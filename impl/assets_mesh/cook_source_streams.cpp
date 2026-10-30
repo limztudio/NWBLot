@@ -89,7 +89,6 @@ Expected<ScratchVector<MeshVertexRef>> MeshCookSourceStreams::ParseSourceVertexR
     return vertexRefs;
 }
 
-
 b8 MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, const TStringView metaKind, const AStringView streamName, const u32 index, const usize streamCount){
     if(index < streamCount)
         return true;
@@ -97,7 +96,6 @@ b8 MeshCookSourceStreams::ValidateSourceStreamIndex(const Path& nwbFilePath, con
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(streamName));
     return false;
 }
-
 
 b8 MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const usize vertexRefCount){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
@@ -114,7 +112,6 @@ b8 MeshCookSourceStreams::ValidateSourceIndexStream(const Path& nwbFilePath, con
     return true;
 }
 
-
 b8 MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, const TStringView metaKind, const SourceMeshStreams& streams){
     for(const MeshVertexRef& ref : streams.vertexRefs){
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_cook_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
@@ -130,7 +127,6 @@ b8 MeshCookSourceStreams::ValidateSourceVertexRefs(const Path& nwbFilePath, cons
     }
     return true;
 }
-
 
 void MeshCookSourceStreams::CopySourceStreams(const SourceMeshStreams& streams, MeshCookEntry& outEntry){
     outEntry.positions.clear();
@@ -157,7 +153,6 @@ void MeshCookSourceStreams::CopySourceStreams(const SourceMeshStreams& streams, 
         outEntry.colors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
     outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
 }
-
 
 Expected<SourceMeshStreams> MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,

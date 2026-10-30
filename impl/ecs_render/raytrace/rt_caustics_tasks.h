@@ -39,10 +39,7 @@ static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
 
 template<typename Payload>
-static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(
-    noexcept(static_cast<b8>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched))
-    && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())
-){
+static void ConfirmCausticAccumulatorClears(Payload& payload)noexcept(noexcept(static_cast<b8>(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched)) && noexcept(payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear())){
     if(payload.graphOwnsAccumulatorBootstrapClear && payload.causticProducerDispatched)
         payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
@@ -156,7 +153,6 @@ public:
     }
 };
 
-
 using SoftwareCausticsGraphTask = CausticProducerGraphTask<false>;
 using HardwareCausticsGraphTask = CausticProducerGraphTask<true>;
 
@@ -195,7 +191,6 @@ public:
     }
 };
 
-
 // All resolve phases retain the same activity and producer bindings.
 // Specializations remain separate graph tasks, preserving each ping-pong resource handoff.
 struct CausticResolveRecordInputs{
@@ -204,7 +199,6 @@ struct CausticResolveRecordInputs{
     const b8& causticProducerDispatched;
     CausticResolveActivitySnapshot activity;
 };
-
 
 template<auto Dispatch>
 struct CausticResolvePhaseGraphTask{
@@ -226,7 +220,6 @@ public:
     }
 };
 
-
 template<u32 PassIndex>
 struct CausticResolveWaveletGraphTaskDefinition{
     using Payload = CausticResolveRecordInputs;
@@ -247,7 +240,6 @@ public:
     }
 };
 
-
 using CausticResolvePrepareGraphTask = CausticResolvePhaseGraphTask<&RendererRayTracingSystem::dispatchCausticResolvePrepare>;
 using CausticResolveWaveletGraphTask = CausticResolveWaveletGraphTaskDefinition<0u>;
 using CausticResolveSecondWaveletGraphTask = CausticResolveWaveletGraphTaskDefinition<1u>;
@@ -255,7 +247,6 @@ using CausticResolveThirdWaveletGraphTask = CausticResolveWaveletGraphTaskDefini
 using CausticResolveFourthWaveletGraphTask = CausticResolveWaveletGraphTaskDefinition<3u>;
 using CausticResolveFifthWaveletGraphTask = CausticResolveWaveletGraphTaskDefinition<4u>;
 using CausticResolveUpsampleGraphTask = CausticResolvePhaseGraphTask<&RendererRayTracingSystem::dispatchCausticResolveUpsample>;
-
 
 // The empty timing-close callback follows graph-owned upsample and finishes the retained full-resolve interval.
 struct CausticResolveGraphTask{
@@ -298,14 +289,12 @@ inline void EnableCausticResolveBarriers(Core::CommandList& commandList, Deferre
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
 }
 
-
 // A ping-pong resolve target with sampled and storage slots.
 struct CausticResolvePassResources{
     Core::Texture* texture = nullptr;
     u32 sampledSlot = 0u;
     u32 storageSlot = 0u;
 };
-
 
 inline void DispatchCausticResolvePass(
     Core::CommandList& commandList,

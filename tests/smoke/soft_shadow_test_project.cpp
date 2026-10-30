@@ -105,7 +105,7 @@ class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     // Directional light angular radius in radians.
     static f32 ConfiguredAngularRadius(){
-        static const f32 s_Angle = [](){
+        static const f32 s_Angle = []()noexcept{
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
             if(!parsed)
                 return s_DefaultAngularRadius;
@@ -117,7 +117,7 @@ private:
 
     // Point and spot source radius in world units.
     static f32 ConfiguredSourceRadius(){
-        static const f32 s_Radius = [](){
+        static const f32 s_Radius = []()noexcept{
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
             if(!parsed)
                 return s_DefaultSourceRadius;
@@ -143,20 +143,6 @@ public:
         m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
-    }
-
-
-private:
-    void destroyWorld(){
-        DestroySmokeSkinnedRenderWorld(m_context, m_world);
-    }
-
-    void spinCasters()noexcept{
-        for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
-            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
-            if(transform)
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
-        }
     }
 
 
@@ -205,15 +191,7 @@ public:
         // Timing materials omit stochastic surfel GI while keeping direct shadows.
         const auto& opaqueMaterial = m_timingEnabled ? s_TimingOpaqueMaterial : s_OpaqueMaterial;
         const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
-        m_groundEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_GroundMesh,
-            opaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.82f, 0.82f, 0.85f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
-        );
+        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
 
         // The opaque caster provides the contact-hardening reference.
         const auto characterModel = CreateTintedModelEntity(*m_world, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
@@ -296,6 +274,20 @@ public:
         return true;
     }
 
+
+private:
+    void destroyWorld(){
+        DestroySmokeSkinnedRenderWorld(m_context, m_world);
+    }
+
+    void spinCasters()noexcept{
+        for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
+            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
+            if(transform)
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
+        }
+    }
+
     void updateWindowTitle(){
         const SIMDVectorSingle yawDisplay = CalculateSmokeYawDisplay(VectorReplicate(m_yaw.yaw()), VectorReplicate(s_TwoPi));
         const f32 angleDegrees = VectorGetX(VectorScale(VectorReplicate(ConfiguredAngularRadius()), 360.0f / s_TwoPi));
@@ -341,7 +333,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Soft Shadow Test");

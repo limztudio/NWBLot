@@ -36,7 +36,6 @@ RendererSystem::RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World
 
 RendererSystem::~RendererSystem()noexcept = default;
 
-
 b8 RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     return m_pipeline->validateResources(width, height, sampleCount);
 }

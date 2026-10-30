@@ -125,7 +125,6 @@ private:
     BasicOutputFileStream<char>& m_stream;
 };
 
-
 template<typename Stream>
 void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin)noexcept(noexcept(out << "[") && noexcept(out << ", ") && noexcept(out << skin.joint[DeclVal<usize>()]) && noexcept(out << "]")){
     out << "[";
@@ -165,7 +164,6 @@ void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView 
     out << indent << "]";
 }
 
-
 b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
     static constexpr AStringView s_Context = "Failed to write NWB mesh";
     if(!AssetWriterSkeletonDetail::ValidateMeshGeometry(mesh, s_Context))
@@ -182,7 +180,6 @@ b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
     }
     return true;
 }
-
 
 template<typename Stream>
 void WriteVertexRef(Stream& out, const SourceVertexRef& ref)noexcept(noexcept(out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]")){
@@ -201,7 +198,6 @@ b8 EnsureOutputDirectory(const ScratchPath& outputPath, const AStringView assetK
     NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}"), ConvertString(assetKind), PathToString<tchar>(parentPath), ConvertString(created.error().message()));
     return false;
 }
-
 
 template<typename Stream>
 void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStringView variableName = s_AssetVariableName, const AStringView indent = "")noexcept(
@@ -276,7 +272,6 @@ void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStri
     file << indent << s_ListCloseText;
 }
 
-
 b8 NameUsed(const Span<const ScratchString> names, const AStringView name)noexcept{
     for(const ScratchString& usedName : names){
         if(usedName == name)
@@ -309,7 +304,6 @@ UtilityScratchVector<ScratchString> BuildUniqueJointNames(const Span<ufbx_node* 
     return names;
 }
 
-
 template<typename Stream>
 void WriteReferenceValue(Stream& file, const AStringView value, const b8 quote, Core::Alloc::ScratchArena& scratchArena){
     constexpr usize s_EscapedTextReserveFactor = 2u;
@@ -322,7 +316,6 @@ void WriteReferenceValue(Stream& file, const AStringView value, const b8 quote, 
     else
         file << value;
 }
-
 
 template<typename Stream>
 b8 WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
@@ -362,7 +355,6 @@ b8 WriteSkeletonAssetBody(Stream& file, const AStringView variableName, const Sp
     return true;
 }
 
-
 template<typename Stream>
 void WriteSkinAssetBody(
     Stream& file,
@@ -399,7 +391,6 @@ void WriteSkinAssetBody(
     }
     file << s_ListCloseText;
 }
-
 
 template<typename Stream>
 void WriteModelAssetBody(
@@ -445,7 +436,6 @@ void WriteModelAssetBody(
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -486,7 +476,6 @@ b8 WriteMeshAsset(const ScratchPath& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-
 b8 WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const> joints, const Span<const JointMatrix> bindPoseMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(!__hidden_asset_writer_format::EnsureOutputDirectory(outputPath, __hidden_asset_writer_format::s_SkeletonAssetKindText))
         return false;
@@ -510,7 +499,6 @@ b8 WriteSkeletonAsset(const ScratchPath& outputPath, const Span<ufbx_node* const
     }
     return true;
 }
-
 
 b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, const AStringView skeletonName, const Span<const MeshSkinInfluence> influences, const Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena){
     if(influences.empty()){
@@ -538,7 +526,6 @@ b8 WriteSkinAsset(const ScratchPath& outputPath, const AStringView meshName, con
     }
     return true;
 }
-
 
 b8 WriteModelAsset(const ScratchPath& outputPath, const AStringView meshName, const Optional<AStringView> skinName, const Optional<AStringView> skeletonName, Core::Alloc::ScratchArena& scratchArena){
     if(!__hidden_asset_writer_format::EnsureOutputDirectory(outputPath, __hidden_asset_writer_format::s_ModelAssetKindText))
@@ -602,12 +589,10 @@ b8 WriteAssetBunch(
     const b8 skinnedBunch = skinName && skeletonName && !skinInfluences.empty();
     file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
     file << "model model;\n\n";
-    if(skinnedBunch){
+    if(skinnedBunch)
         __hidden_asset_writer_format::WriteModelAssetBody(file, __hidden_asset_writer_format::s_ModelAssetKindText, __hidden_asset_writer_format::s_MeshAssetKindText, __hidden_asset_writer_format::s_SkinAssetKindText, __hidden_asset_writer_format::s_SkeletonAssetKindText, scratchArena, __hidden_asset_writer_format::s_SkeletonAssetKindText, false, true);
-    }
-    else{
+    else
         __hidden_asset_writer_format::WriteModelAssetBody(file, __hidden_asset_writer_format::s_ModelAssetKindText, __hidden_asset_writer_format::s_MeshAssetKindText, {}, {}, scratchArena, __hidden_asset_writer_format::s_SkeletonAssetKindText, false, false);
-    }
 
     file << __hidden_asset_writer_format::s_AssetSectionSeparatorText;
     file << "asset_bunch bunch = [\n";
@@ -626,7 +611,6 @@ b8 WriteAssetBunch(
     }
     return true;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class StmtParser{
+class StmtParser final{
 public:
     StmtParser(ParserCursor& cursor, TypeParser& typeParser, ExprParser& exprParser)noexcept
         : m_cursor(cursor)

@@ -127,7 +127,6 @@ static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material
 }
 #endif
 
-
 TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -436,6 +435,11 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
     EXPECT_EQ(logger.errorCount(), binary.size() + 5u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("is not a material stage")));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -452,3 +456,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

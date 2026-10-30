@@ -22,7 +22,6 @@ NWB_IMPL_BEGIN
 
 class UiSkin;
 
-
 // Commits a skin identity only after its complete asset and GPU binding succeeds.
 class UiSkinSelection final{
 public:

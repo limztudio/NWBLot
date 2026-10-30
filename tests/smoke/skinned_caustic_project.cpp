@@ -138,6 +138,108 @@ private:
     }
 
 
+public:
+    explicit SkinnedCausticSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorldOrDie(context))
+        , m_bindJoints(context.objectArena)
+        , m_capturePaths(context.objectArena)
+    {}
+    virtual ~SkinnedCausticSmokeProject()noexcept override{
+        destroyWorld();
+    }
+
+
+public:
+    virtual b8 onStartup()override{
+        // Enable per-pass GPU timing when a timingprobe sink is active.
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+        m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment);
+        if(m_transitionEnabled){
+            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+            m_transitionLagged = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgLaggedEnvironment);
+            m_transitionPhotonsEnabled = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
+            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+            if(!output)
+                return false;
+            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false };
+            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions);
+            if(!captureSeries)
+                return false;
+            m_capturePaths = Move(captureSeries->paths);
+            m_capture = Move(captureSeries->capture);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
+                , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
+                , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
+            );
+        }
+        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_Model, s_ProjectName);
+        if(!bindJoints)
+            return false;
+        m_bindJoints = Move(*bindJoints);
+
+        auto activeCameraEntity = m_world->createEntity();
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
+        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
+            light->enableCaustics = !m_transitionEnabled || !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
+
+        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
+
+        m_character = createGlassCharacter();
+        SyncSmokeModelRuntimes(*m_world);
+        const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
+        auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
+        if(!renderer){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: closed refractor renderer is unavailable"));
+            return false;
+        }
+        renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
+
+        m_skeletonEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
+
+        NWB_FATAL_ASSERT_MSG(activeCamera.camera.valid() && m_groundEntity.valid() && m_character.valid() && m_skeletonEntity.valid(), NWB_TEXT("SkinnedCausticSmokeProject failed to create all scene entities"));
+
+        if(m_transitionEnabled && !installTransitionCutter()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: could not install the skinned CSG receiver"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)"), static_cast<u32>(m_bindJoints.size()));
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
+        m_fpsProbe.recordFrame(safeDelta);
+        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
+        if(m_transitionEnabled){
+            const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
+            m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
+            updateTransitionState();
+        }
+        else{
+            const SIMDVectorSingle animationStep = VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed);
+            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), ConvertVectorSingleToDouble(animationStep)));
+        }
+        animatePoses();
+        const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
+        if(m_transitionEnabled)
+            updateTransitionCapture();
+        return true;
+    }
+
+
 private:
     void destroyWorld(){
         if(m_capture){
@@ -283,9 +385,8 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: sample {} graphics frame {} phase {} pose_frame {}"), m_transitionSample, sourceFrame, m_transitionSample / 2u, (sourceFrame - m_transitionFirstFrame) % s_TransitionPhaseFrames);
         ++m_transitionSample;
         if(m_transitionSample == s_TransitionSampleCount){
-            for(u32 phase = 0u; phase < s_TransitionPhaseCount; ++phase){
+            for(u32 phase = 0u; phase < s_TransitionPhaseCount; ++phase)
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: completed GPU phase {} photon_samples={} skinning_samples={}"), phase, m_phasePhotonSamples[phase], m_phaseSkinningSamples[phase]);
-            }
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: complete samples=8"));
             m_capture->finish();
             return;
@@ -321,115 +422,6 @@ private:
             const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), VectorSet(static_cast<f32>(jointIndex), 0.0f, 0.0f, 0.0f), timeSeconds, animationSpeed);
             StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
         }
-    }
-
-
-public:
-    explicit SkinnedCausticSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorldOrDie(context))
-        , m_bindJoints(context.objectArena)
-        , m_capturePaths(context.objectArena)
-    {}
-    virtual ~SkinnedCausticSmokeProject()noexcept override{
-        destroyWorld();
-    }
-
-
-public:
-    virtual b8 onStartup()override{
-        // Enable per-pass GPU timing when a timingprobe sink is active.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
-
-        m_transitionEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment);
-        if(m_transitionEnabled){
-            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-            m_transitionLagged = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgLaggedEnvironment);
-            m_transitionPhotonsEnabled = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
-            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-            if(!output)
-                return false;
-            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions);
-            if(!captureSeries)
-                return false;
-            m_capturePaths = Move(captureSeries->paths);
-            m_capture = Move(captureSeries->capture);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticTransition: setup lagged={} caustics={} minimum_frame=360 warmup_seconds=30 phase_frames=64 samples=8 model=closed_prism")
-                , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_LAGGED") ? 1u : 0u
-                , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
-            );
-        }
-        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_Model, s_ProjectName);
-        if(!bindJoints)
-            return false;
-        m_bindJoints = Move(*bindJoints);
-
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
-        const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
-            light->enableCaustics = !m_transitionEnabled || !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
-
-        m_groundEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_GroundMesh,
-            s_GroundMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.82f, 0.82f, 0.85f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
-        );
-
-        m_character = createGlassCharacter();
-        SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
-        auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
-        if(!renderer){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: closed refractor renderer is unavailable"));
-            return false;
-        }
-        renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
-
-        m_skeletonEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
-
-        NWB_FATAL_ASSERT_MSG(activeCamera.camera.valid() && m_groundEntity.valid() && m_character.valid() && m_skeletonEntity.valid(), NWB_TEXT("SkinnedCausticSmokeProject failed to create all scene entities"));
-
-        if(m_transitionEnabled && !installTransitionCutter()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticTransition: could not install the skinned CSG receiver"));
-            return false;
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)"), static_cast<u32>(m_bindJoints.size()));
-        return true;
-    }
-
-    virtual void onShutdown()override{
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: shutdown"));
-    }
-
-    virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
-        m_fpsProbe.recordFrame(safeDelta);
-        m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        if(m_transitionEnabled){
-            const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
-            m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
-            updateTransitionState();
-        }else{
-            const SIMDVectorSingle animationStep = VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed);
-            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), ConvertVectorSingleToDouble(animationStep)));
-        }
-        animatePoses();
-        const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        if(m_transitionEnabled)
-            updateTransitionCapture();
-        return true;
     }
 
 
@@ -476,7 +468,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Skinned Caustic Smoke");

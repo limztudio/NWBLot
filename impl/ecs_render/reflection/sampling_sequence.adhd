@@ -11,16 +11,15 @@ class ReflectionSampleBase{
 ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
     ReflectionSampleBase base;
     u32 remaining = sampleIndex;
-    const u32 s_SampleBitCount = 32u;
-    const u32 s_SampleDirectionHighBit = 0x80000000u;
-    u32 direction = s_SampleDirectionHighBit;
+    const u32 sampleBitCount = 32u;
+    const u32 sampleDirectionHighBit = 0x80000000u;
+    u32 direction = sampleDirectionHighBit;
     // x reverses index bits; y uses the Sobol generator (see pbr-book).
-    for(u32 bit = 0u; bit < s_SampleBitCount; ++bit){
+    for(u32 bit = 0u; bit < sampleBitCount; ++bit){
         const u32 selected = remaining & 1u;
         base.x = (base.x << 1u) | selected;
-        if(selected != 0u){
+        if(selected != 0u)
             base.y ^= direction;
-        }
         remaining >>= 1u;
         direction ^= direction >> 1u;
     }
@@ -29,3 +28,4 @@ ReflectionSampleBase ComputeReflectionSampleBase(in u32 sampleIndex){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

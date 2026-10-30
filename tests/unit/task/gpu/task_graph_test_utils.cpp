@@ -35,7 +35,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-
 [[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label){
     Graphics::GpuGraphResourceDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::HazardDomain);
@@ -47,7 +46,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     desc.setIdentity(identity).setMarkerLabel(label).setType(Graphics::GpuGraphResourceType::Texture).setInitialState(initialState).setQueueSharing(queueSharing);
     return graph.importResource(desc);
 }
-
 
 [[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddBufferMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState, const Graphics::ResourceQueueSharing::Mask queueSharing){
     Graphics::GpuGraphResourceDesc desc;
@@ -181,8 +179,8 @@ SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
     , topology{.queues = &singleQueue, .queueCount = 1u}
     , analysis(testArena.arena)
     , assignments(testArena.arena)
-    , compiledGraph(testArena.arena){
-}
+    , compiledGraph(testArena.arena)
+{}
 
 [[nodiscard]] b8 SingleQueueCompile::compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options){
     return Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology, options);
@@ -199,7 +197,8 @@ TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
     , topology{.queues = queueStorage, .queueCount = 2u}
     , analysis(testArena.arena)
     , assignments(testArena.arena)
-    , compiledGraph(testArena.arena){
+    , compiledGraph(testArena.arena)
+{
     queueStorage[0u] = graphicsQueue;
     queueStorage[1u] = computeQueue;
 }
@@ -220,7 +219,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     , topology{.queues = queueStorage, .queueCount = 3u}
     , analysis(testArena.arena)
     , assignments(testArena.arena)
-    , compiledGraph(testArena.arena){
+    , compiledGraph(testArena.arena)
+{
     queueStorage[0u] = graphicsQueue;
     queueStorage[1u] = computeQueue;
     queueStorage[2u] = transferQueue;

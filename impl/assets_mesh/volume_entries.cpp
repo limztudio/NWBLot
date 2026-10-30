@@ -39,7 +39,6 @@ static constexpr AStringView s_SkinDiagnosticPrefix = "Skin meta";
 static constexpr AStringView s_MeshField = "mesh";
 static constexpr AStringView s_SkeletonField = "skeleton";
 
-
 static Expected<MeshCookEntry> ParseMeshDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseMeshCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.cpuScheduler, context.scratchArena);
 }
@@ -120,3 +119,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -24,13 +24,7 @@ NWB_ADHD_BEGIN
 [[nodiscard]] MStringView IntSimdLaneType(MStringView simdType)noexcept;
 [[nodiscard]] MStringView IntSimdRawWordType(b8 isDouble)noexcept;
 [[nodiscard]] MStringView SimdLaneCallSuffix(u32 lane)noexcept;
-void AppendIntSimdLaneExtract(
-    MString& out,
-    MStringView varName,
-    u32 lane,
-    b8 isDouble,
-    MStringView laneType
-);
+void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 isDouble, MStringView laneType);
 [[nodiscard]] u32 InferEffectiveSimdLanes(const Expr& expr)noexcept;
 [[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr)noexcept;
 [[nodiscard]] MStringView SimdRegisterCppType(MStringView simdType)noexcept;

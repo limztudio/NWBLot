@@ -18,7 +18,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class HeaderEmitter{
+class HeaderEmitter final{
 public:
     HeaderEmitter(MetaArena& arena, const SymbolTable& symbols)noexcept
         : m_arena(arena)

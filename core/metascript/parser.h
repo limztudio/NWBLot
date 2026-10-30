@@ -34,13 +34,7 @@ struct ParseError{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Document{
-public:
-    using ErrorList = MVector<ParseError>;
-    using VariableMap = MStringMap<Value>;
-    using StructMap = MStringMap<Value>;
-
-
+class Document final{
 public:
     struct Declaration{
         MString type;
@@ -60,6 +54,9 @@ public:
 
 
 public:
+    using ErrorList = MVector<ParseError>;
+    using VariableMap = MStringMap<Value>;
+    using StructMap = MStringMap<Value>;
     using DeclarationList = MVector<Declaration>;
 
 

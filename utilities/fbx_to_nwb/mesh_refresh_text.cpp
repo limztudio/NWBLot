@@ -40,7 +40,6 @@ static constexpr AStringView s_RowOpenText = "    [";
 static constexpr AStringView s_RowItemSeparatorText = ", ";
 static constexpr AStringView s_RowSuffixText = "],\n";
 
-
 struct AssignmentRange{
     usize begin = 0u;
     usize end = 0u;
@@ -133,9 +132,8 @@ template<typename Value, typename WriteValue>
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
-    for(const SourceVertexRef& ref : refs){
+    for(const SourceVertexRef& ref : refs)
         out << s_RowOpenText << ref.position << s_RowItemSeparatorText << ref.normal << s_RowItemSeparatorText << ref.tangent << s_RowItemSeparatorText << ref.uv0 << s_RowItemSeparatorText << ref.color << s_RowSuffixText;
-    }
     out << s_ListCloseText;
     return Move(out).str();
 }
@@ -193,9 +191,8 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
             capacity = AddSize(capacity, replacement.text.size() - oldSize);
     }
     inOutSource.reserve(capacity);
-    for(const TextReplacement& replacement : replacements){
+    for(const TextReplacement& replacement : replacements)
         inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
-    }
 }
 
 [[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{

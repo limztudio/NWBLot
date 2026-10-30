@@ -3,7 +3,6 @@
 
 
 #include "paint.h"
-
 #include "rect_math.h"
 
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>

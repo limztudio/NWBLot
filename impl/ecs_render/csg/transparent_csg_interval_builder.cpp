@@ -34,8 +34,8 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
     : m_graph(graph)
     , m_materialSystem(materialSystem)
     , m_csgSystem(csgSystem)
-    , m_avboitSystem(avboitSystem){
-}
+    , m_avboitSystem(avboitSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,13 +100,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             }
 
             const MaterialPassDrawItemsView transparentCsgMaterialGeometryDrawSets[] = { transparentCsgDrawItems.csgReceiverSurface, };
-            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-                transparentCsgMaterialGeometryDrawSets,
-                Name("render.avboit.intervals.transparent_csg_material_geometry"),
-                "Transparent CSG Material Geometry",
-                m_graph,
-                scratchArena
-            );
+            const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name("render.avboit.intervals.transparent_csg_material_geometry"), "Transparent CSG Material Geometry", m_graph, scratchArena);
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = geometrySetResult.has_value();
             if(!geometrySetResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
@@ -299,7 +293,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             avboitPrePayload.transparentCsgStreamsUploaded = true;
         }
     }
-
 
     // Clear frozen rect after uploads so the graph owns CopyDest -> UAV ordering.
     if(avboitPrePayload.transparentCsgStreamsUploaded){

@@ -20,12 +20,7 @@ namespace __hidden_adhd_type_checker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 TypeRefReferencesAlias(
-    const TypeRef* type,
-    const MStringView targetAliasName,
-    const SymbolTable& symbols,
-    const u32 depth = 0u
-)noexcept{
+[[nodiscard]] b8 TypeRefReferencesAlias(const TypeRef* type, const MStringView targetAliasName, const SymbolTable& symbols, const u32 depth = 0u)noexcept{
     if(!type || depth > 16u)
         return false;
     if(type->isFuncType){
@@ -135,7 +130,7 @@ namespace __hidden_adhd_type_checker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const ScopedVarInfo* TypeChecker::findScopedVar(const Span<const ScopedVarInfo> scope, const MStringView name)noexcept{
+const ScopedVarInfo* TypeChecker::FindScopedVar(const Span<const ScopedVarInfo> scope, const MStringView name)noexcept{
     for(usize i = scope.size(); i > 0u; --i){
         if(scope[i - 1u].name == name)
             return &scope[i - 1u];
@@ -188,11 +183,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                     }
                     else{
                         const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
-                        if(entry.valueExpr->kind == ExprKind::FloatLiteral
-                            || entry.valueExpr->kind == ExprKind::StringLiteral
-                            || IsFloatScalarType(valType)
-                            || SymbolTable::isStringSwitchType(valType))
-                        {
+                        if(entry.valueExpr->kind == ExprKind::FloatLiteral || entry.valueExpr->kind == ExprKind::StringLiteral || IsFloatScalarType(valType) || SymbolTable::IsStringSwitchType(valType)){
                             reportError(errors, entry.span, "enum entry value must be an integral constant expression");
                             ok = false;
                         }
@@ -218,7 +209,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             }
             MethodDecl aliasScope(m_arena);
             aliasScope.templateParams = aliasDecl->templateParams;
-            if(!checkTypeRef(*aliasDecl->aliasedType, nullptr, &aliasScope, errors, true))
+            if(!checkTypeRef(*aliasDecl->aliasedType, nullptr, &aliasScope, true, errors))
                 ok = false;
         }
     }
@@ -335,17 +326,10 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
         MethodDecl* matched = nullptr;
         MethodDecl* paramMatched = nullptr;
         for(MethodDecl* m : cls->methods){
-            if(m->isConstructor == ool->isConstructor
-                && m->isDestructor == ool->isDestructor
-                && m->isOperator == ool->isOperator
-                && m->name == ool->name
-                && m->params.size() == ool->params.size())
-            {
+            if(m->isConstructor == ool->isConstructor && m->isDestructor == ool->isDestructor && m->isOperator == ool->isOperator && m->name == ool->name && m->params.size() == ool->params.size()){
                 if(!matched || m->templateParams.size() == ool->templateParams.size())
                     matched = m;
-                if(m->templateParams.size() == ool->templateParams.size()
-                    && DoParamListsMatch(m->params, ool->params, m_symbols))
-                {
+                if(m->templateParams.size() == ool->templateParams.size() && DoParamListsMatch(m->params, ool->params, m_symbols)){
                     paramMatched = m;
                     if(m->isConst == ool->isConst)
                         break;
@@ -376,10 +360,7 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                 methodTemplateParamsMatch = false;
                 break;
             }
-            if((declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr)
-                || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols))
-                || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size())
-            {
+            if((declTp.constValueType != nullptr) != (oolTp.constValueType != nullptr) || (declTp.constValueType && oolTp.constValueType && !AreTypeRefsEquivalent(declTp.constValueType, oolTp.constValueType, m_symbols)) || declTp.interfaceBounds.size() != oolTp.interfaceBounds.size()){
                 reportError(errors, ool->span, "out-of-line method template parameter constraints do not match class declaration");
                 ok = false;
                 methodTemplateParamsMatch = false;
@@ -522,14 +503,7 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
     return ok;
 }
 
-void TypeChecker::buildCallArgHints(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const Span<const Expr* const> args,
-    const Span<const ScopedVarInfo> scope,
-    MVector<MStringView>& outArgTypes,
-    MVector<u8>& outArgIsMut
-)const{
+void TypeChecker::buildCallArgHints(ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
     outArgTypes.clear();
     outArgIsMut.clear();
     outArgTypes.reserve(args.size());
@@ -538,7 +512,7 @@ void TypeChecker::buildCallArgHints(
         b8 isMut = arg && arg->isMutArg;
         if(!isMut && arg && method){
             if(arg->kind == ExprKind::Identifier){
-                if(findScopedVar(scope, arg->text) != nullptr && !isReceiverConst(ownerClass, *method, *arg, scope))
+                if(FindScopedVar(scope, arg->text) != nullptr && !isReceiverConst(ownerClass, *method, *arg, scope))
                     isMut = true;
             }
             else if(arg->kind == ExprKind::ThisMember || arg->kind == ExprKind::MemberAccess || arg->kind == ExprKind::Index){
@@ -560,15 +534,15 @@ MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const
 }
 
 b8 TypeChecker::isThisConstInScope(const MethodDecl& method, const Span<const ScopedVarInfo> scope)const noexcept{
-    const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
+    const ScopedVarInfo* lambdaThis = m_inLambda ? FindScopedVar(scope, "this") : nullptr;
     return method.isConst || (lambdaThis && lambdaThis->isConst);
 }
 
 b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStringView baseCallee)const noexcept{
     return m_symbols.findClass(baseCallee) != nullptr
         || m_symbols.findTypeAlias(calleeName) != nullptr
-        || SymbolTable::isSimdType(baseCallee)
-        || SymbolTable::isArenaBackedContainer(baseCallee)
+        || SymbolTable::IsSimdType(baseCallee)
+        || SymbolTable::IsArenaBackedContainer(baseCallee)
         || m_symbols.isSelfDefaultedType(baseCallee);
 }
 
@@ -593,7 +567,7 @@ const MethodDecl* TypeChecker::resolveCustomOperator(
     }
     if(lhsTypeRef && m_symbols.findInterface(lhsBaseType))
         return m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &arity);
-    if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsBaseType)){
+    if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, method, lhsBaseType)){
         for(const TypeRef* boundRef : tp->interfaceBounds){
             if(!boundRef)
                 continue;
@@ -604,14 +578,7 @@ const MethodDecl* TypeChecker::resolveCustomOperator(
     return nullptr;
 }
 
-MStringView TypeChecker::resolveScopeAccessEnumTypeName(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    const ClassDecl** outAccessedClass,
-    const FieldDecl** outAccessedField
-)const noexcept{
+MStringView TypeChecker::resolveScopeAccessEnumTypeName(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const ClassDecl** outAccessedClass, const FieldDecl** outAccessedField)const noexcept{
     if(outAccessedClass)
         *outAccessedClass = nullptr;
     if(outAccessedField)
@@ -622,7 +589,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(
     const MStringView rootName = expr.scopeChain[0];
     if(expr.text == "this"){
         if(ownerClass){
-            if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, rootName); field && field->type){
+            if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, rootName); field && field->type){
                 const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
                 if(m_symbols.findEnum(fieldTypeName))
                     return fieldTypeName;
@@ -634,7 +601,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
         if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
-            if(const FieldDecl* field = SymbolTable::findClassField(*targetCls, rootName); field && field->type){
+            if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, rootName); field && field->type){
                 if(outAccessedClass)
                     *outAccessedClass = targetCls;
                 if(outAccessedField)
@@ -647,7 +614,7 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(
         }
         return {};
     }
-    if(const ScopedVarInfo* local = findScopedVar(scope, rootName)){
+    if(const ScopedVarInfo* local = FindScopedVar(scope, rootName)){
         const MStringView localTypeName = resolveScopedVarBaseType(*local);
         if(!localTypeName.empty() && m_symbols.findEnum(localTypeName))
             return localTypeName;
@@ -663,10 +630,6 @@ MStringView TypeChecker::resolveScopeAccessEnumTypeName(
     if(!resolvedRoot.empty() && m_symbols.findEnum(resolvedRoot))
         return resolvedRoot;
     return {};
-}
-
-void TypeChecker::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{
-    ReportAdhdDiagnostic(m_arena, errors, span, message);
 }
 
 

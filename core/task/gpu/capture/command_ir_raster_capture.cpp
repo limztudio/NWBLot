@@ -92,7 +92,8 @@ GpuCommandIrOwnerAnchor::GpuCommandIrOwnerAnchor(IGpuCommandIrRetainedOwner* con
 {}
 
 GpuCommandIrOwnerAnchor::GpuCommandIrOwnerAnchor(const GpuCommandIrOwnerAnchor& other)noexcept
-    : m_owner(other.m_owner){
+    : m_owner(other.m_owner)
+{
     if(m_owner)
         m_owner->retain();
 }

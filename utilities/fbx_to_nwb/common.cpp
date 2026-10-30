@@ -23,8 +23,8 @@ namespace __hidden_common{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin, };
-static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate, };
+static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin };
+static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate };
 static constexpr AStringView s_OptionSeparatorText = ", ";
 static constexpr AStringView s_OptionLastSeparatorText = ", or ";
 
@@ -101,6 +101,7 @@ static AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
         return {};
     }
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

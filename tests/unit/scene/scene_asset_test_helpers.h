@@ -16,7 +16,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace NWB::Tests::SceneAssetTestHelpers{
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::SceneAssetTestHelpers{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,24 +50,14 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
     return binary;
 }
 
-[[nodiscard]] inline AssetBytes MakeSceneBinary(
-    AssetArena& arena,
-    const Span<const SceneAsset::SubsystemRef> subsystems,
-    const SceneAsset::AssetMap& assets,
-    const Span<const SceneAsset::EntityRef> entities = {}
-){
+[[nodiscard]] inline AssetBytes MakeSceneBinary(AssetArena& arena, const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, const Span<const SceneAsset::EntityRef> entities = {}){
     SceneHeaderBinary header;
     header.subsystemCount = static_cast<u64>(subsystems.size());
     header.entityCount = static_cast<u64>(entities.size());
     header.assetCount = static_cast<u64>(assets.size());
 
     AssetBytes binary(arena);
-    binary.reserve(
-        sizeof(header)
-        + subsystems.size() * sizeof(NameHash)
-        + entities.size() * sizeof(NameHash)
-        + assets.size() * sizeof(SceneAssetEntryBinary)
-    );
+    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
     AppendPOD(binary, header);
     for(const SceneAsset::SubsystemRef& ref : subsystems)
         AppendPOD(binary, ref.name().hash());
@@ -130,12 +126,7 @@ template<typename SubsystemT>
     header.assetCount = totalAssetCount;
 
     AssetBytes binary(arena);
-    binary.reserve(
-        sizeof(header)
-        + subsystemCount * sizeof(NameHash)
-        + fieldCount * sizeof(u64)
-        + static_cast<usize>(totalAssetCount) * sizeof(NameHash)
-    );
+    binary.reserve(sizeof(header) + subsystemCount * sizeof(NameHash) + fieldCount * sizeof(u64) + static_cast<usize>(totalAssetCount) * sizeof(NameHash));
     AppendPOD(binary, header);
     for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
         AppendPOD(binary, ref.name().hash());
@@ -215,3 +206,10 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

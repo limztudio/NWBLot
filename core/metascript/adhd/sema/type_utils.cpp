@@ -273,24 +273,14 @@ b8 CheckSwizzlePattern(const MStringView text, const u32 maxLanes, b8& outIsPatt
 b8 IsVoidTypeRef(const TypeRef* ref)noexcept{
     if(!ref)
         return true;
-    return ref->name == "void"
-        && ref->refMode == ParamPassingMode::None
-        && !ref->isAuto
-        && !ref->isFuncType
-        && ref->templateArgs.empty();
+    return ref->name == "void" && ref->refMode == ParamPassingMode::None && !ref->isAuto && !ref->isFuncType && ref->templateArgs.empty();
 }
 
 b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
     return AreTypeRefsEquivalentWithSubst(a, b, {}, {}, symbols);
 }
 
-b8 AreTypeRefsEquivalentWithSubst(
-    const TypeRef* actual,
-    const TypeRef* pattern,
-    const Span<const TemplateParamDecl> ifaceParams,
-    const Span<const TypeArg> ifaceArgs,
-    const SymbolTable& symbols
-)noexcept{
+b8 AreTypeRefsEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, const Span<const TemplateParamDecl> ifaceParams, const Span<const TypeArg> ifaceArgs, const SymbolTable& symbols)noexcept{
     actual = symbols.unwrapTypeAlias(actual);
     pattern = symbols.unwrapTypeAlias(pattern);
     if(actual == pattern)
@@ -316,35 +306,20 @@ b8 AreTypeRefsEquivalentWithSubst(
         }
     }
 
-    if(actual->name != pattern->name
-        || actual->refMode != pattern->refMode
-        || actual->isAuto != pattern->isAuto
-        || actual->isFuncType != pattern->isFuncType
-        || actual->templateArgs.size() != pattern->templateArgs.size())
-    {
+    if(actual->name != pattern->name || actual->refMode != pattern->refMode || actual->isAuto != pattern->isAuto || actual->isFuncType != pattern->isFuncType || actual->templateArgs.size() != pattern->templateArgs.size())
         return false;
-    }
     for(usize i = 0u; i < actual->templateArgs.size(); ++i){
         const TypeArg& ta = actual->templateArgs[i];
         const TypeArg& tb = pattern->templateArgs[i];
-        if(!AreConstantTemplateArgsEquivalent(ta.constantText, tb.constantText, symbols)
-            || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs, symbols))
-        {
+        if(!AreConstantTemplateArgsEquivalent(ta.constantText, tb.constantText, symbols) || !AreTypeRefsEquivalentWithSubst(ta.type, tb.type, ifaceParams, ifaceArgs, symbols))
             return false;
-        }
     }
     if(actual->isFuncType){
-        if(!AreTypeRefsEquivalentWithSubst(actual->funcReturnType, pattern->funcReturnType, ifaceParams, ifaceArgs, symbols)
-            || actual->funcParams.size() != pattern->funcParams.size())
-        {
+        if(!AreTypeRefsEquivalentWithSubst(actual->funcReturnType, pattern->funcReturnType, ifaceParams, ifaceArgs, symbols) || actual->funcParams.size() != pattern->funcParams.size())
             return false;
-        }
         for(usize i = 0u; i < actual->funcParams.size(); ++i){
-            if(actual->funcParams[i].mode != pattern->funcParams[i].mode
-                || !AreTypeRefsEquivalentWithSubst(actual->funcParams[i].type, pattern->funcParams[i].type, ifaceParams, ifaceArgs, symbols))
-            {
+            if(actual->funcParams[i].mode != pattern->funcParams[i].mode || !AreTypeRefsEquivalentWithSubst(actual->funcParams[i].type, pattern->funcParams[i].type, ifaceParams, ifaceArgs, symbols))
                 return false;
-            }
         }
     }
     return true;
@@ -388,9 +363,7 @@ TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noe
                 continue;
             }
         }
-        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name))
-            && !type->templateArgs.empty() && type->templateArgs[0].type)
-        {
+        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name)) && !type->templateArgs.empty() && type->templateArgs[0].type){
             type = type->templateArgs[0].type;
             continue;
         }
@@ -402,7 +375,7 @@ TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noe
 b8 IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)noexcept{
     if(name == "void")
         return true;
-    if(IsScalarType(name) || SymbolTable::isSimdType(name) || SymbolTable::isUnalignedVectorType(name) || symbols.hasTypeSymbol(name))
+    if(IsScalarType(name) || SymbolTable::IsSimdType(name) || SymbolTable::IsUnalignedVectorType(name) || symbols.hasTypeSymbol(name))
         return true;
     if(FindBuiltinObjectType(name) != nullptr)
         return true;
@@ -440,11 +413,7 @@ b8 IsConcreteTypeRef(const TypeRef& type, const SymbolTable& symbols)noexcept{
     return true;
 }
 
-b8 IsConcreteTemplateArgList(
-    const Span<const TemplateParamDecl> params,
-    const Span<const TypeArg> args,
-    const SymbolTable& symbols
-)noexcept{
+b8 IsConcreteTemplateArgList(const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, const SymbolTable& symbols)noexcept{
     if(params.size() != args.size())
         return false;
     for(usize i = 0u; i < params.size(); ++i){
@@ -461,17 +430,13 @@ b8 IsConcreteTemplateArgList(
     return true;
 }
 
-b8 TypeContainsArenaBackedContainer(
-    const TypeRef& type,
-    const SymbolTable& symbols,
-    const u32 depth
-)noexcept{
+b8 TypeContainsArenaBackedContainer(const TypeRef& type, const SymbolTable& symbols, const u32 depth)noexcept{
     if(depth >= 8u || type.refMode != ParamPassingMode::None)
         return false;
     const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type);
     if(!unwrapped || unwrapped->refMode != ParamPassingMode::None)
         return false;
-    if(SymbolTable::isArenaBackedContainer(unwrapped->name))
+    if(SymbolTable::IsArenaBackedContainer(unwrapped->name))
         return true;
     for(const TypeArg& targ : unwrapped->templateArgs){
         if(targ.type && TypeContainsArenaBackedContainer(*targ.type, symbols, depth + 1u))
@@ -486,22 +451,17 @@ b8 ShouldPackSerializeClass(const Span<const FieldDecl* const> fields, const Sym
             continue;
         const TypeRef* resolved = symbols.unwrapTypeAlias(field->type);
         const MStringView baseName = resolved ? resolved->name : field->type->name;
-        if(SymbolTable::isSimdType(baseName) || (symbols.findClass(baseName) && !ShouldPackSerializeClass(symbols.findClass(baseName)->fields, symbols)))
+        if(SymbolTable::IsSimdType(baseName) || (symbols.findClass(baseName) && !ShouldPackSerializeClass(symbols.findClass(baseName)->fields, symbols)))
             return false;
         if(baseName == "Array" && resolved && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-            if(SymbolTable::isSimdType(symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name)))
+            if(SymbolTable::IsSimdType(symbols.resolveBaseTypeName(resolved->templateArgs[0].type->name)))
                 return false;
         }
     }
     return true;
 }
 
-i32 ScoreCallableParams(
-    const SymbolTable& symbols,
-    const Span<const ParamDecl> params,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)noexcept{
+i32 ScoreCallableParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     i32 score = 0;
     const usize count = params.size();
     for(usize i = 0u; i < count; ++i){
@@ -516,12 +476,12 @@ i32 ScoreCallableParams(
             if(paramBase == argBase){
                 score += 16;
             }
-            else if((paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
+            else if(
+                (paramBase == "StringView" && (argBase == "String" || argBase == "CompactString"))
                 || (paramBase == "Path" && argBase == "StringView")
-                || (paramBase == "Span" && (argBase == "Vector" || argBase == "ParallelVector" || argBase == "Array" || argBase == "FixedVector")))
-            {
+                || (paramBase == "Span" && (argBase == "Vector" || argBase == "ParallelVector" || argBase == "Array" || argBase == "FixedVector"))
+            )
                 score += 8;
-            }
         }
     }
     return score;
@@ -557,16 +517,10 @@ b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, 
                 return true;
         }
     }
-    if((tname == "Optional" || IsReflectedLinearContainerType(tname))
-        && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
-    {
+    if((tname == "Optional" || IsReflectedLinearContainerType(tname)) && !resolved->templateArgs.empty() && resolved->templateArgs[0].type)
         return IsAssetDependencyType(resolved->templateArgs[0].type, symbols, depth + 1u);
-    }
-    if(IsReflectedMapContainerType(tname)
-        && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
-    {
+    if(IsReflectedMapContainerType(tname) && resolved->templateArgs.size() >= 2u && resolved->templateArgs[1].type)
         return IsAssetDependencyType(resolved->templateArgs[1].type, symbols, depth + 1u);
-    }
     return false;
 }
 
@@ -582,3 +536,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

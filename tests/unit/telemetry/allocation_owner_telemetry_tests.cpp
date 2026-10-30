@@ -71,7 +71,6 @@ public:
     }
 };
 
-
 [[nodiscard]] static Perf::MemorySnapshot MakeSnapshot(const Name& name, const Perf::MemorySource::Enum source)noexcept{
     Perf::MemorySnapshot snapshot;
     snapshot.scopeName = name;
@@ -85,7 +84,6 @@ public:
     snapshot.deallocationCount = 1u;
     return snapshot;
 }
-
 
 static void ExpectSnapshot(const Perf::MemorySnapshot& actual, const Perf::MemorySnapshot& expected){
     EXPECT_EQ(actual.scopeName, expected.scopeName);
@@ -207,7 +205,7 @@ TEST(AllocationOwnerTelemetry, SeparatesRecorderSourcesAndKeepsPreviousFrameDuri
     recorder.setEnabled(true);
     const Perf::MemoryView view(recorder);
     const Name owner("tests/telemetry/recorder_source_collision");
-    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking, };
+    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking };
     Perf::MemoryScopeId scopes[LengthOf(sources)];
     Perf::MemorySnapshot previous[LengthOf(sources)];
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
@@ -476,7 +474,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Name owner("tests/telemetry/shared_source_identity");
-    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking, };
+    const Perf::MemorySource::Enum sources[] = { Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking };
     for(usize sourceIndex = 0u; sourceIndex < LengthOf(sources); ++sourceIndex){
         Perf::MemorySnapshot snapshot = MakeSnapshot(owner, sources[sourceIndex]);
         // Keep explicit scope counters separate from the aliased arena summary.

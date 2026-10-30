@@ -46,21 +46,13 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Compiler{
+class Compiler final{
 public:
-    [[nodiscard]] static b8 compile(
-        MStringView source,
-        MStringView virtualFilePath,
-        MetaArena& arena,
-        CompileResult& outResult,
-        IIncludeResolver* includeResolver = nullptr,
-        MStringView customNamespace = {},
-        Span<const MString> macroDefinitions = {}
-    );
+    [[nodiscard]] static b8 Compile(MStringView source, MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver = nullptr, MStringView customNamespace = {}, Span<const MString> macroDefinitions = {});
 
-    [[nodiscard]] static MString deriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
-    [[nodiscard]] static MString deriveHeaderFilename(MStringView virtualFilePath, MetaArena& arena);
-    [[nodiscard]] static MString deriveSourceFilename(MStringView virtualFilePath, MetaArena& arena);
+    [[nodiscard]] static MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
+    [[nodiscard]] static MString DeriveHeaderFilename(MStringView virtualFilePath, MetaArena& arena);
+    [[nodiscard]] static MString DeriveSourceFilename(MStringView virtualFilePath, MetaArena& arena);
 };
 
 

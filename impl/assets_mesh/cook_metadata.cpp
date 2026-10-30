@@ -28,7 +28,6 @@ Expected<DiscoveredNwbFile> MeshCookMetadata::BuildDiscoveredNwbFile(const Path&
     return file;
 }
 
-
 b8 MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount)noexcept{
     if(value.isList()){
         for(const Core::Metascript::Value& child : value.asList()){
@@ -45,14 +44,12 @@ b8 MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::V
     return true;
 }
 
-
 Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept{
     usize count = 0u;
     if(!AccumulateFlattenedValueLeafCount(value, count))
         return MakeUnexpected(Failure{});
     return count;
 }
-
 
 ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
     char indexBuffer[s_DecimalTextBufferBytes];
@@ -68,7 +65,6 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(Core::Alloc::ScratchArena& aren
     return label;
 }
 
-
 Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequiredMetadataListField(const Path& nwbFilePath, const Core::Metascript::Value& map, const TStringView metaKind, const AStringView fieldName){
     const Core::Metascript::Value* field = map.findField(fieldName);
     if(field && field->isList())
@@ -77,7 +73,6 @@ Expected<NotNull<const Core::Metascript::Value*>> MeshCookMetadata::FindRequired
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list"), metaKind, PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
     return MakeUnexpected(Failure{});
 }
-
 
 Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value)noexcept{
     if(!value.isNumeric())
@@ -91,7 +86,6 @@ Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataF
 
     return static_cast<f32>(numericValue);
 }
-
 
 void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataF32ValueFailure::Enum failure){
     switch(failure){
@@ -112,7 +106,6 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(const Path& nwbFilePath,
     }
 }
 
-
 Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value)noexcept{
     if(!value.isNumeric())
         return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NotNumeric);
@@ -125,7 +118,6 @@ Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU
 
     return static_cast<u32>(numericValue);
 }
-
 
 void MeshCookMetadata::LogMetadataU32ValueFailure(const Path& nwbFilePath, const TStringView metaKind, const AStringView label, const MetadataU32ValueFailure::Enum failure){
     switch(failure){

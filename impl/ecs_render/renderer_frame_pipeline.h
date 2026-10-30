@@ -551,6 +551,7 @@ private:
     ActiveSceneSubsystems m_defaultSceneSubsystems;
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
 
+
 private:
     RendererMeshState m_meshState;
     RendererMaterialState m_materialState;
@@ -604,6 +605,7 @@ private:
     // Keep its storage before the domain systems so their service objects are destroyed before the shared frame-resource generation.
     DeferredFrameTargets m_frameTargets;
 
+
 private:
     RendererShaderSystem m_shaderSystem;
     RendererMeshSystem m_meshSystem;
@@ -613,6 +615,7 @@ private:
     RendererReflectionSystem m_reflectionSystem;
     RendererAvboitSystem m_avboitSystem;
     RendererRayTracingSystem m_raytracingSystem;
+
 
 private:
     // Declare every callback owner before graph storage so reverse destruction keeps graph storage alive during teardown and unwinding.

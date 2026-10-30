@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "renderer_gather_benchmark_probe.h"
+#include "renderer_compiler_statistics_probe.h"
+#include "smoke_project_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_render/module.h>
@@ -12,11 +17,6 @@
 #include <core/graphics/runtime/runtime.h>
 
 #include <global/simd/vector.h>
-
-#include "renderer_gather_benchmark_probe.h"
-#include "renderer_compiler_statistics_probe.h"
-#include "smoke_project_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,15 +141,15 @@ public:
         const auto cameraEntity = CreateSmokeCamera(*m_world, 2.6f, 9.0f, 0.0f);
         if(!cameraEntity.valid())
             return false;
-        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.f, Float4(1.f, 0.96f, 0.88f), 2.f);
+        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
         m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
         if(!createBackdrop())
             return false;
         for(u32 index = 0u; index < s_ObjectCount; ++index){
-            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.f, 0.f), VectorSet(3.5f, 0.f, 0.f, 0.f));
-            const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.f, 0.f));
+            const SIMDVectorSingle grid = VectorSubtract(VectorSet(static_cast<f32>(index % 8u), static_cast<f32>(index / 8u), 0.0f, 0.0f), VectorSet(3.5f, 0.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle spacing = VectorMultiply(grid, VectorSet(0.75f, 0.58f, 0.0f, 0.0f));
             Float4 position;
-            StoreFloat(VectorAdd(VectorSet(0.f, 0.7f, 0.f, 0.f), spacing), position);
+            StoreFloat(VectorAdd(VectorSet(0.0f, 0.7f, 0.0f, 0.0f), spacing), position);
             if(m_runtime && index % 8u == 0u){
                 if(!createRuntime(index, position))
                     return false;
@@ -173,7 +173,7 @@ public:
             auto entity = m_world->createEntity();
             auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
             transform.position = position;
-            transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.f);
+            transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.0f);
             entity.addComponent<NWB::Impl::MeshComponent>().mesh = mesh;
             auto& component = entity.addComponent<NWB::Impl::RendererComponent>();
             component.material = material;
@@ -185,7 +185,7 @@ public:
             if(workload == s_OverridesWorkload){
                 entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
                 Float4 tint;
-                StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.f, 1.f), VectorDivide(VectorSet(static_cast<f32>(index), 0.f, 0.f, 0.f), VectorReplicate(256.f))), tint);
+                StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.0f, 1.0f), VectorDivide(VectorSet(static_cast<f32>(index), 0.0f, 0.0f, 0.0f), VectorReplicate(256.0f))), tint);
                 if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
                     return false;
             }
@@ -249,13 +249,13 @@ public:
 
 private:
     [[nodiscard]] b8 createBackdrop(){
-        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
+        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f));
         if(!backdrop.valid())
             return false;
         auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
-        const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.f);
-        const Half roughness = ConvertFloatToHalf(0.f);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
+        const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
+        const Half roughness = ConvertFloatToHalf(0.0f);
         if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
             return false;
         if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
@@ -265,7 +265,7 @@ private:
     }
 
     [[nodiscard]] b8 createRuntime(const u32 index, const Float4& position){
-        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f));
+        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f));
         const auto owner = modelResult.entity;
         if(!owner.valid() || !modelResult.tintApplied)
             return false;
@@ -277,7 +277,7 @@ private:
         if(pose.localJoints.size() < 2u)
             return false;
         const f32 yaw = (index & 8u) != 0u ? 0.08f : -0.08f;
-        StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.f, yaw, 0.f)), pose.localJoints[1u]);
+        StoreFloat(MatrixMultiply(LoadFloat(pose.localJoints[1u]), MatrixRotationRollPitchYaw(0.0f, yaw, 0.0f)), pose.localJoints[1u]);
         // Held real skeletal pose: runtime preparation stays live, with no animation-phase difference between arms.
         ++m_runtimeOwners;
         return true;

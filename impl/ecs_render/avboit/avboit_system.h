@@ -85,6 +85,7 @@ public:
     void markFrameTargetUsage(b8 hasTransparentRenderers)noexcept;
     void invalidateResources()noexcept;
 
+
 public:
     // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;

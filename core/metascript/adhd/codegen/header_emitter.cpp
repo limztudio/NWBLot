@@ -133,16 +133,12 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
 
     MVector<MStringView> externalForwardClasses(m_arena);
-    const auto collectCallableForwardDeclClasses = [&](
-        const MethodDecl& callable,
-        const Span<const TemplateParamDecl> outerTemplateParams,
-        const Span<const TemplateParamDecl> innerTemplateParams
-    ){
+    const auto collectCallableForwardDeclClasses = [&](const MethodDecl& callable, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams){
         if(callable.returnType)
             CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses, true);
+                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, true, 0u, externalForwardClasses);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
@@ -202,7 +198,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     if(emittedForwardDecl)
         out.append("\r\n");
 
-    auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> b8{
+    const auto constUsesLocalTypeAlias = [&](const Stmt& c)noexcept -> b8{
         if(!c.varType)
             return false;
         for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
@@ -212,7 +208,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         return false;
     };
 
-    auto constUsesLocalClass = [&](const Stmt& c)noexcept -> b8{
+    const auto constUsesLocalClass = [&](const Stmt& c)noexcept -> b8{
         if(!c.varType)
             return false;
         for(const ClassDecl* classDecl : unit.classes){
@@ -287,7 +283,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                 readyClasses.push_back(classDecl);
         }
 
-        auto isClassReady = [&](const ClassDecl* target)noexcept -> b8{
+        const auto isClassReady = [&](const ClassDecl* target)noexcept -> b8{
             for(const ClassDecl* c : readyClasses){
                 if(c == target)
                     return true;
@@ -295,7 +291,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             return false;
         };
 
-        auto emitReadyInstantiations = [&](){
+        const auto emitReadyInstantiations = [&](){
             b8 progress = true;
             while(progress){
                 progress = false;
@@ -375,11 +371,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     return out;
 }
 
-b8 HeaderEmitter::tryResolveSubsystemFieldAssetType(
-    const FieldDecl& field,
-    MStringView& outAssetTypeName,
-    b8& outIsVector
-)const noexcept{
+b8 HeaderEmitter::tryResolveSubsystemFieldAssetType(const FieldDecl& field, MStringView& outAssetTypeName, b8& outIsVector)const noexcept{
     outAssetTypeName = {};
     outIsVector = false;
     if(!field.type)

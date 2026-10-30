@@ -54,8 +54,7 @@ public:
         : AvboitRecordInputsBase(targetsIn)
         , extinctionTimingTicket(timingTicketIn)
         , extinctionComputeEmulationTiming(computeEmulationTimingIn)
-    {
-    }
+    {}
 };
 
 

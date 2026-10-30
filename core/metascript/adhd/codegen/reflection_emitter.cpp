@@ -20,12 +20,7 @@ namespace __hidden_adhd_reflection_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CountReflectedFields(
-    const Span<const FieldDecl* const> fields,
-    const SymbolTable& symbols,
-    usize& outNonTransientCount,
-    usize& outAssetRefCount
-)noexcept{
+void CountReflectedFields(const Span<const FieldDecl* const> fields, const SymbolTable& symbols, usize& outNonTransientCount, usize& outAssetRefCount)noexcept{
     outNonTransientCount = 0u;
     outAssetRefCount = 0u;
     for(const FieldDecl* field : fields){
@@ -64,11 +59,7 @@ void EmitReflectedCountMethod(MString& out, const MStringView methodName, const 
     out.append("u; }\r\n");
 }
 
-void EmitSerializedBinarySizeMethod(
-    MString& out,
-    const Span<const FieldDecl* const> fields,
-    const SymbolTable& symbols
-){
+void EmitSerializedBinarySizeMethod(MString& out, const Span<const FieldDecl* const> fields, const SymbolTable& symbols){
     out.append("    [[nodiscard]] static constexpr usize serializedBinarySize()noexcept{ return 0u");
     for(const FieldDecl* field : fields){
         if(!field || field->isTransient || !field->type)
@@ -121,14 +112,7 @@ void EmitSerializedBinarySizeMethod(
     out.append("; }\r\n");
 }
 
-void EmitSerializeNameOrAssetRefStep(
-    MString& out,
-    const MStringView indent,
-    const MStringView targetPrefix,
-    const MStringView targetName,
-    const b8 isAssetRef,
-    const b8 singleLineReturn
-){
+void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 isAssetRef, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append(singleLineReturn
         ? "if(offset + sizeof(::NameHash) > bufferCapacity) return 0u;\r\n"
@@ -148,13 +132,7 @@ void EmitSerializeNameOrAssetRefStep(
     out.append("offset += sizeof(::NameHash);\r\n");
 }
 
-void EmitSerializeSubObjectStep(
-    MString& out,
-    const MStringView indent,
-    const MStringView targetPrefix,
-    const MStringView targetName,
-    const b8 singleLineReturn
-){
+void EmitSerializeSubObjectStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append("if(offset + ");
     out.append(targetPrefix.data(), targetPrefix.size());
@@ -187,14 +165,7 @@ void EmitSerializeSubObjectStep(
     out.append(".serializedBinarySize();\r\n");
 }
 
-void EmitDeserializeNameOrAssetRefStep(
-    MString& out,
-    const MStringView indent,
-    const MStringView targetPrefix,
-    const MStringView targetName,
-    const b8 isAssetRef,
-    const b8 singleLineReturn
-){
+void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 isAssetRef, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append(singleLineReturn
         ? "if(offset + sizeof(::NameHash) > bufferSize) return false;\r\n"
@@ -214,13 +185,7 @@ void EmitDeserializeNameOrAssetRefStep(
     out.append("offset += sizeof(::NameHash);\r\n");
 }
 
-void EmitDeserializeSubObjectStep(
-    MString& out,
-    const MStringView indent,
-    const MStringView targetPrefix,
-    const MStringView targetName,
-    const b8 singleLineReturn
-){
+void EmitDeserializeSubObjectStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
     out.append("if(offset + ");
     out.append(targetPrefix.data(), targetPrefix.size());
@@ -250,12 +215,7 @@ void EmitDeserializeSubObjectStep(
     out.append(".serializedBinarySize();\r\n");
 }
 
-void EmitSerializeBinaryBody(
-    MString& out,
-    const Span<const FieldDecl* const> fields,
-    const SymbolTable& symbols,
-    const MStringView indent
-){
+void EmitSerializeBinaryBody(MString& out, const Span<const FieldDecl* const> fields, const SymbolTable& symbols, const MStringView indent){
     MString innerIndent(out.get_allocator());
     innerIndent.append(indent.data(), indent.size());
     innerIndent.append("    ");
@@ -321,12 +281,7 @@ void EmitSerializeBinaryBody(
     out.append("return offset;\r\n");
 }
 
-void EmitDeserializeBinaryBody(
-    MString& out,
-    const Span<const FieldDecl* const> fields,
-    const SymbolTable& symbols,
-    const MStringView indent
-){
+void EmitDeserializeBinaryBody(MString& out, const Span<const FieldDecl* const> fields, const SymbolTable& symbols, const MStringView indent){
     MString innerIndent(out.get_allocator());
     innerIndent.append(indent.data(), indent.size());
     innerIndent.append("    ");
@@ -394,13 +349,7 @@ void EmitDeserializeBinaryBody(
     out.append("return true;\r\n");
 }
 
-void EmitFieldNameLookupBody(
-    MString& out,
-    const Span<const FieldDecl* const> fields,
-    const SymbolTable& symbols,
-    const b8 assetDepOnly,
-    const MStringView indent
-){
+void EmitFieldNameLookupBody(MString& out, const Span<const FieldDecl* const> fields, const SymbolTable& symbols, const b8 assetDepOnly, const MStringView indent){
     usize idx = 0u;
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field))
@@ -418,11 +367,7 @@ void EmitFieldNameLookupBody(
     out.append("return {};\r\n");
 }
 
-void EmitMethodNameLookupBody(
-    MString& out,
-    const Span<const MethodDecl* const> methods,
-    const MStringView indent
-){
+void EmitMethodNameLookupBody(MString& out, const Span<const MethodDecl* const> methods, const MStringView indent){
     usize idx = 0u;
     for(const MethodDecl* method : methods){
         if(!method || !IsMethodReflected(*method))
@@ -439,14 +384,7 @@ void EmitMethodNameLookupBody(
 }
 
 
-void EmitContainerAssetDependencyLoop(
-    MString& out,
-    const MStringView fieldName,
-    const MStringView elemName,
-    const MStringView containerDerefPrefix,
-    const b8 isOptional,
-    const b8 isMapContainer
-){
+void EmitContainerAssetDependencyLoop(MString& out, const MStringView fieldName, const MStringView elemName, const MStringView containerDerefPrefix, const b8 isOptional, const b8 isMapContainer){
     if(isOptional){
         out.append("        if(this->");
         out.append(fieldName.data(), fieldName.size());
@@ -480,11 +418,7 @@ void EmitContainerAssetDependencyLoop(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionEmitter::emitInterfaceReflectionDeclarations(
-    MString& out,
-    const InterfaceDecl& decl,
-    MetaArena& arena
-)const{
+void ReflectionEmitter::emitInterfaceReflectionDeclarations(MString& out, const InterfaceDecl& decl, MetaArena& arena)const{
     using namespace __hidden_adhd_reflection_emitter;
 
     EmitAssetTypeNameDecl(out, decl.assetTypeName, "\r\n    ");
@@ -530,11 +464,7 @@ void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const Clas
     }
 }
 
-void ReflectionEmitter::emitInlineClassReflection(
-    MString& out,
-    const ClassDecl& decl,
-    const Span<const FieldDecl* const> fields
-)const{
+void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields)const{
     using namespace __hidden_adhd_reflection_emitter;
 
     out.append("public:\r\n");
@@ -618,7 +548,7 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
 
 void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<const FieldDecl* const> fields)const{
     out.append("    template<typename DependencyCallback>\r\n");
-    out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const{\r\n");
+    out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{\r\n");
     for(const FieldDecl* field : fields){
         if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
             continue;
@@ -661,16 +591,12 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
             out.append(memberDotOrArrow.data(), memberDotOrArrow.size());
             out.append("forEachAssetDependency(callback);\r\n");
         }
-        else if(IsReflectedLinearContainerType(tname)
-            && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type)
-        {
+        else if(IsReflectedLinearContainerType(tname) && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type){
             const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
             if(elemName == "AssetRef" || m_symbols.findClass(elemName))
                 __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, elemName, containerDerefPrefix, isOptional, false);
         }
-        else if(IsReflectedMapContainerType(tname)
-            && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type)
-        {
+        else if(IsReflectedMapContainerType(tname) && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type){
             const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
             if(valName == "AssetRef" || m_symbols.findClass(valName))
                 __hidden_adhd_reflection_emitter::EmitContainerAssetDependencyLoop(out, field->name, valName, containerDerefPrefix, isOptional, true);

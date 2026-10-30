@@ -53,8 +53,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     : m_graph(graph)
     , m_graphics(graphics)
     , m_materialSystem(materialSystem)
-    , m_avboitSystem(avboitSystem){
-}
+    , m_avboitSystem(avboitSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,9 +109,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         if(extinctionComputeEmulationOutputSetResult)
             extinctionComputeEmulationOutputSet = *extinctionComputeEmulationOutputSetResult;
     }
-    if(extinctionComputeEmulationPlanCaptured && !extinctionComputeEmulationOutputStatesGraphOwned){
+    if(extinctionComputeEmulationPlanCaptured && !extinctionComputeEmulationOutputStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT Extinction compute-emulation output states"));
-    }
     Core::GpuGraphResourceId extinctionSharedComputeEmulationOutput;
     b8 extinctionSharedComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.sharedComputeEmulationPlanCaptured){
@@ -120,9 +119,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         if(extinctionSharedComputeEmulationOutputResult)
             extinctionSharedComputeEmulationOutput = *extinctionSharedComputeEmulationOutputResult;
     }
-    if(inputs.sharedComputeEmulationPlanCaptured && !extinctionSharedComputeEmulationOutputStatesGraphOwned){
+    if(inputs.sharedComputeEmulationPlanCaptured && !extinctionSharedComputeEmulationOutputStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT Extinction shared compute-emulation output"));
-    }
     if(generatedGeometryReused && !extinctionComputeEmulationOutputStatesGraphOwned)
         return false;
     extinctionPayload.extinctionComputeEmulationOutputStatesGraphOwned = inputs.regularComputeEmulationPlanCaptured && extinctionComputeEmulationOutputStatesGraphOwned;
@@ -188,9 +186,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
     if(inputs.materialSampledTextureSet.valid())
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialSampledTextureSetUse;
-    if(extinctionComputeEmulationOutputStatesGraphOwned){
+    if(extinctionComputeEmulationOutputStatesGraphOwned)
         extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionComputeEmulationOutputVertexBufferSetUse;
-    }
     extinctionResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     extinctionResourceUses.push_back(ReadUse(inputs.avboitMaterialDomain));
     extinctionResourceUses.push_back(ReadUse(inputs.avboitCsgDomain));
@@ -202,21 +199,14 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
     avboitExtinctionScheduling.mergeWithPrevious = true;
     avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
 
-
     // Keep the final upload as stream anchor; replacing it hides a broken producer handoff.
     const Core::GpuTaskId extinctionStreamTask = inputs.uploadTask;
     if(inputs.streamsUploaded)
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
-    if(inputs.streamsUploaded && !objectGeometry.prepare(
-        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems,
-        frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
-    ))
+    if(inputs.streamsUploaded && !objectGeometry.prepare(extinctionPayload.extinctionSnapshot.regularIndexedDrawItems, frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket))
         return false;
-    if(inputs.streamsUploaded && !objectGeometry.prepare(
-        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems,
-        frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket
-    ))
+    if(inputs.streamsUploaded && !objectGeometry.prepare(extinctionPayload.extinctionSnapshot.csgIndexedDrawItems, frameBindings, scratchArena, extinctionDependency, extinctionResourceUses, &inputs.extinctionTimingTicket))
         return false;
 
     if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
@@ -248,9 +238,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(Core::GpuTaskGraph&
         Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[__hidden_avboit_extinction_record_builder::s_ComputeEmulationResourceSetUseCapacity] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
-        if(inputs.materialSampledTextureSet.valid()){
+        if(inputs.materialSampledTextureSet.valid())
             extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionMaterialSampledTextureSetUse;
-        }
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] = extinctionComputeEmulationOutputUavSetUse;
 
         Core::GpuTaskSchedulingHint extinctionComputeEmulationScheduling;

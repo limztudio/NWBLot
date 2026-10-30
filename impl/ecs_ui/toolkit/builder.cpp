@@ -3,6 +3,7 @@
 
 
 #include "builder.h"
+
 #include "widgets/selectable_paint.h"
 
 #include <global/simd/vector_arithmetic.h>

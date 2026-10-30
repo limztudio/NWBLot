@@ -74,7 +74,6 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using TransparentMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using TransparentMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
-
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraTargetY = 0.85f;
 static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
@@ -156,20 +155,19 @@ public:
     for(u32 stripe = 0u; stripe < 24u; ++stripe){
         const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
         Float4 position;
-        StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.f, 0.f, 0.f), VectorSet(0.2f, 0.f, 0.f, 0.f), VectorSet(-2.3f, s_CameraTargetY, 2.2f, 0.f)), position);
-        const auto entity = CreateTintedStaticMeshEntity(world, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.f), position, Float4(0.1f, 1.f, 1.3f, 0.f));
+        StoreFloat(VectorMultiplyAddExpression(VectorSet(static_cast<f32>(stripe), 0.0f, 0.0f, 0.0f), VectorSet(0.2f, 0.0f, 0.0f, 0.0f), VectorSet(-2.3f, s_CameraTargetY, 2.2f, 0.0f)), position);
+        const auto entity = CreateTintedStaticMeshEntity(world, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface, Float4(value, value, value, 1.0f), position, Float4(0.1f, 1.0f, 1.3f, 0.0f));
         if(!entity.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
             return false;
         }
         auto& transform = world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
     }
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
     return true;
 }
 #endif
-
 
 [[nodiscard]] static TStringView TransparentMultiFpsLabel()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
@@ -183,7 +181,6 @@ public:
 #endif
 }
 
-
 [[nodiscard, maybe_unused]] static Name TransparentCenterCsgReceiverGroup()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return s_TransparentCsgReceiverGroup;
@@ -191,7 +188,6 @@ public:
     return s_NameNone;
 #endif
 }
-
 
 [[nodiscard]] static SIMDVectorSingle TransparentLeftShapeBasePosition()noexcept{
     return VectorSet(-0.68f, s_CameraTargetY, 0.02f, 0.0f);
@@ -230,7 +226,6 @@ static void ApplyTransparentSceneTransform(NWB::Core::ECS::World& world, const N
     StoreFloat(RotateTransparentBasePosition(basePosition, sceneRotation), transform->position);
     StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), transform->rotation);
 }
-
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 [[nodiscard]] static SIMDVectorSingle BuildTransparentCsgRotation(const SIMDVectorSingle time)noexcept{
@@ -274,7 +269,6 @@ static void ApplyTransparentCsgSceneTransform(
 }
 #endif
 
-
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
     const TransparentMeshRef& mesh,
@@ -298,18 +292,16 @@ static void ApplyTransparentCsgSceneTransform(
     return entity;
 }
 
-
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, s_TransparentProjectName);
 
         const b8 rayQueryHardwareAvailable = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-        if(rayQueryHardwareAvailable){
+        if(rayQueryHardwareAvailable)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware"));
-        }else{
+        else
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable"));
-        }
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
@@ -338,7 +330,7 @@ private:
                 NWB_FATAL_ASSERT_MSG(mode == "hybrid", NWB_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
         }
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON")){
-            reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.f);
+            reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.0f);
             reflectionSettings.environmentBottom = reflectionSettings.environmentTop;
             reflectionSettings.maxHardwareRaysPerFrame = 2u * 1280u * 900u;
             reflectionSettings.temporalEnabled = false;
@@ -377,7 +369,7 @@ private:
 public:
     // Vary spin speed from one build to compare caustic motion-vector reprojection.
     static f32 EffectiveRotationSpeed(){
-        static const f32 s_Speed = [](){
+        static const f32 s_Speed = []()noexcept{
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
             if(!parsed)
                 return s_TransparentSceneRotationSpeed;
@@ -388,7 +380,7 @@ public:
 
     // Pin yaw when NWB_TRANSPARENT_MULTI_SPIN_ANGLE is set.
     static f32 EffectiveFrozenAngle(){
-        static const f32 s_Angle = [](){
+        static const f32 s_Angle = []()noexcept{
             const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
             if(!parsed)
                 return Limit<f32>::s_QuietNaN;
@@ -396,41 +388,6 @@ public:
         }();
         return s_Angle;
     }
-
-
-private:
-    void destroyWorld(){
-#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        if(m_framebufferCapture){
-            m_framebufferCapture->stop();
-            m_framebufferCapture.reset();
-        }
-#endif
-        DestroySmokeRenderWorld(m_context, m_world);
-    }
-
-#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    [[nodiscard]] b8 configureFramebufferCapture(){
-        constexpr u32 s_DefaultCaptureFrameCount = 360u;
-        auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, s_CausticProjectName, s_DefaultCaptureFrameCount);
-        if(!capture)
-            return false;
-        m_framebufferCapture = Move(*capture);
-        return true;
-    }
-#endif
-
-#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    void removeFrameLaggedAsyncLightingUnfocusedPass(){
-        if(!m_frameLaggedAsyncLightingUnfocusedPassRegistered)
-            return;
-
-        m_context.graphics.removeRenderPass(m_frameLaggedAsyncLightingUnfocusedPass);
-        m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
-    }
-#endif
-
-
 
 
 public:
@@ -501,7 +458,7 @@ public:
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         const auto causticSetting = ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED");
-        const b8 causticsEnabled = !causticSetting || *causticSetting != 0.f;
+        const b8 causticsEnabled = !causticSetting || *causticSetting != 0.0f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}"), causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
 #else
@@ -555,24 +512,8 @@ public:
         m_rightShape = rightShapeEntity;
 
         // Static opaque occluders cast hard shadows across the sweeping tinted shadows.
-        const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_TransparentCenterMesh,
-            s_GroundMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.66f, 0.66f, 0.70f, 1.0f),
-            opaqueLeftBasePosition,
-            Float4(0.26f, 0.26f, 0.26f)
-        );
-        const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_TransparentRightMesh,
-            s_GroundMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.72f, 0.68f, 0.62f, 1.0f),
-            opaqueRightBasePosition,
-            Float4(0.26f, 0.26f, 0.26f)
-        );
+        const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(*m_world, s_TransparentCenterMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.66f, 0.66f, 0.70f, 1.0f), opaqueLeftBasePosition, Float4(0.26f, 0.26f, 0.26f));
+        const auto opaqueRightEntity = CreateTintedStaticMeshEntity(*m_world, s_TransparentRightMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.68f, 0.62f, 1.0f), opaqueRightBasePosition, Float4(0.26f, 0.26f, 0.26f));
         m_opaqueLeftShape = opaqueLeftEntity;
         m_opaqueRightShape = opaqueRightEntity;
 
@@ -680,6 +621,37 @@ public:
 
 
 private:
+    void destroyWorld(){
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(m_framebufferCapture){
+            m_framebufferCapture->stop();
+            m_framebufferCapture.reset();
+        }
+#endif
+        DestroySmokeRenderWorld(m_context, m_world);
+    }
+
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    [[nodiscard]] b8 configureFramebufferCapture(){
+        constexpr u32 s_DefaultCaptureFrameCount = 360u;
+        auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, s_CausticProjectName, s_DefaultCaptureFrameCount);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
+    }
+#endif
+
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    void removeFrameLaggedAsyncLightingUnfocusedPass(){
+        if(!m_frameLaggedAsyncLightingUnfocusedPassRegistered)
+            return;
+
+        m_context.graphics.removeRenderPass(m_frameLaggedAsyncLightingUnfocusedPass);
+        m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
+    }
+#endif
+
     void updateTransparentSceneTransforms()noexcept{
         const SIMDVectorSingle sceneYaw = VectorReplicate(m_sceneYaw.yaw());
         const SIMDVectorSingle sceneRotation = BuildTransparentSceneRotation(sceneYaw);
@@ -740,7 +712,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)

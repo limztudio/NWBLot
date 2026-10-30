@@ -19,13 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PreparedSceneTlasBuild::capture(
-    const RendererRayTracingState& state,
-    const b8 staticScene,
-    const u64 staticSceneHash,
-    const Span<const Core::RayTracingInstanceDesc> instances,
-    const Span<const Core::RayTracingAccelStructHandle> instanceBlases
-){
+b8 PreparedSceneTlasBuild::capture(const RendererRayTracingState& state, const b8 staticScene, const u64 staticSceneHash, const Span<const Core::RayTracingInstanceDesc> instances, const Span<const Core::RayTracingAccelStructHandle> instanceBlases){
     clear();
     if(
         instances.empty()
@@ -98,9 +92,8 @@ void PreparedSceneTlasBuild::confirm(RendererRayTracingState& state)noexcept{
     else
         state.m_tlasStaticSceneHashValid = false;
     // This follows the accepted persistent-state handoff. Later imports use that binding, not a fresh Common.
-    if(preparedTlasMatchesCurrent){
+    if(preparedTlasMatchesCurrent)
         state.m_tlasBackingFresh = false;
-    }
     clear();
 }
 

@@ -145,9 +145,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_laggedLightingHistoryGeneration = laggedLightingHistoryTargetGeneration;
         }
     }
-    else{
+    else
         resetLaggedLightingHistoryReadTracking();
-    }
     // Snapshot the prior tail before declaration resets the token.
     const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken = m_laggedLightingHistorySubmissionToken;
     const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken = m_laggedLightingHistoryWriterDrainToken;
@@ -658,16 +657,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     if(!normalGraphAccepted || !normalSemanticTokensReady || !normalStateReady || !presentationSignalReady){
         const b8 hadAcceptedPackets = m_deferredLightingSubmissionTransaction.hasAcceptedPackets();
         b8 recovered = true;
-        if(!hadAcceptedPackets){
+        if(!hadAcceptedPackets)
             discardRenderPackets();
-        }
         else{
             recovered = recovery.recoverPendingFrameThenDiscardUnaccepted();
             timing.discardTickets();
 
-            if(!shadowPrepareSubmissionToken.valid()){
+            if(!shadowPrepareSubmissionToken.valid())
                 restorePostGbufferPacketCpuState(true);
-            }
             else{
                 if(!graphicsPrefixSubmissionToken.valid())
                     restorePrefixCpuState();
@@ -688,20 +685,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: acquired back buffer was written before presentation suffix rejection; requesting recreation"));
             m_graphics.requestDeviceRecreation();
         }
-        if(!presentationSignalReady && finalPresentationSubmissionToken.valid()){
+        if(!presentationSignalReady && finalPresentationSubmissionToken.valid())
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: terminal graph presentation signal confirmation failed"));
-        }
-        else{
+        else
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned normal deferred execution was rejected"));
-        }
         if(!recovered || acceptedStateLost || (!presentationSignalReady && finalPresentationSubmissionToken.valid()))
             recovery.failFrameRenderRecovery();
         return;
     }
 
-    if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled){
+    if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled)
         reportLaggedLightingTransition(LaggedLightingReport::NoDedicatedAsyncCompute, deferredTargets.laggedLightingHistory.generation);
-    }
     else if(m_laggedLightingCurrentFrameAcceptancePending){
         reportLaggedLightingTransition(LaggedLightingReport::CurrentFrameAccepted, deferredTargets.laggedLightingHistory.generation);
         m_laggedLightingCurrentFrameAcceptancePending = false;

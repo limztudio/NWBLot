@@ -148,11 +148,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
             }
             else if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(expr.lhs->text)){
                 if(aliasDecl->aliasedType && !aliasDecl->templateParams.empty() && expr.callTemplateArgs.size() == aliasDecl->templateParams.size()){
-                    const TypeRef* resolvedAlias = m_symbols.substituteTypeParams(
-                        *aliasDecl->aliasedType,
-                        aliasDecl->templateParams,
-                        expr.callTemplateArgs
-                    );
+                    const TypeRef* resolvedAlias = m_symbols.substituteTypeParams(*aliasDecl->aliasedType, aliasDecl->templateParams, expr.callTemplateArgs);
                     collectTemplateInstantiationsInType(*resolvedAlias, unit);
                 }
             }
@@ -182,24 +178,24 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
     }
 }
 
-void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit, const u32 depth){
+void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, const u32 depth, TranslationUnit& unit){
     if(depth > 16u)
         return;
     if(type.isFuncType){
         if(type.funcReturnType)
-            collectTemplateInstantiationsInType(*type.funcReturnType, unit, depth + 1u);
+            collectTemplateInstantiationsInType(*type.funcReturnType, depth + 1u, unit);
         for(const FuncParamType& fp : type.funcParams){
             if(fp.type)
-                collectTemplateInstantiationsInType(*fp.type, unit, depth + 1u);
+                collectTemplateInstantiationsInType(*fp.type, depth + 1u, unit);
         }
     }
     for(const TypeArg& arg : type.templateArgs){
         if(arg.type)
-            collectTemplateInstantiationsInType(*arg.type, unit, depth + 1u);
+            collectTemplateInstantiationsInType(*arg.type, depth + 1u, unit);
     }
     if(const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type)){
         if(unwrapped != &type)
-            collectTemplateInstantiationsInType(*unwrapped, unit, depth + 1u);
+            collectTemplateInstantiationsInType(*unwrapped, depth + 1u, unit);
     }
     if(const ClassDecl* cls = m_symbols.findClass(type.name)){
         if(!cls->templateParams.empty() && type.templateArgs.size() == cls->templateParams.size())
@@ -207,11 +203,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, T
     }
 }
 
-void LayoutOptimizer::instantiateClassTemplate(
-    const ClassDecl& templateDecl,
-    const Span<const TypeArg> templateArgs,
-    TranslationUnit& unit
-){
+void LayoutOptimizer::instantiateClassTemplate(const ClassDecl& templateDecl, const Span<const TypeArg> templateArgs, TranslationUnit& unit){
     if(!IsConcreteTemplateArgList(templateDecl.templateParams, templateArgs, m_symbols))
         return;
 
@@ -243,24 +235,14 @@ void LayoutOptimizer::instantiateClassTemplate(
         for(Expr* arg : origField->ctorArgs)
             clonedField->ctorArgs.push_back(arg);
 
-        TypeRef* resolvedType = m_symbols.substituteTypeParams(
-            *origField->type,
-            templateDecl.templateParams,
-            templateArgs
-        );
+        TypeRef* resolvedType = m_symbols.substituteTypeParams(*origField->type, templateDecl.templateParams, templateArgs);
         clonedField->type = resolvedType;
-        markFieldArenaUsage(*clonedField, *resolvedType, const_cast<ClassDecl&>(templateDecl));
+        markFieldArenaUsage(*resolvedType, *clonedField, const_cast<ClassDecl&>(templateDecl));
         collectTemplateInstantiationsInType(*resolvedType, unit);
         inst->orderedFields.push_back(clonedField);
     }
 
-    finalizeClassFieldLayouts(
-        inst->orderedFields,
-        templateDecl.isSerialize,
-        !templateDecl.implementedInterfaces.empty(),
-        inst->totalSize,
-        inst->totalAlign
-    );
+    finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
 }
 

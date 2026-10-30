@@ -28,7 +28,6 @@ NWB_IMPL_BEGIN
 class RendererCsgSystem;
 class RendererMaterialSystem;
 
-
 // Opaque upload chain owns material plus CSG frame buffer uploads feeding G-buffer.
 struct OpaqueUploadChainInputs{
     DeferredFrameTargets& targets;

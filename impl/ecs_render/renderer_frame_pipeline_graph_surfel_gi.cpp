@@ -67,17 +67,7 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
-    if(
-        !deferredTargets.valid()
-        || !deferredTargets.bindless.valid()
-        || !worldPosition.valid()
-        || !normal.valid()
-        || !surfelIrradiance.valid()
-        || !currentBindlessSlots.valid()
-        || !sceneShading.valid()
-        || !lights.valid()
-        || !effectsTask.valid()
-    )
+    if(!deferredTargets.valid() || !deferredTargets.bindless.valid() || !worldPosition.valid() || !normal.valid() || !surfelIrradiance.valid() || !currentBindlessSlots.valid() || !sceneShading.valid() || !lights.valid() || !effectsTask.valid())
         return false;
 
     const b8 useHwTrace = rayTracingResources.surfelUsesHardwareTrace;
@@ -277,16 +267,14 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
             if(tlasResult)
                 tlas = *tlasResult;
             optionalResourcesImported = tlasResult.has_value();
-            if(optionalResourcesImported){
+            if(optionalResourcesImported)
                 resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-            }
         }
     }
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
         return false;
     }
-
 
     const b8 graphOwnsSurfelGiResolve =
         hasSurfelWork
@@ -345,17 +333,15 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
             for(const Core::GpuGraphResourceId resource : traceGeometryResources)
                 traceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
-        if(useHwTrace){
+        if(useHwTrace)
             traceResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-        }
         else{
             traceResourceUses.push_back(ReadUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
             traceResourceUses.push_back(ReadUse(sceneInstances, Core::ResourceStates::ShaderResource));
         }
     }
-    else if(surfelTraceIndirectArgs.valid()){
+    else if(surfelTraceIndirectArgs.valid())
         resourceUses.push_back(WriteUse(surfelTraceIndirectArgs, Core::ResourceStates::UnorderedAccess));
-    }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -393,7 +379,6 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     m_deferredSurfelGiInitializationLifecycleTask = surfelGiLifecycleResult->initializationLifecycleTask;
     m_deferredSurfelGiSnapshotCopyTask = surfelGiLifecycleResult->snapshotCopyTask;
     Core::GpuTaskId surfelGiDependency = surfelGiLifecycleResult->dependency;
-
 
     // Zero coverage is the no-op; keep its clear at the front of the GI packet.
     Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
@@ -606,8 +591,6 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     }
     m_deferredSurfelGiTask = *deferredSurfelGiTaskResult;
     return true;
-
-
 }
 
 

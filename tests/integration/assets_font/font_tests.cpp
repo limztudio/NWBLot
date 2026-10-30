@@ -251,7 +251,6 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
     EXPECT_EQ(logger.errorCount(), LengthOf(s_BundledNames));
 }
 
-
 TEST(AssetsFont, MalformedBinaryPreservesThePreviouslyLoadedFont){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -364,7 +363,6 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
     }
 }
 
-
 TEST(AssetsFont, NativeFaceFailurePreservesErrorCodeAndReclaimsValidationAllocations){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -430,3 +428,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -36,7 +36,6 @@ struct PreparedSceneBvhUploads{
     Core::GpuUploadBlobId instance;
 };
 
-
 // Shadow Visibility freezes its route policy before the coordinator declares topology. Handles stay in snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
     LightSpaceShadowSnapshot lightSpace;
@@ -75,7 +74,6 @@ struct RayTracingFrameCpuStateSnapshot{
     b8 surfelSeeded = false;
 };
 
-
 // Shadow Preparation keeps TLAS, software-BVH scratch, adaptive-shadow scratch across packets. Coordinator gets handles only.
 struct RayTracingShadowPreparationResourceSnapshot{
     Core::RayTracingAccelStructHandle sceneTlas;
@@ -87,7 +85,6 @@ struct RayTracingShadowPreparationResourceSnapshot{
     Core::BufferHandle swShadowEdgeListBuffer;
     Core::BufferHandle swShadowIndirectArgsBuffer;
 };
-
 
 // Graph declaration freezes the descriptor-visible effects resources and route decisions selected by preflight.
 // Keeping this read-only snapshot separate from CPU rollback state prevents the coordinator from mutating caches.
@@ -112,7 +109,6 @@ struct RayTracingDeferredGraphResourceSnapshot{
     b8 surfelUsesHardwareTrace = false;
     b8 surfelSplitGraphPipelinesReady = false;
 };
-
 
 // Surfel resources outlive resizable targets. The accepted readback token shares its generation with the counter/readback pair.
 struct RayTracingSurfelPersistentResourceSnapshot{
@@ -164,3 +160,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

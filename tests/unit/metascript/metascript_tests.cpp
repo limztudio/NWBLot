@@ -356,7 +356,6 @@ TEST(Metascript, ReparsingClearsStructsVariablesDeclarationsAndErrors){
     EXPECT_EQ(document.findVariable("current"), nullptr);
 }
 
-
 TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
     struct InvalidTargetCase{
         MStringView source;

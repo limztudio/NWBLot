@@ -28,9 +28,8 @@ FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Cor
 
 FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)noexcept
     : m_graph(graph)
-    , m_meshSystem(meshSystem){
-}
-
+    , m_meshSystem(meshSystem)
+{}
 
 Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena){
     FrameGraphSoftwareBvhBuildStateResult result(scratchArena);

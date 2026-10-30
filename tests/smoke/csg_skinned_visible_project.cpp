@@ -113,10 +113,6 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 #endif
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static f32 ReceiverAlpha()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
     return s_TransparentReceiverAlpha;
@@ -124,7 +120,6 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
     return 1.0f;
 #endif
 }
-
 
 [[nodiscard]] static SIMDVectorSingle BuildReceiverRotation(const f32 animationTime)noexcept{
     return QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, animationTime, 0.0f, 0.0f), s_ReceiverYawSpeed));
@@ -148,8 +143,93 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
     return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCutterLocalRotation(animationTime)));
 }
 
-
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
+public:
+    explicit CsgSkinnedVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+    {}
+    virtual ~CsgSkinnedVisibleSmokeProject()noexcept override{
+        destroyWorld();
+    }
+
+
+public:
+    virtual b8 onStartup()override{
+        auto activeCameraEntity = m_world->createEntity();
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
+        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, s_WarmDirectionalLightColor, s_DefaultDirectionalLightIntensity);
+
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
+            light->enableCaustics = false;
+#endif
+
+        createReceiver();
+        SyncSmokeModelRuntimes(*m_world);
+        const b8 receiverReady = installCsgReceiverOnSpawnedModelObject();
+        const SIMDVectorSingle cutterLocalCenter = loadCutterAnchorLocalCenter();
+        StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
+        createCutter(cutterLocalCenter);
+        NWB_FATAL_ASSERT_MSG(
+            activeCamera.camera.valid() && directionalLight.valid()
+                && m_plainReceiver.valid()
+                && m_receiver.valid()
+                && m_receiverObject.valid()
+                && m_cutter.valid(),
+            NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
+        );
+        NWB_FATAL_ASSERT_MSG(receiverReady, NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
+
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+#else
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
+#endif
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        m_context.graphics.setFrameSubmissionSuspended(false);
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
+        if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
+            if(!m_rendererBaselineCapturePaused){
+                // Freeze the animated pose at the target frame for baseline capture.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_rendererBaselineCapturePaused = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
+            }
+            return true;
+        }
+
+        const f32 fixedDelta = RendererBaselineFixedDelta();
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
+        m_fpsProbe.recordFrame(safeDelta);
+        m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CutterAnimationSpeed), VectorReplicate(m_animationTime)));
+        const SIMDVectorSingle receiverRotation = BuildReceiverRotation(m_animationTime);
+        updateReceiverTransforms(receiverRotation);
+        updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
+
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
+        ++m_rendererBaselineRenderedFrameCount;
+        return true;
+    }
+
+
 private:
     void destroyWorld(){
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
@@ -270,92 +350,6 @@ private:
     }
 
 
-public:
-    explicit CsgSkinnedVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
-    {}
-    virtual ~CsgSkinnedVisibleSmokeProject()noexcept override{
-        destroyWorld();
-    }
-
-
-public:
-    virtual b8 onStartup()override{
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f));
-        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, s_WarmDirectionalLightColor, s_DefaultDirectionalLightIntensity);
-
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
-            light->enableCaustics = false;
-#endif
-
-        createReceiver();
-        SyncSmokeModelRuntimes(*m_world);
-        const b8 receiverReady = installCsgReceiverOnSpawnedModelObject();
-        const SIMDVectorSingle cutterLocalCenter = loadCutterAnchorLocalCenter();
-        StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
-        createCutter(cutterLocalCenter);
-        NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && directionalLight.valid()
-                && m_plainReceiver.valid()
-                && m_receiver.valid()
-                && m_receiverObject.valid()
-                && m_cutter.valid(),
-            NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
-        );
-        NWB_FATAL_ASSERT_MSG(receiverReady, NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
-
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
-#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
-#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
-#else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
-#endif
-        return true;
-    }
-
-    virtual void onShutdown()override{
-        m_context.graphics.setFrameSubmissionSuspended(false);
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
-    }
-
-    virtual b8 onUpdate(const f32 delta)override{
-        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
-        if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
-            if(!m_rendererBaselineCapturePaused){
-                // Freeze the animated pose at the target frame for baseline capture.
-                m_context.graphics.setFrameSubmissionSuspended(true);
-                m_rendererBaselineCapturePaused = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"), m_rendererBaselineRenderedFrameCount);
-            }
-            return true;
-        }
-
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
-        m_fpsProbe.recordFrame(safeDelta);
-        m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CutterAnimationSpeed), VectorReplicate(m_animationTime)));
-        const SIMDVectorSingle receiverRotation = BuildReceiverRotation(m_animationTime);
-        updateReceiverTransforms(receiverRotation);
-        updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
-
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        ++m_rendererBaselineRenderedFrameCount;
-        return true;
-    }
-
-
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
@@ -383,7 +377,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { __hidden_csg_skinned_visible_smoke::s_FrameClientWidth, __hidden_csg_skinned_visible_smoke::s_FrameClientHeight };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)

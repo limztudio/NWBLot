@@ -60,17 +60,11 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     transformPayload.position = Float4(1.0f, 2.0f, 3.0f, 0.0f);
     transformPayload.rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     transformPayload.scale = Float4(2.0f, 2.0f, 2.0f, 0.0f);
-    source.setBinary(
-        Name("project/entities/hero/transform"),
-        MakeComponentBinary<TransformComponentAsset>(arena, transformPayload)
-    );
+    source.setBinary(Name("project/entities/hero/transform"), MakeComponentBinary<TransformComponentAsset>(arena, transformPayload));
 
     SingleAssetRefComponentPayloadBinary modelPayload;
     modelPayload.assetHash = Name("project/characters/female/model").hash();
-    source.setBinary(
-        Name("project/entities/hero/model"),
-        MakeComponentBinary<ModelComponentAsset>(arena, modelPayload)
-    );
+    source.setBinary(Name("project/entities/hero/model"), MakeComponentBinary<ModelComponentAsset>(arena, modelPayload));
 
     RendererComponentPayloadBinary rendererPayload;
     rendererPayload.materialHash = Name("project/materials/mat_skinned_uv").hash();
@@ -80,10 +74,7 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     rendererPayload.visible = 1u;
     rendererPayload.opticalVolumeCoincidence = static_cast<u8>(OpticalVolumeCoincidence::SharedGroup);
     rendererPayload.opticalBoundaryMode = static_cast<u8>(OpticalBoundaryMode::ClosedPriority);
-    source.setBinary(
-        Name("project/entities/hero/renderer"),
-        MakeComponentBinary<RendererComponentAsset>(arena, rendererPayload)
-    );
+    source.setBinary(Name("project/entities/hero/renderer"), MakeComponentBinary<RendererComponentAsset>(arena, rendererPayload));
 
     EntityAsset::ComponentRefVector heroComponents(arena);
     heroComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform"));
@@ -131,19 +122,10 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
     RendererComponentPayloadBinary invalidRendererPayload = rendererPayload;
     invalidRendererPayload.opticalVolumeGroupHash = {};
     ComponentAssetCodec componentCodec;
-    EXPECT_FALSE(
-        componentCodec.deserialize(
-            arena,
-            Name("project/entities/hero/invalid_renderer"),
-            MakeComponentBinary<RendererComponentAsset>(arena, invalidRendererPayload)
-        ).has_value()
-    );
+    EXPECT_FALSE(componentCodec.deserialize(arena, Name("project/entities/hero/invalid_renderer"), MakeComponentBinary<RendererComponentAsset>(arena, invalidRendererPayload)).has_value());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("shared_group optical volume requires optical_volume_group")));
 
-    source.setBinary(
-        Name("project/entities/hero/transform_duplicate"),
-        MakeComponentBinary<TransformComponentAsset>(arena, transformPayload)
-    );
+    source.setBinary(Name("project/entities/hero/transform_duplicate"), MakeComponentBinary<TransformComponentAsset>(arena, transformPayload));
     EntityAsset::ComponentRefVector duplicateComponents(arena);
     duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform"));
     duplicateComponents.push_back(EntityAsset::ComponentRef("project/entities/hero/transform_duplicate"));
@@ -164,3 +146,4 @@ TEST(SceneSubsystemAssets, EntityAndComponentAssetsDecodeAndInstantiate){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

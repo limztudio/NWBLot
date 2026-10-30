@@ -60,13 +60,12 @@ template<typename VisitTriangle>
         const u32 triangleCount = ufbx_triangulate_face(inOutTriangleIndices.data(), inOutTriangleIndices.size(), &mesh, face);
 
         for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-            u32 cornerIndices[s_TriangleIndexCount] = { inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u], };
+            u32 cornerIndices[s_TriangleIndexCount] = { inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u] };
             if(flipWinding)
                 Swap(cornerIndices[1], cornerIndices[2]);
 
-            for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
+            for([[maybe_unused]] const u32 cornerIndex : cornerIndices)
                 NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
-            }
 
             if(!visitTriangle(cornerIndices))
                 return false;
@@ -75,16 +74,13 @@ template<typename VisitTriangle>
     return true;
 }
 
-
 [[nodiscard]] static SIMDVectorSingle LoadUfbxVector(const ufbx_vec3 value)noexcept{
     return ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(value.x), static_cast<f64>(value.y), static_cast<f64>(value.z), 0.0));
 }
 
-
 [[nodiscard]] static PositionKey MakePositionKey(const SIMDVectorSingle position)noexcept{
-    return PositionKey{ FloatingHashBits(VectorGetX(position)), FloatingHashBits(VectorGetY(position)), FloatingHashBits(VectorGetZ(position)), };
+    return PositionKey{ FloatingHashBits(VectorGetX(position)), FloatingHashBits(VectorGetY(position)), FloatingHashBits(VectorGetZ(position)) };
 }
-
 
 [[nodiscard]] static SIMDVectorSingle LoadCornerOutputPositionVector(const ufbx_mesh& mesh, const ufbx_node& node, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 position = {};
@@ -93,13 +89,11 @@ template<typename VisitTriangle>
         if(wantsSkinning || mesh.skinned_is_local)
             position = ufbx_transform_position(&node.geometry_to_world, position);
     }
-    else{
+    else
         position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
-    }
 
     return VectorScale(LoadUfbxVector(position), static_cast<f32>(options.scale));
 }
-
 
 [[nodiscard]] static SIMDVectorSingle LoadCornerOutputNormalVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex)noexcept{
     ufbx_vec3 normal = {};
@@ -108,14 +102,12 @@ template<typename VisitTriangle>
         if(wantsSkinning || mesh.skinned_is_local)
             normal = ufbx_transform_direction(&normalToWorld, normal);
     }
-    else{
+    else
         normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
-    }
 
     const auto outputNormal = Vector3TryNormalize(LoadUfbxVector(normal));
     return outputNormal ? outputNormal->value : VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 }
-
 
 [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCornerOutputTangentVector(const ufbx_mesh& mesh, const ufbx_matrix& normalToWorld, const ImportOptions& options, const b8 wantsSkinning, const u32 cornerIndex, const SIMDVectorSingle normal)noexcept{
     if(!mesh.vertex_tangent.exists)
@@ -146,11 +138,9 @@ template<typename VisitTriangle>
     return SIMDVectorSingleResult{ VectorSelect(outputTangent->value, sign, s_SIMDMaskW) };
 }
 
-
 [[nodiscard]] static b8 IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
     return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
 }
-
 
 [[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
     const SIMDVectorSingle position,
@@ -169,7 +159,6 @@ template<typename VisitTriangle>
     return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);
 }
 
-
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
@@ -183,9 +172,8 @@ template<typename VisitTriangle>
 
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         SIMDVectorSingle positions[s_TriangleIndexCount] = {};
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex)
             positions[triangleCornerIndex] = LoadCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
-        }
 
         const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
         const f64 areaLengthSquared = VectorDoubleGetX(TriangleAreaNormalLengthSquared(areaNormal64));
@@ -200,8 +188,7 @@ template<typename VisitTriangle>
             StoreFloat(result.second ? areaNormal : VectorAdd(LoadFloat(normal.value), areaNormal), normal.value);
         }
         return true;
-    }, inOutTriangleIndices
-    ))
+    }, inOutTriangleIndices))
         return MakeUnexpected(Failure{});
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
@@ -214,7 +201,6 @@ template<typename VisitTriangle>
     }
     return outNormals;
 }
-
 
 b8 FbxMeshBuild::AppendInstanceMesh(
     const MeshInstance& instance,
@@ -285,9 +271,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             trianglePositions[triangleCornerIndex] = position;
 
             SIMDVectorSingle normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-            if(normalMode == NormalMode::Imported){
+            if(normalMode == NormalMode::Imported)
                 normal = LoadCornerOutputNormalVector(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
-            }
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(position));
                 if(foundNormal == smoothNormals.end()){
@@ -309,9 +294,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
                 uv0 = ConvertVectorDoubleToSingle(VectorDoubleSet(static_cast<f64>(sourceUv0.x), static_cast<f64>(sourceUv0.y), 0.0, 0.0));
                 inOutSawVertexUvs = true;
             }
-            else{
+            else
                 inOutUsedDefaultUvs = true;
-            }
             StoreFloat(uv0, corner.uv0);
 
             SIMDVectorSingle color = defaultColorVector;
@@ -378,10 +362,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             inOutMesh.mesh.indices.push_back(*vertexRefIndex);
         }
         return true;
-    }, inOutTriangleIndices
-    );
+    }, inOutTriangleIndices);
 }
-
 
 Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const Span<const MeshInstance> instances, const Span<const usize> selection){
     usize outTriangleCorners = 0u;

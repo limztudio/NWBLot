@@ -87,10 +87,6 @@ class DeferredBindlessResourceSlots{
 }
 
 class StatisticsReservationKey{
-    public u64 sequence;
-    public u64 generation;
-    public u32 slot;
-
     public StatisticsReservationKey(){
         this.sequence = 0u;
         this.generation = 0u;
@@ -106,6 +102,10 @@ class StatisticsReservationKey{
     public b8 valid()const{
         return this.sequence != 0u && this.generation != 0u;
     }
+
+    public u64 sequence;
+    public u64 generation;
+    public u32 slot;
 }
 
 
@@ -292,3 +292,4 @@ enum<u8> RendererTaskTimingFeedbackCollectionAction{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

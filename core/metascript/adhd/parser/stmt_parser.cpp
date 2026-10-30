@@ -27,12 +27,8 @@ namespace __hidden_adhd_stmt_parser{
         return true;
     if(stmt->kind == StmtKind::Block)
         return !stmt->statements.empty() && CaseBranchTerminates(stmt->statements.back());
-    if(stmt->kind == StmtKind::If){
-        return !stmt->statements.empty()
-            && !stmt->elseStatements.empty()
-            && CaseBranchTerminates(stmt->statements.back())
-            && CaseBranchTerminates(stmt->elseStatements.back());
-    }
+    if(stmt->kind == StmtKind::If)
+        return !stmt->statements.empty() && !stmt->elseStatements.empty() && CaseBranchTerminates(stmt->statements.back()) && CaseBranchTerminates(stmt->elseStatements.back());
     return false;
 }
 
@@ -200,13 +196,7 @@ b8 StmtParser::rejectStatementAttributes(const Span<const ParsedAttribute> attri
     return false;
 }
 
-Stmt* StmtParser::parseSimpleKeywordStatement(
-    const StmtKind::Enum kind,
-    const SourceSpan span,
-    const Span<const ParsedAttribute> attributes,
-    const MStringView rejectAttrMsg,
-    const MStringView missingSemiMsg
-){
+Stmt* StmtParser::parseSimpleKeywordStatement(const StmtKind::Enum kind, const SourceSpan span, const Span<const ParsedAttribute> attributes, const MStringView rejectAttrMsg, const MStringView missingSemiMsg){
     if(!rejectStatementAttributes(attributes, span, rejectAttrMsg))
         return nullptr;
     if(!m_cursor.expect(TokenType::Semicolon, missingSemiMsg))
@@ -301,19 +291,14 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
             return nullptr;
         }
 
-        while(!m_cursor.check(TokenType::RightBrace)
-            && !m_cursor.check(TokenType::EndOfFile)
-            && !m_cursor.checkIdentifier("case")
-            && !m_cursor.checkIdentifier("default"))
-        {
+        while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile) && !m_cursor.checkIdentifier("case") && !m_cursor.checkIdentifier("default")){
             Stmt* caseStmt = parseStatement();
             if(!caseStmt)
                 return nullptr;
             switchCase.statements.push_back(caseStmt);
         }
 
-        const b8 isStackedEmptyLabel = switchCase.statements.empty()
-            && (m_cursor.checkIdentifier("case") || m_cursor.checkIdentifier("default"));
+        const b8 isStackedEmptyLabel = switchCase.statements.empty() && (m_cursor.checkIdentifier("case") || m_cursor.checkIdentifier("default"));
         if(!isStackedEmptyLabel){
             if(switchCase.statements.empty()){
                 m_cursor.error(switchCase.span.line, switchCase.span.column, "'switch' case cannot be empty without 'break' or 'return'");

@@ -203,7 +203,6 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     EnableCrossFamilyComputeEffectRouting(scheduling);
     const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
 
-
     // Black is the no-producer result; merge the producer into this packet.
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;

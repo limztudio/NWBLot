@@ -8,11 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+namespace __hidden_adhd_compiler_simd_parallel_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using namespace NWB::AdhdCompilerTestsDetail;
 
 TEST(AdhdCompiler, OptimizesSimdMathWithBlockScopedLoadStoreAndFmaLowering){
     AdhdTestArena arena;
@@ -46,7 +48,7 @@ TEST(AdhdCompiler, OptimizesSimdMathWithBlockScopedLoadStoreAndFmaLowering){
         "}\r\n";
 
     CompileResult simdRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_SimdSource, "impl/physics/transform_body.adhd", arena.arena, simdRes));
+    ASSERT_TRUE(Compiler::Compile(s_SimdSource, "impl/physics/transform_body.adhd", arena.arena, simdRes));
     const MStringView cppView(simdRes.generatedSource.data(), simdRes.generatedSource.size());
 
     EXPECT_NE(cppView.find("const ::SIMDVectorSingle __adhd_simd_velocity = ::LoadFloat(velocity);"), MStringView::npos);
@@ -120,7 +122,7 @@ TEST(AdhdCompiler, SupportsFixedVectorLayoutStringArenaPathConvertStringAndMatri
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/assets/manifest.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/assets/manifest.adhd", arena.arena, res));
     ASSERT_EQ(res.unit.classes.size(), 2u);
 
     const auto* packedCls = res.unit.classes[0];
@@ -186,7 +188,7 @@ TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndList
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/scene/scene_record.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/scene/scene_record.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -208,7 +210,7 @@ TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndList
         "    public Array<String, 4> names = Array<String, 4>();\r\n"
         "}\r\n";
     CompileResult badSerRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_InvalidNestedSerializeSource, "impl/scene/bad_packet.adhd", arena.arena, badSerRes));
+    EXPECT_FALSE(Compiler::Compile(s_InvalidNestedSerializeSource, "impl/scene/bad_packet.adhd", arena.arena, badSerRes));
 
     static constexpr MStringView s_WaitAndOptionalReflectionSource =
         "[reflect]\r\n"
@@ -230,7 +232,7 @@ TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndList
         "    }\r\n"
         "}\r\n";
     CompileResult waitRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_WaitAndOptionalReflectionSource, "impl/scene/tasked_asset.adhd", arena.arena, waitRes));
+    ASSERT_TRUE(Compiler::Compile(s_WaitAndOptionalReflectionSource, "impl/scene/tasked_asset.adhd", arena.arena, waitRes));
     const MStringView waitHdr(waitRes.generatedHeader.data(), waitRes.generatedHeader.size());
     const MStringView waitCpp(waitRes.generatedSource.data(), waitRes.generatedSource.size());
     EXPECT_NE(waitHdr.find("::NWB::Core::Assets::AssetRef<ModelAsset> mesh;"), MStringView::npos);
@@ -245,7 +247,7 @@ TEST(AdhdCompiler, SupportsTypeAliasesSelfDefaultedFieldsBoundedOutOfLineAndList
         "    wait(NonExistentTask);\r\n"
         "}\r\n";
     CompileResult badWaitRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_InvalidWaitTargetSource, "impl/scene/bad_wait.adhd", arena.arena, badWaitRes));
+    EXPECT_FALSE(Compiler::Compile(s_InvalidWaitTargetSource, "impl/scene/bad_wait.adhd", arena.arena, badWaitRes));
 }
 
 TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropagation){
@@ -285,7 +287,7 @@ TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropa
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/net/int_sink.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/net/int_sink.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -309,7 +311,7 @@ TEST(AdhdCompiler, SupportsTemplatedInterfacesArenaCtorExprsAndStatefulFuncPropa
         "    public void send(in f32 item) override {}\r\n"
         "}\r\n";
     CompileResult badSinkRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd", arena.arena, badSinkRes));
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplatedInterfaceSource, "impl/net/bad_sink.adhd", arena.arena, badSinkRes));
 }
 
 TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForwardDecls){
@@ -350,7 +352,7 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/data/indexed_bucket.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/data/indexed_bucket.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -360,7 +362,7 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
     EXPECT_NE(hdrView.find("reflectedMethodCount()noexcept{ return 3u; }"), MStringView::npos);
     EXPECT_NE(hdrView.find("IndexedBucket()noexcept{"), MStringView::npos);
     EXPECT_NE(hdrView.find("~IndexedBucket()noexcept;"), MStringView::npos);
-    EXPECT_NE(hdrView.find("i32 operator[](const usize idx)const noexcept override;"), MStringView::npos);
+    EXPECT_NE(hdrView.find("virtual i32 operator[](const usize idx)const noexcept override;"), MStringView::npos);
     EXPECT_NE(hdrView.find("inMap.findField(\"m_base\")"), MStringView::npos);
 
     EXPECT_NE(cppView.find("IndexedBucket::~IndexedBucket()noexcept"), MStringView::npos);
@@ -372,7 +374,7 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
         "i32 dupFn(in i32 x) { return x; }\r\n"
         "i32 dupFn(in i32 x) { return x + 1; }\r\n";
     CompileResult dupFreeRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateFreeFnSource, "impl/data/dup_fn.adhd", arena.arena, dupFreeRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateFreeFnSource, "impl/data/dup_fn.adhd", arena.arena, dupFreeRes));
 
     static constexpr MStringView s_DuplicateClassMethodSource =
         "class DupMethod {\r\n"
@@ -380,7 +382,7 @@ TEST(AdhdCompiler, SupportsMethodAndInterfaceReflectionNativeCharLiteralsAndForw
         "    public i32 calc(in i32 y)const { return y; }\r\n"
         "}\r\n";
     CompileResult dupMethodRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateClassMethodSource, "impl/data/dup_method.adhd", arena.arena, dupMethodRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateClassMethodSource, "impl/data/dup_method.adhd", arena.arena, dupMethodRes));
 }
 
 

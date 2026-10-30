@@ -60,12 +60,8 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
         else if(stmt->kind == StmtKind::If){
             if(StmtListMayReturnWithoutInit(stmt->statements, fieldName) || StmtListMayReturnWithoutInit(stmt->elseStatements, fieldName))
                 return true;
-            if(!stmt->elseStatements.empty()
-                && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName)
-                && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
-            {
+            if(!stmt->elseStatements.empty() && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName) && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
                 return false;
-            }
         }
         else if(stmt->kind == StmtKind::Switch){
             for(const SwitchCase& sc : stmt->switchCases){
@@ -93,13 +89,8 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
         }
         else if(stmt->kind == StmtKind::NativeBlock){
             for(const NativeBinding& binding : stmt->nativeBindings){
-                if(binding.mode == ParamPassingMode::Mut
-                    && binding.sourceExpr
-                    && binding.sourceExpr->kind == ExprKind::ThisMember
-                    && binding.sourceExpr->text == fieldName)
-                {
+                if(binding.mode == ParamPassingMode::Mut && binding.sourceExpr && binding.sourceExpr->kind == ExprKind::ThisMember && binding.sourceExpr->text == fieldName)
                     return true;
-                }
             }
         }
         else if(stmt->kind == StmtKind::Block || stmt->kind == StmtKind::ParallelBlock){
@@ -109,12 +100,8 @@ void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MSt
                 return false;
         }
         else if(stmt->kind == StmtKind::If){
-            if(!stmt->elseStatements.empty()
-                && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName)
-                && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
-            {
+            if(!stmt->elseStatements.empty() && IsMemberDefinitelyInitializedInStmts(stmt->statements, fieldName) && IsMemberDefinitelyInitializedInStmts(stmt->elseStatements, fieldName))
                 return true;
-            }
             if(StmtListMayReturnWithoutInit(stmt->statements, fieldName) || StmtListMayReturnWithoutInit(stmt->elseStatements, fieldName))
                 return false;
         }
@@ -195,12 +182,7 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
             continue;
         for(usize j = 0u; j < i; ++j){
             const MethodDecl* prev = iface.methods[j];
-            if(prev
-                && prev->isOperator == m->isOperator
-                && prev->name == m->name
-                && prev->isConst == m->isConst
-                && DoParamListsMatch(prev->params, m->params, m_symbols))
-            {
+            if(prev && prev->isOperator == m->isOperator && prev->name == m->name && prev->isConst == m->isConst && DoParamListsMatch(prev->params, m->params, m_symbols)){
                 reportError(errors, m->span, "duplicate interface method declaration with identical signature");
                 ok = false;
                 break;
@@ -237,7 +219,7 @@ b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const Fi
     const b8 isAutoDefaultField = field.type && m_symbols.resolveRefMode(field.type) == ParamPassingMode::None && (
         field.type->isFuncType
         || m_symbols.isSelfDefaultedType(field.type->name)
-        || findTemplateParam(&classDecl, nullptr, field.type->name) != nullptr
+        || FindTemplateParam(&classDecl, nullptr, field.type->name) != nullptr
     );
     return (field.defaultExpr != nullptr) || field.hasCtorInit || isAutoDefaultField;
 }
@@ -246,9 +228,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
 
     if(!classDecl.subsystemTypeName.empty()){
-        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty()
-            || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty())
-        {
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentAssetTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
             ok = false;
         }
@@ -284,17 +264,11 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     if(!classDecl.componentAssetTypeName.empty()){
-        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty()
-            || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty())
-        {
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class may only declare a single 'public' component field");
             ok = false;
         }
-        if(classDecl.fields.size() != 1u || !classDecl.fields[0]
-            || classDecl.fields[0]->access != AccessSpecifier::Public
-            || classDecl.fields[0]->name != "component"
-            || classDecl.fields[0]->defaultExpr || classDecl.fields[0]->hasCtorInit)
-        {
+        if(classDecl.fields.size() != 1u || !classDecl.fields[0] || classDecl.fields[0]->access != AccessSpecifier::Public || classDecl.fields[0]->name != "component" || classDecl.fields[0]->defaultExpr || classDecl.fields[0]->hasCtorInit){
             reportError(errors, classDecl.span, "'[component_asset(\"...\")]' class must declare exactly one 'public <ComponentType> component;' field");
             ok = false;
         }
@@ -334,9 +308,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                     b8 exactParamsMatch = (m->isConst == req->isConst);
                     if(exactParamsMatch){
                         for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
-                            if(m->params[pIdx].mode != req->params[pIdx].mode
-                                || !AreTypeRefsEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs, m_symbols))
-                            {
+                            if(m->params[pIdx].mode != req->params[pIdx].mode || !AreTypeRefsEquivalentWithSubst(m->params[pIdx].type, req->params[pIdx].type, ifaceParams, ifaceArgs, m_symbols)){
                                 exactParamsMatch = false;
                                 break;
                             }
@@ -486,15 +458,16 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             continue;
         for(usize j = 0u; j < i; ++j){
             const MethodDecl* prev = classDecl.methods[j];
-            if(prev
+            if(
+                prev
                 && prev->isConstructor == m->isConstructor
                 && prev->isDestructor == m->isDestructor
                 && prev->isOperator == m->isOperator
                 && prev->name == m->name
                 && prev->isConst == m->isConst
                 && prev->templateParams.size() == m->templateParams.size()
-                && DoParamListsMatch(prev->params, m->params, m_symbols))
-            {
+                && DoParamListsMatch(prev->params, m->params, m_symbols)
+            ){
                 reportError(errors, m->span, "duplicate class method declaration with identical signature");
                 ok = false;
                 break;
@@ -527,7 +500,7 @@ b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl&
     __hidden_adhd_type_checker_decl::CollectAssignedThisMembers(ctor.body, assignedMembers, assignedSpans);
 
     for(usize i = 0u; i < assignedMembers.size(); ++i){
-        const FieldDecl* field = SymbolTable::findClassField(classDecl, assignedMembers[i]);
+        const FieldDecl* field = SymbolTable::FindClassField(classDecl, assignedMembers[i]);
         if(!field)
             continue;
         if(field->defaultExpr != nullptr || field->hasCtorInit){

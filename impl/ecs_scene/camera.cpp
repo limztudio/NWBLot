@@ -23,7 +23,6 @@ namespace __hidden_camera{
 
 
 [[nodiscard]] b8 SceneCameraTransformValid(const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
-
     const SIMDVectorSingle rotationLengthSquared = QuaternionLengthSq(rotation);
 
     return

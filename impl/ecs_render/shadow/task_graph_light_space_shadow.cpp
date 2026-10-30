@@ -85,7 +85,6 @@ inline constexpr usize s_FixedResourceUseCount = 5u;
     return true;
 }
 
-
 struct ViewTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 

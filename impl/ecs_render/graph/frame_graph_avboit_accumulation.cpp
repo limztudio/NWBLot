@@ -27,9 +27,8 @@ NWB_IMPL_BEGIN
 FrameGraphAvboitAccumulationUploadChain::FrameGraphAvboitAccumulationUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem){
-}
-
+    , m_csgSystem(csgSystem)
+{}
 
 Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationUploadChain::declare(
     Core::Alloc::ScratchArena& scratchArena,
@@ -113,9 +112,7 @@ Expected<FrameGraphAvboitAccumulationUploadResult> FrameGraphAvboitAccumulationU
 
             const MaterialPassDrawItemsView accumulationMaterialGeometryDrawSets[] = { accumulationDrawItems.regular, accumulationDrawItems.csg, };
             AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
-            auto accumulationGeometryPreparationResult = accumulationGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Accumulation, }
-            );
+            auto accumulationGeometryPreparationResult = accumulationGeometryPreparationBuilder.declare(AvboitGeometryPreparationInputs{ .drawItemSets = accumulationMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Accumulation, });
             if(!accumulationGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
             avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = accumulationGeometryPreparationResult->geometryOwned;

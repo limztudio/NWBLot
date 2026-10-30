@@ -4,6 +4,8 @@
 
 #include "layout_optimizer.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,24 +22,13 @@ namespace __hidden_adhd_layout_optimizer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr usize AlignUp(const usize offset, const usize alignment)noexcept{
-    if(alignment <= 1u)
-        return offset;
-    return (offset + alignment - 1u) & ~(alignment - 1u);
-}
-
 [[nodiscard]] b8 IsInlineValueGenericType(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
         return info->byteSize == 0u;
     return false;
 }
 
-[[nodiscard]] b8 TypeReferencesClassByValue(
-    const TypeRef& type,
-    const MStringView targetClassName,
-    const SymbolTable& symbols,
-    const u32 depth = 0u
-){
+[[nodiscard]] b8 TypeReferencesClassByValue(const TypeRef& type, const MStringView targetClassName, const SymbolTable& symbols, const u32 depth = 0u)noexcept{
     if(depth > 16u || type.refMode != ParamPassingMode::None)
         return false;
     const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type);
@@ -65,12 +56,7 @@ namespace __hidden_adhd_layout_optimizer{
     return false;
 }
 
-[[nodiscard]] b8 IsTypeBinarySerializable(
-    const TypeRef& type,
-    const SymbolTable& symbols,
-    MStringView& outReason,
-    const u32 depth = 0u
-){
+[[nodiscard]] b8 IsTypeBinarySerializable(const TypeRef& type, const SymbolTable& symbols, const u32 depth, MStringView& outReason)noexcept{
     if(depth >= 16u)
         return true;
 
@@ -94,14 +80,14 @@ namespace __hidden_adhd_layout_optimizer{
     }
 
     const MStringView name = unwrapped->name;
-    if(SymbolTable::isArenaBackedContainer(name) || name == "Path" || name == "StringView" || name == "Span" || name == "Atomic"){
+    if(SymbolTable::IsArenaBackedContainer(name) || name == "Path" || name == "StringView" || name == "Span" || name == "Atomic"){
         outReason = "'[serialize]' class cannot contain non-transient dynamic heap, view, or atomic members; mark with '[transient]' or use fixed-size types";
         return false;
     }
 
     if(IsInlineValueGenericType(name)){
         for(const TypeArg& targ : unwrapped->templateArgs){
-            if(targ.type && !IsTypeBinarySerializable(*targ.type, symbols, outReason, depth + 1u))
+            if(targ.type && !IsTypeBinarySerializable(*targ.type, symbols, depth + 1u, outReason))
                 return false;
         }
         return true;
@@ -115,7 +101,7 @@ namespace __hidden_adhd_layout_optimizer{
         for(const FieldDecl* subField : subCls->fields){
             if(subField && !subField->isTransient && subField->type){
                 const TypeRef* subFieldType = symbols.substituteTypeParams(subField->type, subCls->templateParams, unwrapped);
-                if(subFieldType && !IsTypeBinarySerializable(*subFieldType, symbols, outReason, depth + 1u))
+                if(subFieldType && !IsTypeBinarySerializable(*subFieldType, symbols, depth + 1u, outReason))
                     return false;
             }
         }
@@ -124,12 +110,7 @@ namespace __hidden_adhd_layout_optimizer{
     return true;
 }
 
-[[nodiscard]] b8 ClassDependsOnClassByValue(
-    const ClassDecl& cls,
-    const MStringView targetClassName,
-    const SymbolTable& symbols,
-    const u32 depth = 0u
-)noexcept{
+[[nodiscard]] b8 ClassDependsOnClassByValue(const ClassDecl& cls, const MStringView targetClassName, const SymbolTable& symbols, const u32 depth = 0u)noexcept{
     for(const FieldDecl* field : cls.fields){
         if(field && field->type && TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols, depth))
             return true;
@@ -137,12 +118,7 @@ namespace __hidden_adhd_layout_optimizer{
     return false;
 }
 
-void VisitTypeAliasTopo(
-    const usize idx,
-    const Span<const TypeAliasDecl* const> aliases,
-    MVector<u8>& state,
-    MVector<const TypeAliasDecl*>& outSorted
-){
+void VisitTypeAliasTopo(const usize idx, const Span<const TypeAliasDecl* const> aliases, MVector<u8>& state, MVector<const TypeAliasDecl*>& outSorted){
     if(state[idx] != 0u)
         return;
     state[idx] = 1u;
@@ -157,13 +133,7 @@ void VisitTypeAliasTopo(
     outSorted.push_back(cur);
 }
 
-void VisitInterfaceTopo(
-    const usize idx,
-    const Span<const InterfaceDecl* const> interfaces,
-    const SymbolTable& symbols,
-    MVector<u8>& state,
-    MVector<const InterfaceDecl*>& outSorted
-){
+void VisitInterfaceTopo(const usize idx, const Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MVector<u8>& state, MVector<const InterfaceDecl*>& outSorted){
     if(state[idx] != 0u)
         return;
     state[idx] = 1u;
@@ -183,13 +153,7 @@ void VisitInterfaceTopo(
     outSorted.push_back(cur);
 }
 
-void VisitClassTopo(
-    const usize idx,
-    const Span<const ClassDecl* const> classes,
-    const SymbolTable& symbols,
-    MVector<u8>& state,
-    MVector<const ClassDecl*>& outSorted
-){
+void VisitClassTopo(const usize idx, const Span<const ClassDecl* const> classes, const SymbolTable& symbols, MVector<u8>& state, MVector<const ClassDecl*>& outSorted){
     if(state[idx] != 0u)
         return;
     state[idx] = 1u;
@@ -242,12 +206,7 @@ b8 TypeRefReferencesSymbol(const TypeRef& type, const MStringView targetName, co
     return false;
 }
 
-b8 TypeRefReferencesSymbolByValue(
-    const TypeRef& type,
-    const MStringView targetName,
-    const SymbolTable& symbols,
-    const u32 depth
-)noexcept{
+b8 TypeRefReferencesSymbolByValue(const TypeRef& type, const MStringView targetName, const SymbolTable& symbols, const u32 depth)noexcept{
     if(depth > 16u || type.isFuncType || symbols.resolveRefMode(&type) != ParamPassingMode::None)
         return false;
     if(type.name == targetName)
@@ -267,11 +226,7 @@ b8 TypeRefReferencesSymbolByValue(
     return false;
 }
 
-b8 InstantiationDependsOnClassByValue(
-    const ClassTemplateInstantiation& inst,
-    const MStringView targetClassName,
-    const SymbolTable& symbols
-)noexcept{
+b8 InstantiationDependsOnClassByValue(const ClassTemplateInstantiation& inst, const MStringView targetClassName, const SymbolTable& symbols)noexcept{
     for(const FieldDecl* field : inst.orderedFields){
         if(field && field->type && TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols))
             return true;
@@ -283,11 +238,7 @@ b8 InstantiationDependsOnClassByValue(
     return false;
 }
 
-void SortTypeAliasesTopologically(
-    const Span<const TypeAliasDecl* const> aliases,
-    MetaArena& arena,
-    MVector<const TypeAliasDecl*>& outSorted
-){
+void SortTypeAliasesTopologically(const Span<const TypeAliasDecl* const> aliases, MetaArena& arena, MVector<const TypeAliasDecl*>& outSorted){
     outSorted.clear();
     if(aliases.empty())
         return;
@@ -297,12 +248,7 @@ void SortTypeAliasesTopologically(
         __hidden_adhd_layout_optimizer::VisitTypeAliasTopo(i, aliases, state, outSorted);
 }
 
-void SortInterfacesTopologically(
-    const Span<const InterfaceDecl* const> interfaces,
-    const SymbolTable& symbols,
-    MetaArena& arena,
-    MVector<const InterfaceDecl*>& outSorted
-){
+void SortInterfacesTopologically(const Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MetaArena& arena, MVector<const InterfaceDecl*>& outSorted){
     outSorted.clear();
     if(interfaces.empty())
         return;
@@ -312,12 +258,7 @@ void SortInterfacesTopologically(
         __hidden_adhd_layout_optimizer::VisitInterfaceTopo(i, interfaces, symbols, state, outSorted);
 }
 
-void SortClassesTopologically(
-    const Span<const ClassDecl* const> classes,
-    const SymbolTable& symbols,
-    MetaArena& arena,
-    MVector<const ClassDecl*>& outSorted
-){
+void SortClassesTopologically(const Span<const ClassDecl* const> classes, const SymbolTable& symbols, MetaArena& arena, MVector<const ClassDecl*>& outSorted){
     outSorted.clear();
     if(classes.empty())
         return;
@@ -327,54 +268,29 @@ void SortClassesTopologically(
         __hidden_adhd_layout_optimizer::VisitClassTopo(i, classes, symbols, state, outSorted);
 }
 
-void CollectExternalForwardDeclClasses(
-    const TypeRef& type,
-    const SymbolTable& symbols,
-    const Span<const TemplateParamDecl> outerTemplateParams,
-    const Span<const TemplateParamDecl> innerTemplateParams,
-    MVector<MStringView>& outNames,
-    const b8 inRefOrAssetContext,
-    const u32 depth
-){
+void CollectExternalForwardDeclClasses(const TypeRef& type, const SymbolTable& symbols, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams, const b8 inRefOrAssetContext, const u32 depth, MVector<MStringView>& outNames){
     if(depth > 16u || type.isAuto)
         return;
 
     if(type.isFuncType){
-        if(type.funcReturnType){
-            CollectExternalForwardDeclClasses(
-                *type.funcReturnType,
-                symbols,
-                outerTemplateParams,
-                innerTemplateParams,
-                outNames,
-                type.funcReturnType->refMode != ParamPassingMode::None,
-                depth + 1u
-            );
-        }
+        if(type.funcReturnType)
+            CollectExternalForwardDeclClasses(*type.funcReturnType, symbols, outerTemplateParams, innerTemplateParams, type.funcReturnType->refMode != ParamPassingMode::None, depth + 1u, outNames);
         for(const FuncParamType& fp : type.funcParams){
-            if(fp.type){
-                CollectExternalForwardDeclClasses(
-                    *fp.type,
-                    symbols,
-                    outerTemplateParams,
-                    innerTemplateParams,
-                    outNames,
-                    true,
-                    depth + 1u
-                );
-            }
+            if(fp.type)
+                CollectExternalForwardDeclClasses(*fp.type, symbols, outerTemplateParams, innerTemplateParams, true, depth + 1u, outNames);
         }
         return;
     }
 
     const b8 isRefOrAsset = inRefOrAssetContext || (type.refMode != ParamPassingMode::None);
-    if(isRefOrAsset
+    if(
+        isRefOrAsset
         && !type.name.empty()
         && type.templateArgs.empty()
         && !__hidden_adhd_layout_optimizer::HasTemplateParamName(outerTemplateParams, type.name)
         && !__hidden_adhd_layout_optimizer::HasTemplateParamName(innerTemplateParams, type.name)
-        && !IsKnownConcreteTypeName(type.name, symbols))
-    {
+        && !IsKnownConcreteTypeName(type.name, symbols)
+    ){
         b8 alreadyPresent = false;
         for(const MStringView existing : outNames){
             if(existing == type.name){
@@ -388,17 +304,8 @@ void CollectExternalForwardDeclClasses(
 
     const b8 childInAssetContext = (type.name == "AssetRef");
     for(const TypeArg& targ : type.templateArgs){
-        if(targ.type){
-            CollectExternalForwardDeclClasses(
-                *targ.type,
-                symbols,
-                outerTemplateParams,
-                innerTemplateParams,
-                outNames,
-                childInAssetContext || (targ.type->refMode != ParamPassingMode::None),
-                depth + 1u
-            );
-        }
+        if(targ.type)
+            CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u, outNames);
     }
 }
 
@@ -406,23 +313,14 @@ void CollectExternalForwardDeclClasses(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void LayoutOptimizer::sortAndPackFields(
-    MVector<FieldDecl*>& orderedFields,
-    const b8 isSerialize,
-    const b8 packSerialize,
-    const b8 hasInterfaces,
-    usize& outTotalSize,
-    usize& outTotalAlign
-)noexcept{
+void LayoutOptimizer::SortAndPackFields(const b8 isSerialize, const b8 packSerialize, const b8 hasInterfaces, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)noexcept{
     if(!isSerialize){
         for(usize i = 1u; i < orderedFields.size(); ++i){
             FieldDecl* key = orderedFields[i];
             usize j = i;
             while(j > 0u){
                 const FieldDecl* prev = orderedFields[j - 1u];
-                const b8 keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize)
-                    || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
+                const b8 keyBeforePrev = (key->resolvedAlign > prev->resolvedAlign) || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize > prev->resolvedSize) || (key->resolvedAlign == prev->resolvedAlign && key->resolvedSize == prev->resolvedSize && key->originalIndex < prev->originalIndex);
                 if(!keyBeforePrev)
                     break;
                 orderedFields[j] = orderedFields[j - 1u];
@@ -438,13 +336,13 @@ void LayoutOptimizer::sortAndPackFields(
         const usize align = (packSerialize && !field->isTransient) ? 1u : field->resolvedAlign;
         if(align > maxAlign)
             maxAlign = align;
-        currentOffset = __hidden_adhd_layout_optimizer::AlignUp(currentOffset, align);
+        currentOffset = ::AlignUp(currentOffset, align);
         field->resolvedOffset = currentOffset;
         currentOffset += field->resolvedSize;
     }
 
     outTotalAlign = maxAlign;
-    outTotalSize = currentOffset == 0u ? 1u : __hidden_adhd_layout_optimizer::AlignUp(currentOffset, maxAlign);
+    outTotalSize = currentOffset == 0u ? 1u : ::AlignUp(currentOffset, maxAlign);
 }
 
 b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
@@ -479,7 +377,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
             if(!clonedField || clonedField->isTransient || !clonedField->type)
                 continue;
             MStringView serializeErr;
-            if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*clonedField->type, m_symbols, serializeErr)){
+            if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*clonedField->type, m_symbols, 0u, serializeErr)){
                 ReportAdhdDiagnostic(m_arena, errors, clonedField->span, serializeErr);
                 return false;
             }
@@ -493,13 +391,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
                 continue;
             const usize prevSize = inst->totalSize;
             const usize prevAlign = inst->totalAlign;
-            finalizeClassFieldLayouts(
-                inst->orderedFields,
-                inst->templateDecl->isSerialize,
-                !inst->templateDecl->implementedInterfaces.empty(),
-                inst->totalSize,
-                inst->totalAlign
-            );
+            finalizeClassFieldLayouts(inst->templateDecl->isSerialize, !inst->templateDecl->implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
             if(inst->totalSize != prevSize || inst->totalAlign != prevAlign)
                 changed = true;
         }
@@ -518,7 +410,7 @@ b8 LayoutOptimizer::optimizeTranslationUnit(TranslationUnit& unit, MVector<Parse
     return ok;
 }
 
-void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSize, usize& outAlign, const u32 depth)const noexcept{
+void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 depth, usize& outSize, usize& outAlign)const noexcept{
     if(depth > 16u || m_symbols.resolveRefMode(&type) != ParamPassingMode::None){
         outSize = 8u;
         outAlign = 8u;
@@ -535,7 +427,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
 
     if(const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&type)){
         if(unwrapped != &type){
-            resolveTypeSizeAndAlign(*unwrapped, outSize, outAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*unwrapped, depth + 1u, outSize, outAlign);
             return;
         }
     }
@@ -545,7 +437,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
 
     if(name == "Atomic"){
         if(!type.templateArgs.empty() && type.templateArgs[0].type){
-            resolveTypeSizeAndAlign(*type.templateArgs[0].type, outSize, outAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, outSize, outAlign);
             return;
         }
         outSize = 8u;
@@ -557,9 +449,9 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         if(!type.templateArgs.empty() && type.templateArgs[0].type){
             usize innerSize = 8u;
             usize innerAlign = 8u;
-            resolveTypeSizeAndAlign(*type.templateArgs[0].type, innerSize, innerAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, innerSize, innerAlign);
             outAlign = innerAlign;
-            outSize = __hidden_adhd_layout_optimizer::AlignUp(innerSize + 1u, innerAlign);
+            outSize = ::AlignUp(innerSize + 1u, innerAlign);
             return;
         }
         outSize = 16u;
@@ -573,11 +465,11 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
             usize valAlign = 8u;
             usize errSize = 8u;
             usize errAlign = 8u;
-            resolveTypeSizeAndAlign(*type.templateArgs[0].type, valSize, valAlign, depth + 1u);
-            resolveTypeSizeAndAlign(*type.templateArgs[1].type, errSize, errAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
+            resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
             outAlign = valAlign > errAlign ? valAlign : errAlign;
             const usize payloadSize = valSize > errSize ? valSize : errSize;
-            outSize = __hidden_adhd_layout_optimizer::AlignUp(payloadSize + 1u, outAlign);
+            outSize = ::AlignUp(payloadSize + 1u, outAlign);
             return;
         }
         outSize = 24u;
@@ -590,7 +482,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         usize elemAlign = 4u;
         usize count = 1u;
         if(!type.templateArgs.empty() && type.templateArgs[0].type)
-            resolveTypeSizeAndAlign(*type.templateArgs[0].type, elemSize, elemAlign, depth + 1u);
+            resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, elemSize, elemAlign);
         if(type.templateArgs.size() >= 2u){
             const MStringView countText = type.templateArgs[1].type ? type.templateArgs[1].type->name : type.templateArgs[1].constantText;
             count = ParseUnsignedConstant(countText, m_symbols);
@@ -601,7 +493,7 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
         }
         else{
             outAlign = elemAlign > 4u ? elemAlign : 4u;
-            outSize = __hidden_adhd_layout_optimizer::AlignUp(elemSize * count + 4u, outAlign);
+            outSize = ::AlignUp(elemSize * count + 4u, outAlign);
         }
         return;
     }
@@ -631,12 +523,10 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, usize& outSiz
     outAlign = 8u;
 }
 
-void LayoutOptimizer::markFieldArenaUsage(FieldDecl& field, const TypeRef& fieldType, ClassDecl& classDecl)const noexcept{
+void LayoutOptimizer::markFieldArenaUsage(const TypeRef& fieldType, FieldDecl& field, ClassDecl& classDecl)const noexcept{
     if(!classDecl.subsystemTypeName.empty() || !classDecl.componentAssetTypeName.empty())
         return;
-    if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None
-        && SymbolTable::isArenaBackedContainer(m_symbols.resolveBaseTypeName(fieldType.name)))
-    {
+    if(m_symbols.resolveRefMode(&fieldType) == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(m_symbols.resolveBaseTypeName(fieldType.name))){
         field.usesClassArena = true;
         classDecl.needsClassArena = true;
     }
@@ -663,11 +553,11 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
             return false;
         }
 
-        markFieldArenaUsage(*field, *field->type, classDecl);
+        markFieldArenaUsage(*field->type, *field, classDecl);
 
         if(classDecl.isSerialize && !field->isTransient){
             MStringView serializeErr;
-            if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*field->type, m_symbols, serializeErr)){
+            if(!__hidden_adhd_layout_optimizer::IsTypeBinarySerializable(*field->type, m_symbols, 0u, serializeErr)){
                 ReportAdhdDiagnostic(m_arena, errors, field->span, serializeErr);
                 return false;
             }
@@ -676,23 +566,11 @@ b8 LayoutOptimizer::computeClassLayout(ClassDecl& classDecl, MVector<ParseError>
         classDecl.orderedFields.push_back(field);
     }
 
-    finalizeClassFieldLayouts(
-        classDecl.orderedFields,
-        classDecl.isSerialize,
-        !classDecl.implementedInterfaces.empty(),
-        classDecl.totalSize,
-        classDecl.totalAlign
-    );
+    finalizeClassFieldLayouts(classDecl.isSerialize, !classDecl.implementedInterfaces.empty(), classDecl.orderedFields, classDecl.totalSize, classDecl.totalAlign);
     return true;
 }
 
-void LayoutOptimizer::finalizeClassFieldLayouts(
-    MVector<FieldDecl*>& orderedFields,
-    const b8 isSerialize,
-    const b8 hasVtablePointer,
-    usize& outTotalSize,
-    usize& outTotalAlign
-)const noexcept{
+void LayoutOptimizer::finalizeClassFieldLayouts(const b8 isSerialize, const b8 hasVtablePointer, MVector<FieldDecl*>& orderedFields, usize& outTotalSize, usize& outTotalAlign)const noexcept{
     const b8 packSerialize = isSerialize && ShouldPackSerializeClass(orderedFields, m_symbols);
     for(FieldDecl* field : orderedFields){
         if(!field || !field->type)
@@ -703,7 +581,7 @@ void LayoutOptimizer::finalizeClassFieldLayouts(
         field->resolvedSize = fieldSize;
         field->resolvedAlign = (packSerialize && !field->isTransient) ? 1u : fieldAlign;
     }
-    sortAndPackFields(orderedFields, isSerialize, packSerialize, hasVtablePointer, outTotalSize, outTotalAlign);
+    SortAndPackFields(isSerialize, packSerialize, hasVtablePointer, orderedFields, outTotalSize, outTotalAlign);
 }
 
 
@@ -714,3 +592,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

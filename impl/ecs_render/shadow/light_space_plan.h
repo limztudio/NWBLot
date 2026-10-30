@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/shadow/light_space_settings.adhd.h>
-
 #include <impl/ecs_scene/components.adhd.h>
 #include <impl/assets/graphics/shadow/light_space_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
@@ -48,3 +47,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

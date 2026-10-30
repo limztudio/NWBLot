@@ -63,7 +63,8 @@ b8 ValidateSoftwareShadowSettings(in SoftwareShadowSettings settings){
         && cast<u8>(settings.captureCadence) <= cast<u8>(SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames)
         && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
         && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes;
+        && settings.memoryBudgetBytes > 0ull && settings.memoryBudgetBytes <= s_ShadowMaxMemoryBudgetBytes
+    ;
 }
 
 
@@ -78,88 +79,71 @@ class LightSpaceCaptureIdentity{
 }
 
 class LightSpaceCaptureTicket{
-    public u64 sequence = 0u;
-    public b8 reuse = false;
-
     public b8 valid()const{
         return this.sequence != 0u;
     }
+
+    public u64 sequence = 0u;
+    public b8 reuse = false;
 }
 
 // A capture publishes only after its complete native packet and retained resource states are accepted.
 class LightSpaceCaptureHistory{
-    private LightSpaceCaptureIdentity m_acceptedIdentity;
-    private LightSpaceCaptureIdentity m_pendingIdentity;
-    private LightSpaceCaptureTicket m_pendingTicket;
-    private u64 m_sequence = 0u;
-    private u64 m_acceptedCaptures = 0u;
-    private u64 m_acceptedReuses = 0u;
-    private u8 m_acceptedReuseCount = 0u;
-    private u8 m_pendingReuseLimit = 0u;
-    private b8 m_accepted = false;
-    private b8 m_captureRecorded = false;
-    private b8 m_frameAccepted = false;
-
     public void beginFrame(){
         // A skipped or rejected frame cannot extend the lifetime of the prior map generation.
-        if(!this.m_frameAccepted){
+        if(!this.m_frameAccepted)
             this.m_accepted = false;
-        }
         this.m_pendingTicket = LightSpaceCaptureTicket();
         this.m_captureRecorded = false;
         this.m_frameAccepted = false;
     }
 
     public LightSpaceCaptureTicket prepare(in LightSpaceCaptureIdentity identity, in SoftwareShadowCaptureCadence cadence){
-        if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames){
+        if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseTwoFrames)
             this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitTwoFrames);
-        }
-        else if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseOneFrame){
+        else if(cadence == SoftwareShadowCaptureCadence::Enum::ReuseOneFrame)
             this.m_pendingReuseLimit = cast<u8>(s_ShadowCaptureReuseLimitOneFrame);
-        }
-        else{
+        else
             this.m_pendingReuseLimit = 0u;
-        }
-        const b8 reuse = this.m_acceptedReuseCount < this.m_pendingReuseLimit
-            && this.m_accepted && identity.trusted && this.m_acceptedIdentity.trusted
-            && identity.scene == this.m_acceptedIdentity.scene && identity.lighting == this.m_acceptedIdentity.lighting
-            && identity.layout == this.m_acceptedIdentity.layout;
+        const b8 reuse =
+            this.m_acceptedReuseCount < this.m_pendingReuseLimit
+            && this.m_accepted
+            && identity.trusted
+            && this.m_acceptedIdentity.trusted
+            && identity.scene == this.m_acceptedIdentity.scene
+            && identity.lighting == this.m_acceptedIdentity.lighting
+            && identity.layout == this.m_acceptedIdentity.layout
+        ;
         ++this.m_sequence;
-        if(this.m_sequence == 0u){
+        if(this.m_sequence == 0u)
             ++this.m_sequence;
-        }
         this.m_pendingIdentity = identity;
         this.m_pendingTicket.sequence = this.m_sequence;
         this.m_pendingTicket.reuse = reuse;
         this.m_captureRecorded = false;
         // Refresh writes the maps in place. Their old identity must be unavailable even if recording or submission fails.
-        if(!reuse){
+        if(!reuse)
             this.m_accepted = false;
-        }
         return this.m_pendingTicket;
     }
 
     public void recordCapture(in LightSpaceCaptureTicket ticket){
-        if(ticket.valid() && ticket.sequence == this.m_pendingTicket.sequence && !ticket.reuse && !this.m_pendingTicket.reuse){
+        if(ticket.valid() && ticket.sequence == this.m_pendingTicket.sequence && !ticket.reuse && !this.m_pendingTicket.reuse)
             this.m_captureRecorded = true;
-        }
     }
 
     public b8 accept(in LightSpaceCaptureTicket ticket){
-        if(!ticket.valid() || ticket.sequence != this.m_pendingTicket.sequence || ticket.reuse != this.m_pendingTicket.reuse){
+        if(!ticket.valid() || ticket.sequence != this.m_pendingTicket.sequence || ticket.reuse != this.m_pendingTicket.reuse)
             return false;
-        }
         if(ticket.reuse){
-            if(!this.m_accepted || this.m_acceptedReuseCount >= this.m_pendingReuseLimit){
+            if(!this.m_accepted || this.m_acceptedReuseCount >= this.m_pendingReuseLimit)
                 return false;
-            }
             ++this.m_acceptedReuseCount;
             ++this.m_acceptedReuses;
         }
         else{
-            if(!this.m_captureRecorded){
+            if(!this.m_captureRecorded)
                 return false;
-            }
             this.m_acceptedIdentity = this.m_pendingIdentity;
             this.m_accepted = this.m_pendingIdentity.trusted;
             this.m_acceptedReuseCount = 0u;
@@ -188,6 +172,18 @@ class LightSpaceCaptureHistory{
     public u32 acceptedReuseAge()const{
         return cast<u32>(this.m_acceptedReuseCount);
     }
+
+    private LightSpaceCaptureIdentity m_acceptedIdentity;
+    private LightSpaceCaptureIdentity m_pendingIdentity;
+    private LightSpaceCaptureTicket m_pendingTicket;
+    private u64 m_sequence = 0u;
+    private u64 m_acceptedCaptures = 0u;
+    private u64 m_acceptedReuses = 0u;
+    private u8 m_acceptedReuseCount = 0u;
+    private u8 m_pendingReuseLimit = 0u;
+    private b8 m_accepted = false;
+    private b8 m_captureRecorded = false;
+    private b8 m_frameAccepted = false;
 }
 
 
@@ -248,45 +244,32 @@ class LightSpacePlan{
     public u32 totalPixels = 0u;
 }
 
-b8 TryBuildLightSpacePlan(
-    in SoftwareShadowSettings settings,
-    in Span<LightSpaceLightRequest> requests,
-    in u64 maxStorageBufferRange,
-    in u32 drawCount,
-    in b8 csgIntervalDepth,
-    mut LightSpacePlan outPlan
-){
+b8 TryBuildLightSpacePlan(in SoftwareShadowSettings settings, in Span<LightSpaceLightRequest> requests, in u64 maxStorageBufferRange, in u32 drawCount, in b8 csgIntervalDepth, mut LightSpacePlan outPlan){
     outPlan = LightSpacePlan();
     const usize requestCount = requests.size();
-    if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > s_LightSpaceSceneShadowSlotCount){
+    if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > s_LightSpaceSceneShadowSlotCount)
         return false;
-    }
     u32 seenSlots = 0u;
     u64 seenLights = 0u;
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
-        if(request.lightIndex >= s_LightSpaceSceneMaxLights || request.shadowSlot >= s_LightSpaceSceneShadowSlotCount || request.type >= s_LightSpaceLightTypeCount){
+        if(request.lightIndex >= s_LightSpaceSceneMaxLights || request.shadowSlot >= s_LightSpaceSceneShadowSlotCount || request.type >= s_LightSpaceLightTypeCount)
             return false;
-        }
         const u32 slotBit = 1u << request.shadowSlot;
         const u64 lightBit = 1ull << request.lightIndex;
-        if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u){
+        if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u)
             return false;
-        }
         seenSlots |= slotBit;
         seenLights |= lightBit;
     }
-    if(settings.backend == SoftwareShadowBackend::Enum::SoftwareTrace){
+    if(settings.backend == SoftwareShadowBackend::Enum::SoftwareTrace)
         return true;
-    }
     for(usize index = 0u; index < requestCount; ++index){
         const LightSpaceLightRequest request = requests[index];
-        if(!request.eligible || request.type == s_LightSpaceLightTypeSpot){
+        if(!request.eligible || request.type == s_LightSpaceLightTypeSpot)
             continue;
-        }
-        if(drawCount == 0u){
+        if(drawCount == 0u)
             return false;
-        }
         const b8 point = request.type == s_LightSpaceLightTypePoint;
         u32 resolution = settings.directionalResolution;
         u32 viewCount = 1u;
@@ -305,31 +288,21 @@ b8 TryBuildLightSpacePlan(
         const u64 viewBytes = cast<u64>(newViewCount) * s_LightSpaceViewBytes;
         const u64 drawArgumentBytes = cast<u64>(newViewCount) * cast<u64>(drawCount) * s_LightSpaceDrawArgumentBytes;
         u64 extraCountBytes = 0u;
-        if(csgIntervalDepth){
+        if(csgIntervalDepth)
             extraCountBytes = countBytes;
-        }
         const u64 totalBytes = eventBytes + countBytes + depthBytes + viewBytes + drawArgumentBytes + extraCountBytes;
-        if(
-            totalBytes > settings.memoryBudgetBytes || eventBytes > s_ShadowMaxMemoryBudgetBytes
-            || eventBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange
-            || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > s_ShadowMaxMemoryBudgetBytes
-        ){
+        if(totalBytes > settings.memoryBudgetBytes || eventBytes > s_ShadowMaxMemoryBudgetBytes || eventBytes > maxStorageBufferRange || viewBytes > maxStorageBufferRange || drawArgumentBytes > maxStorageBufferRange || drawArgumentBytes > s_ShadowMaxMemoryBudgetBytes)
             continue;
-        }
         ++outPlan.lightCount;
         u32 lightFlags = s_LightSpaceFlagEligible;
-        if(point){
+        if(point)
             lightFlags |= s_LightSpaceFlagPoint;
-        }
-        if(settings.coverage == SoftwareShadowCoverage::Enum::FittedVolume){
+        if(settings.coverage == SoftwareShadowCoverage::Enum::FittedVolume)
             lightFlags |= s_LightSpaceFlagFittedCoverage;
-        }
-        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::CompactCross5){
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::CompactCross5)
             lightFlags |= s_LightSpaceFlagCompactBlockers;
-        }
-        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::Center1){
+        if(settings.blockerSearch == SoftwareShadowBlockerSearch::Enum::Center1)
             lightFlags |= s_LightSpaceFlagCenterBlocker;
-        }
         for(u32 face = 0u; face < viewCount; ++face){
             const u32 viewIndex = outPlan.viewCount + face;
             outPlan.views[viewIndex].map[0] = resolution;
@@ -418,7 +391,8 @@ b8 LightSpaceShadowStorageFits(in LightSpacePlan plan, in LightSpaceShadowStorag
         && plan.countByteSize <= capacity.countBytes && plan.eventByteSize <= capacity.eventBytes
         && plan.viewByteSize <= capacity.viewBytes && plan.drawArgumentByteSize <= capacity.drawArgumentBytes
         && plan.textureResolution <= capacity.textureResolution
-        && plan.viewCount <= capacity.arrayLayers;
+        && plan.viewCount <= capacity.arrayLayers
+    ;
 }
 
 // Crossings, overflow list, and overflow arguments.
@@ -438,3 +412,4 @@ class SoftShadowSplitRoute{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

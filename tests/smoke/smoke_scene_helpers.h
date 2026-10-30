@@ -54,7 +54,6 @@ namespace Smoke{
 using SmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
 using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
 
-
 struct SmokeTintedEntitySetup{
     Core::ECS::EntityID entity;
     Name materialInterface;

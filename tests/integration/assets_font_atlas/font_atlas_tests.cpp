@@ -181,12 +181,23 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     ASSERT_TRUE(valid);
     FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(*valid));
-    const usize corruptOffsets[] = { 0u, 4u, 8u, 12u, 112u, 120u, 136u, 152u, 156u, 160u,
+    const usize corruptOffsets[] = {
+        0u,
+        4u,
+        8u,
+        12u,
+        112u,
+        120u,
+        136u,
+        152u,
+        156u,
+        160u,
         s_FontAtlasBinaryHeaderBytes + 48u,
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes,
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 4u,
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 8u,
-        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u };
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u
+    };
     for(const usize offset : corruptOffsets){
         Core::Assets::AssetBytes invalid(*valid);
         WriteLittleU32(invalid, offset, Limit<u32>::s_Max);
@@ -262,10 +273,17 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
     ASSERT_TRUE(loaded);
     const usize groupOffset = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
     const Pair<usize, u32> invalidFields[] = {
-        { 4u, 1u }, { 4u, 0u }, { 4u, s_FontAtlasBinaryVersion + 1u },
-        { groupOffset, Limit<u32>::s_Max }, { groupOffset + 4u, Limit<u32>::s_Max },
-        { groupOffset + 8u, 0u }, { groupOffset + 8u, 5u }, { groupOffset + 8u, Limit<u32>::s_Max },
-        { groupOffset + 12u, 0u }, { groupOffset + 12u, 255u }, { groupOffset + 12u, 257u },
+        { 4u, 1u },
+        { 4u, 0u },
+        { 4u, s_FontAtlasBinaryVersion + 1u },
+        { groupOffset, Limit<u32>::s_Max },
+        { groupOffset + 4u, Limit<u32>::s_Max },
+        { groupOffset + 8u, 0u },
+        { groupOffset + 8u, 5u },
+        { groupOffset + 8u, Limit<u32>::s_Max },
+        { groupOffset + 12u, 0u },
+        { groupOffset + 12u, 255u },
+        { groupOffset + 12u, 257u }
     };
     for(const auto& field : invalidFields){
         const usize offset = field.first();

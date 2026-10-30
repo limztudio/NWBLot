@@ -34,26 +34,20 @@ class MaterialPipelineCsgBindingUse{
 }
 
 b8 MaterialPipelinePassUsesRendererAvboit(in MaterialPipelinePass pass){
-    return pass == MaterialPipelinePass::Enum::AvboitOccupancy
-        || pass == MaterialPipelinePass::Enum::AvboitExtinction
-        || pass == MaterialPipelinePass::Enum::AvboitAccumulate
-        || pass == MaterialPipelinePass::Enum::AvboitRefractionCapture;
+    return pass == MaterialPipelinePass::Enum::AvboitOccupancy || pass == MaterialPipelinePass::Enum::AvboitExtinction || pass == MaterialPipelinePass::Enum::AvboitAccumulate || pass == MaterialPipelinePass::Enum::AvboitRefractionCapture;
 }
 
 b8 MaterialPipelinePassUsesRendererCsgShaderVariant(in MaterialPipelinePass pass){
-    if(pass == MaterialPipelinePass::Enum::Opaque || pass == MaterialPipelinePass::Enum::CsgReceiverSurface){
+    if(pass == MaterialPipelinePass::Enum::Opaque || pass == MaterialPipelinePass::Enum::CsgReceiverSurface)
         return true;
-    }
     return MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
 b8 MaterialPipelinePassUsesRendererCsgClip(in MaterialPipelinePass pass, in b8 transparent){
-    if(pass == MaterialPipelinePass::Enum::Opaque){
+    if(pass == MaterialPipelinePass::Enum::Opaque)
         return !transparent;
-    }
-    if(pass == MaterialPipelinePass::Enum::CsgReceiverSurface){
+    if(pass == MaterialPipelinePass::Enum::CsgReceiverSurface)
         return true;
-    }
     return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
@@ -63,12 +57,12 @@ b8 MaterialPipelinePassUsesRendererCsgClip(in MaterialPipelinePass pass, in b8 t
 
 // Buffer identity alone does not describe which regions a retained draw generates and consumes.
 class GeneratedGeometryOutputLayout{
-    public u32 m_indexByteOffset = 0u;
-    public b8 m_indexed = false;
-
     public b8 matches(in u32 indexByteOffset, in b8 indexed)const{
-        return this.m_indexByteOffset == indexByteOffset && this.m_indexed == indexed;
+        return this.indexByteOffset == indexByteOffset && this.indexed == indexed;
     }
+
+    public u32 indexByteOffset = 0u;
+    public b8 indexed = false;
 }
 
 const usize s_MaterialInstanceVectorComponentCount = 4u;
@@ -112,9 +106,6 @@ class MaterialTypedInstanceRanges{
 }
 
 class MaterialTypedByteRangeKey{
-    public Name materialName;
-    public u64 typedLayoutHash = 0u;
-
     public b8 operator==(in MaterialTypedByteRangeKey rhs)const{
         return this.materialName == rhs.materialName && this.typedLayoutHash == rhs.typedLayoutHash;
     }
@@ -124,6 +115,9 @@ class MaterialTypedByteRangeKey{
         seed = hashCombineValue(seed, this.typedLayoutHash);
         return seed;
     }
+
+    public Name materialName;
+    public u64 typedLayoutHash = 0u;
 }
 
 class MaterialTypedByteAppendRange{
@@ -137,3 +131,4 @@ b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

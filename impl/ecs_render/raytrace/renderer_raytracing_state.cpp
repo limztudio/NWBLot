@@ -56,7 +56,6 @@ void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFr
     m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
 }
 
-
 void RendererRayTracingState::invalidateResources()noexcept{
     m_hardwareTransparentShadow = HardwareTransparentShadowState{};
     for(u32 csg = 0u; csg < 2u; ++csg){

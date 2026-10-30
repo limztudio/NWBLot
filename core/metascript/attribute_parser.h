@@ -43,7 +43,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AttributeParser{
+class AttributeParser final{
 public:
     [[nodiscard]] static b8 ParseOptionalList(ParserCursor& cursor, MVector<ParsedAttribute>& outAttributes);
 

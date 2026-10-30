@@ -26,7 +26,8 @@ TaskResourceUseIndex::TaskResourceUseIndex(const usize resourceCount, const u64 
     , m_nextUses(scratchArena)
     , m_touchedResources(scratchArena)
     , m_graphGeneration(graphGeneration)
-    , m_useCapacity(useCapacity){
+    , m_useCapacity(useCapacity)
+{
     m_nextUses.reserve(useCapacity);
     m_touchedResources.reserve(resourceCount < useCapacity ? resourceCount : useCapacity);
 }

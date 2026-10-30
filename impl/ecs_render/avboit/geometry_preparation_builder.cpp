@@ -22,8 +22,8 @@ NWB_IMPL_BEGIN
 AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
-    , m_scratchArena(scratchArena){
-}
+    , m_scratchArena(scratchArena)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +41,6 @@ struct PhaseIdentities{
     NameText<char> sampledIdentity;
     AStringView sampledLabel;
 };
-
 
 [[nodiscard]] PhaseIdentities IdentitiesForPhase(AvboitGeometryPhase::Enum phase)noexcept{
     switch(phase){
@@ -95,14 +94,7 @@ struct PhaseIdentities{
     }
     result.sampledTexturesCollected = false;
     if(result.geometryOwned){
-        const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
-            m_materialSystem,
-            inputs.drawItemSets,
-            Name(identities.sampledIdentity),
-            identities.sampledLabel,
-            m_graph,
-            m_scratchArena
-        );
+        const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(m_materialSystem, inputs.drawItemSets, Name(identities.sampledIdentity), identities.sampledLabel, m_graph, m_scratchArena);
         result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
         if(materialSampledTextureSetResult)
             result.materialSampledTextureSet = *materialSampledTextureSetResult;

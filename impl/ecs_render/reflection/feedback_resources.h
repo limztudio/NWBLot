@@ -74,6 +74,7 @@ public:
     [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings, b8 enabled);
     [[nodiscard]] ReflectionFeedbackSnapshot snapshot(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, b8 enabled, u64 graphicsFrameIndex)const noexcept;
 
+
 private:
     void releaseBuffers();
     [[nodiscard]] Expected<ReflectionFeedbackBinding> prepareBank(u32 byteCount, Name name);

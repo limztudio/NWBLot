@@ -117,9 +117,8 @@ b8 InputRouter::stagePopups(const PopupScope* scopes, const usize count){
 }
 
 b8 InputRouter::validPopupTarget(const HitTarget& target)const noexcept{
-    if(!target.popup.widget.valid()){
+    if(!target.popup.widget.valid())
         return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
-    }
     for(const auto& record : m_stagedPopups){
         if(record.scope.token == target.popup)
             return target.layer == record.scope.layer;

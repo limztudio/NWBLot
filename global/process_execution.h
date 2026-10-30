@@ -109,7 +109,6 @@ namespace ProcessExecutionDetail{
     return true;
 }
 
-
 template<typename ArenaT>
 struct NativeProcessArguments{
     Vector<AString<ArenaT>, ArenaT> text;
@@ -250,8 +249,6 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 
 
 #endif
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -414,8 +411,6 @@ template<typename ArenaT>
     return MakeUnexpected(ProcessExecutionFailure::Unsupported);
 #endif
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

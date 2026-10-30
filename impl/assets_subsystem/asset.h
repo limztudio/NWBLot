@@ -43,7 +43,6 @@ struct SubsystemFieldValueDescriptor{
     b8 isArray = false;
 };
 
-
 interface ISubsystem : Core::Assets::IAsset{
 public:
     using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
@@ -67,6 +66,7 @@ protected:
     {}
     ISubsystem(const ISubsystem&) = default;
     ISubsystem(ISubsystem&&)noexcept = default;
+
 
 protected:
     ISubsystem& operator=(const ISubsystem&) = default;
@@ -266,7 +266,6 @@ private:
     const SubsystemTypeAutoRegistrar* m_next = nullptr;
 };
 
-
 [[nodiscard]] const ISubsystem* CastSubsystem(const Core::Assets::IAsset* asset)noexcept;
 
 
@@ -287,19 +286,16 @@ public:
 #endif
 };
 
-
 #if defined(NWB_COOK)
 namespace SubsystemAssetSerialization{
 [[nodiscard]] b8 Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary);
 };
 #endif
 
-
 template<typename SubsystemT>
 class TypedSubsystemAssetCodec final : public Core::Assets::AssetCodec<SubsystemT>{
 public:
     TypedSubsystemAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName()))) = default;
-
 
 #if defined(NWB_COOK)
 public:
@@ -311,7 +307,6 @@ public:
     }
 #endif
 };
-
 
 template<typename SubsystemT>
 class TypedSubsystemAutoRegistrar final : NoCopy{
@@ -344,3 +339,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

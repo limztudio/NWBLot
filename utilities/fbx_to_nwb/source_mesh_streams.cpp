@@ -27,13 +27,11 @@ inline constexpr StringView s_SourceUv0Label = "uv0";
 inline constexpr StringView s_SourceColorLabel = "color";
 inline constexpr StringView s_SourceVertexRefLabel = "vertex_ref";
 
-
 template<typename Value, typename Lookup>
 [[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName){
     auto found = lookup.find(value);
-    if(found != lookup.end()){
+    if(found != lookup.end())
         return found.value();
-    }
 
     if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
@@ -66,7 +64,6 @@ void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, con
         mesh.skin.reserve(estimatedTriangleCorners);
 }
 
-
 void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const b8 wantsSkinning){
     context.positions.reserve(estimatedTriangleCorners);
     context.normals.reserve(estimatedTriangleCorners);
@@ -78,7 +75,6 @@ void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext&
     context.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
-
 b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
     if(mesh.vertexRefs.empty() || mesh.tangents.empty())
         return false;
@@ -89,7 +85,6 @@ b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& 
     }
     return true;
 }
-
 
 b8 FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
     mesh.tangents.clear();
@@ -128,7 +123,6 @@ b8 FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::A
     return true;
 }
 
-
 b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
@@ -140,7 +134,6 @@ b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mes
         inOutTriangleIndices.resize(triangleIndexCapacity);
     return true;
 }
-
 
 Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena){
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
@@ -159,7 +152,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
-        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), mesh.uv0[ref.uv0], });
+        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), mesh.uv0[ref.uv0] });
     }
 
     UtilityScratchVector<u32> rebuildIndices(scratchArena);
@@ -223,7 +216,6 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     outTangentReport.mode = usedDefaultUvs || rebuildResult->degenerateUvTriangleCount != 0u || rebuildResult->fallbackTangentVertexCount != 0u ? SourceTangentMode::GeneratedFallback : SourceTangentMode::GeneratedUv;
     return outTangentReport;
 }
-
 
 Expected<u32> FbxSourceMeshStreams::InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const b8 wantsSkinning){
     SourceVertexRef ref;

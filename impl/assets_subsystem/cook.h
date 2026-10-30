@@ -59,13 +59,7 @@ namespace AssetsSubsystemCook{
 [[nodiscard]] b8 ParseSubsystemCookMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena, ISubsystem& outSubsystem);
 
 template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SubsystemDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
@@ -97,23 +91,12 @@ template<typename SubsystemT>
 }
 
 template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    Core::Assets::CookEntryParseContext& context
-){
+[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
     return ParseSubsystemCookMetadata<SubsystemT>(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
 template<typename SubsystemT>
-[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemValue(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::CookEntryParseContext& context
-){
+[[nodiscard]] Expected<SubsystemCookEntry<SubsystemT>> ParseSubsystemValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
     return ParseSubsystemCookMetadata<SubsystemT>(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
 }
 
@@ -189,3 +172,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

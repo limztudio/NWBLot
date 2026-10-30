@@ -190,54 +190,47 @@ EditCommandRequest TranslateEditCommand(in InputCommandIntent intent, in b8 repe
     request.command = EditCommand::Enum::None;
     request.extend = intent.extend;
     request.repeat = repeat;
-    if(!intent.edit || cast<u8>(mode) > cast<u8>(EditTextMode::Enum::Multiline)){
+    if(!intent.edit || cast<u8>(mode) > cast<u8>(EditTextMode::Enum::Multiline))
         return request;
-    }
     switch(intent.command){
-    case InputCommand::Enum::Left: request.command = EditCommand::Enum::Left; break;
-    case InputCommand::Enum::Right: request.command = EditCommand::Enum::Right; break;
-    case InputCommand::Enum::Home: request.command = EditCommand::Enum::Home; break;
-    case InputCommand::Enum::End: request.command = EditCommand::Enum::End; break;
-    case InputCommand::Enum::WordLeft: request.command = EditCommand::Enum::WordLeft; break;
-    case InputCommand::Enum::WordRight: request.command = EditCommand::Enum::WordRight; break;
-    case InputCommand::Enum::DocumentHome:
-        if(mode == EditTextMode::Enum::Multiline){
-            request.command = EditCommand::Enum::DocumentHome;
-        }
-        else{
-            request.command = EditCommand::Enum::Home;
-        }
-        break;
-    case InputCommand::Enum::DocumentEnd:
-        if(mode == EditTextMode::Enum::Multiline){
-            request.command = EditCommand::Enum::DocumentEnd;
-        }
-        else{
-            request.command = EditCommand::Enum::End;
-        }
-        break;
-    case InputCommand::Enum::Backspace: request.command = EditCommand::Enum::Backspace; break;
-    case InputCommand::Enum::Delete: request.command = EditCommand::Enum::Delete; break;
-    case InputCommand::Enum::WordBackspace: request.command = EditCommand::Enum::WordBackspace; break;
-    case InputCommand::Enum::WordDelete: request.command = EditCommand::Enum::WordDelete; break;
-    case InputCommand::Enum::SelectAll: request.command = EditCommand::Enum::SelectAll; break;
-    case InputCommand::Enum::Copy: request.command = EditCommand::Enum::Copy; break;
-    case InputCommand::Enum::Cut: request.command = EditCommand::Enum::Cut; break;
-    case InputCommand::Enum::Paste: request.command = EditCommand::Enum::Paste; break;
-    case InputCommand::Enum::Undo: request.command = EditCommand::Enum::Undo; break;
-    case InputCommand::Enum::Redo: request.command = EditCommand::Enum::Redo; break;
-    case InputCommand::Enum::Accept:
-        if(mode == EditTextMode::Enum::Multiline){
-            request.command = EditCommand::Enum::Newline;
-        }
-        else{
-            request.command = EditCommand::Enum::Submit;
-        }
-        break;
-    case InputCommand::Enum::Submit: request.command = EditCommand::Enum::Submit; break;
-    case InputCommand::Enum::Cancel: request.command = EditCommand::Enum::Cancel; break;
-    case InputCommand::Enum::Newline: request.command = EditCommand::Enum::Newline; break;
-    default: break;
+        case InputCommand::Enum::Left: request.command = EditCommand::Enum::Left; break;
+        case InputCommand::Enum::Right: request.command = EditCommand::Enum::Right; break;
+        case InputCommand::Enum::Home: request.command = EditCommand::Enum::Home; break;
+        case InputCommand::Enum::End: request.command = EditCommand::Enum::End; break;
+        case InputCommand::Enum::WordLeft: request.command = EditCommand::Enum::WordLeft; break;
+        case InputCommand::Enum::WordRight: request.command = EditCommand::Enum::WordRight; break;
+        case InputCommand::Enum::DocumentHome:
+            if(mode == EditTextMode::Enum::Multiline)
+                request.command = EditCommand::Enum::DocumentHome;
+            else
+                request.command = EditCommand::Enum::Home;
+            break;
+        case InputCommand::Enum::DocumentEnd:
+            if(mode == EditTextMode::Enum::Multiline)
+                request.command = EditCommand::Enum::DocumentEnd;
+            else
+                request.command = EditCommand::Enum::End;
+            break;
+        case InputCommand::Enum::Backspace: request.command = EditCommand::Enum::Backspace; break;
+        case InputCommand::Enum::Delete: request.command = EditCommand::Enum::Delete; break;
+        case InputCommand::Enum::WordBackspace: request.command = EditCommand::Enum::WordBackspace; break;
+        case InputCommand::Enum::WordDelete: request.command = EditCommand::Enum::WordDelete; break;
+        case InputCommand::Enum::SelectAll: request.command = EditCommand::Enum::SelectAll; break;
+        case InputCommand::Enum::Copy: request.command = EditCommand::Enum::Copy; break;
+        case InputCommand::Enum::Cut: request.command = EditCommand::Enum::Cut; break;
+        case InputCommand::Enum::Paste: request.command = EditCommand::Enum::Paste; break;
+        case InputCommand::Enum::Undo: request.command = EditCommand::Enum::Undo; break;
+        case InputCommand::Enum::Redo: request.command = EditCommand::Enum::Redo; break;
+        case InputCommand::Enum::Accept:
+            if(mode == EditTextMode::Enum::Multiline)
+                request.command = EditCommand::Enum::Newline;
+            else
+                request.command = EditCommand::Enum::Submit;
+            break;
+        case InputCommand::Enum::Submit: request.command = EditCommand::Enum::Submit; break;
+        case InputCommand::Enum::Cancel: request.command = EditCommand::Enum::Cancel; break;
+        case InputCommand::Enum::Newline: request.command = EditCommand::Enum::Newline; break;
+        default: break;
     }
     return request;
 }
@@ -256,3 +249,4 @@ b8 ValidateFloatBounds(in FloatBounds bounds){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

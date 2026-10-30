@@ -27,7 +27,6 @@ namespace __hidden_ui_image_layout_tests{
 using namespace Impl;
 using namespace Impl::Ui;
 
-
 static UiSkinRegion Sprite()noexcept{
     UiSkinRegion region;
     region.name = Name("image.test");

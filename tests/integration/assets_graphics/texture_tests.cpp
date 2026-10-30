@@ -77,6 +77,15 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
     return mipLevels;
 }
 
+[[nodiscard]] static Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
+    Impl::Texture texture(testArena.arena, Name("project/textures/prepared"));
+    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
+    Impl::TextureAssetCodec codec;
+    Core::Assets::AssetBytes bytes(testArena.arena);
+    if(!codec.serialize(texture, bytes))
+        return MakeUnexpected(Failure{});
+    return bytes;
+}
 
 TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
     const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, 7u, 5u, 1u);
@@ -95,7 +104,6 @@ TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
     EXPECT_EQ(hdrPlane->blocksY, 1u);
     EXPECT_EQ(hdrPlane->planeByteCount, 16u);
 }
-
 
 TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     CapturingLogger logger;
@@ -129,17 +137,6 @@ TEST(AssetsGraphics, TexturePayloadRejectsAlphaTransportIncompatibleWithFormat){
     texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::ConstantUnorm8, 77u);
     EXPECT_FALSE(texture.validatePayload());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid alpha transport for its payload format")));
-}
-
-
-[[nodiscard]] static Expected<Core::Assets::AssetBytes> MakeTextureTestRuntimeBinary(TestArena& testArena){
-    Impl::Texture texture(testArena.arena, Name("project/textures/prepared"));
-    texture.setPayload(7u, 5u, MakeTextureTestMipLevels(testArena), MakeTextureTestUastcPayload(testArena), TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4, TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8);
-    Impl::TextureAssetCodec codec;
-    Core::Assets::AssetBytes bytes(testArena.arena);
-    if(!codec.serialize(texture, bytes))
-        return MakeUnexpected(Failure{});
-    return bytes;
 }
 
 TEST(AssetsGraphics, TextureCookerPreservesImplicitRawSidecarWithoutEncodingItAgain){

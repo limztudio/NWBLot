@@ -17,20 +17,14 @@ NWB_IMPL_BEGIN
 
 
 OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline){
-}
+    : m_pipeline(pipeline)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void OpaqueEmulationMergeValidator::validate(
-    const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const Span<const Core::GpuTaskId> timingTasks,
-    b8 timingBindingsValid,
-    b8 hasOpaqueCsgFrameWork,
-    OpaqueEmulationMergeValidationResult& outResult
-)const noexcept{
+void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept{
     RendererFramePipeline& pipeline = *m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult{};
     const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{

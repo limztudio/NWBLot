@@ -24,7 +24,8 @@ TrackedResourceStateHistory::TrackedResourceStateHistory(Vector<TrackedCompiledR
     : m_states(states)
     , m_resources(resourceCount, scratchArena)
     , m_links(scratchArena)
-    , m_graphGeneration(graphGeneration){
+    , m_graphGeneration(graphGeneration)
+{
     m_links.reserve(states.capacity());
 }
 

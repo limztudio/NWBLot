@@ -33,6 +33,7 @@ namespace __hidden_storage_equality_tests{
 
 template<typename Element, usize Count>
 struct RawEqualityStorage{
+public:
     friend b8 operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs); }
     friend b8 operator!=(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -192,11 +193,11 @@ void CheckRawEqualityComparisonFlags(){
 #if defined(__linux__)
 template<typename Value, usize Count>
 void CheckPageBoundary(){
-    const long pageSize = sysconf(_SC_PAGESIZE);
+    const isize pageSize = static_cast<isize>(sysconf(_SC_PAGESIZE));
     ASSERT_GT(pageSize, 0);
     void* const mapping = mmap(nullptr, static_cast<usize>(pageSize) * 2u, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     ASSERT_NE(mapping, MAP_FAILED);
-    const int protection = mprotect(static_cast<char*>(mapping) + pageSize, static_cast<usize>(pageSize), PROT_NONE);
+    const i32 protection = static_cast<i32>(mprotect(static_cast<char*>(mapping) + pageSize, static_cast<usize>(pageSize), PROT_NONE));
     if(protection != 0){
         munmap(mapping, static_cast<usize>(pageSize) * 2u);
         FAIL() << "Unable to protect equality boundary page";
@@ -280,7 +281,6 @@ TEST(Math, StorageEqualityDoesNotReadBeyondUnalignedShortValues){
 #endif
 }
 
-
 TEST(Math, StorageEqualityFallsBackForBooleanArrays){
     using namespace __hidden_storage_equality_tests;
     const auto verify = []<usize Count>(){
@@ -322,7 +322,6 @@ TEST(Math, StorageEqualityFallsBackForWideIntegralArrays){
     GTEST_SKIP() << "This target does not expose a wider integral type";
 #endif
 }
-
 
 TEST(Math, StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags){
     using namespace __hidden_storage_equality_tests;

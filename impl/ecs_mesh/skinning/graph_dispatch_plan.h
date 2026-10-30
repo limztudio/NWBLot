@@ -24,7 +24,6 @@ NWB_IMPL_BEGIN
 
 static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
 
-
 // Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
 struct MeshSkinningGraphDispatchPlan{
     RuntimeMeshHandle handle;

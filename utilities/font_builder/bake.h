@@ -27,10 +27,17 @@ inline constexpr AStringView s_RasterModeOutlineText = "outline";
 // One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
 inline constexpr u32 s_GlyphGuardExtent = 2u;
 
-
 inline constexpr u32 s_DefaultBakeExtent = 1024u;
 
 struct BakeOptions{
+public:
+    explicit BakeOptions(Core::Alloc::GlobalArena& arena)noexcept
+        : source(arena)
+        , output(arena)
+    {}
+
+
+public:
     Path source;
     Path output;
     u32 ppem = Impl::s_FontAtlasDefaultBakePpem;
@@ -39,24 +46,18 @@ struct BakeOptions{
     u32 maxGroups = Impl::s_FontAtlasMaxGroupCount;
     b8 outline = false;
     b8 overwrite = false;
-
-
-public:
-    explicit BakeOptions(Core::Alloc::GlobalArena& arena)noexcept
-        : source(arena)
-        , output(arena)
-    {}
 };
 
 struct RasterGlyph{
-    Impl::FontAtlasGlyph record;
-    Core::Assets::AssetBytes pixels;
-
-
 public:
     explicit RasterGlyph(Core::Assets::AssetArena& arena)noexcept
         : pixels(arena)
     {}
+
+
+public:
+    Impl::FontAtlasGlyph record;
+    Core::Assets::AssetBytes pixels;
 };
 
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;

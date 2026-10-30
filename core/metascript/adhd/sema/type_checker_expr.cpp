@@ -14,14 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeChecker::checkExpr(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    const b8 isMutationTarget,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MVector<ParseError>& errors){
     b8 ok = true;
 
     switch(expr.kind){
@@ -37,7 +30,7 @@ b8 TypeChecker::checkExpr(
         break;
     }
     case ExprKind::Identifier:{
-        const ScopedVarInfo* local = findScopedVar(scope, expr.text);
+        const ScopedVarInfo* local = FindScopedVar(scope, expr.text);
         if(local){
             const ParamPassingMode::Enum resolvedLocalRefMode = m_symbols.resolveRefMode(local->type);
             if((!local->isParam && local->mode != ParamPassingMode::None) || resolvedLocalRefMode != ParamPassingMode::None)
@@ -62,7 +55,7 @@ b8 TypeChecker::checkExpr(
         }
         else{
             b8 reportedUnqualifiedMember = false;
-            if(ownerClass && (SymbolTable::findClassField(*ownerClass, expr.text) || m_symbols.findClassMethod(*ownerClass, expr.text))){
+            if(ownerClass && (SymbolTable::FindClassField(*ownerClass, expr.text) || m_symbols.findClassMethod(*ownerClass, expr.text))){
                 reportError(errors, expr.span, "class member must be accessed explicitly via 'this.member' in adhd");
                 ok = false;
                 reportedUnqualifiedMember = true;
@@ -83,12 +76,12 @@ b8 TypeChecker::checkExpr(
             ok = false;
             break;
         }
-        if(m_inLambda && !findScopedVar(scope, "this")){
+        if(m_inLambda && !FindScopedVar(scope, "this")){
             reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
             ok = false;
         }
         const b8 isConstThis = isThisConstInScope(method, scope);
-        const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.text);
+        const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text);
         const MethodDecl* memberMethod = m_symbols.findClassMethod(*ownerClass, expr.text);
         if(!field && !memberMethod){
             reportError(errors, expr.span, "unknown member on 'this'");
@@ -126,7 +119,7 @@ b8 TypeChecker::checkExpr(
                     reportError(errors, expr.span, "'this' cannot be used in a free function");
                     ok = false;
                 }
-                else if(m_inLambda && !findScopedVar(scope, "this")){
+                else if(m_inLambda && !FindScopedVar(scope, "this")){
                     reportError(errors, expr.span, "accessing 'this' inside a lambda requires capturing 'in this' or 'mut this'");
                     ok = false;
                 }
@@ -136,14 +129,7 @@ b8 TypeChecker::checkExpr(
             }
             const ClassDecl* accessedCls = nullptr;
             const FieldDecl* accessedField = nullptr;
-            const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(
-                ownerClass,
-                &method,
-                expr,
-                scope,
-                &accessedCls,
-                &accessedField
-            );
+            const MStringView resolvedEnumName = resolveScopeAccessEnumTypeName(ownerClass, &method, expr, scope, &accessedCls, &accessedField);
             if(accessedCls && accessedField && ownerClass != accessedCls && accessedField->access != AccessSpecifier::Public){
                 reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                 ok = false;
@@ -223,7 +209,7 @@ b8 TypeChecker::checkExpr(
                     }
                 }
             }
-            else if(u32 unalignedLanes = 0u; SymbolTable::isUnalignedVectorType(baseType, unalignedLanes)){
+            else if(u32 unalignedLanes = 0u; SymbolTable::IsUnalignedVectorType(baseType, unalignedLanes)){
                 b8 isSwizzlePattern = false;
                 b8 validLanes = true;
                 if(!CheckSwizzlePattern(expr.text, unalignedLanes, isSwizzlePattern, validLanes) || !isSwizzlePattern || !validLanes || expr.text.size() != 1u){
@@ -232,7 +218,7 @@ b8 TypeChecker::checkExpr(
                 }
             }
             else if(const ClassDecl* targetCls = m_symbols.findClass(baseType)){
-                const FieldDecl* field = SymbolTable::findClassField(*targetCls, expr.text);
+                const FieldDecl* field = SymbolTable::FindClassField(*targetCls, expr.text);
                 const MethodDecl* memberMethod = m_symbols.findClassMethod(*targetCls, expr.text);
                 if(!field && !memberMethod){
                     reportError(errors, expr.span, "unknown member on class");
@@ -254,7 +240,7 @@ b8 TypeChecker::checkExpr(
                     else if(isMutationTarget && m_parallelDepth > 0u && ft && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(ft->name))){
                         b8 isTaskLocalOwner = false;
                         if(expr.lhs->kind == ExprKind::Identifier){
-                            if(const ScopedVarInfo* lhsLocal = findScopedVar(scope, expr.lhs->text))
+                            if(const ScopedVarInfo* lhsLocal = FindScopedVar(scope, expr.lhs->text))
                                 isTaskLocalOwner = (lhsLocal->declaredParallelDepth == m_parallelDepth);
                         }
                         if(!isTaskLocalOwner){
@@ -278,20 +264,11 @@ b8 TypeChecker::checkExpr(
         if(lhsBaseType != "Map" && lhsBaseType != "HashMap")
             m_parallelDepth = 0u;
         u32 vecIdxLanes = 0u;
-        if(SymbolTable::isSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::isUnalignedVectorType(lhsBaseType, vecIdxLanes))
+        if(SymbolTable::IsSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
             expr.isVectorRawIndex = true;
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const ClassDecl* opDeclCls = nullptr;
-        const MethodDecl* customOpIdx = resolveCustomOperator(
-            ownerClass,
-            &method,
-            containerTypeRef,
-            lhsBaseType,
-            "[]",
-            1u,
-            recvIsConst,
-            &opDeclCls
-        );
+        const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst, &opDeclCls);
         if(opDeclCls && !customOpIdx){
             reportError(errors, expr.span, "indexing custom class requires 'operator[]' to be defined on the class");
             ok = false;
@@ -339,16 +316,7 @@ b8 TypeChecker::checkExpr(
             const MStringView opSym = MapTokenTypeToOperatorSymbol(expr.op);
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             const ClassDecl* opDeclCls = nullptr;
-            const MethodDecl* opMethod = resolveCustomOperator(
-                ownerClass,
-                &method,
-                lhsTypeRef,
-                lhsType,
-                opSym,
-                0u,
-                recvIsConst,
-                &opDeclCls
-            );
+            const MethodDecl* opMethod = resolveCustomOperator(ownerClass, &method, lhsTypeRef, lhsType, opSym, 0u, recvIsConst, &opDeclCls);
             if(opDeclCls && !opMethod){
                 reportError(errors, expr.span, "unary operator is not defined on custom class");
                 ok = false;
@@ -407,17 +375,14 @@ b8 TypeChecker::checkExpr(
             if(expr.kind == ExprKind::BitCast && expr.targetType && !srcType.empty()){
                 const MStringView dstType = m_symbols.resolveBaseTypeName(expr.targetType->name);
                 const auto hasKnownFixedLayout = [&](const MStringView baseName)noexcept -> b8{
-                    if(baseName.empty() || findTemplateParam(ownerClass, &method, baseName))
+                    if(baseName.empty() || FindTemplateParam(ownerClass, &method, baseName))
                         return false;
                     return IsScalarType(baseName)
-                        || SymbolTable::isSimdType(baseName)
-                        || SymbolTable::isUnalignedVectorType(baseName)
+                        || SymbolTable::IsSimdType(baseName)
+                        || SymbolTable::IsUnalignedVectorType(baseName)
                         || m_symbols.findEnum(baseName) != nullptr;
                 };
-                if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None
-                    && hasKnownFixedLayout(dstType)
-                    && hasKnownFixedLayout(srcType))
-                {
+                if(m_symbols.resolveRefMode(expr.targetType) == ParamPassingMode::None && hasKnownFixedLayout(dstType) && hasKnownFixedLayout(srcType)){
                     TypeRef srcTypeRef(m_arena);
                     srcTypeRef.name = srcType;
                     usize dstSize = 0u;
@@ -448,7 +413,7 @@ b8 TypeChecker::checkExpr(
     }
 
     const MStringView inferredType = inferExprTypeName(ownerClass, &method, expr, scope);
-    if(SymbolTable::isSimdType(inferredType))
+    if(SymbolTable::IsSimdType(inferredType))
         expr.resolvedSimdType = inferredType;
 
     return ok;
@@ -471,27 +436,12 @@ b8 TypeChecker::applyInterfaceRefRebind(
         outRhsNeedsMut = true;
     const MStringView baseTypeName = targetType ? m_symbols.resolveBaseTypeName(targetType->name) : MStringView{};
     if(assignExpr.rhs && !baseTypeName.empty() && m_symbols.findInterface(baseTypeName)){
-        return verifyConcreteClassImplementsInterface(
-            ownerClass,
-            method,
-            *assignExpr.rhs,
-            targetType,
-            scope,
-            assignExpr.span,
-            errorMessage,
-            errors
-        );
+        return verifyConcreteClassImplementsInterface(ownerClass, method, *assignExpr.rhs, targetType, scope, assignExpr.span, errorMessage, errors);
     }
     return true;
 }
 
-b8 TypeChecker::checkBinaryExpr(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
     b8 ok = true;
 
     const b8 isAssign = IsCompoundOrSimpleAssignment(expr.op);
@@ -525,7 +475,7 @@ b8 TypeChecker::checkBinaryExpr(
     }
     if(expr.op == TokenType::Equal && expr.lhs){
         if(expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-            if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.lhs->text); field && field->type){
+            if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text); field && field->type){
                 const MStringView baseFieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
                 const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
                 if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
@@ -538,7 +488,7 @@ b8 TypeChecker::checkBinaryExpr(
             }
         }
         else if(expr.lhs->kind == ExprKind::Identifier){
-            if(const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text); local && local->type && !local->isParam){
+            if(const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text); local && local->type && !local->isParam){
                 const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(local->type->name);
                 const ParamPassingMode::Enum localRefMode = (local->mode != ParamPassingMode::None) ? local->mode : m_symbols.resolveRefMode(local->type);
                 if(localRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLocalTypeName))
@@ -564,9 +514,9 @@ b8 TypeChecker::checkBinaryExpr(
         ok = false;
     b8 rhsInClassArenaCtx = false;
     if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.lhs->text)){
+        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
             const MStringView baseFieldTypeName = field->type ? m_symbols.resolveBaseTypeName(field->type->name) : MStringView{};
-            if(field->type && SymbolTable::isArenaBackedContainer(baseFieldTypeName))
+            if(field->type && SymbolTable::IsArenaBackedContainer(baseFieldTypeName))
                 rhsInClassArenaCtx = true;
             const ParamPassingMode::Enum fieldRefMode = field->type ? m_symbols.resolveRefMode(field->type) : ParamPassingMode::None;
             if(fieldRefMode != ParamPassingMode::None && (method.isConstructor || m_symbols.findInterface(baseFieldTypeName))){
@@ -584,11 +534,11 @@ b8 TypeChecker::checkBinaryExpr(
                     ok = false;
                 }
             }
-            propagateFuncCaptureBytes(field->type, expr.rhs, scope, m_symbols);
+            PropagateFuncCaptureBytes(field->type, expr.rhs, scope, m_symbols);
         }
     }
     if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text);
+        const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text);
         if(local && local->type){
             const MStringView baseLocalTypeName = m_symbols.resolveBaseTypeName(local->type->name);
             if(expr.lhs->derefNotNull && m_symbols.findInterface(baseLocalTypeName)){
@@ -609,14 +559,14 @@ b8 TypeChecker::checkBinaryExpr(
                     ok = false;
                 }
             }
-            propagateFuncCaptureBytes(local->type, expr.rhs, scope, m_symbols);
+            PropagateFuncCaptureBytes(local->type, expr.rhs, scope, m_symbols);
             if(expr.rhs){
                 ScopedVarInfo* mutableLocal = const_cast<ScopedVarInfo*>(local);
                 if(expr.rhs->kind == ExprKind::Lambda){
                     mutableLocal->lambdaExpr = expr.rhs;
                 }
                 else if(expr.rhs->kind == ExprKind::Identifier){
-                    const ScopedVarInfo* rhsLocal = findScopedVar(scope, expr.rhs->text);
+                    const ScopedVarInfo* rhsLocal = FindScopedVar(scope, expr.rhs->text);
                     mutableLocal->lambdaExpr = rhsLocal ? rhsLocal->lambdaExpr : nullptr;
                 }
                 else{
@@ -628,7 +578,7 @@ b8 TypeChecker::checkBinaryExpr(
     if(expr.op == TokenType::Equal && expr.lhs && (expr.lhs->kind == ExprKind::MemberAccess || expr.lhs->kind == ExprKind::Index)){
         const TypeRef* lhsTypeRef = inferExprTypeRef(ownerClass, &method, *expr.lhs, scope);
         if(lhsTypeRef)
-            propagateFuncCaptureBytes(const_cast<TypeRef*>(lhsTypeRef), expr.rhs, scope, m_symbols);
+            PropagateFuncCaptureBytes(const_cast<TypeRef*>(lhsTypeRef), expr.rhs, scope, m_symbols);
         const ParamPassingMode::Enum lhsRefMode = m_symbols.resolveRefMode(lhsTypeRef);
         const MStringView baseLhsTypeName = lhsTypeRef ? m_symbols.resolveBaseTypeName(lhsTypeRef->name) : MStringView{};
         if(lhsRefMode != ParamPassingMode::None && m_symbols.findInterface(baseLhsTypeName)){
@@ -656,10 +606,7 @@ b8 TypeChecker::checkBinaryExpr(
         if(!checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
             ok = false;
         m_inClassArenaContext = savedClassArenaCtx;
-        if(expr.op == TokenType::Equal
-            && expr.lhs && expr.lhs->kind == ExprKind::ThisMember
-            && isEscapingMutCaptureLambda(expr.rhs, scope))
-        {
+        if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && IsEscapingMutCaptureLambda(expr.rhs, scope)){
             reportError(errors, expr.span, "cannot store lambda with 'mut' capture into 'this.member'; mutable reference captures cannot escape their enclosing scope");
             ok = false;
         }
@@ -673,14 +620,9 @@ b8 TypeChecker::checkBinaryExpr(
     return ok;
 }
 
-b8 TypeChecker::isReceiverConst(
-    ClassDecl* ownerClass,
-    const MethodDecl& method,
-    const Expr& recv,
-    const Span<const ScopedVarInfo> scope
-)const noexcept{
+b8 TypeChecker::isReceiverConst(ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, const Span<const ScopedVarInfo> scope)const noexcept{
     if(recv.kind == ExprKind::Identifier){
-        if(const ScopedVarInfo* local = findScopedVar(scope, recv.text)){
+        if(const ScopedVarInfo* local = FindScopedVar(scope, recv.text)){
             if(local->mode == ParamPassingMode::In || local->isConst)
                 return true;
             const ParamPassingMode::Enum localRefMode = m_symbols.resolveRefMode(local->type);
@@ -692,7 +634,7 @@ b8 TypeChecker::isReceiverConst(
             return true;
     }
     else if(recv.kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, recv.text)){
+        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, recv.text)){
             const ParamPassingMode::Enum fieldRefMode = m_symbols.resolveRefMode(field->type);
             if(fieldRefMode != ParamPassingMode::None)
                 return fieldRefMode == ParamPassingMode::In;

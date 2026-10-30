@@ -69,15 +69,7 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 Compiler::compile(
-    const MStringView source,
-    const MStringView virtualFilePath,
-    MetaArena& arena,
-    CompileResult& outResult,
-    IIncludeResolver* includeResolver,
-    const MStringView customNamespace,
-    const Span<const MString> macroDefinitions
-){
+b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
     Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver);
@@ -116,38 +108,24 @@ b8 Compiler::compile(
     if(!typeChecker.checkTranslationUnit(outResult.unit, outResult.errors))
         return false;
 
-    const MString namespacePath = customNamespace.empty()
-        ? deriveNamespaceFromPath(virtualFilePath, arena)
-        : MString(customNamespace.data(), customNamespace.size(), arena);
-    const MString headerFilename = deriveHeaderFilename(virtualFilePath, arena);
+    const MString namespacePath = customNamespace.empty() ? DeriveNamespaceFromPath(virtualFilePath, arena) : MString(customNamespace.data(), customNamespace.size(), arena);
+    const MString headerFilename = DeriveHeaderFilename(virtualFilePath, arena);
 
     HeaderEmitter headerEmitter(arena, outResult.symbols);
     SourceEmitter sourceEmitter(arena, outResult.symbols);
 
-    outResult.generatedHeader = headerEmitter.emitHeader(
-        outResult.unit,
-        MStringView(namespacePath.data(), namespacePath.size())
-    );
-    outResult.generatedSource = sourceEmitter.emitSource(
-        outResult.unit,
-        MStringView(headerFilename.data(), headerFilename.size()),
-        MStringView(namespacePath.data(), namespacePath.size())
-    );
+    outResult.generatedHeader = headerEmitter.emitHeader(outResult.unit, MStringView(namespacePath.data(), namespacePath.size()));
+    outResult.generatedSource = sourceEmitter.emitSource(outResult.unit, MStringView(headerFilename.data(), headerFilename.size()), MStringView(namespacePath.data(), namespacePath.size()));
 
     return outResult.errors.empty();
 }
 
-MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, MetaArena& arena){
+MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, MetaArena& arena){
     MString ns(arena);
     ns.append("NWB");
 
-    if(virtualFilePath.empty()
-        || virtualFilePath[0] == '/'
-        || virtualFilePath[0] == '\\'
-        || (virtualFilePath.size() >= 2u && virtualFilePath[1] == ':'))
-    {
+    if(virtualFilePath.empty() || virtualFilePath[0] == '/' || virtualFilePath[0] == '\\' || (virtualFilePath.size() >= 2u && virtualFilePath[1] == ':'))
         return ns;
-    }
 
     usize lastSlash = virtualFilePath.size();
     for(usize i = 0u; i < virtualFilePath.size(); ++i){
@@ -180,11 +158,11 @@ MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, Met
     return ns;
 }
 
-MString Compiler::deriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){
+MString Compiler::DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){
     return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.h", arena);
 }
 
-MString Compiler::deriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){
+MString Compiler::DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){
     return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena);
 }
 

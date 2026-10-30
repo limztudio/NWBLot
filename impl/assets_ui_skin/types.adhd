@@ -260,8 +260,6 @@ const UiSkinColor s_DefaultProgressFillTintColor(1.0f, 1.0f, 1.0f, 1.0f);
 
 [reflect]
 class UiSkinPalette{
-    public Array<UiSkinColor, 17u> colors;
-
     public UiSkinPalette(){
         this.colors[0u] = s_DefaultTextNormalColor;
         this.colors[1u] = s_DefaultTextDisabledColor;
@@ -281,7 +279,10 @@ class UiSkinPalette{
         this.colors[15u] = s_DefaultProgressTrackTintColor;
         this.colors[16u] = s_DefaultProgressFillTintColor;
     }
+
+    public Array<UiSkinColor, 17u> colors;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

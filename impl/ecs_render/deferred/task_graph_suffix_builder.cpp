@@ -33,8 +33,8 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     , m_deferredSystem(deferredSystem)
     , m_graphics(graphics)
     , m_presentationContributor(presentationContributor)
-    , m_outputLayerContributor(outputLayerContributor){
-}
+    , m_outputLayerContributor(outputLayerContributor)
+{}
 
 [[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,

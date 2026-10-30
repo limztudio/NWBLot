@@ -4,7 +4,7 @@
 import ctypes
 import time
 from window_capture_outcome import SmokeSkip, SmokeFailure, write_status  # noqa: E402
-from window_capture_image import write_capture_rows, read_bmp_24_rows, ximage_rgb_rows  # noqa: E402
+from window_capture_image import write_capture_rows, ximage_rgb_rows  # noqa: E402
 
 
 LIT_WINDOW_POLL_SECONDS = 0.1

@@ -96,14 +96,14 @@ b8 Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
 }
 
 const Value* Document::findVariable(MStringView name)const noexcept{
-    auto it = m_variables.find(name);
+    const auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;
     return &it.value();
 }
 
 Value* Document::findVariable(MStringView name)noexcept{
-    auto it = m_variables.find(name);
+    const auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;
     return &it.value();

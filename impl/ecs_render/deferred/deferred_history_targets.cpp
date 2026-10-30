@@ -110,7 +110,6 @@ b8 RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTar
         return false;
     }
 
-
     const auto descriptorsRegistered = [&]() -> Expected<void>{
         if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
             heap,

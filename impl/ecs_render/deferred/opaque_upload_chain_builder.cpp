@@ -27,8 +27,8 @@ NWB_IMPL_BEGIN
 OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem){
-}
+    , m_csgSystem(csgSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

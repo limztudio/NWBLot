@@ -8,11 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+namespace __hidden_adhd_compiler_templates_interfaces_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using namespace NWB::AdhdCompilerTestsDetail;
 
 TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferences){
     AdhdTestArena arena;
@@ -47,7 +49,7 @@ TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferen
         "}\r\n";
 
     CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/task_runner.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidSource, "impl/task_runner.adhd", arena.arena, validRes));
     const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
     EXPECT_NE(cppView.find("::NotNull<ITask*> active = ::MakeNotNull(&(a));"), MStringView::npos);
     EXPECT_NE(cppView.find("active->execute(dt);"), MStringView::npos);
@@ -68,7 +70,7 @@ TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferen
         "}\r\n";
 
     CompileResult invalidBoundRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_InvalidBoundArgSource, "impl/bad_bound.adhd", arena.arena, invalidBoundRes));
+    EXPECT_FALSE(Compiler::Compile(s_InvalidBoundArgSource, "impl/bad_bound.adhd", arena.arena, invalidBoundRes));
 
     static constexpr MStringView s_DowncastInterfaceSource =
         "interface ITask {\r\n"
@@ -81,7 +83,7 @@ TEST(AdhdCompiler, ValidatesTemplateInterfaceBoundsAndRebindableInterfaceReferen
         "    PhysicsTask p = cast<PhysicsTask>(task);\r\n"
         "}\r\n";
     CompileResult downcastRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DowncastInterfaceSource, "impl/bad_downcast.adhd", arena.arena, downcastRes));
+    EXPECT_FALSE(Compiler::Compile(s_DowncastInterfaceSource, "impl/bad_downcast.adhd", arena.arena, downcastRes));
 }
 
 TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
@@ -110,7 +112,7 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
         "}\r\n";
 
     CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/tag_switch.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidSource, "impl/tag_switch.adhd", arena.arena, validRes));
     const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
     EXPECT_NE(cppView.find("Mode::Flag::Active"), MStringView::npos);
     EXPECT_NE(cppView.find("if(key == target){"), MStringView::npos);
@@ -126,7 +128,7 @@ TEST(AdhdCompiler, SupportsCustomClassSwitchEnumVarScopeAndConstSafety){
         "    c.bump();\r\n"
         "}\r\n";
     CompileResult constRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ConstViolationSource, "impl/bad_const.adhd", arena.arena, constRes));
+    EXPECT_FALSE(Compiler::Compile(s_ConstViolationSource, "impl/bad_const.adhd", arena.arena, constRes));
 }
 
 TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflection){
@@ -149,7 +151,7 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "}\r\n";
 
     CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ValidSource, "impl/bounded_call.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidSource, "impl/bounded_call.adhd", arena.arena, validRes));
     const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
     EXPECT_NE(hdrView.find("m_buffer{8, s_ClassArena};"), MStringView::npos);
     EXPECT_NE(hdrView.find("conv.convert<u32>(comp.id())"), MStringView::npos);
@@ -159,20 +161,20 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "    comp.step(1.0f);\r\n"
         "}\r\n";
     CompileResult unboundedRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnboundedMethodCall, "impl/bad_unbounded.adhd", arena.arena, unboundedRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnboundedMethodCall, "impl/bad_unbounded.adhd", arena.arena, unboundedRes));
 
     static constexpr MStringView s_CStyleArraySource =
         "void badArray() {\r\n"
         "    i32 values[4] = 0;\r\n"
         "}\r\n";
     CompileResult cArrayRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_CStyleArraySource, "impl/bad_array.adhd", arena.arena, cArrayRes));
+    EXPECT_FALSE(Compiler::Compile(s_CStyleArraySource, "impl/bad_array.adhd", arena.arena, cArrayRes));
 
     static constexpr MStringView s_CppIncludeOutsideNative =
         "#include <vector>\r\n"
         "void nop() {}\r\n";
     CompileResult cppIncRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_CppIncludeOutsideNative, "impl/bad_inc.adhd", arena.arena, cppIncRes));
+    EXPECT_FALSE(Compiler::Compile(s_CppIncludeOutsideNative, "impl/bad_inc.adhd", arena.arena, cppIncRes));
 
     static constexpr MStringView s_ByValueInterfaceVar =
         "interface IComponent {\r\n"
@@ -186,7 +188,7 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "    IComponent val = c;\r\n"
         "}\r\n";
     CompileResult byValIfaceRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ByValueInterfaceVar, "impl/bad_val_iface.adhd", arena.arena, byValIfaceRes));
+    EXPECT_FALSE(Compiler::Compile(s_ByValueInterfaceVar, "impl/bad_val_iface.adhd", arena.arena, byValIfaceRes));
 
     static constexpr MStringView s_MismatchedOverrideConst =
         "interface IComponent {\r\n"
@@ -198,7 +200,7 @@ TEST(AdhdCompiler, EnforcesTemplateBoundMethodCallsAndEmitsInstantiationReflecti
         "    }\r\n"
         "}\r\n";
     CompileResult mismatchOverrideRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MismatchedOverrideConst, "impl/bad_override_sig.adhd", arena.arena, mismatchOverrideRes));
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedOverrideConst, "impl/bad_override_sig.adhd", arena.arena, mismatchOverrideRes));
 }
 
 TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumAndOperatorChecks){
@@ -222,7 +224,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "}\r\n";
 
     CompileResult splitRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", arena.arena, splitRes, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_SplitImplSource, "impl/service/shared_service_impl.adhd", arena.arena, splitRes, &resolver));
     const MStringView hdrView(splitRes.generatedHeader.data(), splitRes.generatedHeader.size());
     const MStringView cppView(splitRes.generatedSource.data(), splitRes.generatedSource.size());
     EXPECT_NE(hdrView.find("#include \"shared_service.adhd.h\""), MStringView::npos);
@@ -242,7 +244,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    return Mode::Flag::Idle;\r\n"
         "}\r\n";
     CompileResult badEnumScopeRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MismatchedEnumFlagScope, "impl/bad_enum_scope.adhd", arena.arena, badEnumScopeRes));
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedEnumFlagScope, "impl/bad_enum_scope.adhd", arena.arena, badEnumScopeRes));
 
     static constexpr MStringView s_InvalidOperatorArity =
         "class Mask {\r\n"
@@ -252,7 +254,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    }\r\n"
         "}\r\n";
     CompileResult badOpArityRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_InvalidOperatorArity, "impl/bad_op_arity.adhd", arena.arena, badOpArityRes));
+    EXPECT_FALSE(Compiler::Compile(s_InvalidOperatorArity, "impl/bad_op_arity.adhd", arena.arena, badOpArityRes));
 
     static constexpr MStringView s_MismatchedTemplateArgOverride =
         "interface IBatch {\r\n"
@@ -262,7 +264,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    public void process(in Span<f32> items) override {}\r\n"
         "}\r\n";
     CompileResult badTemplateOverrideRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
+    EXPECT_FALSE(Compiler::Compile(s_MismatchedTemplateArgOverride, "impl/bad_tpl_override.adhd", arena.arena, badTemplateOverrideRes));
 
     static constexpr MStringView s_ExprLevelTemplateInstantiation =
         "class Pair<T, U> {\r\n"
@@ -273,7 +275,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    auto p = Pair<u8, f32x4>();\r\n"
         "}\r\n";
     CompileResult exprInstRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ExprLevelTemplateInstantiation, "impl/auto_pair.adhd", arena.arena, exprInstRes));
+    ASSERT_TRUE(Compiler::Compile(s_ExprLevelTemplateInstantiation, "impl/auto_pair.adhd", arena.arena, exprInstRes));
     ASSERT_EQ(exprInstRes.unit.templateInstantiations.size(), 1u);
     EXPECT_EQ(exprInstRes.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
 
@@ -283,7 +285,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    private u32 value = 1;\r\n"
         "}\r\n";
     CompileResult dupFieldRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateFieldSource, "impl/dup_field.adhd", arena.arena, dupFieldRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateFieldSource, "impl/dup_field.adhd", arena.arena, dupFieldRes));
 
     static constexpr MStringView s_UnknownThisMemberSource =
         "class KnownClass {\r\n"
@@ -293,20 +295,20 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    }\r\n"
         "}\r\n";
     CompileResult unknownThisRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnknownThisMemberSource, "impl/unknown_this.adhd", arena.arena, unknownThisRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnknownThisMemberSource, "impl/unknown_this.adhd", arena.arena, unknownThisRes));
 
     static constexpr MStringView s_InterfaceMethodByValueReturn =
         "interface IFactory {\r\n"
         "    IFactory cloneSelf();\r\n"
         "}\r\n";
     CompileResult ifaceValRetRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_InterfaceMethodByValueReturn, "impl/bad_iface_ret.adhd", arena.arena, ifaceValRetRes));
+    EXPECT_FALSE(Compiler::Compile(s_InterfaceMethodByValueReturn, "impl/bad_iface_ret.adhd", arena.arena, ifaceValRetRes));
 
     static constexpr MStringView s_FuncAndSimdParamAbiSource =
         "void dispatchSample(in Func<i32(in i32)> fn, in f32x4 tint) {\r\n"
         "}\r\n";
     CompileResult abiRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_FuncAndSimdParamAbiSource, "impl/param_abi.adhd", arena.arena, abiRes));
+    ASSERT_TRUE(Compiler::Compile(s_FuncAndSimdParamAbiSource, "impl/param_abi.adhd", arena.arena, abiRes));
     EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("InplaceFunction<0u, i32(i32)>"), MStringView::npos);
     EXPECT_NE(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("const Float4& tint"), MStringView::npos);
     EXPECT_EQ(MStringView(abiRes.generatedHeader.data(), abiRes.generatedHeader.size()).find("// Compiled by ADHD Compiler 1.0.0\r\n"), 0u);
@@ -321,7 +323,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    Pair<u8> p;\r\n"
         "}\r\n";
     CompileResult badTplArityRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_TemplateArgCountMismatchSource, "impl/bad_tpl_arity.adhd", arena.arena, badTplArityRes));
+    EXPECT_FALSE(Compiler::Compile(s_TemplateArgCountMismatchSource, "impl/bad_tpl_arity.adhd", arena.arena, badTplArityRes));
 
     static constexpr MStringView s_DuplicateEnumeratorSource =
         "enum DupMode : u8 {\r\n"
@@ -329,14 +331,14 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    enum Alpha\r\n"
         "}\r\n";
     CompileResult dupEnumRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateEnumeratorSource, "impl/dup_enum.adhd", arena.arena, dupEnumRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateEnumeratorSource, "impl/dup_enum.adhd", arena.arena, dupEnumRes));
 
     static constexpr MStringView s_DuplicateLocalVarSource =
         "void badScope(in u32 x) {\r\n"
         "    u32 x = 1u;\r\n"
         "}\r\n";
     CompileResult dupLocalRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateLocalVarSource, "impl/dup_local.adhd", arena.arena, dupLocalRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateLocalVarSource, "impl/dup_local.adhd", arena.arena, dupLocalRes));
 
     static constexpr MStringView s_SimdNwbAndParallelInclusiveSource =
         "[reflect]\r\n"
@@ -349,7 +351,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    }\r\n"
         "}\r\n";
     CompileResult simdNwbRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_SimdNwbAndParallelInclusiveSource, "impl/bounds_asset.adhd", arena.arena, simdNwbRes));
+    ASSERT_TRUE(Compiler::Compile(s_SimdNwbAndParallelInclusiveSource, "impl/bounds_asset.adhd", arena.arena, simdNwbRes));
     const MStringView boundsHdr(simdNwbRes.generatedHeader.data(), simdNwbRes.generatedHeader.size());
     const MStringView boundsCpp(simdNwbRes.generatedSource.data(), simdNwbRes.generatedSource.size());
     EXPECT_NE(boundsHdr.find("static constexpr usize reflectedFieldCount()noexcept{ return 2u; }"), MStringView::npos);
@@ -362,7 +364,7 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    break;\r\n"
         "}\r\n";
     CompileResult badBreakRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BreakOutsideLoopSource, "impl/bad_break.adhd", arena.arena, badBreakRes));
+    EXPECT_FALSE(Compiler::Compile(s_BreakOutsideLoopSource, "impl/bad_break.adhd", arena.arena, badBreakRes));
 
     static constexpr MStringView s_ReturnInParallelSource =
         "u32 badParReturn() {\r\n"
@@ -372,14 +374,14 @@ TEST(AdhdCompiler, SupportsCrossFileIncludesTemplatedInterfaceRefsAndStrictEnumA
         "    return 0u;\r\n"
         "}\r\n";
     CompileResult badParRetRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ReturnInParallelSource, "impl/bad_par_ret.adhd", arena.arena, badParRetRes));
+    EXPECT_FALSE(Compiler::Compile(s_ReturnInParallelSource, "impl/bad_par_ret.adhd", arena.arena, badParRetRes));
 
     static constexpr MStringView s_VoidReturnValueSource =
         "void badVoidRet() {\r\n"
         "    return 42;\r\n"
         "}\r\n";
     CompileResult badVoidRetRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
+    EXPECT_FALSE(Compiler::Compile(s_VoidReturnValueSource, "impl/bad_void_ret.adhd", arena.arena, badVoidRetRes));
 }
 
 TEST(AdhdCompiler, SupportsCrossFileSplitFunctionsTemplateClassOutOfLineMethodsAndTransitiveIncludes){
@@ -387,15 +389,7 @@ TEST(AdhdCompiler, SupportsCrossFileSplitFunctionsTemplateClassOutOfLineMethodsA
 
     class TransitiveSplitResolver final : public NWB::Core::Metascript::IIncludeResolver{
     public:
-        u32 popCount = 0u;
-
-        [[nodiscard]] b8 resolveInclude(
-            const MStringView includePath,
-            const b8,
-            MetaArena& rArena,
-            MString& outResolvedKey,
-            MString& outContent
-        )override{
+        [[nodiscard]] virtual b8 resolveInclude(const MStringView includePath, const b8, MetaArena& rArena, MString& outResolvedKey, MString& outContent)override{
             if(includePath == "split_decl.adhd"){
                 outResolvedKey = MString("/abs/split_decl.adhd", rArena);
                 static constexpr MStringView s_DeclCode =
@@ -418,9 +412,13 @@ TEST(AdhdCompiler, SupportsCrossFileSplitFunctionsTemplateClassOutOfLineMethodsA
             return false;
         }
 
-        void popIncludeScope()noexcept override{
+        virtual void popIncludeScope()noexcept override{
             ++popCount;
         }
+
+
+    public:
+        u32 popCount = 0u;
     };
 
     static constexpr MStringView s_ImplSource =
@@ -434,7 +432,7 @@ TEST(AdhdCompiler, SupportsCrossFileSplitFunctionsTemplateClassOutOfLineMethodsA
 
     TransitiveSplitResolver resolver;
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ImplSource, "impl/split_impl.adhd", arena.arena, res, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_ImplSource, "impl/split_impl.adhd", arena.arena, res, &resolver));
 
     EXPECT_EQ(resolver.popCount, 2u);
     ASSERT_EQ(res.unit.includedAdhdFiles.size(), 1u);

@@ -22,8 +22,8 @@ NWB_IMPL_BEGIN
 
 SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
     : m_graph(graph)
-    , m_raytracingSystem(raytracingSystem){
-}
+    , m_raytracingSystem(raytracingSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

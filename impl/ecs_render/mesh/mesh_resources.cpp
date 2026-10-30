@@ -209,7 +209,6 @@ template<typename PayloadT>
 
 
 Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena){
-
     const Name meshPath = meshAsset.name();
     if(!meshPath){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer mesh is empty"));
@@ -394,7 +393,6 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
             return MakeUnexpected(Failure{});
         }
         createdMesh.attributeBuffer = Move(*attributeBuffer);
-
     }
 
     NWB_ASSERT(createdMesh.valid());
@@ -412,7 +410,6 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::createMeshResources(const 
 }
 
 Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept{
-
     const Name meshPath = meshAsset.name();
     return findMeshResources(meshPath);
 }
@@ -431,7 +428,6 @@ Expected<NotNull<MeshResources*>> RendererMeshSystem::findMeshResources(const Na
 }
 
 Expected<NotNull<MeshResources*>> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
-
     NWB_ASSERT(desc.valid());
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);

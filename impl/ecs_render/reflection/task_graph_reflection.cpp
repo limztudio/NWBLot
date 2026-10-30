@@ -3,10 +3,11 @@
 
 
 #include "task_graph_reflection.h"
+
 #include "timing_names.h"
 #include "task_graph_postprocess.h"
-#include <impl/ecs_render/reflection/sampling_sequence.adhd.h>
 
+#include <impl/ecs_render/reflection/sampling_sequence.adhd.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
@@ -154,9 +155,8 @@ public:
             commandList.dispatchIndirect(0u);
         else if(payload.stage == DispatchStage::BuildArgs)
             commandList.dispatch(1u, 1u, 1u);
-        else{
+        else
             commandList.dispatch((resources.parameters.width + NWB_REFLECTION_CLASSIFY_GROUP_SIZE - 1u) / NWB_REFLECTION_CLASSIFY_GROUP_SIZE, (resources.parameters.height + NWB_REFLECTION_CLASSIFY_GROUP_SIZE - 1u) / NWB_REFLECTION_CLASSIFY_GROUP_SIZE, 1u);
-        }
         return true;
     }
 

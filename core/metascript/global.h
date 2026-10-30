@@ -38,13 +38,9 @@ struct MStringHash{
 
 
 public:
-    [[nodiscard]] usize operator()(const MString& s)const noexcept{
-        return static_cast<usize>(ComputeFnv64Bytes(s.data(), s.size()));
-    }
+    [[nodiscard]] usize operator()(const MString& s)const noexcept{ return static_cast<usize>(ComputeFnv64Bytes(s.data(), s.size())); }
 
-    [[nodiscard]] usize operator()(MStringView sv)const noexcept{
-        return static_cast<usize>(ComputeFnv64Bytes(sv.data(), sv.size()));
-    }
+    [[nodiscard]] usize operator()(MStringView sv)const noexcept{ return static_cast<usize>(ComputeFnv64Bytes(sv.data(), sv.size())); }
 };
 
 struct MStringEqual{

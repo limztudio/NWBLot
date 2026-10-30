@@ -157,10 +157,6 @@ b8 ParserCursor::consumeBalancedBracesRaw(MStringView& outInnerCode){
     return true;
 }
 
-void ParserCursor::error(MStringView message){
-    error(m_current.line, m_current.column, message);
-}
-
 void ParserCursor::error(u32 line, u32 column, MStringView message){
     m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), m_arena)});
 }

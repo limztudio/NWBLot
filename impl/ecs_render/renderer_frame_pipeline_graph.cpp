@@ -340,7 +340,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredSurfelGiCounterReadbackCompletion = *deferredSurfelGiCounterReadbackCompletionResult;
     }
 
-
     // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
     if(!declareDeferredShadowVisibilityTask(
         deferredLightingResources,
@@ -425,7 +424,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         surfelGiAsyncTiming
     ))
         return;
-
 
     // Declare Hardware Caustics before Lighting so declaration order owns the live irradiance RAW edge.
     if(declaresHardwareCaustics){
@@ -551,7 +549,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     m_deferredLaggedLightingHistorySlotsUploadTask = deferredLightingStageResult->historySlotsUploadTask;
     m_deferredLightingTask = deferredLightingStageResult->lightingTask;
-
 
     FrameGraphReflectionResolve reflectionResolve(m_deferredLightingTaskGraph, m_graphics, m_raytracingSystem, m_reflectionSystem);
     auto reflectionResolveResult = reflectionResolve.declare(

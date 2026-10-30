@@ -29,22 +29,24 @@ enum<u8> LayoutSizePolicy{
 }
 
 class LayoutSize{
-    public LayoutSizePolicy policy;
-    // Fixed logical size, or a positive stretch weight. Content ignores this finite, nonnegative value.
-    public f32 value;
-
     public LayoutSize(){
         this.policy = LayoutSizePolicy::Enum::Content;
         this.value = 0.0f;
     }
+
     public LayoutSize(in LayoutSizePolicy inPolicy){
         this.policy = inPolicy;
         this.value = 0.0f;
     }
+
     public LayoutSize(in LayoutSizePolicy inPolicy, in f32 inValue){
         this.policy = inPolicy;
         this.value = inValue;
     }
+
+    public LayoutSizePolicy policy;
+    // Fixed logical size, or a positive stretch weight. Content ignores this finite, nonnegative value.
+    public f32 value;
 }
 
 class LayoutNodeDesc{
@@ -67,3 +69,4 @@ class LayoutBox{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

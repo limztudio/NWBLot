@@ -28,8 +28,8 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, Re
     : m_graph(graph)
     , m_deferredSystem(deferredSystem)
     , m_meshSystem(meshSystem)
-    , m_graphics(graphics){
-}
+    , m_graphics(graphics)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

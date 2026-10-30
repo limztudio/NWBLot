@@ -117,7 +117,6 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
 }
 
-
 TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAndAdmissionBoundary){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -165,7 +164,6 @@ TEST(AssetsGraphics, SamplerFailedReloadPreservesDescriptionAcrossEveryPrefixAnd
     EXPECT_EQ(logger.errorCount(), binary.size() + 7u);
 }
 
-
 TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreservesReload){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -202,7 +200,6 @@ TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreserv
     EXPECT_EQ(logger.errorCount(), 16u);
 }
 
-
 TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerGuard(logger, NWB::Core::Common::LoggerBreakPolicy::ReportOnly);
@@ -217,7 +214,7 @@ TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
-    static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n", };
+    static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n" };
 
     for(const AStringView assignment : s_UnsupportedAssignments){
         CapturingLogger logger;
@@ -265,7 +262,6 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, entry.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
-#else
 #endif
 }
 

@@ -131,7 +131,6 @@ public:
         {}
     };
 
-
     struct IncludeEntry{
         CookString source;
         CookMap<CookString, DefineEntry> defineValues;
@@ -182,10 +181,7 @@ private:
 
 private:
     template<typename MapT>
-    using ScratchDefineEntryVector = Vector<
-        DefineEntryPtr<MapT>,
-        Core::Alloc::ScratchArena
-    >;
+    using ScratchDefineEntryVector = Vector<DefineEntryPtr<MapT>, Core::Alloc::ScratchArena>;
 
 
 public:
@@ -205,7 +201,6 @@ public:
     [[nodiscard]] b8 expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
     [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
-
 
     [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(Span<const Path> dependencies, Span<const Path> includeDirectories, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] u64 computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
@@ -242,3 +237,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

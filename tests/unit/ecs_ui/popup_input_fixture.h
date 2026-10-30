@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include <tests/unit/ui/native_input.h>
-
 #include "edit_host_fixture_support.h"
+
+#include <tests/unit/ui/native_input.h>
 
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
 
@@ -29,7 +29,6 @@ namespace EcsUiPopupInputTestDetail{
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Impl;
-
 
 // These queued service doubles exercise the borrowed OS contract without claiming native IME qualification.
 class FakeTextInput final : public QueuedTextInputService{
@@ -132,7 +131,6 @@ protected:
         ASSERT_TRUE(m_popupModel.setText(s_PopupKey));
         ASSERT_TRUE(m_childModel.setText(s_ChildKey));
     }
-
 
     [[nodiscard]] Expected<DeclaredEdit> declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds){
         const auto widget = m_context.declare(key, Ui::WidgetKind::EditBox);

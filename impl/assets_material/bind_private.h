@@ -61,12 +61,10 @@ static constexpr AStringView s_MaterialMutableAttribute = "material_mutable";
 static constexpr AStringView s_DefaultAttribute = "default";
 static constexpr AStringView s_MaterialBindDiagnosticPrefix = "Material bind";
 
-
 static constexpr AStringView s_BindNameKey = "name";
 static constexpr AStringView s_BindTypeKey = "type";
 static constexpr AStringView s_BindAttributesKey = "attributes";
 static constexpr AStringView s_BindFieldsKey = "fields";
-
 
 static constexpr AStringView s_BindFieldTypeTexture2D = "texture2d";
 static constexpr AStringView s_BindFieldTypeSampler = "sampler";
@@ -121,3 +119,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

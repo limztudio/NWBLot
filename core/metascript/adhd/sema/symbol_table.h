@@ -17,16 +17,16 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SymbolTable{
+class SymbolTable final{
 public:
-    [[nodiscard]] static b8 isArenaBackedContainer(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdMatrixType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
-    [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
+    [[nodiscard]] static b8 IsArenaBackedContainer(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 IsUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 IsUnalignedVectorType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdMatrixType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsSimdType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 IsStringSwitchType(MStringView typeName)noexcept;
+    [[nodiscard]] static const FieldDecl* FindClassField(const ClassDecl& classDecl, MStringView name)noexcept;
 
 
 public:
@@ -48,59 +48,18 @@ public:
     [[nodiscard]] InterfaceDecl* findInterface(MStringView name)const noexcept;
     [[nodiscard]] ClassDecl* findClass(MStringView name)const noexcept;
     [[nodiscard]] TypeAliasDecl* findTypeAlias(MStringView name)const noexcept;
-    [[nodiscard]] MethodDecl* findFreeFunction(
-        MStringView name,
-        const usize* preferredArgCount = nullptr,
-        Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
-    )const noexcept;
+    [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
-    [[nodiscard]] const MethodDecl* findClassMethod(
-        const ClassDecl& classDecl,
-        MStringView name,
-        const usize* preferredArgCount = nullptr,
-        b8 preferConst = false,
-        b8 requirePublic = false,
-        Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
-    )const noexcept;
-    [[nodiscard]] const MethodDecl* findClassOperator(
-        const ClassDecl& classDecl,
-        MStringView opName,
-        const usize* preferredArgCount = nullptr,
-        b8 preferConst = false,
-        b8 requirePublic = false,
-        Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
-    )const noexcept;
-    [[nodiscard]] const MethodDecl* findClassConstructor(
-        const ClassDecl& classDecl,
-        usize argCount,
-        b8 requirePublic = false,
-        Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
-    )const noexcept;
-    [[nodiscard]] MethodDecl* findInterfaceMethod(
-        const TypeRef& ifaceType,
-        MStringView methodName,
-        const usize* preferredArgCount = nullptr,
-        u32 depth = 0u,
-        Span<const MStringView> argTypeNames = {},
-        Span<const u8> argIsMut = {}
-    )const noexcept;
-    void collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
+    [[nodiscard]] const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name, const usize* preferredArgCount = nullptr, b8 preferConst = false, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    [[nodiscard]] const MethodDecl* findClassOperator(const ClassDecl& classDecl, MStringView opName, const usize* preferredArgCount = nullptr, b8 preferConst = false, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    [[nodiscard]] const MethodDecl* findClassConstructor(const ClassDecl& classDecl, usize argCount, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    [[nodiscard]] MethodDecl* findInterfaceMethod(const TypeRef& ifaceType, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    void collectAllInterfaceMethods(const TypeRef& ifaceType, u32 depth, MVector<MethodDecl*>& outMethods)const;
+    void collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods)const{ collectAllInterfaceMethods(ifaceType, 0u, outMethods); }
 
-    [[nodiscard]] TypeRef* substituteTypeParams(
-        const TypeRef& origType,
-        Span<const TemplateParamDecl> templateParams,
-        Span<const TypeArg> templateArgs
-    )const;
-    [[nodiscard]] TypeRef* substituteTypeParams(
-        const TypeRef* origType,
-        Span<const TemplateParamDecl> templateParams,
-        const TypeRef* instanceTypeRef
-    )const;
+    [[nodiscard]] TypeRef* substituteTypeParams(const TypeRef& origType, Span<const TemplateParamDecl> templateParams, Span<const TypeArg> templateArgs)const;
+    [[nodiscard]] TypeRef* substituteTypeParams(const TypeRef* origType, Span<const TemplateParamDecl> templateParams, const TypeRef* instanceTypeRef)const;
     [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
     [[nodiscard]] ParamPassingMode::Enum resolveRefMode(const TypeRef* type)const noexcept;
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;

@@ -57,6 +57,7 @@ public:
     [[nodiscard]] b8 validatePayload()const;
     [[nodiscard]] b8 loadBinary(Span<const u8> binary);
 
+
 public:
     // Cooked RGB values use the engine's linear working space; alpha is linear coverage.
     void setPayload(

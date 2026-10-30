@@ -93,11 +93,7 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
 b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     const ISubsystem* const subsystem = CastSubsystem(&asset);
     if(!subsystem){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} failed: invalid asset type '{}'"),
-            s_SubsystemSerializeContext,
-            ConvertString(asset.assetType().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), s_SubsystemSerializeContext, ConvertString(asset.assetType().resolvedText()));
         return false;
     }
 
@@ -118,14 +114,8 @@ using namespace Core::Metascript;
 
 static constexpr AStringView s_SubsystemsFieldName = "subsystems";
 
-
 template<typename TAsset>
-[[nodiscard]] static Expected<Core::Assets::AssetRef<TAsset>> ParseAssetRefString(
-    const Path& nwbFilePath,
-    const Value& itemValue,
-    const AStringView fieldLabel,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static Expected<Core::Assets::AssetRef<TAsset>> ParseAssetRefString(const Path& nwbFilePath, const Value& itemValue, const AStringView fieldLabel, Core::Alloc::ScratchArena& scratchArena){
     if(!itemValue.isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a string"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
@@ -166,12 +156,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
     outSubsystem.subsystems.clear();
     if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemsFieldName)){
         if(!subsystemsValue->isList()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': '{}' must be a list of strings"),
-                ConvertString(s_SubsystemDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(s_SubsystemsFieldName)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemsFieldName));
             return false;
         }
         outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
@@ -218,12 +203,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         outSubsystem.clearFieldValues(i);
         if(descriptor.isArray){
             if(!fieldValue->isList() || fieldValue->asList().empty()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{} '{}': '{}' must be a non-empty list of strings"),
-                    ConvertString(s_SubsystemDiagnosticPrefix),
-                    PathToString<tchar>(nwbFilePath),
-                    ConvertString(descriptor.fieldName)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a non-empty list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(descriptor.fieldName));
                 return false;
             }
             for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
@@ -271,3 +251,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

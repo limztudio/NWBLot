@@ -192,9 +192,8 @@ TEST(AssetsUiSkin, TypographyMetadataRequiresValidFontSize){
     auto entryResult = ParseMetadata(testArena, TypographyMetadata());
     ASSERT_TRUE(entryResult);
     const AStringView malformed[]{ "", "{}", "{\"default_font_size\": 0.0}", "{\"default_font_size\": 2049.0}", "{\"default_font_size\": \"large\"}", "{\"default_font_size\": 16.0, \"body\": 18.0}" };
-    for(u32 index = 0u; index < LengthOf(malformed); ++index){
+    for(u32 index = 0u; index < LengthOf(malformed); ++index)
         EXPECT_FALSE(ParseMetadata(testArena, TypographyMetadata(malformed[index]))) << index;
-    }
 }
 
 TEST(AssetsUiSkin, PaletteRejectsMalformedFooterWithoutReplacingSkin){
@@ -237,11 +236,9 @@ TEST(AssetsUiSkin, PaletteMetadataRequiresEveryKnownRoleAndValidRgba){
     SkinTestArena testArena;
     auto entryResult = ParseMetadata(testArena, PaletteMetadata());
     ASSERT_TRUE(entryResult);
-    for(u32 variant = 1u; variant <= 6u; ++variant){
+    for(u32 variant = 1u; variant <= 6u; ++variant)
         EXPECT_FALSE(ParseMetadata(testArena, PaletteMetadata(variant))) << variant;
-    }
 }
-
 
 TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
     CapturingLogger logger;
@@ -502,3 +499,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

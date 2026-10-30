@@ -21,11 +21,7 @@ NWB_IMPL_UI_BEGIN
 
 
 Expected<EditBoxPlacement> EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip, const Point previousScroll, const f32 caretWidth, const b8 revealCaret)const noexcept{
-    if(
-        !m_ready || !IsValidUiRect(bounds) || !IsValidUiRect(clip)
-        || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll)
-        || !IsFinite(caretWidth) || caretWidth <= 0.0f
-    )
+    if(!m_ready || !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding) || !IsValidUiExtent(previousScroll) || !IsFinite(caretWidth) || caretWidth <= 0.0f)
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle origin = VectorSet(bounds.x, bounds.y, bounds.x, bounds.y);
     const SIMDVectorSingle size = VectorSet(bounds.width, bounds.height, bounds.width, bounds.height);

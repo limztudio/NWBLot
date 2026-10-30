@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ReflectionEmitter{
+class ReflectionEmitter final{
 public:
     explicit ReflectionEmitter(const SymbolTable& symbols)noexcept
         : m_symbols(symbols)

@@ -43,6 +43,14 @@ class SliderResult{
 }
 
 class SliderSnapshot{
+    public b8 operator==(in SliderSnapshot rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.inputGeneration == rhs.inputGeneration && this.revision == rhs.revision && this.admissionGeneration == rhs.admissionGeneration && this.valueBits == rhs.valueBits && this.press == rhs.press && this.pressMoved == rhs.pressMoved;
+    }
+
+    public b8 operator!=(in SliderSnapshot rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.inputGeneration != rhs.inputGeneration || this.revision != rhs.revision || this.admissionGeneration != rhs.admissionGeneration || this.valueBits != rhs.valueBits || this.press != rhs.press || this.pressMoved != rhs.pressMoved;
+    }
+
     public u64 instanceGeneration = 0u;
     public u64 inputGeneration = 0u;
     public u64 revision = 0u;
@@ -50,28 +58,6 @@ class SliderSnapshot{
     public u64 valueBits = 0u;
     public InputActionId press;
     public b8 pressMoved = false;
-
-    public b8 operator==(in SliderSnapshot rhs)const{
-        return
-            this.instanceGeneration == rhs.instanceGeneration
-            && this.inputGeneration == rhs.inputGeneration
-            && this.revision == rhs.revision
-            && this.admissionGeneration == rhs.admissionGeneration
-            && this.valueBits == rhs.valueBits
-            && this.press == rhs.press
-            && this.pressMoved == rhs.pressMoved;
-    }
-
-    public b8 operator!=(in SliderSnapshot rhs)const{
-        return
-            this.instanceGeneration != rhs.instanceGeneration
-            || this.inputGeneration != rhs.inputGeneration
-            || this.revision != rhs.revision
-            || this.admissionGeneration != rhs.admissionGeneration
-            || this.valueBits != rhs.valueBits
-            || this.press != rhs.press
-            || this.pressMoved != rhs.pressMoved;
-    }
 }
 
 class SliderMetrics{
@@ -93,3 +79,4 @@ class SliderPlacement{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

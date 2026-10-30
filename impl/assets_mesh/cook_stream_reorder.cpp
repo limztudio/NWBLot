@@ -24,7 +24,6 @@ void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(const MeshCookEntry& 
     PrepareMeshStreamReorder(entry.colors, reorder.colors, reorder.colorRemap);
 }
 
-
 b8 MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
@@ -43,7 +42,6 @@ b8 MeshCookStreamReorder::RemapMeshletAttributeRefs(const TStringView metaKind, 
     return true;
 }
 
-
 b8 MeshCookStreamReorder::RemapMeshletPositionRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder){
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
@@ -60,7 +58,6 @@ b8 MeshCookStreamReorder::RemapMeshletPositionRefs(const TStringView metaKind, M
     return true;
 }
 
-
 void MeshCookStreamReorder::CommitCommonMeshStreamReorder(MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder)noexcept{
     entry.positions = Move(reorder.positions);
     entry.normals = Move(reorder.normals);
@@ -68,7 +65,6 @@ void MeshCookStreamReorder::CommitCommonMeshStreamReorder(MeshCookEntry& entry, 
     entry.uv0 = Move(reorder.uv0);
     entry.colors = Move(reorder.colors);
 }
-
 
 b8 MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);

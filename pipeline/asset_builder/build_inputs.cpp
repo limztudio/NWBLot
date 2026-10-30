@@ -40,7 +40,8 @@ struct PathSelectionIndex{
 
 public:
     PathSelectionIndex(const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const b8 preserveCase)
-        : m_entries(scratchArena){
+        : m_entries(scratchArena)
+    {
         m_entries.reserve(files.size());
         if(preserveCase){
             m_ownedPaths.emplace(scratchArena);

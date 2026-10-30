@@ -16,10 +16,13 @@ const usize s_InputMaxPopups = 8u;
 
 
 class PopupToken{
-    public WidgetId widget;
-    public u64 declarationGeneration = 0u;
-    public u64 instanceGeneration = 0u;
-    public u64 openGeneration = 0u;
+    public b8 operator==(in PopupToken rhs)const{
+        return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.instanceGeneration == rhs.instanceGeneration && this.openGeneration == rhs.openGeneration;
+    }
+
+    public b8 operator!=(in PopupToken rhs)const{
+        return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.instanceGeneration != rhs.instanceGeneration || this.openGeneration != rhs.openGeneration;
+    }
 
     public b8 valid()const{
         return this.widget.valid() && this.declarationGeneration != 0u && this.instanceGeneration != 0u && this.openGeneration != 0u;
@@ -29,13 +32,10 @@ class PopupToken{
         return !this.widget.valid() && this.declarationGeneration == 0u && this.instanceGeneration == 0u && this.openGeneration == 0u;
     }
 
-    public b8 operator==(in PopupToken rhs)const{
-        return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.instanceGeneration == rhs.instanceGeneration && this.openGeneration == rhs.openGeneration;
-    }
-
-    public b8 operator!=(in PopupToken rhs)const{
-        return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.instanceGeneration != rhs.instanceGeneration || this.openGeneration != rhs.openGeneration;
-    }
+    public WidgetId widget;
+    public u64 declarationGeneration = 0u;
+    public u64 instanceGeneration = 0u;
+    public u64 openGeneration = 0u;
 }
 
 enum<u8> PopupDismissReason{
@@ -77,14 +77,6 @@ enum<u8> UiEditClickKind{
 
 // The host advances the corresponding generation when a declaration or its backing model is replaced.
 class UiTextEditOwner{
-    public WidgetId widget;
-    public u64 declarationGeneration = 0u;
-    public u64 modelGeneration = 0u;
-
-    public b8 valid()const{
-        return this.widget.valid() && this.declarationGeneration != 0u && this.modelGeneration != 0u;
-    }
-
     public b8 operator==(in UiTextEditOwner rhs)const{
         return this.widget == rhs.widget && this.declarationGeneration == rhs.declarationGeneration && this.modelGeneration == rhs.modelGeneration;
     }
@@ -92,6 +84,14 @@ class UiTextEditOwner{
     public b8 operator!=(in UiTextEditOwner rhs)const{
         return this.widget != rhs.widget || this.declarationGeneration != rhs.declarationGeneration || this.modelGeneration != rhs.modelGeneration;
     }
+
+    public b8 valid()const{
+        return this.widget.valid() && this.declarationGeneration != 0u && this.modelGeneration != 0u;
+    }
+
+    public WidgetId widget;
+    public u64 declarationGeneration = 0u;
+    public u64 modelGeneration = 0u;
 }
 
 const u64 s_UiDoubleClickMaxIntervalMs = 500u;
@@ -100,16 +100,6 @@ const u8 s_UiDoubleClickCount = 2u;
 
 // Editor-local policy: a released second press within 500 ms and four logical units selects a word run.
 class UiEditClickTracker{
-    private UiTextEditOwner m_owner;
-    private PopupToken m_popup;
-    private Point m_position;
-    private u64 m_revision = 0u;
-    private u64 m_externalRevision = 0u;
-    private u64 m_pressTimestampMs = 0u;
-    private u8 m_clickCount = 0u;
-    private b8 m_down = false;
-    private b8 m_released = false;
-
     public void cancel(){
         this.m_owner = UiTextEditOwner();
         this.m_popup = PopupToken();
@@ -139,33 +129,28 @@ class UiEditClickTracker{
         this.m_revision = revision;
         this.m_externalRevision = externalRevision;
         this.m_pressTimestampMs = timestampMs;
-        if(second){
+        if(second)
             this.m_clickCount = s_UiDoubleClickCount;
-        }
-        else{
+        else
             this.m_clickCount = 1u;
-        }
         this.m_down = true;
         this.m_released = false;
-        if(second){
+        if(second)
             return UiEditClickKind::Enum::Word;
-        }
         return UiEditClickKind::Enum::Caret;
     }
 
     public void move(in Point position){
-        if(!this.m_down){
+        if(!this.m_down)
             return;
-        }
         if(!isFinite(position.x) || !isFinite(position.y)){
             this.cancel();
             return;
         }
         const f64x2 delta = f64x2(cast<f64>(position.x), cast<f64>(position.y)) - f64x2(cast<f64>(this.m_position.x), cast<f64>(this.m_position.y));
         const f64 distanceSquared = lengthSq(delta);
-        if(distanceSquared > s_UiDoubleClickMaxDistanceSquared){
+        if(distanceSquared > s_UiDoubleClickMaxDistanceSquared)
             this.cancel();
-        }
     }
 
     public void release(in UiTextEditOwner owner){
@@ -173,17 +158,26 @@ class UiEditClickTracker{
             this.m_down = false;
             this.m_released = true;
         }
-        else{
+        else
             this.cancel();
-        }
     }
 
     public void retainFocus(in UiTextEditOwner owner){
-        if(this.m_clickCount != 0u && (!owner.valid() || owner != this.m_owner)){
+        if(this.m_clickCount != 0u && (!owner.valid() || owner != this.m_owner))
             this.cancel();
-        }
     }
+
+    private UiTextEditOwner m_owner;
+    private PopupToken m_popup;
+    private Point m_position;
+    private u64 m_revision = 0u;
+    private u64 m_externalRevision = 0u;
+    private u64 m_pressTimestampMs = 0u;
+    private u8 m_clickCount = 0u;
+    private b8 m_down = false;
+    private b8 m_released = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

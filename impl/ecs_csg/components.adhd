@@ -12,11 +12,6 @@ class CsgReceiverComponent{
 
 [reflect]
 class CsgMeshReceiverComponent<const u8 Kind>{
-    public Name receiverGroup = s_NameNone;
-    public b8 enabled = true;
-    public b8 affectOpaquePass = true;
-    public b8 affectTransparentPass = true;
-
     public CsgReceiverComponent asReceiver()const{
         CsgReceiverComponent out;
         out.receiverGroup = this.receiverGroup;
@@ -25,6 +20,11 @@ class CsgMeshReceiverComponent<const u8 Kind>{
         out.affectTransparentPass = this.affectTransparentPass;
         return out;
     }
+
+    public Name receiverGroup = s_NameNone;
+    public b8 enabled = true;
+    public b8 affectOpaquePass = true;
+    public b8 affectTransparentPass = true;
 }
 
 type StaticCsgMeshComponent = CsgMeshReceiverComponent<0u>;
@@ -42,3 +42,4 @@ class CsgCutterComponent{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

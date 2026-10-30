@@ -53,8 +53,8 @@ namespace __hidden_avboit_compute_effect_chain_builder{
 
 AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
-    , m_avboitSystem(avboitSystem){
-}
+    , m_avboitSystem(avboitSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,7 +63,6 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
 [[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(const AvboitDepthWarpStageInputs& inputs){
     using namespace RendererTaskGraphDetail;
     AvboitDepthWarpStageResult result{};
-
 
     if(!inputs.occupancyTask.valid())
         return MakeUnexpected(Failure{});

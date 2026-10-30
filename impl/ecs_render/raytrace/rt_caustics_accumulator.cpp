@@ -48,7 +48,6 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(Core::CommandLi
     commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
 }
 
-
 void RendererRayTracingSystem::dispatchCausticResolvePrepare(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();

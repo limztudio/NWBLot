@@ -78,7 +78,6 @@ public:
     }
 };
 
-
 // Occupancy emulation streams freeze after target clear; regular and CSG stay exclusive.
 struct AvboitOccupancyComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -131,7 +130,6 @@ public:
     }
 };
 
-
 // Shared-buffer occupancy draws cannot batch generators; keep D/R streams as explicit callbacks.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
     struct Phase{
@@ -171,7 +169,6 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
         Core::DiscardGpuTimingMeasure(&payload.occupancyTiming);
     }
 };
-
 
 // Occupancy follows the interval producer with its own immutable stream.
 struct AvboitOccupancyGraphTask{
@@ -214,7 +211,6 @@ public:
     }
 };
 
-
 struct AvboitDepthWarpGraphTask{
     // The avboit system, the frame targets, and the timing ticket are required: depth warp always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
@@ -230,7 +226,6 @@ public:
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };
-
 
 // Extinction emulation streams freeze after prior uploads; regular and CSG stay exclusive.
 

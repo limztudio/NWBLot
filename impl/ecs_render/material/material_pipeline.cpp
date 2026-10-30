@@ -131,19 +131,16 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     MaterialPipelineResources& resources = it.value();
     switch(resources.renderPath){
     case RenderPath::MeshShader:
-        if(resources.meshletPipeline){
+        if(resources.meshletPipeline)
             return MakeNotNull(&resources);
-        }
         break;
     case RenderPath::VertexIndexed:
-        if(resources.indexedPipeline && resources.objectGeometryDecodePipeline){
+        if(resources.indexedPipeline && resources.objectGeometryDecodePipeline)
             return MakeNotNull(&resources);
-        }
         break;
     case RenderPath::ComputeEmulation:
-        if(resources.computePipeline && resources.emulationPipeline){
+        if(resources.computePipeline && resources.emulationPipeline)
             return MakeNotNull(&resources);
-        }
         break;
     default:
         break;
@@ -253,15 +250,12 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         return failMaterialPipeline();
 
     auto loadPassPixelShader = [&]() -> b8{
-        if(pass == MaterialPipelinePass::Opaque){
+        if(pass == MaterialPipelinePass::Opaque)
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
-        }
-        if(pass == MaterialPipelinePass::CsgReceiverSurface){
+        if(pass == MaterialPipelinePass::CsgReceiverSurface)
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, &CsgSubsystem::receiverSurfacePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSurfacePS");
-        }
-        if(avboitCsgClipPipeline){
+        if(avboitCsgClipPipeline)
             return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
-        }
         // AVBOIT pixel shaders are generated per material with its binding/surface contract; load the resolved pass shader at its default variant.
         return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
     };
@@ -466,9 +460,8 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
                 , ConvertString(materialKey.resolvedText())
             );
         }
-        else{
+        else
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected CS + PS through compute emulation"), ConvertString(materialKey.resolvedText()));
-        }
         break;
     }
     default:{
@@ -485,3 +478,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

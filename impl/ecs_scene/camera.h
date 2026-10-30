@@ -45,8 +45,6 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 
 
 [[nodiscard]] inline Expected<SIMDVectorSingleResult> TryComputeCameraTanHalfVerticalFov(const SIMDVectorSingle verticalFovRadians)noexcept{
-
-
     if(!VectorIsFinite(verticalFovRadians, VectorComponentMask::s_XYZW) || !Vector4Greater(verticalFovRadians, s_SIMDZero) || !Vector4Less(verticalFovRadians, VectorReplicate(s_PI)))
         return MakeUnexpected(Failure{});
 
@@ -144,13 +142,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
 }
 
 [[nodiscard]] inline CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept{
-    const auto defaultProjection = TryBuildCameraProjection(
-        VectorReplicate(s_CameraVerticalFovRadians),
-        VectorReplicate(s_CameraNearPlane),
-        VectorReplicate(s_CameraFarPlane),
-        VectorReplicate(s_CameraAutoAspectRatio),
-        VectorReplicate(fallbackAspectRatio)
-    );
+    const auto defaultProjection = TryBuildCameraProjection(VectorReplicate(s_CameraVerticalFovRadians), VectorReplicate(s_CameraNearPlane), VectorReplicate(s_CameraFarPlane), VectorReplicate(s_CameraAutoAspectRatio), VectorReplicate(fallbackAspectRatio));
     if(defaultProjection)
         return StoreCameraProjection(*defaultProjection);
 
@@ -179,7 +171,6 @@ public:
         return entity.valid() && transform != nullptr && camera != nullptr && CameraProjectionStorageValid(projection);
     }
 };
-
 
 [[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = s_CameraFallbackAspectRatio)noexcept;
 [[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);

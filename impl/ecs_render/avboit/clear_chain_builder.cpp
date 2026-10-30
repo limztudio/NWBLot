@@ -22,8 +22,8 @@ NWB_IMPL_BEGIN
 
 AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
-    , m_avboitSystem(avboitSystem){
-}
+    , m_avboitSystem(avboitSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

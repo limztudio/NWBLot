@@ -14,16 +14,16 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeChecker::statementsContainReturnOrNative(const Span<const Stmt* const> stmts)noexcept{
+b8 TypeChecker::StatementsContainReturnOrNative(const Span<const Stmt* const> stmts)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
         if(stmt->kind == StmtKind::Return || stmt->kind == StmtKind::NativeBlock)
             return true;
-        if(statementsContainReturnOrNative(stmt->statements) || statementsContainReturnOrNative(stmt->elseStatements))
+        if(StatementsContainReturnOrNative(stmt->statements) || StatementsContainReturnOrNative(stmt->elseStatements))
             return true;
         for(const SwitchCase& sc : stmt->switchCases){
-            if(statementsContainReturnOrNative(sc.statements))
+            if(StatementsContainReturnOrNative(sc.statements))
                 return true;
         }
     }
@@ -37,7 +37,7 @@ b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVect
     b8 ok = true;
     MVector<ScopedVarInfo> scope(m_arena);
     for(const ParamDecl& param : method.params){
-        if(!param.name.empty() && findScopedVar(scope, param.name)){
+        if(!param.name.empty() && FindScopedVar(scope, param.name)){
             reportError(errors, param.span, "duplicate parameter name");
             ok = false;
         }
@@ -53,7 +53,7 @@ b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVect
     if(!checkStatementList(ownerClass, method, method.body, scope, errors))
         ok = false;
     if(!method.isConstructor && !method.isDestructor && !IsVoidTypeRef(m_symbols.unwrapTypeAlias(method.returnType))){
-        if(!statementsContainReturnOrNative(method.body)){
+        if(!StatementsContainReturnOrNative(method.body)){
             reportError(errors, method.span, "non-void function or method must contain a 'return' statement");
             ok = false;
         }
@@ -61,13 +61,7 @@ b8 TypeChecker::checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVect
     return ok;
 }
 
-b8 TypeChecker::checkStatementList(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    MVector<Stmt*>& statements,
-    MVector<ScopedVarInfo>& scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkStatementList(ClassDecl* ownerClass, MethodDecl& method, MVector<Stmt*>& statements, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors){
     const usize savedScopeSize = scope.size();
     b8 ok = true;
 
@@ -85,15 +79,7 @@ b8 TypeChecker::checkStatementList(
     return ok;
 }
 
-b8 TypeChecker::checkConstructorInitArguments(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    const TypeRef* targetType,
-    MVector<Expr*>& arguments,
-    const Span<const ScopedVarInfo> scope,
-    const SourceSpan errorSpan,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, MethodDecl& method, const TypeRef* targetType, MVector<Expr*>& arguments, const Span<const ScopedVarInfo> scope, const SourceSpan errorSpan, MVector<ParseError>& errors){
     b8 ok = true;
     const TypeRef* resolvedTargetType = targetType ? m_symbols.unwrapTypeAlias(targetType) : nullptr;
     const ClassDecl* ctorCls = resolvedTargetType
@@ -129,15 +115,9 @@ b8 TypeChecker::checkConstructorInitArguments(
     return ok;
 }
 
-b8 TypeChecker::checkVarDeclStatement(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Stmt& stmt,
-    MVector<ScopedVarInfo>& scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors){
     b8 ok = true;
-    if(!stmt.name.empty() && findScopedVar(scope, stmt.name)){
+    if(!stmt.name.empty() && FindScopedVar(scope, stmt.name)){
         reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
         ok = false;
     }
@@ -168,16 +148,16 @@ b8 TypeChecker::checkVarDeclStatement(
             reportError(errors, stmt.span, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             ok = false;
         }
-        if(varRefMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseVarTypeName)){
+        if(varRefMode == ParamPassingMode::None && SymbolTable::IsArenaBackedContainer(baseVarTypeName)){
             stmt.usesScratchArena = true;
             method.usesScratchArena = true;
             m_activeParallelBlockUsesScratch = true;
         }
-        propagateFuncCaptureBytes(stmt.varType, stmt.expr, scope, m_symbols);
+        PropagateFuncCaptureBytes(stmt.varType, stmt.expr, scope, m_symbols);
         if(stmt.isCtorInit){
             for(const Expr* arg : stmt.arguments){
                 if(arg)
-                    propagateFuncCaptureBytes(stmt.varType, arg, scope, m_symbols);
+                    PropagateFuncCaptureBytes(stmt.varType, arg, scope, m_symbols);
             }
         }
         if(baseVarTypeName == "Path"){
@@ -256,13 +236,7 @@ b8 TypeChecker::checkVarDeclStatement(
     return ok;
 }
 
-b8 TypeChecker::checkReturnStatement(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Stmt& stmt,
-    const Span<const ScopedVarInfo> scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
     b8 ok = true;
     if(m_parallelDepth > 0u && !m_inLambda){
         reportError(errors, stmt.span, "'return' cannot be used inside a 'parallel' or 'parallel_for' construct");
@@ -281,7 +255,7 @@ b8 TypeChecker::checkReturnStatement(
         ok = false;
     }
     if(activeRetType && stmt.expr){
-        propagateFuncCaptureBytes(const_cast<TypeRef*>(activeRetType), stmt.expr, scope, m_symbols);
+        PropagateFuncCaptureBytes(const_cast<TypeRef*>(activeRetType), stmt.expr, scope, m_symbols);
         const MStringView baseRetTypeName = m_symbols.resolveBaseTypeName(activeRetType->name);
         if(baseRetTypeName == "Path")
             markStringToPathAdaptation(ownerClass, &method, *stmt.expr, scope);
@@ -289,11 +263,12 @@ b8 TypeChecker::checkReturnStatement(
             stmt.wrapReturnNotNull = true;
             b8 isDanglingReturn = false;
             if(stmt.expr->kind == ExprKind::Identifier){
-                const ScopedVarInfo* local = findScopedVar(scope, stmt.expr->text);
+                const ScopedVarInfo* local = FindScopedVar(scope, stmt.expr->text);
                 if(local && !local->isParam && m_symbols.resolveRefMode(local->type) == ParamPassingMode::None && local->mode == ParamPassingMode::None)
                     isDanglingReturn = true;
             }
-            else if(stmt.expr->kind == ExprKind::IntegerLiteral
+            else if(
+                stmt.expr->kind == ExprKind::IntegerLiteral
                 || stmt.expr->kind == ExprKind::FloatLiteral
                 || stmt.expr->kind == ExprKind::DoubleLiteral
                 || stmt.expr->kind == ExprKind::StringLiteral
@@ -301,46 +276,30 @@ b8 TypeChecker::checkReturnStatement(
                 || stmt.expr->kind == ExprKind::Binary
                 || stmt.expr->kind == ExprKind::Cast
                 || stmt.expr->kind == ExprKind::BitCast
-                || stmt.expr->kind == ExprKind::Lambda)
-            {
+                || stmt.expr->kind == ExprKind::Lambda
+            )
                 isDanglingReturn = true;
-            }
             if(isDanglingReturn){
                 reportError(errors, stmt.span, "cannot return a reference to a temporary or stack-local variable");
                 ok = false;
             }
-            if(m_symbols.findInterface(baseRetTypeName)
-                && !verifyConcreteClassImplementsInterface(
-                    ownerClass,
-                    method,
-                    *stmt.expr,
-                    activeRetType,
-                    scope,
-                    stmt.span,
-                    "cannot return concrete class for interface reference return type: class does not implement the interface",
-                    errors
-                ))
-            {
+            if(
+                m_symbols.findInterface(baseRetTypeName)
+                && !verifyConcreteClassImplementsInterface(ownerClass, method, *stmt.expr, activeRetType, scope, stmt.span, "cannot return concrete class for interface reference return type: class does not implement the interface", errors)
+            )
                 ok = false;
-            }
         }
     }
     if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, retRefMode == ParamPassingMode::Mut, errors))
         ok = false;
-    if(stmt.expr && isEscapingMutCaptureLambda(stmt.expr, scope)){
+    if(stmt.expr && IsEscapingMutCaptureLambda(stmt.expr, scope)){
         reportError(errors, stmt.span, "cannot return lambda with 'mut' capture; mutable reference captures cannot escape their enclosing scope");
         ok = false;
     }
     return ok;
 }
 
-b8 TypeChecker::checkStatement(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Stmt& stmt,
-    MVector<ScopedVarInfo>& scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors){
     b8 ok = true;
 
     switch(stmt.kind){
@@ -373,10 +332,7 @@ b8 TypeChecker::checkStatement(
         break;
     }
     case StmtKind::ExprStmt:{
-        if(stmt.expr && stmt.expr->kind == ExprKind::Call
-            && stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier
-            && stmt.expr->lhs->text == "wait")
-        {
+        if(stmt.expr && stmt.expr->kind == ExprKind::Call && stmt.expr->lhs && stmt.expr->lhs->kind == ExprKind::Identifier && stmt.expr->lhs->text == "wait"){
             method.usesTaskScope = true;
             if(m_parallelDepth > 0u){
                 reportError(errors, stmt.span, "'wait' cannot be used inside a 'parallel' or 'parallel_for' construct");
@@ -434,16 +390,11 @@ b8 TypeChecker::checkStatement(
                 ok = false;
             const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
-            if(!subjectType.empty()
-                && (IsFloatScalarType(subjectType)
-                    || subjectType == "void"
-                    || SymbolTable::isSimdType(subjectType)
-                    || SymbolTable::isUnalignedVectorType(subjectType)))
-            {
+            if(!subjectType.empty() && (IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType))){
                 reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, and 'void' types cannot be switched on");
                 ok = false;
             }
-            if(SymbolTable::isStringSwitchType(subjectType)){
+            if(SymbolTable::IsStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
             }
             else{
@@ -482,17 +433,10 @@ b8 TypeChecker::checkStatement(
                         continue;
                     b8 isDup = false;
                     if(prevSc.matchExpr->kind == sc.matchExpr->kind){
-                        if(sc.matchExpr->kind == ExprKind::IntegerLiteral
-                            || sc.matchExpr->kind == ExprKind::BoolLiteral
-                            || sc.matchExpr->kind == ExprKind::StringLiteral
-                            || sc.matchExpr->kind == ExprKind::Identifier)
-                        {
+                        if(sc.matchExpr->kind == ExprKind::IntegerLiteral || sc.matchExpr->kind == ExprKind::BoolLiteral || sc.matchExpr->kind == ExprKind::StringLiteral || sc.matchExpr->kind == ExprKind::Identifier){
                             isDup = (prevSc.matchExpr->text == sc.matchExpr->text);
                         }
-                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess
-                            && !prevSc.matchExpr->scopeChain.empty()
-                            && !sc.matchExpr->scopeChain.empty())
-                        {
+                        else if(sc.matchExpr->kind == ExprKind::ScopeAccess && !prevSc.matchExpr->scopeChain.empty() && !sc.matchExpr->scopeChain.empty()){
                             isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
                                 && prevSc.matchExpr->scopeChain.back() == sc.matchExpr->scopeChain.back());
                         }
@@ -515,7 +459,7 @@ b8 TypeChecker::checkStatement(
         const b8 isPar = (stmt.kind == StmtKind::ParallelForRange);
         if(isPar)
             method.usesTaskScope = true;
-        if(!stmt.name.empty() && findScopedVar(scope, stmt.name)){
+        if(!stmt.name.empty() && FindScopedVar(scope, stmt.name)){
             reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
             ok = false;
         }
@@ -542,7 +486,7 @@ b8 TypeChecker::checkStatement(
                         }
                         resolvedElemName = m_symbols.resolveBaseTypeName(elemTypeRef->name);
                         if(stmt.varType->isAuto){
-                            if(elemTypeRef->templateArgs.empty() && !elemTypeRef->isFuncType && SymbolTable::isSimdType(resolvedElemName)){
+                            if(elemTypeRef->templateArgs.empty() && !elemTypeRef->isFuncType && SymbolTable::IsSimdType(resolvedElemName)){
                                 stmt.varType->isAuto = false;
                                 stmt.varType->name = resolvedElemName;
                             }

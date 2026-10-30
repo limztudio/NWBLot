@@ -23,60 +23,27 @@ class SkinnedRuntimeMeshIdentity{
 // Captures CPU state true only when the producing command list was accepted.
 [serialize, reflect]
 class MeshSkinningSubmissionCommit{
-    public u32 editRevision = 0u;
-    public b8 bindlessResourceSlotsUploadRecorded = false;
-    public RuntimeMeshDirtyFlags handledDirtyFlags = RuntimeMeshDirtyFlag::Flag::None;
-
     public b8 empty()const{
         return this.handledDirtyFlags == RuntimeMeshDirtyFlag::Flag::None && !this.bindlessResourceSlotsUploadRecorded;
     }
+
+    public u32 editRevision = 0u;
+    public b8 bindlessResourceSlotsUploadRecorded = false;
+    public RuntimeMeshDirtyFlags handledDirtyFlags = RuntimeMeshDirtyFlag::Flag::None;
 }
 
-void ApplyMeshSkinningSubmissionCommit(
-    in b8 submissionAccepted,
-    in u32 currentEditRevision,
-    in MeshSkinningSubmissionCommit commit,
-    mut RuntimeMeshDirtyFlags inOutDirtyFlags,
-    mut b8 inOutBindlessResourceSlotsUploaded
-){
-    if(!submissionAccepted || currentEditRevision != commit.editRevision){
+void ApplyMeshSkinningSubmissionCommit(in b8 submissionAccepted, in u32 currentEditRevision, in MeshSkinningSubmissionCommit commit, mut RuntimeMeshDirtyFlags inOutDirtyFlags, mut b8 inOutBindlessResourceSlotsUploaded){
+    if(!submissionAccepted || currentEditRevision != commit.editRevision)
         return;
-    }
 
     inOutDirtyFlags = cast<RuntimeMeshDirtyFlags>(cast<u8>(inOutDirtyFlags) & ~cast<u8>(commit.handledDirtyFlags));
-    if(commit.bindlessResourceSlotsUploadRecorded){
+    if(commit.bindlessResourceSlotsUploadRecorded)
         inOutBindlessResourceSlotsUploaded = true;
-    }
 }
 
 // Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
 [serialize, reflect]
 class MeshSkinningBindlessResourceSlots{
-    public u32 restPosition = 0u;
-    public u32 skinnedPosition = 0u;
-    public u32 restNormal = 0u;
-    public u32 skinnedNormal = 0u;
-
-    public u32 restTangent = 0u;
-    public u32 skinnedTangent = 0u;
-    public u32 meshletDesc = 0u;
-    public u32 positionRefDeltas = 0u;
-
-    public u32 attributeRefDeltas = 0u;
-    public u32 attributeSkins = 0u;
-    public u32 skinInfluences = 0u;
-    public u32 jointPalette = 0u;
-
-    public u32 localVertexRefs = 0u;
-    public u32 primitiveIndices = 0u;
-    public u32 meshletBounds = 0u;
-    public u32 attributeBuffer = 0u;
-
-    public u32 meshletLocalBounds = 0u;
-    public u32 localBounds = 0u;
-    public u32 reserved0 = 0u;
-    public u32 reserved1 = 0u;
-
     public b8 operator==(in MeshSkinningBindlessResourceSlots rhs)const{
         return
             this.restPosition == rhs.restPosition
@@ -98,8 +65,30 @@ class MeshSkinningBindlessResourceSlots{
             && this.meshletLocalBounds == rhs.meshletLocalBounds
             && this.localBounds == rhs.localBounds
             && this.reserved0 == rhs.reserved0
-            && this.reserved1 == rhs.reserved1;
+            && this.reserved1 == rhs.reserved1
+        ;
     }
+
+    public u32 restPosition = 0u;
+    public u32 skinnedPosition = 0u;
+    public u32 restNormal = 0u;
+    public u32 skinnedNormal = 0u;
+    public u32 restTangent = 0u;
+    public u32 skinnedTangent = 0u;
+    public u32 meshletDesc = 0u;
+    public u32 positionRefDeltas = 0u;
+    public u32 attributeRefDeltas = 0u;
+    public u32 attributeSkins = 0u;
+    public u32 skinInfluences = 0u;
+    public u32 jointPalette = 0u;
+    public u32 localVertexRefs = 0u;
+    public u32 primitiveIndices = 0u;
+    public u32 meshletBounds = 0u;
+    public u32 attributeBuffer = 0u;
+    public u32 meshletLocalBounds = 0u;
+    public u32 localBounds = 0u;
+    public u32 reserved0 = 0u;
+    public u32 reserved1 = 0u;
 }
 
 [serialize, reflect]
@@ -133,3 +122,4 @@ class MeshSkinningRestToSkinnedCopyByteCounts{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

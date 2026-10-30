@@ -62,19 +62,9 @@ void SourceEmitter::emitTaskScopePrologue(MString& out, const u32 indent)const{
     out.append("::ScopeExit __adhd_scope_join([&__adhd_task_scope]()noexcept{ __adhd_task_scope.wait(); });\r\n");
 }
 
-b8 SourceEmitter::tryEmitParallelWaitStmt(
-    MString& out,
-    const Stmt& stmt,
-    const u32 indent
-)const{
-    if(!stmt.expr
-        || stmt.expr->kind != ExprKind::Call
-        || !stmt.expr->lhs
-        || stmt.expr->lhs->kind != ExprKind::Identifier
-        || stmt.expr->lhs->text != "wait")
-    {
+b8 SourceEmitter::tryEmitParallelWaitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
+    if(!stmt.expr || stmt.expr->kind != ExprKind::Call || !stmt.expr->lhs || stmt.expr->lhs->kind != ExprKind::Identifier || stmt.expr->lhs->text != "wait")
         return false;
-    }
 
     if(stmt.expr->arguments.empty()){
         emitIndent(out, indent);
@@ -99,11 +89,7 @@ b8 SourceEmitter::tryEmitParallelWaitStmt(
     return true;
 }
 
-void SourceEmitter::emitParallelStmt(
-    MString& out,
-    const Stmt& stmt,
-    const u32 indent
-)const{
+void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     using namespace __hidden_adhd_source_emitter_parallel;
 
     switch(stmt.kind){
@@ -172,12 +158,7 @@ void SourceEmitter::emitParallelStmt(
                 emitExpr(out, *stmt.stepExpr->rhs);
                 out.push_back(')');
             }
-            else if(stmt.stepExpr->op == TokenType::Equal
-                && stmt.stepExpr->rhs
-                && stmt.stepExpr->rhs->kind == ExprKind::Binary
-                && stmt.stepExpr->rhs->op == TokenType::Plus
-                && stmt.stepExpr->rhs->rhs)
-            {
+            else if(stmt.stepExpr->op == TokenType::Equal && stmt.stepExpr->rhs && stmt.stepExpr->rhs->kind == ExprKind::Binary && stmt.stepExpr->rhs->op == TokenType::Plus && stmt.stepExpr->rhs->rhs){
                 out.append("static_cast<usize>(");
                 emitExpr(out, *stmt.stepExpr->rhs->rhs);
                 out.push_back(')');
@@ -212,7 +193,7 @@ void SourceEmitter::emitParallelStmt(
         break;
     }
     case StmtKind::ParallelBlock:{
-        auto appendBlockSuffix = [&](){
+        const auto appendBlockSuffix = [&](){
             if(!stmt.name.empty())
                 out.append(stmt.name.data(), stmt.name.size());
             else
@@ -296,9 +277,8 @@ void SourceEmitter::emitParallelStmt(
                 if(i > 0u)
                     out.append(", ");
                 const Expr* arg = stmt.expr->arguments[i];
-                if(arg && arg->isMutArg){
+                if(arg && arg->isMutArg)
                     emitExpr(out, *arg);
-                }
                 else{
                     out.append("__adhd_arg_");
                     AppendAdhdUnsigned(out, i);

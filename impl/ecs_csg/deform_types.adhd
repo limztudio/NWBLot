@@ -131,10 +131,6 @@ CsgDeformFailure MakeCsgDeformFailure(in CsgDeformViabilityReason reason, in Csg
     return out;
 }
 
-b8 CsgDeformFiniteFloat(in f32 value){
-    return IsFinite(value);
-}
-
 b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
     return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
@@ -142,30 +138,25 @@ b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
 b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexCount){
     for(usize triangleIndex = 0u; triangleIndex < triangles.size(); ++triangleIndex){
         const CsgDeformTriangle triangle = triangles[triangleIndex];
-        for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
-            if(triangle.indices[corner] >= vertexCount){
+        for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner)
+            if(triangle.indices[corner] >= vertexCount)
                 return false;
-            }
-        }
     }
     return true;
 }
 
 CsgDeformShapeKind ClassifyCsgDeformShape(in Name shapeType){
-    if(shapeType == s_CsgPlaneShapeName){
+    if(shapeType == s_CsgPlaneShapeName)
         return CsgDeformShapeKind::Enum::Plane;
-    }
-    if(shapeType == s_CsgBoxShapeName){
+    if(shapeType == s_CsgBoxShapeName)
         return CsgDeformShapeKind::Enum::Box;
-    }
-    if(shapeType == s_CsgSphereShapeName){
+    if(shapeType == s_CsgSphereShapeName)
         return CsgDeformShapeKind::Enum::Sphere;
-    }
-    if(shapeType == s_CsgCapsuleShapeName){
+    if(shapeType == s_CsgCapsuleShapeName)
         return CsgDeformShapeKind::Enum::Capsule;
-    }
     return CsgDeformShapeKind::Enum::Invalid;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

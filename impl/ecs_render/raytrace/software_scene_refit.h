@@ -85,6 +85,7 @@ public:
         RendererShaderSystem& shaderSystem
     );
 
+
 private:
     [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
 
@@ -108,3 +109,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

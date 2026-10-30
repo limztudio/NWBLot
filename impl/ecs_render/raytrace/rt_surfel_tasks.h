@@ -130,9 +130,8 @@ public:
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        if(queue->queueClass == Core::CommandQueue::Compute){
+        if(queue->queueClass == Core::CommandQueue::Compute)
             payload.asyncTiming.emplace(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_AsyncSurfelGi, payload.graphics.getDevice(), commandList);
-        }
 
         if(!payload.raytracingSystem.renderSurfelGiAgeFree(commandList, payload.targets, payload.deferredLightingResources)){
             if(payload.asyncTiming.has_value()){
@@ -152,7 +151,6 @@ public:
     }
 };
 
-
 struct SurfelGiHashBuildGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
 
@@ -170,7 +168,6 @@ public:
         DiscardSurfelGiAsyncPass(payload);
     }
 };
-
 
 struct SurfelGiSpawnGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
@@ -190,7 +187,6 @@ public:
     }
 };
 
-
 struct SurfelGiTraceBuildArgsGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
 
@@ -208,7 +204,6 @@ public:
         DiscardSurfelGiAsyncPass(payload);
     }
 };
-
 
 struct SurfelGiTraceGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
@@ -232,7 +227,6 @@ public:
     }
 };
 
-
 struct SurfelGiResolveGraphTask{
     using Payload = SurfelGiAsyncPassPayload;
 
@@ -250,7 +244,6 @@ public:
         DiscardSurfelGiAsyncPass(payload);
     }
 };
-
 
 struct SurfelGiGraphTask{
     // The raytracing system, the frame targets, and the timing ticket are required: the fallback upsample always records against this frame's ticket.
@@ -343,3 +336,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

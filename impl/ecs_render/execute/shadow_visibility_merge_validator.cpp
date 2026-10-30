@@ -44,8 +44,8 @@ b8 PreparedShadowVisibilityTasksSharePacket(const Core::GpuCompiledGraph::ReadVi
 
 
 ShadowVisibilityMergeValidator::ShadowVisibilityMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline){
-}
+    : m_pipeline(pipeline)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

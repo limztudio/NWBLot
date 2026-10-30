@@ -14,11 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclParser::parseCallableOwnerOrTemplateHeader(
-    MVector<MStringView>& outOwnerTemplateParams,
-    MVector<TemplateParamDecl>& outTemplateParams,
-    const b8 failOnInvalidTemplateParams
-){
+b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams){
     if(!m_cursor.check(TokenType::Less))
         return true;
 
@@ -44,10 +40,7 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(
     return true;
 }
 
-MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
-    const SourceSpan span,
-    const Span<const ParsedAttribute> attributes
-){
+MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
 
@@ -61,9 +54,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 
         MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
         MVector<TemplateParamDecl> ownerTemplateParams(m_cursor.arena());
-        if(parseCallableOwnerOrTemplateHeader(parsedOwnerTemplateParams, ownerTemplateParams, false)
-            && m_cursor.match(TokenType::ColonColon))
-        {
+        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, ownerTemplateParams) && m_cursor.match(TokenType::ColonColon)){
             if(m_cursor.match(TokenType::Tilde)){
                 if(!m_cursor.checkIdentifier(maybeClass)){
                     m_cursor.errorExpected("expected class name after '~' in out-of-line destructor");
@@ -118,7 +109,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     m_cursor.advance();
 
     MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
-    if(!parseCallableOwnerOrTemplateHeader(parsedOwnerTemplateParams, decl->templateParams, true))
+    if(!parseCallableOwnerOrTemplateHeader(true, parsedOwnerTemplateParams, decl->templateParams))
         return nullptr;
 
     if(m_cursor.match(TokenType::ColonColon)){
@@ -182,10 +173,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     return decl;
 }
 
-b8 DeclParser::applyCallableAttributes(
-    const Span<const ParsedAttribute> attributes,
-    MethodDecl& decl
-){
+b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attributes, MethodDecl& decl){
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
 #define NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE(attrName, declField) \

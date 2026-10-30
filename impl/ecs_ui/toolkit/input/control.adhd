@@ -10,9 +10,13 @@
 
 // The host supplies value lifetimes; the router retains no model or data-source address.
 class ControlToken{
-    public u64 instanceGeneration = 0u;
-    public u64 contentGeneration = 0u;
-    public u64 contentRevision = 0u;
+    public b8 operator==(in ControlToken rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.contentGeneration == rhs.contentGeneration && this.contentRevision == rhs.contentRevision;
+    }
+
+    public b8 operator!=(in ControlToken rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.contentGeneration != rhs.contentGeneration || this.contentRevision != rhs.contentRevision;
+    }
 
     public b8 valid()const{
         return this.instanceGeneration != 0u && this.contentGeneration != 0u && this.contentRevision != 0u;
@@ -22,13 +26,9 @@ class ControlToken{
         return this.instanceGeneration == 0u && this.contentGeneration == 0u && this.contentRevision == 0u;
     }
 
-    public b8 operator==(in ControlToken rhs)const{
-        return this.instanceGeneration == rhs.instanceGeneration && this.contentGeneration == rhs.contentGeneration && this.contentRevision == rhs.contentRevision;
-    }
-
-    public b8 operator!=(in ControlToken rhs)const{
-        return this.instanceGeneration != rhs.instanceGeneration || this.contentGeneration != rhs.contentGeneration || this.contentRevision != rhs.contentRevision;
-    }
+    public u64 instanceGeneration = 0u;
+    public u64 contentGeneration = 0u;
+    public u64 contentRevision = 0u;
 }
 
 enum<u8> ControlActionKind{
@@ -47,3 +47,4 @@ enum<u8> ControlActionKind{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

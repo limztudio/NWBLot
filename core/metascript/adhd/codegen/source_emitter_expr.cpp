@@ -33,9 +33,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
 
     if(IsRegisterPromotableSimdType(expr.resolvedSimdType)){
         b8 isSimdCtorWithRegArg = false;
-        if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier
-            && m_symbols.isSimdType(m_symbols.resolveBaseTypeName(expr.lhs->text)))
-        {
+        if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier && SymbolTable::IsSimdType(m_symbols.resolveBaseTypeName(expr.lhs->text))){
             for(const Expr* arg : expr.arguments){
                 if(arg && (findSimdBindingForExpr(arg) || ExprContainsSimdMath(arg, m_symbols))){
                     isSimdCtorWithRegArg = true;
@@ -113,9 +111,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
     case ExprKind::MemberAccess:{
         u32 lane = 0u;
-        if(!expr.isMutArg && expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType)
-            && IsSingleSwizzleLane(expr.text, lane))
-        {
+        if(!expr.isMutArg && expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType) && IsSingleSwizzleLane(expr.text, lane)){
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 emitSimdLaneGetExpr(out, *expr.lhs, lane, nullptr);
                 break;
@@ -144,10 +140,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
     }
     case ExprKind::Index:{
         u32 vecLanes = 0u;
-        if(!expr.isMutArg && expr.lhs && expr.rhs
-            && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType)
-            && m_symbols.isSimdVectorType(expr.lhs->resolvedSimdType, vecLanes))
-        {
+        if(!expr.isMutArg && expr.lhs && expr.rhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType) && SymbolTable::IsSimdVectorType(expr.lhs->resolvedSimdType, vecLanes)){
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
                 emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
                 break;
@@ -176,10 +169,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             if(callee == adhdName) scalarReductionSuffix = laneIntrinsicSuffix;
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION
-            if(!scalarReductionSuffix.empty()
-                && !expr.arguments.empty() && expr.arguments[0]
-                && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType))
-            {
+            if(!scalarReductionSuffix.empty() && !expr.arguments.empty() && expr.arguments[0] && IsRegisterPromotableSimdType(expr.arguments[0]->resolvedSimdType)){
                 const MStringView argSimd = expr.arguments[0]->resolvedSimdType;
                 const b8 isDouble = IsDoubleSimdType(argSimd);
                 const u32 effLanes = InferEffectiveSimdLanes(*expr.arguments[0]);
@@ -194,10 +184,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.append("))");
                 break;
             }
-            if(callee == "lerp" && expr.arguments.size() == 3u
-                && expr.arguments[0] && expr.arguments[1] && expr.arguments[2]
-                && expr.resolvedSimdType.empty())
-            {
+            if(callee == "lerp" && expr.arguments.size() == 3u && expr.arguments[0] && expr.arguments[1] && expr.arguments[2] && expr.resolvedSimdType.empty()){
                 out.append("((");
                 emitExpr(out, *expr.arguments[0]);
                 out.append(") + ((");
@@ -209,9 +196,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
                 out.append("))");
                 break;
             }
-            if(callee == "rsqrt" && expr.arguments.size() == 1u
-                && expr.arguments[0] && expr.resolvedSimdType.empty())
-            {
+            if(callee == "rsqrt" && expr.arguments.size() == 1u && expr.arguments[0] && expr.resolvedSimdType.empty()){
                 out.append("(static_cast<decltype(");
                 emitExpr(out, *expr.arguments[0]);
                 out.append(")>(1) / ::Sqrt(");

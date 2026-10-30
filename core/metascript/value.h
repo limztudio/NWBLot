@@ -36,7 +36,7 @@ namespace ValueType{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Value{
+class Value final{
 public:
     using StringType = MString;
     using ListType = MVector<Value>;
@@ -45,9 +45,7 @@ public:
 
 private:
     template<typename Container>
-    static constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
-        && requires(Container& c, const MStringView text){ c.emplace_back(text); }
-    ;
+    static constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); } && requires(Container& c, const MStringView text){ c.emplace_back(text); };
     template<typename Container>
     static constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
         && requires(Container& c){ c.get_allocator().arena(); }
@@ -118,8 +116,8 @@ public:
 
     void setInteger(i64 val)noexcept;
     void setDouble(f64 val)noexcept;
-    void setString(MStringView val);
-    void setReference(MStringView val);
+    void setString(MStringView val){ setStringOrReference(val, ValueType::String); }
+    void setReference(MStringView val){ setStringOrReference(val, ValueType::Reference); }
     void makeList();
     void makeMap();
 

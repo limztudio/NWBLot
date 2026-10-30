@@ -221,10 +221,7 @@ b8 Lexer::consumeBalancedBracesRaw(MStringView& outInnerCode)noexcept{
                 const MStringView delim = m_source.substr(delimStart, m_current - delimStart);
                 advance();
                 while(!isAtEnd()){
-                    if(peek() == ')' && m_current + 1u + delim.size() < m_source.size()
-                        && m_source.substr(m_current + 1u, delim.size()) == delim
-                        && m_source[m_current + 1u + delim.size()] == '"')
-                    {
+                    if(peek() == ')' && m_current + 1u + delim.size() < m_source.size() && m_source.substr(m_current + 1u, delim.size()) == delim && m_source[m_current + 1u + delim.size()] == '"'){
                         for(usize skip = 0u; skip < delim.size() + 2u; ++skip)
                             advance();
                         break;
@@ -389,21 +386,11 @@ Token Lexer::readNumber()noexcept{
         return tok;
     };
 
-    if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
-        return finishRadixInteger(
-            IsHexDigit,
-            MStringView("invalid hexadecimal integer literal"),
-            MStringView("invalid suffix on hexadecimal integer literal")
-        );
-    }
+    if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X'))
+        return finishRadixInteger(IsHexDigit, MStringView("invalid hexadecimal integer literal"), MStringView("invalid suffix on hexadecimal integer literal"));
 
-    if(peek() == '0' && (peekNext() == 'b' || peekNext() == 'B')){
-        return finishRadixInteger(
-            IsBinaryDigit,
-            MStringView("invalid binary integer literal"),
-            MStringView("invalid suffix on binary integer literal")
-        );
-    }
+    if(peek() == '0' && (peekNext() == 'b' || peekNext() == 'B'))
+        return finishRadixInteger(IsBinaryDigit, MStringView("invalid binary integer literal"), MStringView("invalid suffix on binary integer literal"));
 
     while(!isAtEnd() && IsAsciiDigit(peek()))
         advance();
@@ -571,10 +558,6 @@ Token Lexer::makeToken(TokenType::Enum type, usize length)noexcept{
     return tok;
 }
 
-Token Lexer::makeErrorToken(MStringView message)noexcept{
-    return makeErrorToken(message, m_line, m_column);
-}
-
 Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 column)noexcept{
     Token tok;
     tok.type = TokenType::Error;
@@ -582,20 +565,6 @@ Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 colum
     tok.line = line;
     tok.column = column;
     return tok;
-}
-
-MChar Lexer::peek()const noexcept{
-    return peekAt(0u);
-}
-
-MChar Lexer::peekNext()const noexcept{
-    return peekAt(1u);
-}
-
-MChar Lexer::peekAt(const usize offset)const noexcept{
-    if(m_current + offset >= m_source.size())
-        return '\0';
-    return m_source[m_current + offset];
 }
 
 MChar Lexer::advance()noexcept{

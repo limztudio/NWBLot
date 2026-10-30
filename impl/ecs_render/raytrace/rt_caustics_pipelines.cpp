@@ -92,6 +92,18 @@ b8 RendererRayTracingSystem::hasHwCausticWork()const noexcept{
     return hasHwCausticWork(meshView);
 }
 
+b8 RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
+    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
+    return
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
+        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
+        && m_rayTracingState.m_tlas
+        && m_rayTracingState.m_shadowMeshCount > 0u
+        && hasCommonCausticWork(meshView)
+    ;
+}
+
 b8 RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
     return
         m_shadowVisibilityTraceResourcesPreflighted
@@ -107,18 +119,6 @@ b8 RendererRayTracingSystem::hasCommonCausticWork(const ECSRenderDetail::MeshVie
         && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
         && meshView.bindingValid()
-    ;
-}
-
-b8 RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{
-    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
-    return
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgPipeline : m_rayTracingState.m_hwCausticPipeline)
-        && (m_lightSpaceShadow.m_csg.snapshot.hasCsg ? m_rayTracingState.m_hwCausticCsgShaderTable : m_rayTracingState.m_hwCausticShaderTable)
-        && m_rayTracingState.m_tlas
-        && m_rayTracingState.m_shadowMeshCount > 0u
-        && hasCommonCausticWork(meshView)
     ;
 }
 

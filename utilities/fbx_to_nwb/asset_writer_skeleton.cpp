@@ -135,7 +135,6 @@ b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* 
     return true;
 }
 
-
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
     ScratchString name(scratchArena);
     if(node && node->name.data && node->name.length != 0u)
@@ -305,9 +304,8 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
         const u64 key = PositionSkinKey(sourceRef.position, sourceRef.skin);
         u32 positionIndex = 0u;
         const auto foundPosition = positionSkinLookup.find(key);
-        if(foundPosition != positionSkinLookup.end()){
+        if(foundPosition != positionSkinLookup.end())
             positionIndex = foundPosition.value();
-        }
         else{
             if(outMesh.positions.size() > static_cast<usize>(Limit<u32>::s_Max)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: split skinned mesh has too many positions"));

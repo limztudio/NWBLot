@@ -98,12 +98,7 @@ namespace __hidden_adhd_const_eval{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidScopedEnumTemplateArg(
-    MStringView text,
-    const SymbolTable& symbols,
-    const EnumDecl** outEnum,
-    MStringView* outEntryName
-)noexcept{
+b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, const EnumDecl** outEnum, MStringView* outEntryName)noexcept{
     text = TrimView(text);
     const usize firstSep = text.find("::");
     if(firstSep == MStringView::npos || firstSep == 0u)
@@ -139,13 +134,7 @@ b8 IsValidScopedEnumTemplateArg(
     return false;
 }
 
-b8 TryEvaluateEnumEntryConstant(
-    const EnumDecl& ed,
-    const MStringView targetEntry,
-    const SymbolTable& symbols,
-    i64& outVal,
-    const u32 depth
-)noexcept{
+b8 TryEvaluateEnumEntryConstant(const EnumDecl& ed, const MStringView targetEntry, const SymbolTable& symbols, const u32 depth, i64& outVal)noexcept{
     if(depth > 16u)
         return false;
     i64 nextSeq = 0;
@@ -153,7 +142,7 @@ b8 TryEvaluateEnumEntryConstant(
     for(const EnumEntry& entry : ed.entries){
         i64 curVal = 0;
         if(entry.valueExpr){
-            if(!TryEvaluateExprConstant(entry.valueExpr, symbols, curVal, depth + 1u, &ed))
+            if(!TryEvaluateExprConstant(entry.valueExpr, symbols, depth + 1u, &ed, curVal))
                 return false;
             nextSeq = curVal + 1;
         }
@@ -172,20 +161,14 @@ b8 TryEvaluateEnumEntryConstant(
     return false;
 }
 
-b8 TryEvaluateExprConstant(
-    const Expr* expr,
-    const SymbolTable& symbols,
-    i64& outVal,
-    const u32 depth,
-    const EnumDecl* contextEnum
-)noexcept{
+b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, const u32 depth, const EnumDecl* contextEnum, i64& outVal)noexcept{
     if(!expr || depth > 16u)
         return false;
 
     switch(expr->kind){
     case ExprKind::IntegerLiteral:
     case ExprKind::Identifier:
-        return TryEvaluateTextConstant(expr->text, symbols, outVal, depth + 1u, contextEnum);
+        return TryEvaluateTextConstant(expr->text, symbols, depth + 1u, contextEnum, outVal);
     case ExprKind::BoolLiteral:
         outVal = (expr->text == "true") ? 1 : 0;
         return true;
@@ -195,40 +178,31 @@ b8 TryEvaluateExprConstant(
         const EnumDecl* ed = symbols.findEnum(symbols.resolveBaseTypeName(expr->scopeChain[0]));
         if(!ed)
             return false;
-        return TryEvaluateEnumEntryConstant(*ed, expr->scopeChain.back(), symbols, outVal, depth);
+        return TryEvaluateEnumEntryConstant(*ed, expr->scopeChain.back(), symbols, depth, outVal);
     }
     case ExprKind::Unary:{
         if(expr->isPostfix)
             return false;
         i64 inner = 0;
-        if(!TryEvaluateExprConstant(expr->lhs, symbols, inner, depth + 1u, contextEnum))
+        if(!TryEvaluateExprConstant(expr->lhs, symbols, depth + 1u, contextEnum, inner))
             return false;
         return __hidden_adhd_const_eval::TryApplyUnaryConstantOp(expr->op, inner, outVal);
     }
     case ExprKind::Binary:{
         i64 lhsVal = 0;
         i64 rhsVal = 0;
-        if(!TryEvaluateExprConstant(expr->lhs, symbols, lhsVal, depth + 1u, contextEnum)
-            || !TryEvaluateExprConstant(expr->rhs, symbols, rhsVal, depth + 1u, contextEnum))
-        {
+        if(!TryEvaluateExprConstant(expr->lhs, symbols, depth + 1u, contextEnum, lhsVal) || !TryEvaluateExprConstant(expr->rhs, symbols, depth + 1u, contextEnum, rhsVal))
             return false;
-        }
         return __hidden_adhd_const_eval::TryApplyBinaryConstantOp(expr->op, lhsVal, rhsVal, outVal);
     }
     case ExprKind::Cast:
-        return TryEvaluateExprConstant(expr->lhs, symbols, outVal, depth + 1u, contextEnum);
+        return TryEvaluateExprConstant(expr->lhs, symbols, depth + 1u, contextEnum, outVal);
     default:
         return false;
     }
 }
 
-b8 TryEvaluateTextConstant(
-    MStringView text,
-    const SymbolTable& symbols,
-    i64& outVal,
-    const u32 depth,
-    const EnumDecl* contextEnum
-)noexcept{
+b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, const u32 depth, const EnumDecl* contextEnum, i64& outVal)noexcept{
     if(depth > 16u)
         return false;
     text = TrimView(text);
@@ -237,7 +211,7 @@ b8 TryEvaluateTextConstant(
     if(text.empty())
         return false;
 
-    auto findTopLevelBinary = [&](const MStringView op1, const MStringView op2, usize& outPos, usize& outLen)noexcept -> b8{
+    const auto findTopLevelBinary = [&](const MStringView op1, const MStringView op2, usize& outPos, usize& outLen)noexcept -> b8{
         u32 parenDepth = 0u;
         b8 inSingleQuote = false;
         usize foundPos = MStringView::npos;
@@ -260,7 +234,7 @@ b8 TryEvaluateTextConstant(
             if(parenDepth != 0u)
                 continue;
 
-            auto matchesAt = [&](const MStringView op)noexcept -> b8{
+            const auto matchesAt = [&](const MStringView op)noexcept -> b8{
                 if(op.empty() || i + op.size() > text.size())
                     return false;
                 if(text.substr(i, op.size()) != op)
@@ -299,14 +273,11 @@ b8 TryEvaluateTextConstant(
         return false;
     };
 
-    auto evalBinaryOp = [&](const usize pos, const usize len, const TokenType::Enum op)noexcept -> b8{
+    const auto evalBinaryOp = [&](const usize pos, const usize len, const TokenType::Enum op)noexcept -> b8{
         i64 l = 0;
         i64 r = 0;
-        if(!TryEvaluateTextConstant(text.substr(0u, pos), symbols, l, depth + 1u, contextEnum)
-            || !TryEvaluateTextConstant(text.substr(pos + len), symbols, r, depth + 1u, contextEnum))
-        {
+        if(!TryEvaluateTextConstant(text.substr(0u, pos), symbols, depth + 1u, contextEnum, l) || !TryEvaluateTextConstant(text.substr(pos + len), symbols, depth + 1u, contextEnum, r))
             return false;
-        }
         return __hidden_adhd_const_eval::TryApplyBinaryConstantOp(op, l, r, outVal);
     };
 
@@ -323,19 +294,15 @@ b8 TryEvaluateTextConstant(
     if(findTopLevelBinary("+", "-", opPos, opLen))
         return evalBinaryOp(opPos, opLen, (text[opPos] == '+') ? TokenType::Plus : TokenType::Minus);
     if(findTopLevelBinary("*", "/", opPos, opLen) || findTopLevelBinary("%", "", opPos, opLen)){
-        const TokenType::Enum op = (text[opPos] == '*')
-            ? TokenType::Star
-            : ((text[opPos] == '/') ? TokenType::Slash : TokenType::Percent);
+        const TokenType::Enum op = (text[opPos] == '*') ? TokenType::Star : ((text[opPos] == '/') ? TokenType::Slash : TokenType::Percent);
         return evalBinaryOp(opPos, opLen, op);
     }
 
     if(text[0] == '+' || text[0] == '-' || text[0] == '~' || text[0] == '!'){
         i64 inner = 0;
-        if(!TryEvaluateTextConstant(text.substr(1u), symbols, inner, depth + 1u, contextEnum))
+        if(!TryEvaluateTextConstant(text.substr(1u), symbols, depth + 1u, contextEnum, inner))
             return false;
-        const TokenType::Enum op = (text[0] == '+')
-            ? TokenType::Plus
-            : ((text[0] == '-') ? TokenType::Minus : ((text[0] == '~') ? TokenType::Tilde : TokenType::Bang));
+        const TokenType::Enum op = (text[0] == '+') ? TokenType::Plus : ((text[0] == '-') ? TokenType::Minus : ((text[0] == '~') ? TokenType::Tilde : TokenType::Bang));
         return __hidden_adhd_const_eval::TryApplyUnaryConstantOp(op, inner, outVal);
     }
 
@@ -359,9 +326,9 @@ b8 TryEvaluateTextConstant(
     const EnumDecl* scopedEnum = nullptr;
     MStringView scopedEntryName;
     if(IsValidScopedEnumTemplateArg(text, symbols, &scopedEnum, &scopedEntryName))
-        return TryEvaluateEnumEntryConstant(*scopedEnum, scopedEntryName, symbols, outVal, depth);
+        return TryEvaluateEnumEntryConstant(*scopedEnum, scopedEntryName, symbols, depth, outVal);
 
-    if(contextEnum && TryEvaluateEnumEntryConstant(*contextEnum, text, symbols, outVal, depth))
+    if(contextEnum && TryEvaluateEnumEntryConstant(*contextEnum, text, symbols, depth, outVal))
         return true;
 
     if(const Stmt* globalConst = symbols.findGlobalConstant(text)){
@@ -371,7 +338,7 @@ b8 TryEvaluateTextConstant(
         if(!valExpr && globalConst->isCtorInit && globalConst->arguments.size() == 1u)
             valExpr = globalConst->arguments[0];
         if(valExpr)
-            return TryEvaluateExprConstant(valExpr, symbols, outVal, depth + 1u, contextEnum);
+            return TryEvaluateExprConstant(valExpr, symbols, depth + 1u, contextEnum, outVal);
     }
 
     return false;
@@ -423,12 +390,7 @@ b8 HasConstValueTemplateParam(const ClassDecl* ownerClass, const MethodDecl* met
     return false;
 }
 
-b8 NormalizeConstantTemplateArg(
-    TypeArg& arg,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    const SymbolTable& symbols
-)noexcept{
+b8 NormalizeConstantTemplateArg(TypeArg& arg, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SymbolTable& symbols)noexcept{
     if(!arg.constantText.empty()){
         const MStringView ctext = TrimView(arg.constantText);
         if(IsConcreteConstTemplateArgText(ctext, symbols))
@@ -441,10 +403,7 @@ b8 NormalizeConstantTemplateArg(
     if(!arg.type || arg.type->refMode != ParamPassingMode::None || !arg.type->templateArgs.empty() || arg.type->isFuncType)
         return false;
     const MStringView name = arg.type->name;
-    if(name == "true" || name == "false"
-        || IsConcreteConstTemplateArgText(name, symbols)
-        || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name))
-    {
+    if(name == "true" || name == "false" || IsConcreteConstTemplateArgText(name, symbols) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, name)){
         arg.constantText = name;
         arg.type = nullptr;
         return true;

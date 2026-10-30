@@ -139,7 +139,6 @@ private:
     const ComponentTypeAutoRegistrar* m_next = nullptr;
 };
 
-
 [[nodiscard]] const IComponent* CastComponent(const Core::Assets::IAsset* asset)noexcept;
 
 
@@ -160,7 +159,6 @@ public:
 #endif
 };
 
-
 #if defined(NWB_COOK)
 namespace ComponentAssetSerialization{
 [[nodiscard]] b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary);
@@ -175,12 +173,10 @@ template<typename TPod>
 };
 #endif
 
-
 template<typename ComponentT>
 class TypedComponentAssetCodec final : public Core::Assets::AssetCodec<ComponentT>{
 public:
     TypedComponentAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ComponentT::AssetTypeName()))) = default;
-
 
 #if defined(NWB_COOK)
 public:
@@ -192,7 +188,6 @@ public:
     }
 #endif
 };
-
 
 template<typename ComponentT>
 class TypedComponentAutoRegistrar final : NoCopy{
@@ -233,3 +228,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

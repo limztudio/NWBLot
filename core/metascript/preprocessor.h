@@ -49,13 +49,25 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Preprocessor{
+class Preprocessor final{
 public:
     struct IncludedByteRange{
         usize startOffset = 0u;
         usize endOffset = 0u;
     };
 
+
+private:
+    struct ConditionalFrame{
+        u32 line = 1;
+        b8 parentActive = true;
+        b8 branchTaken = false;
+        b8 currentActive = true;
+        b8 seenElse = false;
+    };
+
+
+public:
     using MacroMap = MStringMap<PreprocessorMacro>;
     using IncludedSet = MStringMap<b8>;
     using IncludedList = MVector<MString>;
@@ -74,24 +86,14 @@ public:
 
 public:
     void defineObjectMacro(MStringView name, MStringView body);
-    void undefineMacro(MStringView name);
-    [[nodiscard]] b8 isMacroDefined(MStringView name)const noexcept;
+    void undefineMacro(MStringView name)noexcept;
+    [[nodiscard]] b8 isMacroDefined(MStringView name)const noexcept{ return m_macros.find(name) != m_macros.end(); }
     [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
 
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);
 
     [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
     [[nodiscard]] const IncludedList& resolvedIncludedFiles()const noexcept{ return m_resolvedIncludedFiles; }
-
-
-private:
-    struct ConditionalFrame{
-        u32 line = 1;
-        b8 parentActive = true;
-        b8 branchTaken = false;
-        b8 currentActive = true;
-        b8 seenElse = false;
-    };
 
 
 private:

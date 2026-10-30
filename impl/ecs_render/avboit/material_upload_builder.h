@@ -59,14 +59,7 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<b8> declare(
-        const AvboitMaterialUploadInputs& inputs,
-        Span<const InstanceGpuData> instanceData,
-        Span<const u8> materialTypedBytes,
-        const CsgFrameGpuDataView& csgFrameData,
-        b8 hasCsgDrawItems,
-        Core::GpuTaskId& inOutUploadTask
-    );
+    [[nodiscard]] Expected<b8> declare(const AvboitMaterialUploadInputs& inputs, Span<const InstanceGpuData> instanceData, Span<const u8> materialTypedBytes, const CsgFrameGpuDataView& csgFrameData, b8 hasCsgDrawItems, Core::GpuTaskId& inOutUploadTask);
 
 
 private:
@@ -82,3 +75,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

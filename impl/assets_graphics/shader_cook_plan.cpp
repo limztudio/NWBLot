@@ -179,9 +179,8 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
     const ::Path<ScratchArena> includePath(scratchArena, includeName);
     if(includePath.isAbsolute()){
         const auto includePathQueryResult = IsRegularFile(includePath);
-        if(includePathQueryResult && *includePathQueryResult){
+        if(includePathQueryResult && *includePathQueryResult)
             return includePath.lexicallyNormal();
-        }
         if(!includePathQueryResult && !IsMissingPathError(includePathQueryResult.error())){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(includePath), ConvertString(includePathQueryResult.error().message()));
             return MakeUnexpected(Failure{});
@@ -191,9 +190,8 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
     for(const Path& includeDirectory : includeDirectories){
         const ::Path<ScratchArena> candidate = (::Path<ScratchArena>(scratchArena, includeDirectory) / includePath).lexicallyNormal();
         const auto candidateQueryResult = IsRegularFile(candidate);
-        if(candidateQueryResult && *candidateQueryResult){
+        if(candidateQueryResult && *candidateQueryResult)
             return candidate;
-        }
         if(!candidateQueryResult && !IsMissingPathError(candidateQueryResult.error())){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query CSG evaluator module include '{}': {}"), PathToString<tchar>(candidate), ConvertString(candidateQueryResult.error().message()));
             return MakeUnexpected(Failure{});
@@ -514,3 +512,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

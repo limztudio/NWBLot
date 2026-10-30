@@ -145,9 +145,8 @@ template<typename JointPaletteVector>
         }
 
         SkeletonJointMatrix storedJointMatrix{};
-        if(!useDualQuaternionPayload){
+        if(!useDualQuaternionPayload)
             StoreFloat(*jointMatrix, storedJointMatrix);
-        }
         else{
             const auto dualQuaternion = MatrixTryBuildRigidDualQuaternion(*jointMatrix, s_SkeletonAffineEpsilon, s_SkeletonRigidJointEpsilon);
             if(dualQuaternion){
@@ -210,3 +209,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

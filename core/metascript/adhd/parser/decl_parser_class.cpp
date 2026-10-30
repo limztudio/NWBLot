@@ -26,12 +26,10 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     m_cursor.advance();
 
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "serialize" && attr.arguments.empty()){
+        if(attr.name == "serialize" && attr.arguments.empty())
             decl->isSerialize = true;
-        }
-        else if(attr.name == "reflect" && attr.arguments.empty()){
+        else if(attr.name == "reflect" && attr.arguments.empty())
             decl->isReflect = true;
-        }
         else if(attr.name == "asset"){
             if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){
                 m_cursor.error(attr.line, attr.column, "'[asset(\"...\")]' requires a single string literal argument");
@@ -143,7 +141,7 @@ b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const Sourc
         return false;
     if(method.isOperator){
         MStringView opErr;
-        if(!validateMemberOperatorArity(method.name, method.params.size(), opErr)){
+        if(!ValidateMemberOperatorArity(method.name, method.params.size(), opErr)){
             m_cursor.error(span.line, span.column, opErr);
             return false;
         }
@@ -151,17 +149,7 @@ b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const Sourc
     return true;
 }
 
-b8 DeclParser::parseClassMethodOrOperatorTail(
-    ClassDecl& classDecl,
-    const AccessSpecifier::Enum access,
-    TypeRef* returnType,
-    const MStringView name,
-    const b8 isOperator,
-    MVector<TemplateParamDecl>&& templateParams,
-    const Span<const ParsedAttribute> attributes,
-    const SourceSpan span,
-    const MStringView missingTerminatorMessage
-){
+b8 DeclParser::parseClassMethodOrOperatorTail(ClassDecl& classDecl, const AccessSpecifier::Enum access, TypeRef* returnType, const MStringView name, const b8 isOperator, MVector<TemplateParamDecl>&& templateParams, const Span<const ParsedAttribute> attributes, const SourceSpan span, const MStringView missingTerminatorMessage){
     MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
     method->access = access;
     method->ownerClassName = classDecl.name;
@@ -285,17 +273,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             return false;
 
         MVector<TemplateParamDecl> emptyTemplateParams(m_cursor.arena());
-        return parseClassMethodOrOperatorTail(
-            classDecl,
-            access,
-            memberType,
-            opName,
-            true,
-            Move(emptyTemplateParams),
-            attributes,
-            span,
-            "expected '{' or ';' after operator declaration"
-        );
+        return parseClassMethodOrOperatorTail(classDecl, access, memberType, opName, true, Move(emptyTemplateParams), attributes, span, "expected '{' or ';' after operator declaration");
     }
 
     if(!m_cursor.check(TokenType::Identifier)){
@@ -328,8 +306,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     if(m_cursor.check(TokenType::LeftParen)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
-        b8 isMethodSig = m_cursor.check(TokenType::RightParen)
-            || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
+        b8 isMethodSig = m_cursor.check(TokenType::RightParen) || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
         if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
             TypeRef* maybeParamType = m_typeParser.parseType(false, false);
             if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
@@ -338,19 +315,8 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         }
         m_cursor.restore(cp);
 
-        if(isMethodSig){
-            return parseClassMethodOrOperatorTail(
-                classDecl,
-                access,
-                memberType,
-                memberName,
-                false,
-                Move(methodTemplateParams),
-                attributes,
-                span,
-                "expected '{' or ';' after method declaration"
-            );
-        }
+        if(isMethodSig)
+            return parseClassMethodOrOperatorTail(classDecl, access, memberType, memberName, false, Move(methodTemplateParams), attributes, span, "expected '{' or ';' after method declaration");
     }
 
     FieldDecl* field = AllocateAstNode<FieldDecl>(m_cursor.arena());
@@ -361,9 +327,8 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     field->originalIndex = classDecl.fields.size();
 
     for(const ParsedAttribute& attr : attributes){
-        if(attr.name == "transient" && attr.arguments.empty()){
+        if(attr.name == "transient" && attr.arguments.empty())
             field->isTransient = true;
-        }
         else if(attr.name == "reflect" && attr.arguments.empty()){
             field->isReflect = true;
             classDecl.isReflect = true;

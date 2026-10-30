@@ -21,10 +21,11 @@ class CausticPhotonBudget{
     public u32 photonsPerFrame = 0u;
 }
 
+const u32 s_CausticHalfPhotonGridDivisor = 2u;
+const u32 s_CausticQuarterPhotonGridDivisor = 4u;
+
 b8 ValidateCausticQualitySettings(in CausticQualitySettings settings){
-    const u32 s_HalfPhotonGridDivisor = 2u;
-    const u32 s_QuarterPhotonGridDivisor = 4u;
-    return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_HalfPhotonGridDivisor || settings.photonGridDivisor == s_QuarterPhotonGridDivisor;
+    return settings.photonGridDivisor == 1u || settings.photonGridDivisor == s_CausticHalfPhotonGridDivisor || settings.photonGridDivisor == s_CausticQuarterPhotonGridDivisor;
 }
 
 // Callers supply validated settings, a supported base grid, and the current 1/2 temporal phase count.
@@ -96,3 +97,4 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

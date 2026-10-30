@@ -93,7 +93,6 @@ public:
     }
 };
 
-
 // Shared-buffer extinction draws keep native D/R order; phases stay graph-visible.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
     struct Phase{
@@ -134,7 +133,6 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
     }
 };
 
-
 struct AvboitExtinctionGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
@@ -174,7 +172,6 @@ public:
     }
 };
 
-
 struct AvboitIntegrationGraphTask{
     // The avboit system, the frame targets, and the timing ticket are required: integration always dispatches against this frame's targets.
     // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
@@ -190,7 +187,6 @@ public:
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
     static void Discarded(Payload& payload)noexcept;
 };
-
 
 // Accumulation emulation streams freeze after Integration; regular and CSG stay exclusive.
 

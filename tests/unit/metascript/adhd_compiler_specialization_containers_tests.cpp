@@ -8,11 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+namespace __hidden_adhd_compiler_specialization_containers_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using namespace NWB::AdhdCompilerTestsDetail;
 
 TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastUseMove){
     AdhdTestArena arena;
@@ -64,7 +66,7 @@ TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastU
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/job/job_node.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/job/job_node.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -93,7 +95,7 @@ TEST(AdhdCompiler, EnforcesPrivateReflectionFilterSimdMutCallReloadsAndSafeLastU
         "    }\r\n"
         "}\r\n";
     CompileResult badParNativeRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnsafeParallelNativeMutContainer, "impl/job/bad_par_native.adhd", arena.arena, badParNativeRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnsafeParallelNativeMutContainer, "impl/job/bad_par_native.adhd", arena.arena, badParNativeRes));
 }
 
 TEST(AdhdCompiler, SupportsTemplateSpecializationArenaReflectionAndScalarMathLowering){
@@ -138,7 +140,7 @@ TEST(AdhdCompiler, SupportsTemplateSpecializationArenaReflectionAndScalarMathLow
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/store/memory_store.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/store/memory_store.adhd", arena.arena, res));
     ASSERT_EQ(res.unit.templateInstantiations.size(), 1u);
 
     const auto* inst = res.unit.templateInstantiations[0];
@@ -201,7 +203,7 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/config_packet.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/config_packet.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -223,7 +225,7 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
         "    mut String s;\r\n"
         "}\r\n";
     CompileResult badRefRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UninitRefLocalSource, "impl/sim/bad_ref.adhd", arena.arena, badRefRes));
+    EXPECT_FALSE(Compiler::Compile(s_UninitRefLocalSource, "impl/sim/bad_ref.adhd", arena.arena, badRefRes));
 
     static constexpr MStringView s_UnknownLambdaCaptureSource =
         "void badCapture() {\r\n"
@@ -231,7 +233,7 @@ TEST(AdhdCompiler, SupportsGlobalConstAndContainerIndexInferenceLambdaSyncAndOrd
         "    };\r\n"
         "}\r\n";
     CompileResult badCapRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnknownLambdaCaptureSource, "impl/sim/bad_cap.adhd", arena.arena, badCapRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnknownLambdaCaptureSource, "impl/sim/bad_cap.adhd", arena.arena, badCapRes));
 }
 
 TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSimdCaptureReload){
@@ -274,7 +276,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/worker_node.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/worker_node.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -297,7 +299,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
         "    }\r\n"
         "}\r\n";
     CompileResult badUncapturedThisRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UncapturedThisInLambdaSource, "impl/sim/bad_this_cap.adhd", arena.arena, badUncapturedThisRes));
+    EXPECT_FALSE(Compiler::Compile(s_UncapturedThisInLambdaSource, "impl/sim/bad_this_cap.adhd", arena.arena, badUncapturedThisRes));
 
     static constexpr MStringView s_MutateInThisLambdaSource =
         "class BadConstThis {\r\n"
@@ -310,7 +312,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
         "    }\r\n"
         "}\r\n";
     CompileResult badMutInThisRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MutateInThisLambdaSource, "impl/sim/bad_in_this.adhd", arena.arena, badMutInThisRes));
+    EXPECT_FALSE(Compiler::Compile(s_MutateInThisLambdaSource, "impl/sim/bad_in_this.adhd", arena.arena, badMutInThisRes));
 
     static constexpr MStringView s_DuplicateDefaultSwitchSource =
         "void badSwitch(in u32 x) {\r\n"
@@ -322,7 +324,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
         "    }\r\n"
         "}\r\n";
     CompileResult badDupDefaultRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DuplicateDefaultSwitchSource, "impl/sim/bad_dup_default.adhd", arena.arena, badDupDefaultRes));
+    EXPECT_FALSE(Compiler::Compile(s_DuplicateDefaultSwitchSource, "impl/sim/bad_dup_default.adhd", arena.arena, badDupDefaultRes));
 
     static constexpr MStringView s_BodylessOutOfLineSource =
         "class Box {\r\n"
@@ -330,7 +332,7 @@ TEST(AdhdCompiler, SupportsTopLevelConstCtorStackedSwitchCasesLambdaThisAndMutSi
         "}\r\n"
         "void Box::run();\r\n";
     CompileResult badOolRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BodylessOutOfLineSource, "impl/sim/bad_ool.adhd", arena.arena, badOolRes));
+    EXPECT_FALSE(Compiler::Compile(s_BodylessOutOfLineSource, "impl/sim/bad_ool.adhd", arena.arena, badOolRes));
 }
 
 TEST(AdhdCompiler, SupportsIntegerAndMatrixSimdLoweringAndStorageSyncForNonSimdUses){
@@ -370,7 +372,7 @@ TEST(AdhdCompiler, SupportsIntegerAndMatrixSimdLoweringAndStorageSyncForNonSimdU
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/int_mat_simd.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/int_mat_simd.adhd", arena.arena, res));
 
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
@@ -387,14 +389,14 @@ TEST(AdhdCompiler, SupportsIntegerAndMatrixSimdLoweringAndStorageSyncForNonSimdU
         "    f32x3_i32 s = v.xyzw;\r\n"
         "}\r\n";
     CompileResult badSwizzleRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MixedSwizzleSource, "impl/sim/bad_mixed_swizzle.adhd", arena.arena, badSwizzleRes));
+    EXPECT_FALSE(Compiler::Compile(s_MixedSwizzleSource, "impl/sim/bad_mixed_swizzle.adhd", arena.arena, badSwizzleRes));
 
     static constexpr MStringView s_WrongBuiltinAritySource =
         "f32 badDot(in f32x4 a) {\r\n"
         "    return dot(a);\r\n"
         "}\r\n";
     CompileResult badBuiltinArityRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_WrongBuiltinAritySource, "impl/sim/bad_builtin_arity.adhd", arena.arena, badBuiltinArityRes));
+    EXPECT_FALSE(Compiler::Compile(s_WrongBuiltinAritySource, "impl/sim/bad_builtin_arity.adhd", arena.arena, badBuiltinArityRes));
 }
 
 

@@ -46,7 +46,6 @@ static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stabl
 static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
-
 [[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVectorSingle defaultForward, usize maxLights, SceneLight* outLights)noexcept;
 
 

@@ -50,7 +50,6 @@ static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must st
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
-
 // Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct CsgClipWorkBounds{
     SIMDVectorSingle minBounds = VectorZero();
@@ -168,3 +167,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

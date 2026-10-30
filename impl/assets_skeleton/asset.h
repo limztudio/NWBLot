@@ -56,6 +56,7 @@ public:
 public:
     void setJoints(JointVector&& joints, JointIndexMap&& jointIndices)noexcept;
 
+
 public:
     [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
 
@@ -63,6 +64,7 @@ public:
 
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
     [[nodiscard]] u32 findJointIndex(Name jointName)const noexcept;
+
 
 public:
     [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;

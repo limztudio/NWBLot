@@ -17,8 +17,8 @@ NWB_IMPL_BEGIN
 
 
 GraphicsPrefixTimingResolver::GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline){
-}
+    : m_pipeline(pipeline)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

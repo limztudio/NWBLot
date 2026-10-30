@@ -66,7 +66,6 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
     return true;
 }
 
-
 b8 Mesh::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
@@ -95,3 +94,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

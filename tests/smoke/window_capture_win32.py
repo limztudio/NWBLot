@@ -3,7 +3,7 @@
 
 import ctypes
 import time
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
+from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure  # noqa: E402
 from window_capture_image import write_capture_rows, bgra_rgb_rows  # noqa: E402
 
 

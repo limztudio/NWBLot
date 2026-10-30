@@ -55,8 +55,6 @@ class ActiveCameraComponent{
 
 [reflect]
 class CameraComponent{
-    public f32x4 projection(s_CameraVerticalFovRadians, s_CameraNearPlane, s_CameraFarPlane, s_CameraAutoAspectRatio);
-
     public f32 verticalFovRadians()const{
         return this.projection.x;
     }
@@ -88,6 +86,8 @@ class CameraComponent{
     public void setAspectRatio(in f32 value){
         this.projection.w = value;
     }
+
+    public f32x4 projection(s_CameraVerticalFovRadians, s_CameraNearPlane, s_CameraFarPlane, s_CameraAutoAspectRatio);
 }
 
 [reflect]
@@ -100,15 +100,6 @@ enum<u8> LightType{
 
 [reflect]
 class LightComponent{
-    public f32x4 colorIntensity(s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightIntensity);
-    public f32 range = s_LightRange;
-    public f32 innerConeCos = s_LightInnerConeCos;
-    public f32 outerConeCos = s_LightOuterConeCos;
-    public f32 angularRadius = s_LightDirectionalAngularRadius;
-    public f32 sourceRadius = s_LightPunctualSourceRadius;
-    public LightType type = LightType::Enum::Directional;
-    public b8 enableCaustics = s_LightEnableCaustics;
-
     public f32x4 color()const{
         return f32x4(this.colorIntensity.x, this.colorIntensity.y, this.colorIntensity.z, 0.0f);
     }
@@ -126,6 +117,15 @@ class LightComponent{
     public void setIntensity(in f32 value){
         this.colorIntensity.w = value;
     }
+
+    public f32x4 colorIntensity(s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightWhiteColorComponent, s_LightIntensity);
+    public f32 range = s_LightRange;
+    public f32 innerConeCos = s_LightInnerConeCos;
+    public f32 outerConeCos = s_LightOuterConeCos;
+    public f32 angularRadius = s_LightDirectionalAngularRadius;
+    public f32 sourceRadius = s_LightPunctualSourceRadius;
+    public LightType type = LightType::Enum::Directional;
+    public b8 enableCaustics = s_LightEnableCaustics;
 }
 
 [reflect]
@@ -156,3 +156,4 @@ class SceneLight{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

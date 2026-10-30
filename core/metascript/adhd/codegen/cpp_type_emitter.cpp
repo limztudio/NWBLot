@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MStringView CppTypeEmitter::mapBuiltinCppType(const MStringView typeName)noexcept{
+MStringView CppTypeEmitter::MapBuiltinCppType(const MStringView typeName)noexcept{
     if(IsScalarType(typeName))
         return typeName;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
@@ -73,7 +73,7 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         out.push_back('>');
         return;
     }
-    if(const MStringView mappedBuiltin = mapBuiltinCppType(name); !mappedBuiltin.empty()){
+    if(const MStringView mappedBuiltin = MapBuiltinCppType(name); !mappedBuiltin.empty()){
         out.append(mappedBuiltin.data(), mappedBuiltin.size());
         if(!type.templateArgs.empty())
             emitTypeArgListCpp(out, type.templateArgs);
@@ -105,12 +105,7 @@ void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> 
     out.push_back('>');
 }
 
-void CppTypeEmitter::emitParamTypeCpp(
-    MString& out,
-    const ParamPassingMode::Enum mode,
-    const TypeRef& type,
-    const b8 topLevelConst
-)const{
+void CppTypeEmitter::emitParamTypeCpp(MString& out, const ParamPassingMode::Enum mode, const TypeRef& type, const b8 topLevelConst)const{
     if(mode == ParamPassingMode::Mut){
         emitTypeCpp(out, type);
         out.push_back('&');
@@ -151,13 +146,10 @@ void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const Templa
     out.append(">\r\n");
 }
 
-void CppTypeEmitter::emitMethodSignature(
-    MString& out,
-    const ClassDecl* ownerClass,
-    const MethodDecl& method,
-    const b8 isDeclarationInClass
-)const{
+void CppTypeEmitter::emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, const b8 isDeclarationInClass)const{
     if(!method.isConstructor && !method.isDestructor){
+        if(isDeclarationInClass && method.isOverride)
+            out.append("virtual ");
         if(method.returnType)
             emitTypeCpp(out, *method.returnType);
         else

@@ -24,15 +24,7 @@ public:
     [[nodiscard]] static SIMDVectorSingle MakeMeshUvVector(const SIMDVectorSingle uv)noexcept;
     [[nodiscard]] static b8 ValidDirectionVector(const SIMDVectorSingle direction)noexcept;
     [[nodiscard]] static b8 ValidTangentVector(const SIMDVectorSingle tangent)noexcept;
-    [[nodiscard]] static b8 ValidateMeshStreams(
-        Span<const Float3U> positions,
-        Span<const Half4U> normals,
-        Span<const Half4U> tangents,
-        Span<const Float2U> uv0,
-        Span<const Half4U> colors,
-        const TStringView contextText,
-        const TStringView meshPathText
-    );
+    [[nodiscard]] static b8 ValidateMeshStreams(Span<const Float3U> positions, Span<const Half4U> normals, Span<const Half4U> tangents, Span<const Float2U> uv0, Span<const Half4U> colors, const TStringView contextText, const TStringView meshPathText);
     [[nodiscard]] static b8 ValidateMeshletPayload(
         Span<const u8> positionRefDeltas,
         Span<const u8> attributeRefDeltas,

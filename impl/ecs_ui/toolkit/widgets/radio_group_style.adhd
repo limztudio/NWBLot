@@ -57,6 +57,14 @@ class RadioGroupChoices{
 }
 
 class RadioGroupSnapshot{
+    public b8 operator==(in RadioGroupSnapshot rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.inputGeneration == rhs.inputGeneration && this.revision == rhs.revision && this.selectedKey == rhs.selectedKey && this.cursorKey == rhs.cursorKey && this.sourceGeneration == rhs.sourceGeneration && this.sourceRevision == rhs.sourceRevision;
+    }
+
+    public b8 operator!=(in RadioGroupSnapshot rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.inputGeneration != rhs.inputGeneration || this.revision != rhs.revision || this.selectedKey != rhs.selectedKey || this.cursorKey != rhs.cursorKey || this.sourceGeneration != rhs.sourceGeneration || this.sourceRevision != rhs.sourceRevision;
+    }
+
     public u64 instanceGeneration = 0u;
     public u64 inputGeneration = 0u;
     public u64 revision = 0u;
@@ -64,28 +72,6 @@ class RadioGroupSnapshot{
     public u64 cursorKey = 0u;
     public u64 sourceGeneration = 0u;
     public u64 sourceRevision = 0u;
-
-    public b8 operator==(in RadioGroupSnapshot rhs)const{
-        return
-            this.instanceGeneration == rhs.instanceGeneration
-            && this.inputGeneration == rhs.inputGeneration
-            && this.revision == rhs.revision
-            && this.selectedKey == rhs.selectedKey
-            && this.cursorKey == rhs.cursorKey
-            && this.sourceGeneration == rhs.sourceGeneration
-            && this.sourceRevision == rhs.sourceRevision;
-    }
-
-    public b8 operator!=(in RadioGroupSnapshot rhs)const{
-        return
-            this.instanceGeneration != rhs.instanceGeneration
-            || this.inputGeneration != rhs.inputGeneration
-            || this.revision != rhs.revision
-            || this.selectedKey != rhs.selectedKey
-            || this.cursorKey != rhs.cursorKey
-            || this.sourceGeneration != rhs.sourceGeneration
-            || this.sourceRevision != rhs.sourceRevision;
-    }
 }
 
 class RadioGroupMetrics{
@@ -120,3 +106,4 @@ class RadioGroupPlacement{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

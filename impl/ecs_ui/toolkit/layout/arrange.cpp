@@ -83,12 +83,10 @@ b8 LayoutTree::arrangeNode(const u32 index)noexcept{
         const Point measured = m_work[child].box.measuredSize;
         f32 width = measured.x;
         f32 height = measured.y;
-        if(childDescription.width.policy == LayoutSizePolicy::Stretch){
+        if(childDescription.width.policy == LayoutSizePolicy::Stretch)
             width = row ? static_cast<f32>(VectorDoubleGetX(VectorDoubleMultiply(available, VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(childDescription.width.value)), weight)))) : box.content.width;
-        }
-        if(childDescription.height.policy == LayoutSizePolicy::Stretch){
+        if(childDescription.height.policy == LayoutSizePolicy::Stretch)
             height = column ? static_cast<f32>(VectorDoubleGetX(VectorDoubleMultiply(available, VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(childDescription.height.value)), weight)))) : box.content.height;
-        }
         const f32 x = row ? static_cast<f32>(VectorDoubleGetX(cursor)) : box.content.x;
         const f32 y = column ? static_cast<f32>(VectorDoubleGetX(cursor)) : box.content.y;
         const Rect rectangle{ x, y, width, height };

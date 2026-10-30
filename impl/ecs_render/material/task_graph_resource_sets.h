@@ -29,11 +29,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPreparedMaterialGeometryUses(
-    const Span<const MaterialPassDrawItemsView> drawItemSets,
-    Core::GpuTaskGraph& graph,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] inline Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPreparedMaterialGeometryUses(const Span<const MaterialPassDrawItemsView> drawItemSets, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena){
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
 
     // Indexed raster reads its decoded cache; only mesh/compute stages and cache producers consume source streams.
@@ -120,9 +116,8 @@ namespace RendererTaskGraphDetail{
     resourceUses.resize(sourceBuffers.size());
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        if(!declarations.valid()){
+        if(!declarations.valid())
             return MakeUnexpected(Failure{});
-        }
         for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex)
             resourceUses[bufferIndex].resource = declarations.findImportedBuffer(*sourceBuffers[bufferIndex]);
     }
@@ -131,17 +126,15 @@ namespace RendererTaskGraphDetail{
         Core::GpuGraphResourceId resource = resourceUses[bufferIndex].resource;
         if(!resource.valid()){
             const Name identity = buffer->getCreationDescription().debugName;
-            if(!identity){
+            if(!identity)
                 return MakeUnexpected(Failure{});
-            }
             const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
             if(!importedResource)
                 return MakeUnexpected(Failure{});
             resource = *importedResource;
         }
-        if(!resource.valid()){
+        if(!resource.valid())
             return MakeUnexpected(Failure{});
-        }
         resourceUses[bufferIndex] = ReadUse(resource, Core::ResourceStates::ShaderResource);
     }
     return resourceUses;
@@ -172,7 +165,6 @@ namespace RendererTaskGraphDetail{
     return resource;
 }
 
-
 [[nodiscard]] inline Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(Core::GpuTaskGraph& graph, const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan, const AStringView label){
     Core::GpuGraphResourceId resource{};
     if(!plan.captured || !plan.outputBuffer)
@@ -197,7 +189,6 @@ namespace RendererTaskGraphDetail{
         return MakeUnexpected(Failure{});
     return resource;
 }
-
 
 [[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
     const RendererMaterialSystem& materialSystem,

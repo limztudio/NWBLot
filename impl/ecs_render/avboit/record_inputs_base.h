@@ -73,8 +73,7 @@ struct AvboitRecordInputsBase{
 public:
     explicit AvboitRecordInputsBase(DeferredFrameTargets& targetsIn)noexcept
         : targets(targetsIn)
-    {
-    }
+    {}
 
 
 public:

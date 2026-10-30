@@ -148,9 +148,8 @@ template<typename PayloadT, typename DispatchFn>
         preparedInstanceCount = (payload.*snapshotMember).instanceCount;
         preparedMaterialTypedByteCount = (payload.*snapshotMember).materialTypedByteCount;
     }
-    if(payload.hasTransparentRenderers){
+    if(payload.hasTransparentRenderers)
         dispatch(commandList, drawItems, csgFrameData, preparedInstanceCount, preparedMaterialTypedByteCount);
-    }
     return true;
 }
 
@@ -185,3 +184,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -90,9 +90,8 @@ template<typename PayloadT>
         return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
 
     const usize paddedByteCount = logicalByteCount + trailingByteCount;
-    if(trailingByteCount == 0u){
+    if(trailingByteCount == 0u)
         return SetupBuffer<u8>(graphics, debugName, payload, flags);
-    }
 
     // Upload records before payload dies; explicitly zero the allocated tail.
     Vector<u8, Core::Alloc::ScratchArena> paddedPayload{scratchArena};
@@ -116,3 +115,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

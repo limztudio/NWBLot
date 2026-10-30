@@ -4,9 +4,6 @@
 
 // Qualifies the accepted RGB history generation independently from opaque-only history advancement.
 class TransparentShadowSamplingHistory{
-    private u32 m_acceptedSlots = 0u;
-    private u32 m_pendingSlots = 0u;
-
     public void reset(){
         this.m_acceptedSlots = 0u;
         this.m_pendingSlots = 0u;
@@ -28,7 +25,11 @@ class TransparentShadowSamplingHistory{
     public b8 covers(in u32 slotMask)const{
         return slotMask != 0u && (this.m_acceptedSlots & slotMask) == slotMask;
     }
+
+    private u32 m_acceptedSlots = 0u;
+    private u32 m_pendingSlots = 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

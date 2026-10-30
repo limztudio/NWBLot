@@ -118,7 +118,7 @@ static constexpr BenchmarkCase s_BenchmarkCases[] = {
     { BenchmarkMode::FrustumCone, BenchmarkView::Close },
     { BenchmarkMode::FrustumCone, BenchmarkView::Far },
 };
-static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(s_BenchmarkCases[0]);
+static constexpr usize s_BenchmarkCaseCount = LengthOf(s_BenchmarkCases);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +191,7 @@ static void BuildAnimatedJointMatrix(const SIMDMatrix& bindJoint, const u32 join
 class BenchmarkRuntimeMeshProvider final : public NWB::Impl::IRuntimeMeshProvider{
 public:
     BenchmarkRuntimeMeshProvider()noexcept = default;
-    ~BenchmarkRuntimeMeshProvider()noexcept{
+    virtual ~BenchmarkRuntimeMeshProvider()noexcept override{
         uninstall();
     }
 
@@ -269,6 +269,148 @@ private:
 
 
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
+public:
+    explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+        , m_entities(context.objectArena)
+        , m_bindJoints(context.objectArena)
+        , m_staticPreview(ReadSmokeEnvironmentFlag(s_StaticPreviewEnv))
+        , m_fastSmoke(!m_staticPreview && ReadSmokeEnvironmentFlag(s_FastSmokeEnv))
+    {}
+    virtual ~SkinningCullingBenchmarkProject()noexcept override{
+        destroyWorld();
+    }
+
+
+public:
+    virtual b8 onStartup()override{
+        if(!m_staticPreview)
+            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
+        if(m_gpuTimingEnabled)
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true);
+        if(!bindJoints){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
+            requestQuit();
+            return true;
+        }
+        m_bindJoints = Move(*bindJoints);
+        NWB::Impl::MeshSystem& meshSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
+        NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSkinningSystem>());
+
+        m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
+
+        auto activeCameraEntity = m_world->createEntity();
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
+        m_cameraEntity = activeCamera.camera;
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
+
+        if(!activeCamera.camera.valid() || !directionalLight.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+            requestQuit();
+            return true;
+        }
+
+        const BenchmarkModelRef& model = s_BenchmarkModel;
+        const BenchmarkMaterialRef& material = s_SkinningBenchmarkMaterial;
+        const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
+        m_entities.reserve(characterCount);
+        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/skinning_culling/model_owners"));
+        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::ScratchArena> modelOwners(scratchArena);
+        modelOwners.reserve(characterCount);
+
+        for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
+            auto entity = m_world->createEntity();
+            auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
+            const SIMDVectorSingle position = m_staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
+            StoreFloat(position, transform.position);
+            transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
+
+            auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
+            modelComponent.model = model;
+
+            auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
+            renderer.material = material;
+            modelOwners.push_back(entity.id());
+        }
+
+        SyncSmokeModelRuntimes(*m_world);
+        for(const NWB::Core::ECS::EntityID owner : modelOwners){
+            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(*m_world, owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
+            if(!skeletonEntity.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
+                requestQuit();
+                return true;
+            }
+
+            m_entities.push_back(skeletonEntity);
+        }
+
+        if(m_staticPreview){
+            m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
+            configureCamera(BenchmarkView::Front);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
+        }
+        else
+            configureCase();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: shutdown"));
+        if(!m_staticPreview){
+            if(!m_context.flushTelemetryUpload(true))
+                NWB_LOGGER_WARNING(NWB_TEXT("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown"));
+        }
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
+        if(m_gpuTimingEnabled)
+            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
+        if(m_finished){
+            if(m_finishDrainFrames > 0u){
+                --m_finishDrainFrames;
+                return true;
+            }
+
+            requestQuit();
+            return true;
+        }
+
+        if(m_staticPreview){
+            m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
+            animatePoses();
+            const auto updated = m_world->tick(safeDelta);
+            if(!updated){
+                NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+                return false;
+            }
+            ++m_caseRenderedFrames;
+            return true;
+        }
+
+        advanceCaseOrFinish();
+        if(m_finished)
+            return true;
+
+        m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
+        animatePoses();
+        const auto updated = m_world->tick(safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
+        ++m_caseRenderedFrames;
+        return true;
+    }
+
+
 private:
     void destroyWorld(){
         if(!m_world.owner())
@@ -394,149 +536,6 @@ private:
     }
 
 
-public:
-    explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
-        , m_entities(context.objectArena)
-        , m_bindJoints(context.objectArena)
-        , m_staticPreview(ReadSmokeEnvironmentFlag(s_StaticPreviewEnv))
-        , m_fastSmoke(!m_staticPreview && ReadSmokeEnvironmentFlag(s_FastSmokeEnv))
-    {}
-    virtual ~SkinningCullingBenchmarkProject()noexcept override{
-        destroyWorld();
-    }
-
-
-public:
-    virtual b8 onStartup()override{
-        if(!m_staticPreview)
-            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
-        if(m_gpuTimingEnabled)
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
-
-        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true);
-        if(!bindJoints){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
-            requestQuit();
-            return true;
-        }
-        m_bindJoints = Move(*bindJoints);
-        NWB::Impl::MeshSystem& meshSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSystem>());
-        NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(m_world->getSystem<NWB::Impl::MeshSkinningSystem>());
-
-        m_runtimeMeshProvider.install(meshSystem, meshSkinningSystem);
-
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
-        m_cameraEntity = activeCamera.camera;
-        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
-
-        if(!activeCamera.camera.valid() || !directionalLight.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
-            requestQuit();
-            return true;
-        }
-
-        const BenchmarkModelRef& model = s_BenchmarkModel;
-        const BenchmarkMaterialRef& material = s_SkinningBenchmarkMaterial;
-        const u32 characterCount = m_staticPreview ? 1u : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount);
-        m_entities.reserve(characterCount);
-        NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/skinning_culling/model_owners"));
-        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::ScratchArena> modelOwners(scratchArena);
-        modelOwners.reserve(characterCount);
-
-        for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
-            auto entity = m_world->createEntity();
-            auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
-            const SIMDVectorSingle position = m_staticPreview ? VectorZero() : VectorScale(VectorSubtract(VectorSet(static_cast<f32>(characterIndex), 0.0f, 0.0f, 0.0f), VectorSet(1.0f, 0.0f, 0.0f, 0.0f)), 1.15f);
-            StoreFloat(position, transform.position);
-            transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-
-            auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
-            modelComponent.model = model;
-
-            auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-            renderer.material = material;
-            modelOwners.push_back(entity.id());
-        }
-
-        SyncSmokeModelRuntimes(*m_world);
-        for(const NWB::Core::ECS::EntityID owner : modelOwners){
-            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(*m_world, owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
-            if(!skeletonEntity.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
-                requestQuit();
-                return true;
-            }
-
-            m_entities.push_back(skeletonEntity);
-        }
-
-        if(m_staticPreview){
-            m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
-            configureCamera(BenchmarkView::Front);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
-        }
-        else{
-            configureCase();
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
-        return true;
-    }
-
-    virtual void onShutdown()override{
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: shutdown"));
-        if(!m_staticPreview){
-            if(!m_context.flushTelemetryUpload(true))
-                NWB_LOGGER_WARNING(NWB_TEXT("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown"));
-        }
-    }
-
-    virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
-        if(m_gpuTimingEnabled)
-            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        if(m_finished){
-            if(m_finishDrainFrames > 0u){
-                --m_finishDrainFrames;
-                return true;
-            }
-
-            requestQuit();
-            return true;
-        }
-
-        if(m_staticPreview){
-            m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
-            animatePoses();
-            const auto updated = m_world->tick(safeDelta);
-            if(!updated){
-                NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-                return false;
-            }
-            ++m_caseRenderedFrames;
-            return true;
-        }
-
-        advanceCaseOrFinish();
-        if(m_finished)
-            return true;
-
-        m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
-        animatePoses();
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        ++m_caseRenderedFrames;
-        return true;
-    }
-
-
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
@@ -570,7 +569,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Skinning Culling Benchmark");

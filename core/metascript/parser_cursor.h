@@ -20,7 +20,7 @@ NWB_METASCRIPT_BEGIN
 
 
 // Token stream and parse error sink shared by the statement, expression, attribute, and adhd parsers.
-class ParserCursor{
+class ParserCursor final{
     friend class ExpressionParser;
     friend class StatementParser;
 
@@ -60,7 +60,7 @@ public:
     b8 expect(TokenType::Enum type, MStringView expected);
     b8 consumeBalancedBracesRaw(MStringView& outInnerCode);
 
-    void error(MStringView message);
+    void error(MStringView message){ error(m_current.line, m_current.column, message); }
     void error(u32 line, u32 column, MStringView message);
     void errorExpected(MStringView expected);
 

@@ -28,7 +28,6 @@ NWB_IMPL_BEGIN
 class RendererDeferredSystem;
 class RendererMeshSystem;
 
-
 // Graphics-prefix scene uploads own mesh-view plus scene light/shading upload chain.
 struct PrefixSceneUploadInputs{
     RayTracingLightingClassificationInput rayTracingLightingInput;

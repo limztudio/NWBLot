@@ -46,12 +46,7 @@ void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SourceEmitter::emitSimdLaneGetExpr(
-    MString& out,
-    const Expr& vecExpr,
-    const u32 lane,
-    const Expr* dynamicIndexExpr
-)const{
+void SourceEmitter::emitSimdLaneGetExpr(MString& out, const Expr& vecExpr, const u32 lane, const Expr* dynamicIndexExpr)const{
     const MStringView lhsSimd = vecExpr.resolvedSimdType;
     const b8 isDouble = IsDoubleSimdType(lhsSimd);
     const b8 isInt = IsIntSimdType(lhsSimd);
@@ -80,16 +75,10 @@ void SourceEmitter::emitSimdLaneGetExpr(
         out.push_back(')');
 }
 
-b8 SourceEmitter::tryEmitSimdBinaryOpReg(
-    MString& out,
-    const TokenType::Enum binaryOp,
-    const Expr& lhs,
-    const Expr& rhs,
-    const MStringView simdType
-)const{
+b8 SourceEmitter::tryEmitSimdBinaryOpReg(MString& out, const TokenType::Enum binaryOp, const Expr& lhs, const Expr& rhs, const MStringView simdType)const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
-    const b8 isMatrix = m_symbols.isSimdMatrixType(simdType);
+    const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);
 
     const auto emitBinaryRegCall = [&](const MStringView fnPrefix, const Expr& a, const Expr& b){
         out.append(fnPrefix.data(), fnPrefix.size());
@@ -199,9 +188,7 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(
         emitBinaryRegCall(isDouble ? "::VectorDoubleSubtract(" : "::VectorSubtract(", lhs, rhs);
         return true;
     }
-    if(isInt && (binaryOp == TokenType::Star || binaryOp == TokenType::Slash
-        || binaryOp == TokenType::Percent || binaryOp == TokenType::LessLess || binaryOp == TokenType::GreaterGreater))
-    {
+    if(isInt && (binaryOp == TokenType::Star || binaryOp == TokenType::Slash || binaryOp == TokenType::Percent || binaryOp == TokenType::LessLess || binaryOp == TokenType::GreaterGreater)){
         const MStringView regType = SimdRegisterCppType(simdType);
         const MStringView laneType = IntSimdLaneType(simdType);
         const MStringView rawWordType = IntSimdRawWordType(isDouble);
@@ -275,15 +262,11 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(
     return false;
 }
 
-void SourceEmitter::emitSimdRegExpr(
-    MString& out,
-    const Expr& expr,
-    const MStringView expectedSimdType
-)const{
+void SourceEmitter::emitSimdRegExpr(MString& out, const Expr& expr, const MStringView expectedSimdType)const{
     const MStringView simdType = !expr.resolvedSimdType.empty() ? expr.resolvedSimdType : expectedSimdType;
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
-    const b8 isMatrix = m_symbols.isSimdMatrixType(simdType);
+    const b8 isMatrix = SymbolTable::IsSimdMatrixType(simdType);
 
     if(expr.resolvedSimdType.empty() && !expectedSimdType.empty()){
         if(isInt){
@@ -384,7 +367,7 @@ void SourceEmitter::emitSimdRegExpr(
             const MStringView callee = expr.lhs->text;
             const MStringView baseCallee = m_symbols.resolveBaseTypeName(callee);
             u32 ctorLanes = 0u;
-            if(m_symbols.isSimdVectorType(baseCallee, ctorLanes) || m_symbols.isSimdMatrixType(baseCallee)){
+            if(SymbolTable::IsSimdVectorType(baseCallee, ctorLanes) || SymbolTable::IsSimdMatrixType(baseCallee)){
                 emitSimdVectorCtorReg(out, simdType, expr.arguments);
                 return;
             }
@@ -484,8 +467,8 @@ void SourceEmitter::emitSimdRegExpr(
             if(callee == "mul" && expr.arguments.size() == 2u && expr.arguments[0] && expr.arguments[1]){
                 const MStringView lhsSimd = expr.arguments[0]->resolvedSimdType;
                 const MStringView rhsSimd = expr.arguments[1]->resolvedSimdType;
-                const b8 lhsIsMat = m_symbols.isSimdMatrixType(lhsSimd);
-                const b8 rhsIsMat = m_symbols.isSimdMatrixType(rhsSimd);
+                const b8 lhsIsMat = SymbolTable::IsSimdMatrixType(lhsSimd);
+                const b8 rhsIsMat = SymbolTable::IsSimdMatrixType(rhsSimd);
                 if(lhsIsMat && rhsIsMat){
                     out.append(isDouble ? "::MatrixDoubleMultiply(" : "::MatrixMultiply(");
                     emitSimdRegExpr(out, *expr.arguments[0], lhsSimd);
@@ -506,11 +489,12 @@ void SourceEmitter::emitSimdRegExpr(
             }
             if(callee == "transpose" && !expr.arguments.empty() && expr.arguments[0]){
                 const Expr& arg0 = *expr.arguments[0];
-                if(arg0.kind == ExprKind::Call && arg0.lhs && arg0.lhs->kind == ExprKind::Identifier
+                if(
+                    arg0.kind == ExprKind::Call && arg0.lhs && arg0.lhs->kind == ExprKind::Identifier
                     && arg0.lhs->text == "mul" && arg0.arguments.size() == 2u && arg0.arguments[0] && arg0.arguments[1]
-                    && m_symbols.isSimdMatrixType(arg0.arguments[0]->resolvedSimdType)
-                    && m_symbols.isSimdMatrixType(arg0.arguments[1]->resolvedSimdType))
-                {
+                    && SymbolTable::IsSimdMatrixType(arg0.arguments[0]->resolvedSimdType)
+                    && SymbolTable::IsSimdMatrixType(arg0.arguments[1]->resolvedSimdType)
+                ){
                     out.append(isDouble ? "::MatrixDoubleMultiplyTranspose(" : "::MatrixMultiplyTranspose(");
                     emitSimdRegExpr(out, *arg0.arguments[0], arg0.arguments[0]->resolvedSimdType);
                     out.append(", ");

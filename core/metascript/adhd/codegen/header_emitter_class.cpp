@@ -127,13 +127,6 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append("    NWB_DEFINE_ASSET_TYPE(\"");
         out.append(decl.componentAssetTypeName.data(), decl.componentAssetTypeName.size());
         out.append("\")\r\n\r\n");
-        out.append("public:\r\n    ");
-        if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type){
-            m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
-            out.push_back(' ');
-            out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
-            out.append(";\r\n\r\n");
-        }
         out.append("public:\r\n");
         out.append("    using ::NWB::Impl::TypedComponent<");
         out.append(decl.name.data(), decl.name.size());
@@ -149,7 +142,14 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append("    }\r\n");
         out.append("#if defined(NWB_COOK)\r\n");
         out.append("    [[nodiscard]] virtual b8 serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
-        out.append("#endif\r\n");
+        out.append("#endif\r\n\r\n");
+        out.append("public:\r\n    ");
+        if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type){
+            m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
+            out.push_back(' ');
+            out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
+            out.append(";\r\n");
+        }
         out.append("};\r\n\r\n");
         return;
     }
@@ -223,20 +223,14 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
                 out.append(", ");
             out.append("public ");
             if(decl.implementedInterfaces[i]){
-                const TypeRef* resolvedIface = m_symbols.substituteTypeParams(
-                    *decl.implementedInterfaces[i],
-                    decl.templateParams,
-                    inst.templateArgs
-                );
+                const TypeRef* resolvedIface = m_symbols.substituteTypeParams(*decl.implementedInterfaces[i], decl.templateParams, inst.templateArgs);
                 m_typeEmitter.emitTypeCpp(out, *resolvedIface);
             }
         }
     }
     out.append("{\r\n");
 
-    const usize aliasCount = decl.templateParams.size() < inst.templateArgs.size()
-        ? decl.templateParams.size()
-        : inst.templateArgs.size();
+    const usize aliasCount = decl.templateParams.size() < inst.templateArgs.size() ? decl.templateParams.size() : inst.templateArgs.size();
     if(aliasCount > 0u){
         out.append("private:\r\n");
         for(usize i = 0u; i < aliasCount; ++i){
@@ -279,12 +273,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
     out.append("\r\n");
 }
 
-void HeaderEmitter::emitClassMethodsCpp(
-    MString& out,
-    const ClassDecl& decl,
-    const Span<const FieldDecl* const> orderedFields,
-    const b8 forceInlineBody
-)const{
+void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> orderedFields, const b8 forceInlineBody)const{
     if(decl.needsClassArena){
         out.append("private:\r\n");
         out.append("    inline static ::NWB::Core::Alloc::GlobalArena s_ClassArena{::Name(\"");
@@ -360,30 +349,23 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl*
         }
         else if(field->hasCtorInit){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            m_sourceEmitter.emitCtorOrCallArgs(
-                out,
-                baseFieldType,
-                field->ctorArgs,
-                field->usesClassArena ? MStringView("s_ClassArena") : MStringView{},
-                true,
-                true
-            );
+            m_sourceEmitter.emitCtorOrCallArgs(out, baseFieldType, field->ctorArgs, field->usesClassArena ? MStringView("s_ClassArena") : MStringView{}, true, true);
         }
         else if(field->usesClassArena){
             out.append("{s_ClassArena}");
         }
         else if(fieldRefMode == ParamPassingMode::None){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            if(baseFieldType == "Array"
+            if(
+                baseFieldType == "Array"
                 || baseFieldType == "Span"
                 || baseFieldType == "StringView"
                 || baseFieldType == "NameHash"
-                || SymbolTable::isUnalignedVectorType(baseFieldType)
+                || SymbolTable::IsUnalignedVectorType(baseFieldType)
                 || m_symbols.findEnum(baseFieldType) != nullptr
-                || m_symbols.findClass(baseFieldType) != nullptr)
-            {
+                || m_symbols.findClass(baseFieldType) != nullptr
+            )
                 out.append("{}");
-            }
         }
         out.append(";\r\n");
     }
@@ -397,3 +379,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

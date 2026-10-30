@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 
 AvboitMaterialUploadBuilder::AvboitMaterialUploadBuilder(Core::GpuTaskGraph& graph, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
-    , m_csgSystem(csgSystem){
-}
+    , m_csgSystem(csgSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +46,6 @@ struct UploadIdentities{
     NameText<char> clipIdentity;
     AStringView clipLabel;
 };
-
 
 [[nodiscard]] UploadIdentities IdentitiesForPhase(AvboitMaterialUploadPhase::Enum phase)noexcept{
     switch(phase){

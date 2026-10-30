@@ -27,9 +27,8 @@ NWB_IMPL_BEGIN
 FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem){
-}
-
+    , m_csgSystem(csgSystem)
+{}
 
 Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploadChain::declare(
     Core::Alloc::ScratchArena& scratchArena,
@@ -114,9 +113,7 @@ Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploa
 
             const MaterialPassDrawItemsView extinctionMaterialGeometryDrawSets[] = { extinctionDrawItems.regular, extinctionDrawItems.csg, };
             AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
-            auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Extinction, }
-            );
+            auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(AvboitGeometryPreparationInputs{ .drawItemSets = extinctionMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Extinction, });
             if(!extinctionGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
             avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = extinctionGeometryPreparationResult->geometryOwned;

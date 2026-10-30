@@ -22,7 +22,6 @@ NWB_IMPL_BEGIN
 
 class RendererAvboitSystem;
 
-
 // AVBOIT clear chain owns serial target clears feeding the occupancy dependency.
 struct AvboitClearChainInputs{
     Core::GpuGraphResourceId lowRaster;

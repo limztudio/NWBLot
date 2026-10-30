@@ -28,7 +28,6 @@ struct SourceTriangleCorner{
 };
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
-
 struct MeshSkinInfluenceHasher{
     usize operator()(const MeshSkinInfluence& value)const noexcept{
         usize seed = Hasher<u16>{}(value.joint[0u]);
@@ -39,7 +38,6 @@ struct MeshSkinInfluenceHasher{
         return seed;
     }
 };
-
 
 struct SourceVertexRefHasher{
     usize operator()(const SourceVertexRef& value)const noexcept{
@@ -53,7 +51,6 @@ struct SourceVertexRefHasher{
     }
 };
 
-
 struct SourceVertexRefEqual{
     b8 operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
         return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
@@ -66,19 +63,7 @@ using Vec4IndexMap = UtilityScratchMap<Vec4, u32>;
 using MeshSkinInfluenceIndexMap = UtilityScratchMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
 using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
 
-
 struct SourceMeshBuildContext{
-    SourceMeshStreams& mesh;
-    Core::Alloc::ScratchArena& scratchArena;
-    Vec3IndexMap positions;
-    Vec3IndexMap normals;
-    Vec4IndexMap tangents;
-    Vec2IndexMap uv0;
-    Vec4IndexMap colors;
-    MeshSkinInfluenceIndexMap skin;
-    SourceVertexRefIndexMap vertexRefs;
-
-
 public:
     SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
         : mesh(sourceMesh)
@@ -91,6 +76,18 @@ public:
         , skin(sourceScratchArena)
         , vertexRefs(sourceScratchArena)
     {}
+
+
+public:
+    SourceMeshStreams& mesh;
+    Core::Alloc::ScratchArena& scratchArena;
+    Vec3IndexMap positions;
+    Vec3IndexMap normals;
+    Vec4IndexMap tangents;
+    Vec2IndexMap uv0;
+    Vec4IndexMap colors;
+    MeshSkinInfluenceIndexMap skin;
+    SourceVertexRefIndexMap vertexRefs;
 };
 
 

@@ -52,7 +52,6 @@ NWB_IMPL_BEGIN
 class ActiveSceneSubsystems;
 class RendererFramePipeline;
 
-
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
 private:
     using PipelineOwner = Core::GlobalUniquePtr<RendererFramePipeline>;

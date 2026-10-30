@@ -55,33 +55,30 @@ class MeshBinaryHeader{
 b8 ValidSkinInfluenceWeights(in f32x4u weights){
     for(usize i = 0u; i < 4u; ++i){
         const f32 w = weights[i];
-        if(!isFinite(w) || w < 0.0f){
+        if(!isFinite(w) || w < 0.0f)
             return false;
-        }
     }
     const f32 sum = weights[0u] + weights[1u] + weights[2u] + weights[3u];
     return isFinite(sum) && abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
 b8 SkinInfluenceFitsSkeleton(in SkinInfluence4 skin, in u32 skeletonJointCount){
-    if(skeletonJointCount == 0u){
+    if(skeletonJointCount == 0u)
         return true;
-    }
     for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
         const u32 joint = cast<u32>(skin.joint[influenceIndex]);
-        if(joint >= skeletonJointCount){
+        if(joint >= skeletonJointCount)
             return false;
-        }
     }
     return true;
 }
 
 b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJointCount){
-    if(inverseBindMatrixCount == 0u){
+    if(inverseBindMatrixCount == 0u)
         return true;
-    }
     return skeletonJointCount != 0u && inverseBindMatrixCount == cast<usize>(skeletonJointCount);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

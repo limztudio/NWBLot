@@ -27,13 +27,6 @@ struct DeferredFrameTargets;
 
 // Hardware caustics resolve chain owns prepare plus wavelet plus upsample plus timing-close declaration.
 struct HardwareCausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
-    DeferredFrameTargets& targets;
-    Core::GpuTaskId geometryTask;
-    Core::GpuTaskSchedulingHint baseScheduling;
-    b8& producerDispatched;
-    Core::GpuTimingSubmissionTicket& timingTicket;
-    Optional<Core::GpuTimingMeasure>& resolveTiming;
-
 public:
     HardwareCausticsResolveChainInputs(DeferredFrameTargets& targetsIn, b8& producerDispatchedIn, Core::GpuTimingSubmissionTicket& timingTicketIn, Optional<Core::GpuTimingMeasure>& resolveTimingIn)noexcept
         : targets(targetsIn)
@@ -41,6 +34,15 @@ public:
         , timingTicket(timingTicketIn)
         , resolveTiming(resolveTimingIn)
     {}
+
+
+public:
+    DeferredFrameTargets& targets;
+    Core::GpuTaskId geometryTask;
+    Core::GpuTaskSchedulingHint baseScheduling;
+    b8& producerDispatched;
+    Core::GpuTimingSubmissionTicket& timingTicket;
+    Optional<Core::GpuTimingMeasure>& resolveTiming;
 };
 
 struct HardwareCausticsResolveChainResult : public CausticsResolveChainStageTasks{

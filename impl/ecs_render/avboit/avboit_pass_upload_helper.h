@@ -29,7 +29,6 @@ NWB_IMPL_BEGIN
 class RendererMaterialSystem;
 class CsgFrameState;
 
-
 // Shared AVBOIT pass upload owns gather plus readiness checks for occupancy, extinction, and accumulation.
 struct AvboitPassUploadInputs{
     Core::Framebuffer& framebuffer;
@@ -80,3 +79,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

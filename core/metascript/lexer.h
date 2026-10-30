@@ -27,9 +27,7 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
 }
 
 [[nodiscard]] constexpr u32 HexDigitValue(const MChar c)noexcept{
-    return IsAsciiDigit(c)
-        ? static_cast<u32>(c - '0')
-        : static_cast<u32>((c >= 'a' && c <= 'f') ? (c - 'a' + 10) : (c - 'A' + 10));
+    return IsAsciiDigit(c) ? static_cast<u32>(c - '0') : static_cast<u32>((c >= 'a' && c <= 'f') ? (c - 'a' + 10) : (c - 'A' + 10));
 }
 
 [[nodiscard]] constexpr b8 IsBinaryDigit(const MChar c)noexcept{
@@ -228,7 +226,7 @@ struct Token{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Lexer{
+class Lexer final{
 public:
     explicit Lexer(MStringView source)noexcept;
 
@@ -245,12 +243,12 @@ private:
     [[nodiscard]] Token readString()noexcept;
     [[nodiscard]] Token readCharLiteral()noexcept;
     [[nodiscard]] Token makeToken(TokenType::Enum type, usize length)noexcept;
-    [[nodiscard]] Token makeErrorToken(MStringView message)noexcept;
+    [[nodiscard]] Token makeErrorToken(MStringView message)noexcept{ return makeErrorToken(message, m_line, m_column); }
     [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column)noexcept;
 
-    [[nodiscard]] MChar peek()const noexcept;
-    [[nodiscard]] MChar peekNext()const noexcept;
-    [[nodiscard]] MChar peekAt(usize offset)const noexcept;
+    [[nodiscard]] MChar peek()const noexcept{ return peekAt(0u); }
+    [[nodiscard]] MChar peekNext()const noexcept{ return peekAt(1u); }
+    [[nodiscard]] MChar peekAt(const usize offset)const noexcept{ return m_current + offset >= m_source.size() ? '\0' : m_source[m_current + offset]; }
     MChar advance()noexcept;
     [[nodiscard]] b8 isAtEnd()const noexcept{ return m_current >= m_source.size(); }
 

@@ -8,17 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+namespace __hidden_adhd_compiler_core_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace NWB::AdhdCompilerTestsDetail;
+
 TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
     using StatelessFn = InplaceFunction<0u, i32(i32, i32)>;
     static_assert(sizeof(StatelessFn) == sizeof(void*), "Stateless InplaceFunction<0> must be 1 pointer wide");
 
-    StatelessFn addFn([](const i32 a, const i32 b) -> i32{ return a + b; });
+    StatelessFn addFn([](const i32 a, const i32 b)noexcept -> i32{ return a + b; });
     ASSERT_TRUE(static_cast<b8>(addFn));
     EXPECT_EQ(addFn(10, 22), 32);
 
@@ -33,7 +35,7 @@ TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
     EXPECT_EQ(cFirst(addFn.userData(), 8, 9), 17);
 
     i32 accumulator = 100;
-    InplaceFunction<64u, i32(i32)> statefulFn([&accumulator](const i32 delta) -> i32{
+    InplaceFunction<64u, i32(i32)> statefulFn([&accumulator](const i32 delta)noexcept -> i32{
         accumulator += delta;
         return accumulator;
     });
@@ -69,7 +71,7 @@ TEST(AdhdPreprocessor, DeduplicatesIncludesAndSupportsMacrosInNwbAndAdhd){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_AdhdSource, "impl/math/compute.adhd", arena.arena, result, &resolver));
+    ASSERT_TRUE(Compiler::Compile(s_AdhdSource, "impl/math/compute.adhd", arena.arena, result, &resolver));
     EXPECT_EQ(resolver.resolveCallCount, 1u);
 }
 
@@ -91,7 +93,7 @@ TEST(AdhdCompiler, ReordersClassFieldsByDescendingAlignmentAndSize){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/scene/transform_node.adhd", arena.arena, result));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/scene/transform_node.adhd", arena.arena, result));
     ASSERT_EQ(result.unit.classes.size(), 1u);
 
     const auto* cls = result.unit.classes[0];
@@ -122,7 +124,7 @@ TEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/assets/binary_header.adhd", arena.arena, result));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/assets/binary_header.adhd", arena.arena, result));
     ASSERT_EQ(result.unit.classes.size(), 1u);
 
     const auto* cls = result.unit.classes[0];
@@ -147,7 +149,7 @@ TEST(AdhdCompiler, SerializeClassPacksTightlyInSourceOrder){
         "}\r\n";
 
     CompileResult simdResult(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_SimdOrderSource, "impl/assets/simd_payload.adhd", arena.arena, simdResult));
+    ASSERT_TRUE(Compiler::Compile(s_SimdOrderSource, "impl/assets/simd_payload.adhd", arena.arena, simdResult));
     ASSERT_EQ(simdResult.unit.classes.size(), 1u);
 
     const auto* simdCls = simdResult.unit.classes[0];
@@ -173,7 +175,7 @@ TEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses){
         "}\r\n";
 
     CompileResult validRes(arena.arena);
-    EXPECT_TRUE(Compiler::compile(s_ValidSource, "impl/task/physics_task.adhd", arena.arena, validRes));
+    EXPECT_TRUE(Compiler::Compile(s_ValidSource, "impl/task/physics_task.adhd", arena.arena, validRes));
 
     static constexpr MStringView s_MissingOverrideSource =
         "interface ITask {\r\n"
@@ -185,7 +187,7 @@ TEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses){
         "}\r\n";
 
     CompileResult missingOverrideRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MissingOverrideSource, "impl/task/bad_task.adhd", arena.arena, missingOverrideRes));
+    EXPECT_FALSE(Compiler::Compile(s_MissingOverrideSource, "impl/task/bad_task.adhd", arena.arena, missingOverrideRes));
 
     static constexpr MStringView s_ClassInheritanceSource =
         "class BaseClass {\r\n"
@@ -196,7 +198,7 @@ TEST(AdhdCompiler, EnforcesInterfaceOverrideAndFinalClasses){
         "}\r\n";
 
     CompileResult classInheritRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ClassInheritanceSource, "impl/task/derived.adhd", arena.arena, classInheritRes));
+    EXPECT_FALSE(Compiler::Compile(s_ClassInheritanceSource, "impl/task/derived.adhd", arena.arena, classInheritRes));
 }
 
 TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
@@ -207,7 +209,7 @@ TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
         "    u32 count;\r\n"
         "}\r\n";
     CompileResult res1(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UninitLocal, "impl/test.adhd", arena.arena, res1));
+    EXPECT_FALSE(Compiler::Compile(s_UninitLocal, "impl/test.adhd", arena.arena, res1));
 
     static constexpr MStringView s_DoubleInitCtor =
         "class DoubleInit {\r\n"
@@ -217,20 +219,20 @@ TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
         "    }\r\n"
         "}\r\n";
     CompileResult res2(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DoubleInitCtor, "impl/test.adhd", arena.arena, res2));
+    EXPECT_FALSE(Compiler::Compile(s_DoubleInitCtor, "impl/test.adhd", arena.arena, res2));
 
     static constexpr MStringView s_BitfieldClass =
         "class BitfieldBad {\r\n"
         "    public u32 flag : 1;\r\n"
         "}\r\n";
     CompileResult res3(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BitfieldClass, "impl/test.adhd", arena.arena, res3));
+    EXPECT_FALSE(Compiler::Compile(s_BitfieldClass, "impl/test.adhd", arena.arena, res3));
 
     static constexpr MStringView s_DefaultArgFn =
         "void badFn(in u32 x = 5) {\r\n"
         "}\r\n";
     CompileResult res4(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DefaultArgFn, "impl/test.adhd", arena.arena, res4));
+    EXPECT_FALSE(Compiler::Compile(s_DefaultArgFn, "impl/test.adhd", arena.arena, res4));
 
     static constexpr MStringView s_MoveCall =
         "void consume(in u32 x) {}\r\n"
@@ -239,14 +241,14 @@ TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
         "    consume(Move(local));\r\n"
         "}\r\n";
     CompileResult res5(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MoveCall, "impl/test.adhd", arena.arena, res5));
+    EXPECT_FALSE(Compiler::Compile(s_MoveCall, "impl/test.adhd", arena.arena, res5));
 
     static constexpr MStringView s_MutateInParam =
         "void badMutate(in u32 a) {\r\n"
         "    a = 10;\r\n"
         "}\r\n";
     CompileResult res6(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MutateInParam, "impl/test.adhd", arena.arena, res6));
+    EXPECT_FALSE(Compiler::Compile(s_MutateInParam, "impl/test.adhd", arena.arena, res6));
 }
 
 TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
@@ -283,7 +285,7 @@ TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/frame/runner.adhd", arena.arena, result));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/frame/runner.adhd", arena.arena, result));
 
     const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
     EXPECT_NE(cppView.find("InplaceFunction<0u,"), MStringView::npos);
@@ -324,7 +326,7 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/render/material_def.adhd", arena.arena, result, nullptr, "NWB::CustomRender"));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/render/material_def.adhd", arena.arena, result, nullptr, "NWB::CustomRender"));
     ASSERT_EQ(result.unit.templateInstantiations.size(), 1u);
     ASSERT_EQ(result.unit.templateInstantiations[0]->orderedFields.size(), 2u);
     EXPECT_EQ(result.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
@@ -346,7 +348,7 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "    return a + b;\r\n"
         "}\r\n";
     CompileResult freeOpResult(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_FreeOpSource, "impl/render/bad_op.adhd", arena.arena, freeOpResult));
+    EXPECT_FALSE(Compiler::Compile(s_FreeOpSource, "impl/render/bad_op.adhd", arena.arena, freeOpResult));
 
     static constexpr MStringView s_UnimplementedMethodSource =
         "class Incomplete {\r\n"
@@ -354,7 +356,7 @@ TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
         "    public void missingBody(in u32 v);\r\n"
         "}\r\n";
     CompileResult unimplResult(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnimplementedMethodSource, "impl/render/incomplete.adhd", arena.arena, unimplResult));
+    EXPECT_FALSE(Compiler::Compile(s_UnimplementedMethodSource, "impl/render/incomplete.adhd", arena.arena, unimplResult));
 }
 
 TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
@@ -368,7 +370,7 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
         "    increment(inputVal);\r\n"
         "}\r\n";
     CompileResult mutRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MutLiteralCall, "impl/test_mut.adhd", arena.arena, mutRes));
+    EXPECT_FALSE(Compiler::Compile(s_MutLiteralCall, "impl/test_mut.adhd", arena.arena, mutRes));
 
     static constexpr MStringView s_UnsafeParallelVector =
         "void gatherBad(mut Vector<u32> outItems) {\r\n"
@@ -377,7 +379,7 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
         "    }\r\n"
         "}\r\n";
     CompileResult unsafeParRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnsafeParallelVector, "impl/test_par_bad.adhd", arena.arena, unsafeParRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnsafeParallelVector, "impl/test_par_bad.adhd", arena.arena, unsafeParRes));
 
     static constexpr MStringView s_SafeParallelVector =
         "void gatherGood(mut ParallelVector<u32> outItems, mut Vector<u32> indexedOut) {\r\n"
@@ -387,7 +389,7 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
         "    }\r\n"
         "}\r\n";
     CompileResult safeParRes(arena.arena);
-    EXPECT_TRUE(Compiler::compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
+    EXPECT_TRUE(Compiler::Compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
 }
 
 TEST(AdhdCompiler, SupportsCharLiteralsLineContinuationsInlineAttributesAndOverloadResolution){
@@ -443,7 +445,7 @@ TEST(AdhdCompiler, SupportsCharLiteralsLineContinuationsInlineAttributesAndOverl
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/test_char_inline_overload.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/test_char_inline_overload.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -488,7 +490,7 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "}\r\n";
 
     CompileResult reflectRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ReflectSerializeSource, "impl/test_bundle_reflect.adhd", arena.arena, reflectRes));
+    ASSERT_TRUE(Compiler::Compile(s_ReflectSerializeSource, "impl/test_bundle_reflect.adhd", arena.arena, reflectRes));
     const MStringView reflectHdr(reflectRes.generatedHeader.data(), reflectRes.generatedHeader.size());
     const MStringView reflectCpp(reflectRes.generatedSource.data(), reflectRes.generatedSource.size());
 
@@ -512,7 +514,7 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "    flag F8\r\n"
         "}\r\n";
     CompileResult overflowFlagRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_OverflowFlagEnum, "impl/bad_flag_overflow.adhd", arena.arena, overflowFlagRes));
+    EXPECT_FALSE(Compiler::Compile(s_OverflowFlagEnum, "impl/bad_flag_overflow.adhd", arena.arena, overflowFlagRes));
 
     static constexpr MStringView s_BadFloatSwitch =
         "void badSwitch(in f32 v) {\r\n"
@@ -522,7 +524,7 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "    }\r\n"
         "}\r\n";
     CompileResult badSwitchRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadFloatSwitch, "impl/bad_float_switch.adhd", arena.arena, badSwitchRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadFloatSwitch, "impl/bad_float_switch.adhd", arena.arena, badSwitchRes));
 
     static constexpr MStringView s_DupCaseSwitch =
         "void dupSwitch(in i32 v) {\r\n"
@@ -536,7 +538,7 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "    }\r\n"
         "}\r\n";
     CompileResult dupCaseRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DupCaseSwitch, "impl/bad_dup_case.adhd", arena.arena, dupCaseRes));
+    EXPECT_FALSE(Compiler::Compile(s_DupCaseSwitch, "impl/bad_dup_case.adhd", arena.arena, dupCaseRes));
 
     static constexpr MStringView s_PartialCtorInit =
         "class PartialInit {\r\n"
@@ -548,7 +550,7 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "    }\r\n"
         "}\r\n";
     CompileResult partialCtorRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_PartialCtorInit, "impl/bad_partial_ctor.adhd", arena.arena, partialCtorRes));
+    EXPECT_FALSE(Compiler::Compile(s_PartialCtorInit, "impl/bad_partial_ctor.adhd", arena.arena, partialCtorRes));
 
     static constexpr MStringView s_CallNonFuncField =
         "class NonCallableField {\r\n"
@@ -558,13 +560,13 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
         "    }\r\n"
         "}\r\n";
     CompileResult nonFuncFieldRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_CallNonFuncField, "impl/bad_call_field.adhd", arena.arena, nonFuncFieldRes));
+    EXPECT_FALSE(Compiler::Compile(s_CallNonFuncField, "impl/bad_call_field.adhd", arena.arena, nonFuncFieldRes));
 
     static constexpr MStringView s_ConflictingInlineAttrs =
         "[inline, noinline]\r\n"
         "void badAttrs() {}\r\n";
     CompileResult badAttrRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ConflictingInlineAttrs, "impl/bad_inline_attrs.adhd", arena.arena, badAttrRes));
+    EXPECT_FALSE(Compiler::Compile(s_ConflictingInlineAttrs, "impl/bad_inline_attrs.adhd", arena.arena, badAttrRes));
 }
 
 TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
@@ -607,7 +609,7 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
         "#endif\r\n";
 
     CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ValidPass2Source, "impl/pass2_valid.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidPass2Source, "impl/pass2_valid.adhd", arena.arena, validRes));
     const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
     EXPECT_NE(hdrView.find("#include <core/task/cpu/scheduler.h>"), MStringView::npos);
     EXPECT_NE(hdrView.find("unalignedVec.raw[0]"), MStringView::npos);
@@ -616,27 +618,27 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
     static constexpr MStringView s_BadHexLiteral =
         "const u32 kBad = 0x1G;\r\n";
     CompileResult badHexRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadHexLiteral, "impl/bad_hex.adhd", arena.arena, badHexRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadHexLiteral, "impl/bad_hex.adhd", arena.arena, badHexRes));
 
     static constexpr MStringView s_DupMacroParam =
         "#define BAD_MACRO(x, x) (x)\r\n"
         "const i32 kVal = 1;\r\n";
     CompileResult dupMacroRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DupMacroParam, "impl/bad_macro_param.adhd", arena.arena, dupMacroRes));
+    EXPECT_FALSE(Compiler::Compile(s_DupMacroParam, "impl/bad_macro_param.adhd", arena.arena, dupMacroRes));
 
     static constexpr MStringView s_UnaryCStyleCast =
         "i32 badCast() {\r\n"
         "    return (i32)-1;\r\n"
         "}\r\n";
     CompileResult unaryCastRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_UnaryCStyleCast, "impl/bad_unary_cast.adhd", arena.arena, unaryCastRes));
+    EXPECT_FALSE(Compiler::Compile(s_UnaryCStyleCast, "impl/bad_unary_cast.adhd", arena.arena, unaryCastRes));
 
     static constexpr MStringView s_BitCastSizeMismatch =
         "u64 badBitCast(in f32 x) {\r\n"
         "    return bit_cast<u64>(x);\r\n"
         "}\r\n";
     CompileResult bitCastRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BitCastSizeMismatch, "impl/bad_bit_cast.adhd", arena.arena, bitCastRes));
+    EXPECT_FALSE(Compiler::Compile(s_BitCastSizeMismatch, "impl/bad_bit_cast.adhd", arena.arena, bitCastRes));
 
     static constexpr MStringView s_DanglingLocalReturn =
         "in i32 badReturnRef() {\r\n"
@@ -644,7 +646,7 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
         "    return localVal;\r\n"
         "}\r\n";
     CompileResult danglingRetRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DanglingLocalReturn, "impl/bad_dangling_ret.adhd", arena.arena, danglingRetRes));
+    EXPECT_FALSE(Compiler::Compile(s_DanglingLocalReturn, "impl/bad_dangling_ret.adhd", arena.arena, danglingRetRes));
 
     static constexpr MStringView s_RvalueMutArg =
         "void mutateInt(mut i32 v) { v = v + 1; }\r\n"
@@ -652,7 +654,7 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
         "    mutateInt(a + b);\r\n"
         "}\r\n";
     CompileResult rvalueMutRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_RvalueMutArg, "impl/bad_rvalue_mut.adhd", arena.arena, rvalueMutRes));
+    EXPECT_FALSE(Compiler::Compile(s_RvalueMutArg, "impl/bad_rvalue_mut.adhd", arena.arena, rvalueMutRes));
 
     static constexpr MStringView s_EarlyReturnCtor =
         "class EarlyRetClass {\r\n"
@@ -665,7 +667,7 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
         "    }\r\n"
         "}\r\n";
     CompileResult earlyRetCtorRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_EarlyReturnCtor, "impl/bad_early_ret_ctor.adhd", arena.arena, earlyRetCtorRes));
+    EXPECT_FALSE(Compiler::Compile(s_EarlyReturnCtor, "impl/bad_early_ret_ctor.adhd", arena.arena, earlyRetCtorRes));
 
     static constexpr MStringView s_ParallelForSet =
         "void badParSet(in Set<i32> items) {\r\n"
@@ -673,7 +675,7 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
         "    }\r\n"
         "}\r\n";
     CompileResult parSetRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ParallelForSet, "impl/bad_par_set.adhd", arena.arena, parSetRes));
+    EXPECT_FALSE(Compiler::Compile(s_ParallelForSet, "impl/bad_par_set.adhd", arena.arena, parSetRes));
 }
 
 TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
@@ -749,7 +751,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "}\r\n";
 
     CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_ValidPass3Source, "impl/pass3_valid.adhd", arena.arena, validRes));
+    ASSERT_TRUE(Compiler::Compile(s_ValidPass3Source, "impl/pass3_valid.adhd", arena.arena, validRes));
     const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
     const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
     EXPECT_NE(hdrView.find("Vector<::InplaceFunction<64u, i32(i32)>> callbacks{s_ClassArena};"), MStringView::npos);
@@ -772,7 +774,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "    }\r\n"
         "}\r\n";
     CompileResult simdLoopRes(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_SimdLoopScopeSource, "impl/simd_loop_scope.adhd", arena.arena, simdLoopRes));
+    ASSERT_TRUE(Compiler::Compile(s_SimdLoopScopeSource, "impl/simd_loop_scope.adhd", arena.arena, simdLoopRes));
     const MStringView simdLoopCpp(simdLoopRes.generatedSource.data(), simdLoopRes.generatedSource.size());
     EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n            continue;"), MStringView::npos);
     EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n        break;"), MStringView::npos);
@@ -780,7 +782,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
     static constexpr MStringView s_BadSurrogateEscape =
         "const u32 kSurrogate = '\\uD800';\r\n";
     CompileResult badSurrogateRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadSurrogateEscape, "impl/bad_surrogate.adhd", arena.arena, badSurrogateRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadSurrogateEscape, "impl/bad_surrogate.adhd", arena.arena, badSurrogateRes));
 
     static constexpr MStringView s_BadEmptyAttrParens =
         "[reflect()]\r\n"
@@ -788,14 +790,14 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "    public i32 x = 0;\r\n"
         "}\r\n";
     CompileResult badAttrRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadEmptyAttrParens, "impl/bad_attr.adhd", arena.arena, badAttrRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadEmptyAttrParens, "impl/bad_attr.adhd", arena.arena, badAttrRes));
 
     static constexpr MStringView s_BadDupConstMethod =
         "class DupConst {\r\n"
         "    public i32 get()const const { return 0; }\r\n"
         "}\r\n";
     CompileResult badDupConstRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadDupConstMethod, "impl/bad_dup_const.adhd", arena.arena, badDupConstRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadDupConstMethod, "impl/bad_dup_const.adhd", arena.arena, badDupConstRes));
 
     static constexpr MStringView s_BadDependentBound =
         "interface IBound {\r\n"
@@ -808,7 +810,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "    public ReqBound<U> inner;\r\n"
         "}\r\n";
     CompileResult badDepBoundRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadDependentBound, "impl/bad_dep_bound.adhd", arena.arena, badDepBoundRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadDependentBound, "impl/bad_dep_bound.adhd", arena.arena, badDepBoundRes));
 
     static constexpr MStringView s_BadInInterfaceMutCall =
         "interface IMutator {\r\n"
@@ -818,7 +820,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "    m.mutate();\r\n"
         "}\r\n";
     CompileResult badInIfaceRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadInInterfaceMutCall, "impl/bad_in_iface.adhd", arena.arena, badInIfaceRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadInInterfaceMutCall, "impl/bad_in_iface.adhd", arena.arena, badInIfaceRes));
 
     static constexpr MStringView s_BadParallelContainerLambda =
         "void badParLambda() {\r\n"
@@ -831,7 +833,7 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "    }\r\n"
         "}\r\n";
     CompileResult badParLamRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadParallelContainerLambda, "impl/bad_par_lam.adhd", arena.arena, badParLamRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadParallelContainerLambda, "impl/bad_par_lam.adhd", arena.arena, badParLamRes));
 }
 
 

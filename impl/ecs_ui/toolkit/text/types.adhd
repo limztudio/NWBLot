@@ -74,17 +74,20 @@ b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
 // This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
 TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
     if(
-        request.text.size() > s_TextMaxBytes || !isFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale
-        || request.fontSize > s_TextMaxFontSize || request.scriptTag == 0u || request.language.empty() || request.language.size() > s_TextMaxLanguageBytes
+        request.text.size() > s_TextMaxBytes
+        || !isFinite(request.fontSize)
+        || request.fontSize < 1.0f / s_TextFixedPointScale
+        || request.fontSize > s_TextMaxFontSize
+        || request.scriptTag == 0u
+        || request.language.empty()
+        || request.language.size() > s_TextMaxLanguageBytes
         || (request.direction != TextDirection::Enum::LeftToRight && request.direction != TextDirection::Enum::RightToLeft)
-    ){
+    )
         return TextLayoutStatus::Enum::InvalidParameters;
-    }
     for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
         const u32 letter = (request.scriptTag >> (byte * s_ScriptTagBitsPerByte)) & s_ScriptTagLetterMask;
-        if(!IsTextAsciiAlpha(letter)){
+        if(!IsTextAsciiAlpha(letter))
             return TextLayoutStatus::Enum::InvalidParameters;
-        }
     }
     b8 validLanguage = true;
     const StringView language = request.language;
@@ -96,9 +99,8 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
             }
         }
     }
-    if(!validLanguage){
+    if(!validLanguage)
         return TextLayoutStatus::Enum::InvalidParameters;
-    }
     TextLayoutStatus utf8Status = TextLayoutStatus::Enum::Success;
     const StringView text = request.text;
     native(in text, in allowLineBreaks, mut utf8Status){
@@ -134,3 +136,4 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

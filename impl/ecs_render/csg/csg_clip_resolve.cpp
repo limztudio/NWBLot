@@ -165,7 +165,6 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
     CopyCsgCutterInlineParameters(resolvedCutter.parameterBytes(), resolvedCutter.parameterByteSize(), outCutter);
 }
 
-
 [[nodiscard]] static Expected<CsgResolvedClipCutter> ResolveReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
@@ -197,7 +196,6 @@ static void BuildResolvedClipCutterGpuData(const CsgResolvedClipCutter& resolved
 
     return resolvedCutter;
 }
-
 
 template<typename CutterTransformLoader, typename CutterHandler>
 [[nodiscard]] static b8 ForEachReceiverClipCutter(
@@ -370,9 +368,8 @@ Expected<CsgReceiverClipDrawInfo> RendererCsgSystem::resolveCsgReceiverClipDrawI
             if(resolvedCutter.shapeType.desc.shaderModule){
                 if(!info.evaluatorVariant)
                     info.evaluatorVariant = resolvedCutter.shapeType.desc.shaderModule;
-                else if(info.evaluatorVariant != resolvedCutter.shapeType.desc.shaderModule){
+                else if(info.evaluatorVariant != resolvedCutter.shapeType.desc.shaderModule)
                     return false;
-                }
             }
             if(info.cutterCount < Limit<u32>::s_Max)
                 ++info.cutterCount;
@@ -436,20 +433,17 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         },
         [&](const __hidden_csg_clip_resolve::CsgResolvedClipCutter& resolvedCutter){
             CsgCutterGpuData cutterGpuData;
-            if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
+            if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max))
                 return false;
-            }
             const SIMDMatrix worldToShape = resolvedCutter.worldToShape;
             cutterGpuData = CsgCutterGpuData{};
             StoreFloat(worldToShape, cutterGpuData.worldToShape);
             __hidden_csg_clip_resolve::BuildResolvedClipCutterGpuData(resolvedCutter, VectorGetX(__hidden_csg_clip_resolve::ComputeWorldToShapeScaleBound(worldToShape)), cutterGpuData);
 
-            if(meshViewReady && resolvedCutter.workBounds.valid){
+            if(meshViewReady && resolvedCutter.workBounds.valid)
                 receiverWorkRegion.expandWorldBounds(worldToClip, resolvedCutter.workBounds.minBounds, resolvedCutter.workBounds.maxBounds, frameWidth, frameHeight);
-            }
-            else{
+            else
                 receiverWorkRegion.expandFull();
-            }
 
             csgFrameData.cutters.push_back(cutterGpuData);
             ++range.cutterCount;
@@ -461,9 +455,8 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
     range.screenWorkRect = UInt4(static_cast<u32>(receiverRect.minX), static_cast<u32>(receiverRect.minY), static_cast<u32>(receiverRect.maxX), static_cast<u32>(receiverRect.maxY));
     if(receiverWorkRegion.fullFrame)
         csgFrameData.workRegion.expandFull();
-    else if(receiverWorkRegion.bounded()){
+    else if(receiverWorkRegion.bounded())
         csgFrameData.workRegion.expandClamped(receiverRect.minX, receiverRect.maxX, receiverRect.minY, receiverRect.maxY, frameWidth, frameHeight);
-    }
     if(!appended || range.cutterCount == 0u)
         return MakeUnexpected(Failure{});
     return range;

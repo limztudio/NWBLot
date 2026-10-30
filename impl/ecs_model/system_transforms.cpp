@@ -27,13 +27,7 @@ namespace __hidden_model_system_transforms{
 
 static constexpr usize s_ParallelModelObjectTransformGrainSize = 256u;
 
-static void ResolveAttachmentJointQueries(
-    Core::ECS::World& world,
-    const usize queryCount,
-    const usize* const parentOrder,
-    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette,
-    const NotNull<ModelAttachmentJointQuery*> queries
-){
+static void ResolveAttachmentJointQueries(Core::ECS::World& world, const usize queryCount, const usize* const parentOrder, Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette, const NotNull<ModelAttachmentJointQuery*> queries){
     const auto queryAt = [&](const usize index)noexcept -> ModelAttachmentJointQuery&{
         return queries.get()[parentOrder ? parentOrder[index] : index];
     };
@@ -114,9 +108,8 @@ void ModelSystem::updateStaticMeshAttachments(){
             jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
         });
         const NotNull<ModelAttachmentJointQuery*> queries(jointQueries.data());
-        if(sharedParent){
+        if(sharedParent)
             __hidden_model_system_transforms::ResolveAttachmentJointQueries(m_world, queryCount, nullptr, m_scratchJoints, queries);
-        }
         else{
             Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
             parentOrder.clear();
@@ -141,9 +134,8 @@ void ModelSystem::updateStaticMeshAttachments(){
         const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 
         SIMDMatrix worldTransform{};
-        if(!attachment.parentEntity.valid() || attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
+        if(!attachment.parentEntity.valid() || attachment.parentJointIndex == s_SkeletonInvalidJointIndex)
             worldTransform = MatrixMultiply(parentMatrix, localMatrix);
-        }
         else{
             SIMDMatrix jointMatrix{};
             if(queryCount > 1u){
@@ -174,3 +166,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

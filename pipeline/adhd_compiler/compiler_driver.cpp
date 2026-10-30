@@ -27,12 +27,7 @@ void AppendDepfileEscapedPath(NWB::Core::Metascript::MString& out, const NWB::Co
     }
 }
 
-[[nodiscard]] NWB::Core::Metascript::MString DeriveVirtualCompilePath(
-    NWB::Core::Metascript::MetaArena& arena,
-    const Path<NWB::Core::Metascript::MetaArena>& inputPath,
-    const NWB::Core::Metascript::MStringView rawInputView,
-    const Span<const NWB::Core::Metascript::MString> includeDirs
-){
+[[nodiscard]] NWB::Core::Metascript::MString DeriveVirtualCompilePath(NWB::Core::Metascript::MetaArena& arena, const Path<NWB::Core::Metascript::MetaArena>& inputPath, const NWB::Core::Metascript::MStringView rawInputView, const Span<const NWB::Core::Metascript::MString> includeDirs){
     using namespace NWB::Core::Metascript;
 
     const MString genericInput = PathToGenericString<MChar>(arena, inputPath);
@@ -47,10 +42,7 @@ void AppendDepfileEscapedPath(NWB::Core::Metascript::MString& out, const NWB::Co
             genericInc.pop_back();
         if(genericInc.empty() || genericView.size() <= genericInc.size() + 1u)
             continue;
-        if(genericView.substr(0u, genericInc.size()) == MStringView(genericInc.data(), genericInc.size())
-            && genericView[genericInc.size()] == '/'
-            && genericInc.size() > bestPrefixLen)
-        {
+        if(genericView.substr(0u, genericInc.size()) == MStringView(genericInc.data(), genericInc.size()) && genericView[genericInc.size()] == '/' && genericInc.size() > bestPrefixLen){
             bestPrefixLen = genericInc.size();
             bestRelView = genericView.substr(genericInc.size() + 1u);
         }
@@ -64,11 +56,7 @@ void AppendDepfileEscapedPath(NWB::Core::Metascript::MString& out, const NWB::Co
 
 class FilesystemIncludeResolver final : public NWB::Core::Metascript::IIncludeResolver{
 public:
-    FilesystemIncludeResolver(
-        NWB::Core::Metascript::MetaArena& arena,
-        const Path<NWB::Core::Metascript::MetaArena>& currentFileDir,
-        const Span<const NWB::Core::Metascript::MString> includeDirs
-    )
+    FilesystemIncludeResolver(NWB::Core::Metascript::MetaArena& arena, const Path<NWB::Core::Metascript::MetaArena>& currentFileDir, const Span<const NWB::Core::Metascript::MString> includeDirs)
         : m_resolvedParentDirs(arena)
         , m_includeDirs(includeDirs)
     {
@@ -77,13 +65,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 resolveInclude(
-        const NWB::Core::Metascript::MStringView includePath,
-        const b8 isAngleBracket,
-        NWB::Core::Metascript::MetaArena& arena,
-        NWB::Core::Metascript::MString& outResolvedKey,
-        NWB::Core::Metascript::MString& outContent
-    )override{
+    [[nodiscard]] virtual b8 resolveInclude(const NWB::Core::Metascript::MStringView includePath, const b8 isAngleBracket, NWB::Core::Metascript::MetaArena& arena, NWB::Core::Metascript::MString& outResolvedKey, NWB::Core::Metascript::MString& outContent)override{
         using namespace NWB::Core::Metascript;
 
         if(!Adhd::HasAdhdExtension(includePath))
@@ -115,7 +97,7 @@ public:
         return false;
     }
 
-    void popIncludeScope()noexcept override{
+    virtual void popIncludeScope()noexcept override{
         if(m_resolvedParentDirs.size() > 1u)
             m_resolvedParentDirs.pop_back();
     }
@@ -136,18 +118,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RunAdhdCompilerDriver(
-    const AdhdCompilerOptions& options,
-    NWB::Core::Metascript::MetaArena& arena
-){
+b8 RunAdhdCompilerDriver(const AdhdCompilerOptions& options, NWB::Core::Metascript::MetaArena& arena){
     using namespace NWB::Core::Metascript;
 
     const Path<MetaArena> outDir(arena, AStringView(options.outputDirectory.data(), options.outputDirectory.size()));
     if(!options.validateOnly && !EnsureDirectories(outDir)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("adhd_compiler: failed to create output directory '{}'"),
-            ConvertString(AStringView(options.outputDirectory.data(), options.outputDirectory.size()))
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: failed to create output directory '{}'"), ConvertString(AStringView(options.outputDirectory.data(), options.outputDirectory.size())));
         return false;
     }
 
@@ -160,60 +136,32 @@ b8 RunAdhdCompilerDriver(
 
         MString sourceContent(arena);
         if(!ReadTextFile(inputPath, sourceContent)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("adhd_compiler: failed to read input file '{}'"),
-                ConvertString(AStringView(inputView.data(), inputView.size()))
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: failed to read input file '{}'"), ConvertString(AStringView(inputView.data(), inputView.size())));
             return false;
         }
 
         const Path<MetaArena> parentDir = inputPath.parentPath();
         __hidden_adhd_compiler_driver::FilesystemIncludeResolver resolver(arena, parentDir, options.includeDirectories);
-        const MString virtualPath = __hidden_adhd_compiler_driver::DeriveVirtualCompilePath(
-            arena,
-            inputPath,
-            inputView,
-            options.includeDirectories
-        );
+        const MString virtualPath = __hidden_adhd_compiler_driver::DeriveVirtualCompilePath(arena, inputPath, inputView, options.includeDirectories);
 
         Adhd::CompileResult result(arena);
-        if(!Adhd::Compiler::compile(
-            MStringView(sourceContent.data(), sourceContent.size()),
-            MStringView(virtualPath.data(), virtualPath.size()),
-            arena,
-            result,
-            &resolver,
-            customNs,
-            options.macroDefinitions
-        )){
-            for(const ParseError& err : result.errors){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{}:{}:{}: error: {}"),
-                    ConvertString(AStringView(inputView.data(), inputView.size())),
-                    err.line,
-                    err.column,
-                    ConvertString(AStringView(err.message.data(), err.message.size()))
-                );
-            }
+        if(!Adhd::Compiler::Compile(MStringView(sourceContent.data(), sourceContent.size()), MStringView(virtualPath.data(), virtualPath.size()), arena, result, &resolver, customNs, options.macroDefinitions)){
+            for(const ParseError& err : result.errors)
+                NWB_LOGGER_ERROR(NWB_TEXT("{}:{}:{}: error: {}"), ConvertString(AStringView(inputView.data(), inputView.size())), err.line, err.column, ConvertString(AStringView(err.message.data(), err.message.size())));
             return false;
         }
 
         if(options.validateOnly)
             continue;
 
-        const MString headerRel = Adhd::Compiler::deriveHeaderFilename(inputView, arena);
-        const MString sourceRel = Adhd::Compiler::deriveSourceFilename(inputView, arena);
+        const MString headerRel = Adhd::Compiler::DeriveHeaderFilename(inputView, arena);
+        const MString sourceRel = Adhd::Compiler::DeriveSourceFilename(inputView, arena);
 
         const Path<MetaArena> headerOutPath = outDir / Path<MetaArena>(arena, AStringView(headerRel.data(), headerRel.size()));
         const Path<MetaArena> sourceOutPath = outDir / Path<MetaArena>(arena, AStringView(sourceRel.data(), sourceRel.size()));
 
-        if(!WriteTextFile(headerOutPath, AStringView(result.generatedHeader.data(), result.generatedHeader.size()))
-            || !WriteTextFile(sourceOutPath, AStringView(result.generatedSource.data(), result.generatedSource.size())))
-        {
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("adhd_compiler: failed to write generated output for '{}'"),
-                ConvertString(AStringView(inputView.data(), inputView.size()))
-            );
+        if(!WriteTextFile(headerOutPath, AStringView(result.generatedHeader.data(), result.generatedHeader.size())) || !WriteTextFile(sourceOutPath, AStringView(result.generatedSource.data(), result.generatedSource.size()))){
+            NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: failed to write generated output for '{}'"), ConvertString(AStringView(inputView.data(), inputView.size())));
             return false;
         }
 
@@ -237,13 +185,8 @@ b8 RunAdhdCompilerDriver(
 
     if(!options.validateOnly && !options.depfilePath.empty()){
         const Path<MetaArena> depfileOutPath(arena, AStringView(options.depfilePath.data(), options.depfilePath.size()));
-        if(!EnsureDirectories(depfileOutPath.parentPath())
-            || !WriteTextFile(depfileOutPath, AStringView(combinedDepContent.data(), combinedDepContent.size())))
-        {
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("adhd_compiler: failed to write depfile '{}'"),
-                ConvertString(AStringView(options.depfilePath.data(), options.depfilePath.size()))
-            );
+        if(!EnsureDirectories(depfileOutPath.parentPath()) || !WriteTextFile(depfileOutPath, AStringView(combinedDepContent.data(), combinedDepContent.size()))){
+            NWB_LOGGER_ERROR(NWB_TEXT("adhd_compiler: failed to write depfile '{}'"), ConvertString(AStringView(options.depfilePath.data(), options.depfilePath.size())));
             return false;
         }
     }

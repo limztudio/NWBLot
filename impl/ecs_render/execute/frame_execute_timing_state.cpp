@@ -75,7 +75,6 @@ FrameExecuteTimingState::FrameExecuteTimingState(Core::GraphicsRuntime& graphics
     , frameTimingTransaction(graphics.gpuTiming())
 {}
 
-
 void FrameExecuteTimingState::discardGraphicsPrefixTickets(){
     for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
         timingTicket->discard();

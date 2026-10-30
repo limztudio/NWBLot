@@ -38,7 +38,6 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     return true;
 }
 
-
 b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
     // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && m_graphics.queryFeatureSupport(Core::Feature::RayQuery))

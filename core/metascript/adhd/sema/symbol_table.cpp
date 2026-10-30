@@ -21,12 +21,7 @@ namespace __hidden_adhd_symbol_table{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TypeRef* SubstituteAliasTypeRef(
-    const TypeRef& origType,
-    const Span<const TemplateParamDecl> templateParams,
-    const Span<const TypeArg> templateArgs,
-    MetaArena& arena
-){
+TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
     const usize count = templateParams.size() < templateArgs.size() ? templateParams.size() : templateArgs.size();
     for(usize p = 0u; p < count; ++p){
         if(!templateParams[p].constValueType && origType.name == templateParams[p].name && origType.templateArgs.empty() && templateArgs[p].type){
@@ -46,9 +41,7 @@ TypeRef* SubstituteAliasTypeRef(
     TypeRef* cloned = AllocateAstNode<TypeRef>(arena);
     cloned->name = origType.name;
     cloned->refMode = origType.refMode;
-    cloned->funcReturnType = origType.funcReturnType
-        ? SubstituteAliasTypeRef(*origType.funcReturnType, templateParams, templateArgs, arena)
-        : nullptr;
+    cloned->funcReturnType = origType.funcReturnType ? SubstituteAliasTypeRef(*origType.funcReturnType, templateParams, templateArgs, arena) : nullptr;
     cloned->inferredCaptureBytes = origType.inferredCaptureBytes;
     cloned->span = origType.span;
     cloned->isFuncType = origType.isFuncType;
@@ -87,22 +80,13 @@ TypeRef* SubstituteAliasTypeRef(
     return cloned;
 }
 
-[[nodiscard]] MethodDecl* SubstituteInterfaceMethod(
-    const SymbolTable& symbols,
-    MethodDecl* method,
-    const b8 hasSubst,
-    const Span<const TemplateParamDecl> templateParams,
-    const Span<const TypeArg> templateArgs,
-    MetaArena& arena
-){
+[[nodiscard]] MethodDecl* SubstituteInterfaceMethod(const SymbolTable& symbols, MethodDecl* method, const b8 hasSubst, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs, MetaArena& arena){
     if(!method || !hasSubst)
         return method;
     MethodDecl* cloned = AllocateAstNode<MethodDecl>(arena);
     cloned->access = method->access;
     cloned->name = method->name;
-    cloned->returnType = method->returnType
-        ? symbols.substituteTypeParams(*method->returnType, templateParams, templateArgs)
-        : nullptr;
+    cloned->returnType = method->returnType ? symbols.substituteTypeParams(*method->returnType, templateParams, templateArgs) : nullptr;
     for(const ParamDecl& p : method->params){
         ParamDecl subP = p;
         if(p.type)
@@ -115,27 +99,13 @@ TypeRef* SubstituteAliasTypeRef(
     return cloned;
 }
 
-[[nodiscard]] i32 ScoreCandidateParams(
-    const SymbolTable& symbols,
-    const Span<const ParamDecl> params,
-    const usize* preferredArgCount,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)noexcept{
+[[nodiscard]] i32 ScoreCandidateParams(const SymbolTable& symbols, const Span<const ParamDecl> params, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     i32 score = (!preferredArgCount || params.size() == *preferredArgCount) ? 64 : 0;
     score += ScoreCallableParams(symbols, params, argTypeNames, argIsMut);
     return score;
 }
 
-[[nodiscard]] b8 ConsiderScoredCallableCandidate(
-    const SymbolTable& symbols,
-    MethodDecl* candidate,
-    const usize* preferredArgCount,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut,
-    MethodDecl*& inOutBestMatch,
-    i32& inOutBestScore
-)noexcept{
+[[nodiscard]] b8 ConsiderScoredCallableCandidate(const SymbolTable& symbols, MethodDecl* candidate, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut, MethodDecl*& inOutBestMatch, i32& inOutBestScore)noexcept{
     if(argTypeNames.empty() && argIsMut.empty()){
         if(!preferredArgCount || candidate->params.size() == *preferredArgCount){
             inOutBestMatch = candidate;
@@ -153,17 +123,7 @@ TypeRef* SubstituteAliasTypeRef(
     return false;
 }
 
-[[nodiscard]] const MethodDecl* FindScoredClassCallable(
-    const SymbolTable& symbols,
-    const ClassDecl& classDecl,
-    const MStringView name,
-    const b8 isOperator,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)noexcept{
+[[nodiscard]] const MethodDecl* FindScoredClassCallable(const SymbolTable& symbols, const ClassDecl& classDecl, const MStringView name, const b8 isOperator, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
@@ -192,7 +152,7 @@ TypeRef* SubstituteAliasTypeRef(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
+b8 SymbolTable::IsArenaBackedContainer(const MStringView typeName)noexcept{
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->isArenaBacked;
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(typeName))
@@ -200,7 +160,7 @@ b8 SymbolTable::isArenaBackedContainer(const MStringView typeName)noexcept{
     return false;
 }
 
-b8 SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
+b8 SymbolTable::IsSimdVectorType(const MStringView typeName, u32& outLanes)noexcept{
     if(const BuiltinSimdVectorInfo* info = FindBuiltinSimdVectorType(typeName)){
         outLanes = info->lanes;
         return true;
@@ -208,7 +168,7 @@ b8 SymbolTable::isSimdVectorType(const MStringView typeName, u32& outLanes)noexc
     return false;
 }
 
-b8 SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
+b8 SymbolTable::IsUnalignedVectorType(const MStringView typeName, u32& outLanes)noexcept{
     if(const BuiltinUnalignedVectorInfo* info = FindBuiltinUnalignedVectorType(typeName)){
         outLanes = info->lanes;
         return true;
@@ -216,26 +176,26 @@ b8 SymbolTable::isUnalignedVectorType(const MStringView typeName, u32& outLanes)
     return false;
 }
 
-b8 SymbolTable::isUnalignedVectorType(const MStringView typeName)noexcept{
+b8 SymbolTable::IsUnalignedVectorType(const MStringView typeName)noexcept{
     return FindBuiltinUnalignedVectorType(typeName) != nullptr;
 }
 
-b8 SymbolTable::isSimdMatrixType(const MStringView typeName)noexcept{
+b8 SymbolTable::IsSimdMatrixType(const MStringView typeName)noexcept{
     return FindBuiltinSimdMatrixType(typeName) != nullptr;
 }
 
-b8 SymbolTable::isSimdType(const MStringView typeName)noexcept{
+b8 SymbolTable::IsSimdType(const MStringView typeName)noexcept{
     u32 lanes = 0u;
-    return isSimdVectorType(typeName, lanes) || isSimdMatrixType(typeName);
+    return IsSimdVectorType(typeName, lanes) || IsSimdMatrixType(typeName);
 }
 
-b8 SymbolTable::isStringSwitchType(const MStringView typeName)noexcept{
+b8 SymbolTable::IsStringSwitchType(const MStringView typeName)noexcept{
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
         return objInfo->isStringSwitch;
     return false;
 }
 
-const FieldDecl* SymbolTable::findClassField(const ClassDecl& classDecl, const MStringView name)noexcept{
+const FieldDecl* SymbolTable::FindClassField(const ClassDecl& classDecl, const MStringView name)noexcept{
     for(const FieldDecl* field : classDecl.fields){
         if(field && field->name == name)
             return field;
@@ -329,12 +289,7 @@ TypeAliasDecl* SymbolTable::findTypeAlias(const MStringView name)const noexcept{
     return nullptr;
 }
 
-MethodDecl* SymbolTable::findFreeFunction(
-    const MStringView name,
-    const usize* preferredArgCount,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)const noexcept{
+MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* preferredArgCount, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
     MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(MethodDecl* fn : m_freeFunctions){
@@ -354,57 +309,15 @@ Stmt* SymbolTable::findGlobalConstant(const MStringView name)const noexcept{
     return nullptr;
 }
 
-const MethodDecl* SymbolTable::findClassMethod(
-    const ClassDecl& classDecl,
-    const MStringView name,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)const noexcept{
-    return __hidden_adhd_symbol_table::FindScoredClassCallable(
-        *this,
-        classDecl,
-        name,
-        false,
-        preferredArgCount,
-        preferConst,
-        requirePublic,
-        argTypeNames,
-        argIsMut
-    );
+const MethodDecl* SymbolTable::findClassMethod(const ClassDecl& classDecl, const MStringView name, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
+    return __hidden_adhd_symbol_table::FindScoredClassCallable(*this, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
-const MethodDecl* SymbolTable::findClassOperator(
-    const ClassDecl& classDecl,
-    const MStringView opName,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)const noexcept{
-    return __hidden_adhd_symbol_table::FindScoredClassCallable(
-        *this,
-        classDecl,
-        opName,
-        true,
-        preferredArgCount,
-        preferConst,
-        requirePublic,
-        argTypeNames,
-        argIsMut
-    );
+const MethodDecl* SymbolTable::findClassOperator(const ClassDecl& classDecl, const MStringView opName, const usize* preferredArgCount, const b8 preferConst, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
+    return __hidden_adhd_symbol_table::FindScoredClassCallable(*this, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
 }
 
-const MethodDecl* SymbolTable::findClassConstructor(
-    const ClassDecl& classDecl,
-    const usize argCount,
-    const b8 requirePublic,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)const noexcept{
+const MethodDecl* SymbolTable::findClassConstructor(const ClassDecl& classDecl, const usize argCount, const b8 requirePublic, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
     const MethodDecl* bestMatch = nullptr;
     i32 bestScore = -1;
     for(const MethodDecl* m : classDecl.methods){
@@ -420,14 +333,7 @@ const MethodDecl* SymbolTable::findClassConstructor(
     return bestMatch;
 }
 
-MethodDecl* SymbolTable::findInterfaceMethod(
-    const TypeRef& ifaceType,
-    const MStringView methodName,
-    const usize* preferredArgCount,
-    const u32 depth,
-    const Span<const MStringView> argTypeNames,
-    const Span<const u8> argIsMut
-)const noexcept{
+MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MStringView methodName, const usize* preferredArgCount, const u32 depth, const Span<const MStringView> argTypeNames, const Span<const u8> argIsMut)const noexcept{
     if(depth > 16u)
         return nullptr;
     const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
@@ -465,7 +371,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(
     return bestMatch;
 }
 
-void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, const u32 depth)const{
+void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, const u32 depth, MVector<MethodDecl*>& outMethods)const{
     if(depth > 16u)
         return;
     const TypeRef* resolvedIface = unwrapTypeAlias(&ifaceType);
@@ -481,7 +387,7 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<M
             continue;
         const TypeRef* subBase = substituteTypeParams(baseType, iface->templateParams, resolvedIface);
         if(subBase)
-            collectAllInterfaceMethods(*subBase, outMethods, depth + 1u);
+            collectAllInterfaceMethods(*subBase, depth + 1u, outMethods);
     }
 
     for(MethodDecl* method : iface->methods){
@@ -491,19 +397,11 @@ void SymbolTable::collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<M
     }
 }
 
-TypeRef* SymbolTable::substituteTypeParams(
-    const TypeRef& origType,
-    const Span<const TemplateParamDecl> templateParams,
-    const Span<const TypeArg> templateArgs
-)const{
+TypeRef* SymbolTable::substituteTypeParams(const TypeRef& origType, const Span<const TemplateParamDecl> templateParams, const Span<const TypeArg> templateArgs)const{
     return __hidden_adhd_symbol_table::SubstituteAliasTypeRef(origType, templateParams, templateArgs, m_arena);
 }
 
-TypeRef* SymbolTable::substituteTypeParams(
-    const TypeRef* origType,
-    const Span<const TemplateParamDecl> templateParams,
-    const TypeRef* instanceTypeRef
-)const{
+TypeRef* SymbolTable::substituteTypeParams(const TypeRef* origType, const Span<const TemplateParamDecl> templateParams, const TypeRef* instanceTypeRef)const{
     if(!origType || !instanceTypeRef || templateParams.empty() || instanceTypeRef->templateArgs.empty())
         return const_cast<TypeRef*>(origType);
     return substituteTypeParams(*origType, templateParams, instanceTypeRef->templateArgs);
@@ -567,7 +465,7 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         }
         return !hasAnyCtor;
     }
-    if(isUnalignedVectorType(baseName) || findEnum(baseName) != nullptr)
+    if(IsUnalignedVectorType(baseName) || findEnum(baseName) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(baseName))
         return objInfo->isSelfDefaulted;
@@ -588,10 +486,7 @@ b8 SymbolTable::isSmallValueType(MStringView typeName)const noexcept{
 }
 
 b8 SymbolTable::hasTypeSymbol(const MStringView name)const noexcept{
-    return findEnum(name) != nullptr
-        || findInterface(name) != nullptr
-        || findClass(name) != nullptr
-        || findTypeAlias(name) != nullptr;
+    return findEnum(name) != nullptr || findInterface(name) != nullptr || findClass(name) != nullptr || findTypeAlias(name) != nullptr;
 }
 
 

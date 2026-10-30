@@ -221,7 +221,6 @@ private:
         b8 queryChanged = false;
     };
 
-
     struct TooltipFrame{
         WidgetState widget;
         WidgetState anchor;

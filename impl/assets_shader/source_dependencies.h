@@ -43,22 +43,10 @@ void SpliceSourceLines(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
 void MaskSourceComments(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
 
 [[nodiscard]] Expected<IncludeDirective> ExtractIncludeDirective(AStringView line)noexcept;
-[[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(
-    AStringView includeName,
-    IncludeKind::Enum kind,
-    TStringView sourceDirectory,
-    Span<const Path> includeDirectories,
-    Core::Alloc::ScratchArena& scratchArena
-);
+[[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(AStringView includeName, IncludeKind::Enum kind, TStringView sourceDirectory, Span<const Path> includeDirectories, Core::Alloc::ScratchArena& scratchArena);
 
 template<typename SourceArenaT, typename DependencyVectorT>
-[[nodiscard]] b8 Gather(
-    const ::Path<SourceArenaT>& sourcePath,
-    Span<const Path> includeDirectories,
-    const Span<const AStringView> externallyPlannedMacroIncludes,
-    Core::Alloc::ScratchArena& scratchArena,
-    DependencyVectorT& outDependencies
-){
+[[nodiscard]] b8 Gather(const ::Path<SourceArenaT>& sourcePath, Span<const Path> includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, Core::Alloc::ScratchArena& scratchArena, DependencyVectorT& outDependencies){
     using ScratchArena = Core::Alloc::ScratchArena;
     using ScratchPath = ::Path<ScratchArena>;
     using ScratchString = AString<ScratchArena>;
@@ -161,3 +149,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

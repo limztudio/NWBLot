@@ -94,8 +94,6 @@ public:
 
 
 private:
-
-
     MeasureKey m_measureKey;
     f32 m_rowHeight = 0.0f;
     f32 m_scrollRowHeight = 0.0f;

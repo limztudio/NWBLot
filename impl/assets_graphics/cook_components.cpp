@@ -51,16 +51,11 @@ using ModelComponentCookEntry = TypedComponentCookEntry<ModelComponent>;
 using MeshComponentCookEntry = TypedComponentCookEntry<MeshComponent>;
 using RendererComponentCookEntry = TypedComponentCookEntry<RendererComponent>;
 
-
-[[nodiscard]] static b8 SerializeSingleAssetRefComponentPayload(
-    const Name& assetName,
-    Core::Assets::AssetBytes& outPayload
-){
+[[nodiscard]] static b8 SerializeSingleAssetRefComponentPayload(const Name& assetName, Core::Assets::AssetBytes& outPayload){
     SingleAssetRefComponentPayloadBinary binaryPayload;
     binaryPayload.assetHash = assetName.hash();
     return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
 }
-
 
 template<
     typename ComponentAssetT,
@@ -105,10 +100,7 @@ template<
     Core::Assets::AssetRef<ReferencedAssetT> decltype(ComponentAssetT::component)::* FieldPtr,
     const AStringView& DiagnosticPrefix
 >
-static b8 ExtractSingleAssetRefComponentDependencies(
-    const Core::Assets::CookDependencyItemContext& context,
-    Core::Assets::ICookDependencyCollector& collector
-){
+static b8 ExtractSingleAssetRefComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     using EntryT = TypedComponentCookEntry<decltype(ComponentAssetT::component)>;
     const auto entry = SceneAssetCook::ParseCookDependencyEntry<
         EntryT,
@@ -123,13 +115,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<RendererComponentCookEntry> ParseRendererComponentCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static Expected<RendererComponentCookEntry> ParseRendererComponentCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     RendererComponentCookEntry entry(arena);
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix))
         return MakeUnexpected(Failure{});
@@ -186,32 +172,16 @@ static b8 ExtractSingleAssetRefComponentDependencies(
     }
 
     if(asset.findField(s_OpticalVolumeGroupField)){
-        const auto groupField = Core::Assets::ReadMetadataStringField(
-            nwbFilePath,
-            asset,
-            s_RendererComponentDiagnosticPrefix,
-            s_OpticalVolumeGroupField,
-            true
-        );
+        const auto groupField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_RendererComponentDiagnosticPrefix, s_OpticalVolumeGroupField, true);
         if(!groupField)
             return MakeUnexpected(Failure{});
         if(TrimView(groupField->text).empty() || groupField->text != TrimView(groupField->text)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': field '{}' must not be empty or padded"),
-                ConvertString(s_RendererComponentDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(s_OpticalVolumeGroupField)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty or padded"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_OpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }
         const auto groupName = Name::FromText(groupField->text);
         if(!groupName || !*groupName){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{} '{}': field '{}' contains an embedded null"),
-                ConvertString(s_RendererComponentDiagnosticPrefix),
-                PathToString<tchar>(nwbFilePath),
-                ConvertString(s_OpticalVolumeGroupField)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(s_RendererComponentDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_OpticalVolumeGroupField));
             return MakeUnexpected(Failure{});
         }
         entry.component.opticalVolumeGroup = *groupName;
@@ -249,10 +219,7 @@ static b8 ExtractSingleAssetRefComponentDependencies(
 }
 
 static b8 ExtractRendererComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
-    const auto entry = SceneAssetCook::ParseCookDependencyEntry<RendererComponentCookEntry, &ParseRendererComponentCookMetadata>(
-        context,
-        s_RendererComponentDiagnosticPrefix
-    );
+    const auto entry = SceneAssetCook::ParseCookDependencyEntry<RendererComponentCookEntry, &ParseRendererComponentCookMetadata>(context, s_RendererComponentDiagnosticPrefix);
     if(!entry)
         return false;
     return collector.addAssetDependency(entry->component.material.name(), Material::AssetTypeName());
@@ -323,21 +290,9 @@ b8 RegisterGraphicsComponentCookDependencies(Core::Assets::CookDependencyRegistr
     using namespace __hidden_assets_graphics_cook_components;
 
     return
-        registry.registerType(
-            ModelComponentAsset::AssetTypeName(),
-            &ExtractSingleAssetRefComponentDependencies<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>,
-            IComponent::AssetTypeName()
-        )
-        && registry.registerType(
-            MeshComponentAsset::AssetTypeName(),
-            &ExtractSingleAssetRefComponentDependencies<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>,
-            IComponent::AssetTypeName()
-        )
-        && registry.registerType(
-            RendererComponentAsset::AssetTypeName(),
-            &ExtractRendererComponentDependencies,
-            IComponent::AssetTypeName()
-        )
+        registry.registerType(ModelComponentAsset::AssetTypeName(), &ExtractSingleAssetRefComponentDependencies<ModelComponentAsset, Model, &ModelComponent::model, s_ModelComponentDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(MeshComponentAsset::AssetTypeName(), &ExtractSingleAssetRefComponentDependencies<MeshComponentAsset, Mesh, &MeshComponent::mesh, s_MeshComponentDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(RendererComponentAsset::AssetTypeName(), &ExtractRendererComponentDependencies, IComponent::AssetTypeName())
     ;
 }
 
@@ -355,3 +310,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

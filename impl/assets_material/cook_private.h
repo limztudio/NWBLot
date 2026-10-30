@@ -76,7 +76,6 @@ inline constexpr AStringView s_MaterialBindByteSizeSymbolSuffix = "_BYTE_SIZE";
 inline constexpr AStringView s_MaterialBindKeySymbolSuffix = "_KEY";
 inline constexpr AStringView s_MaterialBindDefaultSymbolSuffix = "_DEFAULT";
 
-
 // Text pieces shared by the generated Slang sources.
 inline constexpr AStringView s_GeneratedDefineDirective = "#define ";
 inline constexpr AStringView s_GeneratedUndefDirective = "#undef ";
@@ -187,29 +186,11 @@ Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialPixelShad
     Span<MaterialCookEntry> materialEntries
 );
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShadersImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitAccumulatePixelShadersImpl(const Path& cacheDirectory, const AStringView configurationSafeName, CookArena& arena, ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShadersImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitOccupancyPixelShadersImpl(const Path& cacheDirectory, const AStringView configurationSafeName, CookArena& arena, ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
 
-Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShadersImpl(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    CookArena& arena,
-    ScratchArena& scratchArena,
-    Span<MaterialCookEntry> materialEntries
-);
+Expected<MaterialCookVector<GeneratedMaterialPixelShader>> EmitMaterialAvboitExtinctionPixelShadersImpl(const Path& cacheDirectory, const AStringView configurationSafeName, CookArena& arena, ScratchArena& scratchArena, Span<MaterialCookEntry> materialEntries);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,3 +212,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

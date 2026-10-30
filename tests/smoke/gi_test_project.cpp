@@ -170,17 +170,6 @@ private:
     }
 
 
-private:
-    void destroyWorld(){
-        if(m_complexCapture){
-            m_complexCapture->stop();
-            m_complexCapture.reset();
-        }
-        m_csgGiScene.stop();
-        DestroySmokeRenderWorld(m_context, m_world);
-    }
-
-
 public:
     explicit GiTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
@@ -267,17 +256,16 @@ public:
 
         NWB_FATAL_ASSERT_MSG(activeCamera.valid() && directionalLight.valid() && m_floorEntity.valid() && m_redWallEntity.valid() && m_blueWallNegX.valid() && m_whiteWallPosZ.valid(), NWB_TEXT("GiTestSmokeProject failed to create all scene entities"));
 
-        if(m_complexSceneEnabled){
+        if(m_complexSceneEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: closed black enclosure around camera and maze, small skylight, one vertical sun, red/blue bounce patches"));
-        }else{
+        else
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor"));
-        }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex_scene={}"), m_complexSceneEnabled ? 1u : 0u);
         if(m_complexSceneEnabled){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: min_post_presentation_live_warmup_seconds={}"), m_complexMinLiveWarmupSeconds);
             const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
             if(captureFreezeFrame != 0u){
-                const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCaptureComplex, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
+                const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCaptureComplex, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u };
                 auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, captureFreezeFrame, options);
                 if(!capture || !*capture){
                     NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: complex GI baseline requires application framebuffer capture"));
@@ -323,7 +311,8 @@ public:
                     , captureWarmup
                     , static_cast<f64>(m_complexMinLiveWarmupSeconds)
                 );
-            }else{
+            }
+            else{
                 elapsedLiveSeconds = DurationInSeconds<f64>(now, m_complexLiveWarmupStartTime);
                 liveWarmupComplete = elapsedLiveSeconds >= m_complexMinLiveWarmupSeconds && successfulPresentations > m_complexLiveWarmupStartPresentations;
             }
@@ -383,6 +372,15 @@ public:
 
 
 private:
+    void destroyWorld(){
+        if(m_complexCapture){
+            m_complexCapture->stop();
+            m_complexCapture.reset();
+        }
+        m_csgGiScene.stop();
+        DestroySmokeRenderWorld(m_context, m_world);
+    }
+
     [[nodiscard]] b8 samplePresentationFps(){
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const auto status = m_presentationFpsProbe.observe(successfulPresentations, TimerNow());
@@ -452,10 +450,9 @@ private:
             const SIMDVectorSingle absoluteSine = VectorAbs(sine);
             const SIMDVectorSingle absoluteCosine = VectorAbs(cosine);
             const SIMDVectorSingle cosineSine = VectorMergeX(absoluteCosine, absoluteSine, VectorSplatY(absoluteCosine), VectorSplatY(absoluteSine));
-            const SIMDVectorSingle halfExtents = VectorScale(VectorMultiplyAddExpression(
-                cosineSine, VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x),
-                VectorMultiply(VectorSwizzle<1, 0, 3, 2>(cosineSine), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))
-            ), 0.5f
+            const SIMDVectorSingle halfExtents = VectorScale(
+                VectorMultiplyAddExpression(cosineSine, VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x), VectorMultiply(VectorSwizzle<1, 0, 3, 2>(cosineSine), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))),
+                0.5f
             );
             const SIMDVectorSingle combinedHalfExtents = VectorAdd(VectorAdd(halfExtents, VectorSwizzle<2, 3, 0, 1>(halfExtents)), VectorReplicate(0.06f));
             const SIMDVectorSingle separation = VectorAbs(VectorSubtract(VectorSet(a.position.x, a.position.z, 0.0f, 0.0f), VectorSet(b.position.x, b.position.z, 0.0f, 0.0f)));
@@ -530,11 +527,7 @@ private:
         );
         if(m_coverageViewEnabled){
             // Place the probe cube where its -X and -Z faces share one spatial cell.
-            const auto probe = CreateTintedStaticMeshEntity(
-                *m_world, s_BoxMesh, s_CoverageProbeMaterial,
-                s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
-                Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f)
-            );
+            const auto probe = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_CoverageProbeMaterial, s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f));
             if(!probe.valid())
                 return false;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
@@ -594,7 +587,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB GI Test");

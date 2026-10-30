@@ -40,9 +40,8 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             m_csgState.m_frameStateCache = frameState;
             m_csgState.m_frameStateCacheValid = true;
         }
-        else{
+        else
             m_csgState.m_frameStateCacheValid = false;
-        }
         return frameState;
     };
 

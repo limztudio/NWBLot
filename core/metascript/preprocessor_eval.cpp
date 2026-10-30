@@ -49,7 +49,7 @@ constexpr u32 s_MaxMacroExpansionPasses = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ConditionEvaluator{
+class ConditionEvaluator final{
 public:
     ConditionEvaluator(MStringView text, const Preprocessor::MacroMap& macros, MetaArena& arena, MVector<ParseError>& errors, const u32 line)
         : m_lexer(text)

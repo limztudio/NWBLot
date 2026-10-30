@@ -53,12 +53,8 @@ namespace __hidden_adhd_type_checker_infer{
         return false;
     if(stmt->initStmt && StmtReferencesIdentifier(stmt->initStmt, varName))
         return true;
-    if(ExprReferencesIdentifier(stmt->expr, varName)
-        || ExprReferencesIdentifier(stmt->condition, varName)
-        || ExprReferencesIdentifier(stmt->stepExpr, varName))
-    {
+    if(ExprReferencesIdentifier(stmt->expr, varName) || ExprReferencesIdentifier(stmt->condition, varName) || ExprReferencesIdentifier(stmt->stepExpr, varName))
         return true;
-    }
     for(const Expr* arg : stmt->arguments){
         if(ExprReferencesIdentifier(arg, varName))
             return true;
@@ -111,25 +107,12 @@ namespace __hidden_adhd_type_checker_infer{
 [[nodiscard]] b8 StmtPreventsMoveAtLastUse(const Stmt* stmt, const MStringView varName, const SymbolTable& symbols)noexcept{
     if(!stmt)
         return false;
-    if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall)
-        && StmtReferencesIdentifier(stmt, varName))
-    {
+    if((stmt->kind == StmtKind::ParallelBlock || stmt->kind == StmtKind::ParallelCall) && StmtReferencesIdentifier(stmt, varName))
         return true;
-    }
-    if(stmt->kind == StmtKind::VarDecl
-        && stmt->name != varName
-        && stmt->varType
-        && symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None
-        && StmtReferencesIdentifier(stmt, varName))
-    {
+    if(stmt->kind == StmtKind::VarDecl && stmt->name != varName && stmt->varType && symbols.resolveRefMode(stmt->varType) != ParamPassingMode::None && StmtReferencesIdentifier(stmt, varName))
         return true;
-    }
-    if(ExprHasMutLambdaCapture(stmt->expr, varName)
-        || ExprHasMutLambdaCapture(stmt->condition, varName)
-        || ExprHasMutLambdaCapture(stmt->stepExpr, varName))
-    {
+    if(ExprHasMutLambdaCapture(stmt->expr, varName) || ExprHasMutLambdaCapture(stmt->condition, varName) || ExprHasMutLambdaCapture(stmt->stepExpr, varName))
         return true;
-    }
     for(const Expr* arg : stmt->arguments){
         if(ExprHasMutLambdaCapture(arg, varName))
             return true;
@@ -169,14 +152,9 @@ namespace __hidden_adhd_type_checker_infer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MStringView TypeChecker::inferExprTypeName(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const Expr& expr,
-    const Span<const ScopedVarInfo> scope
-)const noexcept{
+MStringView TypeChecker::inferExprTypeName(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(expr.kind == ExprKind::Identifier){
-        if(const ScopedVarInfo* local = findScopedVar(scope, expr.text))
+        if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text))
             return resolveScopedVarBaseType(*local);
         if(const Stmt* gc = m_symbols.findGlobalConstant(expr.text); gc && gc->varType)
             return m_symbols.resolveBaseTypeName(gc->varType->name);
@@ -184,7 +162,7 @@ MStringView TypeChecker::inferExprTypeName(
             return builtinConstType;
     }
     else if(expr.kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.text); field && field->type)
+        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text); field && field->type)
             return m_symbols.resolveBaseTypeName(field->type->name);
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
@@ -219,18 +197,18 @@ MStringView TypeChecker::inferExprTypeName(
     else if(expr.kind == ExprKind::Binary){
         if(const TypeRef* binTypeRef = inferExprTypeRef(ownerClass, method, expr, scope))
             return m_symbols.resolveBaseTypeName(binTypeRef->name);
-        if(expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
+        if(
+            expr.op == TokenType::EqualEqual || expr.op == TokenType::BangEqual
             || expr.op == TokenType::Less || expr.op == TokenType::LessEqual
             || expr.op == TokenType::Greater || expr.op == TokenType::GreaterEqual
-            || expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe)
-        {
+            || expr.op == TokenType::AmpersandAmpersand || expr.op == TokenType::PipePipe
+        )
             return "b8";
-        }
         const MStringView lhsT = expr.lhs ? inferExprTypeName(ownerClass, method, *expr.lhs, scope) : MStringView{};
         const MStringView rhsT = expr.rhs ? inferExprTypeName(ownerClass, method, *expr.rhs, scope) : MStringView{};
-        if(SymbolTable::isSimdType(lhsT))
+        if(SymbolTable::IsSimdType(lhsT))
             return lhsT;
-        if(SymbolTable::isSimdType(rhsT))
+        if(SymbolTable::IsSimdType(rhsT))
             return rhsT;
         if(m_symbols.findEnum(lhsT))
             return lhsT;
@@ -268,7 +246,7 @@ MStringView TypeChecker::inferExprTypeName(
                     if(expr.arguments.size() == 2u && expr.arguments[1]){
                         const MStringView rhsT = inferExprTypeName(ownerClass, method, *expr.arguments[1], scope);
                         u32 rhsLanes = 0u;
-                        if(SymbolTable::isSimdMatrixType(lhsT) && SymbolTable::isSimdVectorType(rhsT, rhsLanes))
+                        if(SymbolTable::IsSimdMatrixType(lhsT) && SymbolTable::IsSimdVectorType(rhsT, rhsLanes))
                             return rhsT;
                     }
                     return lhsT;
@@ -278,7 +256,7 @@ MStringView TypeChecker::inferExprTypeName(
                         if(!arg)
                             continue;
                         const MStringView argT = inferExprTypeName(ownerClass, method, *arg, scope);
-                        if(SymbolTable::isSimdType(argT))
+                        if(SymbolTable::IsSimdType(argT))
                             return argT;
                     }
                     return inferExprTypeName(ownerClass, method, *expr.arguments[0], scope);
@@ -324,27 +302,22 @@ MStringView TypeChecker::inferExprTypeName(
     return {};
 }
 
-const TypeRef* TypeChecker::inferExprTypeRef(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const Expr& expr,
-    const Span<const ScopedVarInfo> scope
-)const noexcept{
+const TypeRef* TypeChecker::inferExprTypeRef(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     if(expr.kind == ExprKind::Identifier){
-        if(const ScopedVarInfo* local = findScopedVar(scope, expr.text))
+        if(const ScopedVarInfo* local = FindScopedVar(scope, expr.text))
             return m_symbols.unwrapTypeAlias(local->type);
         if(const Stmt* gc = m_symbols.findGlobalConstant(expr.text))
             return m_symbols.unwrapTypeAlias(gc->varType);
     }
     else if(expr.kind == ExprKind::ThisMember && ownerClass){
-        if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.text))
+        if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.text))
             return m_symbols.unwrapTypeAlias(field->type);
     }
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
-            if(const FieldDecl* field = SymbolTable::findClassField(*cls, expr.text)){
+            if(const FieldDecl* field = SymbolTable::FindClassField(*cls, expr.text)){
                 if(!field->type)
                     return nullptr;
                 const TypeRef* ft = m_symbols.substituteTypeParams(field->type, cls->templateParams, lhsTypeRef);
@@ -406,7 +379,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                     : fn->returnType;
                 return m_symbols.unwrapTypeAlias(rt);
             }
-            if(const ScopedVarInfo* local = findScopedVar(scope, expr.lhs->text)){
+            if(const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text)){
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(local->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
                 if(local->lambdaExpr && local->lambdaExpr->lambdaReturnType)
@@ -430,7 +403,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                     : m->returnType;
                 return m_symbols.unwrapTypeAlias(rt);
             }
-            if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.lhs->text)){
+            if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
                 if(const TypeRef* ft = m_symbols.unwrapTypeAlias(field->type); ft && ft->isFuncType && ft->funcReturnType)
                     return m_symbols.unwrapTypeAlias(ft->funcReturnType);
             }
@@ -463,7 +436,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                         rt = m_symbols.substituteTypeParams(*rt, m->templateParams, expr.callTemplateArgs);
                     return m_symbols.unwrapTypeAlias(rt);
                 }
-                if(const FieldDecl* field = SymbolTable::findClassField(*cls, mName)){
+                if(const FieldDecl* field = SymbolTable::FindClassField(*cls, mName)){
                     const TypeRef* ft = m_symbols.substituteTypeParams(field->type, cls->templateParams, recvTypeRef);
                     if(const TypeRef* uft = m_symbols.unwrapTypeAlias(ft); uft && uft->isFuncType && uft->funcReturnType)
                         return m_symbols.unwrapTypeAlias(uft->funcReturnType);
@@ -473,7 +446,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
                 if(const MethodDecl* m = m_symbols.findInterfaceMethod(*recvTypeRef, mName, &callArgCount, 0u, argTypeHints, argIsMutHints); m && m->returnType)
                     return m_symbols.unwrapTypeAlias(m->returnType);
             }
-            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsType)){
+            else if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, method, lhsType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
@@ -499,13 +472,7 @@ const TypeRef* TypeChecker::inferExprTypeRef(
     return nullptr;
 }
 
-MStringView TypeChecker::inferExprBaseType(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    const TypeRef** outTypeRef
-)const noexcept{
+MStringView TypeChecker::inferExprBaseType(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef)const noexcept{
     const TypeRef* typeRef = inferExprTypeRef(ownerClass, method, expr, scope);
     if(outTypeRef)
         *outTypeRef = typeRef;
@@ -514,11 +481,7 @@ MStringView TypeChecker::inferExprBaseType(
         : inferExprTypeName(ownerClass, method, expr, scope);
 }
 
-void TypeChecker::analyzeBlockMoveAtLastUse(
-    const Span<Stmt* const> statements,
-    const Span<const ScopedVarInfo> scope,
-    const usize savedScopeSize
-)const noexcept{
+void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, const Span<const ScopedVarInfo> scope, const usize savedScopeSize)const noexcept{
     for(usize i = savedScopeSize; i < scope.size(); ++i){
         const ScopedVarInfo& local = scope[i];
         if(local.isParam || local.isConst || (local.type && m_symbols.resolveRefMode(local.type) != ParamPassingMode::None))
@@ -530,7 +493,7 @@ void TypeChecker::analyzeBlockMoveAtLastUse(
                 lastUseIndex = s;
         }
 
-        if(SymbolTable::isSimdType(resolveScopedVarBaseType(local)))
+        if(SymbolTable::IsSimdType(resolveScopedVarBaseType(local)))
             continue;
 
         b8 capturedOrAsyncOrAliased = false;
@@ -583,3 +546,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

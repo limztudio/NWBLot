@@ -14,15 +14,7 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_scene_view{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
+namespace __hidden_view{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,7 +54,7 @@ SIMDMatrix BuildDefaultSceneViewBasis()noexcept{
     SIMDVectorSingle right;
     SIMDVectorSingle up;
     SIMDVectorSingle forward;
-    __hidden_scene_view::BuildDefaultSceneViewBasisVectors(right, up, forward);
+    __hidden_view::BuildDefaultSceneViewBasisVectors(right, up, forward);
     return SIMDMatrix{ .v = { right, up, forward, VectorSet(0.0f, 0.0f, 0.0f, s_DefaultSceneViewDepthOffset) } };
 }
 
@@ -70,7 +62,7 @@ SIMDMatrix BuildSceneViewBasis(const SIMDVectorSingle position, const SIMDVector
     SIMDVectorSingle right;
     SIMDVectorSingle up;
     SIMDVectorSingle forward;
-    __hidden_scene_view::BuildSceneViewBasisVectors(rotation, right, up, forward);
+    __hidden_view::BuildSceneViewBasisVectors(rotation, right, up, forward);
     return SIMDMatrix{ .v = { right, up, forward, position } };
 }
 

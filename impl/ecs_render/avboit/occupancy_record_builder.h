@@ -50,9 +50,9 @@ public:
         : AvboitRecordInputsBase(targetsIn)
         , preTimingTicket(timingTicketIn)
         , occupancyComputeEmulationTiming(computeEmulationTimingIn)
-    {
-    }
+    {}
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

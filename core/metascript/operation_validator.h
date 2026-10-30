@@ -18,7 +18,7 @@ NWB_METASCRIPT_BEGIN
 
 
 // Checks operand types, zero divisors and size or integer overflow before a binary or assignment operator runs.
-class OperationValidator{
+class OperationValidator final{
 public:
     static constexpr AStringView s_IntegerOverflowText = "integer overflow";
 
@@ -30,12 +30,12 @@ public:
 
 
 public:
-    b8 validateBinaryOperation(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column);
-    b8 validateAssignment(TokenType::Enum op, const Value& target, const Value& rhs, u32 line, u32 column);
+    [[nodiscard]] b8 validateBinaryOperation(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column);
+    [[nodiscard]] b8 validateAssignment(TokenType::Enum op, const Value& target, const Value& rhs, u32 line, u32 column);
 
 
 private:
-    b8 validateNumericOperands(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column, AStringView operandError, b8 rejectZeroDivisor = false);
+    [[nodiscard]] b8 validateNumericOperands(TokenType::Enum op, const Value& lhs, const Value& rhs, u32 line, u32 column, AStringView operandError, b8 rejectZeroDivisor = false);
 
 
 private:

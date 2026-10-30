@@ -396,9 +396,8 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
             AppendPOD(outBinary, static_cast<u32>(1u));
             AppendPOD(outBinary, shaderRef.name().hash());
         }
-        else{
+        else
             AppendPOD(outBinary, static_cast<u32>(0u));
-        }
     };
     appendOptionalAvboitPixelShader(material.avboitAccumulatePixelShader());
     appendOptionalAvboitPixelShader(material.avboitOccupancyPixelShader());
@@ -421,3 +420,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

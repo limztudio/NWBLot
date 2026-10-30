@@ -16,17 +16,7 @@ namespace __hidden_adhd_compiler_options{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 TryConsumeOptionValue(
-    const NWB::Core::Metascript::MStringView arg,
-    const NWB::Core::Metascript::MStringView shortFlag,
-    const NWB::Core::Metascript::MStringView longFlag,
-    int& inOutIndex,
-    const int argc,
-    char** argv,
-    NWB::Core::Metascript::MetaArena& arena,
-    NWB::Core::Metascript::MString& outValue,
-    b8& outMatched
-){
+[[nodiscard]] b8 TryConsumeOptionValue(const NWB::Core::Metascript::MStringView arg, const NWB::Core::Metascript::MStringView shortFlag, const NWB::Core::Metascript::MStringView longFlag, const int argc, char** argv, int& inOutIndex, NWB::Core::Metascript::MetaArena& arena, NWB::Core::Metascript::MString& outValue, b8& outMatched){
     using namespace NWB::Core::Metascript;
 
     outMatched = false;
@@ -59,12 +49,7 @@ namespace __hidden_adhd_compiler_options{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ParseAdhdCompilerOptions(
-    const int argc,
-    char** argv,
-    NWB::Core::Metascript::MetaArena& arena,
-    AdhdCompilerOptions& outOptions
-){
+b8 ParseAdhdCompilerOptions(const int argc, char** argv, NWB::Core::Metascript::MetaArena& arena, AdhdCompilerOptions& outOptions){
     using namespace NWB::Core::Metascript;
     using namespace __hidden_adhd_compiler_options;
 
@@ -78,38 +63,38 @@ b8 ParseAdhdCompilerOptions(
         b8 matched = false;
         MString value(arena);
 
-        if(!TryConsumeOptionValue(arg, "-o", "--output-dir", i, argc, argv, arena, outOptions.outputDirectory, matched))
+        if(!TryConsumeOptionValue(arg, "-o", "--output-dir", argc, argv, i, arena, outOptions.outputDirectory, matched))
             return false;
         if(matched)
             continue;
 
-        if(!TryConsumeOptionValue(arg, "-I", "--include-dir", i, argc, argv, arena, value, matched))
+        if(!TryConsumeOptionValue(arg, "-I", "--include-dir", argc, argv, i, arena, value, matched))
             return false;
         if(matched){
             outOptions.includeDirectories.push_back(Move(value));
             continue;
         }
 
-        if(!TryConsumeOptionValue(arg, "-D", "--define", i, argc, argv, arena, value, matched))
+        if(!TryConsumeOptionValue(arg, "-D", "--define", argc, argv, i, arena, value, matched))
             return false;
         if(matched){
             outOptions.macroDefinitions.push_back(Move(value));
             continue;
         }
 
-        if(!TryConsumeOptionValue(arg, {}, "--input", i, argc, argv, arena, value, matched))
+        if(!TryConsumeOptionValue(arg, {}, "--input", argc, argv, i, arena, value, matched))
             return false;
         if(matched){
             outOptions.inputFiles.push_back(Move(value));
             continue;
         }
 
-        if(!TryConsumeOptionValue(arg, {}, "--namespace", i, argc, argv, arena, outOptions.customNamespace, matched))
+        if(!TryConsumeOptionValue(arg, {}, "--namespace", argc, argv, i, arena, outOptions.customNamespace, matched))
             return false;
         if(matched)
             continue;
 
-        if(!TryConsumeOptionValue(arg, "-MF", "--depfile", i, argc, argv, arena, outOptions.depfilePath, matched))
+        if(!TryConsumeOptionValue(arg, "-MF", "--depfile", argc, argv, i, arena, outOptions.depfilePath, matched))
             return false;
         if(matched)
             continue;

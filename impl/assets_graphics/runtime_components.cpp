@@ -28,12 +28,7 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelCo
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
-
-[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(
-    const Span<const u8> payload,
-    const TStringView context,
-    Name& outVirtualPath
-){
+[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, Name& outVirtualPath){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
     if(!binaryPayload)
         return false;
@@ -52,21 +47,14 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
 
 
 b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(
-        payload,
-        NWB_TEXT("ModelComponentAsset::loadComponentPayload"),
-        component.model.virtualPath
-    );
+    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"), component.model.virtualPath);
 }
 
 b8 ModelComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("ModelComponentAsset::validatePayload")))
         return false;
     if(!component.model.valid()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ModelComponentAsset::validatePayload failed: model_component '{}' asset must not be empty"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("ModelComponentAsset::validatePayload failed: model_component '{}' asset must not be empty"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -77,21 +65,14 @@ b8 ModelComponentAsset::validatePayload()const{
 
 
 b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(
-        payload,
-        NWB_TEXT("MeshComponentAsset::loadComponentPayload"),
-        component.mesh.virtualPath
-    );
+    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"), component.mesh.virtualPath);
 }
 
 b8 MeshComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("MeshComponentAsset::validatePayload")))
         return false;
     if(!component.mesh.valid()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("MeshComponentAsset::validatePayload failed: mesh_component '{}' asset must not be empty"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshComponentAsset::validatePayload failed: mesh_component '{}' asset must not be empty"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -102,10 +83,7 @@ b8 MeshComponentAsset::validatePayload()const{
 
 
 b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(
-        payload,
-        NWB_TEXT("RendererComponentAsset::loadComponentPayload")
-    );
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(payload, NWB_TEXT("RendererComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
     if(
@@ -133,27 +111,15 @@ b8 RendererComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("RendererComponentAsset::validatePayload")))
         return false;
     if(!component.material.valid()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
-    if(
-        static_cast<u8>(component.opticalVolumeCoincidence) > static_cast<u8>(OpticalVolumeCoincidence::SharedGroup)
-        || static_cast<u8>(component.opticalBoundaryMode) > static_cast<u8>(OpticalBoundaryMode::ClosedPriority)
-    ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value"),
-            ConvertString(virtualPath().resolvedText())
-        );
+    if(static_cast<u8>(component.opticalVolumeCoincidence) > static_cast<u8>(OpticalVolumeCoincidence::SharedGroup) || static_cast<u8>(component.opticalBoundaryMode) > static_cast<u8>(OpticalBoundaryMode::ClosedPriority)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     if(component.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && !component.opticalVolumeGroup){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' shared_group optical volume requires optical_volume_group"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' shared_group optical volume requires optical_volume_group"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -167,3 +133,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

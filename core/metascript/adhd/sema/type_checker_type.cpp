@@ -14,11 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const TemplateParamDecl* TypeChecker::findTemplateParam(
-    const ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const MStringView name
-)noexcept{
+const TemplateParamDecl* TypeChecker::FindTemplateParam(const ClassDecl* ownerClass, const MethodDecl* method, const MStringView name)noexcept{
     if(method){
         for(const TemplateParamDecl& tp : method->templateParams){
             if(!tp.constValueType && tp.name == name)
@@ -34,12 +30,7 @@ const TemplateParamDecl* TypeChecker::findTemplateParam(
     return nullptr;
 }
 
-b8 TypeChecker::checkTemplateParamBounds(
-    const Span<const TemplateParamDecl> params,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkTemplateParamBounds(const Span<const TemplateParamDecl> params, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors){
     b8 ok = true;
     MethodDecl tempMethodScope(m_arena);
     if(!enclosingMethod){
@@ -65,10 +56,7 @@ b8 TypeChecker::checkTemplateParamBounds(
             else{
                 const TypeRef* unwrappedConstType = m_symbols.unwrapTypeAlias(param.constValueType);
                 const MStringView baseConstName = unwrappedConstType ? m_symbols.resolveBaseTypeName(unwrappedConstType->name) : MStringView{};
-                if(!unwrappedConstType
-                    || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None
-                    || !(baseConstName == "b8" || IsIntegerScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr))
-                {
+                if(!unwrappedConstType || m_symbols.resolveRefMode(param.constValueType) != ParamPassingMode::None || !(baseConstName == "b8" || IsIntegerScalarType(baseConstName) || m_symbols.findEnum(baseConstName) != nullptr)){
                     reportError(errors, param.span, "non-type template parameter must have an integer, b8, or enum value type");
                     ok = false;
                 }
@@ -149,14 +137,7 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
     return false;
 }
 
-b8 TypeChecker::checkTemplateArgBounds(
-    const Span<const TemplateParamDecl> params,
-    const Span<const TypeArg> args,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    const SourceSpan span,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkTemplateArgBounds(const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan span, MVector<ParseError>& errors){
     b8 ok = true;
     if(args.size() != params.size()){
         reportError(errors, span, "template argument count does not match template parameter list");
@@ -182,9 +163,9 @@ b8 TypeChecker::checkTemplateArgBounds(
             continue;
 
         const MStringView argTypeName = m_symbols.resolveBaseTypeName(arg.type->name);
-        const TemplateParamDecl* dependentTp = findTemplateParam(enclosingClass, enclosingMethod, arg.type->name);
+        const TemplateParamDecl* dependentTp = FindTemplateParam(enclosingClass, enclosingMethod, arg.type->name);
         if(!dependentTp && argTypeName != arg.type->name)
-            dependentTp = findTemplateParam(enclosingClass, enclosingMethod, argTypeName);
+            dependentTp = FindTemplateParam(enclosingClass, enclosingMethod, argTypeName);
         if(dependentTp){
             for(const TypeRef* boundRef : param.interfaceBounds){
                 if(!boundRef)
@@ -222,13 +203,7 @@ b8 TypeChecker::checkTemplateArgBounds(
     return ok;
 }
 
-b8 TypeChecker::checkTemplateArgTypes(
-    const Span<const TypeArg> templateArgs,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    const SourceSpan fallbackSpan,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkTemplateArgTypes(const Span<const TypeArg> templateArgs, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan fallbackSpan, MVector<ParseError>& errors){
     b8 ok = true;
     for(const TypeArg& targ : templateArgs){
         if(targ.type){
@@ -244,13 +219,7 @@ b8 TypeChecker::checkTemplateArgTypes(
     return ok;
 }
 
-b8 TypeChecker::checkTypeRef(
-    const TypeRef& typeRef,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    MVector<ParseError>& errors,
-    const b8 allowVoid
-){
+b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const b8 allowVoid, MVector<ParseError>& errors){
     b8 ok = true;
     const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(&typeRef);
     const b8 isVoid = IsVoidTypeRef(&typeRef) || IsVoidTypeRef(unwrapped);
@@ -293,7 +262,8 @@ b8 TypeChecker::checkTypeRef(
         }
     }
     else if(IsTypeAndCountBuiltinGeneric(typeRef.name)){
-        if(typeRef.templateArgs.size() != 2u
+        if(
+            typeRef.templateArgs.size() != 2u
             || !typeRef.templateArgs[0].type
             || !NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols)
             || typeRef.templateArgs[1].constantText == "true"
@@ -301,8 +271,8 @@ b8 TypeChecker::checkTypeRef(
             || typeRef.templateArgs[1].constantText == "0"
             || typeRef.templateArgs[1].constantText == "0u"
             || typeRef.templateArgs[1].constantText == "0U"
-            || (!typeRef.templateArgs[1].constantText.empty() && typeRef.templateArgs[1].constantText[0] == '-'))
-        {
+            || (!typeRef.templateArgs[1].constantText.empty() && typeRef.templateArgs[1].constantText[0] == '-')
+        ){
             reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 positive integer compile-time constant capacity argument");
             ok = false;
         }
@@ -333,9 +303,7 @@ b8 TypeChecker::checkTypeRef(
     if(!checkTemplateArgTypes(typeRef.templateArgs, enclosingClass, enclosingMethod, typeRef.span, errors))
         ok = false;
     if(!typeRef.isAuto && !typeRef.isFuncType && !typeRef.name.empty()){
-        if((m_symbols.findGlobalConstant(typeRef.name) != nullptr && !m_symbols.hasTypeSymbol(typeRef.name))
-            || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name))
-        {
+        if((m_symbols.findGlobalConstant(typeRef.name) != nullptr && !m_symbols.hasTypeSymbol(typeRef.name)) || HasConstValueTemplateParam(enclosingClass, enclosingMethod, typeRef.name)){
             reportError(errors, typeRef.span, "compile-time constant cannot be used as a type");
             ok = false;
         }
@@ -343,29 +311,16 @@ b8 TypeChecker::checkTypeRef(
     return ok;
 }
 
-b8 TypeChecker::checkReturnTypeRef(
-    const TypeRef& returnType,
-    const ClassDecl* enclosingClass,
-    const MethodDecl* enclosingMethod,
-    const SourceSpan errorSpan,
-    MVector<ParseError>& errors
-){
-    b8 ok = checkTypeRef(returnType, enclosingClass, enclosingMethod, errors, true);
-    if(m_symbols.resolveRefMode(&returnType) == ParamPassingMode::None
-        && m_symbols.findInterface(m_symbols.resolveBaseTypeName(returnType.name)))
-    {
+b8 TypeChecker::checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, const SourceSpan errorSpan, MVector<ParseError>& errors){
+    b8 ok = checkTypeRef(returnType, enclosingClass, enclosingMethod, true, errors);
+    if(m_symbols.resolveRefMode(&returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(returnType.name))){
         reportError(errors, errorSpan, "cannot return an 'interface' type by value");
         ok = false;
     }
     return ok;
 }
 
-void TypeChecker::markStringToPathAdaptation(
-    ClassDecl* ownerClass,
-    const MethodDecl* method,
-    Expr& expr,
-    const Span<const ScopedVarInfo> scope
-)const noexcept{
+void TypeChecker::markStringToPathAdaptation(ClassDecl* ownerClass, const MethodDecl* method, Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
     const MStringView exprType = inferExprTypeName(ownerClass, method, expr, scope);
     if(expr.kind == ExprKind::StringLiteral || exprType == "String" || exprType == "StringView" || exprType == "CompactString")
         expr.adaptToTChar = true;
@@ -409,7 +364,7 @@ b8 TypeChecker::verifyConcreteClassImplementsInterface(
         return true;
     }
 
-    if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, rhsType)){
+    if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, &method, rhsType)){
         for(const TypeRef* bound : tp->interfaceBounds){
             if(bound && interfaceInheritsFrom(*bound, *resolvedExpected))
                 return true;

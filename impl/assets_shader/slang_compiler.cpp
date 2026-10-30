@@ -170,9 +170,8 @@ static constexpr SlangStageMapping s_StageMappings[]{
 
 static Expected<AStringView> TryMapStageToSlangStage(const AStringView stage)noexcept{
     for(const SlangStageMapping& mapping : s_StageMappings){
-        if(stage == mapping.stage){
+        if(stage == mapping.stage)
             return mapping.slangStage;
-        }
     }
 
     return MakeUnexpected(Failure{});
@@ -416,12 +415,10 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
                 , diagnosticsRead.error().value()
             );
         }
-        else if(!diagnostics.empty()){
+        else if(!diagnostics.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {} :\n{}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode, ConvertString(diagnostics));
-        }
-        else{
+        else
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}"), ConvertString(request.shaderName), ConvertString(request.variantName), failureStage, failureCode);
-        }
         return false;
     }
 
@@ -452,9 +449,8 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
                 , ConvertString(readBinaryFileResult.error().message())
             );
         }
-        else{
+        else
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'"), ConvertString(request.shaderName), ConvertString(request.variantName), PathToString<tchar>(compilerOutputPath));
-        }
         return false;
     }
 
@@ -502,3 +498,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -14,19 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
-    while(!m_cursor.check(TokenType::EndOfFile)){
-        if(!parseTopLevelDeclaration(outUnit))
-            return false;
-    }
-    return !m_cursor.failed();
-}
-
-b8 DeclParser::validateMemberOperatorArity(
-    const MStringView opName,
-    const usize paramCount,
-    MStringView& outErrorMsg
-)noexcept{
+b8 DeclParser::ValidateMemberOperatorArity(const MStringView opName, const usize paramCount, MStringView& outErrorMsg)noexcept{
     if((opName == "*" || opName == "&") && paramCount == 0u){
         outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
         return false;
@@ -50,6 +38,14 @@ b8 DeclParser::validateMemberOperatorArity(
         return false;
     }
     return true;
+}
+
+b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
+    while(!m_cursor.check(TokenType::EndOfFile)){
+        if(!parseTopLevelDeclaration(outUnit))
+            return false;
+    }
+    return !m_cursor.failed();
 }
 
 b8 DeclParser::isCurrentTokenImported()const noexcept{

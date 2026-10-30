@@ -366,7 +366,7 @@ Expected<NotNull<Value*>> StatementParser::resolveTarget(const ExpressionParser:
     NWB_ASSERT(!path.empty());
 
     const auto rootName = path[0];
-    auto rootIt = m_variables.find(rootName);
+    const auto rootIt = m_variables.find(rootName);
     if(rootIt == m_variables.end()){
         m_cursor.error(errorLine, errorColumn, "assignments must target a declared variable");
         return MakeUnexpected(Failure{});

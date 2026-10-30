@@ -32,7 +32,6 @@ NWB_IMPL_BEGIN
 
 inline constexpr TStringView s_UiLayerSystemOwnerName = NWB_TEXT("UiLayerSystem");
 
-
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
 class UiLayerSystem final
     : public Core::ECS::ISystem

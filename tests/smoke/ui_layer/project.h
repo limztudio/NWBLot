@@ -27,7 +27,6 @@ namespace Tests::Smoke{
 
 class FramebufferCapture;
 
-
 class UiLayerSmokeProject final : public IProjectEntryCallbacks{
 public:
     explicit UiLayerSmokeProject(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World> world)noexcept;

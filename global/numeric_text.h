@@ -172,18 +172,14 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline Expected<u8> ParseHexDigit(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')){
+    if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
         return static_cast<u8>(ch - static_cast<CharT>('0'));
-    }
-    if(ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')){
+    if(ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f'))
         return static_cast<u8>(ch - static_cast<CharT>('a') + s_HexDecimalDigitCount);
-    }
-    if(ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')){
+    if(ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F'))
         return static_cast<u8>(ch - static_cast<CharT>('A') + s_HexDecimalDigitCount);
-    }
     return MakeUnexpected(Failure{});
 }
-
 
 template<typename CharT>
 [[nodiscard]] inline Expected<u64> ParseHexU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
@@ -202,7 +198,6 @@ template<typename CharT>
     return value;
 }
 
-
 template<typename CharT>
 [[nodiscard]] inline Expected<u64> ParseVariableHexU64(BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     u64 value = 0u;
@@ -220,7 +215,6 @@ template<typename CharT>
     }
     return value;
 }
-
 
 namespace NumericTextDetail{
 
@@ -293,7 +287,6 @@ template<typename StringT>
 inline void AppendHexU64(const u64 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText))){
     NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
 }
-
 
 template<typename ArenaT>
 [[nodiscard]] inline AString<ArenaT> FormatHex64A(ArenaT& arena, const u64 value){

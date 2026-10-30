@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+
 #include <impl/assets_scene/component_assets.adhd.h>
 
 #include <core/assets/cook_metadata.h>
@@ -30,7 +31,6 @@ namespace __hidden_assets_scene_volume_entry{
 
 
 using namespace SceneAssetCook;
-
 
 static b8 RegisterTransformComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
     return RegisterComponentCookEntry<
@@ -157,26 +157,10 @@ static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& re
     Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return
-        registry.registerDefaultEntryAsset(
-            s_DefaultProjectVirtualPath,
-            ProjectAsset::AssetTypeName(),
-            s_DefaultProjectVirtualPathText
-        )
-        && registry.registerType(
-            TransformComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>,
-            IComponent::AssetTypeName()
-        )
-        && registry.registerType(
-            CameraComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>,
-            IComponent::AssetTypeName()
-        )
-        && registry.registerType(
-            LightComponentAsset::AssetTypeName(),
-            &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>,
-            IComponent::AssetTypeName()
-        )
+        registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
+        && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(CameraComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<CameraComponentCookEntry, &ParseCameraComponentCookMetadata, s_CameraDiagnosticPrefix>, IComponent::AssetTypeName())
+        && registry.registerType(LightComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<LightComponentCookEntry, &ParseLightComponentCookMetadata, s_LightDiagnosticPrefix>, IComponent::AssetTypeName())
         && registry.registerType(EntityAsset::AssetTypeName(), &ExtractEntityDependencies)
         && registry.registerType(ProjectAsset::AssetTypeName(), &ExtractProjectDependencies)
         && registry.registerType(SceneAsset::AssetTypeName(), &ExtractSceneDependencies)
@@ -217,3 +201,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

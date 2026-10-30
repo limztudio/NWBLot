@@ -76,8 +76,7 @@ static b8 TestMeshletHasPositionNormalValue(
     const LocalRefVectorT& localRefs,
     const Float3U& expectedPosition,
     const Float4U& expectedNormal
-)noexcept(
-    noexcept(DeclVal<void(*)(const NWB::Impl::MeshletLocalVertexRef&)noexcept>()(localRefs[DeclVal<u32>()]))
+)noexcept(noexcept(DeclVal<void(*)(const NWB::Impl::MeshletLocalVertexRef&)noexcept>()(localRefs[DeclVal<u32>()]))
     && noexcept(TestDecodeMeshletPositionRef(mesh, meshlet, DeclVal<u32>()))
     && noexcept(TestDecodeMeshletAttributeRef(mesh, meshlet, DeclVal<u32>()))
     && noexcept(DeclVal<void(*)(const Float3U&)noexcept>()(positions[DeclVal<u32>()]))
@@ -192,7 +191,6 @@ TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
     });
 }
 
-
 TEST(AssetsGraphics, OpposedSphereNormalsDisableMeshletCone){
     RunSmokeMeshAcceptance("sphere_smooth.nwb", "sphere_smooth", Name("project/meshes/sphere_smooth"), [](const NWB::Impl::Mesh& loadedMesh){
         ASSERT_EQ(loadedMesh.meshletBounds().size(), 1u);
@@ -268,7 +266,6 @@ TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
         EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(loadedMesh.meshlets()[1u]), 1u);
     });
 }
-
 
 TEST(AssetsGraphics, MeshFailedReloadPreservesEveryPreviouslyPublishedStream){
     CapturingLogger logger;
@@ -465,3 +462,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -32,12 +32,10 @@ TEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStruc
     EXPECT_GE(layout.bufferByteSize, static_cast<u64>(layout.indexByteOffset) + 3u * sizeof(u32));
 }
 
-
 TEST(ComputeEmulationLayoutTests, RejectsInvalidSourceSizes){
     const u64 sizes[] = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
-    for(const u64 size : sizes){
+    for(const u64 size : sizes)
         EXPECT_FALSE(ResolveComputeEmulationLayout(size, 3u));
-    }
     EXPECT_FALSE(ResolveComputeEmulationLayout(sizeof(MeshletLocalVertexRef), 0u));
 }
 

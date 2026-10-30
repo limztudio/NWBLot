@@ -4,7 +4,6 @@
 
 const Name s_TextureUploadScratchArena = "impl/assets_texture/upload";
 
-
 [reflect]
 class TextureMipLevel{
     public u64 offsetBytes = 0u;
@@ -19,3 +18,4 @@ class TextureMipLevel{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

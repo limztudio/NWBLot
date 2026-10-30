@@ -22,8 +22,8 @@ NWB_IMPL_BEGIN
 
 
 DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept
-    : m_graph(graph){
-}
+    : m_graph(graph)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,7 +136,6 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
     specularRoughnessResult = importFirstWriteTexture(deferredTargets.specularRoughness, Name("render.deferred_lighting.specular_roughness"), "G-Buffer Specular Roughness");
     depthResult = importFirstWriteTexture(deferredTargets.depth, Name("render.deferred_lighting.depth"), "G-Buffer Depth");
 
-
     // CSG working set is declared only for frames with CSG work; wider target lifecycle stays in native producers.
     if(hasCsgFrameWork){
         csgCapBackNormalResult = importTexture(deferredTargets.csgCapBackNormal, Name("render.deferred.csg_cap_back_normal"), "CSG Cap Back Normal");
@@ -213,7 +212,6 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
             materialContextSlotsResult = Optional<Core::GpuGraphResourceId>{*importedResource};
     }
 
-
     // History copy declared after Present; reuse active-lighting identities for copy destinations.
     if(capturesLaggedLightingHistory){
         historyCopyShadowVisibilityResult = currentShadowVisibilityResult;
@@ -223,7 +221,6 @@ DeferredGraphResourceImportBuilder::DeferredGraphResourceImportBuilder(Core::Gpu
         historyCopyDestinationCausticIrradianceResult = history ? causticIrradianceResult : importFirstWriteTexture(captureHistory->causticIrradiance, Name("render.lagged_history_copy.history_caustic_irradiance"), "History Caustic Irradiance");
         historyCopyDestinationSurfelIrradianceResult = history ? surfelIrradianceResult : importFirstWriteTexture(captureHistory->surfelIrradiance, Name("render.lagged_history_copy.history_surfel_irradiance"), "History Surfel Irradiance");
     }
-
 
     // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
     avboitLowRasterResult = importAvboitTexture(deferredTargets.avboit.lowRasterTarget, Name("render.avboit.low_raster"), "AVBOIT Low Raster");

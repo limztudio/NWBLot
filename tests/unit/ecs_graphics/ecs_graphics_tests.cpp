@@ -49,6 +49,7 @@ namespace __hidden_ecs_graphics_tests{
 
 
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using TestWorld = NWB::Tests::EcsTestWorld;
 using NWB::Tests::MakeTriangleIndices;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
@@ -72,7 +73,6 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
     EXPECT_FLOAT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE], NWB_AVBOIT_REFRACTION_DISABLED);
     EXPECT_FLOAT_EQ(hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE], NWB_AVBOIT_REFRACTION_DISABLED);
 }
-
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
     NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty);
@@ -118,7 +118,6 @@ TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){
     EXPECT_TRUE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
 }
 
-
 TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection){
     NWB::Tests::TestArena<> arena;
     NWB::Impl::CsgShapeRegistry registry(arena.arena);
@@ -128,11 +127,11 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     ASSERT_TRUE(foundShape1);
     shape = *foundShape1;
     NWB::Impl::CsgBoxShapeParameters parameters;
-    parameters.halfExtents = Float4(0.25f, 0.125f, 0.5f, 0.f);
-    const SIMDMatrix shapeToWorld = MatrixTranslation(0.5f, 0.25f, 2.f);
+    parameters.halfExtents = Float4(0.25f, 0.125f, 0.5f, 0.0f);
+    const SIMDMatrix shapeToWorld = MatrixTranslation(0.5f, 0.25f, 2.0f);
     NWB::Impl::CsgClipWorkBounds receiver;
-    receiver.minBounds = VectorSet(-20.f, -20.f, -20.f, 0.f);
-    receiver.maxBounds = VectorSet(-10.f, -10.f, -10.f, 0.f);
+    receiver.minBounds = VectorSet(-20.0f, -20.0f, -20.0f, 0.0f);
+    receiver.maxBounds = VectorSet(-10.0f, -10.0f, -10.0f, 0.0f);
     NWB::Impl::CsgClipWorkBounds work;
     ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     ASSERT_TRUE(work.valid);
@@ -145,8 +144,8 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     receiver.valid = true;
     EXPECT_FALSE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = VectorSet(0.5f, 0.25f, 1.75f, 0.f);
-    receiver.maxBounds = VectorSet(1.f, 1.f, 3.f, 0.f);
+    receiver.minBounds = VectorSet(0.5f, 0.25f, 1.75f, 0.0f);
+    receiver.maxBounds = VectorSet(1.0f, 1.0f, 3.0f, 0.0f);
     ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver));
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.5f);
@@ -171,11 +170,11 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     ASSERT_TRUE(work.valid);
 
     NWB::Impl::CsgBoxShapeParameters invalidParameters;
-    invalidParameters.halfExtents.x = 0.f;
+    invalidParameters.halfExtents.x = 0.0f;
     EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = VectorReplicate(-2.f);
-    receiver.maxBounds = VectorReplicate(2.f);
+    receiver.minBounds = VectorReplicate(-2.0f);
+    receiver.maxBounds = VectorReplicate(2.0f);
     receiver.valid = true;
     EXPECT_FALSE(work.resolveCutter(registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver));
     EXPECT_FALSE(work.valid);
@@ -185,8 +184,8 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     shape = *foundShape3;
     ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -2.f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 2.f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -2.0f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 2.0f);
     receiver.valid = false;
     EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
     EXPECT_FALSE(work.valid);
@@ -208,10 +207,9 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     receiver.valid = true;
     ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -1.f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -1.0f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.0f);
 }
-
 
 TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections){
     NWB::Impl::CsgFrameWorkRegion unknown;
@@ -222,29 +220,25 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
     EXPECT_EQ(unknownRect.maxY, 701);
 
     NWB::Impl::CsgFrameWorkRegion crossing;
-    crossing.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.f, 0.1f, 100.f), VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), 1001u, 701u);
+    crossing.expandWorldBounds(MatrixPerspectiveFovLH(s_PIDIV2, 1.0f, 0.1f, 100.0f), VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(crossing.fullFrame);
     EXPECT_EQ(crossing.resolveRect(1001u, 701u).maxX, 1001);
 
     NWB::Impl::CsgFrameWorkRegion invalid;
-    invalid.expandWorldBounds(MatrixIdentity(), VectorSet(1.f, 1.f, 1.f, 0.f), VectorZero(), 1001u, 701u);
+    invalid.expandWorldBounds(MatrixIdentity(), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorZero(), 1001u, 701u);
     EXPECT_TRUE(invalid.fullFrame);
     NWB::Impl::CsgFrameWorkRegion nonfinite;
-    nonfinite.expandWorldBounds(MatrixIdentity(), VectorSet(-Limit<f32>::s_Infinity, -1.f, 1.f, 0.f), VectorSet(1.f, 1.f, 2.f, 0.f), 1001u, 701u);
+    nonfinite.expandWorldBounds(MatrixIdentity(), VectorSet(-Limit<f32>::s_Infinity, -1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 2.0f, 0.0f), 1001u, 701u);
     EXPECT_TRUE(nonfinite.fullFrame);
 
     NWB::Impl::CsgFrameWorkRegion large;
-    large.expandWorldBounds(MatrixIdentity(), VectorSet(-1e20f, -0.25f, 1.f, 0.f), VectorSet(0.f, 0.25f, 2.f, 0.f), 1000u, 600u);
+    large.expandWorldBounds(MatrixIdentity(), VectorSet(-1e20f, -0.25f, 1.0f, 0.0f), VectorSet(0.0f, 0.25f, 2.0f, 0.0f), 1000u, 600u);
     ASSERT_TRUE(large.bounded());
     EXPECT_EQ(large.minX, 0u);
     EXPECT_EQ(large.maxX, 502u);
     large.expandFull();
     EXPECT_EQ(large.resolveRect(1000u, 600u).maxX, 1000);
 }
-
-
-using TestWorld = NWB::Tests::EcsTestWorld;
-
 
 TEST(EcsGraphics, MissingMeshDoesNotReplacePreviousResolution){
     TestWorld testWorld;
@@ -266,7 +260,7 @@ TEST(EcsGraphics, ShadowMaterialConstantsReuseOnlyTheSameMaterialAndLayout){
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedConstantRangeMap;
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     ::Vector<u8, NWB::Core::Alloc::ScratchArena> uploadBytes(scratchArena);
-    constexpr u8 s_Constants[] = {0xA1u, 0xB2u, 0xC3u, 0xD4u};
+    constexpr u8 s_Constants[] = { 0xA1u, 0xB2u, 0xC3u, 0xD4u };
     RangeMap ranges(0, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(3u);
     const Name material("project/materials/shared");
@@ -349,7 +343,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
     for(usize index = 0u; index < sourceBytes.size(); ++index)
         sourceBytes[index] = static_cast<u8>((index * 31u) & 255u);
 
-    const Array<usize, 2> byteCounts = {512u, 4096u};
+    const Array<usize, 2> byteCounts = { 512u, 4096u };
     for(const usize byteCount : byteCounts){
         NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
         ByteVector uploadBytes(scratchArena);
@@ -372,7 +366,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
             EXPECT_EQ(range.byteCount, firstRange.byteCount);
         }
         const Span<const u8> emptyBytes;
-        ByteRange emptyRange{4u, 4u};
+        ByteRange emptyRange{ 4u, 4u };
         const auto rangeResult4 = NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(emptyBytes, uploadBytes, ranges);
         ASSERT_TRUE(rangeResult4);
         emptyRange = *rangeResult4;
@@ -400,23 +394,23 @@ TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
     RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
     ranges.reserve(2u);
     constexpr u64 s_CollisionHash = 41u;
-    const Array<u8, 4> originalFirstBytes = {1u, 2u, 3u, 4u};
-    const Array<u8, 4> secondBytes = {1u, 2u, 3u, 5u};
+    const Array<u8, 4> originalFirstBytes = { 1u, 2u, 3u, 4u };
+    const Array<u8, 4> secondBytes = { 1u, 2u, 3u, 5u };
     {
         Array<u8, 4> firstBytes = originalFirstBytes;
-        const ByteLookup lookup{s_CollisionHash, firstBytes};
-        ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, lookup), ByteRange{0u, 4u}).second);
+        const ByteLookup lookup{ s_CollisionHash, firstBytes };
+        ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, lookup), ByteRange{ 0u, 4u }).second);
         firstBytes.fill(0u);
     }
 
     // Compare payload bytes even when hash and byte length match.
-    const ByteLookup firstLookup{s_CollisionHash, originalFirstBytes};
-    const ByteLookup secondLookup{s_CollisionHash, secondBytes};
+    const ByteLookup firstLookup{ s_CollisionHash, originalFirstBytes };
+    const ByteLookup secondLookup{ s_CollisionHash, secondBytes };
     const auto firstFound = ranges.find(firstLookup);
     ASSERT_NE(firstFound, ranges.end());
     EXPECT_EQ(firstFound.value().byteOffset, 0u);
     EXPECT_EQ(ranges.find(secondLookup), ranges.end());
-    ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, secondLookup), ByteRange{4u, 4u}).second);
+    ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, secondLookup), ByteRange{ 4u, 4u }).second);
     const auto secondFound = ranges.find(secondLookup);
     ASSERT_NE(secondFound, ranges.end());
     EXPECT_EQ(secondFound.value().byteOffset, 4u);
@@ -476,7 +470,6 @@ static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, co
     return joint;
 }
 
-
 static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix()noexcept{
     NWB::Impl::SkeletonJointMatrix joint = ::MatrixIdentity<Float34>();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
@@ -515,17 +508,16 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
     AppendRuntimeVertex(instance, Float3U(1.0f, -1.0f, 0.0f), 0.5f);
     AppendRuntimeVertex(instance, Float3U(0.0f, 1.0f, 0.0f), 1.0f);
 
-    instance.meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u), });
+    instance.meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u) });
     instance.meshlets.back().skinBase = 0u;
-    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_SIMDOne), });
+    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 2.0f), NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_SIMDOne) });
     ::Vector<NWB::Impl::MeshletPositionStreamRef, NWB::Core::Alloc::ScratchArena> meshletPositionStreamRefs(scratchArena);
     meshletPositionStreamRefs.reserve(instance.restPositions.size());
     ::Vector<NWB::Impl::MeshletAttributeStreamRef, NWB::Core::Alloc::ScratchArena> meshletAttributeStreamRefs(scratchArena);
     meshletAttributeStreamRefs.reserve(instance.restPositions.size());
     NWB::Tests::AppendSequentialMeshletRefs(instance.restPositions.size(), meshletPositionStreamRefs, meshletAttributeStreamRefs, instance.meshletLocalVertexRefs);
-    for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
+    for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex)
         instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
-    }
     for(const u32 index : MakeTriangleIndices())
         instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
     const b8 meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(
@@ -550,11 +542,6 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix()noexcept{
 
 #endif
 
-
-TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
-    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(LoadFloat(MakeNonUniformScaleJointMatrix()), NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonRigidJointEpsilon));
-}
-
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl::SkeletonJointMatrix& rootJoint, const NWB::Impl::SkeletonJointMatrix& childJoint){
     NWB::Impl::SkeletonPoseComponent pose;
     pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
@@ -562,6 +549,10 @@ static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(const NWB::Impl
     pose.localJoints.push_back(rootJoint);
     pose.localJoints.push_back(childJoint);
     return pose;
+}
+
+TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
+    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(LoadFloat(MakeNonUniformScaleJointMatrix()), NWB::Impl::s_SkeletonAffineEpsilon, NWB::Impl::s_SkeletonRigidJointEpsilon));
 }
 
 TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
@@ -577,6 +568,7 @@ TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
     pose.parentJoints.pop_back();
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints));
 }
+
 #if defined(NWB_FINAL)
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     constexpr u32 s_ExpectedDualCount = 2u;

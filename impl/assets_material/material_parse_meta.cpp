@@ -87,9 +87,8 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
-    if(rawVariantView == Core::ShaderArchive::s_DefaultVariant){
+    if(rawVariantView == Core::ShaderArchive::s_DefaultVariant)
         return CookString(Core::ShaderArchive::s_DefaultVariant, arena);
-    }
 
     using ScratchDefineCombo = HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>>;
     ScratchDefineCombo assignments(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
@@ -528,3 +527,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

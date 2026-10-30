@@ -113,21 +113,6 @@ public:
     }
 
 
-private:
-    void destroyWorld(){
-        DestroySmokeSkinnedRenderWorld(m_context, m_world);
-    }
-
-    void spinCharacters()noexcept{
-        for(const NWB::Core::ECS::EntityID owner : { m_opaqueOwner, m_transparentOwner }){
-            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
-            if(!transform)
-                continue;
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
-        }
-    }
-
-
 public:
     virtual b8 onStartup()override{
         // Register arrow yaw scrubbing at the front of the input chain.
@@ -150,26 +135,10 @@ public:
             }
         }
 
-        m_groundEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_GroundMesh,
-            s_OpaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.82f, 0.82f, 0.85f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
-        );
+        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
 
         // Overlapping opaque and glass shadows exercise their combined response.
-        const auto opaqueModel = CreateTintedModelEntity(
-            *m_world,
-            s_Model,
-            s_OpaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.86f, 0.80f, 0.74f, 1.0f),
-            Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f)
-        );
+        const auto opaqueModel = CreateTintedModelEntity(*m_world, s_Model, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
         m_opaqueOwner = opaqueModel.entity;
         const auto transparentModel = CreateTintedModelEntity(
             *m_world,
@@ -223,6 +192,21 @@ public:
 
 
 private:
+    void destroyWorld(){
+        DestroySmokeSkinnedRenderWorld(m_context, m_world);
+    }
+
+    void spinCharacters()noexcept{
+        for(const NWB::Core::ECS::EntityID owner : { m_opaqueOwner, m_transparentOwner }){
+            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
+            if(!transform)
+                continue;
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
+        }
+    }
+
+
+private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::s_InvalidEntityId;
@@ -246,7 +230,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB Flicker Test");

@@ -33,11 +33,6 @@ class FontBinaryHeader{
 }
 
 class PreparedFontImageView{
-    public u32 width;
-    public u32 height;
-    public u32 channelCount;
-    public Span<u8> pixels;
-
     public PreparedFontImageView(){
         this.width = 0u;
         this.height = 0u;
@@ -51,6 +46,11 @@ class PreparedFontImageView{
         this.channelCount = c;
         this.pixels = p;
     }
+
+    public u32 width;
+    public u32 height;
+    public u32 channelCount;
+    public Span<u8> pixels;
 }
 
 class FontSfntTable{
@@ -73,21 +73,6 @@ u32 ReadFontSfntU32BigEndian(in Span<u8> bytes, in usize offset){
 
 // Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
 class FontSfntDirectory{
-    private Span<u8> m_bytes;
-    private u16 m_tableCount = 0u;
-
-    private u16 readU16(in Span<u8> bytes, in usize offset)const{
-        const u16 hi = cast<u16>(bytes[offset]) << s_FontSfntBitsPerByte;
-        const u16 lo = cast<u16>(bytes[offset + 1u]);
-        return hi | lo;
-    }
-
-    private u32 readU32(in Span<u8> bytes, in usize offset)const{
-        const u32 hi = cast<u32>(this.readU16(bytes, offset)) << s_FontSfntU16Bits;
-        const u32 lo = cast<u32>(this.readU16(bytes, offset + s_FontSfntU16Bytes));
-        return hi | lo;
-    }
-
     public void assign(in Span<u8> bytes, in u16 tableCount){
         this.m_bytes = bytes;
         this.m_tableCount = tableCount;
@@ -105,24 +90,14 @@ class FontSfntDirectory{
         return this.m_tableCount;
     }
 
-    private b8 record(in usize index, mut Span<u8> outRecord)const{
-        if(index >= cast<usize>(this.m_tableCount)){
-            return false;
-        }
-        outRecord = this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
-        return true;
-    }
-
     public b8 table(in usize index, mut FontSfntTable outTable)const{
         Span<u8> rec;
-        if(!this.record(index, rec)){
+        if(!this.record(index, rec))
             return false;
-        }
         const u32 offset = this.readU32(rec, s_FontSfntRecordOffsetFieldOffset);
         const u32 length = this.readU32(rec, s_FontSfntRecordLengthFieldOffset);
-        if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset)){
+        if(cast<usize>(offset) > this.m_bytes.size() || cast<usize>(length) > this.m_bytes.size() - cast<usize>(offset))
             return false;
-        }
         outTable.tag = this.readU32(rec, 0u);
         outTable.offset = offset;
         outTable.bytes = this.m_bytes.subspan(cast<usize>(offset), cast<usize>(length));
@@ -131,25 +106,45 @@ class FontSfntDirectory{
 
     public b8 tableTag(in usize index, mut u32 outTag)const{
         Span<u8> rec;
-        if(!this.record(index, rec)){
+        if(!this.record(index, rec))
             return false;
-        }
         outTag = this.readU32(rec, 0u);
         return true;
     }
+
+    private u16 readU16(in Span<u8> bytes, in usize offset)const{
+        const u16 hi = cast<u16>(bytes[offset]) << s_FontSfntBitsPerByte;
+        const u16 lo = cast<u16>(bytes[offset + 1u]);
+        return hi | lo;
+    }
+
+    private u32 readU32(in Span<u8> bytes, in usize offset)const{
+        const u32 hi = cast<u32>(this.readU16(bytes, offset)) << s_FontSfntU16Bits;
+        const u32 lo = cast<u32>(this.readU16(bytes, offset + s_FontSfntU16Bytes));
+        return hi | lo;
+    }
+
+    private b8 record(in usize index, mut Span<u8> outRecord)const{
+        if(index >= cast<usize>(this.m_tableCount))
+            return false;
+        outRecord = this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
+        return true;
+    }
+
+    private Span<u8> m_bytes;
+    private u16 m_tableCount = 0u;
 }
 
 b8 ReadFontSfntDirectory(in Span<u8> bytes, mut FontSfntDirectory outDirectory){
-    if(bytes.size() < s_FontSfntHeaderBytes){
+    if(bytes.size() < s_FontSfntHeaderBytes)
         return false;
-    }
     const u16 tableCount = ReadFontSfntU16BigEndian(bytes, s_FontSfntHeaderTableCountFieldOffset);
-    if(tableCount == 0u || cast<u32>(tableCount) > s_FontMaxTableCount || cast<usize>(tableCount) * s_FontSfntTableRecordBytes > bytes.size() - s_FontSfntHeaderBytes){
+    if(tableCount == 0u || cast<u32>(tableCount) > s_FontMaxTableCount || cast<usize>(tableCount) * s_FontSfntTableRecordBytes > bytes.size() - s_FontSfntHeaderBytes)
         return false;
-    }
     outDirectory.assign(bytes, tableCount);
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

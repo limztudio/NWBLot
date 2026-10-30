@@ -111,15 +111,6 @@ class HitTarget{
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
 class InputActionId{
-    public WidgetId target;
-    public u64 declarationGeneration = 0u;
-    public u64 layoutGeneration = 0u;
-    public u64 sequence = 0u;
-
-    public b8 valid()const{
-        return this.target.valid() && this.declarationGeneration != 0u && this.layoutGeneration != 0u && this.sequence != 0u;
-    }
-
     public b8 operator==(in InputActionId rhs)const{
         return this.target == rhs.target && this.declarationGeneration == rhs.declarationGeneration && this.layoutGeneration == rhs.layoutGeneration && this.sequence == rhs.sequence;
     }
@@ -127,6 +118,15 @@ class InputActionId{
     public b8 operator!=(in InputActionId rhs)const{
         return this.target != rhs.target || this.declarationGeneration != rhs.declarationGeneration || this.layoutGeneration != rhs.layoutGeneration || this.sequence != rhs.sequence;
     }
+
+    public b8 valid()const{
+        return this.target.valid() && this.declarationGeneration != 0u && this.layoutGeneration != 0u && this.sequence != 0u;
+    }
+
+    public WidgetId target;
+    public u64 declarationGeneration = 0u;
+    public u64 layoutGeneration = 0u;
+    public u64 sequence = 0u;
 }
 
 class InputAction{
@@ -200,3 +200,4 @@ class InputRoutingResult{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

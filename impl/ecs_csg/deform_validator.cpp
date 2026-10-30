@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 
 
 b8 CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
-    return CsgDeformFiniteFloat(value);
+    return IsFinite(value);
 }
 
 b8 CsgDeformValidator::FiniteVertexVec(const SIMDVectorSingle position, const SIMDVectorSingle normal, const SIMDVectorSingle tangent, const SIMDVectorSingle uv0, const SIMDVectorSingle color)noexcept{
@@ -43,9 +43,8 @@ b8 CsgDeformValidator::ValidTopology(NotNull<const CsgDeformTriangle*> triangles
 Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(NotNull<const CsgDeformVertex*> vertices, const usize vertexCount)noexcept{
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices.get()[vertexIndex];
-        if(!FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color))){
+        if(!FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color)))
             return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
-        }
     }
     return {};
 }
@@ -58,3 +57,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

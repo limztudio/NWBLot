@@ -24,7 +24,6 @@ NWB_IMPL_BEGIN
 class RendererMaterialSystem;
 class RendererMeshSystem;
 
-
 // One declaration-local registry deduplicates immutable object vertices and indices across every material raster phase.
 class ObjectGeometryCacheGraph final : NoCopy{
 private:
@@ -52,8 +51,6 @@ public:
 
 
 private:
-
-
     Core::GpuTaskGraph& m_graph;
     RendererMaterialSystem& m_materialSystem;
     RendererMeshSystem& m_meshSystem;

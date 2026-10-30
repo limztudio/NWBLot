@@ -31,6 +31,10 @@ class CsgReceiverDrawState{
 
 [reflect]
 class CsgFrameState{
+    public b8 empty()const{
+        return !this.hasAnyWork;
+    }
+
     public u32 receiverCount = 0u;
     public u32 cutterCount = 0u;
     public b8 hasAnyWork = false;
@@ -38,10 +42,6 @@ class CsgFrameState{
     public b8 hasOpaqueSkinnedWork = false;
     public b8 hasTransparentStaticWork = false;
     public b8 hasTransparentSkinnedWork = false;
-
-    public b8 empty()const{
-        return !this.hasAnyWork;
-    }
 }
 
 [reflect]
@@ -56,13 +56,7 @@ class CsgResolvedReceiver{
     public CsgReceiverKind receiverKind = CsgReceiverKind::Enum::Static;
 }
 
-void AddCsgFrameReceiverWork(
-    mut CsgFrameState inOutState,
-    in CsgReceiverKind receiverKind,
-    in b8 opaqueWork,
-    in b8 transparentWork,
-    in u32 cutterCount
-){
+void AddCsgFrameReceiverWork(mut CsgFrameState inOutState, in CsgReceiverKind receiverKind, in b8 opaqueWork, in b8 transparentWork, in u32 cutterCount){
     inOutState.receiverCount = AddSaturating<u32>(inOutState.receiverCount, 1u);
     inOutState.cutterCount = AddSaturating<u32>(inOutState.cutterCount, cutterCount);
 
@@ -77,12 +71,9 @@ void AddCsgFrameReceiverWork(
 }
 
 void FinalizeCsgFrameState(mut CsgFrameState inOutState){
-    inOutState.hasAnyWork =
-        inOutState.hasOpaqueStaticWork
-        || inOutState.hasOpaqueSkinnedWork
-        || inOutState.hasTransparentStaticWork
-        || inOutState.hasTransparentSkinnedWork;
+    inOutState.hasAnyWork = inOutState.hasOpaqueStaticWork || inOutState.hasOpaqueSkinnedWork || inOutState.hasTransparentStaticWork || inOutState.hasTransparentSkinnedWork;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

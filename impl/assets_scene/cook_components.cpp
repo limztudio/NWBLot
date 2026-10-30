@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+
 #include <impl/assets_scene/component_assets.adhd.h>
 
 #include <core/common/log.h>
@@ -56,7 +57,6 @@ static constexpr AStringView s_SourceRadiusField = "source_radius";
 static constexpr AStringView s_EnableCausticsField = "enable_caustics";
 static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
 
-
 [[nodiscard]] static b8 CheckOptionalMetadataAssetMap(const Path& nwbFilePath, const Value& asset, const AStringView diagnosticPrefix){
     if(asset.isNull() || asset.isMap())
         return true;
@@ -65,12 +65,7 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
     return false;
 }
 
-[[nodiscard]] static Expected<Float4> ParseFloat3Field(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const Value& listValue,
-    const AStringView fieldLabel
-){
+[[nodiscard]] static Expected<Float4> ParseFloat3Field(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
     if(!listValue.isList() || listValue.asList().size() != 3u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 3-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
@@ -84,12 +79,7 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
     return Float4(*x, *y, *z, 0.0f);
 }
 
-[[nodiscard]] static Expected<Float4> ParseQuaternionField(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const Value& listValue,
-    const AStringView fieldLabel
-){
+[[nodiscard]] static Expected<Float4> ParseQuaternionField(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Value& listValue, const AStringView fieldLabel){
     if(!listValue.isList() || listValue.asList().size() != 4u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 4-element numeric list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
@@ -165,11 +155,7 @@ b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
 b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     const IComponent* const component = CastComponent(&asset);
     if(!component){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: unexpected asset type '{}'"),
-            ConvertString(s_ComponentSerializeContext),
-            ConvertString(asset.assetType().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: unexpected asset type '{}'"), ConvertString(s_ComponentSerializeContext), ConvertString(asset.assetType().resolvedText()));
         return false;
     }
     return ComponentAssetSerialization::Serialize(*component, outBinary);
@@ -213,12 +199,7 @@ namespace SceneAssetCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<b8> ParseMetadataBoolField(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const Core::Metascript::Value& value,
-    const AStringView fieldLabel
-){
+Expected<b8> ParseMetadataBoolField(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Core::Metascript::Value& value, const AStringView fieldLabel){
     if(!value.isInteger()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer boolean (0 or 1)"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
@@ -231,13 +212,7 @@ Expected<b8> ParseMetadataBoolField(
     return integerValue != 0;
 }
 
-b8 ReadOptionalFiniteF32Field(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldLabel,
-    f32& outValue
-){
+b8 ReadOptionalFiniteF32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView diagnosticPrefix, const AStringView fieldLabel, f32& outValue){
     const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
     if(!fieldValue)
         return true;
@@ -248,33 +223,17 @@ b8 ReadOptionalFiniteF32Field(
     return true;
 }
 
-b8 ReadOptionalI32Field(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldLabel,
-    i32& outValue
-){
+b8 ReadOptionalI32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView diagnosticPrefix, const AStringView fieldLabel, i32& outValue){
     const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
     if(!fieldValue)
         return true;
     if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} '{}': field '{}' must be an integer"),
-            ConvertString(diagnosticPrefix),
-            PathToString<tchar>(nwbFilePath),
-            ConvertString(fieldLabel)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return false;
     }
     const i64 integerValue = fieldValue->asInteger();
     if(integerValue < static_cast<i64>(Limit<i32>::s_Min) || integerValue > static_cast<i64>(Limit<i32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"),
-            ConvertString(diagnosticPrefix),
-            PathToString<tchar>(nwbFilePath),
-            ConvertString(fieldLabel)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return false;
     }
     outValue = static_cast<i32>(integerValue);
@@ -291,13 +250,7 @@ b8 ReadOptionalI32Field(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena&
-){
+Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     TransformComponentCookEntry entry(arena);
@@ -307,12 +260,7 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath,
-            asset,
-            s_TransformDiagnosticPrefix,
-            { s_PositionField, s_RotationField, s_RotationEulerField, s_RotationEulerDegreesField, s_ScaleField }
-        ))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, { s_PositionField, s_RotationField, s_RotationEulerField, s_RotationEulerDegreesField, s_ScaleField }))
             return MakeUnexpected(Failure{});
 
         if(const Core::Metascript::Value* positionValue = asset.findField(s_PositionField)){
@@ -346,14 +294,7 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(
             const auto eulerDegrees = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerDegreesValue, s_RotationEulerDegreesField);
             if(!eulerDegrees)
                 return MakeUnexpected(Failure{});
-            StoreFloat(
-                QuaternionRotationRollPitchYaw(
-                    eulerDegrees->x * s_DegreesToRadians,
-                    eulerDegrees->y * s_DegreesToRadians,
-                    eulerDegrees->z * s_DegreesToRadians
-                ),
-                entry.component.rotation
-            );
+            StoreFloat(QuaternionRotationRollPitchYaw(eulerDegrees->x * s_DegreesToRadians, eulerDegrees->y * s_DegreesToRadians, eulerDegrees->z * s_DegreesToRadians), entry.component.rotation);
         }
 
         if(const Core::Metascript::Value* scaleValue = asset.findField(s_ScaleField)){
@@ -374,13 +315,7 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena&
-){
+Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     CameraComponentCookEntry entry(arena);
@@ -390,12 +325,7 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath,
-            asset,
-            s_CameraDiagnosticPrefix,
-            { s_VerticalFovDegreesField, s_VerticalFovRadiansField, s_NearPlaneField, s_FarPlaneField, s_AspectRatioField }
-        ))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, { s_VerticalFovDegreesField, s_VerticalFovRadiansField, s_NearPlaneField, s_FarPlaneField, s_AspectRatioField }))
             return MakeUnexpected(Failure{});
 
         const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_VerticalFovDegreesField);
@@ -441,13 +371,7 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena&
-){
+Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     LightComponentCookEntry entry(arena);
@@ -541,3 +465,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

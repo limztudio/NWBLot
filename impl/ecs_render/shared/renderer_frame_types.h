@@ -138,7 +138,6 @@ struct MaterialPassDrawContext{
     b8 conservativeGeometryScissor = false;
 };
 
-
 static_assert(sizeof(RayTracingLightingClassificationInput) == sizeof(u32));
 static_assert(sizeof(RayTracingLightingClassification) == sizeof(u32) * 2u);
 

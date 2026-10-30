@@ -12,9 +12,6 @@ const u32 s_CsgInvalidIndex = 0xffffffffu;
 
 [serialize]
 class CsgBoundsGpuData{
-    public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
-    public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
-
     public b8 valid()const{
         return (this.minBounds.w & s_CsgBoundsValidFlag) != 0;
     }
@@ -22,6 +19,9 @@ class CsgBoundsGpuData{
     public b8 finite()const{
         return (this.minBounds.w & s_CsgBoundsFiniteFlag) != 0;
     }
+
+    public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
+    public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 }
 
 type CsgReceiverCpuBounds = CsgBoundsGpuData;
@@ -128,13 +128,14 @@ class CsgReceiverClipDrawInfo{
 }
 
 class CsgFrameStateCacheSignature{
-    public u64 contentHash = 0u;
-    public u64 shapeRegistryRevision = 0u;
-
     public b8 operator==(in CsgFrameStateCacheSignature rhs)const{
         return this.contentHash == rhs.contentHash && this.shapeRegistryRevision == rhs.shapeRegistryRevision;
     }
+
+    public u64 contentHash = 0u;
+    public u64 shapeRegistryRevision = 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -23,7 +23,7 @@ class StmtParser;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ExprParser{
+class ExprParser final{
 public:
     ExprParser(ParserCursor& cursor, TypeParser& typeParser)noexcept
         : m_cursor(cursor)
@@ -34,7 +34,7 @@ public:
 public:
     void setStmtParser(StmtParser* stmtParser)noexcept{ m_stmtParser = stmtParser; }
 
-    [[nodiscard]] Expr* parseExpression();
+    [[nodiscard]] Expr* parseExpression(){ return parseAssignment(); }
     [[nodiscard]] b8 parseArgumentList(MVector<Expr*>& outArgs);
 
 

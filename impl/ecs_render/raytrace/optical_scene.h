@@ -81,7 +81,6 @@ struct alignas(SIMDVectorSingle) OpticalWorldBounds{
 };
 static_assert(alignof(Expected<OpticalWorldBounds>) >= alignof(OpticalWorldBounds));
 
-
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
 [[nodiscard]] Expected<OpticalWorldBounds> NWB_SIMD_CALL ComputeOpticalWorldBounds(const SIMDMatrix& objectToWorld, SIMDVectorSingle localMin, SIMDVectorSingle localMax)noexcept;
 
@@ -93,3 +92,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -90,13 +90,7 @@ namespace __hidden_adhd_simd_analyzer{
     return false;
 }
 
-SimdVarBinding* FindOrCreateBinding(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const b8 isThisMember,
-    const MStringView name,
-    const MStringView simdType
-){
+SimdVarBinding* FindOrCreateBinding(const b8 isThisMember, const MStringView name, const MStringView simdType, MetaArena& arena, MVector<SimdVarBinding>& bindings){
     for(SimdVarBinding& b : bindings){
         if(b.isThisMember == isThisMember && b.name == name)
             return &b;
@@ -112,24 +106,15 @@ SimdVarBinding* FindOrCreateBinding(
     return &created;
 }
 
-void MarkPartialSimdBindingWrite(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const Expr& targetExpr
-){
+void MarkPartialSimdBindingWrite(const Expr& targetExpr, MetaArena& arena, MVector<SimdVarBinding>& bindings){
     const b8 isThis = targetExpr.kind == ExprKind::ThisMember;
-    SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, isThis, targetExpr.text, targetExpr.resolvedSimdType);
+    SimdVarBinding* binding = FindOrCreateBinding(isThis, targetExpr.text, targetExpr.resolvedSimdType, arena, bindings);
     if(!binding->isLocalDecl && !binding->unconditionallyWrittenFirst)
         binding->readBeforeWrite = true;
     binding->written = true;
 }
 
-void PreRegisterLocalSimdDecls(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const Span<const Stmt* const> statements,
-    const SymbolTable& symbols
-){
+void PreRegisterLocalSimdDecls(const Span<const Stmt* const> statements, const SymbolTable& symbols, MetaArena& arena, MVector<SimdVarBinding>& bindings){
     for(const Stmt* stmt : statements){
         if(!stmt)
             continue;
@@ -138,40 +123,40 @@ void PreRegisterLocalSimdDecls(
         case StmtKind::VarDecl:{
             const MStringView varSimdType = ResolveLocalVarDeclSimdType(*stmt, symbols);
             if(!varSimdType.empty()){
-                SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, false, stmt->name, varSimdType);
+                SimdVarBinding* binding = FindOrCreateBinding(false, stmt->name, varSimdType, arena, bindings);
                 binding->isLocalDecl = true;
             }
             break;
         }
         case StmtKind::Block:
         case StmtKind::ParallelBlock:
-            PreRegisterLocalSimdDecls(arena, bindings, stmt->statements, symbols);
+            PreRegisterLocalSimdDecls(stmt->statements, symbols, arena, bindings);
             break;
         case StmtKind::If:
-            PreRegisterLocalSimdDecls(arena, bindings, stmt->statements, symbols);
-            PreRegisterLocalSimdDecls(arena, bindings, stmt->elseStatements, symbols);
+            PreRegisterLocalSimdDecls(stmt->statements, symbols, arena, bindings);
+            PreRegisterLocalSimdDecls(stmt->elseStatements, symbols, arena, bindings);
             break;
         case StmtKind::Switch:
             for(const SwitchCase& sc : stmt->switchCases)
-                PreRegisterLocalSimdDecls(arena, bindings, sc.statements, symbols);
+                PreRegisterLocalSimdDecls(sc.statements, symbols, arena, bindings);
             break;
         case StmtKind::ForRange:
         case StmtKind::ParallelForRange:{
             if(stmt->varType){
                 const MStringView resolvedLoopSimd = symbols.resolveBaseTypeName(stmt->varType->name);
                 if(IsRegisterPromotableSimdType(resolvedLoopSimd)){
-                    SimdVarBinding* loopBinding = FindOrCreateBinding(arena, bindings, false, stmt->name, resolvedLoopSimd);
+                    SimdVarBinding* loopBinding = FindOrCreateBinding(false, stmt->name, resolvedLoopSimd, arena, bindings);
                     loopBinding->isLoopElement = true;
                 }
             }
-            PreRegisterLocalSimdDecls(arena, bindings, stmt->statements, symbols);
+            PreRegisterLocalSimdDecls(stmt->statements, symbols, arena, bindings);
             break;
         }
         case StmtKind::ForIndex:
         case StmtKind::ParallelForIndex:
         case StmtKind::While:
         case StmtKind::DoWhile:
-            PreRegisterLocalSimdDecls(arena, bindings, stmt->statements, symbols);
+            PreRegisterLocalSimdDecls(stmt->statements, symbols, arena, bindings);
             break;
         default:
             break;
@@ -179,15 +164,8 @@ void PreRegisterLocalSimdDecls(
     }
 }
 
-void CollectLocalDeclConflicts(
-    const Span<const Stmt* const> statements,
-    const SymbolTable& symbols,
-    MVector<MStringView>& seenNames,
-    MVector<MStringView>& seenSimdTypes,
-    MVector<b8>& seenIsLoop,
-    MVector<MStringView>& conflictedNames
-){
-    auto recordLocal = [&](const MStringView name, const MStringView simdType, const b8 isLoop){
+void CollectLocalDeclConflicts(const Span<const Stmt* const> statements, const SymbolTable& symbols, MVector<MStringView>& seenNames, MVector<MStringView>& seenSimdTypes, MVector<b8>& seenIsLoop, MVector<MStringView>& conflictedNames){
+    const auto recordLocal = [&](const MStringView name, const MStringView simdType, const b8 isLoop){
         if(name.empty())
             return;
         for(usize i = 0u; i < seenNames.size(); ++i){
@@ -259,20 +237,13 @@ void CollectLocalDeclConflicts(
     }
 }
 
-void AnalyzeSimdExprReads(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const Expr* expr,
-    const SymbolTable& symbols,
-    const b8 requireStorage,
-    const b8 canUnconditionallyWrite
-){
+void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8 requireStorage, const b8 canUnconditionallyWrite, MetaArena& arena, MVector<SimdVarBinding>& bindings){
     if(!expr)
         return;
 
     if((expr->kind == ExprKind::Identifier || expr->kind == ExprKind::ThisMember) && IsRegisterPromotableSimdType(expr->resolvedSimdType)){
         const b8 isThis = expr->kind == ExprKind::ThisMember;
-        SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, isThis, expr->text, expr->resolvedSimdType);
+        SimdVarBinding* binding = FindOrCreateBinding(isThis, expr->text, expr->resolvedSimdType, arena, bindings);
         if(!binding->isLocalDecl && !binding->unconditionallyWrittenFirst)
             binding->readBeforeWrite = true;
         if(requireStorage)
@@ -285,20 +256,16 @@ void AnalyzeSimdExprReads(
 
     if(expr->kind == ExprKind::MemberAccess){
         u32 lane = 0u;
-        const b8 isSimdSwizzleOrLane = !expr->isMutArg
-            && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
-            && (expr->isSwizzle || IsSingleSwizzleLane(expr->text, lane));
-        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, !isSimdSwizzleOrLane, false);
+        const b8 isSimdSwizzleOrLane = !expr->isMutArg && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType) && (expr->isSwizzle || IsSingleSwizzleLane(expr->text, lane));
+        AnalyzeSimdExprReads(expr->lhs, symbols, !isSimdSwizzleOrLane, false, arena, bindings);
         return;
     }
 
     if(expr->kind == ExprKind::Index){
         u32 vecLanes = 0u;
-        const b8 isSimdVecIndex = !expr->isMutArg
-            && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)
-            && symbols.isSimdVectorType(expr->lhs->resolvedSimdType, vecLanes);
-        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, !isSimdVecIndex, false);
-        AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
+        const b8 isSimdVecIndex = !expr->isMutArg && expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType) && SymbolTable::IsSimdVectorType(expr->lhs->resolvedSimdType, vecLanes);
+        AnalyzeSimdExprReads(expr->lhs, symbols, !isSimdVecIndex, false, arena, bindings);
+        AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
         return;
     }
 
@@ -307,22 +274,22 @@ void AnalyzeSimdExprReads(
         if(expr->lhs && expr->lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr->lhs->text;
             const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
-            if(symbols.isSimdType(baseCallee) || !MapBuiltinMathFunction(callee).empty())
+            if(SymbolTable::IsSimdType(baseCallee) || !MapBuiltinMathFunction(callee).empty())
                 isSimdIntrinsicOrCtor = true;
         }
         if(!isSimdIntrinsicOrCtor)
-            AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, true, false);
+            AnalyzeSimdExprReads(expr->lhs, symbols, true, false, arena, bindings);
         for(const Expr* arg : expr->arguments)
-            AnalyzeSimdExprReads(arena, bindings, arg, symbols, !isSimdIntrinsicOrCtor, false);
+            AnalyzeSimdExprReads(arg, symbols, !isSimdIntrinsicOrCtor, false, arena, bindings);
         return;
     }
 
     if(expr->kind == ExprKind::Binary && IsSimdAssignmentOp(expr->op) && expr->lhs){
         if(IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType)){
-            AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
+            AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
             if(expr->lhs->kind == ExprKind::Identifier || expr->lhs->kind == ExprKind::ThisMember){
                 const b8 isThis = expr->lhs->kind == ExprKind::ThisMember;
-                SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, isThis, expr->lhs->text, expr->lhs->resolvedSimdType);
+                SimdVarBinding* binding = FindOrCreateBinding(isThis, expr->lhs->text, expr->lhs->resolvedSimdType, arena, bindings);
                 if(!binding->isLocalDecl){
                     if(expr->op == TokenType::Equal && canUnconditionallyWrite && !binding->isLoopElement && !binding->readBeforeWrite && !binding->written)
                         binding->unconditionallyWrittenFirst = true;
@@ -332,60 +299,57 @@ void AnalyzeSimdExprReads(
                 binding->written = true;
             }
             else{
-                AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, true, false);
+                AnalyzeSimdExprReads(expr->lhs, symbols, true, false, arena, bindings);
             }
             return;
         }
 
         u32 lane = 0u;
-        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs
+        if(
+            expr->lhs->kind == ExprKind::MemberAccess
+            && expr->lhs->lhs
             && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType)
             && IsSingleSwizzleLane(expr->lhs->text, lane)
-            && (expr->lhs->lhs->kind == ExprKind::Identifier || expr->lhs->lhs->kind == ExprKind::ThisMember))
-        {
-            AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
-            MarkPartialSimdBindingWrite(arena, bindings, *expr->lhs->lhs);
+            && (expr->lhs->lhs->kind == ExprKind::Identifier || expr->lhs->lhs->kind == ExprKind::ThisMember)
+        ){
+            AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
+            MarkPartialSimdBindingWrite(*expr->lhs->lhs, arena, bindings);
             return;
         }
 
         u32 vecLanes = 0u;
-        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs
+        if(
+            expr->lhs->kind == ExprKind::Index
+            && expr->lhs->lhs
             && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType)
-            && symbols.isSimdVectorType(expr->lhs->lhs->resolvedSimdType, vecLanes)
-            && (expr->lhs->lhs->kind == ExprKind::Identifier || expr->lhs->lhs->kind == ExprKind::ThisMember))
-        {
-            AnalyzeSimdExprReads(arena, bindings, expr->lhs->rhs, symbols, false, false);
-            AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
-            MarkPartialSimdBindingWrite(arena, bindings, *expr->lhs->lhs);
+            && SymbolTable::IsSimdVectorType(expr->lhs->lhs->resolvedSimdType, vecLanes)
+            && (expr->lhs->lhs->kind == ExprKind::Identifier || expr->lhs->lhs->kind == ExprKind::ThisMember)
+        ){
+            AnalyzeSimdExprReads(expr->lhs->rhs, symbols, false, false, arena, bindings);
+            AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
+            MarkPartialSimdBindingWrite(*expr->lhs->lhs, arena, bindings);
             return;
         }
     }
 
     if(expr->kind == ExprKind::Cast || expr->kind == ExprKind::BitCast){
-        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, true, false);
+        AnalyzeSimdExprReads(expr->lhs, symbols, true, false, arena, bindings);
         return;
     }
 
     if(expr->kind == ExprKind::Binary && !IsRegisterPromotableSimdType(expr->resolvedSimdType)){
         const b8 lhsIsSimd = expr->lhs && IsRegisterPromotableSimdType(expr->lhs->resolvedSimdType);
         const b8 rhsIsSimd = expr->rhs && IsRegisterPromotableSimdType(expr->rhs->resolvedSimdType);
-        AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, lhsIsSimd, false);
-        AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, rhsIsSimd, false);
+        AnalyzeSimdExprReads(expr->lhs, symbols, lhsIsSimd, false, arena, bindings);
+        AnalyzeSimdExprReads(expr->rhs, symbols, rhsIsSimd, false, arena, bindings);
         return;
     }
 
-    AnalyzeSimdExprReads(arena, bindings, expr->lhs, symbols, false, false);
-    AnalyzeSimdExprReads(arena, bindings, expr->rhs, symbols, false, false);
+    AnalyzeSimdExprReads(expr->lhs, symbols, false, false, arena, bindings);
+    AnalyzeSimdExprReads(expr->rhs, symbols, false, false, arena, bindings);
 }
 
-void ScanStmtsForSimdBindings(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const Span<const Stmt* const> statements,
-    const SymbolTable& symbols,
-    const b8 inConditionalOrLoop,
-    b8& ioHasSeenPossibleReturn
-){
+void ScanStmtsForSimdBindings(const Span<const Stmt* const> statements, const SymbolTable& symbols, const b8 inConditionalOrLoop, MetaArena& arena, MVector<SimdVarBinding>& bindings, b8& ioHasSeenPossibleReturn){
     for(const Stmt* stmt : statements){
         if(!stmt)
             continue;
@@ -394,74 +358,74 @@ void ScanStmtsForSimdBindings(
 
         switch(stmt->kind){
         case StmtKind::VarDecl:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, false, false);
+            AnalyzeSimdExprReads(stmt->expr, symbols, false, false, arena, bindings);
             for(const Expr* arg : stmt->arguments)
-                AnalyzeSimdExprReads(arena, bindings, arg, symbols, false, false);
+                AnalyzeSimdExprReads(arg, symbols, false, false, arena, bindings);
             break;
         }
         case StmtKind::ExprStmt:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, false, canUnconditionallyWrite);
+            AnalyzeSimdExprReads(stmt->expr, symbols, false, canUnconditionallyWrite, arena, bindings);
             break;
         }
         case StmtKind::Return:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, stmt->wrapReturnNotNull, false);
+            AnalyzeSimdExprReads(stmt->expr, symbols, stmt->wrapReturnNotNull, false, arena, bindings);
             ioHasSeenPossibleReturn = true;
             break;
         }
         case StmtKind::Block:{
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, inConditionalOrLoop, ioHasSeenPossibleReturn);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, inConditionalOrLoop, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::If:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->condition, symbols, false, false);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->elseStatements, symbols, true, ioHasSeenPossibleReturn);
+            AnalyzeSimdExprReads(stmt->condition, symbols, false, false, arena, bindings);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
+            ScanStmtsForSimdBindings(stmt->elseStatements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::Switch:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, false, false);
+            AnalyzeSimdExprReads(stmt->expr, symbols, false, false, arena, bindings);
             for(const SwitchCase& sc : stmt->switchCases){
-                AnalyzeSimdExprReads(arena, bindings, sc.matchExpr, symbols, false, false);
-                ScanStmtsForSimdBindings(arena, bindings, sc.statements, symbols, true, ioHasSeenPossibleReturn);
+                AnalyzeSimdExprReads(sc.matchExpr, symbols, false, false, arena, bindings);
+                ScanStmtsForSimdBindings(sc.statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             }
             break;
         }
         case StmtKind::ForRange:
         case StmtKind::ParallelForRange:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, true, false);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
+            AnalyzeSimdExprReads(stmt->expr, symbols, true, false, arena, bindings);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::ForIndex:
         case StmtKind::ParallelForIndex:{
             if(stmt->initStmt){
-                AnalyzeSimdExprReads(arena, bindings, stmt->initStmt->expr, symbols, false, false);
+                AnalyzeSimdExprReads(stmt->initStmt->expr, symbols, false, false, arena, bindings);
                 for(const Expr* arg : stmt->initStmt->arguments)
-                    AnalyzeSimdExprReads(arena, bindings, arg, symbols, false, false);
+                    AnalyzeSimdExprReads(arg, symbols, false, false, arena, bindings);
             }
-            AnalyzeSimdExprReads(arena, bindings, stmt->condition, symbols, false, false);
-            AnalyzeSimdExprReads(arena, bindings, stmt->stepExpr, symbols, false, false);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
+            AnalyzeSimdExprReads(stmt->condition, symbols, false, false, arena, bindings);
+            AnalyzeSimdExprReads(stmt->stepExpr, symbols, false, false, arena, bindings);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::While:
         case StmtKind::DoWhile:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->condition, symbols, false, false);
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
+            AnalyzeSimdExprReads(stmt->condition, symbols, false, false, arena, bindings);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::ParallelBlock:{
-            ScanStmtsForSimdBindings(arena, bindings, stmt->statements, symbols, true, ioHasSeenPossibleReturn);
+            ScanStmtsForSimdBindings(stmt->statements, symbols, true, arena, bindings, ioHasSeenPossibleReturn);
             break;
         }
         case StmtKind::ParallelCall:{
-            AnalyzeSimdExprReads(arena, bindings, stmt->expr, symbols, true, false);
+            AnalyzeSimdExprReads(stmt->expr, symbols, true, false, arena, bindings);
             if(stmt->expr && stmt->expr->kind == ExprKind::Call){
                 for(const Expr* arg : stmt->expr->arguments){
                     if(!arg || !arg->isMutArg)
                         continue;
                     if((arg->kind == ExprKind::Identifier || arg->kind == ExprKind::ThisMember) && IsRegisterPromotableSimdType(arg->resolvedSimdType)){
-                        SimdVarBinding* b = FindOrCreateBinding(arena, bindings, arg->kind == ExprKind::ThisMember, arg->text, arg->resolvedSimdType);
+                        SimdVarBinding* b = FindOrCreateBinding(arg->kind == ExprKind::ThisMember, arg->text, arg->resolvedSimdType, arena, bindings);
                         b->needsStorageSync = true;
                         b->capturedByMutLambda = true;
                     }
@@ -471,12 +435,12 @@ void ScanStmtsForSimdBindings(
         }
         case StmtKind::NativeBlock:{
             for(const NativeBinding& nb : stmt->nativeBindings)
-                AnalyzeSimdExprReads(arena, bindings, nb.sourceExpr, symbols, true, false);
+                AnalyzeSimdExprReads(nb.sourceExpr, symbols, true, false, arena, bindings);
             break;
         }
         case StmtKind::Diagnostic:{
             for(const Expr* arg : stmt->arguments)
-                AnalyzeSimdExprReads(arena, bindings, arg, symbols, true, false);
+                AnalyzeSimdExprReads(arg, symbols, true, false, arena, bindings);
             break;
         }
         default:
@@ -549,20 +513,15 @@ void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CollectScopedSimdBindings(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& bindings,
-    const Span<const Stmt* const> statements,
-    const SymbolTable& symbols
-){
+void CollectScopedSimdBindings(const Span<const Stmt* const> statements, const SymbolTable& symbols, MetaArena& arena, MVector<SimdVarBinding>& bindings){
     using namespace __hidden_adhd_simd_analyzer;
 
     if(!StmtsContainSimdMath(statements, symbols))
         return;
 
-    PreRegisterLocalSimdDecls(arena, bindings, statements, symbols);
+    PreRegisterLocalSimdDecls(statements, symbols, arena, bindings);
     b8 hasSeenPossibleReturn = false;
-    ScanStmtsForSimdBindings(arena, bindings, statements, symbols, false, hasSeenPossibleReturn);
+    ScanStmtsForSimdBindings(statements, symbols, false, arena, bindings, hasSeenPossibleReturn);
     MarkLambdaCapturedSimdBindingsInStmts(bindings, statements);
 
     MVector<MStringView> seenNames(arena);

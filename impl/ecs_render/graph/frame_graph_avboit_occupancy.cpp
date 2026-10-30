@@ -27,9 +27,8 @@ NWB_IMPL_BEGIN
 FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
     : m_graph(graph)
     , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem){
-}
-
+    , m_csgSystem(csgSystem)
+{}
 
 Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadChain::declare(
     Core::Alloc::ScratchArena& scratchArena,
@@ -112,9 +111,7 @@ Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadC
 
             const MaterialPassDrawItemsView occupancyMaterialGeometryDrawSets[] = { occupancyDrawItems.regular, occupancyDrawItems.csg, };
             AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(m_graph, m_materialSystem, scratchArena);
-            auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(
-                AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Occupancy, }
-            );
+            auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(AvboitGeometryPreparationInputs{ .drawItemSets = occupancyMaterialGeometryDrawSets, .phase = AvboitGeometryPhase::Occupancy, });
             if(!occupancyGeometryPreparationResult)
                 return MakeUnexpected(Failure{});
             avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyGeometryPreparationResult->geometryOwned;

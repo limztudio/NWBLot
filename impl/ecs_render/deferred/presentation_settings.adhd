@@ -19,10 +19,9 @@ class PresentationSettings{
 }
 
 b8 ValidatePresentationSettings(in PresentationSettings settings){
-    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Enum::Reinhard)
-        && isFinite(settings.exposure) && settings.exposure >= 0.0f
-        && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
+    return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Enum::Reinhard) && isFinite(settings.exposure) && settings.exposure >= 0.0f && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -58,13 +58,6 @@ class InputKeyBinding{
 
 // Adapters assign device and control identities; control zero is invalid.
 class InputSource{
-    public u64 device = 0u;
-    public u64 control = 0u;
-
-    public b8 valid()const{
-        return this.control != 0u;
-    }
-
     public b8 operator==(in InputSource rhs)const{
         return this.device == rhs.device && this.control == rhs.control;
     }
@@ -72,6 +65,13 @@ class InputSource{
     public b8 operator!=(in InputSource rhs)const{
         return this.device != rhs.device || this.control != rhs.control;
     }
+
+    public b8 valid()const{
+        return this.control != 0u;
+    }
+
+    public u64 device = 0u;
+    public u64 control = 0u;
 }
 
 class InputCommandIntent{
@@ -83,3 +83,4 @@ class InputCommandIntent{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

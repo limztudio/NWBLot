@@ -23,8 +23,8 @@ NWB_IMPL_BEGIN
 
 DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)noexcept
     : m_graph(graph)
-    , m_deferredSystem(deferredSystem){
-}
+    , m_deferredSystem(deferredSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

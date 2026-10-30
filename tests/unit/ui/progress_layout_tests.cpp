@@ -29,7 +29,6 @@ namespace __hidden_ui_progress_layout_tests{
 using namespace Impl;
 using namespace Impl::Ui;
 
-
 static UiSkinRegion NineSlice()noexcept{
     UiSkinRegion region;
     region.name = Name("progress.test");

@@ -31,7 +31,6 @@ struct RendererTaskTimingFeedbackPolicyTransition{
 [[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, b8 rendererActive)noexcept;
 void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, b8 collectionUpdated)noexcept;
 
-
 // Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
 class RendererTaskTimingFeedbackState final : NoCopy{
 private:
@@ -75,7 +74,6 @@ private:
     Vector<PendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
 };
 
-
 // Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
 class RendererTaskTimingFeedback final : NoCopy{
 private:
@@ -117,8 +115,10 @@ private:
 
 namespace ECSRenderDetail{
 
+
 // Callers own the recording scope and clear attribution when dispatch records nothing.
 [[nodiscard]] Expected<Core::GpuTimingSampleAttribution> BeginTaskTimingSample(RendererTaskTimingFeedback* timingFeedback, const Core::GpuTimingScopeDefinition* timingScope, const Core::GpuTaskRecordContext& context);
+
 
 };
 
@@ -130,3 +130,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

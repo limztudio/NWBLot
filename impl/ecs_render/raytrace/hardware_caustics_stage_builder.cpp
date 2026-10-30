@@ -26,8 +26,8 @@ NWB_IMPL_BEGIN
 
 HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
     : m_graph(graph)
-    , m_raytracingSystem(raytracingSystem){
-}
+    , m_raytracingSystem(raytracingSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,22 +86,17 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ scratchArena };
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
-    const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    constexpr usize s_HardwarePhotonResourceSetUseCapacity = 2u;
-    Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[s_HardwarePhotonResourceSetUseCapacity] = {};
+    const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
+    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
+    constexpr usize hardwarePhotonResourceSetUseCapacity = 2u;
+    Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCapacity] = {};
     usize hardwarePhotonResourceSetUseCount = 0u;
-    if(hardwareTraceGeometryStatesGraphOwned){
+    if(hardwareTraceGeometryStatesGraphOwned)
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceGeometrySetUse;
-    }
-    if(inputs.traceMaterialSampledTextureSet.valid()){
+    if(inputs.traceMaterialSampledTextureSet.valid())
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
-    }
-    constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
-    hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity
-        + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u)
-        + inputs.rayTracingResources->csgTraceBoundsBuffers.size() + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResources.size())
-    );
+    constexpr usize hardwarePhotonResourceUseCapacity = 15u;
+    hardwarePhotonResourceUses.reserve(hardwarePhotonResourceUseCapacity + (inputs.rayTracingResources->csgTraceContextBuffer ? 1u : 0u) + inputs.rayTracingResources->csgTraceBoundsBuffers.size() + (hardwareTraceGeometryStatesGraphOwned ? 0u : inputs.hardwareTraceGeometryResources.size()));
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadTextureUse(inputs.depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     hardwarePhotonResourceUses.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -170,9 +165,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
         && appendOptionalReadBuffer(inputs.rayTracingResources->shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel, Core::ResourceStates::ShaderResource)
         && appendOptionalReadBuffer(inputs.rayTracingResources->causticEmissionTargetBuffer, Name(RendererFramePipelineDetail::s_HardwareCausticEmissionTargetsName), RendererFramePipelineDetail::s_CausticEmissionTargetsLabel, Core::ResourceStates::ShaderResource)
     ;
-    if(inputs.materialContextSlots.valid()){
+    if(inputs.materialContextSlots.valid())
         hardwarePhotonResourceUses.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    }
     // Candidate normal and seam checks read the frozen position and index streams.
     for(const Core::GpuGraphResourceId resource : inputs.hardwareTraceGeometryResources){
         if(!resource.valid()){
@@ -189,9 +183,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
                 .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
         );
         optionalResourcesImported = optionalResourcesImported && tlas.has_value();
-        if(tlas.has_value()){
+        if(tlas.has_value())
             hardwarePhotonResourceUses.push_back(ReadUse(*tlas, Core::ResourceStates::AccelStructRead));
-        }
     }
     optionalResourcesImported = optionalResourcesImported && RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
         inputs.rayTracingResources->csgTraceContextBuffer,
@@ -223,7 +216,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(Core::GpuTaskGraph& g
     // Allow physical queue balancing for the clear; later successors retain its selected queue.
     EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
-
 
     Core::GpuTaskDesc irradianceClearDesc;
     irradianceClearDesc

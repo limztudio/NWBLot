@@ -25,7 +25,7 @@ b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statement
     MVector<MStringView> declaredTaskNames(m_arena);
     b8 ok = true;
 
-    auto validateExprLambdas = [&](auto& self, const Expr* expr) -> void{
+    const auto validateExprLambdas = [&](const auto& self, const Expr* expr) -> void{
         if(!expr)
             return;
         if(expr->kind == ExprKind::Lambda){
@@ -125,10 +125,7 @@ b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statement
             break;
         }
         case StmtKind::ExprStmt:{
-            if(stmt->expr && stmt->expr->kind == ExprKind::Call
-                && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::Identifier
-                && stmt->expr->lhs->text == "wait")
-            {
+            if(stmt->expr && stmt->expr->kind == ExprKind::Call && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::Identifier && stmt->expr->lhs->text == "wait"){
                 for(usize aIdx = 0u; aIdx < stmt->expr->arguments.size(); ++aIdx){
                     const Expr* arg = stmt->expr->arguments[aIdx];
                     if(!arg || arg->kind != ExprKind::Identifier){

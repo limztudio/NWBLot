@@ -8,11 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+namespace __hidden_adhd_compiler_sema_validation_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+using namespace NWB::AdhdCompilerTestsDetail;
 
 TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullPropagation){
     AdhdTestArena arena;
@@ -76,7 +78,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/topo_layout_access.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/topo_layout_access.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
@@ -128,7 +130,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "    return b.hidden;\r\n"
         "}\r\n";
     CompileResult privFieldRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_PrivateFieldSource, "impl/sim/priv_field.adhd", arena.arena, privFieldRes));
+    EXPECT_FALSE(Compiler::Compile(s_PrivateFieldSource, "impl/sim/priv_field.adhd", arena.arena, privFieldRes));
 
     static constexpr MStringView s_PrivateMethodSource =
         "class SecretBox {\r\n"
@@ -138,7 +140,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "    return b.calc();\r\n"
         "}\r\n";
     CompileResult privMethodRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_PrivateMethodSource, "impl/sim/priv_method.adhd", arena.arena, privMethodRes));
+    EXPECT_FALSE(Compiler::Compile(s_PrivateMethodSource, "impl/sim/priv_method.adhd", arena.arena, privMethodRes));
 
     static constexpr MStringView s_PrivateCtorSource =
         "class SecretBox {\r\n"
@@ -149,7 +151,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "    SecretBox b(5);\r\n"
         "}\r\n";
     CompileResult privCtorRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_PrivateCtorSource, "impl/sim/priv_ctor.adhd", arena.arena, privCtorRes));
+    EXPECT_FALSE(Compiler::Compile(s_PrivateCtorSource, "impl/sim/priv_ctor.adhd", arena.arena, privCtorRes));
 
     static constexpr MStringView s_AutoInterfaceByValueSource =
         "interface INode {\r\n"
@@ -159,7 +161,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "    auto copy = n;\r\n"
         "}\r\n";
     CompileResult autoIfaceRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_AutoInterfaceByValueSource, "impl/sim/auto_iface.adhd", arena.arena, autoIfaceRes));
+    EXPECT_FALSE(Compiler::Compile(s_AutoInterfaceByValueSource, "impl/sim/auto_iface.adhd", arena.arena, autoIfaceRes));
 
     static constexpr MStringView s_MutRebindConstSource =
         "interface INode {\r\n"
@@ -173,7 +175,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "    ref = b;\r\n"
         "}\r\n";
     CompileResult mutRebindRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MutRebindConstSource, "impl/sim/mut_rebind_const.adhd", arena.arena, mutRebindRes));
+    EXPECT_FALSE(Compiler::Compile(s_MutRebindConstSource, "impl/sim/mut_rebind_const.adhd", arena.arena, mutRebindRes));
 }
 
 TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDefines){
@@ -214,7 +216,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
     defines.push_back(MString("FEATURE_ENABLED", 15u, arena.arena));
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, defines));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, defines));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
 
@@ -256,7 +258,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "    public Box<BadRec> next;\r\n"
         "}\r\n";
     CompileResult recRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_TemplateRecSource, "impl/sim/template_rec.adhd", arena.arena, recRes));
+    EXPECT_FALSE(Compiler::Compile(s_TemplateRecSource, "impl/sim/template_rec.adhd", arena.arena, recRes));
 
     static constexpr MStringView s_TemplateSerializeBadSource =
         "[serialize]\r\n"
@@ -265,7 +267,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "}\r\n"
         "void usePacket(in Packet<Vector<u32>> p) {}\r\n";
     CompileResult serRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_TemplateSerializeBadSource, "impl/sim/template_ser_bad.adhd", arena.arena, serRes));
+    EXPECT_FALSE(Compiler::Compile(s_TemplateSerializeBadSource, "impl/sim/template_ser_bad.adhd", arena.arena, serRes));
 
     static constexpr MStringView s_BadEnumCountSource =
         "enum<u8> BadMode {\r\n"
@@ -273,7 +275,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "    enum Count,\r\n"
         "}\r\n";
     CompileResult badEnumCountRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadEnumCountSource, "impl/sim/bad_enum_count.adhd", arena.arena, badEnumCountRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadEnumCountSource, "impl/sim/bad_enum_count.adhd", arena.arena, badEnumCountRes));
 }
 
 TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfElse){
@@ -328,7 +330,7 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/alias_ool.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/alias_ool.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView srcView(res.generatedSource.data(), res.generatedSource.size());
@@ -351,7 +353,7 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
         "    this.b = y;\r\n"
         "}\r\n";
     CompileResult badOolRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_BadOolTemplateParamsSource, "impl/sim/bad_ool_tparams.adhd", arena.arena, badOolRes));
+    EXPECT_FALSE(Compiler::Compile(s_BadOolTemplateParamsSource, "impl/sim/bad_ool_tparams.adhd", arena.arena, badOolRes));
 }
 
 TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolInstantiations){
@@ -429,13 +431,13 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "}\r\n";
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/asset_deps_rebind.adhd", arena.arena, res));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/asset_deps_rebind.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView srcView(res.generatedSource.data(), res.generatedSource.size());
 
     EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 4u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const{"), MStringView::npos);
+    EXPECT_NE(hdrView.find("void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{"), MStringView::npos);
     EXPECT_NE(hdrView.find("if(this->mainRef.valid()) callback(this->mainRef.virtualPath);"), MStringView::npos);
     EXPECT_NE(hdrView.find("if(this->optRef.has_value() && this->optRef->valid()) callback(this->optRef->virtualPath);"), MStringView::npos);
     EXPECT_NE(hdrView.find("for(const auto& __dep : this->refList){ if(__dep.valid()) callback(__dep.virtualPath); }"), MStringView::npos);
@@ -469,7 +471,7 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "    readFrom(u);\r\n"
         "}\r\n";
     CompileResult badDeducedRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_DeducedBoundViolationSource, "impl/sim/bad_deduced.adhd", arena.arena, badDeducedRes));
+    EXPECT_FALSE(Compiler::Compile(s_DeducedBoundViolationSource, "impl/sim/bad_deduced.adhd", arena.arena, badDeducedRes));
 
     static constexpr MStringView s_WrongArgCountSource =
         "i32 addPair(in i32 a, in i32 b) {\r\n"
@@ -479,7 +481,7 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "    addPair(1);\r\n"
         "}\r\n";
     CompileResult badArityRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_WrongArgCountSource, "impl/sim/bad_arity.adhd", arena.arena, badArityRes));
+    EXPECT_FALSE(Compiler::Compile(s_WrongArgCountSource, "impl/sim/bad_arity.adhd", arena.arena, badArityRes));
 
     static constexpr MStringView s_MutateInRefInCtorSource =
         "interface ISource {\r\n"
@@ -493,14 +495,14 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "    }\r\n"
         "}\r\n";
     CompileResult badCtorMutRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_MutateInRefInCtorSource, "impl/sim/bad_ctor_in_mut.adhd", arena.arena, badCtorMutRes));
+    EXPECT_FALSE(Compiler::Compile(s_MutateInRefInCtorSource, "impl/sim/bad_ctor_in_mut.adhd", arena.arena, badCtorMutRes));
 
     static constexpr MStringView s_ProhibitedBoolSource =
         "class BadFlagHolder {\r\n"
         "    public bo" "ol enabled = false;\r\n"
         "}\r\n";
     CompileResult prohibitedBoolRes(arena.arena);
-    EXPECT_FALSE(Compiler::compile(s_ProhibitedBoolSource, "impl/sim/prohibited_b8.adhd", arena.arena, prohibitedBoolRes));
+    EXPECT_FALSE(Compiler::Compile(s_ProhibitedBoolSource, "impl/sim/prohibited_b8.adhd", arena.arena, prohibitedBoolRes));
 }
 
 

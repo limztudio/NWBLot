@@ -54,9 +54,9 @@ inline void AppendAdhdTextCrlf(MString& out, const MStringView text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CppTypeEmitter{
+class CppTypeEmitter final{
 public:
-    [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
+    [[nodiscard]] static MStringView MapBuiltinCppType(MStringView typeName)noexcept;
 
 
 public:

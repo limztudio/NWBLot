@@ -175,9 +175,8 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
         auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
         ASSERT_TRUE(corruptedPathResult);
         path = Move(*corruptedPathResult);
-        for(const b8 includePixels : { false, true }){
+        for(const b8 includePixels : { false, true })
             EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels));
-        }
     }
     EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("SFNT content hash differs")));
@@ -291,9 +290,8 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes){
         auto malformedPathResult = WriteCase(testArena, cut.filename, malformed);
         ASSERT_TRUE(malformedPathResult);
         path = Move(*malformedPathResult);
-        for(const b8 includePixels : { false, true }){
+        for(const b8 includePixels : { false, true })
             EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels)) << cut.filename;
-        }
     }
     EXPECT_EQ(logger.errorCount(), 2u * LengthOf(cuts));
 }

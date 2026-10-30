@@ -144,12 +144,7 @@ class MeshletAttributeRefEncodingLayout{
 }
 
 u32 PackMeshletCounts(in u32 vertexCount, in u32 primitiveCount, in u32 positionCount, in u32 attributeCount){
-    return
-        (vertexCount & s_MeshletCountMask)
-        | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
-        | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
-        | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift)
-    ;
+    return (vertexCount & s_MeshletCountMask) | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift) | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift) | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift);
 }
 
 u32 MeshletVertexCount(in MeshletDesc meshlet){
@@ -169,12 +164,10 @@ u32 MeshletAttributeCount(in MeshletDesc meshlet){
 }
 
 MeshletRefDeltaWidth MeshletRefDeltaWidthForMaxDelta(in u32 maxDelta){
-    if(maxDelta <= 0xffu){
+    if(maxDelta <= 0xffu)
         return MeshletRefDeltaWidth::Enum::U8;
-    }
-    if(maxDelta <= 0xffffu){
+    if(maxDelta <= 0xffffu)
         return MeshletRefDeltaWidth::Enum::U16;
-    }
     return MeshletRefDeltaWidth::Enum::U32;
 }
 
@@ -182,14 +175,7 @@ u32 PackMeshletRefEncodingWidth(in MeshletRefDeltaWidth width, in u32 shift){
     return (cast<u32>(width) & s_MeshletRefEncodingWidthMask) << shift;
 }
 
-u32 PackMeshletRefEncoding(
-    in MeshletRefDeltaWidth positionWidth,
-    in MeshletRefDeltaWidth skinWidth,
-    in MeshletRefDeltaWidth normalWidth,
-    in MeshletRefDeltaWidth tangentWidth,
-    in MeshletRefDeltaWidth uv0Width,
-    in MeshletRefDeltaWidth colorWidth
-){
+u32 PackMeshletRefEncoding(in MeshletRefDeltaWidth positionWidth, in MeshletRefDeltaWidth skinWidth, in MeshletRefDeltaWidth normalWidth, in MeshletRefDeltaWidth tangentWidth, in MeshletRefDeltaWidth uv0Width, in MeshletRefDeltaWidth colorWidth){
     return
         PackMeshletRefEncodingWidth(positionWidth, s_MeshletRefEncodingPositionShift)
         | PackMeshletRefEncodingWidth(skinWidth, s_MeshletRefEncodingSkinShift)
@@ -225,22 +211,18 @@ b8 MeshletRefDeltaWidthValid(in MeshletRefDeltaWidth width){
 }
 
 u32 MeshletRefDeltaByteWidth(in MeshletRefDeltaWidth width){
-    if(width == MeshletRefDeltaWidth::Enum::U8){
+    if(width == MeshletRefDeltaWidth::Enum::U8)
         return 1u;
-    }
-    if(width == MeshletRefDeltaWidth::Enum::U16){
+    if(width == MeshletRefDeltaWidth::Enum::U16)
         return 2u;
-    }
     return 4u;
 }
 
 b8 MeshletPositionRefInRange(in MeshletPositionStreamRef streamRef, in usize positionCount, in usize skinCount, in b8 skinRequired){
-    if(cast<usize>(streamRef.position) >= positionCount){
+    if(cast<usize>(streamRef.position) >= positionCount)
         return false;
-    }
-    if(skinRequired){
+    if(skinRequired)
         return cast<usize>(streamRef.skin) < skinCount;
-    }
     return streamRef.skin == s_MeshMissingStreamIndex;
 }
 
@@ -250,3 +232,4 @@ b8 MeshletAttributeRefInRange(in MeshletAttributeStreamRef streamRef, in usize n
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -151,9 +151,8 @@ private:
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
         static const u32 s_CaptureFrame = [](){
             const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
-            if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f){
+            if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f)
                 return 0u;
-            }
             return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
         }();
         return s_CaptureFrame;
@@ -210,166 +209,6 @@ private:
     static f32 FrozenYaw(){
         static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
         return s_Yaw;
-    }
-
-
-private:
-    void destroyWorld(){
-        DestroySmokeSkinnedRenderWorld(m_context, m_world);
-    }
-
-    [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
-        // Comparison mode uses the zigzag layout instead of staggered material rows.
-        const b8 transparentMaterialClass = (index % 2u) == 0u;
-        const b8 transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
-        const u32 classIndex = index / 2u;
-        const b8 comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
-        const f32 slot = static_cast<f32>(comparison ? index : classIndex);
-        const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
-        const SIMDVectorSingle spacing = VectorReplicate(s_CharacterSpacingX);
-        const SIMDVectorSingle slotOffset = VectorNegativeMultiplySubtractExpression(VectorReplicate(lastSlot), VectorReplicate(0.5f), VectorReplicate(slot));
-        const f32 x = comparison ? VectorGetX(VectorMultiply(slotOffset, spacing)) : VectorGetX(VectorMultiplyAddExpression(slotOffset, spacing, VectorMultiply(VectorReplicate(transparentMaterialClass ? -0.25f : 0.25f), spacing)));
-        const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
-
-        const auto modelResult = CreateTintedModelEntity(
-            *m_world,
-            transparentMaterialClass ? s_CausticModel : s_Model,
-            transparent ? s_TransparentMaterial : s_OpaqueMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            CharacterTint(classIndex, transparent),
-            Float4(x, s_CharacterLift, z, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f)
-        );
-        const NWB::Core::ECS::EntityID entity = modelResult.entity;
-        if(!modelResult.tintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);
-
-        return entity;
-    }
-
-    // The XZ source plane spans -1..+1, so wall scales are half-extents.
-    [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
-        const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
-        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
-        // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
-        const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
-
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f));
-        if(entity.valid()){
-            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
-                StoreFloat(wallRotation, transform->rotation);
-        }
-        return entity;
-    }
-
-    // Face the ceiling downward so it bounces light into the crowd.
-    [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
-        const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
-        Float4 ceilingScale;
-        StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
-        if(entity.valid()){
-            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
-                StoreFloat(ceilingRotation, transform->rotation);
-        }
-        return entity;
-    }
-
-
-    void spinCharacters()noexcept{
-        const SIMDVectorSingle yawBase = VectorReplicate(m_yaw.yaw());
-        const SIMDVectorSingle phaseStep = VectorDivide(VectorReplicate(s_TwoPi), VectorReplicate(static_cast<f32>(m_charactersPerClass * 2u)));
-        for(usize index = 0u; index < m_characterOwners.size(); ++index){
-            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
-            if(!transform)
-                continue;
-
-            const SIMDVectorSingle yaw = VectorAdd(yawBase, VectorMultiply(VectorReplicate(static_cast<f32>(index)), phaseStep));
-            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorSelect(VectorZero(), yaw, s_SIMDMaskY)), transform->rotation);
-        }
-    }
-
-
-    void reportReflectionStatistics(){
-        if(!m_reflectionDiagnosticsEnabled)
-            return;
-        const auto statisticsResult = m_renderer.tryGetLatestReflectionStatistics();
-        if(!statisticsResult)
-            return;
-        const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
-        if(statistics.sequence == m_reflectionStatisticsSequence && statistics.generation == m_reflectionStatisticsGeneration)
-            return;
-        m_reflectionStatisticsSequence = statistics.sequence;
-        m_reflectionStatisticsGeneration = statistics.generation;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
-            NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
-            NWB_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
-            NWB_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
-            , statistics.sequence
-            , statistics.generation
-            , statistics.frameIndex
-            , statistics.graphicsFrameIndex
-            , statistics.hardwareReady ? 1u : 0u
-            , statistics.opticalTransportEnabled ? 1u : 0u
-            , statistics.candidates
-            , statistics.hardwareRays
-            , statistics.exteriorEligibleRays
-            , statistics.queryBudgetUnits
-            , statistics.physicalQueries
-            , statistics.bootstrapEvents
-            , statistics.transparentPaths
-            , statistics.unsupportedPaths
-            , statistics.screenAttempts
-            , statistics.screenHits
-            , statistics.screenReturns
-            , statistics.screenIterations
-            , statistics.screenLimitMisses
-        );
-    }
-
-    b8 samplePresentationFps(){
-        const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
-        const Timer observationTime = TimerNow();
-        m_pacingRing.record(successfulPresentations, observationTime);
-        const auto status = m_fpsProbe.observe(successfulPresentations, observationTime);
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
-            return false;
-        }
-        if(!m_cpuTimingProbe.observe(m_context.perfSession, m_fpsProbe, successfulPresentations, status == NWB::Tests::Smoke::PresentationFpsStatus::Complete))
-            return false;
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
-            return true;
-
-        const auto& interval = m_fpsProbe.interval();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
-            , interval.averageFps()
-            , interval.presentations()
-            , interval.wallSeconds
-            , interval.firstPresentationCount
-            , interval.lastPresentationCount
-        );
-        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
-            const auto& total = m_fpsProbe.total();
-            const NWB::Tests::Smoke::PresentationPacingSummary pacingSummary = m_pacingRing.summarize();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
-                , pacingSummary.samples
-                , pacingSummary.p50Ms
-                , pacingSummary.p95Ms
-                , pacingSummary.maxMs
-                , pacingSummary.stallsOver50Ms
-            );
-            m_timingComplete = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
-                , total.averageFps()
-                , total.presentations()
-                , total.wallSeconds
-                , total.firstPresentationCount
-                , total.lastPresentationCount
-            );
-            m_context.requestQuit();
-        }
-        return true;
     }
 
 
@@ -514,15 +353,7 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
 
-        m_groundEntity = CreateTintedStaticMeshEntity(
-            *m_world,
-            s_GroundMesh,
-            s_GroundMaterial,
-            s_SmokeSurfaceMaterialInterface,
-            Float4(0.82f, 0.82f, 0.85f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
-        );
+        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
 
         // Lanes are side-wall extent and back-wall extent.
         const SIMDVectorSingle wallSpans = VectorMultiply(VectorReplicate(2.0f), VectorSet(s_BoxHalf.y, s_BoxHalf.x, 0.0f, 0.0f));
@@ -563,9 +394,9 @@ public:
 
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
         const b8 rayQueryCapable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-        if(!rayQueryCapable){
+        if(!rayQueryCapable)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"));
-        }else{
+        else{
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available"));
             if(HardwareShadowOpaqueBaseline())
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
@@ -667,6 +498,164 @@ public:
 
 
 private:
+    void destroyWorld(){
+        DestroySmokeSkinnedRenderWorld(m_context, m_world);
+    }
+
+    [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
+        // Comparison mode uses the zigzag layout instead of staggered material rows.
+        const b8 transparentMaterialClass = (index % 2u) == 0u;
+        const b8 transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
+        const u32 classIndex = index / 2u;
+        const b8 comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
+        const f32 slot = static_cast<f32>(comparison ? index : classIndex);
+        const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
+        const SIMDVectorSingle spacing = VectorReplicate(s_CharacterSpacingX);
+        const SIMDVectorSingle slotOffset = VectorNegativeMultiplySubtractExpression(VectorReplicate(lastSlot), VectorReplicate(0.5f), VectorReplicate(slot));
+        const f32 x = comparison ? VectorGetX(VectorMultiply(slotOffset, spacing)) : VectorGetX(VectorMultiplyAddExpression(slotOffset, spacing, VectorMultiply(VectorReplicate(transparentMaterialClass ? -0.25f : 0.25f), spacing)));
+        const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
+
+        const auto modelResult = CreateTintedModelEntity(
+            *m_world,
+            transparentMaterialClass ? s_CausticModel : s_Model,
+            transparent ? s_TransparentMaterial : s_OpaqueMaterial,
+            s_SmokeSurfaceMaterialInterface,
+            CharacterTint(classIndex, transparent),
+            Float4(x, s_CharacterLift, z, 0.0f),
+            Float4(1.0f, 1.0f, 1.0f, 0.0f)
+        );
+        const NWB::Core::ECS::EntityID entity = modelResult.entity;
+        if(!modelResult.tintApplied)
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);
+
+        return entity;
+    }
+
+    // The XZ source plane spans -1..+1, so wall scales are half-extents.
+    [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
+        const SIMDVectorSingle pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
+        const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
+        // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
+        const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
+
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f));
+        if(entity.valid()){
+            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+                StoreFloat(wallRotation, transform->rotation);
+        }
+        return entity;
+    }
+
+    // Face the ceiling downward so it bounces light into the crowd.
+    [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
+        const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
+        Float4 ceilingScale;
+        StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
+        if(entity.valid()){
+            if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
+                StoreFloat(ceilingRotation, transform->rotation);
+        }
+        return entity;
+    }
+
+    void spinCharacters()noexcept{
+        const SIMDVectorSingle yawBase = VectorReplicate(m_yaw.yaw());
+        const SIMDVectorSingle phaseStep = VectorDivide(VectorReplicate(s_TwoPi), VectorReplicate(static_cast<f32>(m_charactersPerClass * 2u)));
+        for(usize index = 0u; index < m_characterOwners.size(); ++index){
+            auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
+            if(!transform)
+                continue;
+
+            const SIMDVectorSingle yaw = VectorAdd(yawBase, VectorMultiply(VectorReplicate(static_cast<f32>(index)), phaseStep));
+            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorSelect(VectorZero(), yaw, s_SIMDMaskY)), transform->rotation);
+        }
+    }
+
+    void reportReflectionStatistics(){
+        if(!m_reflectionDiagnosticsEnabled)
+            return;
+        const auto statisticsResult = m_renderer.tryGetLatestReflectionStatistics();
+        if(!statisticsResult)
+            return;
+        const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
+        if(statistics.sequence == m_reflectionStatisticsSequence && statistics.generation == m_reflectionStatisticsGeneration)
+            return;
+        m_reflectionStatisticsSequence = statistics.sequence;
+        m_reflectionStatisticsGeneration = statistics.generation;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
+            NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
+            NWB_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
+            NWB_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
+            , statistics.sequence
+            , statistics.generation
+            , statistics.frameIndex
+            , statistics.graphicsFrameIndex
+            , statistics.hardwareReady ? 1u : 0u
+            , statistics.opticalTransportEnabled ? 1u : 0u
+            , statistics.candidates
+            , statistics.hardwareRays
+            , statistics.exteriorEligibleRays
+            , statistics.queryBudgetUnits
+            , statistics.physicalQueries
+            , statistics.bootstrapEvents
+            , statistics.transparentPaths
+            , statistics.unsupportedPaths
+            , statistics.screenAttempts
+            , statistics.screenHits
+            , statistics.screenReturns
+            , statistics.screenIterations
+            , statistics.screenLimitMisses
+        );
+    }
+
+    b8 samplePresentationFps(){
+        const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
+        const Timer observationTime = TimerNow();
+        m_pacingRing.record(successfulPresentations, observationTime);
+        const auto status = m_fpsProbe.observe(successfulPresentations, observationTime);
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
+            return false;
+        }
+        if(!m_cpuTimingProbe.observe(m_context.perfSession, m_fpsProbe, successfulPresentations, status == NWB::Tests::Smoke::PresentationFpsStatus::Complete))
+            return false;
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
+            return true;
+
+        const auto& interval = m_fpsProbe.interval();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
+            , interval.averageFps()
+            , interval.presentations()
+            , interval.wallSeconds
+            , interval.firstPresentationCount
+            , interval.lastPresentationCount
+        );
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
+            const auto& total = m_fpsProbe.total();
+            const NWB::Tests::Smoke::PresentationPacingSummary pacingSummary = m_pacingRing.summarize();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
+                , pacingSummary.samples
+                , pacingSummary.p50Ms
+                , pacingSummary.p95Ms
+                , pacingSummary.maxMs
+                , pacingSummary.stallsOver50Ms
+            );
+            m_timingComplete = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
+                , total.averageFps()
+                , total.presentations()
+                , total.wallSeconds
+                , total.firstPresentationCount
+                , total.lastPresentationCount
+            );
+            m_context.requestQuit();
+        }
+        return true;
+    }
+
+
+private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Impl::RendererSystem& m_renderer;
@@ -712,7 +701,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)

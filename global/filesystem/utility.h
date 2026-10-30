@@ -68,9 +68,11 @@ struct formatter<GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, 
     template<typename FormatContext>
     auto format(const GlobalFilesystemUtilityDetail::PathToStringArg<RequestedCharT, SourceCharT>& arg, FormatContext& ctx)const noexcept([]()consteval noexcept{
         using Output = Decay_T<decltype(DeclVal<FormatContext&>().out())>;
-        return noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
+        return
+            noexcept(DeclVal<void(*)(Output)noexcept>()(DeclVal<FormatContext&>().out()))
             && noexcept(WriteConvertedText<FormatCharT>(DeclVal<Output&>(), DeclVal<const BasicStringView<SourceCharT>&>()))
-            && IsNothrowMoveConstructible_V<Output> && IsNothrowDestructible_V<Output>
+            && IsNothrowMoveConstructible_V<Output>
+            && IsNothrowDestructible_V<Output>
         ;
     }()){
         auto out = ctx.out();

@@ -57,10 +57,7 @@ template<typename StringT>
     return
         noexcept(TrimInPlace(DeclVal<StringT&>())) && noexcept(static_cast<b8>(DeclVal<StringT&>().size() >= 2u))
         && noexcept(DeclVal<void(*)(First)noexcept>()(DeclVal<StringT&>().front())) && noexcept(DeclVal<void(*)(Last)noexcept>()(DeclVal<StringT&>().back()))
-        && noexcept(static_cast<b8>(
-            (DeclVal<First&>() == static_cast<First>('"') && DeclVal<Last&>() == static_cast<Last>('"'))
-            || (DeclVal<First&>() == static_cast<First>('\'') && DeclVal<Last&>() == static_cast<Last>('\''))
-        ))
+        && noexcept(static_cast<b8>((DeclVal<First&>() == static_cast<First>('"') && DeclVal<Last&>() == static_cast<Last>('"')) || (DeclVal<First&>() == static_cast<First>('\'') && DeclVal<Last&>() == static_cast<Last>('\''))))
         && noexcept(DeclVal<StringT&>().erase(DeclVal<StringT&>().size() - 1u)) && noexcept(DeclVal<StringT&>().erase(0u, 1u))
         && IsNothrowDestructible_V<First> && IsNothrowDestructible_V<Last> && IsNothrowMoveConstructible_V<StringT> && IsNothrowDestructible_V<StringT>
     ;
@@ -238,7 +235,6 @@ template<typename CharT>
     }
     return false;
 }
-
 
 template<typename EnumT>
 struct NamedEnumCase{

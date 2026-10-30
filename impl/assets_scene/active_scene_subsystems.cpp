@@ -76,30 +76,17 @@ b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, co
         const SubsystemRef currentSubsystem = pendingSubsystems[queueIndex];
         auto loadedAsset = assetManager.loadSync(ISubsystem::AssetTypeName(), currentSubsystem.name());
         if(!loadedAsset){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: failed to load subsystem asset '{}'"),
-                __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                ConvertString(currentSubsystem.name().resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load subsystem asset '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
             return false;
         }
         const ISubsystem* const subsystemPtr = CastSubsystem(loadedAsset->get());
         if(!subsystemPtr){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: asset '{}' is not a subsystem"),
-                __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                ConvertString(currentSubsystem.name().resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a subsystem"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentSubsystem.name().resolvedText()));
             return false;
         }
         for(const UniquePtr<ISubsystem>& existing : nextLoadedSubsystems){
             if(existing && existing->assetType() == subsystemPtr->assetType()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{}: duplicate subsystem type '{}' in scene '{}'"),
-                    __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                    ConvertString(subsystemPtr->assetType().resolvedText()),
-                    ConvertString(scene.name().resolvedText())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{}: duplicate subsystem type '{}' in scene '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(subsystemPtr->assetType().resolvedText()), ConvertString(scene.name().resolvedText()));
                 return false;
             }
         }
@@ -131,11 +118,7 @@ b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, co
             }
             const IComponent* const componentPtr = CastComponent(loadedComponentAsset->get());
             if(!componentPtr){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("{}: asset '{}' is not a component"),
-                    __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                    ConvertString(currentComponent.name().resolvedText())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a component"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(currentComponent.name().resolvedText()));
                 return false;
             }
             for(const UniquePtr<IComponent>& existing : loadedComponents){
@@ -170,20 +153,12 @@ b8 ActiveSceneSubsystems::instantiateEntities(Core::ECS::World& world)const{
 
     for(const LoadedEntity& loadedEntity : m_loadedEntities){
         if(loadedEntity.components.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: loaded entity '{}' has no components"),
-                __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                ConvertString(loadedEntity.entity.name().resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded entity '{}' has no components"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
             return false;
         }
         Core::ECS::Entity entity = world.createEntity();
         if(!entity.id().valid()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("{}: failed to create ECS entity for '{}'"),
-                __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner,
-                ConvertString(loadedEntity.entity.name().resolvedText())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create ECS entity for '{}'"), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner, ConvertString(loadedEntity.entity.name().resolvedText()));
             return false;
         }
         for(const UniquePtr<IComponent>& component : loadedEntity.components){
@@ -203,3 +178,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

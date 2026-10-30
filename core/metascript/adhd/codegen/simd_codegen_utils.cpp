@@ -20,7 +20,7 @@ namespace __hidden_adhd_simd_codegen_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr MStringView s_LaneCallSuffixes[4] = {
+inline constexpr MStringView s_LaneCallSuffixes[4] = {
     "X(",
     "Y(",
     "Z(",
@@ -76,13 +76,7 @@ static constexpr MStringView s_LaneCallSuffixes[4] = {
     return __hidden_adhd_simd_codegen_utils::s_LaneCallSuffixes[lane < 4u ? lane : 3u];
 }
 
-void AppendIntSimdLaneExtract(
-    MString& out,
-    const MStringView varName,
-    const u32 lane,
-    const b8 isDouble,
-    const MStringView laneType
-){
+void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32 lane, const b8 isDouble, const MStringView laneType){
     const MStringView laneSuffix = SimdLaneCallSuffix(lane);
     out.append("static_cast<");
     out.append(laneType.data(), laneType.size());
@@ -97,7 +91,7 @@ void AppendIntSimdLaneExtract(
     if(expr.kind == ExprKind::MemberAccess && expr.isSwizzle && expr.text.size() >= 2u && expr.text.size() <= 4u)
         return static_cast<u32>(expr.text.size());
     u32 lanes = 4u;
-    if(SymbolTable::isSimdVectorType(expr.resolvedSimdType, lanes))
+    if(SymbolTable::IsSimdVectorType(expr.resolvedSimdType, lanes))
         return lanes;
     return 4u;
 }
@@ -146,12 +140,7 @@ void AppendIntSimdLaneExtract(
     return {};
 }
 
-void AppendSimdLaneCountIntrinsicPrefix(
-    MString& out,
-    const b8 isDouble,
-    const u32 effLanes,
-    const MStringView suffix
-){
+void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u32 effLanes, const MStringView suffix){
     out.append(isDouble ? "::VectorDouble" : "::Vector");
     out.push_back(effLanes == 2u ? '2' : (effLanes == 3u ? '3' : '4'));
     out.append(suffix.data(), suffix.size());
@@ -246,23 +235,16 @@ void AppendSimdLaneCountIntrinsicPrefix(
 
     if(expr->kind == ExprKind::Binary && IsSimdAssignmentOp(expr->op) && expr->lhs){
         u32 lane = 0u;
-        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs
-            && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType)
-            && IsSingleSwizzleLane(expr->lhs->text, lane))
-        {
+        if(expr->lhs->kind == ExprKind::MemberAccess && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType) && IsSingleSwizzleLane(expr->lhs->text, lane))
             return true;
-        }
-        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs
-            && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType))
-        {
+        if(expr->lhs->kind == ExprKind::Index && expr->lhs->lhs && IsRegisterPromotableSimdType(expr->lhs->lhs->resolvedSimdType))
             return true;
-        }
     }
 
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
         const MStringView callee = expr->lhs->text;
         const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
-        if(symbols.isSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
+        if(SymbolTable::IsSimdType(baseCallee) && IsRegisterPromotableSimdType(expr->resolvedSimdType))
             return true;
         if(!MapBuiltinMathFunction(callee).empty()){
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType))

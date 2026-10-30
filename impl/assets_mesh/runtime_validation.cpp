@@ -48,21 +48,17 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     return VectorSetW(position, 0.0f);
 }
 
-
 [[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept{
     return VectorSetW(normal, 0.0f);
 }
-
 
 [[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshUvVector(const SIMDVectorSingle uv)noexcept{
     return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
 }
 
-
 [[nodiscard]] b8 MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
     return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance));
 }
-
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
     const SIMDVectorSingle direction = VectorSetW(tangent, 0.0f);
@@ -72,7 +68,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_TangentHandednessTolerance))
     ;
 }
-
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshStreams(
     const Span<const Float3U> positions,
@@ -126,7 +121,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 
     return true;
 }
-
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateMeshletPayload(
     const Span<const u8> positionRefDeltas,
@@ -267,7 +261,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     return true;
 }
 
-
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(
     const Span<const Float3U> positions,
     const Span<const Half4U> normals,
@@ -286,23 +279,8 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     if(!ValidateMeshStreams(positions, normals, tangents, uv0, colors, contextText, meshPathText))
         return false;
 
-    return ValidateMeshletPayload(
-        positionRefDeltas,
-        attributeRefDeltas,
-        localVertexRefs,
-        meshlets,
-        meshletBounds,
-        meshletPrimitiveIndices,
-        positions.size(),
-        normals.size(),
-        tangents.size(),
-        uv0.size(),
-        colors.size(),
-        contextText,
-        meshPathText
-    );
+    return ValidateMeshletPayload(positionRefDeltas, attributeRefDeltas, localVertexRefs, meshlets, meshletBounds, meshletPrimitiveIndices, positions.size(), normals.size(), tangents.size(), uv0.size(), colors.size(), contextText, meshPathText);
 }
-
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(const Mesh& payload, const TStringView contextText, const TStringView meshPathText){
     return ValidateSharedMeshPayload(

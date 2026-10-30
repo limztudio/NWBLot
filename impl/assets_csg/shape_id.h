@@ -21,16 +21,15 @@ NWB_IMPL_BEGIN
 
 
 // Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
-[[nodiscard]] inline Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName){
+[[nodiscard]] inline Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept{
     if(!shapeName)
         return MakeUnexpected(Failure{});
 
     // HashValue returns usize and would make the cooked ID host-dependent.
     const NameHash& shapeHash = shapeName.hash();
     u64 foldedHash = shapeHash.qwords[0u];
-    for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane){
+    for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane)
         HashCombineHash(foldedHash, shapeHash.qwords[lane], s_HashCombineGoldenRatio64);
-    }
 
     const CsgShapeTypeId typeId = static_cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));
     return typeId != s_InvalidCsgShapeTypeId ? typeId : Limit<CsgShapeTypeId>::s_Max;

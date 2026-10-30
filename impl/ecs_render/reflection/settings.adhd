@@ -69,54 +69,77 @@ class ReflectionSettings{
 
 b8 SameReflectionTraceSettings(in ReflectionSettings first, in ReflectionSettings second){
     return
-        first.traceMode == second.traceMode && first.samplingSeed == second.samplingSeed
-        && first.maxHardwareRaysPerFrame == second.maxHardwareRaysPerFrame && first.maxOpticalQueries == second.maxOpticalQueries
-        && first.maxRayDistance == second.maxRayDistance && first.distanceFadeStart == second.distanceFadeStart
-        && first.roughnessCutoff == second.roughnessCutoff && first.screenMaxSteps == second.screenMaxSteps
-        && first.screenThickness == second.screenThickness && first.screenConfidenceThreshold == second.screenConfidenceThreshold
+        first.traceMode == second.traceMode
+        && first.samplingSeed == second.samplingSeed
+        && first.maxHardwareRaysPerFrame == second.maxHardwareRaysPerFrame
+        && first.maxOpticalQueries == second.maxOpticalQueries
+        && first.maxRayDistance == second.maxRayDistance
+        && first.distanceFadeStart == second.distanceFadeStart
+        && first.roughnessCutoff == second.roughnessCutoff
+        && first.screenMaxSteps == second.screenMaxSteps
+        && first.screenThickness == second.screenThickness
+        && first.screenConfidenceThreshold == second.screenConfidenceThreshold
         && first.screenEdgeFade == second.screenEdgeFade
-        && first.environmentTop.x == second.environmentTop.x && first.environmentTop.y == second.environmentTop.y
-        && first.environmentTop.z == second.environmentTop.z && first.environmentBottom.x == second.environmentBottom.x
-        && first.environmentBottom.y == second.environmentBottom.y && first.environmentBottom.z == second.environmentBottom.z;
+        && first.environmentTop.x == second.environmentTop.x
+        && first.environmentTop.y == second.environmentTop.y
+        && first.environmentTop.z == second.environmentTop.z
+        && first.environmentBottom.x == second.environmentBottom.x
+        && first.environmentBottom.y == second.environmentBottom.y
+        && first.environmentBottom.z == second.environmentBottom.z
+    ;
 }
 
 // Settings are an external boundary; reject invalid values early.
 b8 ValidateReflectionSettings(in ReflectionSettings settings){
-    const u32 s_MaxTemporalSamples = 256u;
-    const u32 s_MaxSpatialRadius = 3u;
-    if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > s_MaxTemporalSamples || settings.spatialRadius > s_MaxSpatialRadius){
+    const u32 maxTemporalSamples = 256u;
+    const u32 maxSpatialRadius = 3u;
+    if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > maxTemporalSamples || settings.spatialRadius > maxSpatialRadius)
         return false;
-    }
-    if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > s_ReflectionDefaultMaxOpticalQueries){
+    if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > s_ReflectionDefaultMaxOpticalQueries)
         return false;
-    }
-    if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Enum::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Enum::Confidence)){
+    if(cast<u8>(settings.traceMode) > cast<u8>(ReflectionTraceMode::Enum::Hybrid) || cast<u8>(settings.debugView) > cast<u8>(ReflectionDebugView::Enum::Confidence))
         return false;
-    }
     if(
-        !isFinite(settings.maxRayDistance) || settings.maxRayDistance <= 0.0f
-        || !isFinite(settings.distanceFadeStart) || settings.distanceFadeStart < 0.0f
+        !isFinite(settings.maxRayDistance)
+        || settings.maxRayDistance <= 0.0f
+        || !isFinite(settings.distanceFadeStart)
+        || settings.distanceFadeStart < 0.0f
         || settings.distanceFadeStart >= settings.maxRayDistance
-        || !isFinite(settings.roughnessCutoff) || settings.roughnessCutoff < 0.0f || settings.roughnessCutoff > 1.0f
-    ){
+        || !isFinite(settings.roughnessCutoff)
+        || settings.roughnessCutoff < 0.0f
+        || settings.roughnessCutoff > 1.0f
+    )
         return false;
-    }
-    const u32 s_MinScreenSteps = 8u;
-    const u32 s_MaxScreenSteps = 256u;
-    const f32 s_MaxScreenEdgeFade = 0.25f;
+    const u32 minScreenSteps = 8u;
+    const u32 maxScreenSteps = 256u;
+    const f32 maxScreenEdgeFade = 0.25f;
     if(
-        settings.screenMaxSteps < s_MinScreenSteps || settings.screenMaxSteps > s_MaxScreenSteps
-        || !isFinite(settings.screenThickness) || settings.screenThickness <= 0.0f
+        settings.screenMaxSteps < minScreenSteps
+        || settings.screenMaxSteps > maxScreenSteps
+        || !isFinite(settings.screenThickness)
+        || settings.screenThickness <= 0.0f
         || !isFinite(settings.screenConfidenceThreshold)
-        || settings.screenConfidenceThreshold <= 0.0f || settings.screenConfidenceThreshold > 1.0f
-        || !isFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.0f || settings.screenEdgeFade > s_MaxScreenEdgeFade
-    ){
+        || settings.screenConfidenceThreshold <= 0.0f
+        || settings.screenConfidenceThreshold > 1.0f
+        || !isFinite(settings.screenEdgeFade)
+        || settings.screenEdgeFade < 0.0f
+        || settings.screenEdgeFade > maxScreenEdgeFade
+    )
         return false;
-    }
-    return isFinite(settings.environmentTop.x) && isFinite(settings.environmentTop.y) && isFinite(settings.environmentTop.z)
-        && isFinite(settings.environmentBottom.x) && isFinite(settings.environmentBottom.y) && isFinite(settings.environmentBottom.z)
-        && settings.environmentTop.x >= 0.0f && settings.environmentTop.y >= 0.0f && settings.environmentTop.z >= 0.0f
-        && settings.environmentBottom.x >= 0.0f && settings.environmentBottom.y >= 0.0f && settings.environmentBottom.z >= 0.0f;
+    return
+        isFinite(settings.environmentTop.x)
+        && isFinite(settings.environmentTop.y)
+        && isFinite(settings.environmentTop.z)
+        && isFinite(settings.environmentBottom.x)
+        && isFinite(settings.environmentBottom.y)
+        && isFinite(settings.environmentBottom.z)
+        && settings.environmentTop.x >= 0.0f
+        && settings.environmentTop.y >= 0.0f
+        && settings.environmentTop.z >= 0.0f
+        && settings.environmentBottom.x >= 0.0f
+        && settings.environmentBottom.y >= 0.0f
+        && settings.environmentBottom.z >= 0.0f
+    ;
 }
 
 b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSettings second){
@@ -126,12 +149,6 @@ b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSet
 
 // Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
 class ReflectionSceneContentStamp{
-    public u64 geometry;
-    public u64 material;
-    public u64 lighting;
-    public u64 view;
-    public b8 trusted;
-
     public ReflectionSceneContentStamp(){
         this.geometry = 0u;
         this.material = 0u;
@@ -151,6 +168,12 @@ class ReflectionSceneContentStamp{
     public b8 matchesScene(in ReflectionSceneContentStamp other)const{
         return this.geometry == other.geometry && this.material == other.material && this.lighting == other.lighting && this.trusted == other.trusted;
     }
+
+    public u64 geometry;
+    public u64 material;
+    public u64 lighting;
+    public u64 view;
+    public b8 trusted;
 }
 
 enum<u8> ReflectionFeedbackResetReason{
@@ -213,12 +236,10 @@ ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedback
     result.eligible = plan.eligible && hardwareReady;
     result.reused = result.eligible && plan.reused && !hardwareChanged;
     result.reset = plan.reset || hardwareChanged;
-    if(hardwareChanged){
+    if(hardwareChanged)
         result.resetReason = ReflectionFeedbackResetReason::Enum::HardwareChanged;
-    }
-    else{
+    else
         result.resetReason = plan.resetReason;
-    }
     return result;
 }
 
@@ -279,49 +300,33 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPla
     result.eligible = plan.eligible;
     result.reused = plan.reused && !hardwareChanged;
     if(result.eligible){
-        if(result.reused){
+        if(result.reused)
             result.historyStartGraphicsFrame = plan.historyStartGraphicsFrame;
-        }
-        else{
+        else
             result.historyStartGraphicsFrame = plan.graphicsFrameIndex;
-        }
     }
-    else{
+    else
         result.historyStartGraphicsFrame = 0u;
-    }
     result.reset = plan.reset || hardwareChanged;
-    if(hardwareChanged){
+    if(hardwareChanged)
         result.resetReason = ReflectionHistoryResetReason::Enum::HardwareChanged;
-    }
-    else{
+    else
         result.resetReason = plan.resetReason;
-    }
     if(result.eligible){
         u32 nextSampleCount = 1u;
-        if(result.reused){
+        if(result.reused)
             nextSampleCount = plan.previousSampleCount + 1u;
-        }
-        if(nextSampleCount < plan.settings.temporalMaxSamples){
+        if(nextSampleCount < plan.settings.temporalMaxSamples)
             result.sampleCount = nextSampleCount;
-        }
-        else{
+        else
             result.sampleCount = plan.settings.temporalMaxSamples;
-        }
     }
-    else{
+    else
         result.sampleCount = 0u;
-    }
     return result;
 }
 
 class ReflectionFeedbackExtent{
-    public u32 width;
-    public u32 height;
-    public u32 tilesX;
-    public u32 tilesY;
-    public u32 entryCount;
-    public u32 byteCount;
-
     public ReflectionFeedbackExtent(){
         this.width = 0u;
         this.height = 0u;
@@ -343,6 +348,13 @@ class ReflectionFeedbackExtent{
     public b8 valid()const{
         return this.byteCount != 0u;
     }
+
+    public u32 width;
+    public u32 height;
+    public u32 tilesX;
+    public u32 tilesY;
+    public u32 entryCount;
+    public u32 byteCount;
 }
 
 const u32 s_ReflectionFeedbackGroupSize = 8u;
@@ -352,16 +364,14 @@ const u64 s_ReflectionFeedbackEntryBytes = 4u;
 const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
 
 b8 TryComputeReflectionFeedbackExtent(in u32 width, in u32 height, mut ReflectionFeedbackExtent outExtent){
-    if(width == 0u || height == 0u){
+    if(width == 0u || height == 0u)
         return false;
-    }
     const u32 tilesX = (width - 1u) / s_ReflectionFeedbackGroupSize + 1u;
     const u32 tilesY = (height - 1u) / s_ReflectionFeedbackGroupSize + 1u;
     const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
     const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
-    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount){
+    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
         return false;
-    }
     outExtent = ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
     return true;
 }
@@ -433,3 +443,4 @@ const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_T
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

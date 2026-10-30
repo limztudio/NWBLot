@@ -83,22 +83,14 @@ namespace __hidden_adhd_source_emitter_stmt{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SourceEmitter::emitStatementList(
-    MString& out,
-    const Span<const Stmt* const> statements,
-    const u32 indent
-)const{
+void SourceEmitter::emitStatementList(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     for(const Stmt* stmt : statements){
         if(stmt)
             emitStmt(out, *stmt, indent);
     }
 }
 
-void SourceEmitter::emitSwitchIfChainStatements(
-    MString& out,
-    const Span<const Stmt* const> statements,
-    const u32 indent
-)const{
+void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     for(usize i = 0u; i < statements.size(); ++i){
         const Stmt* child = statements[i];
         if(!child)
@@ -147,11 +139,7 @@ void SourceEmitter::emitSwitchIfChainStatements(
     }
 }
 
-void SourceEmitter::emitLoopBodyStatements(
-    MString& out,
-    const Span<const Stmt* const> statements,
-    const u32 indent
-)const{
+void SourceEmitter::emitLoopBodyStatements(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
     m_activeSwitchBreakLabelLine = 0u;
     ++m_activeSimdLoopInnerBreakDepth;
@@ -162,11 +150,7 @@ void SourceEmitter::emitLoopBodyStatements(
     m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
 }
 
-void SourceEmitter::emitStmt(
-    MString& out,
-    const Stmt& stmt,
-    const u32 indent
-)const{
+void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)const{
     switch(stmt.kind){
     case StmtKind::Block:{
         emitIndent(out, indent);
@@ -509,11 +493,7 @@ void SourceEmitter::emitStmt(
         m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
 
         if(stmt.rangeMode == ParamPassingMode::Mut && loopBinding && loopBinding->isLoopElement && loopBinding->written){
-            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (
-                stmt.statements.back()->kind == StmtKind::Return
-                || stmt.statements.back()->kind == StmtKind::Break
-                || stmt.statements.back()->kind == StmtKind::Continue
-            );
+            const b8 endsWithTerminal = !stmt.statements.empty() && stmt.statements.back() && (stmt.statements.back()->kind == StmtKind::Return || stmt.statements.back()->kind == StmtKind::Break || stmt.statements.back()->kind == StmtKind::Continue);
             if(!endsWithTerminal)
                 emitSimdStoreForBinding(out, *loopBinding, indent + 1u);
         }

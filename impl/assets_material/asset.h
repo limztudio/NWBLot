@@ -40,7 +40,6 @@ static_assert(sizeof(MaterialTypedLayoutBlockBinary) == s_MaterialTypedLayoutBlo
 static_assert(sizeof(MaterialTypedLayoutFieldBinary) == s_MaterialTypedLayoutFieldBytes, "MaterialTypedLayoutFieldBinary layout drifted");
 static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceReferenceBytes, "MaterialResourceReferenceBinary layout drifted");
 
-
 // Transparent materials need all three pass shaders; opaque materials carry none.
 [[nodiscard]] inline b8 HasValidMaterialAvboitPixelShaderContract(
     const b8 transparent,
@@ -48,9 +47,8 @@ static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceRefer
     const Core::Assets::AssetRef<PixelShader>& occupancyPixelShader,
     const Core::Assets::AssetRef<PixelShader>& extinctionPixelShader
 )noexcept{
-    if(transparent){
+    if(transparent)
         return accumulatePixelShader.valid() && occupancyPixelShader.valid() && extinctionPixelShader.valid();
-    }
 
     return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
 }
@@ -64,10 +62,7 @@ static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceRefer
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(
-    s_MaterialLayoutFieldComponentsPerValueType == NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT,
-    "Material layout field component count drifted"
-);
+static_assert(s_MaterialLayoutFieldComponentsPerValueType == NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT, "Material layout field component count drifted");
 static_assert(
     static_cast<u32>(MaterialParameterValueType::f32) - s_MaterialParameterFirstValueTypeId
         == (static_cast<u32>(MaterialLayoutFieldType::f32x4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
@@ -132,7 +127,7 @@ static_assert(
     }
 }
 
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name){
+[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name)noexcept{
     return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
 }
 
@@ -308,3 +303,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

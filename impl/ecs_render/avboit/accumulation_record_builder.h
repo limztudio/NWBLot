@@ -57,8 +57,7 @@ public:
         : AvboitRecordInputsBase(targetsIn)
         , accumulationTimingTicket(timingTicketIn)
         , accumulationComputeEmulationTiming(computeEmulationTimingIn)
-    {
-    }
+    {}
 };
 
 

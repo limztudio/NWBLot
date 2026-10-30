@@ -14,12 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TypeChecker::propagateFuncCaptureBytes(
-    TypeRef* targetType,
-    const Expr* rhs,
-    const Span<const ScopedVarInfo> scope,
-    const SymbolTable& symbols
-)noexcept{
+void TypeChecker::PropagateFuncCaptureBytes(TypeRef* targetType, const Expr* rhs, const Span<const ScopedVarInfo> scope, const SymbolTable& symbols)noexcept{
     TypeRef* funcType = ExtractUnderlyingFuncType(targetType, symbols);
     if(!funcType || !rhs)
         return;
@@ -29,7 +24,7 @@ void TypeChecker::propagateFuncCaptureBytes(
         return;
     }
     if(rhs->kind == ExprKind::Identifier){
-        if(const ScopedVarInfo* v = findScopedVar(scope, rhs->text)){
+        if(const ScopedVarInfo* v = FindScopedVar(scope, rhs->text)){
             const TypeRef* rhsFunc = ExtractUnderlyingFuncType(v->type, symbols);
             if((v->lambdaExpr && !v->lambdaExpr->lambdaCaptures.empty()) || (rhsFunc && rhsFunc->inferredCaptureBytes > 0u))
                 funcType->inferredCaptureBytes = 64u;
@@ -39,18 +34,18 @@ void TypeChecker::propagateFuncCaptureBytes(
     if(rhs->kind == ExprKind::Call){
         for(const Expr* arg : rhs->arguments){
             if(arg)
-                propagateFuncCaptureBytes(targetType, arg, scope, symbols);
+                PropagateFuncCaptureBytes(targetType, arg, scope, symbols);
         }
     }
 }
 
-b8 TypeChecker::isEscapingMutCaptureLambda(const Expr* rhs, const Span<const ScopedVarInfo> scope)noexcept{
+b8 TypeChecker::IsEscapingMutCaptureLambda(const Expr* rhs, const Span<const ScopedVarInfo> scope)noexcept{
     if(!rhs)
         return false;
     if(rhs->kind == ExprKind::Lambda)
         return rhs->hasMutLocalCapture;
     if(rhs->kind == ExprKind::Identifier){
-        if(const ScopedVarInfo* v = findScopedVar(scope, rhs->text))
+        if(const ScopedVarInfo* v = FindScopedVar(scope, rhs->text))
             return v->lambdaExpr && v->lambdaExpr->hasMutLocalCapture;
     }
     return false;
@@ -101,7 +96,7 @@ b8 TypeChecker::checkCallableArguments(
                     subParamType = m_symbols.substituteTypeParams(*subParamType, targetCallable->templateParams, callTemplateArgs);
                 expectedParamTypeRef = subParamType;
                 expectedParamType = m_symbols.resolveBaseTypeName(subParamType->name);
-                propagateFuncCaptureBytes(targetCallable->params[i].type, arg, scope, m_symbols);
+                PropagateFuncCaptureBytes(targetCallable->params[i].type, arg, scope, m_symbols);
             }
         }
         else if(invokedFuncType && invokedFuncType->isFuncType && i < invokedFuncType->funcParams.size()){
@@ -109,7 +104,7 @@ b8 TypeChecker::checkCallableArguments(
             if(invokedFuncType->funcParams[i].type){
                 expectedParamTypeRef = invokedFuncType->funcParams[i].type;
                 expectedParamType = m_symbols.resolveBaseTypeName(invokedFuncType->funcParams[i].type->name);
-                propagateFuncCaptureBytes(invokedFuncType->funcParams[i].type, arg, scope, m_symbols);
+                PropagateFuncCaptureBytes(invokedFuncType->funcParams[i].type, arg, scope, m_symbols);
             }
         }
         else if(localCallable && localCallable->lambdaExpr && i < localCallable->lambdaExpr->lambdaParams.size()){
@@ -117,14 +112,14 @@ b8 TypeChecker::checkCallableArguments(
             if(localCallable->lambdaExpr->lambdaParams[i].type){
                 expectedParamTypeRef = localCallable->lambdaExpr->lambdaParams[i].type;
                 expectedParamType = m_symbols.resolveBaseTypeName(localCallable->lambdaExpr->lambdaParams[i].type->name);
-                propagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg, scope, m_symbols);
+                PropagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg, scope, m_symbols);
             }
         }
         else if(i == 0u && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
             if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName); memberInfo && memberInfo->adaptsFirstArgToElement){
                 expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
                 expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
-                propagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
+                PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
             }
         }
         arg->isMutArg = paramIsMut || expectedParamType == "Span" || expectedParamType == "StringView";
@@ -176,14 +171,7 @@ b8 TypeChecker::checkCallableArguments(
     return ok;
 }
 
-b8 TypeChecker::checkCallExpr(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    const b8 isMutationTarget,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MVector<ParseError>& errors){
     b8 ok = true;
 
     if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
@@ -207,7 +195,7 @@ b8 TypeChecker::checkCallExpr(
                 reportError(errors, expr.span, "cannot instantiate an 'interface' type directly");
                 ok = false;
             }
-            if(SymbolTable::isArenaBackedContainer(baseCallee)){
+            if(SymbolTable::IsArenaBackedContainer(baseCallee)){
                 if(m_inClassArenaContext && ownerClass){
                     expr.injectClassArena = true;
                     ownerClass->needsClassArena = true;
@@ -220,7 +208,7 @@ b8 TypeChecker::checkCallExpr(
             }
             targetCallable = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, argTypeHints, argIsMutHints);
             if(!targetCallable){
-                localCallable = findScopedVar(scope, expr.lhs->text);
+                localCallable = FindScopedVar(scope, expr.lhs->text);
                 if(localCallable && localCallable->type)
                     invokedFuncType = m_symbols.unwrapTypeAlias(localCallable->type);
             }
@@ -262,9 +250,9 @@ b8 TypeChecker::checkCallExpr(
             targetOwnerCls = ownerClass;
             targetCallable = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints);
             if(!targetCallable){
-                if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, expr.lhs->text)){
+                if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
                     invokedFuncType = m_symbols.unwrapTypeAlias(field->type);
-                    if(field->type && (!invokedFuncType || !invokedFuncType->isFuncType) && !findTemplateParam(ownerClass, &method, field->type->name)){
+                    if(field->type && (!invokedFuncType || !invokedFuncType->isFuncType) && !FindTemplateParam(ownerClass, &method, field->type->name)){
                         reportError(errors, expr.span, "class member field is not a callable function");
                         ok = false;
                     }
@@ -291,14 +279,14 @@ b8 TypeChecker::checkCallExpr(
                         ok = false;
                     }
                 }
-                else if(const FieldDecl* field = SymbolTable::findClassField(*targetCls, mName)){
+                else if(const FieldDecl* field = SymbolTable::FindClassField(*targetCls, mName)){
                     if(ownerClass != targetCls && field->access != AccessSpecifier::Public){
                         reportError(errors, expr.span, "cannot access 'private' or 'protected' field outside of its declaring class");
                         ok = false;
                     }
                     const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, recvTypeRef);
                     invokedFuncType = m_symbols.unwrapTypeAlias(ft);
-                    if(ft && (!invokedFuncType || !invokedFuncType->isFuncType) && !findTemplateParam(ownerClass, &method, ft->name)){
+                    if(ft && (!invokedFuncType || !invokedFuncType->isFuncType) && !FindTemplateParam(ownerClass, &method, ft->name)){
                         reportError(errors, expr.span, "class member field is not a callable function");
                         ok = false;
                     }
@@ -315,7 +303,7 @@ b8 TypeChecker::checkCallExpr(
                     ok = false;
                 }
             }
-            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, objType)){
+            else if(const TemplateParamDecl* tp = FindTemplateParam(ownerClass, &method, objType)){
                 for(const TypeRef* boundRef : tp->interfaceBounds){
                     if(!boundRef)
                         continue;
@@ -336,7 +324,7 @@ b8 TypeChecker::checkCallExpr(
             else if(IsNonThreadSafeContainer(objType) && m_parallelDepth > 0u && isMutatingContainerOp){
                 b8 isTaskLocalContainer = false;
                 if(expr.lhs->lhs->kind == ExprKind::Identifier){
-                    if(const ScopedVarInfo* recvLocal = findScopedVar(scope, expr.lhs->lhs->text))
+                    if(const ScopedVarInfo* recvLocal = FindScopedVar(scope, expr.lhs->lhs->text))
                         isTaskLocalContainer = (recvLocal->declaredParallelDepth == m_parallelDepth);
                 }
                 if(!isTaskLocalContainer){
@@ -362,12 +350,7 @@ b8 TypeChecker::checkCallExpr(
             invokedFuncType = m_symbols.unwrapTypeAlias(lhsTypeRef);
         }
     }
-    if(m_parallelDepth > 0u
-        && localCallable
-        && localCallable->lambdaExpr
-        && localCallable->lambdaExpr->hasMutContainerCapture
-        && localCallable->declaredParallelDepth < m_parallelDepth)
-    {
+    if(m_parallelDepth > 0u && localCallable && localCallable->lambdaExpr && localCallable->lambdaExpr->hasMutContainerCapture && localCallable->declaredParallelDepth < m_parallelDepth){
         reportError(errors, expr.span, "calling lambda that captures outer non-thread-safe container as 'mut' inside 'parallel' or 'parallel_for' is prohibited");
         ok = false;
     }
@@ -449,20 +432,14 @@ b8 TypeChecker::checkCallExpr(
     return ok;
 }
 
-b8 TypeChecker::checkLambdaExpr(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Expr& expr,
-    const Span<const ScopedVarInfo> scope,
-    MVector<ParseError>& errors
-){
+b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
     b8 ok = true;
 
     if(expr.lambdaReturnType && !checkReturnTypeRef(*expr.lambdaReturnType, ownerClass, &method, expr.span, errors))
         ok = false;
     MVector<ScopedVarInfo> lambdaScope(m_arena);
     for(LambdaCapture& cap : expr.lambdaCaptures){
-        if(!cap.name.empty() && findScopedVar(lambdaScope, cap.name)){
+        if(!cap.name.empty() && FindScopedVar(lambdaScope, cap.name)){
             reportError(errors, cap.span, "duplicate capture name in lambda");
             ok = false;
         }
@@ -483,7 +460,7 @@ b8 TypeChecker::checkLambdaExpr(
             lambdaScope.push_back(thisCapVar);
             continue;
         }
-        const ScopedVarInfo* outer = findScopedVar(scope, cap.name);
+        const ScopedVarInfo* outer = FindScopedVar(scope, cap.name);
         const Stmt* globalConst = outer ? nullptr : m_symbols.findGlobalConstant(cap.name);
         cap.isGlobalConstant = (globalConst != nullptr);
         if(!outer && !globalConst){
@@ -519,7 +496,7 @@ b8 TypeChecker::checkLambdaExpr(
         lambdaScope.push_back(capVar);
     }
     for(const ParamDecl& p : expr.lambdaParams){
-        if(!p.name.empty() && findScopedVar(lambdaScope, p.name)){
+        if(!p.name.empty() && FindScopedVar(lambdaScope, p.name)){
             reportError(errors, p.span, "duplicate parameter or capture name in lambda");
             ok = false;
         }
@@ -550,7 +527,7 @@ b8 TypeChecker::checkLambdaExpr(
     if(!checkStatementList(ownerClass, method, expr.lambdaBody, lambdaScope, errors))
         ok = false;
     if(expr.lambdaReturnType && !IsVoidTypeRef(m_symbols.unwrapTypeAlias(expr.lambdaReturnType))){
-        if(!statementsContainReturnOrNative(expr.lambdaBody)){
+        if(!StatementsContainReturnOrNative(expr.lambdaBody)){
             reportError(errors, expr.span, "non-void lambda must contain a 'return' statement");
             ok = false;
         }

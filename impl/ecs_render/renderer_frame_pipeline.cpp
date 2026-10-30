@@ -86,7 +86,6 @@ RendererFramePipeline::~RendererFramePipeline(){
     m_deferredTaskTimingFeedback.deactivate();
 }
 
-
 Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStatistics()const noexcept{
     return m_raytracingSystem.tryGetLatestRefractionStatistics();
 }
@@ -139,14 +138,14 @@ void RendererFramePipeline::invalidateLaggedLightingHistorySubmission()noexcept{
     m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
 }
 
-void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
-    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
-    m_laggedLightingHistoryWriterDrainGeneration = 0u;
-}
-
 void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
     invalidateLaggedLightingHistorySubmission();
     m_laggedLightingHistoryGeneration = 0u;
+}
+
+void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryWriterDrainGeneration = 0u;
 }
 
 void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{

@@ -17,8 +17,8 @@ NWB_IMPL_BEGIN
 
 
 ShadowPreparePacketValidator::ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline){
-}
+    : m_pipeline(pipeline)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

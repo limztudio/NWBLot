@@ -43,12 +43,10 @@ namespace Smoke{
 
 using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 
-
 struct SmokeTintedModelEntityResult{
     Core::ECS::EntityID entity;
     b8 tintApplied = false;
 };
-
 
 inline void AddSmokeSkinnedRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
@@ -160,7 +158,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
     modelComponent.model = model;
 
-    return {.entity = setup.entity, .tintApplied = ApplySmokeMaterialTint(world, setup, colorTint)};
+    return { .entity = setup.entity, .tintApplied = ApplySmokeMaterialTint(world, setup, colorTint) };
 }
 
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(Core::ECS::World& world, const Core::ECS::EntityID owner, const Name objectName, const Impl::ModelObjectKind::Enum objectKind)noexcept{

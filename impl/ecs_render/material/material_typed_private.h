@@ -276,9 +276,8 @@ inline void AssertMaterialTypedUploadRanges(const Span<const MaterialTypedInstan
     NWB_ASSERT_MSG(uploadByteCount != 0u, NWB_TEXT("RendererSystem: material typed data upload is empty"));
     NWB_ASSERT_MSG((uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u, NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
 
-    for(const MaterialTypedInstanceRanges& ranges : instanceRanges){
+    for(const MaterialTypedInstanceRanges& ranges : instanceRanges)
         AssertMaterialTypedInstanceRange(ranges, uploadByteCount);
-    }
 }
 
 
@@ -301,3 +300,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

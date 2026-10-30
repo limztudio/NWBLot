@@ -22,28 +22,16 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const Expr* FindConstructorFieldAssignment(
-    const Span<const Stmt* const> stmts,
-    const MStringView fieldName,
-    const Expr*& outUniqueTopLevelAssignExpr
-)noexcept{
+[[nodiscard]] const Expr* FindConstructorFieldAssignment(const Span<const Stmt* const> stmts, const MStringView fieldName, const Expr*& outUniqueTopLevelAssignExpr)noexcept{
     const Expr* firstFound = nullptr;
     usize totalMatches = 0u;
     b8 firstIsTopLevel = false;
 
-    auto countRecursive = [&](auto& self, const Span<const Stmt* const> list, const b8 topLevel)noexcept -> void{
+    const auto countRecursive = [&](const auto& self, const Span<const Stmt* const> list, const b8 topLevel)noexcept -> void{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
-            if(stmt->kind == StmtKind::ExprStmt
-                && stmt->expr
-                && stmt->expr->kind == ExprKind::Binary
-                && stmt->expr->op == TokenType::Equal
-                && stmt->expr->lhs
-                && stmt->expr->lhs->kind == ExprKind::ThisMember
-                && stmt->expr->lhs->text == fieldName
-                && stmt->expr->rhs)
-            {
+            if(stmt->kind == StmtKind::ExprStmt && stmt->expr && stmt->expr->kind == ExprKind::Binary && stmt->expr->op == TokenType::Equal && stmt->expr->lhs && stmt->expr->lhs->kind == ExprKind::ThisMember && stmt->expr->lhs->text == fieldName && stmt->expr->rhs){
                 if(!firstFound){
                     firstFound = stmt->expr;
                     firstIsTopLevel = topLevel;
@@ -76,11 +64,7 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MString SourceEmitter::emitSource(
-    const TranslationUnit& unit,
-    const MStringView headerIncludePath,
-    const MStringView namespacePath
-)const{
+MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView headerIncludePath, const MStringView namespacePath)const{
     MString out(m_arena);
     out.reserve(4096u);
 
@@ -137,13 +121,7 @@ MString SourceEmitter::emitSource(
     return out;
 }
 
-void SourceEmitter::emitOutOfClassCallable(
-    MString& out,
-    const ClassDecl* ownerClass,
-    const MethodDecl& callable,
-    const b8 emitBody,
-    const b8 emitInlineKeyword
-)const{
+void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerClass, const MethodDecl& callable, const b8 emitBody, const b8 emitInlineKeyword)const{
     if(ownerClass && !ownerClass->templateParams.empty())
         m_typeEmitter.emitTemplateHeaderCpp(out, ownerClass->templateParams);
     m_typeEmitter.emitTemplateHeaderCpp(out, callable.templateParams);
@@ -169,11 +147,7 @@ void SourceEmitter::emitOutOfClassCallable(
     }
 }
 
-void SourceEmitter::emitMethodBodyBlock(
-    MString& out,
-    const MethodDecl& method,
-    const u32 indent
-)const{
+void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, const u32 indent)const{
     if(method.usesScratchArena){
         emitIndent(out, indent);
         out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"");
@@ -190,11 +164,7 @@ void SourceEmitter::emitMethodBodyBlock(
     m_skippedCtorAssignExprs = nullptr;
 }
 
-void SourceEmitter::emitConstructorNotNullInitializers(
-    MString& out,
-    const Span<const FieldDecl* const> orderedFields,
-    const MethodDecl& ctor
-)const{
+void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<const FieldDecl* const> orderedFields, const MethodDecl& ctor)const{
     m_skippedCtorAssignExprs = nullptr;
     if(!ctor.isConstructor || !ctor.hasBody)
         return;
@@ -221,19 +191,12 @@ void SourceEmitter::emitConstructorNotNullInitializers(
         m_skippedCtorAssignExprs = skipped;
 }
 
-void SourceEmitter::emitCtorOrCallArgs(
-    MString& out,
-    const MStringView baseTypeName,
-    const Span<const Expr* const> arguments,
-    const MStringView injectedArenaName,
-    const b8 useBracesForList,
-    const b8 emptyUsesBraces
-)const{
-    if(!baseTypeName.empty() && m_symbols.isSimdMatrixType(baseTypeName)){
+void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeName, const Span<const Expr* const> arguments, const MStringView injectedArenaName, const b8 useBracesForList, const b8 emptyUsesBraces)const{
+    if(!baseTypeName.empty() && SymbolTable::IsSimdMatrixType(baseTypeName)){
         if(arguments.empty()){
             out.append("{}");
         }
-        else if(!useBracesForList && arguments.size() == 1u && arguments[0] && m_symbols.isSimdMatrixType(arguments[0]->resolvedSimdType)){
+        else if(!useBracesForList && arguments.size() == 1u && arguments[0] && SymbolTable::IsSimdMatrixType(arguments[0]->resolvedSimdType)){
             out.push_back('(');
             emitExpr(out, *arguments[0]);
             out.push_back(')');
@@ -259,7 +222,7 @@ void SourceEmitter::emitCtorOrCallArgs(
     out.push_back(useBracesForList ? '{' : '(');
     u32 ctorVecLanes = 0u;
     const b8 isScalarSplatCtor = !baseTypeName.empty()
-        && (m_symbols.isSimdVectorType(baseTypeName, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseTypeName, ctorVecLanes))
+        && (SymbolTable::IsSimdVectorType(baseTypeName, ctorVecLanes) || SymbolTable::IsUnalignedVectorType(baseTypeName, ctorVecLanes))
         && arguments.size() == 1u && arguments[0]
         && arguments[0]->resolvedSimdType.empty();
     if(isScalarSplatCtor){

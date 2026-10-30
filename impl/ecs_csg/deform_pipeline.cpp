@@ -40,22 +40,17 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
     outTriangles.clear();
     stats.inputVertexCount = static_cast<u32>(inputVertexCount);
     stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
-    if(inputVertexCount == 0u || inputTriangleCount == 0u){
+    if(inputVertexCount == 0u || inputTriangleCount == 0u)
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::EmptyInput, stats));
-    }
-    if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles){
+    if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::TooLarge, stats));
-    }
-    if(!CsgDeformValidator::ValidOptions(options)){
+    if(!CsgDeformValidator::ValidOptions(options))
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidCutter, stats));
-    }
     const auto finiteInput = CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount);
-    if(!finiteInput){
+    if(!finiteInput)
         return MakeUnexpected(MakeCsgDeformFailure(finiteInput.error(), stats));
-    }
-    if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
+    if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount))
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidTopology, stats));
-    }
 
     const SIMDVectorSingle epsilon = CsgDeformValidator::ShapeEpsilon(VectorReplicate(options.distanceEpsilon));
     outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
@@ -77,9 +72,8 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         if(!cut.active)
             continue;
         const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, scratchKept, scratchDistances, outVertices, outTriangles);
-        if(!clipped){
+        if(!clipped)
             return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
-        }
         ++appliedCuts;
         if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
             const auto reason = outTriangles.empty() ? CsgDeformViabilityReason::NoKeptGeometry : CsgDeformViabilityReason::TooLarge;
@@ -87,20 +81,17 @@ Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialC
         }
         if(options.fillCaps){
             const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
-            if(!cutCaps){
+            if(!cutCaps)
                 return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::CapLoopFailed, stats));
-            }
             capTriangles += *cutCaps;
         }
     }
 
-    if(outVertices.empty() || outTriangles.empty()){
+    if(outVertices.empty() || outTriangles.empty())
         return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, stats));
-    }
     for(const CsgDeformVertex& vertex : outVertices){
-        if(!CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color))){
+        if(!CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color)))
             return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
-        }
     }
     stats.outputVertexCount = static_cast<u32>(outVertices.size());
     stats.outputTriangleCount = static_cast<u32>(outTriangles.size());
@@ -117,3 +108,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

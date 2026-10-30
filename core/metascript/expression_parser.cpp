@@ -37,10 +37,6 @@ constexpr MStringView s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Value ExpressionParser::parseExpression(){
-    return parseAdditive();
-}
-
 b8 ExpressionParser::parseReferencePath(ScratchPath& path){
     while(m_cursor.m_current.type == TokenType::Dot){
         m_cursor.advance();
@@ -80,21 +76,11 @@ Value ExpressionParser::parseBinaryExpression(ParseNext&& parseNext, const Token
 }
 
 Value ExpressionParser::parseAdditive(){
-    return parseBinaryExpression(
-        [&](){ return parseMultiplicative(); },
-        TokenType::Plus, TokenType::Minus, [](const TokenType::Enum op, const Value& left, const Value& right){
-            return op == TokenType::Plus ? left + right : left - right;
-        }
-    );
+    return parseBinaryExpression([&](){ return parseMultiplicative(); }, TokenType::Plus, TokenType::Minus, [](const TokenType::Enum op, const Value& left, const Value& right){ return op == TokenType::Plus ? left + right : left - right; });
 }
 
 Value ExpressionParser::parseMultiplicative(){
-    return parseBinaryExpression(
-        [&](){ return parseUnary(); },
-        TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right)noexcept{
-            return op == TokenType::Star ? left * right : left / right;
-        }
-    );
+    return parseBinaryExpression([&](){ return parseUnary(); }, TokenType::Star, TokenType::Slash, [](const TokenType::Enum op, const Value& left, const Value& right)noexcept{ return op == TokenType::Star ? left * right : left / right; });
 }
 
 Value ExpressionParser::parseUnary(){

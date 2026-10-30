@@ -14,15 +14,11 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SourceEmitter::emitSimdVectorCtorReg(
-    MString& out,
-    const MStringView simdType,
-    const Span<const Expr* const> arguments
-)const{
+void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdType, const Span<const Expr* const> arguments)const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
 
-    if(m_symbols.isSimdMatrixType(simdType)){
+    if(SymbolTable::IsSimdMatrixType(simdType)){
         if(arguments.empty()){
             out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
             return;
@@ -132,13 +128,7 @@ const SimdVarBinding* SourceEmitter::findSimdRootBindingForExpr(const Expr* cons
     return nullptr;
 }
 
-void SourceEmitter::emitSimdBindingInitialDecl(
-    MString& out,
-    const SimdVarBinding& binding,
-    const b8 loadFromStorage,
-    const b8 qualifyThisMember,
-    const u32 indent
-)const{
+void SourceEmitter::emitSimdBindingInitialDecl(MString& out, const SimdVarBinding& binding, const b8 loadFromStorage, const b8 qualifyThisMember, const u32 indent)const{
     const MStringView regType = SimdRegisterCppType(binding.simdType);
     const MStringView loadFn = SimdLoadFunctionCpp(binding.simdType);
     emitIndent(out, indent);
@@ -161,11 +151,7 @@ void SourceEmitter::emitSimdBindingInitialDecl(
     }
 }
 
-void SourceEmitter::emitSimdStoreForBinding(
-    MString& out,
-    const SimdVarBinding& binding,
-    const u32 indent
-)const{
+void SourceEmitter::emitSimdStoreForBinding(MString& out, const SimdVarBinding& binding, const u32 indent)const{
     const MStringView storeFn = SimdStoreFunctionCpp(binding.simdType);
     emitIndent(out, indent);
     out.append(storeFn.data(), storeFn.size());
@@ -178,11 +164,7 @@ void SourceEmitter::emitSimdStoreForBinding(
     out.append(");\r\n");
 }
 
-void SourceEmitter::emitSimdLoadReloadForBinding(
-    MString& out,
-    const SimdVarBinding& binding,
-    const u32 indent
-)const{
+void SourceEmitter::emitSimdLoadReloadForBinding(MString& out, const SimdVarBinding& binding, const u32 indent)const{
     const MStringView loadFn = SimdLoadFunctionCpp(binding.simdType);
     emitIndent(out, indent);
     out.append(binding.regName.data(), binding.regName.size());
@@ -195,19 +177,11 @@ void SourceEmitter::emitSimdLoadReloadForBinding(
     out.append(");\r\n");
 }
 
-void SourceEmitter::emitSimdLoopElementLoad(
-    MString& out,
-    const SimdVarBinding& loopBinding,
-    const u32 indent
-)const{
+void SourceEmitter::emitSimdLoopElementLoad(MString& out, const SimdVarBinding& loopBinding, const u32 indent)const{
     emitSimdBindingInitialDecl(out, loopBinding, true, false, indent);
 }
 
-void SourceEmitter::emitSimdMutCallReloads(
-    MString& out,
-    const Expr& expr,
-    const u32 indent
-)const{
+void SourceEmitter::emitSimdMutCallReloads(MString& out, const Expr& expr, const u32 indent)const{
     if(!m_activeSimdBindings)
         return;
     if(expr.lhs)
@@ -258,13 +232,9 @@ void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent)const{
     }
 }
 
-void SourceEmitter::emitScopedSimdBody(
-    MString& out,
-    const Span<const Stmt* const> statements,
-    const u32 indent
-)const{
+void SourceEmitter::emitScopedSimdBody(MString& out, const Span<const Stmt* const> statements, const u32 indent)const{
     MVector<SimdVarBinding> simdBindings(m_arena);
-    CollectScopedSimdBindings(m_arena, simdBindings, statements, m_symbols);
+    CollectScopedSimdBindings(statements, m_symbols, m_arena, simdBindings);
 
     const MVector<SimdVarBinding>* prevBindings = m_activeSimdBindings;
     const SimdVarBinding* prevLoopBinding = m_activeSimdLoopBinding;
@@ -285,11 +255,7 @@ void SourceEmitter::emitScopedSimdBody(
 
     emitStatementList(out, statements, indent);
 
-    const b8 endsWithTerminal = !statements.empty() && statements.back() && (
-        statements.back()->kind == StmtKind::Return
-        || statements.back()->kind == StmtKind::Break
-        || statements.back()->kind == StmtKind::Continue
-    );
+    const b8 endsWithTerminal = !statements.empty() && statements.back() && (statements.back()->kind == StmtKind::Return || statements.back()->kind == StmtKind::Break || statements.back()->kind == StmtKind::Continue);
     if(!endsWithTerminal)
         emitSimdBlockStores(out, indent);
 
@@ -348,10 +314,7 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
 }
 
 b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u32 indent)const{
-    if(stmt.expr && stmt.expr->kind == ExprKind::Binary
-        && IsSimdAssignmentOp(stmt.expr->op)
-        && stmt.expr->lhs && stmt.expr->rhs)
-    {
+    if(stmt.expr && stmt.expr->kind == ExprKind::Binary && IsSimdAssignmentOp(stmt.expr->op) && stmt.expr->lhs && stmt.expr->rhs){
         const Expr& lhs = *stmt.expr->lhs;
         const Expr& rhs = *stmt.expr->rhs;
 
@@ -360,11 +323,7 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
             const SimdVarBinding* targetBinding = findSimdBindingForExpr(&lhs);
             const SimdVarBinding* rhsBinding = findSimdBindingForExpr(&rhs);
 
-            const b8 shouldLowerNonBindingAssign = !targetBinding && (
-                stmt.expr->op != TokenType::Equal
-                || rhsBinding != nullptr
-                || ExprContainsSimdMath(&rhs, m_symbols)
-            );
+            const b8 shouldLowerNonBindingAssign = !targetBinding && (stmt.expr->op != TokenType::Equal || rhsBinding != nullptr || ExprContainsSimdMath(&rhs, m_symbols));
 
             if(targetBinding || shouldLowerNonBindingAssign){
                 emitIndent(out, indent);
@@ -403,7 +362,7 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
             && IsSingleSwizzleLane(lhs.text, lane);
         const b8 isDynamicIndexAssign = lhs.kind == ExprKind::Index && lhs.lhs && lhs.rhs
             && IsRegisterPromotableSimdType(lhs.lhs->resolvedSimdType)
-            && m_symbols.isSimdVectorType(lhs.lhs->resolvedSimdType, vecLanes);
+            && SymbolTable::IsSimdVectorType(lhs.lhs->resolvedSimdType, vecLanes);
         if(isStaticLaneAssign || isDynamicIndexAssign){
             const SimdVarBinding* targetBinding = findSimdBindingForExpr(lhs.lhs);
             if(targetBinding){

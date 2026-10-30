@@ -18,6 +18,13 @@ NWB_ADHD_BEGIN
 
 
 struct SimdVarBinding{
+public:
+    explicit SimdVarBinding(MetaArena& arena)noexcept
+        : regName(arena)
+    {}
+
+
+public:
     b8 isThisMember = false;
     b8 isLocalDecl = false;
     b8 isLoopElement = false;
@@ -29,22 +36,13 @@ struct SimdVarBinding{
     MStringView name;
     MStringView simdType;
     MString regName;
-
-    explicit SimdVarBinding(MetaArena& arena)noexcept
-        : regName(arena)
-    {}
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CollectScopedSimdBindings(
-    MetaArena& arena,
-    MVector<SimdVarBinding>& outBindings,
-    Span<const Stmt* const> statements,
-    const SymbolTable& symbols
-);
+void CollectScopedSimdBindings(Span<const Stmt* const> statements, const SymbolTable& symbols, MetaArena& arena, MVector<SimdVarBinding>& outBindings);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

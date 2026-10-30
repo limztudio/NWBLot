@@ -44,9 +44,6 @@ class RendererComponentPayloadBinary{
 }
 
 class ShaderStageKey{
-    public Name shaderName;
-    public Name stageName;
-
     public ShaderStageKey(){
         this.shaderName = s_NameNone;
         this.stageName = s_NameNone;
@@ -57,15 +54,19 @@ class ShaderStageKey{
         this.stageName = inStageName;
     }
 
+    public b8 operator==(in ShaderStageKey rhs)const{
+        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
+    }
+
     public usize hash()const{
         usize seed = hashValue(this.shaderName);
         return hashCombineValue(seed, this.stageName);
     }
 
-    public b8 operator==(in ShaderStageKey rhs)const{
-        return this.shaderName == rhs.shaderName && this.stageName == rhs.stageName;
-    }
+    public Name shaderName;
+    public Name stageName;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

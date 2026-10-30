@@ -81,7 +81,6 @@ void MeshCookStreamReorder::PrepareMeshStreamReorder(const StreamVectorT& source
     outRemap.resize(source.size(), s_MeshMissingStreamIndex);
 }
 
-
 template<typename StreamVectorT>
 b8 MeshCookStreamReorder::RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, const Span<u32> remap, StreamVectorT& reordered, u32& index){
     if(index == s_MeshMissingStreamIndex){

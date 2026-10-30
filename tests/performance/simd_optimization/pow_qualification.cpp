@@ -10,7 +10,6 @@
 #include <global/text_utils.h>
 
 #include <cerrno>
-#include <iostream>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <excpt.h>
@@ -45,13 +44,16 @@ inline constexpr f32 s_EncodeExponent = 1.0f / 2.4f;
 inline constexpr f32 s_DecodeScale = 1.0f / 1.055f;
 
 struct FlagsSnapshot{
+public:
     friend b8 operator==(const FlagsSnapshot&, const FlagsSnapshot&)noexcept = default;
+
     template<typename Stream>
     friend Stream& operator<<(Stream& stream, const FlagsSnapshot& value)noexcept(noexcept(DeclVal<void(*)(Stream&)noexcept>()(stream << value.standard << '/' << value.mapped << '/' << value.native))){
         return stream << value.standard << '/' << value.mapped << '/' << value.native;
     }
 
 
+public:
     i32 standard;
     u32 mapped;
     u64 native;
@@ -119,8 +121,29 @@ NWB_NOINLINE SIMDVectorSingle PackedDouble(const SIMDVectorSingle x, const SIMDV
     const SIMDVectorDouble integral = VectorDoubleFloor(bounded);
     const SIMDVectorDouble remainder = VectorDoubleScale(VectorDoubleSubtract(bounded, integral), 0x1.62e42fefa39efp-1);
     // The series use binary64 lanes so the final binary32 rounding has guard bits.
-    constexpr f64 s_InverseFactorials[]{ 1.0, 1.0, 0.5, 1.0 / 6.0, 1.0 / 24.0, 1.0 / 120.0, 1.0 / 720.0, 1.0 / 5040.0, 1.0 / 40320.0, 1.0 / 362880.0, 1.0 / 3628800.0, 1.0 / 39916800.0, 1.0 / 479001600.0,
-        1.0 / 6227020800.0, 1.0 / 87178291200.0, 1.0 / 1307674368000.0, 1.0 / 20922789888000.0, 1.0 / 355687428096000.0, 1.0 / 6402373705728000.0, 1.0 / 121645100408832000.0, 1.0 / 2432902008176640000.0 };
+    constexpr f64 s_InverseFactorials[]{
+        1.0,
+        1.0,
+        0.5,
+        1.0 / 6.0,
+        1.0 / 24.0,
+        1.0 / 120.0,
+        1.0 / 720.0,
+        1.0 / 5040.0,
+        1.0 / 40320.0,
+        1.0 / 362880.0,
+        1.0 / 3628800.0,
+        1.0 / 39916800.0,
+        1.0 / 479001600.0,
+        1.0 / 6227020800.0,
+        1.0 / 87178291200.0,
+        1.0 / 1307674368000.0,
+        1.0 / 20922789888000.0,
+        1.0 / 355687428096000.0,
+        1.0 / 6402373705728000.0,
+        1.0 / 121645100408832000.0,
+        1.0 / 2432902008176640000.0
+    };
     SIMDVectorDouble exponential = VectorDoubleReplicate(s_InverseFactorials[20]);
     for(i32 degree = 19; degree >= 0; --degree)
         exponential = VectorDoubleMultiplyAdd(exponential, remainder, VectorDoubleReplicate(s_InverseFactorials[degree]));
@@ -232,8 +255,37 @@ void PrintCounts(const StringView category, const Counts& counts){
 
 [[nodiscard]] u64 Verify(const NotNull<Evaluate> evaluate){
 #pragma STDC FENV_ACCESS ON
-    constexpr u32 s_Exceptional[]{ 0u, 0x80000000u, 1u, 0x80000001u, 0x007fffffu, 0x00800000u, 0x80800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00123u, 0xffc00124u, 0x7f800125u, 0xff800126u,
-        0x3f800000u, 0xbf800000u, 0x40000000u, 0xc0000000u, 0x3f000000u, 0xbf000000u, 0x40400000u, 0xc0400000u, 0x4b7fffffu, 0x4b800000u, 0x4b800001u, 0x3eaaaaabu, 0x42fe0000u, 0xc3160000u };
+    constexpr u32 s_Exceptional[]{
+        0u,
+        0x80000000u,
+        1u,
+        0x80000001u,
+        0x007fffffu,
+        0x00800000u,
+        0x80800000u,
+        0x7f7fffffu,
+        0xff7fffffu,
+        0x7f800000u,
+        0xff800000u,
+        0x7fc00123u,
+        0xffc00124u,
+        0x7f800125u,
+        0xff800126u,
+        0x3f800000u,
+        0xbf800000u,
+        0x40000000u,
+        0xc0000000u,
+        0x3f000000u,
+        0xbf000000u,
+        0x40400000u,
+        0xc0400000u,
+        0x4b7fffffu,
+        0x4b800000u,
+        0x4b800001u,
+        0x3eaaaaabu,
+        0x42fe0000u,
+        0xc3160000u
+    };
     constexpr i32 s_Modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     u64 failures = 0u;
     for(const i32 mode : s_Modes){
@@ -354,12 +406,13 @@ void PrintCounts(const StringView category, const Counts& counts){
 #endif
 }
 
-
 #if defined(NWB_PLATFORM_WINDOWS)
 struct TrapEdgeObservation{
+public:
     friend b8 operator==(const TrapEdgeObservation&, const TrapEdgeObservation&)noexcept = default;
 
 
+public:
     u32 code{}, flags{}, control{}, valueBits{};
     i32 error{};
     u64 nativeStatus{}, nativeControl{};

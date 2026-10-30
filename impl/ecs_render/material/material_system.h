@@ -170,11 +170,7 @@ public:
         MaterialTypedByteDataVector& materialTypedBytes
     );
     // Creation and override application belong to preparation; render paths only use the prepared lookup below.
-    [[nodiscard]] Expected<Span<const u8>> prepareMaterialInstanceMutableTypedBytes(
-        Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        const MaterialInstanceComponent* materialInstance
-    );
+    [[nodiscard]] Expected<Span<const u8>> prepareMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance);
     [[nodiscard]] Expected<Span<const u8>> findPreparedMaterialInstanceMutableTypedBytes(Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept;
     // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
     // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
@@ -253,3 +249,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

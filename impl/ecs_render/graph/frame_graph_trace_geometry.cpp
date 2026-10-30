@@ -52,12 +52,7 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
             result.softwareTraceGeometry.push_back(resource);
     }
     // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
-    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(
-        preparedTraceMaterialSampledTextures,
-        "Prepared Trace Material Sampled Texture",
-        m_graph,
-        scratchArena
-    );
+    const auto traceMaterialSampledTextureResources = ImportMaterialSampledTextureResources(preparedTraceMaterialSampledTextures, "Prepared Trace Material Sampled Texture", m_graph, scratchArena);
     if(!traceMaterialSampledTextureResources){
         switch(traceMaterialSampledTextureResources.error()){
         case SampledTextureImportFailure::GraphUnavailable:
@@ -101,7 +96,6 @@ Expected<FrameGraphTraceGeometryResult> FrameGraphTraceGeometryImporter::declare
     result.softwareBvhBuildState = Move(softwareBvhBuildStateResult->buildStateResources);
     return result;
 }
-
 
 // Empty member lists and failed imports leave the set invalid.
 Core::GpuGraphResourceSetId FrameGraphTraceGeometryImporter::importSet(const Span<const Core::GpuGraphResourceId> members, const Name& identity, const AStringView markerLabel){

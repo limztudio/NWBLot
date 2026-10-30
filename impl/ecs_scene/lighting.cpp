@@ -103,6 +103,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
 
 namespace __hidden_lighting{
 
+
 [[nodiscard]] Expected<SIMDMatrix> TryBuildSceneLightVectors(
     const SIMDVectorSingle position,
     const SIMDVectorSingle rotation,
@@ -152,6 +153,7 @@ namespace __hidden_lighting{
         return MakeUnexpected(Failure{});
     }
 }
+
 
 };
 
@@ -215,3 +217,4 @@ NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

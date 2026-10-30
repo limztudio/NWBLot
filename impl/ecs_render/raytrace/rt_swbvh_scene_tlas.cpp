@@ -126,7 +126,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
                 return false;
             }
 
-
             meshSlot = m_rayTracingState.m_shadowMeshCount;
             m_rayTracingState.m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             m_rayTracingState.m_shadowMeshAttributeBuffers.push_back(MakeNotNull(meshResult->meshResources.attributeBuffer.get()));
@@ -408,7 +407,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             return false;
         if(!capturePreparedShadowMaterialContext(PreparedShadowMaterialContextRoute::Hardware, staticScene, hwMaterialContextHash, instanceMaterials, shadowInstanceData, Span<const u8>(shadowMaterialTypedBytes.data(), materialTypedUploadBytes)))
             return false;
-
     }
     // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){

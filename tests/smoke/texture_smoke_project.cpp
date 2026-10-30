@@ -104,7 +104,7 @@ static constexpr NWB::Core::Color s_SRGBClearEdgeColors[]{
 }
 
 struct SRGBClearEdgeTask{
-    static constexpr NWB::Core::GpuTaskCommandRequirements s_CommandRequirements{ .alternativeCapabilities = NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics, };
+    static constexpr NWB::Core::GpuTaskCommandRequirements s_CommandRequirements{ .alternativeCapabilities = NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics };
 
 
 public:
@@ -243,18 +243,7 @@ struct SRGBClearEdgeInputs{
     return true;
 }
 
-
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
-private:
-    b8 configureFramebufferCapture(){
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
-        if(!capture)
-            return false;
-        m_framebufferCapture = Move(*capture);
-        return true;
-    }
-
-
 public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
@@ -309,6 +298,16 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
             return false;
         }
+        return true;
+    }
+
+
+private:
+    b8 configureFramebufferCapture(){
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
         return true;
     }
 

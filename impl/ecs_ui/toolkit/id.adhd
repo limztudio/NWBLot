@@ -20,12 +20,6 @@ const u64 s_WidgetFnv64Prime = 1099511628211ull;
 
 
 class WidgetId{
-    public u64 value = 0u;
-
-    public b8 valid()const{
-        return this.value != 0u;
-    }
-
     public b8 operator==(in WidgetId rhs)const{
         return this.value == rhs.value;
     }
@@ -33,13 +27,16 @@ class WidgetId{
     public b8 operator!=(in WidgetId rhs)const{
         return this.value != rhs.value;
     }
+
+    public b8 valid()const{
+        return this.value != 0u;
+    }
+
+    public u64 value = 0u;
 }
 
 // Root identity comes from the host; include its lifetime generation rather than iteration order or an address.
 class WidgetRoot{
-    public u64 value = 0u;
-    public u64 generation = 1u;
-
     public b8 operator==(in WidgetRoot rhs)const{
         return this.value == rhs.value && this.generation == rhs.generation;
     }
@@ -47,6 +44,9 @@ class WidgetRoot{
     public b8 operator!=(in WidgetRoot rhs)const{
         return this.value != rhs.value || this.generation != rhs.generation;
     }
+
+    public u64 value = 0u;
+    public u64 generation = 1u;
 }
 
 enum<u8> WidgetKind{
@@ -73,12 +73,6 @@ enum<u8> WidgetKind{
 }
 
 class WidgetState{
-    public WidgetId id;
-    public WidgetRoot root;
-    public u64 declarationGeneration;
-    public u64 lastSeenFrame;
-    public WidgetKind kind;
-
     public WidgetState(){
         this.id = WidgetId();
         this.root = WidgetRoot();
@@ -94,6 +88,12 @@ class WidgetState{
         this.lastSeenFrame = lastSeenFrame;
         this.kind = kind;
     }
+
+    public WidgetId id;
+    public WidgetRoot root;
+    public u64 declarationGeneration;
+    public u64 lastSeenFrame;
+    public WidgetKind kind;
 }
 
 u64 UpdateWidgetFnv64Byte(in u64 hash, in u8 byteValue){
@@ -111,56 +111,48 @@ u64 UpdateWidgetFnv64U64LittleEndian(in u64 hash, in u64 value){
 
 b8 TryMakeRootId(in WidgetRoot root, mut WidgetId outId){
     outId = WidgetId();
-    if(root.generation == 0u){
+    if(root.generation == 0u)
         return false;
-    }
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, root.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, root.generation);
-    if(hash == 0u){
+    if(hash == 0u)
         outId.value = 1u;
-    }
-    else{
+    else
         outId.value = hash;
-    }
     return true;
 }
 
 b8 TryMakeWidgetPartId(in WidgetId parent, in u64 stableKey, mut WidgetId outId){
     outId = WidgetId();
-    if(!parent.valid() || stableKey == 0u){
+    if(!parent.valid() || stableKey == 0u)
         return false;
-    }
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, 0u);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, stableKey);
-    if(hash == 0u){
+    if(hash == 0u)
         outId.value = 1u;
-    }
-    else{
+    else
         outId.value = hash;
-    }
     return true;
 }
 
 b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId outId){
     outId = WidgetId();
-    if(!parent.valid() || stableKey.empty()){
+    if(!parent.valid() || stableKey.empty())
         return false;
-    }
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, cast<u64>(stableKey.size()));
     native(in stableKey, mut hash){
         for(const char byte : stableKey)
             hash = UpdateWidgetFnv64Byte(hash, static_cast<u8>(byte));
     }
-    if(hash == 0u){
+    if(hash == 0u)
         outId.value = 1u;
-    }
-    else{
+    else
         outId.value = hash;
-    }
     return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

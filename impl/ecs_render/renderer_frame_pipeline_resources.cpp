@@ -103,9 +103,8 @@ b8 RendererFramePipeline::validateResources(const u32 width, const u32 height, c
         commitFrameTargets(Move(createdTargets));
         deferredTargets = &m_frameTargets;
         targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
-        if(!targetsReady){
+        if(!targetsReady)
             resetFrameTargets();
-        }
     }
     if(!targetsReady || !deferredTargets)
         return false;
@@ -512,7 +511,6 @@ void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
     m_deferredCausticProducerDispatched = false;
 }
 
-
 void RendererFramePipeline::resetSharedDeferredFrameTaskState()noexcept{
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -551,7 +549,6 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState()noexcept{
     m_deferredLightingHistoryReadReadyCompletion = {};
     m_deferredLightingHistoryWriterDrainCompletion = {};
 }
-
 
 void RendererFramePipeline::resetGraphicsPrefixTaskState()noexcept{
     m_graphicsPrefixOpaqueComputeEmulationTask = {};

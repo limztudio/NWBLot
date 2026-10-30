@@ -92,7 +92,6 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
     }
 }
 
-
 RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const noexcept{
     return RayTracingShadowPreparationResourceSnapshot{
         .sceneTlas = m_rayTracingState.m_tlas,

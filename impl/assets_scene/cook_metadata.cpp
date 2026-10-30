@@ -39,7 +39,6 @@ static constexpr AStringView s_EntitiesField = "entities";
 static constexpr AStringView s_AssetsField = "assets";
 static constexpr AStringView s_ComponentsField = "components";
 
-
 template<typename TAsset>
 [[nodiscard]] static Expected<Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>> ParseAssetRefList(
     const Path& nwbFilePath,
@@ -70,12 +69,7 @@ template<typename TAsset>
     return refs;
 }
 
-[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(
-    const Path& nwbFilePath,
-    const Value& mapValue,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!mapValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
         return MakeUnexpected(Failure{});
@@ -121,13 +115,7 @@ template<typename TAsset>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<EntityCookEntry> ParseEntityCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_scene_cook_metadata;
 
     EntityCookEntry entry(arena);
@@ -168,13 +156,7 @@ Expected<EntityAsset> BuildEntityAsset(EntityCookEntry& entry, Core::Assets::Ass
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ProjectCookEntry> ParseProjectCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_scene_cook_metadata;
 
     ProjectCookEntry entry(arena);
@@ -213,13 +195,7 @@ Expected<ProjectAsset> BuildProjectAsset(ProjectCookEntry& entry, Core::Assets::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SceneCookEntry> ParseSceneCookMetadata(
-    const Name virtualPath,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
+Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_scene_cook_metadata;
 
     SceneCookEntry entry(arena);
@@ -256,11 +232,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(
     }
 
     SceneAsset candidate(arena, entry.virtualPath);
-    candidate.setContents(
-        SceneAsset::SubsystemRefVector(entry.subsystems),
-        SceneAsset::AssetMap(entry.assets),
-        SceneAsset::EntityRefVector(entry.entities)
-    );
+    candidate.setContents(SceneAsset::SubsystemRefVector(entry.subsystems), SceneAsset::AssetMap(entry.assets), SceneAsset::EntityRefVector(entry.entities));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
 
@@ -289,3 +261,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -42,21 +42,12 @@ constexpr u32 s_ExpectedDualCount = 2u;
 using namespace NWB;
 using namespace NWB::Impl;
 
-
 struct ModelInputs{
-    Core::Assets::AssetArena arena{ Name("tests/model_payload/inputs") };
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_payload/validation_scratch") };
-    Model model{ arena, Name("tests/model_payload/model") };
-    Model::SkeletonObjectVector skeletonObjects{ arena };
-    Model::StaticMeshObjectVector staticMeshObjects{ arena };
-    Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
-
-
 public:
     ModelInputs(){
-        skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_Rig), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"), });
-        staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_Prop), .mesh = Core::Assets::AssetRef<Mesh>(s_TestsModelPayloadMesh.data()), .material = {}, .parentObject = Name(s_Rig), .parentJoint = Name("hand"), });
-        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{ .name = Name(s_Body), .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_Rig), });
+        skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_Rig), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton") });
+        staticMeshObjects.push_back(ModelStaticMeshObject{ .name = Name(s_Prop), .mesh = Core::Assets::AssetRef<Mesh>(s_TestsModelPayloadMesh.data()), .material = {}, .parentObject = Name(s_Rig), .parentJoint = Name("hand") });
+        skinnedMeshObjects.push_back(ModelSkinnedMeshObject{ .name = Name(s_Body), .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"), .material = {}, .skeletonObject = Name(s_Rig) });
         publish();
     }
 
@@ -65,6 +56,15 @@ public:
     void publish(){
         model.setObjects(Model::SkeletonObjectVector(skeletonObjects), Model::StaticMeshObjectVector(staticMeshObjects), Model::SkinnedMeshObjectVector(skinnedMeshObjects));
     }
+
+
+public:
+    Core::Assets::AssetArena arena{ Name("tests/model_payload/inputs") };
+    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_payload/validation_scratch") };
+    Model model{ arena, Name("tests/model_payload/model") };
+    Model::SkeletonObjectVector skeletonObjects{ arena };
+    Model::StaticMeshObjectVector staticMeshObjects{ arena };
+    Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
 };
 
 
@@ -224,7 +224,6 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     EXPECT_FALSE(codec.serialize(inputs.model, malformed));
     EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));
 }
-
 
 TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload){
     Tests::CapturingLogger logger;

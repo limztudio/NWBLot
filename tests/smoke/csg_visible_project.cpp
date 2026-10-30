@@ -93,11 +93,11 @@ namespace CsgVisibleShapeSlot{
         Box,
         Sphere,
         Capsule,
-        Count
+        kCount
     };
 };
 
-static_assert(CsgVisibleShapeSlot::Count == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
+static_assert(CsgVisibleShapeSlot::kCount == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
 
 inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     Name("project/smoke/csg_visible/plane_receiver"),
@@ -114,19 +114,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return NWB_TEXT("CsgVisibleSmokeProject");
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(
-    NWB::Core::ECS::World& world,
-    const Name receiverGroup,
-    const Float4& colorTint,
-    const Float4& position,
-    const Float4& scale,
-    const b8 csgReceiver,
-    const CsgVisibleMaterialRef& material
-){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(NWB::Core::ECS::World& world, const Name receiverGroup, const Float4& colorTint, const Float4& position, const Float4& scale, const b8 csgReceiver, const CsgVisibleMaterialRef& material){
     const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
     if(!entity.valid())
         return NWB::Core::ECS::s_InvalidEntityId;
@@ -244,11 +232,10 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, CsgVisibleFpsLabel());
 
-        if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets)){
+        if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets))
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
-        }else{
+        else
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"));
-        }
 
         auto& renderer = AddSmokeRenderSystems(*world, context);
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment)){
@@ -263,6 +250,154 @@ private:
 
     [[nodiscard]] static b8 ShouldCapture(void* const context, const u64 frame)noexcept{
         return frame >= MakeNotNull(static_cast<CsgVisibleSmokeProject*>(context))->m_nextCaptureFrame;
+    }
+
+
+public:
+    explicit CsgVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorldOrDie(context))
+        , m_capturePaths(context.objectArena)
+    {}
+    virtual ~CsgVisibleSmokeProject()noexcept override{
+        destroyWorld();
+    }
+
+
+public:
+    virtual b8 onStartup()override{
+        m_temporalEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
+        const b8 overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
+        CsgVisibleMaterialRef material = s_SolidMaterial;
+        if(m_temporalEnabled){
+            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+            const auto view = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_VIEW");
+            if(!output || !view)
+                return false;
+            if(*view == "indirect")
+                material = s_IndirectMaterial;
+            else if(*view == "direct")
+                material = s_DirectMaterial;
+            else if(*view == "normal")
+                material = s_NormalMaterial;
+            else if(*view == "position")
+                material = s_PositionMaterial;
+            else if(*view == "cap_state")
+                material = s_CapStateMaterial;
+            else if(*view == "interval_state")
+                material = s_IntervalStateMaterial;
+            else if(*view == "event_state")
+                material = s_EventStateMaterial;
+            else if(*view == "event_data"){
+                material = s_EventDataMaterial;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"));
+            }
+            else if(*view == "event_order"){
+                material = s_EventOrderMaterial;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"));
+            }
+            else if(*view == "span_state"){
+                material = s_SpanStateMaterial;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"));
+            }
+            else if(*view != "full")
+                return false;
+            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false };
+            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions);
+            if(!captureSeries)
+                return false;
+            m_capturePaths = Move(captureSeries->paths);
+            m_capture = Move(captureSeries->capture);
+            m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
+            if(overlapping && m_temporalAnimated){
+                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
+                return false;
+            }
+            const auto intervalText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_INTERVAL");
+            if(intervalText){
+                const auto interval = ParseU64(AStringView(intervalText->data(), intervalText->size()));
+                if(!interval || *interval == 0u || *interval > 64u){
+                    NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal interval must be between 1 and 64"));
+                    return false;
+                }
+                m_temporalFrameInterval = *interval;
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(m_temporalAnimated), ConvertString(*view), m_temporalFrameInterval);
+            if(m_temporalAnimated)
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
+        }
+        auto activeCameraEntity = m_world->createEntity();
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth));
+        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
+
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const SIMDVectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
+            Float4 receiverPosition;
+            StoreFloat(receiverPositionVector, receiverPosition);
+            const SIMDVectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
+            const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
+            m_receivers[shapeSlot] = CreateSolidCubeEntity(*m_world, s_CsgVisibleReceiverGroups[shapeSlot], CsgVisibleShapeColor(shapeSlot), receiverPosition, Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f), true, material);
+            m_cutters[shapeSlot] = CreateCutter(*m_world, shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition);
+            m_receiverCenters[shapeSlot] = receiverPosition;
+        }
+
+        b8 allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
+        if(overlapping){
+            // Move only lane Z.
+            Float4 receiverPosition;
+            StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
+            const auto receiver = CreateSolidCubeEntity(
+                *m_world,
+                s_CsgVisibleReceiverGroups[CsgVisibleShapeSlot::Plane],
+                CsgVisibleShapeColor(CsgVisibleShapeSlot::Plane),
+                receiverPosition,
+                Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
+                true,
+                material
+            );
+            allEntitiesValid = allEntitiesValid && receiver.valid();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125"));
+        }
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
+            allEntitiesValid = allEntitiesValid && m_receivers[shapeSlot].valid() && m_cutters[shapeSlot].valid();
+        NWB_FATAL_ASSERT_MSG(allEntitiesValid, NWB_TEXT("CsgVisibleSmokeProject failed to create all scene entities"));
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: visible CSG interval receiver scene created"));
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
+        m_fpsProbe.recordFrame(safeDelta);
+        if(m_temporalEnabled){
+            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
+            const u32 posePhase = static_cast<u32>(m_context.graphics.getFrameIndex() % 240u);
+            m_animationTime = m_temporalAnimated ? VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(Min(posePhase, 240u - posePhase))), 0.3f / 120.0f)) : 0.0f;
+            updateTemporalCapture();
+        }
+        else
+            m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CubeRotationSpeed), VectorReplicate(m_animationTime)));
+        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
+            const SIMDVectorSingle rotationPhase = VectorScale(VectorReplicate(static_cast<f32>(shapeSlot)), 0.18f);
+            const SIMDVectorSingle rotation = BuildCubeRotation(m_animationTime, rotationPhase);
+            ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
+            ApplyCutterTransform(*m_world, m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot));
+        }
+
+        const auto updated = m_world->tick(m_temporalEnabled ? 1.0f / 60.0f : safeDelta);
+        if(!updated){
+            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            return false;
+        }
+        return true;
     }
 
 
@@ -326,161 +461,6 @@ private:
     }
 
 
-public:
-    explicit CsgVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorldOrDie(context))
-        , m_capturePaths(context.objectArena)
-    {}
-    virtual ~CsgVisibleSmokeProject()noexcept override{
-        destroyWorld();
-    }
-
-
-public:
-    virtual b8 onStartup()override{
-        m_temporalEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_GiTemporalEnvironment);
-        const b8 overlapping = m_temporalEnabled && NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_OVERLAPPING");
-        CsgVisibleMaterialRef material = s_SolidMaterial;
-        if(m_temporalEnabled){
-            NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
-            const auto output = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-            const auto view = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_VIEW");
-            if(!output || !view)
-                return false;
-            if(*view == "indirect")
-                material = s_IndirectMaterial;
-            else if(*view == "direct")
-                material = s_DirectMaterial;
-            else if(*view == "normal")
-                material = s_NormalMaterial;
-            else if(*view == "position")
-                material = s_PositionMaterial;
-            else if(*view == "cap_state")
-                material = s_CapStateMaterial;
-            else if(*view == "interval_state")
-                material = s_IntervalStateMaterial;
-            else if(*view == "event_state")
-                material = s_EventStateMaterial;
-            else if(*view == "event_data"){
-                material = s_EventDataMaterial;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-data red stores missing-span flags divided by 33"));
-            }
-            else if(*view == "event_order"){
-                material = s_EventOrderMaterial;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: event-order RGB stores span/flags and validated raw FRONT=1 BACK=0.5"));
-            }
-            else if(*view == "span_state"){
-                material = s_SpanStateMaterial;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: span-state RGB stores span count, flags, raw event count divided by 33"));
-            }
-            else if(*view != "full")
-                return false;
-            const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false, };
-            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions);
-            if(!captureSeries)
-                return false;
-            m_capturePaths = Move(captureSeries->paths);
-            m_capture = Move(captureSeries->capture);
-            m_temporalAnimated = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CSG_GI_TEMPORAL_ANIMATED");
-            if(overlapping && m_temporalAnimated){
-                NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: overlapping receiver regression requires a static scene"));
-                return false;
-            }
-            const auto intervalText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(scratchArena, "NWB_CSG_GI_TEMPORAL_INTERVAL");
-            if(intervalText){
-                const auto interval = ParseU64(AStringView(intervalText->data(), intervalText->size()));
-                if(!interval || *interval == 0u || *interval > 64u){
-                    NWB_LOGGER_ERROR(NWB_TEXT("CsgVisibleSmokeProject: temporal interval must be between 1 and 64"));
-                    return false;
-                }
-                m_temporalFrameInterval = *interval;
-            }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: temporal scene animated={} view={} minimum_frame=360 warmup_seconds=30 interval={} samples=32"), static_cast<u32>(m_temporalAnimated), ConvertString(*view), m_temporalFrameInterval);
-            if(m_temporalAnimated)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: front-facing triangle pose from graphics frame"));
-        }
-        auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth));
-        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DefaultDirectionalLightIntensity);
-
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const SIMDVectorSingle receiverPositionVector = CsgVisibleShapePosition(shapeSlot);
-            Float4 receiverPosition;
-            StoreFloat(receiverPositionVector, receiverPosition);
-            const SIMDVectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
-            const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
-            m_receivers[shapeSlot] = CreateSolidCubeEntity(
-                *m_world,
-                s_CsgVisibleReceiverGroups[shapeSlot],
-                CsgVisibleShapeColor(shapeSlot),
-                receiverPosition,
-                Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
-                true,
-                material
-            );
-            m_cutters[shapeSlot] = CreateCutter(*m_world, shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition);
-            m_receiverCenters[shapeSlot] = receiverPosition;
-        }
-
-        b8 allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
-        if(overlapping){
-            // Move only lane Z.
-            Float4 receiverPosition;
-            StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
-            const auto receiver = CreateSolidCubeEntity(
-                *m_world,
-                s_CsgVisibleReceiverGroups[CsgVisibleShapeSlot::Plane],
-                CsgVisibleShapeColor(CsgVisibleShapeSlot::Plane),
-                receiverPosition,
-                Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
-                true,
-                material
-            );
-            allEntitiesValid = allEntitiesValid && receiver.valid();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125"));
-        }
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
-            allEntitiesValid = allEntitiesValid && m_receivers[shapeSlot].valid() && m_cutters[shapeSlot].valid();
-        NWB_FATAL_ASSERT_MSG(allEntitiesValid, NWB_TEXT("CsgVisibleSmokeProject failed to create all scene entities"));
-
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: visible CSG interval receiver scene created"));
-        return true;
-    }
-
-    virtual void onShutdown()override{
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: shutdown"));
-    }
-
-    virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
-        m_fpsProbe.recordFrame(safeDelta);
-        if(m_temporalEnabled){
-            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-            const u32 posePhase = static_cast<u32>(m_context.graphics.getFrameIndex() % 240u);
-            m_animationTime = m_temporalAnimated ? VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(Min(posePhase, 240u - posePhase))), 0.3f / 120.0f)) : 0.0f;
-            updateTemporalCapture();
-        }else
-            m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CubeRotationSpeed), VectorReplicate(m_animationTime)));
-        for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const SIMDVectorSingle rotationPhase = VectorScale(VectorReplicate(static_cast<f32>(shapeSlot)), 0.18f);
-            const SIMDVectorSingle rotation = BuildCubeRotation(m_animationTime, rotationPhase);
-            ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
-            ApplyCutterTransform(*m_world, m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot));
-        }
-
-        const auto updated = m_world->tick(m_temporalEnabled ? 1.0f / 60.0f : safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        return true;
-    }
-
-
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
@@ -515,7 +495,6 @@ private:
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
-
 
 TStringView NWB::QueryProjectWindowTitle()noexcept{
     return NWB_TEXT("NWB CSG Visible Smoke");

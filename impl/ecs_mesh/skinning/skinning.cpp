@@ -108,7 +108,6 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     return true;
 }
 
-
 b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
     if(!plan.updatesMeshletBounds)
         return false;

@@ -10,7 +10,6 @@
 #include "runtime_cache.h"
 
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
-
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/subsystem.adhd.h>
 #include <impl/assets_scene/asset.h>

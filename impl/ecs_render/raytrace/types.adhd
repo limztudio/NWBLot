@@ -21,10 +21,6 @@ const u32 s_RtMaxI32AsU32 = 2147483647u;
 // Runtime deformation is unstamped.
 // Static mesh, texture and shader resources remain immutable until invalidation.
 class RayTracingSceneContentStamp{
-    public u64 geometry;
-    public u64 material;
-    public b8 trusted;
-
     public RayTracingSceneContentStamp(){
         this.geometry = 0u;
         this.material = 0u;
@@ -36,6 +32,10 @@ class RayTracingSceneContentStamp{
         this.material = inMaterial;
         this.trusted = inTrusted;
     }
+
+    public u64 geometry;
+    public u64 material;
+    public b8 trusted;
 }
 
 // CPU mirror of trace material ABI; HW and SW share instance IDs.
@@ -80,15 +80,13 @@ class CausticResolveActivityLayout{
 
 b8 TryResolveCausticActivityLayout(in u32 halfWidth, in u32 halfHeight, mut CausticResolveActivityLayout outLayout){
     outLayout = CausticResolveActivityLayout();
-    if(halfWidth == 0u || halfHeight == 0u || halfWidth > s_RtMaxI32AsU32 || halfHeight > s_RtMaxI32AsU32){
+    if(halfWidth == 0u || halfHeight == 0u || halfWidth > s_RtMaxI32AsU32 || halfHeight > s_RtMaxI32AsU32)
         return false;
-    }
     const u32 tilesX = divideUp(halfWidth, s_CausticResolveGroupSize);
     const u32 tilesY = divideUp(halfHeight, s_CausticResolveGroupSize);
     const u64 byteSize = cast<u64>(tilesX) * cast<u64>(tilesY) * 4ull;
-    if(byteSize > s_RtAddressableBytes){
+    if(byteSize > s_RtAddressableBytes)
         return false;
-    }
     outLayout.bufferByteSize = byteSize;
     outLayout.tilesX = tilesX;
     outLayout.tilesY = tilesY;
@@ -271,12 +269,10 @@ u32 AdaptiveRefitsBeforeRebuild(in u32 primitiveCount){
         ++log2Val;
     }
     u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2Val / s_BlasRefitBudgetLog2ExponentStep);
-    if(budget < s_BlasMinRefitsBeforeRebuild){
+    if(budget < s_BlasMinRefitsBeforeRebuild)
         budget = s_BlasMinRefitsBeforeRebuild;
-    }
-    if(budget > s_BlasMaxRefitsBeforeRebuildCap){
+    if(budget > s_BlasMaxRefitsBeforeRebuildCap)
         budget = s_BlasMaxRefitsBeforeRebuildCap;
-    }
     return budget;
 }
 
@@ -572,3 +568,4 @@ RayTracingDispatchGroups ResolveRayTracingDispatchGroups(in u32 width, in u32 he
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -34,7 +34,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 static_assert(sizeof(Vertex) == NWB_UI_VERTEX_BYTE_SIZE);
 static_assert(offsetof(Vertex, position) == NWB_UI_VERTEX_POSITION_BYTE_OFFSET);
 static_assert(offsetof(Vertex, texCoord) == NWB_UI_VERTEX_UV_BYTE_OFFSET);
@@ -69,7 +68,6 @@ using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyp
 using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
 using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
 using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxTextureImages>;
-
 
 template<typename T>
 using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
@@ -263,7 +261,6 @@ public:
         return Core::Rect(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
     }
 };
-
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
 [[nodiscard]] NWB_INLINE b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{

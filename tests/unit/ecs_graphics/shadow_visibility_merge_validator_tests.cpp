@@ -43,8 +43,8 @@ struct ShadowPacketPlan{
 public:
     ShadowPacketPlan()
         : graph(testArena.arena)
-        , compiledGraph(testArena.arena){
-    }
+        , compiledGraph(testArena.arena)
+    {}
 
 
 public:
@@ -188,7 +188,6 @@ TEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePr
     }
 }
 
-
 TEST(ShadowVisibilityMergeValidator, TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket){
     for(const b8 combined : { false, true }){
         {
@@ -233,7 +232,6 @@ TEST(ShadowVisibilityMergeValidator, CombinedWaveletRejectsEveryProducerOrTermin
         EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks)) << stage;
     }
 }
-
 
 TEST(ShadowVisibilityMergeValidator, CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge){
     ShadowPacketPlan fixture;

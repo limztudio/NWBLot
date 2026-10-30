@@ -18,7 +18,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SourceEmitter{
+class SourceEmitter final{
 public:
     SourceEmitter(MetaArena& arena, const SymbolTable& symbols)noexcept
         : m_arena(arena)
@@ -28,29 +28,12 @@ public:
 
 
 public:
-    [[nodiscard]] MString emitSource(
-        const TranslationUnit& unit,
-        MStringView headerIncludePath,
-        MStringView namespacePath
-    )const;
+    [[nodiscard]] MString emitSource(const TranslationUnit& unit, MStringView headerIncludePath, MStringView namespacePath)const;
 
-    void emitOutOfClassCallable(
-        MString& out,
-        const ClassDecl* ownerClass,
-        const MethodDecl& callable,
-        b8 emitBody,
-        b8 emitInlineKeyword
-    )const;
+    void emitOutOfClassCallable(MString& out, const ClassDecl* ownerClass, const MethodDecl& callable, b8 emitBody, b8 emitInlineKeyword)const;
     void emitMethodBodyBlock(MString& out, const MethodDecl& method, u32 indent)const;
     void emitConstructorNotNullInitializers(MString& out, Span<const FieldDecl* const> orderedFields, const MethodDecl& ctor)const;
-    void emitCtorOrCallArgs(
-        MString& out,
-        MStringView baseTypeName,
-        Span<const Expr* const> arguments,
-        MStringView injectedArenaName = {},
-        b8 useBracesForList = false,
-        b8 emptyUsesBraces = true
-    )const;
+    void emitCtorOrCallArgs(MString& out, MStringView baseTypeName, Span<const Expr* const> arguments, MStringView injectedArenaName = {}, b8 useBracesForList = false, b8 emptyUsesBraces = true)const;
     void emitExpr(MString& out, const Expr& expr, b8 omitOuterBinaryParens = false)const;
 
 

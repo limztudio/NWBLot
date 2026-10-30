@@ -7,7 +7,6 @@
 
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_csg/shape_types.adhd.h>
-
 #include <impl/assets_csg/shape_id.h>
 
 

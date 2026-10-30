@@ -36,16 +36,13 @@ struct Half2U{
 
     constexpr Half2U()noexcept
         : packed(0u)
-    {
-    }
+    {}
     constexpr Half2U(const Half xValue, const Half yValue)noexcept
         : x(xValue), y(yValue)
-    {
-    }
+    {}
     explicit constexpr Half2U(const u32 packedValue)noexcept
         : packed(packedValue)
-    {
-    }
+    {}
 };
 static_assert(sizeof(Half2U) == sizeof(u32), "Half2U must stay a packed 32-bit payload");
 static_assert(alignof(Half2U) == alignof(u32), "Half2U must stay word-aligned");
@@ -77,8 +74,7 @@ struct Half4U{
     }
     constexpr Half4U(const Half xValue, const Half yValue, const Half zValue, const Half wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
     constexpr Half4U(const Half2U xyValue, const Half2U zwValue)noexcept
         : pair{xyValue, zwValue}
     {
@@ -109,18 +105,15 @@ struct alignas(32) Double2{
     constexpr Double2()noexcept
         : x(0.0)
         , y(0.0)
-    {
-    }
+    {}
     constexpr Double2(const f64 xValue, const f64 yValue)noexcept
         : x(xValue)
         , y(yValue)
-    {
-    }
+    {}
     explicit constexpr Double2(const f64 (&values)[2])noexcept
         : x(values[0])
         , y(values[1])
-    {
-    }
+    {}
 };
 static_assert(sizeof(Double2) == sizeof(f64) * 4u, "Double2 must stay a 32-byte aligned payload");
 static_assert(alignof(Double2) == 32u, "Double2 must stay SIMD-aligned");
@@ -145,20 +138,17 @@ struct alignas(32) Double3{
         : x(0.0)
         , y(0.0)
         , z(0.0)
-    {
-    }
+    {}
     constexpr Double3(const f64 xValue, const f64 yValue, const f64 zValue)noexcept
         : x(xValue)
         , y(yValue)
         , z(zValue)
-    {
-    }
+    {}
     explicit constexpr Double3(const f64 (&values)[3])noexcept
         : x(values[0])
         , y(values[1])
         , z(values[2])
-    {
-    }
+    {}
 };
 static_assert(sizeof(Double3) == sizeof(f64) * 4u, "Double3 must stay a 32-byte aligned payload");
 static_assert(alignof(Double3) == 32u, "Double3 must stay SIMD-aligned");
@@ -183,20 +173,16 @@ struct alignas(16) Float4{
 
     constexpr Float4()noexcept
         : x(0.0f), y(0.0f), z(0.0f), w(0.0f)
-    {
-    }
+    {}
     constexpr Float4(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(0.0f)
-    {
-    }
+    {}
     constexpr Float4(const f32 xValue, const f32 yValue, const f32 zValue, const f32 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
     explicit constexpr Float4(const f32 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 struct alignas(32) Double4{
@@ -218,20 +204,16 @@ struct alignas(32) Double4{
 
     constexpr Double4()noexcept
         : x(0.0), y(0.0), z(0.0), w(0.0)
-    {
-    }
+    {}
     constexpr Double4(const f64 xValue, const f64 yValue, const f64 zValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(0.0)
-    {
-    }
+    {}
     constexpr Double4(const f64 xValue, const f64 yValue, const f64 zValue, const f64 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
     explicit constexpr Double4(const f64 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 
@@ -258,12 +240,10 @@ struct alignas(16) Int4{
     constexpr Int4()noexcept = default;
     constexpr Int4(i32 _x, i32 _y, i32 _z, i32 _w)noexcept
         : x(_x), y(_y), z(_z), w(_w)
-    {
-    }
+    {}
     explicit constexpr Int4(const i32 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 struct alignas(32) Int64x4{
@@ -286,12 +266,10 @@ struct alignas(32) Int64x4{
     constexpr Int64x4()noexcept = default;
     constexpr Int64x4(i64 _x, i64 _y, i64 _z, i64 _w)noexcept
         : x(_x), y(_y), z(_z), w(_w)
-    {
-    }
+    {}
     explicit constexpr Int64x4(const i64 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 struct alignas(16) UInt4{
@@ -314,12 +292,10 @@ struct alignas(16) UInt4{
     constexpr UInt4()noexcept = default;
     constexpr UInt4(u32 _x, u32 _y, u32 _z, u32 _w)noexcept
         : x(_x), y(_y), z(_z), w(_w)
-    {
-    }
+    {}
     explicit constexpr UInt4(const u32 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 struct alignas(32) UInt64x4{
@@ -342,12 +318,10 @@ struct alignas(32) UInt64x4{
     constexpr UInt64x4()noexcept = default;
     constexpr UInt64x4(u64 _x, u64 _y, u64 _z, u64 _w)noexcept
         : x(_x), y(_y), z(_z), w(_w)
-    {
-    }
+    {}
     explicit constexpr UInt64x4(const u64 (&values)[4])noexcept
         : x(values[0]), y(values[1]), z(values[2]), w(values[3])
-    {
-    }
+    {}
 };
 
 
@@ -372,12 +346,10 @@ struct alignas(16) Float3Int{
 
     constexpr Float3Int()noexcept
         : x(0.0f), y(0.0f), z(0.0f), w(0)
-    {
-    }
+    {}
     constexpr Float3Int(const f32 xValue, const f32 yValue, const f32 zValue, const i32 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
 };
 static_assert(sizeof(Float3Int) == sizeof(f32) * 4u, "Float3Int must stay a packed 16-byte payload");
 static_assert(alignof(Float3Int) == alignof(Float4), "Float3Int must stay SIMD-aligned");
@@ -402,12 +374,10 @@ struct alignas(32) Double3Int{
 
     constexpr Double3Int()noexcept
         : x(0.0), y(0.0), z(0.0), w(0)
-    {
-    }
+    {}
     constexpr Double3Int(const f64 xValue, const f64 yValue, const f64 zValue, const i64 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
 };
 static_assert(sizeof(Double3Int) == sizeof(f64) * 4u, "Double3Int must stay a packed 32-byte payload");
 static_assert(alignof(Double3Int) == alignof(Double4), "Double3Int must stay SIMD-aligned");
@@ -432,12 +402,10 @@ struct alignas(16) Float3UInt{
 
     constexpr Float3UInt()noexcept
         : x(0.0f), y(0.0f), z(0.0f), w(0u)
-    {
-    }
+    {}
     constexpr Float3UInt(const f32 xValue, const f32 yValue, const f32 zValue, const u32 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
 };
 static_assert(sizeof(Float3UInt) == sizeof(f32) * 4u, "Float3UInt must stay a packed 16-byte payload");
 static_assert(alignof(Float3UInt) == alignof(Float4), "Float3UInt must stay SIMD-aligned");
@@ -462,12 +430,10 @@ struct alignas(32) Double3UInt{
 
     constexpr Double3UInt()noexcept
         : x(0.0), y(0.0), z(0.0), w(0u)
-    {
-    }
+    {}
     constexpr Double3UInt(const f64 xValue, const f64 yValue, const f64 zValue, const u64 wValue)noexcept
         : x(xValue), y(yValue), z(zValue), w(wValue)
-    {
-    }
+    {}
 };
 static_assert(sizeof(Double3UInt) == sizeof(f64) * 4u, "Double3UInt must stay a packed 32-byte payload");
 static_assert(alignof(Double3UInt) == alignof(Double4), "Double3UInt must stay SIMD-aligned");

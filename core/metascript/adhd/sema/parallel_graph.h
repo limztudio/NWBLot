@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ParallelGraphValidator{
+class ParallelGraphValidator final{
 public:
     explicit ParallelGraphValidator(MetaArena& arena)noexcept
         : m_arena(arena)

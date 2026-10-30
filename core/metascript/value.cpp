@@ -31,16 +31,7 @@ inline constexpr TStringView s_ListConcatenationSizeOverflowMessage = NWB_TEXT("
 inline constexpr TStringView s_StringAppendSizeOverflowMessage = NWB_TEXT("string append size overflow");
 
 template<typename IntOverflowCheck, typename IntOp, typename SimdOp>
-void ApplyNumericBinary(
-    Value& target,
-    const Value& lhs,
-    const Value& rhs,
-    IntOverflowCheck&& overflows,
-    IntOp&& intOp,
-    SimdOp&& simdOp,
-    const TStringView invalidOpMessage,
-    const b8 rejectZeroDivisor = false
-)noexcept{
+void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, SimdOp&& simdOp, const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
     if(lhs.isInteger() && rhs.isInteger()){
         if(rejectZeroDivisor && rhs.asInteger() == 0){
             NWB_ASSERT_MSG(false, s_DivisionByZeroMessage);
@@ -410,14 +401,6 @@ void Value::setDouble(f64 val)noexcept{
     m_data.m_double = val;
 }
 
-void Value::setString(MStringView val){
-    setStringOrReference(val, ValueType::String);
-}
-
-void Value::setReference(MStringView val){
-    setStringOrReference(val, ValueType::Reference);
-}
-
 void Value::makeList(){
     const NotNull<ListType*> replacement = allocList();
     destroy();
@@ -437,12 +420,12 @@ Value& Value::field(MStringView name){
         makeMap();
     NWB_ASSERT(m_type == ValueType::Map);
 
-    auto it = m_data.m_map->find(name);
+    const auto it = m_data.m_map->find(name);
     if(it != m_data.m_map->end())
         return it.value();
 
     StringType key(name.data(), name.size(), m_arena);
-    auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
+    const auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
     if(!result.second){
         NWB_ASSERT(false);
         return result.first.value();
@@ -453,7 +436,7 @@ Value& Value::field(MStringView name){
 const Value* Value::findField(MStringView name)const noexcept{
     NWB_ASSERT(m_type == ValueType::Map);
 
-    auto it = m_data.m_map->find(name);
+    const auto it = m_data.m_map->find(name);
     if(it == m_data.m_map->end())
         return nullptr;
     return &it.value();
@@ -558,7 +541,7 @@ void Value::copyFrom(const Value& other){
         candidate.makeMap();
         candidate.m_data.m_map->reserve(other.m_data.m_map->size());
         for(const auto& [k, v] : *other.m_data.m_map){
-            auto result = candidate.m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
+            const auto result = candidate.m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
             if(!result.second){
                 NWB_ASSERT(false);
                 continue;

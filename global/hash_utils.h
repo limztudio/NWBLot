@@ -40,9 +40,8 @@ inline constexpr usize s_HashCombineRightShift = 2u;
     if(bytes == nullptr || byteCount == 0)
         return hash;
 
-    for(usize i = 0u; i < byteCount; ++i){
+    for(usize i = 0u; i < byteCount; ++i)
         hash = UpdateFnv64Byte(hash, bytes[i]);
-    }
 
     return hash;
 }
@@ -126,7 +125,6 @@ inline void HashCombineFloating(usize& seed, const T value)noexcept{
     HashCombine(seed, FloatingHashBits(value));
 }
 
-
 template<typename CharT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));
@@ -150,3 +148,4 @@ template<typename StringT>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

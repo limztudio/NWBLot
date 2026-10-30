@@ -32,7 +32,6 @@ static constexpr u32 s_ScopeNameConversionFailure = 0x5C0FEu;
 
 using namespace TelemetryTestDetail;
 
-
 struct GenericScopeRecord{
     Name name;
     u32 generation = 1u;
@@ -47,7 +46,7 @@ public:
 };
 
 struct ThrowingScopeName{
-    explicit operator Name() & noexcept{ return s_NameNone; }
+    explicit operator Name()& noexcept{ return s_NameNone; }
 
     operator const Name&()const&{ throw s_ScopeNameConversionFailure; }
 };
@@ -62,7 +61,7 @@ struct ThrowingScopeRecord{
 
 TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterValidParse){
     TestArena testArena;
-    const Name scopeName{s_RendererFrame};
+    const Name scopeName{ s_RendererFrame };
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -72,7 +71,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
 
     const Telemetry::TelemetryBytes current = payload;
-    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max, };
+    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max };
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         usize cursor = 0u;
@@ -106,10 +105,7 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
     using TimingField = f64 TimingStats::*;
     using WireField = f64 Telemetry::EncodedPerfTimingPayloadHeader::*;
     constexpr Array<TimingField, 4u> s_Fields = { &TimingStats::seconds, &TimingStats::minSeconds, &TimingStats::maxSeconds, &TimingStats::lastSeconds };
-    constexpr WireField s_WireFields[] = {
-        &Telemetry::EncodedPerfTimingPayloadHeader::seconds, &Telemetry::EncodedPerfTimingPayloadHeader::minSeconds,
-        &Telemetry::EncodedPerfTimingPayloadHeader::maxSeconds, &Telemetry::EncodedPerfTimingPayloadHeader::lastSeconds,
-    };
+    constexpr WireField s_WireFields[] = { &Telemetry::EncodedPerfTimingPayloadHeader::seconds, &Telemetry::EncodedPerfTimingPayloadHeader::minSeconds, &Telemetry::EncodedPerfTimingPayloadHeader::maxSeconds, &Telemetry::EncodedPerfTimingPayloadHeader::lastSeconds };
     constexpr u64 s_NonfiniteBits[] = { 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8000000000001ull };
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -142,7 +138,7 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    const Name scopeName{s_MemoryProjectArena};
+    const Name scopeName{ s_MemoryProjectArena };
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
@@ -211,10 +207,7 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
 TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
     using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
     using CounterField = u64 MemorySnapshot::*;
-    constexpr CounterField s_Fields[] = {
-        &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes,
-        &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount,
-    };
+    constexpr CounterField s_Fields[] = { &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes, &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount };
     struct CounterCase{
         u64 current;
         u64 previous;

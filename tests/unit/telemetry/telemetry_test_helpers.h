@@ -29,6 +29,8 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace NWB;
+
 inline constexpr Name s_TelemetryTestScratch("tests/telemetry/scratch");
 
 struct TestArena : NWB::Tests::TestArena<struct TelemetryTestsTag>{

@@ -21,9 +21,6 @@ const i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
 const i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
 
 class RuntimeMeshLocalBounds{
-    public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
-    public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
-
     public b8 valid()const{
         return (this.minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0;
     }
@@ -31,6 +28,9 @@ class RuntimeMeshLocalBounds{
     public b8 finite()const{
         return (this.minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0;
     }
+
+    public f32x3_i32 minBounds(0.0f, 0.0f, 0.0f, 0);
+    public f32x3_i32 maxBounds(0.0f, 0.0f, 0.0f, 0);
 }
 
 
@@ -56,3 +56,4 @@ const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

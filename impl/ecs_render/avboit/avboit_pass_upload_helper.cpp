@@ -20,8 +20,8 @@ NWB_IMPL_BEGIN
 
 
 AvboitPassUploadHelper::AvboitPassUploadHelper(RendererMaterialSystem& materialSystem)noexcept
-    : m_materialSystem(materialSystem){
-}
+    : m_materialSystem(materialSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

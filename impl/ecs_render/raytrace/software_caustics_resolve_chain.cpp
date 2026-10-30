@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 
 SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
     : m_graph(graph)
-    , m_raytracingSystem(raytracingSystem){
-}
+    , m_raytracingSystem(raytracingSystem)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

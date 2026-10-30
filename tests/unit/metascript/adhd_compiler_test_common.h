@@ -18,7 +18,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_compiler_tests{
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AdhdCompilerTestsDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,17 +45,7 @@ using NWB::Core::Metascript::MetaArena;
 
 class MockIncludeResolver final : public NWB::Core::Metascript::IIncludeResolver{
 public:
-    u32 resolveCallCount = 0u;
-
-
-public:
-    [[nodiscard]] b8 resolveInclude(
-        const MStringView includePath,
-        const b8,
-        MetaArena& arena,
-        MString& outResolvedKey,
-        MString& outContent
-    )override{
+    [[nodiscard]] virtual b8 resolveInclude(const MStringView includePath, const b8, MetaArena& arena, MString& outResolvedKey, MString& outContent)override{
         ++resolveCallCount;
         outResolvedKey = MString(includePath.data(), includePath.size(), arena);
         if(includePath == "shared_service.adhd"){
@@ -69,6 +65,10 @@ public:
         outContent = MString(s_HeaderCode.data(), s_HeaderCode.size(), arena);
         return true;
     }
+
+
+public:
+    u32 resolveCallCount = 0u;
 };
 
 
@@ -76,6 +76,12 @@ public:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

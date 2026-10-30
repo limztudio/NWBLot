@@ -7,7 +7,6 @@
 
 #include "asset.h"
 #include <impl/assets_mesh/skin_types.adhd.h>
-
 #include <impl/assets_skeleton/asset.h>
 
 #include <core/assets/module.h>
@@ -100,3 +99,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

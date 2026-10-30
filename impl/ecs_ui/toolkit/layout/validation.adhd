@@ -22,18 +22,16 @@ b8 HasValidUiRectDimensions(in Rect rectangle){
 // Inputs may be unchecked here, so the bottom sum runs only after the right sum is finite.
 b8 HasPreciseUiRectEndpoints(in Rect rectangle){
     const f32 right = rectangle.x + rectangle.width;
-    if(!isFinite(right)){
+    if(!isFinite(right))
         return false;
-    }
     const f32 bottom = rectangle.y + rectangle.height;
     return isFinite(bottom) && (rectangle.width == 0.0f || right > rectangle.x) && (rectangle.height == 0.0f || bottom > rectangle.y);
 }
 
 // Zero or subprecision extents remain valid when their rounded endpoints are finite.
 b8 IsValidUiRect(in Rect rectangle){
-    if(!HasValidUiRectDimensions(rectangle)){
+    if(!HasValidUiRectDimensions(rectangle))
         return false;
-    }
     const f32 right = rectangle.x + rectangle.width;
     const f32 bottom = rectangle.y + rectangle.height;
     return isFinite(right) && isFinite(bottom);
@@ -46,9 +44,8 @@ b8 IsPreciseUiRect(in Rect rectangle){
 
 // Image placements require both precise rounded extents and f64 endpoint sums inside the f32 upper bound.
 b8 IsBoundedUiRect(in Rect rectangle){
-    if(!HasValidUiRectDimensions(rectangle)){
+    if(!HasValidUiRectDimensions(rectangle))
         return false;
-    }
     // Finite f32 inputs cannot overflow these f64 sums.
     const f64x2 end = f64x2(cast<f64>(rectangle.x), cast<f64>(rectangle.y)) + f64x2(cast<f64>(rectangle.width), cast<f64>(rectangle.height));
     return end.x <= s_UiMaxFloatF64 && end.y <= s_UiMaxFloatF64 && HasPreciseUiRectEndpoints(rectangle);
@@ -59,9 +56,8 @@ b8 IsValidUiPadding(in Insets padding){
 }
 
 b8 IsBoundedUiPadding(in Insets padding){
-    if(!IsValidUiPadding(padding)){
+    if(!IsValidUiPadding(padding))
         return false;
-    }
     // Finite f32 inputs cannot overflow these f64 sums.
     const f64x2 size = f64x2(cast<f64>(padding.left), cast<f64>(padding.top)) + f64x2(cast<f64>(padding.right), cast<f64>(padding.bottom));
     return size.x <= s_UiMaxFloatF64 && size.y <= s_UiMaxFloatF64;
@@ -77,3 +73,4 @@ b8 IsValidUiExtent(in Point point){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

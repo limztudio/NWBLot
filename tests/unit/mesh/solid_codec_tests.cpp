@@ -187,7 +187,7 @@ TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
     ASSERT_EQ(control.solidTriangleWords().size(), 1u);
 
     Impl::Mesh rejected(arena, s_MeshName);
-    for(const u32 invalidWord : {0x1fu, 0x8000000fu}){
+    for(const u32 invalidWord : { 0x1fu, 0x8000000fu }){
         Core::Assets::AssetBytes malformed(*cooked);
         NWB_MEMCPY(malformed.data() + malformed.size() - sizeof(u32), sizeof(invalidWord), &invalidWord, sizeof(invalidWord));
         EXPECT_FALSE(rejected.loadBinary(malformed));
@@ -203,7 +203,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
     Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/compact_bounds"));
-    const Array<u32, 10u> words{ 0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u, 0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u, };
+    const Array<u32, 10u> words{ 0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u, 0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u };
     Core::Assets::AssetVector<Impl::MeshletBounds> bounds(arena);
     bounds.resize(2u);
     for(usize index = 0u; index < bounds.size(); ++index){

@@ -46,16 +46,17 @@ class MaterialInstanceParameter{
 
 [reflect]
 class MaterialInstanceComponent{
-    public Name materialInterface;
-    public Vector<MaterialInstanceParameter> overrides;
-    public u64 revision = 0u;
-
     public MaterialInstanceComponent(){}
 
     public MaterialInstanceComponent(in Name interfaceName){
         this.materialInterface = interfaceName;
     }
+
+    public Name materialInterface;
+    public Vector<MaterialInstanceParameter> overrides;
+    public u64 revision = 0u;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

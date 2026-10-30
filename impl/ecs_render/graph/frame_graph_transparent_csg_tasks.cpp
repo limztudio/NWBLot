@@ -25,9 +25,8 @@ NWB_IMPL_BEGIN
 
 FrameGraphTransparentCsgTasks::FrameGraphTransparentCsgTasks(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
     : m_graph(graph)
-    , m_avboitSystem(avboitSystem){
-}
-
+    , m_avboitSystem(avboitSystem)
+{}
 
 Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::declare(
     Core::Alloc::ScratchArena& scratchArena,
@@ -114,12 +113,10 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     constexpr usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
     Core::GpuTaskResourceSetUse transparentCsgMaterialResourceSetUses[s_TransparentCsgMaterialResourceSetUseCapacity] = {};
     usize transparentCsgMaterialResourceSetUseCount = 0u;
-    if(avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned){
+    if(avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)
         transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] = intervalMaterialGeometrySetUse;
-    }
-    if(intervalMaterialSampledTextureSet.valid()){
+    if(intervalMaterialSampledTextureSet.valid())
         transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] = intervalMaterialSampledTextureSetUse;
-    }
     avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));

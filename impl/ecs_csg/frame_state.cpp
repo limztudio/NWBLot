@@ -126,7 +126,6 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     });
 }
 
-
 Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(const Core::ECS::EntityID entity, const CsgReceiverPass::Enum receiverPass)const noexcept{
     if(m_cutterRanges.empty())
         return MakeUnexpected(Failure{});

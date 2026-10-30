@@ -82,6 +82,7 @@ public:
     void invalidate();
     [[nodiscard]] Expected<RayTracingOpticalBoundsFinalizeHandle> prepare(const RayTracingOpticalSceneGather& gather, Core::GpuDescriptorHandle sourceDescriptor, RendererShaderSystem& shaderSystem);
 
+
 private:
     [[nodiscard]] b8 ensurePipeline(RendererShaderSystem& shaderSystem);
 
@@ -107,3 +108,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

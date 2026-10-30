@@ -18,7 +18,7 @@ NWB_METASCRIPT_BEGIN
 
 
 // Parses literal, reference, list, map and arithmetic expressions into values.
-class ExpressionParser{
+class ExpressionParser final{
 public:
     using ScratchPath = Vector<MStringView, Alloc::ScratchArena>;
 
@@ -38,9 +38,9 @@ public:
 
 
 public:
-    Value parseExpression();
+    [[nodiscard]] Value parseExpression(){ return parseAdditive(); }
 
-    b8 parseReferencePath(ScratchPath& path);
+    [[nodiscard]] b8 parseReferencePath(ScratchPath& path);
 
 
 private:

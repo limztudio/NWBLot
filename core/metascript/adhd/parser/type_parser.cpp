@@ -20,7 +20,7 @@ namespace __hidden_adhd_type_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ConsumeScopedConstantTail(ParserCursor& cursor, const MChar* const startPtr, const MChar* endPtr, MStringView& outConstantText){
+[[nodiscard]] b8 ConsumeScopedConstantTail(const MChar* const startPtr, const MChar* endPtr, ParserCursor& cursor, MStringView& outConstantText){
     while(cursor.match(TokenType::ColonColon)){
         if(!cursor.check(TokenType::Identifier)){
             cursor.errorExpected("expected identifier after '::' in template argument");
@@ -236,7 +236,7 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
             const Token& valTok = m_cursor.current();
             const MChar* const endPtr = valTok.text.data() + valTok.text.size();
             m_cursor.advance();
-            if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(m_cursor, signStartPtr, endPtr, arg.constantText))
+            if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(signStartPtr, endPtr, m_cursor, arg.constantText))
                 return false;
         }
         else if(m_cursor.check(TokenType::LeftParen)){
@@ -262,15 +262,10 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
             arg.type = parseType(true, false);
             if(!arg.type)
                 return false;
-            if(m_pendingRightAngles == 0u
-                && arg.type->refMode == ParamPassingMode::None
-                && !arg.type->isFuncType
-                && arg.type->templateArgs.empty()
-                && m_cursor.check(TokenType::ColonColon))
-            {
+            if(m_pendingRightAngles == 0u && arg.type->refMode == ParamPassingMode::None && !arg.type->isFuncType && arg.type->templateArgs.empty() && m_cursor.check(TokenType::ColonColon)){
                 const MChar* const startPtr = arg.type->name.data();
                 const MChar* const endPtr = startPtr + arg.type->name.size();
-                if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(m_cursor, startPtr, endPtr, arg.constantText))
+                if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(startPtr, endPtr, m_cursor, arg.constantText))
                     return false;
                 arg.type = nullptr;
             }

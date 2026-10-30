@@ -296,9 +296,8 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(sceneTlasResult)
             sceneTlas = *sceneTlasResult;
         optionalResourcesImported = optionalResourcesImported && sceneTlasResult.has_value();
-        if(sceneTlas.valid() && !hardwareTransparentTrace){
+        if(sceneTlas.valid() && !hardwareTransparentTrace)
             resourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
-        }
     }
     Core::GpuGraphResourceId hardwareTransparentScratch[s_HardwareTransparentShadowScratchCount] = {};
     if(hardwareTransparentTrace){
@@ -454,7 +453,6 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
             adaptivePrimitivePrecedesVisibility = true;
         }
     }
-
 
     // Preparedness is established while Shadow Prepare records, after this graph is declared.
     // The monolithic path opens with an all-lit clear: real producers overwrite it, a missing one keeps white with no state bridge.

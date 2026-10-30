@@ -609,9 +609,8 @@ private:
         else if constexpr(SameAs<CharT, char8_t>){
             assignSource(AStringView(reinterpret_cast<const char*>(source.data()), source.size()));
         }
-        else{
+        else
             m_text = ConvertString(arena(), source);
-        }
     }
 
     template<typename SourceT>

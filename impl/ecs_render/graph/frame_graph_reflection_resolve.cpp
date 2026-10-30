@@ -23,9 +23,8 @@ FrameGraphReflectionResolve::FrameGraphReflectionResolve(Core::GpuTaskGraph& gra
     : m_graph(graph)
     , m_graphics(graphics)
     , m_raytracingSystem(raytracingSystem)
-    , m_reflectionSystem(reflectionSystem){
-}
-
+    , m_reflectionSystem(reflectionSystem)
+{}
 
 Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(const FrameGraphReflectionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads){
     FrameGraphReflectionResolveResult result{};

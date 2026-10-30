@@ -30,7 +30,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec
 
 using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
-
 template<typename TAsset>
 static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>& outRefs){
     outRefs.clear();
@@ -40,12 +39,7 @@ static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::A
 }
 
 template<typename TAsset>
-[[nodiscard]] static b8 ValidateUniqueAssetRefs(
-    const Span<const Core::Assets::AssetRef<TAsset>> references,
-    const TStringView contextPrefix,
-    const TStringView contextLabel,
-    Core::Alloc::ScratchArena& scratchArena
-){
+[[nodiscard]] static b8 ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextPrefix, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
     NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
@@ -101,13 +95,7 @@ b8 EntityAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 b8 EntityAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_EntityLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityHeaderBinary>(
-        binary,
-        s_EntityMagic,
-        s_EntityLoadBinaryContext,
-        s_EntityAssetKindLabel,
-        cursor
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<EntityHeaderBinary>(binary, s_EntityMagic, s_EntityLoadBinaryContext, s_EntityAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const EntityHeaderBinary& header = *headerResult;
@@ -148,13 +136,7 @@ b8 ProjectAsset::validatePayload()const{
 
 b8 ProjectAsset::loadBinary(const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectHeaderBinary>(
-        binary,
-        s_ProjectMagic,
-        s_ProjectLoadBinaryContext,
-        s_ProjectAssetKindLabel,
-        cursor
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ProjectHeaderBinary>(binary, s_ProjectMagic, s_ProjectLoadBinaryContext, s_ProjectAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const ProjectHeaderBinary& header = *headerResult;
@@ -173,13 +155,6 @@ b8 ProjectAsset::loadBinary(const Span<const u8> binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
-    m_subsystems = Move(subsystems);
-    SubsystemAssetRuntime::DeduplicateSubsystemRefs(m_subsystems);
-    m_entities = Move(entities);
-    m_assets = Move(assets);
-}
-
 b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("SceneAsset::validatePayload")))
         return false;
@@ -196,16 +171,17 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
+void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
+    m_subsystems = Move(subsystems);
+    SubsystemAssetRuntime::DeduplicateSubsystemRefs(m_subsystems);
+    m_entities = Move(entities);
+    m_assets = Move(assets);
+}
+
 b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneHeaderBinary>(
-        binary,
-        s_SceneMagic,
-        s_SceneLoadBinaryContext,
-        s_SceneAssetKindLabel,
-        cursor
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SceneHeaderBinary>(binary, s_SceneMagic, s_SceneLoadBinaryContext, s_SceneAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const SceneHeaderBinary& header = *headerResult;
@@ -265,3 +241,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

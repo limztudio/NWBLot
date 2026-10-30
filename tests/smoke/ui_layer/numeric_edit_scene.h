@@ -68,7 +68,7 @@ private:
     b8 m_clamp = true;
 };
 
-using SharedUiNumericEditSmokeScene = RefCountPtr< RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena> >;
+using SharedUiNumericEditSmokeScene = RefCountPtr<RefCounter<UiNumericEditSmokeScene>, ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>>;
 
 [[nodiscard]] b8 IsUiLayerNumericEditSmokeEnabled();
 [[nodiscard]] b8 IsUiLayerNumericEditSkinSmokeEnabled();

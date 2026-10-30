@@ -267,7 +267,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     opaqueCsgIntervalStage.capturePayloads(frameBindings, csgResources, opaqueDrawItems, csgFrameData, instanceData.size(), materialTypedBytes.size(), gbufferPayload.materialDrawBuffersUploaded, gbufferPayload.csgFrameBuffersUploaded, hasOpaqueDrawItems, hasOpaqueCsgFrameWork);
 
-
     // G-buffer makes peel/event images; span build publishes spans; Combine publishes removed-interval images; Sample takes them.
     // Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
@@ -317,13 +316,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const b8 gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
     gbufferPayload.materialGeometryStatesGraphOwned = false;
     if(gbufferUsesMaterialGeometry){
-        const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
-            gbufferMaterialGeometryDrawSets,
-            Name("render.graphics_prefix.gbuffer.material_geometry"),
-            "Opaque Material Geometry",
-            m_deferredLightingTaskGraph,
-            scratchArena
-        );
+        const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(gbufferMaterialGeometryDrawSets, Name("render.graphics_prefix.gbuffer.material_geometry"), "Opaque Material Geometry", m_deferredLightingTaskGraph, scratchArena);
         gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialGeometrySetResult.has_value();
         if(gbufferMaterialGeometrySetResult)
             gbufferMaterialGeometrySet = *gbufferMaterialGeometrySetResult;
@@ -351,7 +344,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
         return MakeUnexpected(Failure{});
     }
-
 
     // Generated-vertex buffers persist per mesh, so only the alias-free regular opaque case hoists compute ahead of raster.
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{
@@ -381,9 +373,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(opaqueComputeEmulationOutputSetResult)
             opaqueComputeEmulationOutputSet = *opaqueComputeEmulationOutputSetResult;
     }
-    if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned){
+    if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque compute-emulation output states"));
-    }
     gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
 
     // A persistent generated-vertex buffer is normally a local dispatch/raster bridge.
@@ -405,9 +396,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(opaqueSharedComputeEmulationOutputResult)
             opaqueSharedComputeEmulationOutput = *opaqueSharedComputeEmulationOutputResult;
     }
-    if(opaqueSharedComputeEmulationPlanCaptured && !opaqueSharedComputeEmulationOutputStatesGraphOwned){
+    if(opaqueSharedComputeEmulationPlanCaptured && !opaqueSharedComputeEmulationOutputStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned shared opaque compute-emulation output state"));
-    }
     gbufferPayload.regularSharedComputeEmulationDrawsGraphOwned = opaqueSharedComputeEmulationOutputStatesGraphOwned;
     gbufferPayload.regularSharedComputeEmulationTiming = opaqueSharedComputeEmulationOutputStatesGraphOwned ? &opaqueRegularSharedComputeEmulationTiming : nullptr;
 
@@ -440,9 +430,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(opaqueCsgReceiverComputeEmulationOutputSetResult)
             opaqueCsgReceiverComputeEmulationOutputSet = *opaqueCsgReceiverComputeEmulationOutputSetResult;
     }
-    if(opaqueCsgReceiverComputeEmulationPlanCaptured && !opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
+    if(opaqueCsgReceiverComputeEmulationPlanCaptured && !opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
-    }
     gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
 
     constexpr usize s_OpaqueDrawResourceUseCount = 8u;
@@ -521,26 +510,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
     if(gbufferMaterialSampledTextureSet.valid())
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialSampledTextureSetUse;
-    if(opaqueComputeEmulationOutputStatesGraphOwned){
+    if(opaqueComputeEmulationOutputStatesGraphOwned)
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = opaqueComputeEmulationOutputVertexBufferSetUse;
-    }
-    if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned){
+    if(opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned)
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = opaqueCsgReceiverComputeEmulationOutputVertexBufferSetUse;
-    }
 
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{scratchArena};
-    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        opaqueDrawItems.regular.indexedDrawItems,
-        frameBindings, scratchArena, gbufferDependency, objectGeometryReads,
-        nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
-    ))
+    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(opaqueDrawItems.regular.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)))
         return MakeUnexpected(Failure{});
-    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        opaqueDrawItems.csgReceiverSurface.indexedDrawItems,
-        frameBindings, scratchArena, gbufferDependency, objectGeometryReads,
-        nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
-    ))
+    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(opaqueDrawItems.csgReceiverSurface.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)))
         return MakeUnexpected(Failure{});
     gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
 
@@ -579,7 +558,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferScheduling.forceSubmissionBoundary = false;
     gbufferScheduling.allowPacketMerge = true;
     gbufferScheduling.mergeWithPrevious = true;
-
 
     // Explicit immediate predecessor. Keep its UAV-to-vertex/index handoff in the primary-Graphics packet despite cross-queue consumers.
     gbufferScheduling.allowMergeAcrossConsumerFrontier = opaqueComputeEmulationOutputStatesGraphOwned || opaqueSharedComputeEmulationOutputStatesGraphOwned || opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
@@ -718,10 +696,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     m_graphicsPrefixTask = *graphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(
-        rayTracingLightingClassification,
-        Span<const ECSRenderDetail::SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount)
-    );
+    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const ECSRenderDetail::SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount));
     return prefixSceneUploadResult->sceneLightingContentHash;
 }
 

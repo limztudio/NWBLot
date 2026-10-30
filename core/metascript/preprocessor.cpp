@@ -79,9 +79,7 @@ constexpr u32 s_MaxIncludeDepth = 64u;
             usize scan = lookahead + 1u;
             while(scan < text.size() && parenDepth > 0u){
                 const MChar ch = text[scan];
-                if(ch == '\'' && scan > 0u
-                    && (IsAsciiDigit(text[scan - 1u]) || IsAsciiIdentifierChar(text[scan - 1u])))
-                {
+                if(ch == '\'' && scan > 0u && (IsAsciiDigit(text[scan - 1u]) || IsAsciiIdentifierChar(text[scan - 1u]))){
                     ++scan;
                     continue;
                 }
@@ -202,14 +200,10 @@ void Preprocessor::defineObjectMacro(const MStringView name, const MStringView b
     m_macros.insert_or_assign(Move(key), Move(macro));
 }
 
-void Preprocessor::undefineMacro(const MStringView name){
+void Preprocessor::undefineMacro(const MStringView name)noexcept{
     const auto it = m_macros.find(name);
     if(it != m_macros.end())
         m_macros.erase(it);
-}
-
-b8 Preprocessor::isMacroDefined(const MStringView name)const noexcept{
-    return m_macros.find(name) != m_macros.end();
 }
 
 b8 Preprocessor::isOffsetInIncludedRange(const usize offset)const noexcept{
@@ -296,8 +290,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                         joinedBuffer.append(strippedNext.data(), strippedNext.size());
                     }
 
-                    hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive
-                        && HasUnclosedFunctionMacroCall(MStringView(joinedBuffer.data(), joinedBuffer.size()), m_macros);
+                    hasUnclosedMacro = !hasBackslashCont && !isDirectiveLine && isActive && HasUnclosedFunctionMacroCall(MStringView(joinedBuffer.data(), joinedBuffer.size()), m_macros);
                 }
                 rawLine = MStringView(joinedBuffer.data(), joinedBuffer.size());
             }
@@ -331,12 +324,8 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
 
         if(!trimmed.empty() && trimmed[0] == '#'){
             const MStringView afterHash = TrimView(trimmed.substr(1u));
-            const b8 isNativeInclude = (nativeBraceDepth > 0u)
-                && afterHash.starts_with("include")
-                && (afterHash.size() == 7u || !IsAsciiIdentifierChar(afterHash[7u]));
-            const b8 isNativePragma = (nativeBraceDepth > 0u)
-                && afterHash.starts_with("pragma")
-                && (afterHash.size() == 6u || !IsAsciiIdentifierChar(afterHash[6u]));
+            const b8 isNativeInclude = (nativeBraceDepth > 0u) && afterHash.starts_with("include") && (afterHash.size() == 7u || !IsAsciiIdentifierChar(afterHash[7u]));
+            const b8 isNativePragma = (nativeBraceDepth > 0u) && afterHash.starts_with("pragma") && (afterHash.size() == 6u || !IsAsciiIdentifierChar(afterHash[6u]));
             if(isNativeInclude || isNativePragma){
                 if(isActive)
                     outProcessed.append(rawLine.data(), rawLine.size());
@@ -372,9 +361,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                     scanIdx = closeComment + 2u;
                     continue;
                 }
-                if(ch == '\'' && scanIdx > commentPrefix.size()
-                    && (IsAsciiDigit(expandedLine[scanIdx - 1u]) || IsAsciiIdentifierChar(expandedLine[scanIdx - 1u])))
-                {
+                if(ch == '\'' && scanIdx > commentPrefix.size() && (IsAsciiDigit(expandedLine[scanIdx - 1u]) || IsAsciiIdentifierChar(expandedLine[scanIdx - 1u]))){
                     ++scanIdx;
                     continue;
                 }

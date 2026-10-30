@@ -317,9 +317,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
-        if(cache.constantRangeCached){
+        if(cache.constantRangeCached)
             return cache.constantRange;
-        }
 
         const auto range = ECSRenderDetail::AppendMaterialTypedByteRange(materialInfo.constantTypedBytes, materialTypedBytes);
         if(!range)
@@ -334,9 +333,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const ECSRenderDetail::MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
-        if(cache.defaultMutableRangeCached){
+        if(cache.defaultMutableRangeCached)
             return cache.defaultMutableRange;
-        }
 
         const auto range = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(materialInfo.mutableDefaultTypedBytes, materialTypedBytes, mutableMaterialTypedRanges);
         if(!range)
@@ -465,9 +463,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
         if(csgReceiverSurfaceActive){
             csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
-            if(pass == MaterialPipelinePass::CsgReceiverSurface){
+            if(pass == MaterialPipelinePass::CsgReceiverSurface)
                 csgReceiverSurfacePipelineResources = pipelineResources.get();
-            }
             else{
                 const auto csgReceiverSurfacePipeline = lookupMode == RendererResourceLookupMode::CreateMissing ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer) : findRendererPipeline(csgReceiverSurfacePipelineKey);
                 if(!csgReceiverSurfacePipeline)

@@ -63,12 +63,7 @@ public:
 };
 
 // Excludes only world transforms; geometry/material edits still invalidate the bounded capture approximation.
-[[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(
-    const LightSpaceCsgState& state,
-    Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances,
-    Span<const u8> materialBytes,
-    Span<const Core::TextureHandle> textures
-)noexcept;
+[[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(const LightSpaceCsgState& state, Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances, Span<const u8> materialBytes, Span<const Core::TextureHandle> textures)noexcept;
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, b8 hardware);
 void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
@@ -82,3 +77,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

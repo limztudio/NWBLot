@@ -19,8 +19,8 @@ NWB_IMPL_BEGIN
 
 
 OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept
-    : m_graph(graph){
-}
+    : m_graph(graph)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -102,7 +102,6 @@ static constexpr AStringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
 [[nodiscard]] Expected<SkeletonCookJoint> ParseSkeletonJoint(const Path& nwbFilePath, const Value& jointValue){
     SkeletonCookJoint joint{};
 
-
     if(!ValidateSkeletonJointFields(nwbFilePath, jointValue))
         return MakeUnexpected(Failure{});
     auto nameResult = Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_NameField, true);
@@ -131,9 +130,8 @@ template<typename ArenaT>
         return s_SkeletonInvalidJointIndex;
 
     const auto foundParent = earlierJointIndices.find(parent);
-    if(foundParent != earlierJointIndices.end()){
+    if(foundParent != earlierJointIndices.end())
         return foundParent.value();
-    }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
         , ConvertString(skeletonEntry.virtualPath.resolvedText())
@@ -271,3 +269,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

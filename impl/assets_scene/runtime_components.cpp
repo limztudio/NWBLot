@@ -3,8 +3,8 @@
 
 
 #include "asset.h"
-#include <impl/assets_scene/component_assets.adhd.h>
 
+#include <impl/assets_scene/component_assets.adhd.h>
 #include <impl/ecs_scene/camera.h>
 
 #include <core/assets/auto_registration.h>
@@ -37,7 +37,6 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_LightComponentAssetAutoRegistrar, LightCo
 
 static const ComponentTypeAutoRegistrar* s_RegisteredComponentTypesHead = nullptr;
 
-
 [[nodiscard]] static UniquePtr<IComponent> CreateComponentByTypeHash(Core::Assets::AssetArena& arena, const Name& virtualPath, const NameHash& componentTypeHash){
     for(const ComponentTypeAutoRegistrar* node = s_RegisteredComponentTypesHead; node != nullptr; node = node->next()){
         if(node->assetType().hash() == componentTypeHash && node->create() != nullptr)
@@ -68,7 +67,6 @@ static const ComponentTypeAutoRegistrar* s_RegisteredComponentTypesHead = nullpt
 
 IComponent::~IComponent()noexcept = default;
 
-
 ComponentTypeAutoRegistrar::ComponentTypeAutoRegistrar(const Name& assetType, const ComponentInstanceFactory create)noexcept
     : m_assetType(assetType)
     , m_create(create)
@@ -76,7 +74,6 @@ ComponentTypeAutoRegistrar::ComponentTypeAutoRegistrar(const Name& assetType, co
 {
     __hidden_scene_runtime_components::s_RegisteredComponentTypesHead = this;
 }
-
 
 const IComponent* CastComponent(const Core::Assets::IAsset* const asset)noexcept{
     if(!asset || !__hidden_scene_runtime_components::IsComponentAssetType(asset->assetType()))
@@ -96,13 +93,7 @@ namespace ComponentAssetRuntime{
 
 b8 LoadBinary(IComponent& component, const Span<const u8> binary){
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(
-        binary,
-        s_ComponentMagic,
-        s_ComponentLoadBinaryContext,
-        s_ComponentAssetKindLabel,
-        cursor
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(binary, s_ComponentMagic, s_ComponentLoadBinaryContext, s_ComponentAssetKindLabel, cursor);
     if(!headerResult)
         return false;
     const ComponentHeaderBinary& header = *headerResult;
@@ -111,10 +102,7 @@ b8 LoadBinary(IComponent& component, const Span<const u8> binary){
         return false;
     }
     if(header.componentTypeHash != component.assetType().hash()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("IComponent::loadBinary failed: component binary type does not match '{}'"),
-            ConvertString(component.assetType().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("IComponent::loadBinary failed: component binary type does not match '{}'"), ConvertString(component.assetType().resolvedText()));
         return false;
     }
     if(header.payloadByteCount > binary.size() - cursor){
@@ -144,22 +132,13 @@ b8 LoadBinary(IComponent& component, const Span<const u8> binary){
 
 Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const{
     usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(
-        binary,
-        s_ComponentMagic,
-        s_ComponentLoadBinaryContext,
-        s_ComponentAssetKindLabel,
-        cursor
-    );
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ComponentHeaderBinary>(binary, s_ComponentMagic, s_ComponentLoadBinaryContext, s_ComponentAssetKindLabel, cursor);
     if(!headerResult)
         return MakeUnexpected(Failure{});
 
     auto asset = __hidden_scene_runtime_components::CreateComponentByTypeHash(arena, virtualPath, headerResult->componentTypeHash);
     if(!asset){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ComponentAssetCodec::deserialize failed: unregistered component type in '{}'"),
-            ConvertString(virtualPath.resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("ComponentAssetCodec::deserialize failed: unregistered component type in '{}'"), ConvertString(virtualPath.resolvedText()));
         return MakeUnexpected(Failure{});
     }
     if(!asset->loadBinary(binary))
@@ -173,10 +152,7 @@ Expected<UniquePtr<Core::Assets::IAsset>> ComponentAssetCodec::deserialize(Core:
 
 
 b8 TransformComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(
-        payload,
-        NWB_TEXT("TransformComponentAsset::loadComponentPayload")
-    );
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<TransformComponentPayloadBinary>(payload, NWB_TEXT("TransformComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
     component.position = binaryPayload->position;
@@ -202,10 +178,7 @@ b8 TransformComponentAsset::validatePayload()const{
         || !Vector4NearEqual(rotationLengthSq, s_SIMDOne, VectorReplicate(s_RotationUnitLengthSquaredTolerance))
         || !Vector3IsFinite(scale)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("TransformComponentAsset::validatePayload failed: transform '{}' must have finite position/scale and unit quaternion rotation"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("TransformComponentAsset::validatePayload failed: transform '{}' must have finite position/scale and unit quaternion rotation"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -216,10 +189,7 @@ b8 TransformComponentAsset::validatePayload()const{
 
 
 b8 CameraComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(
-        payload,
-        NWB_TEXT("CameraComponentAsset::loadComponentPayload")
-    );
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<CameraComponentPayloadBinary>(payload, NWB_TEXT("CameraComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
     component.projection = binaryPayload->projection;
@@ -239,10 +209,7 @@ b8 CameraComponentAsset::validatePayload()const{
         VectorReplicate(Scene::s_CameraFallbackAspectRatio)
     );
     if(!IsFinite(aspectRatio) || aspectRatio < 0.0f || !projection){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("CameraComponentAsset::validatePayload failed: camera '{}' has invalid projection parameters"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("CameraComponentAsset::validatePayload failed: camera '{}' has invalid projection parameters"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -253,10 +220,7 @@ b8 CameraComponentAsset::validatePayload()const{
 
 
 b8 LightComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<LightComponentPayloadBinary>(
-        payload,
-        NWB_TEXT("LightComponentAsset::loadComponentPayload")
-    );
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<LightComponentPayloadBinary>(payload, NWB_TEXT("LightComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
     if(binaryPayload->type >= Scene::LightType::kCount || binaryPayload->enableCaustics > 1u || binaryPayload->reserved != 0u){
@@ -293,10 +257,7 @@ b8 LightComponentAsset::validatePayload()const{
         || !IsFinite(component.angularRadius) || component.angularRadius < 0.0f
         || !IsFinite(component.sourceRadius) || component.sourceRadius < 0.0f
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("LightComponentAsset::validatePayload failed: light '{}' has invalid parameters"),
-            ConvertString(virtualPath().resolvedText())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("LightComponentAsset::validatePayload failed: light '{}' has invalid parameters"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
     return true;
@@ -310,3 +271,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

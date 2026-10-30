@@ -19,13 +19,13 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeclParser{
+class DeclParser final{
+private:
+    [[nodiscard]] static b8 ValidateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
+
+
 public:
-    explicit DeclParser(
-        ParserCursor& cursor,
-        const MStringView activeSource = {},
-        const Preprocessor* preprocessor = nullptr
-    )noexcept
+    explicit DeclParser(ParserCursor& cursor, const MStringView activeSource = {}, const Preprocessor* preprocessor = nullptr)noexcept
         : m_cursor(cursor)
         , m_typeParser(cursor)
         , m_exprParser(cursor, m_typeParser)
@@ -42,10 +42,6 @@ public:
 
 
 private:
-    [[nodiscard]] static b8 validateMemberOperatorArity(MStringView opName, usize paramCount, MStringView& outErrorMsg)noexcept;
-
-
-private:
     [[nodiscard]] b8 isCurrentTokenImported()const noexcept;
     [[nodiscard]] b8 parseTopLevelDeclaration(TranslationUnit& outUnit);
     [[nodiscard]] TypeAliasDecl* parseTypeAlias(SourceSpan span, Span<const ParsedAttribute> attributes);
@@ -57,19 +53,9 @@ private:
     [[nodiscard]] b8 parseDestructorEmptyParams(MStringView missingLeftParenMessage);
     [[nodiscard]] b8 parseConstructorParamsAndRejectInitList(MVector<ParamDecl>& outParams);
     [[nodiscard]] b8 parseMethodParamsAndValidateArity(MethodDecl& method, SourceSpan span);
-    [[nodiscard]] b8 parseClassMethodOrOperatorTail(
-        ClassDecl& classDecl,
-        AccessSpecifier::Enum access,
-        TypeRef* returnType,
-        MStringView name,
-        b8 isOperator,
-        MVector<TemplateParamDecl>&& templateParams,
-        Span<const ParsedAttribute> attributes,
-        SourceSpan span,
-        MStringView missingTerminatorMessage
-    );
+    [[nodiscard]] b8 parseClassMethodOrOperatorTail(ClassDecl& classDecl, AccessSpecifier::Enum access, TypeRef* returnType, MStringView name, b8 isOperator, MVector<TemplateParamDecl>&& templateParams, Span<const ParsedAttribute> attributes, SourceSpan span, MStringView missingTerminatorMessage);
     [[nodiscard]] b8 parseClassMember(ClassDecl& classDecl);
-    [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams, b8 failOnInvalidTemplateParams);
+    [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] b8 applyCallableAttributes(Span<const ParsedAttribute> attributes, MethodDecl& decl);
     [[nodiscard]] b8 parseOperatorName(MStringView& outOpName);

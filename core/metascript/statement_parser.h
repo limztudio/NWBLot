@@ -18,7 +18,7 @@ NWB_METASCRIPT_BEGIN
 
 
 // Parses variables, struct descriptions, attributes and assignments without selecting a document root.
-class StatementParser{
+class StatementParser final{
 private:
     using ScratchNameList = Vector<MStringView, Alloc::ScratchArena>;
 
@@ -28,21 +28,21 @@ public:
 
 
 public:
-    b8 parseInto();
+    [[nodiscard]] b8 parseInto();
 
 
 private:
-    b8 parseDeclaration(MStringView typeName, u32 typeLine, u32 typeColumn);
-    b8 declareVariable(MStringView typeName, MStringView variableName, Value&& initialValue, u32 typeLine, u32 typeColumn, u32 variableLine, u32 variableColumn);
-    b8 parseStatement();
-    b8 parseAssignment(MStringView firstName, u32 firstLine, u32 firstColumn);
+    [[nodiscard]] b8 parseDeclaration(MStringView typeName, u32 typeLine, u32 typeColumn);
+    [[nodiscard]] b8 declareVariable(MStringView typeName, MStringView variableName, Value&& initialValue, u32 typeLine, u32 typeColumn, u32 variableLine, u32 variableColumn);
+    [[nodiscard]] b8 parseStatement();
+    [[nodiscard]] b8 parseAssignment(MStringView firstName, u32 firstLine, u32 firstColumn);
 
-    Value parseAttributeList();
-    Value parseAttribute();
-    Value parseAttributeArgument();
+    [[nodiscard]] Value parseAttributeList();
+    [[nodiscard]] Value parseAttribute();
+    [[nodiscard]] Value parseAttributeArgument();
 
-    b8 parseStructDeclaration(Value&& attributes, u32 structLine, u32 structColumn);
-    Value parseStructField(Value&& attributes, ScratchNameList& fieldNames);
+    [[nodiscard]] b8 parseStructDeclaration(Value&& attributes, u32 structLine, u32 structColumn);
+    [[nodiscard]] Value parseStructField(Value&& attributes, ScratchNameList& fieldNames);
 
     [[nodiscard]] Expected<NotNull<Value*>> resolveTarget(const ExpressionParser::ScratchPath& path, u32 errorLine, u32 errorColumn);
 

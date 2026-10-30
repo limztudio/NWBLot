@@ -14,38 +14,42 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_decl_parser{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 ResolveEnumUnderlyingType(const MStringView sizeTypeName, usize& outSize, usize& outAlign)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
-    if constexpr(isFixedWidthInt){ \
-        if(sizeTypeName == adhdName){ outSize = byteSize; outAlign = byteAlign; return true; } \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 DeclParser::parseTranslationUnit(TranslationUnit& outUnit){
     while(!m_cursor.check(TokenType::EndOfFile)){
         if(!parseTopLevelDeclaration(outUnit))
             return false;
     }
     return !m_cursor.failed();
+}
+
+b8 DeclParser::validateMemberOperatorArity(
+    const MStringView opName,
+    const usize paramCount,
+    MStringView& outErrorMsg
+)noexcept{
+    if((opName == "*" || opName == "&") && paramCount == 0u){
+        outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
+        return false;
+    }
+    if(opName == "~"){
+        if(paramCount != 0u){
+            outErrorMsg = "member 'operator~' cannot take parameters";
+            return false;
+        }
+        return true;
+    }
+    if(opName == "+" || opName == "-"){
+        if(paramCount > 1u){
+            outErrorMsg = "member 'operator+' and 'operator-' may take at most 1 parameter";
+            return false;
+        }
+        return true;
+    }
+    if(paramCount != 1u){
+        outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
+        return false;
+    }
+    return true;
 }
 
 b8 DeclParser::isCurrentTokenImported()const noexcept{
@@ -63,21 +67,18 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     const b8 isImported = isCurrentTokenImported();
 
     MVector<ParsedAttribute> attributes(m_cursor.arena());
-    if(m_cursor.check(TokenType::LeftBracket)){
-        AttributeParser attrParser(m_cursor);
-        if(!attrParser.parseSingleBracketList(attributes))
-            return false;
-    }
+    if(!AttributeParser::ParseOptionalList(m_cursor, attributes))
+        return false;
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
-#define NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD(keyword, errorMessage) \
-    if(m_cursor.checkIdentifier(keyword)){ \
-        m_cursor.error(errorMessage); \
-        return false; \
+    if(m_cursor.check(TokenType::Identifier)){
+        const MStringView prohibitedErr = FindProhibitedTopLevelKeywordError(m_cursor.current().text);
+        if(!prohibitedErr.empty()){
+            m_cursor.error(prohibitedErr);
+            return false;
+        }
     }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD
 
     if(m_cursor.matchIdentifier("native")){
         if(!attributes.empty()){
@@ -85,7 +86,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
             return false;
         }
         MStringView code;
-        if(!m_stmtParser.parseRawNativeBlock(code))
+        if(!m_cursor.consumeBalancedBracesRaw(code))
             return false;
         if(!isImported)
             outUnit.topLevelNativeBlocks.push_back(code);
@@ -156,7 +157,7 @@ b8 DeclParser::parseTopLevelDeclaration(TranslationUnit& outUnit){
     return true;
 }
 
-TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     if(!attributes.empty()){
         m_cursor.error(span.line, span.column, "attributes are not permitted on 'type' alias declarations");
         return nullptr;
@@ -189,7 +190,7 @@ TypeAliasDecl* DeclParser::parseTypeAlias(const SourceSpan span, const MVector<P
     return decl;
 }
 
-EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     for(const ParsedAttribute& attr : attributes){
         if(attr.name != "reflect" || !attr.arguments.empty()){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on 'enum'; only '[reflect]' is permitted");
@@ -209,7 +210,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
     const MStringView sizeTypeName = m_cursor.current().text;
     usize underlyingSize = 1u;
     usize underlyingAlign = 1u;
-    if(!__hidden_adhd_decl_parser::ResolveEnumUnderlyingType(sizeTypeName, underlyingSize, underlyingAlign)){
+    if(!ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign)){
         m_cursor.error("invalid enum underlying type; expected u8, u16, u32, u64, i8, i16, i32, or i64");
         return nullptr;
     }
@@ -276,7 +277,7 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const MVector<ParsedA
     return decl;
 }
 
-InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     MStringView assetTypeName;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "reflect" && attr.arguments.empty())
@@ -324,19 +325,13 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
 
     while(!m_cursor.check(TokenType::RightBrace) && !m_cursor.check(TokenType::EndOfFile)){
         MVector<ParsedAttribute> methodAttrs(m_cursor.arena());
-        if(m_cursor.check(TokenType::LeftBracket)){
-            AttributeParser attrParser(m_cursor);
-            if(!attrParser.parseSingleBracketList(methodAttrs))
-                return nullptr;
-        }
+        if(!AttributeParser::ParseOptionalList(m_cursor, methodAttrs))
+            return nullptr;
 
-#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
-        if(m_cursor.checkIdentifier(adhdKeyword)){ \
-            m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'"); \
-            return nullptr; \
+        if(m_cursor.check(TokenType::Identifier) && ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
+            m_cursor.error("interface methods are implicitly public; do not write access specifiers inside 'interface'");
+            return nullptr;
         }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
         if(m_cursor.checkIdentifier("virtual")){
             m_cursor.error("'virtual' keyword is prohibited in adhd; interface methods are implicitly abstract contracts");
             return nullptr;
@@ -383,24 +378,11 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const MVect
             return nullptr;
         }
 
-        if(!m_typeParser.parseParamList(method->params))
+        if(!parseMethodParamsAndValidateArity(*method, methodSpan))
             return nullptr;
-        if(method->isOperator){
-            MStringView opErr;
-            if(!validateMemberOperatorArity(method->name, method->params.size(), opErr)){
-                m_cursor.error(methodSpan.line, methodSpan.column, opErr);
-                return nullptr;
-            }
-        }
 
-        if(m_cursor.matchIdentifier("const")){
-            method->isConst = true;
-            if(m_cursor.checkIdentifier("const")){
-                m_cursor.error(methodSpan.line, methodSpan.column, "duplicate 'const' qualifier on interface method");
-                return nullptr;
-            }
-        }
-        if(m_cursor.checkIdentifier("override")){
+        parseClassMethodQualifiers(*method);
+        if(method->isOverride){
             m_cursor.error(methodSpan.line, methodSpan.column, "'override' is only permitted on 'class' methods implementing an 'interface', not inside 'interface' itself");
             return nullptr;
         }

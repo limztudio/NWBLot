@@ -4,8 +4,6 @@
 
 #include "expression_parser.h"
 
-#include "arena_names.h"
-
 #include <global/simd/vector_arithmetic.h>
 
 
@@ -108,7 +106,7 @@ Value ExpressionParser::parseUnary(){
 
         if(val.isInteger()){
             if(NegateOverflows<i64>(val.asInteger())){
-                m_cursor.error(MetascriptArenaScope::s_IntegerOverflowText);
+                m_cursor.error(OperationValidator::s_IntegerOverflowText);
                 return Value(m_arena);
             }
             return Value(-val.asInteger(), m_arena);

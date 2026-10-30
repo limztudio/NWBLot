@@ -14,13 +14,13 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_adhd_type_checker{
+namespace __hidden_adhd_type_checker_decl{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView>& outMembers, MVector<SourceSpan>& outSpans){
+void CollectAssignedThisMembers(const Span<const Stmt* const> stmts, MVector<MStringView>& outMembers, MVector<SourceSpan>& outSpans){
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
@@ -39,9 +39,9 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     }
 }
 
-[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(const MVector<Stmt*>& stmts, MStringView fieldName)noexcept;
+[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(Span<const Stmt* const> stmts, MStringView fieldName)noexcept;
 
-[[nodiscard]] b8 StmtListMayReturnWithoutInit(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+[[nodiscard]] b8 StmtListMayReturnWithoutInit(const Span<const Stmt* const> stmts, const MStringView fieldName)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
@@ -81,7 +81,7 @@ void CollectAssignedThisMembers(const MVector<Stmt*>& stmts, MVector<MStringView
     return false;
 }
 
-[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
+[[nodiscard]] b8 IsMemberDefinitelyInitializedInStmts(const Span<const Stmt* const> stmts, const MStringView fieldName)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
@@ -214,14 +214,8 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
 
 b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDecl& method, MVector<ParseError>& errors){
     b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
-    if(method.returnType){
-        if(!checkTypeRef(*method.returnType, enclosingClass, &method, errors, true))
-            ok = false;
-        if(m_symbols.resolveRefMode(method.returnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(method.returnType->name))){
-            reportError(errors, method.span, "cannot return an 'interface' type by value");
-            ok = false;
-        }
-    }
+    if(method.returnType && !checkReturnTypeRef(*method.returnType, enclosingClass, &method, method.span, errors))
+        ok = false;
     for(usize pIdx = 0u; pIdx < method.params.size(); ++pIdx){
         const ParamDecl& p = method.params[pIdx];
         if(p.type && !checkTypeRef(*p.type, enclosingClass, &method, errors))
@@ -330,8 +324,8 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         m_symbols.collectAllInterfaceMethods(*ifaceType, requiredInterfaceMethods);
         const TypeRef* resolvedIfaceType = m_symbols.unwrapTypeAlias(ifaceType);
         const InterfaceDecl* directIfaceDecl = m_symbols.findInterface(ifaceName);
-        const MVector<TemplateParamDecl>* ifaceParams = directIfaceDecl ? &directIfaceDecl->templateParams : nullptr;
-        const MVector<TypeArg>* ifaceArgs = resolvedIfaceType ? &resolvedIfaceType->templateArgs : &ifaceType->templateArgs;
+        const Span<const TemplateParamDecl> ifaceParams = directIfaceDecl ? Span<const TemplateParamDecl>(directIfaceDecl->templateParams) : Span<const TemplateParamDecl>{};
+        const Span<const TypeArg> ifaceArgs = resolvedIfaceType ? Span<const TypeArg>(resolvedIfaceType->templateArgs) : Span<const TypeArg>(ifaceType->templateArgs);
 
         for(MethodDecl* req : requiredInterfaceMethods){
             MethodDecl* impl = nullptr;
@@ -458,50 +452,24 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             if(!field->defaultExpr->lambdaCaptures.empty() && targetFuncType->inferredCaptureBytes < 64u)
                 targetFuncType->inferredCaptureBytes = 64u;
         }
+        MethodDecl fieldInitDummy(m_arena);
+        MVector<ScopedVarInfo> emptyScope(m_arena);
         if(unwrappedFieldType && unwrappedFieldType->name == "Path"){
-            if(field->defaultExpr && field->defaultExpr->kind == ExprKind::StringLiteral)
-                field->defaultExpr->adaptToTChar = true;
+            if(field->defaultExpr)
+                markStringToPathAdaptation(&classDecl, &fieldInitDummy, *field->defaultExpr, emptyScope);
             for(Expr* arg : field->ctorArgs){
-                if(arg && arg->kind == ExprKind::StringLiteral)
-                    arg->adaptToTChar = true;
+                if(arg)
+                    markStringToPathAdaptation(&classDecl, &fieldInitDummy, *arg, emptyScope);
             }
         }
         if(field->defaultExpr || field->hasCtorInit){
-            MethodDecl fieldInitDummy(m_arena);
-            MVector<ScopedVarInfo> emptyScope(m_arena);
             const b8 savedClassArenaCtx = m_inClassArenaContext;
             m_inClassArenaContext = true;
             if(field->defaultExpr && !checkExpr(&classDecl, fieldInitDummy, *field->defaultExpr, emptyScope, false, errors))
                 ok = false;
             if(field->hasCtorInit){
-                const ClassDecl* fieldCtorCls = unwrappedFieldType ? m_symbols.findClass(m_symbols.resolveBaseTypeName(unwrappedFieldType->name)) : nullptr;
-                const MethodDecl* matchedFieldCtor = nullptr;
-                if(fieldCtorCls){
-                    MVector<MStringView> argTypeHints(m_arena);
-                    MVector<b8> argIsMutHints(m_arena);
-                    buildCallArgHints(&classDecl, &fieldInitDummy, field->ctorArgs, emptyScope, argTypeHints, argIsMutHints);
-                    matchedFieldCtor = findClassConstructor(*fieldCtorCls, field->ctorArgs.size(), &classDecl != fieldCtorCls, &argTypeHints, &argIsMutHints);
-                    if(matchedFieldCtor && &classDecl != fieldCtorCls && matchedFieldCtor->access != AccessSpecifier::Public){
-                        reportError(errors, field->span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
-                        ok = false;
-                    }
-                }
-                if(!checkCallableArguments(
-                    &classDecl,
-                    fieldInitDummy,
-                    field->ctorArgs,
-                    emptyScope,
-                    matchedFieldCtor,
-                    fieldCtorCls,
-                    unwrappedFieldType,
-                    nullptr,
-                    nullptr,
-                    nullptr,
-                    MStringView{},
-                    errors
-                )){
+                if(!checkConstructorInitArguments(&classDecl, fieldInitDummy, unwrappedFieldType, field->ctorArgs, emptyScope, field->span, errors))
                     ok = false;
-                }
             }
             m_inClassArenaContext = savedClassArenaCtx;
         }
@@ -556,10 +524,10 @@ b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl&
     b8 ok = true;
     MVector<MStringView> assignedMembers(m_arena);
     MVector<SourceSpan> assignedSpans(m_arena);
-    __hidden_adhd_type_checker::CollectAssignedThisMembers(ctor.body, assignedMembers, assignedSpans);
+    __hidden_adhd_type_checker_decl::CollectAssignedThisMembers(ctor.body, assignedMembers, assignedSpans);
 
     for(usize i = 0u; i < assignedMembers.size(); ++i){
-        const FieldDecl* field = findClassField(classDecl, assignedMembers[i]);
+        const FieldDecl* field = SymbolTable::findClassField(classDecl, assignedMembers[i]);
         if(!field)
             continue;
         if(field->defaultExpr != nullptr || field->hasCtorInit){
@@ -572,7 +540,7 @@ b8 TypeChecker::checkConstructorInitialization(ClassDecl& classDecl, MethodDecl&
         if(hasFieldInlineOrAutoDefault(classDecl, *field))
             continue;
 
-        if(!__hidden_adhd_type_checker::IsMemberDefinitelyInitializedInStmts(ctor.body, field->name)){
+        if(!__hidden_adhd_type_checker_decl::IsMemberDefinitelyInitializedInStmts(ctor.body, field->name)){
             reportError(errors, ctor.span, "constructor must initialize all class members that do not have an inline default value");
             ok = false;
         }

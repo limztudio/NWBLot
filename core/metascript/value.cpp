@@ -3,7 +3,6 @@
 
 
 #include "value.h"
-#include "arena_names.h"
 
 #include <global/allocation_size.h>
 #include <global/simd/vector.h>
@@ -13,6 +12,65 @@
 
 
 NWB_METASCRIPT_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_metascript_value{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_IntegerOverflowMessage = NWB_TEXT("integer overflow");
+inline constexpr TStringView s_DivisionByZeroMessage = NWB_TEXT("division by zero");
+inline constexpr TStringView s_ListAppendSizeOverflowMessage = NWB_TEXT("list append size overflow");
+inline constexpr TStringView s_StringConcatenationSizeOverflowMessage = NWB_TEXT("string concatenation size overflow");
+inline constexpr TStringView s_ListConcatenationSizeOverflowMessage = NWB_TEXT("list concatenation size overflow");
+inline constexpr TStringView s_StringAppendSizeOverflowMessage = NWB_TEXT("string append size overflow");
+
+template<typename IntOverflowCheck, typename IntOp, typename SimdOp>
+void ApplyNumericBinary(
+    Value& target,
+    const Value& lhs,
+    const Value& rhs,
+    IntOverflowCheck&& overflows,
+    IntOp&& intOp,
+    SimdOp&& simdOp,
+    const TStringView invalidOpMessage,
+    const b8 rejectZeroDivisor = false
+)noexcept{
+    if(lhs.isInteger() && rhs.isInteger()){
+        if(rejectZeroDivisor && rhs.asInteger() == 0){
+            NWB_ASSERT_MSG(false, s_DivisionByZeroMessage);
+            return;
+        }
+        if(overflows(lhs.asInteger(), rhs.asInteger())){
+            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
+            return;
+        }
+        target.setInteger(intOp(lhs.asInteger(), rhs.asInteger()));
+        return;
+    }
+
+    if(lhs.isNumeric() && rhs.isNumeric()){
+        if(rejectZeroDivisor && rhs.toDouble() == 0.0){
+            NWB_ASSERT_MSG(false, s_DivisionByZeroMessage);
+            return;
+        }
+        target.setDouble(VectorDoubleGetX(simdOp(VectorDoubleReplicate(lhs.toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
+        return;
+    }
+
+    NWB_ASSERT_MSG(false, invalidOpMessage);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,10 +107,7 @@ Value::Value(f64 val, MetaArena& arena)noexcept
 Value::Value(MStringView val, MetaArena& arena)
     : m_arena(arena)
 {
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
-    if(!m_data.m_string)
-        throw AllocationException{};
-    m_type = ValueType::String;
+    setStringOrReference(val, ValueType::String);
 }
 
 Value::Value(const Value& other)
@@ -97,9 +152,11 @@ Value& Value::operator=(Value&& other){
 
 
 Value Value::operator+(const Value& rhs)const{
+    using namespace __hidden_metascript_value;
+
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
@@ -112,7 +169,7 @@ Value Value::operator+(const Value& rhs)const{
         const auto lsv = asString();
         const auto rsv = rhs.asString();
         if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, s_StringConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
 
@@ -134,7 +191,7 @@ Value Value::operator+(const Value& rhs)const{
         v.makeList();
         auto& dst = *v.m_data.m_list;
         if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, s_ListConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
@@ -148,66 +205,54 @@ Value Value::operator+(const Value& rhs)const{
 }
 
 Value Value::operator-(const Value& rhs)const noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return Value(m_arena);
-        }
-        return Value(m_data.m_integer - rhs.m_data.m_integer, m_arena);
-    }
-
-    if(isNumeric() && rhs.isNumeric())
-        return Value(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-"));
-    return Value(m_arena);
+    Value out(m_arena);
+    __hidden_metascript_value::ApplyNumericBinary(
+        out,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a - b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleSubtract(a, b); },
+        NWB_TEXT("invalid operand types for operator-")
+    );
+    return out;
 }
 
 Value Value::operator*(const Value& rhs)const noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return Value(m_arena);
-        }
-        return Value(m_data.m_integer * rhs.m_data.m_integer, m_arena);
-    }
-
-    if(isNumeric() && rhs.isNumeric())
-        return Value(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*"));
-    return Value(m_arena);
+    Value out(m_arena);
+    __hidden_metascript_value::ApplyNumericBinary(
+        out,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a * b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleMultiply(a, b); },
+        NWB_TEXT("invalid operand types for operator*")
+    );
+    return out;
 }
 
 Value Value::operator/(const Value& rhs)const noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(rhs.m_data.m_integer == 0){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
-            return Value(m_arena);
-        }
-        if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return Value(m_arena);
-        }
-        return Value(m_data.m_integer / rhs.m_data.m_integer, m_arena);
-    }
-
-    if(isNumeric() && rhs.isNumeric()){
-        if(rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
-            return Value(m_arena);
-        }
-        return Value(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
-    }
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/"));
-    return Value(m_arena);
+    Value out(m_arena);
+    __hidden_metascript_value::ApplyNumericBinary(
+        out,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a / b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleDivide(a, b); },
+        NWB_TEXT("invalid operand types for operator/"),
+        true
+    );
+    return out;
 }
 
 Value& Value::operator+=(const Value& rhs){
+    using namespace __hidden_metascript_value;
+
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer += rhs.m_data.m_integer;
@@ -221,7 +266,7 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringAppendSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, s_StringAppendSizeOverflowMessage);
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
@@ -235,7 +280,7 @@ Value& Value::operator+=(const Value& rhs){
             // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
-                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize appendCount = sourceList.size();
@@ -245,7 +290,7 @@ Value& Value::operator+=(const Value& rhs){
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
-                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
@@ -262,67 +307,42 @@ Value& Value::operator+=(const Value& rhs){
 }
 
 Value& Value::operator-=(const Value& rhs)noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return *this;
-        }
-        m_data.m_integer -= rhs.m_data.m_integer;
-        return *this;
-    }
-
-    if(isNumeric() && rhs.isNumeric()){
-        setDouble(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
-        return *this;
-    }
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-="));
+    __hidden_metascript_value::ApplyNumericBinary(
+        *this,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a - b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleSubtract(a, b); },
+        NWB_TEXT("invalid operand types for operator-=")
+    );
     return *this;
 }
 
 Value& Value::operator*=(const Value& rhs)noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return *this;
-        }
-        m_data.m_integer *= rhs.m_data.m_integer;
-        return *this;
-    }
-
-    if(isNumeric() && rhs.isNumeric()){
-        setDouble(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
-        return *this;
-    }
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*="));
+    __hidden_metascript_value::ApplyNumericBinary(
+        *this,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a * b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleMultiply(a, b); },
+        NWB_TEXT("invalid operand types for operator*=")
+    );
     return *this;
 }
 
 Value& Value::operator/=(const Value& rhs)noexcept{
-    if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
-        if(rhs.m_data.m_integer == 0){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
-            return *this;
-        }
-        if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
-            return *this;
-        }
-        m_data.m_integer /= rhs.m_data.m_integer;
-        return *this;
-    }
-
-    if(isNumeric() && rhs.isNumeric()){
-        if(rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
-            return *this;
-        }
-        setDouble(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
-        return *this;
-    }
-
-    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/="));
+    __hidden_metascript_value::ApplyNumericBinary(
+        *this,
+        *this,
+        rhs,
+        [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
+        [](const i64 a, const i64 b)noexcept{ return a / b; },
+        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleDivide(a, b); },
+        NWB_TEXT("invalid operand types for operator/="),
+        true
+    );
     return *this;
 }
 
@@ -391,21 +411,11 @@ void Value::setDouble(f64 val)noexcept{
 }
 
 void Value::setString(MStringView val){
-    StringType* const replacement = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
-    if(!replacement)
-        throw AllocationException{};
-    destroy();
-    m_data.m_string = replacement;
-    m_type = ValueType::String;
+    setStringOrReference(val, ValueType::String);
 }
 
 void Value::setReference(MStringView val){
-    StringType* const replacement = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
-    if(!replacement)
-        throw AllocationException{};
-    destroy();
-    m_data.m_string = replacement;
-    m_type = ValueType::Reference;
+    setStringOrReference(val, ValueType::Reference);
 }
 
 void Value::makeList(){
@@ -461,7 +471,7 @@ void Value::append(Value&& val){
 
     const usize listSize = m_data.m_list->size();
     if(listSize == Limit<usize>::s_Max){
-        NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+        NWB_ASSERT_MSG(false, __hidden_metascript_value::s_ListAppendSizeOverflowMessage);
         return;
     }
 
@@ -491,6 +501,15 @@ void Value::append(Value&& val){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void Value::setStringOrReference(const MStringView val, const ValueType::Enum type){
+    StringType* const replacement = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
+    if(!replacement)
+        throw AllocationException{};
+    destroy();
+    m_data.m_string = replacement;
+    m_type = type;
+}
 
 void Value::destroy()noexcept{
     if(m_type == ValueType::Null)

@@ -28,9 +28,30 @@ constexpr u32 s_MaxMacroExpansionPasses = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] usize AppendDefinedOperand(const MStringView source, usize i, MString& out){
+    while(i < source.size() && (source[i] == ' ' || source[i] == '\t'))
+        out.push_back(source[i++]);
+    if(i < source.size() && source[i] == '('){
+        out.push_back(source[i++]);
+        while(i < source.size() && source[i] != ')')
+            out.push_back(source[i++]);
+        if(i < source.size())
+            out.push_back(source[i++]);
+    }
+    else if(i < source.size() && IsAsciiIdentifierStart(source[i])){
+        while(i < source.size() && IsAsciiIdentifierChar(source[i]))
+            out.push_back(source[i++]);
+    }
+    return i;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ConditionEvaluator{
 public:
-    ConditionEvaluator(MStringView text, const Preprocessor::MacroMap& macros, MetaArena& arena, MVector<ParseError>& errors, const u32 line)noexcept
+    ConditionEvaluator(MStringView text, const Preprocessor::MacroMap& macros, MetaArena& arena, MVector<ParseError>& errors, const u32 line)
         : m_lexer(text)
         , m_macros(macros)
         , m_arena(arena)
@@ -55,7 +76,7 @@ public:
 
 
 private:
-    void advance()noexcept{
+    void advance(){
         m_current = m_lexer.next();
         if(m_current.type == TokenType::Error)
             fail(m_current.text);
@@ -238,71 +259,14 @@ private:
         }
 
         if(m_current.type == TokenType::IntegerLiteral){
-            MStringView text = m_current.text;
-            if(text.size() >= 3u && text.front() == '\'' && text.back() == '\''){
-                advance();
-                if(text[1] != '\\')
-                    return static_cast<i64>(static_cast<u8>(text[1]));
-                if(text.size() >= 4u){
-                    switch(text[2]){
-                    case 'n': return '\n';
-                    case 'r': return '\r';
-                    case 't': return '\t';
-                    case '\\': return '\\';
-                    case '\'': return '\'';
-                    case '"': return '"';
-                    case 'a': return '\a';
-                    case 'b': return '\b';
-                    case 'f': return '\f';
-                    case 'v': return '\v';
-                    case 'x':
-                    case 'X':
-                    case 'u':
-                    case 'U':{
-                        u64 val = 0u;
-                        for(usize i = 3u; i + 1u < text.size(); ++i){
-                            const MChar ch = text[i];
-                            const u32 digit = IsAsciiDigit(ch) ? static_cast<u32>(ch - '0') : static_cast<u32>((ch | 0x20) - 'a' + 10);
-                            val = (val << 4u) | digit;
-                        }
-                        return static_cast<i64>(val);
-                    }
-                    default:
-                        if(text[2] >= '0' && text[2] <= '7'){
-                            u64 val = 0u;
-                            for(usize i = 2u; i + 1u < text.size() && text[i] >= '0' && text[i] <= '7'; ++i)
-                                val = (val << 3u) | static_cast<u64>(text[i] - '0');
-                            return static_cast<i64>(val);
-                        }
-                        return static_cast<i64>(static_cast<u8>(text[2]));
-                    }
-                }
-                return 0;
-            }
-            while(!text.empty() && (text.back() == 'u' || text.back() == 'U' || text.back() == 'l' || text.back() == 'L'))
-                text.remove_suffix(1u);
+            const MStringView text = m_current.text;
             advance();
-            if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')){
-                u64 val = 0u;
-                for(usize i = 2u; i < text.size(); ++i){
-                    const MChar ch = text[i];
-                    const u32 digit = IsAsciiDigit(ch) ? static_cast<u32>(ch - '0') : static_cast<u32>((ch | 0x20) - 'a' + 10);
-                    val = (val << 4u) | digit;
-                }
-                return static_cast<i64>(val);
-            }
-            if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B')){
-                u64 val = 0u;
-                for(usize i = 2u; i < text.size(); ++i)
-                    val = (val << 1u) | static_cast<u64>(text[i] - '0');
-                return static_cast<i64>(val);
-            }
-            const auto parsed = ParseI64(text);
-            if(!parsed){
+            u64 parsed = 0u;
+            if(!TryParseUnsignedIntegerLiteral(text, parsed)){
                 fail("invalid integer literal in preprocessor condition");
                 return 0;
             }
-            return *parsed;
+            return static_cast<i64>(parsed);
         }
 
         if(m_current.type == TokenType::Identifier){
@@ -373,16 +337,9 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
 
         usize i = 0u;
         while(i < current.size()){
+            const MStringView currentView(current.data(), current.size());
             if(current[i] == '"' || current[i] == '\''){
-                const MChar quote = current[i];
-                next.push_back(current[i++]);
-                while(i < current.size() && current[i] != quote){
-                    if(current[i] == '\\' && i + 1u < current.size())
-                        next.push_back(current[i++]);
-                    next.push_back(current[i++]);
-                }
-                if(i < current.size())
-                    next.push_back(current[i++]);
+                i = AppendQuotedLiteral(currentView, i, next);
                 continue;
             }
 
@@ -392,7 +349,7 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
             }
 
             if(i + 1u < current.size() && current[i] == '/' && current[i + 1u] == '*'){
-                const usize closeComment = MStringView(current.data(), current.size()).find("*/", i + 2u);
+                const usize closeComment = currentView.find("*/", i + 2u);
                 if(closeComment == MStringView::npos){
                     next.append(current.data() + i, current.size() - i);
                     break;
@@ -403,19 +360,7 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
             }
 
             if(IsAsciiDigit(current[i])){
-                while(i < current.size()){
-                    const MChar c = current[i];
-                    if((c == 'e' || c == 'E' || c == 'p' || c == 'P') && i + 1u < current.size() && (current[i + 1u] == '+' || current[i + 1u] == '-')){
-                        next.push_back(current[i++]);
-                        next.push_back(current[i++]);
-                        continue;
-                    }
-                    if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
-                        next.push_back(current[i++]);
-                        continue;
-                    }
-                    break;
-                }
+                i = AppendPreprocessorNumber(currentView, i, next);
                 continue;
             }
 
@@ -427,21 +372,8 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 const auto it = m_macros.find(ident);
                 if(it == m_macros.end()){
                     next.append(ident.data(), ident.size());
-                    if(ident == "defined"){
-                        while(i < current.size() && (current[i] == ' ' || current[i] == '\t'))
-                            next.push_back(current[i++]);
-                        if(i < current.size() && current[i] == '('){
-                            next.push_back(current[i++]);
-                            while(i < current.size() && current[i] != ')')
-                                next.push_back(current[i++]);
-                            if(i < current.size())
-                                next.push_back(current[i++]);
-                        }
-                        else if(i < current.size() && IsAsciiIdentifierStart(current[i])){
-                            while(i < current.size() && IsAsciiIdentifierChar(current[i]))
-                                next.push_back(current[i++]);
-                        }
-                    }
+                    if(ident == "defined")
+                        i = AppendDefinedOperand(currentView, i, next);
                     continue;
                 }
 
@@ -467,21 +399,17 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 while(argScan < current.size() && parenDepth > 0u){
                     const MChar ch = current[argScan];
                     if(ch == '"' || ch == '\''){
-                        const MChar quote = ch;
-                        ++argScan;
-                        while(argScan < current.size() && current[argScan] != quote){
-                            if(current[argScan] == '\\' && argScan + 1u < current.size())
-                                ++argScan;
-                            ++argScan;
-                        }
+                        argScan = SkipQuotedLiteral(currentView, argScan);
+                        continue;
                     }
-                    else if(argScan + 1u < current.size() && ch == '/' && current[argScan + 1u] == '*'){
-                        const usize closeComment = MStringView(current.data(), current.size()).find("*/", argScan + 2u);
+                    if(argScan + 1u < current.size() && ch == '/' && current[argScan + 1u] == '*'){
+                        const usize closeComment = currentView.find("*/", argScan + 2u);
                         if(closeComment == MStringView::npos)
                             break;
-                        argScan = closeComment + 1u;
+                        argScan = closeComment + 2u;
+                        continue;
                     }
-                    else if(ch == '(')
+                    if(ch == '(')
                         ++parenDepth;
                     else if(ch == ')'){
                         --parenDepth;
@@ -511,34 +439,15 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 }
 
                 i = argScan;
+                const MStringView bodyView(macro.body.data(), macro.body.size());
                 usize b = 0u;
                 while(b < macro.body.size()){
                     if(macro.body[b] == '"' || macro.body[b] == '\''){
-                        const MChar quote = macro.body[b];
-                        next.push_back(macro.body[b++]);
-                        while(b < macro.body.size() && macro.body[b] != quote){
-                            if(macro.body[b] == '\\' && b + 1u < macro.body.size())
-                                next.push_back(macro.body[b++]);
-                            next.push_back(macro.body[b++]);
-                        }
-                        if(b < macro.body.size())
-                            next.push_back(macro.body[b++]);
+                        b = AppendQuotedLiteral(bodyView, b, next);
                         continue;
                     }
                     if(IsAsciiDigit(macro.body[b])){
-                        while(b < macro.body.size()){
-                            const MChar c = macro.body[b];
-                            if((c == 'e' || c == 'E' || c == 'p' || c == 'P') && b + 1u < macro.body.size() && (macro.body[b + 1u] == '+' || macro.body[b + 1u] == '-')){
-                                next.push_back(macro.body[b++]);
-                                next.push_back(macro.body[b++]);
-                                continue;
-                            }
-                            if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
-                                next.push_back(macro.body[b++]);
-                                continue;
-                            }
-                            break;
-                        }
+                        b = AppendPreprocessorNumber(bodyView, b, next);
                         continue;
                     }
                     if(IsAsciiIdentifierStart(macro.body[b])){
@@ -584,25 +493,11 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
     usize i = 0u;
     while(i < exprText.size()){
         if(exprText[i] == '"' || exprText[i] == '\''){
-            const MChar quote = exprText[i];
-            expanded.push_back(exprText[i++]);
-            while(i < exprText.size() && exprText[i] != quote){
-                if(exprText[i] == '\\' && i + 1u < exprText.size())
-                    expanded.push_back(exprText[i++]);
-                expanded.push_back(exprText[i++]);
-            }
-            if(i < exprText.size())
-                expanded.push_back(exprText[i++]);
+            i = AppendQuotedLiteral(exprText, i, expanded);
             continue;
         }
         if(IsAsciiDigit(exprText[i])){
-            while(i < exprText.size()){
-                const MChar c = exprText[i];
-                if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.')
-                    expanded.push_back(exprText[i++]);
-                else
-                    break;
-            }
+            i = AppendPreprocessorNumber(exprText, i, expanded, false);
             continue;
         }
         if(IsAsciiIdentifierStart(exprText[i])){
@@ -612,19 +507,7 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
             const MStringView ident = exprText.substr(idStart, i - idStart);
             if(ident == "defined"){
                 expanded.append(ident.data(), ident.size());
-                while(i < exprText.size() && (exprText[i] == ' ' || exprText[i] == '\t'))
-                    expanded.push_back(exprText[i++]);
-                if(i < exprText.size() && exprText[i] == '('){
-                    expanded.push_back(exprText[i++]);
-                    while(i < exprText.size() && exprText[i] != ')')
-                        expanded.push_back(exprText[i++]);
-                    if(i < exprText.size())
-                        expanded.push_back(exprText[i++]);
-                }
-                else if(i < exprText.size() && IsAsciiIdentifierStart(exprText[i])){
-                    while(i < exprText.size() && IsAsciiIdentifierChar(exprText[i]))
-                        expanded.push_back(exprText[i++]);
-                }
+                i = AppendDefinedOperand(exprText, i, expanded);
                 continue;
             }
             usize afterIdent = i;
@@ -674,3 +557,4 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

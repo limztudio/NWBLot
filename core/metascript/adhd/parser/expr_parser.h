@@ -39,6 +39,8 @@ public:
 
 
 private:
+    template<typename ParseNext, typename MatchOp>
+    [[nodiscard]] Expr* parseLeftAssocBinary(ParseNext&& parseNext, MatchOp&& matchOp);
     [[nodiscard]] Expr* parseAssignment();
     [[nodiscard]] Expr* parseLogicalOr();
     [[nodiscard]] Expr* parseLogicalAnd();
@@ -53,6 +55,7 @@ private:
     [[nodiscard]] Expr* parseUnary();
     [[nodiscard]] Expr* parsePostfix();
     [[nodiscard]] Expr* parsePrimary();
+    [[nodiscard]] Expr* parseScopeAccessChain(Expr* lhs, MStringView text, MStringView firstSegment, SourceSpan span);
     [[nodiscard]] Expr* parseLambda(SourceSpan span);
 
 

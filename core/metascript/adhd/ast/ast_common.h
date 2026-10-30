@@ -118,10 +118,173 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
         out.push_back(buf[--idx]);
 }
 
+[[nodiscard]] constexpr b8 HasAdhdExtension(const MStringView path)noexcept{
+    return path.size() > 5u && path.substr(path.size() - 5u) == ".adhd";
+}
+
 [[nodiscard]] constexpr MStringView StripAdhdExtension(const MStringView path)noexcept{
-    if(path.size() > 5u && path.substr(path.size() - 5u) == ".adhd")
+    if(HasAdhdExtension(path))
         return path.substr(0u, path.size() - 5u);
     return path;
+}
+
+[[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{
+    usize fileStart = 0u;
+    for(usize i = 0u; i < path.size(); ++i){
+        if(path[i] == '/' || path[i] == '\\')
+            fileStart = i + 1u;
+    }
+    return StripAdhdExtension(path.substr(fileStart));
+}
+
+[[nodiscard]] constexpr AccessSpecifier::Enum ParseAccessSpecifierKeyword(const MStringView text)noexcept{
+#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
+    if(text == adhdKeyword) return astEnum;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
+    return AccessSpecifier::None;
+}
+
+[[nodiscard]] constexpr b8 IsNestedTypeKeyword(const MStringView text, const b8 classScopeOnly = false)noexcept{
+#define NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD(keyword, isClassNestedKeyword) \
+    if((!classScopeOnly || isClassNestedKeyword) && text == keyword) return true;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
+    return false;
+}
+
+[[nodiscard]] constexpr MStringView FindProhibitedTypeKeywordError(const MStringView text)noexcept{
+#define NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD(keyword, errorMessage) \
+    if(text == keyword) return errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD
+    return {};
+}
+
+[[nodiscard]] constexpr MStringView FindProhibitedExprKeywordError(const MStringView text)noexcept{
+#define NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD(keyword, errorMessage) \
+    if(text == keyword) return errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD
+    return {};
+}
+
+[[nodiscard]] constexpr MStringView FindProhibitedStmtKeywordError(const MStringView text)noexcept{
+#define NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD(keyword, errorMessage) \
+    if(text == keyword) return errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD
+    return {};
+}
+
+[[nodiscard]] constexpr MStringView FindProhibitedTopLevelKeywordError(const MStringView text)noexcept{
+#define NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD(keyword, errorMessage) \
+    if(text == keyword) return errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD
+    return {};
+}
+
+[[nodiscard]] constexpr b8 TryParseParallelCoreKind(const MStringView text, ParallelCoreKind::Enum& outCore)noexcept{
+#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, astEnum, cppCostEnum, cppTargetEnum) \
+    if(text == adhdName){ outCore = astEnum; return true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_CORE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 TryParseParallelPriorityKind(const MStringView text, ParallelPriorityKind::Enum& outPriority)noexcept{
+#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, astEnum, cppPriorityEnum) \
+    if(text == adhdName){ outPriority = astEnum; return true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PARALLEL_PRIORITY
+    return false;
+}
+
+[[nodiscard]] constexpr b8 TryParseDiagnosticKind(const MStringView text, DiagnosticKind::Enum& outKind)noexcept{
+#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
+    if(text == adhdKeyword){ outKind = astEnum; return true; }
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsScalarType(const MStringView name)noexcept{
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(name == adhdName) return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsIntegerScalarType(const MStringView name)noexcept{
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isInteger){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsFloatScalarType(const MStringView name)noexcept{
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isFloat){ \
+        if(name == adhdName) return true; \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 ResolveFixedWidthIntScalar(const MStringView name, usize& outSize, usize& outAlign, b8* outIsSigned = nullptr)noexcept{
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if constexpr(isFixedWidthInt){ \
+        if(name == adhdName){ \
+            outSize = byteSize; \
+            outAlign = byteAlign; \
+            if(outIsSigned) *outIsSigned = isSigned; \
+            return true; \
+        } \
+    }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsBuiltinTypeName(const MStringView name)noexcept{
+    if(name == "void" || name == "Func")
+        return true;
+#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
+    if(name == adhdName) return true;
+#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
+    if(name == adhdName) return true;
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_GENERIC_TYPE
+#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+#undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+    return false;
+}
+
+[[nodiscard]] constexpr b8 IsOverloadableOperatorToken(const TokenType::Enum op)noexcept{
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+    if constexpr(isOverloadable){ \
+        if(op == tokenType) return true; \
+    }
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+    return false;
 }
 
 [[nodiscard]] constexpr b8 IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
@@ -134,47 +297,26 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
     return false;
 }
 
-[[nodiscard]] constexpr MStringView ExtractAdhdFileStem(const MStringView path)noexcept{
-    usize fileStart = 0u;
-    for(usize i = 0u; i < path.size(); ++i){
-        if(path[i] == '/' || path[i] == '\\')
-            fileStart = i + 1u;
-    }
-    return StripAdhdExtension(path.substr(fileStart));
+[[nodiscard]] constexpr MStringView MapTokenTypeToOperatorSymbol(const TokenType::Enum op)noexcept{
+#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
+    if(op == tokenType) return symbol;
+#include "../export_operators.h"
+#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
+    return {};
 }
 
-inline void AppendCamelToSnakeCase(MString& out, const MStringView text){
-    for(usize i = 0u; i < text.size(); ++i){
-        const char ch = text[i];
-        if(ch >= 'A' && ch <= 'Z'){
-            if(i > 0u){
-                const char prev = text[i - 1u];
-                const b8 prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
-                const b8 nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
-                if(prevLowerOrDigit || nextLower)
-                    out.push_back('_');
-            }
-            out.push_back(static_cast<char>(ch + ('a' - 'A')));
-        }
-        else{
-            out.push_back(ch);
-        }
+[[nodiscard]] constexpr b8 TryMapSwizzleCharToLane(const MChar c, u32& outLane, b8* outIsRgba = nullptr)noexcept{
+#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex) \
+    if(c == xyzwChar || c == rgbaChar){ \
+        outLane = laneIndex; \
+        if(outIsRgba) \
+            *outIsRgba = (c == rgbaChar); \
+        return true; \
     }
+#include "../export_types.h"
+#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
+    return false;
 }
-
-inline void AppendAdhdTextCrlf(MString& out, const MStringView text){
-    for(usize i = 0u; i < text.size(); ++i){
-        const char ch = text[i];
-        if(ch == '\r')
-            continue;
-        if(ch == '\n')
-            out.append("\r\n");
-        else
-            out.push_back(ch);
-    }
-}
-
-inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
 
 inline void ReportAdhdDiagnostic(MetaArena& arena, MVector<ParseError>& errors, const SourceSpan span, const MStringView message){
     errors.push_back(ParseError{span.line, span.column, MString(message.data(), message.size(), arena)});

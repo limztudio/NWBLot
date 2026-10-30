@@ -19,6 +19,17 @@ NWB_ADHD_BEGIN
 
 class SymbolTable{
 public:
+    [[nodiscard]] static b8 isArenaBackedContainer(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
+    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdMatrixType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isSimdType(MStringView typeName)noexcept;
+    [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
+    [[nodiscard]] static const FieldDecl* findClassField(const ClassDecl& classDecl, MStringView name)noexcept;
+
+
+public:
     explicit SymbolTable(MetaArena& arena)noexcept
         : m_arena(arena)
         , m_enums(arena)
@@ -40,39 +51,61 @@ public:
     [[nodiscard]] MethodDecl* findFreeFunction(
         MStringView name,
         const usize* preferredArgCount = nullptr,
-        const MVector<MStringView>* argTypeNames = nullptr,
-        const MVector<b8>* argIsMut = nullptr
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
     )const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
+    [[nodiscard]] const MethodDecl* findClassMethod(
+        const ClassDecl& classDecl,
+        MStringView name,
+        const usize* preferredArgCount = nullptr,
+        b8 preferConst = false,
+        b8 requirePublic = false,
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
+    )const noexcept;
+    [[nodiscard]] const MethodDecl* findClassOperator(
+        const ClassDecl& classDecl,
+        MStringView opName,
+        const usize* preferredArgCount = nullptr,
+        b8 preferConst = false,
+        b8 requirePublic = false,
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
+    )const noexcept;
+    [[nodiscard]] const MethodDecl* findClassConstructor(
+        const ClassDecl& classDecl,
+        usize argCount,
+        b8 requirePublic = false,
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
+    )const noexcept;
     [[nodiscard]] MethodDecl* findInterfaceMethod(
         const TypeRef& ifaceType,
         MStringView methodName,
         const usize* preferredArgCount = nullptr,
         u32 depth = 0u,
-        const MVector<MStringView>* argTypeNames = nullptr,
-        const MVector<b8>* argIsMut = nullptr
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
     )const noexcept;
     void collectAllInterfaceMethods(const TypeRef& ifaceType, MVector<MethodDecl*>& outMethods, u32 depth = 0u)const;
 
     [[nodiscard]] TypeRef* substituteTypeParams(
         const TypeRef& origType,
-        const MVector<TemplateParamDecl>& templateParams,
-        const MVector<TypeArg>& templateArgs
+        Span<const TemplateParamDecl> templateParams,
+        Span<const TypeArg> templateArgs
+    )const;
+    [[nodiscard]] TypeRef* substituteTypeParams(
+        const TypeRef* origType,
+        Span<const TemplateParamDecl> templateParams,
+        const TypeRef* instanceTypeRef
     )const;
     [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
     [[nodiscard]] ParamPassingMode::Enum resolveRefMode(const TypeRef* type)const noexcept;
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
     [[nodiscard]] b8 isSelfDefaultedType(MStringView typeName)const noexcept;
-
-    [[nodiscard]] static b8 isArenaBackedContainer(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName, u32& outLanes)noexcept;
-    [[nodiscard]] static b8 isUnalignedVectorType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdMatrixType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isSimdType(MStringView typeName)noexcept;
-    [[nodiscard]] static b8 isStringSwitchType(MStringView typeName)noexcept;
-    [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
+    [[nodiscard]] b8 isSmallValueType(MStringView typeName)const noexcept;
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
 
 

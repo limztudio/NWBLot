@@ -78,11 +78,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             out.push_back(')');
         }
         else{
-            MStringView globalConstCpp;
-#define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName) \
-            if(expr.text == adhdName) globalConstCpp = cppExportName;
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_GLOBAL_CONSTANT
+            const MStringView globalConstCpp = FindBuiltinGlobalConstantCppName(expr.text);
             if(!globalConstCpp.empty())
                 out.append(globalConstCpp.data(), globalConstCpp.size());
             else
@@ -121,23 +117,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             && IsSingleSwizzleLane(expr.text, lane))
         {
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
-                const MStringView lhsSimd = expr.lhs->resolvedSimdType;
-                const b8 isDouble = IsDoubleSimdType(lhsSimd);
-                const b8 isInt = IsIntSimdType(lhsSimd);
-                const b8 isSignedInt = IsSignedIntSimdType(lhsSimd);
-                static constexpr const char* s_LaneSuffix[4] = { "X(", "Y(", "Z(", "W(" };
-
-                if(isSignedInt)
-                    out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
-                if(isInt)
-                    out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
-                else
-                    out.append(isDouble ? "::VectorDoubleGet" : "::VectorGet");
-                out.append(s_LaneSuffix[lane]);
-                emitSimdRegExpr(out, *expr.lhs, lhsSimd);
-                out.push_back(')');
-                if(isSignedInt)
-                    out.push_back(')');
+                emitSimdLaneGetExpr(out, *expr.lhs, lane, nullptr);
                 break;
             }
         }
@@ -169,23 +149,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
             && m_symbols.isSimdVectorType(expr.lhs->resolvedSimdType, vecLanes))
         {
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
-                const MStringView lhsSimd = expr.lhs->resolvedSimdType;
-                const b8 isDouble = IsDoubleSimdType(lhsSimd);
-                const b8 isInt = IsIntSimdType(lhsSimd);
-                const b8 isSignedInt = IsSignedIntSimdType(lhsSimd);
-
-                if(isSignedInt)
-                    out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
-                if(isInt)
-                    out.append(isDouble ? "::VectorDoubleGetIntByIndex(" : "::VectorGetIntByIndex(");
-                else
-                    out.append(isDouble ? "::VectorDoubleGetByIndex(" : "::VectorGetByIndex(");
-                emitSimdRegExpr(out, *expr.lhs, lhsSimd);
-                out.append(", static_cast<usize>(");
-                emitExpr(out, *expr.rhs);
-                out.append("))");
-                if(isSignedInt)
-                    out.push_back(')');
+                emitSimdLaneGetExpr(out, *expr.lhs, 0u, expr.rhs);
                 break;
             }
         }
@@ -280,61 +244,10 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr)const{
         const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
             ? m_symbols.resolveBaseTypeName(expr.lhs->text)
             : MStringView{};
-        if(!baseCallee.empty() && m_symbols.isSimdMatrixType(baseCallee)){
-            if(expr.arguments.empty()){
-                out.append("{}");
-            }
-            else if(expr.arguments.size() == 1u && expr.arguments[0] && m_symbols.isSimdMatrixType(expr.arguments[0]->resolvedSimdType)){
-                out.push_back('(');
-                emitExpr(out, *expr.arguments[0]);
-                out.push_back(')');
-            }
-            else{
-                out.append("{ .raw = { ");
-                for(usize i = 0u; i < expr.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(expr.arguments[i])
-                        emitExpr(out, *expr.arguments[i]);
-                }
-                out.append(" } }");
-            }
-            if(expr.derefNotNull)
-                out.push_back(')');
-            break;
-        }
-        out.push_back('(');
-        u32 ctorVecLanes = 0u;
-        const b8 isScalarSplatCtor = !baseCallee.empty()
-            && (m_symbols.isSimdVectorType(baseCallee, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseCallee, ctorVecLanes))
-            && expr.arguments.size() == 1u && expr.arguments[0]
-            && expr.arguments[0]->resolvedSimdType.empty();
-        if(isScalarSplatCtor){
-            for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-                if(lane > 0u)
-                    out.append(", ");
-                emitExpr(out, *expr.arguments[0]);
-            }
-        }
-        else{
-            for(usize i = 0u; i < expr.arguments.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                if(expr.arguments[i])
-                    emitExpr(out, *expr.arguments[i]);
-            }
-            if(expr.injectClassArena){
-                if(!expr.arguments.empty())
-                    out.append(", ");
-                out.append("s_ClassArena");
-            }
-            else if(expr.injectScratchArena){
-                if(!expr.arguments.empty())
-                    out.append(", ");
-                out.append("__adhd_scratch");
-            }
-        }
-        out.push_back(')');
+        const MStringView injectedArena = expr.injectClassArena
+            ? MStringView("s_ClassArena")
+            : (expr.injectScratchArena ? MStringView("__adhd_scratch") : MStringView{});
+        emitCtorOrCallArgs(out, baseCallee, expr.arguments, injectedArena, false, false);
         if(expr.derefNotNull)
             out.push_back(')');
         break;

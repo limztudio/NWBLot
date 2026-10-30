@@ -5,7 +5,6 @@
 #include "expr_parser.h"
 
 #include "stmt_parser.h"
-#include "../sema/symbol_table.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +80,20 @@ b8 ExprParser::parseArgumentList(MVector<Expr*>& outArgs){
     return m_cursor.expect(TokenType::RightParen, "expected ')' after argument list");
 }
 
+template<typename ParseNext, typename MatchOp>
+Expr* ExprParser::parseLeftAssocBinary(ParseNext&& parseNext, MatchOp&& matchOp){
+    Expr* left = parseNext();
+    while(left && matchOp(m_cursor.current().type)){
+        const Token opTok = m_cursor.current();
+        m_cursor.advance();
+        Expr* right = parseNext();
+        if(!right)
+            return nullptr;
+        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
+    }
+    return left;
+}
+
 Expr* ExprParser::parseAssignment(){
     Expr* lhs = parseLogicalOr();
     if(!lhs)
@@ -110,133 +123,75 @@ Expr* ExprParser::parseAssignment(){
 }
 
 Expr* ExprParser::parseLogicalOr(){
-    Expr* left = parseLogicalAnd();
-    while(left && m_cursor.check(TokenType::PipePipe)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseLogicalAnd();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseLogicalAnd(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::PipePipe; }
+    );
 }
 
 Expr* ExprParser::parseLogicalAnd(){
-    Expr* left = parseBitwiseOr();
-    while(left && m_cursor.check(TokenType::AmpersandAmpersand)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseBitwiseOr();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseBitwiseOr(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::AmpersandAmpersand; }
+    );
 }
 
 Expr* ExprParser::parseBitwiseOr(){
-    Expr* left = parseBitwiseXor();
-    while(left && m_cursor.check(TokenType::Pipe)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseBitwiseXor();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseBitwiseXor(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::Pipe; }
+    );
 }
 
 Expr* ExprParser::parseBitwiseXor(){
-    Expr* left = parseBitwiseAnd();
-    while(left && m_cursor.check(TokenType::Caret)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseBitwiseAnd();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseBitwiseAnd(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::Caret; }
+    );
 }
 
 Expr* ExprParser::parseBitwiseAnd(){
-    Expr* left = parseEquality();
-    while(left && m_cursor.check(TokenType::Ampersand)){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseEquality();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseEquality(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::Ampersand; }
+    );
 }
 
 Expr* ExprParser::parseEquality(){
-    Expr* left = parseRelational();
-    while(left && (m_cursor.check(TokenType::EqualEqual) || m_cursor.check(TokenType::BangEqual))){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseRelational();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseRelational(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::EqualEqual || t == TokenType::BangEqual; }
+    );
 }
 
 Expr* ExprParser::parseRelational(){
-    Expr* left = parseShift();
-    while(left && (m_cursor.check(TokenType::Less) || m_cursor.check(TokenType::LessEqual) || m_cursor.check(TokenType::Greater) || m_cursor.check(TokenType::GreaterEqual))){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseShift();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseShift(); },
+        [](const TokenType::Enum t)noexcept{
+            return t == TokenType::Less || t == TokenType::LessEqual || t == TokenType::Greater || t == TokenType::GreaterEqual;
+        }
+    );
 }
 
 Expr* ExprParser::parseShift(){
-    Expr* left = parseAdditive();
-    while(left && (m_cursor.check(TokenType::LessLess) || m_cursor.check(TokenType::GreaterGreater))){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseAdditive();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseAdditive(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::LessLess || t == TokenType::GreaterGreater; }
+    );
 }
 
 Expr* ExprParser::parseAdditive(){
-    Expr* left = parseMultiplicative();
-    while(left && (m_cursor.check(TokenType::Plus) || m_cursor.check(TokenType::Minus))){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseMultiplicative();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseMultiplicative(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::Plus || t == TokenType::Minus; }
+    );
 }
 
 Expr* ExprParser::parseMultiplicative(){
-    Expr* left = parseUnary();
-    while(left && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Slash) || m_cursor.check(TokenType::Percent))){
-        const Token opTok = m_cursor.current();
-        m_cursor.advance();
-        Expr* right = parseUnary();
-        if(!right)
-            return nullptr;
-        left = __hidden_adhd_expr_parser::MakeBinaryExpr(m_cursor.arena(), opTok, left, right);
-    }
-    return left;
+    return parseLeftAssocBinary(
+        [this](){ return parseUnary(); },
+        [](const TokenType::Enum t)noexcept{ return t == TokenType::Star || t == TokenType::Slash || t == TokenType::Percent; }
+    );
 }
 
 Expr* ExprParser::parseUnary(){
@@ -286,20 +241,9 @@ Expr* ExprParser::parsePostfix(){
             const Token memberTok = m_cursor.current();
             m_cursor.advance();
             if(m_cursor.check(TokenType::ColonColon)){
-                Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
-                scopeNode->kind = ExprKind::ScopeAccess;
-                scopeNode->lhs = expr;
-                scopeNode->span = SourceSpan{memberTok.line, memberTok.column};
-                scopeNode->scopeChain.push_back(memberTok.text);
-                while(m_cursor.match(TokenType::ColonColon)){
-                    if(!m_cursor.check(TokenType::Identifier)){
-                        m_cursor.errorExpected("expected identifier after '::'");
-                        return nullptr;
-                    }
-                    scopeNode->scopeChain.push_back(m_cursor.current().text);
-                    m_cursor.advance();
-                }
-                expr = scopeNode;
+                expr = parseScopeAccessChain(expr, {}, memberTok.text, SourceSpan{memberTok.line, memberTok.column});
+                if(!expr)
+                    return nullptr;
                 continue;
             }
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
@@ -404,16 +348,10 @@ Expr* ExprParser::parsePrimary(){
             const ParserCursor::Checkpoint cp = m_cursor.save();
             TypeRef* maybeType = m_typeParser.parseType(false, false);
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
-                b8 isScalarType = (maybeType->name == "void");
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
-                if(maybeType->name == adhdName) isScalarType = true;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
                 const b8 isKnownType = maybeType->refMode != ParamPassingMode::None
                     || maybeType->isFuncType
                     || !maybeType->templateArgs.empty()
-                    || !SymbolTable::mapBuiltinCppType(maybeType->name).empty()
-                    || isScalarType;
+                    || IsBuiltinTypeName(maybeType->name);
                 const b8 looksLikeType = isKnownType
                     || (!maybeType->name.empty() && maybeType->name[0] >= 'A' && maybeType->name[0] <= 'Z');
                 const b8 nextIsUnambiguousCastOperand = m_cursor.check(TokenType::Identifier)
@@ -443,21 +381,15 @@ Expr* ExprParser::parsePrimary(){
     }
 
     if(tok.type == TokenType::Identifier){
-#define NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD(keyword, errorMessage) \
-        if(tok.text == keyword){ \
-            m_cursor.error(errorMessage); \
-            return nullptr; \
+        const MStringView prohibitedErr = FindProhibitedExprKeywordError(tok.text);
+        if(!prohibitedErr.empty()){
+            m_cursor.error(prohibitedErr);
+            return nullptr;
         }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD
 
         if(tok.text == "true" || tok.text == "false"){
             m_cursor.advance();
-            Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
-            node->kind = ExprKind::BoolLiteral;
-            node->text = tok.text;
-            node->span = span;
-            return node;
+            return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::BoolLiteral, tok, span);
         }
 
         if(tok.text == "this"){
@@ -470,22 +402,8 @@ Expr* ExprParser::parsePrimary(){
             }
             const Token memberTok = m_cursor.current();
             m_cursor.advance();
-            if(m_cursor.check(TokenType::ColonColon)){
-                Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
-                scopeNode->kind = ExprKind::ScopeAccess;
-                scopeNode->text = "this";
-                scopeNode->span = span;
-                scopeNode->scopeChain.push_back(memberTok.text);
-                while(m_cursor.match(TokenType::ColonColon)){
-                    if(!m_cursor.check(TokenType::Identifier)){
-                        m_cursor.errorExpected("expected identifier after '::'");
-                        return nullptr;
-                    }
-                    scopeNode->scopeChain.push_back(m_cursor.current().text);
-                    m_cursor.advance();
-                }
-                return scopeNode;
-            }
+            if(m_cursor.check(TokenType::ColonColon))
+                return parseScopeAccessChain(nullptr, "this", memberTok.text, span);
             Expr* node = AllocateAstNode<Expr>(m_cursor.arena());
             node->kind = ExprKind::ThisMember;
             node->text = memberTok.text;
@@ -526,27 +444,32 @@ Expr* ExprParser::parsePrimary(){
 
         m_cursor.advance();
 
-        if(m_cursor.check(TokenType::ColonColon)){
-            Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
-            scopeNode->kind = ExprKind::ScopeAccess;
-            scopeNode->span = span;
-            scopeNode->scopeChain.push_back(tok.text);
-            while(m_cursor.match(TokenType::ColonColon)){
-                if(!m_cursor.check(TokenType::Identifier)){
-                    m_cursor.errorExpected("expected identifier after '::'");
-                    return nullptr;
-                }
-                scopeNode->scopeChain.push_back(m_cursor.current().text);
-                m_cursor.advance();
-            }
-            return scopeNode;
-        }
+        if(m_cursor.check(TokenType::ColonColon))
+            return parseScopeAccessChain(nullptr, {}, tok.text, span);
 
         return __hidden_adhd_expr_parser::MakeTokenExpr(m_cursor.arena(), ExprKind::Identifier, tok, span);
     }
 
     m_cursor.errorExpected("expected expression");
     return nullptr;
+}
+
+Expr* ExprParser::parseScopeAccessChain(Expr* lhs, const MStringView text, const MStringView firstSegment, const SourceSpan span){
+    Expr* scopeNode = AllocateAstNode<Expr>(m_cursor.arena());
+    scopeNode->kind = ExprKind::ScopeAccess;
+    scopeNode->lhs = lhs;
+    scopeNode->text = text;
+    scopeNode->span = span;
+    scopeNode->scopeChain.push_back(firstSegment);
+    while(m_cursor.match(TokenType::ColonColon)){
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected("expected identifier after '::'");
+            return nullptr;
+        }
+        scopeNode->scopeChain.push_back(m_cursor.current().text);
+        m_cursor.advance();
+    }
+    return scopeNode;
 }
 
 Expr* ExprParser::parseLambda(const SourceSpan span){
@@ -559,11 +482,8 @@ Expr* ExprParser::parseLambda(const SourceSpan span){
             for(;;){
                 LambdaCapture cap;
                 cap.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-                if(m_cursor.matchIdentifier("in"))
-                    cap.mode = ParamPassingMode::In;
-                else if(m_cursor.matchIdentifier("mut"))
-                    cap.mode = ParamPassingMode::Mut;
-                else{
+                cap.mode = MatchParamPassingMode(m_cursor);
+                if(cap.mode == ParamPassingMode::None){
                     m_cursor.error("lambda capture must explicitly specify 'in' or 'mut'");
                     return nullptr;
                 }

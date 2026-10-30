@@ -14,24 +14,49 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_adhd_type_parser{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 ConsumeScopedConstantTail(ParserCursor& cursor, const MChar* const startPtr, const MChar* endPtr, MStringView& outConstantText){
+    while(cursor.match(TokenType::ColonColon)){
+        if(!cursor.check(TokenType::Identifier)){
+            cursor.errorExpected("expected identifier after '::' in template argument");
+            return false;
+        }
+        endPtr = cursor.current().text.data() + cursor.current().text.size();
+        cursor.advance();
+    }
+    outConstantText = MStringView(startPtr, static_cast<usize>(endPtr - startPtr));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
     const SourceSpan startSpan{m_cursor.current().line, m_cursor.current().column};
 
-    if(allowRefMode){
-        if(m_cursor.matchIdentifier("in"))
-            refMode = ParamPassingMode::In;
-        else if(m_cursor.matchIdentifier("mut"))
-            refMode = ParamPassingMode::Mut;
-    }
+    if(allowRefMode)
+        refMode = MatchParamPassingMode(m_cursor);
 
-#define NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD(keyword, errorMessage) \
-    if(m_cursor.checkIdentifier(keyword)){ \
-        m_cursor.error(errorMessage); \
-        return nullptr; \
+    if(m_cursor.check(TokenType::Identifier)){
+        const MStringView prohibitedErr = FindProhibitedTypeKeywordError(m_cursor.current().text);
+        if(!prohibitedErr.empty()){
+            m_cursor.error(prohibitedErr);
+            return nullptr;
+        }
     }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD
 
     if(allowAuto && m_cursor.matchIdentifier("auto")){
         TypeRef* type = AllocateAstNode<TypeRef>(m_cursor.arena());
@@ -59,16 +84,12 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
             return nullptr;
 
         if(m_cursor.check(TokenType::IntegerLiteral)){
-            const MStringView capText = m_cursor.current().text;
-            u32 capVal = 0u;
-            for(usize i = 0u; i < capText.size(); ++i){
-                const MChar c = capText[i];
-                if(c >= '0' && c <= '9')
-                    capVal = capVal * 10u + static_cast<u32>(c - '0');
-                else
-                    break;
+            u64 capVal = 0u;
+            if(!TryParseUnsignedIntegerLiteral(m_cursor.current().text, capVal) || capVal > Limit<u32>::s_Max){
+                m_cursor.error("invalid Func capture byte capacity literal");
+                return nullptr;
             }
-            type->inferredCaptureBytes = capVal;
+            type->inferredCaptureBytes = static_cast<u32>(capVal);
             m_cursor.advance();
             if(!m_cursor.expect(TokenType::Comma, "expected ',' after Func capture byte capacity"))
                 return nullptr;
@@ -84,11 +105,8 @@ TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
         if(!m_cursor.check(TokenType::RightParen)){
             for(;;){
                 FuncParamType param;
-                if(m_cursor.matchIdentifier("in"))
-                    param.mode = ParamPassingMode::In;
-                else if(m_cursor.matchIdentifier("mut"))
-                    param.mode = ParamPassingMode::Mut;
-                else{
+                param.mode = MatchParamPassingMode(m_cursor);
+                if(param.mode == ParamPassingMode::None){
                     m_cursor.error("Func parameter must explicitly specify 'in' or 'mut'");
                     return nullptr;
                 }
@@ -216,17 +234,10 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
                 return false;
             }
             const Token& valTok = m_cursor.current();
-            const MChar* endPtr = valTok.text.data() + valTok.text.size();
+            const MChar* const endPtr = valTok.text.data() + valTok.text.size();
             m_cursor.advance();
-            while(m_cursor.match(TokenType::ColonColon)){
-                if(!m_cursor.check(TokenType::Identifier)){
-                    m_cursor.errorExpected("expected identifier after '::' in template argument");
-                    return false;
-                }
-                endPtr = m_cursor.current().text.data() + m_cursor.current().text.size();
-                m_cursor.advance();
-            }
-            arg.constantText = MStringView(signStartPtr, static_cast<usize>(endPtr - signStartPtr));
+            if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(m_cursor, signStartPtr, endPtr, arg.constantText))
+                return false;
         }
         else if(m_cursor.check(TokenType::LeftParen)){
             const MChar* const parenStartPtr = m_cursor.current().text.data();
@@ -258,16 +269,9 @@ b8 TypeParser::parseTypeArgList(MVector<TypeArg>& outArgs){
                 && m_cursor.check(TokenType::ColonColon))
             {
                 const MChar* const startPtr = arg.type->name.data();
-                const MChar* endPtr = startPtr + arg.type->name.size();
-                while(m_cursor.match(TokenType::ColonColon)){
-                    if(!m_cursor.check(TokenType::Identifier)){
-                        m_cursor.errorExpected("expected identifier after '::' in template argument");
-                        return false;
-                    }
-                    endPtr = m_cursor.current().text.data() + m_cursor.current().text.size();
-                    m_cursor.advance();
-                }
-                arg.constantText = MStringView(startPtr, static_cast<usize>(endPtr - startPtr));
+                const MChar* const endPtr = startPtr + arg.type->name.size();
+                if(!__hidden_adhd_type_parser::ConsumeScopedConstantTail(m_cursor, startPtr, endPtr, arg.constantText))
+                    return false;
                 arg.type = nullptr;
             }
         }
@@ -291,12 +295,8 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams){
         for(;;){
             ParamDecl param;
             param.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-
-            if(m_cursor.matchIdentifier("in"))
-                param.mode = ParamPassingMode::In;
-            else if(m_cursor.matchIdentifier("mut"))
-                param.mode = ParamPassingMode::Mut;
-            else{
+            param.mode = MatchParamPassingMode(m_cursor);
+            if(param.mode == ParamPassingMode::None){
                 m_cursor.error("every parameter in adhd must explicitly specify 'in' or 'mut'");
                 return false;
             }

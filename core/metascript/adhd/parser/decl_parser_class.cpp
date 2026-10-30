@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     if(!m_cursor.check(TokenType::Identifier)){
         m_cursor.errorExpected("expected class name");
         return nullptr;
@@ -67,13 +67,10 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
 
     if(m_cursor.match(TokenType::Colon)){
         for(;;){
-#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
-            if(m_cursor.checkIdentifier(adhdKeyword)){ \
-                m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd"); \
-                return nullptr; \
+            if(m_cursor.check(TokenType::Identifier) && ParseAccessSpecifierKeyword(m_cursor.current().text) != AccessSpecifier::None){
+                m_cursor.error("do not write 'public'/'private'/'protected' before implemented interface names in adhd");
+                return nullptr;
             }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
             if(!m_cursor.check(TokenType::Identifier)){
                 m_cursor.errorExpected("expected implemented interface name after ':'");
                 return nullptr;
@@ -102,7 +99,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const MVector<Parse
     return decl;
 }
 
-void DeclParser::parseClassMethodQualifiers(MethodDecl& method)noexcept{
+void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
     while(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
         if(m_cursor.matchIdentifier("const")){
             if(method.isConst)
@@ -125,22 +122,83 @@ b8 DeclParser::parseClassMemberCallableBody(MethodDecl& method, const MStringVie
     return m_cursor.expect(TokenType::Semicolon, missingTerminatorMessage);
 }
 
+b8 DeclParser::parseDestructorEmptyParams(const MStringView missingLeftParenMessage){
+    if(!m_cursor.expect(TokenType::LeftParen, missingLeftParenMessage))
+        return false;
+    return m_cursor.expect(TokenType::RightParen, "destructor cannot take parameters");
+}
+
+b8 DeclParser::parseConstructorParamsAndRejectInitList(MVector<ParamDecl>& outParams){
+    if(!m_typeParser.parseParamList(outParams))
+        return false;
+    if(m_cursor.check(TokenType::Colon)){
+        m_cursor.error("C++ constructor initializer lists (': member(...)') are prohibited in adhd; initialize 'this.member' inside the constructor body");
+        return false;
+    }
+    return true;
+}
+
+b8 DeclParser::parseMethodParamsAndValidateArity(MethodDecl& method, const SourceSpan span){
+    if(!m_typeParser.parseParamList(method.params))
+        return false;
+    if(method.isOperator){
+        MStringView opErr;
+        if(!validateMemberOperatorArity(method.name, method.params.size(), opErr)){
+            m_cursor.error(span.line, span.column, opErr);
+            return false;
+        }
+    }
+    return true;
+}
+
+b8 DeclParser::parseClassMethodOrOperatorTail(
+    ClassDecl& classDecl,
+    const AccessSpecifier::Enum access,
+    TypeRef* returnType,
+    const MStringView name,
+    const b8 isOperator,
+    MVector<TemplateParamDecl>&& templateParams,
+    const Span<const ParsedAttribute> attributes,
+    const SourceSpan span,
+    const MStringView missingTerminatorMessage
+){
+    MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
+    method->access = access;
+    method->ownerClassName = classDecl.name;
+    method->templateParams = Move(templateParams);
+    method->returnType = returnType;
+    method->name = name;
+    method->isOperator = isOperator;
+    method->span = span;
+
+    if(!applyCallableAttributes(attributes, *method))
+        return false;
+    if(method->isReflect)
+        classDecl.isReflect = true;
+    if(!parseMethodParamsAndValidateArity(*method, span))
+        return false;
+
+    parseClassMethodQualifiers(*method);
+    if(!parseClassMemberCallableBody(*method, missingTerminatorMessage))
+        return false;
+
+    classDecl.methods.push_back(method);
+    return true;
+}
+
 b8 DeclParser::parseClassMember(ClassDecl& classDecl){
     MVector<ParsedAttribute> attributes(m_cursor.arena());
-    if(m_cursor.check(TokenType::LeftBracket)){
-        AttributeParser attrParser(m_cursor);
-        if(!attrParser.parseSingleBracketList(attributes))
-            return false;
-    }
+    if(!AttributeParser::ParseOptionalList(m_cursor, attributes))
+        return false;
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
     AccessSpecifier::Enum access = AccessSpecifier::None;
-#define NWB_ADHD_EXPORT_ACCESS_SPECIFIER(adhdKeyword, astEnum) \
-    if(access == AccessSpecifier::None && m_cursor.matchIdentifier(adhdKeyword)) \
-        access = astEnum;
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_ACCESS_SPECIFIER
+    if(m_cursor.check(TokenType::Identifier)){
+        access = ParseAccessSpecifierKeyword(m_cursor.current().text);
+        if(access != AccessSpecifier::None)
+            m_cursor.advance();
+    }
 
     if(access != AccessSpecifier::None && m_cursor.check(TokenType::Colon)){
         m_cursor.error("C++-style 'public:' section labels are prohibited in adhd; write the access specifier on each member");
@@ -154,15 +212,10 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
         return false;
     }
-#define NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD(keyword, isClassNestedKeyword) \
-    if constexpr(isClassNestedKeyword){ \
-        if(m_cursor.checkIdentifier(keyword)){ \
-            m_cursor.error("nested type declarations inside a class are prohibited in adhd"); \
-            return false; \
-        } \
+    if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
+        m_cursor.error("nested type declarations inside a class are prohibited in adhd");
+        return false;
     }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
     if(access == AccessSpecifier::None){
         m_cursor.error("every class member in adhd must explicitly specify 'public', 'private', or 'protected'");
         return false;
@@ -184,10 +237,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!applyCallableAttributes(attributes, *dtor))
             return false;
-
-        if(!m_cursor.expect(TokenType::LeftParen, "expected '(' for destructor"))
-            return false;
-        if(!m_cursor.expect(TokenType::RightParen, "destructor cannot take parameters"))
+        if(!parseDestructorEmptyParams("expected '(' for destructor"))
             return false;
         if(!parseClassMemberCallableBody(*dtor, "expected '{' or ';' after destructor declaration"))
             return false;
@@ -209,14 +259,8 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
             if(!applyCallableAttributes(attributes, *ctor))
                 return false;
-
-            if(!m_typeParser.parseParamList(ctor->params))
+            if(!parseConstructorParamsAndRejectInitList(ctor->params))
                 return false;
-
-            if(m_cursor.check(TokenType::Colon)){
-                m_cursor.error("C++ constructor initializer lists (': member(...)') are prohibited in adhd; initialize 'this.member' inside the constructor body");
-                return false;
-            }
             if(!parseClassMemberCallableBody(*ctor, "expected '{' or ';' after constructor declaration"))
                 return false;
 
@@ -240,33 +284,18 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         if(!parseOperatorName(opName))
             return false;
 
-        MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
-        method->access = access;
-        method->ownerClassName = classDecl.name;
-        method->returnType = memberType;
-        method->name = opName;
-        method->isOperator = true;
-        method->span = span;
-
-        if(!applyCallableAttributes(attributes, *method))
-            return false;
-        if(method->isReflect)
-            classDecl.isReflect = true;
-
-        if(!m_typeParser.parseParamList(method->params))
-            return false;
-        MStringView opErr;
-        if(!validateMemberOperatorArity(opName, method->params.size(), opErr)){
-            m_cursor.error(span.line, span.column, opErr);
-            return false;
-        }
-
-        parseClassMethodQualifiers(*method);
-        if(!parseClassMemberCallableBody(*method, "expected '{' or ';' after operator declaration"))
-            return false;
-
-        classDecl.methods.push_back(method);
-        return true;
+        MVector<TemplateParamDecl> emptyTemplateParams(m_cursor.arena());
+        return parseClassMethodOrOperatorTail(
+            classDecl,
+            access,
+            memberType,
+            opName,
+            true,
+            Move(emptyTemplateParams),
+            attributes,
+            span,
+            "expected '{' or ';' after operator declaration"
+        );
     }
 
     if(!m_cursor.check(TokenType::Identifier)){
@@ -300,8 +329,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         m_cursor.advance();
         b8 isMethodSig = m_cursor.check(TokenType::RightParen)
-            || m_cursor.checkIdentifier("in")
-            || m_cursor.checkIdentifier("mut");
+            || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
         if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
             TypeRef* maybeParamType = m_typeParser.parseType(false, false);
             if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
@@ -311,28 +339,17 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.restore(cp);
 
         if(isMethodSig){
-            MethodDecl* method = AllocateAstNode<MethodDecl>(m_cursor.arena());
-            method->access = access;
-            method->ownerClassName = classDecl.name;
-            method->templateParams = Move(methodTemplateParams);
-            method->returnType = memberType;
-            method->name = memberName;
-            method->span = span;
-
-            if(!applyCallableAttributes(attributes, *method))
-                return false;
-            if(method->isReflect)
-                classDecl.isReflect = true;
-
-            if(!m_typeParser.parseParamList(method->params))
-                return false;
-
-            parseClassMethodQualifiers(*method);
-            if(!parseClassMemberCallableBody(*method, "expected '{' or ';' after method declaration"))
-                return false;
-
-            classDecl.methods.push_back(method);
-            return true;
+            return parseClassMethodOrOperatorTail(
+                classDecl,
+                access,
+                memberType,
+                memberName,
+                false,
+                Move(methodTemplateParams),
+                attributes,
+                span,
+                "expected '{' or ';' after method declaration"
+            );
         }
     }
 
@@ -383,3 +400,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

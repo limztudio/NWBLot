@@ -22,12 +22,16 @@ namespace __hidden_adhd_source_emitter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const Expr* FindConstructorFieldAssignment(const MVector<Stmt*>& stmts, const MStringView fieldName, b8* outIsTopLevelUnique = nullptr)noexcept{
+[[nodiscard]] const Expr* FindConstructorFieldAssignment(
+    const Span<const Stmt* const> stmts,
+    const MStringView fieldName,
+    const Expr*& outUniqueTopLevelAssignExpr
+)noexcept{
     const Expr* firstFound = nullptr;
     usize totalMatches = 0u;
     b8 firstIsTopLevel = false;
 
-    auto countRecursive = [&](auto& self, const MVector<Stmt*>& list, const b8 topLevel)noexcept -> void{
+    auto countRecursive = [&](auto& self, const Span<const Stmt* const> list, const b8 topLevel)noexcept -> void{
         for(const Stmt* stmt : list){
             if(!stmt)
                 continue;
@@ -58,31 +62,8 @@ namespace __hidden_adhd_source_emitter{
     };
 
     countRecursive(countRecursive, stmts, true);
-    if(outIsTopLevelUnique)
-        *outIsTopLevelUnique = (firstFound != nullptr && firstIsTopLevel && totalMatches == 1u);
+    outUniqueTopLevelAssignExpr = (firstFound != nullptr && firstIsTopLevel && totalMatches == 1u) ? firstFound : nullptr;
     return firstFound ? firstFound->rhs : nullptr;
-}
-
-[[nodiscard]] const Expr* FindUniqueTopLevelCtorAssignExpr(const MVector<Stmt*>& stmts, const MStringView fieldName)noexcept{
-    b8 isTopLevelUnique = false;
-    (void)FindConstructorFieldAssignment(stmts, fieldName, &isTopLevelUnique);
-    if(!isTopLevelUnique)
-        return nullptr;
-    for(const Stmt* stmt : stmts){
-        if(stmt
-            && stmt->kind == StmtKind::ExprStmt
-            && stmt->expr
-            && stmt->expr->kind == ExprKind::Binary
-            && stmt->expr->op == TokenType::Equal
-            && stmt->expr->lhs
-            && stmt->expr->lhs->kind == ExprKind::ThisMember
-            && stmt->expr->lhs->text == fieldName
-            && stmt->expr->rhs)
-        {
-            return stmt->expr;
-        }
-    }
-    return nullptr;
 }
 
 
@@ -133,15 +114,7 @@ MString SourceEmitter::emitSource(
                 if(method->isImported || !method->hasBody || emittedInHeader)
                     continue;
 
-                if(method->isNoInline)
-                    out.append("NWB_NOINLINE ");
-
-                m_typeEmitter.emitMethodSignature(out, classDecl, *method, false);
-                if(method->isConstructor)
-                    emitConstructorNotNullInitializers(out, classDecl->orderedFields, *method);
-                out.append("{\r\n");
-                emitMethodBodyBlock(out, *method, 1u);
-                out.append("}\r\n\r\n");
+                emitOutOfClassCallable(out, classDecl, *method, true, false);
             }
         }
 
@@ -153,13 +126,7 @@ MString SourceEmitter::emitSource(
         if(!fn || fn->isImported || !fn->hasBody || fn->isInline || !fn->templateParams.empty())
             continue;
 
-        if(fn->isNoInline)
-            out.append("NWB_NOINLINE ");
-
-        m_typeEmitter.emitMethodSignature(out, nullptr, *fn, false);
-        out.append("{\r\n");
-        emitMethodBodyBlock(out, *fn, 1u);
-        out.append("}\r\n\r\n");
+        emitOutOfClassCallable(out, nullptr, *fn, true, false);
     }
 
     if(!namespacePath.empty()){
@@ -168,6 +135,38 @@ MString SourceEmitter::emitSource(
 
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n");
     return out;
+}
+
+void SourceEmitter::emitOutOfClassCallable(
+    MString& out,
+    const ClassDecl* ownerClass,
+    const MethodDecl& callable,
+    const b8 emitBody,
+    const b8 emitInlineKeyword
+)const{
+    if(ownerClass && !ownerClass->templateParams.empty())
+        m_typeEmitter.emitTemplateHeaderCpp(out, ownerClass->templateParams);
+    m_typeEmitter.emitTemplateHeaderCpp(out, callable.templateParams);
+    if(emitBody){
+        if(callable.isForceInline)
+            out.append("NWB_FORCE_INLINE ");
+        else if(callable.isNoInline)
+            out.append("NWB_NOINLINE ");
+        if(emitInlineKeyword)
+            out.append("inline ");
+    }
+
+    m_typeEmitter.emitMethodSignature(out, ownerClass, callable, false);
+    if(emitBody){
+        if(ownerClass && callable.isConstructor)
+            emitConstructorNotNullInitializers(out, ownerClass->orderedFields, callable);
+        out.append("{\r\n");
+        emitMethodBodyBlock(out, callable, 1u);
+        out.append("}\r\n\r\n");
+    }
+    else{
+        out.append(";\r\n\r\n");
+    }
 }
 
 void SourceEmitter::emitMethodBodyBlock(
@@ -193,7 +192,7 @@ void SourceEmitter::emitMethodBodyBlock(
 
 void SourceEmitter::emitConstructorNotNullInitializers(
     MString& out,
-    const MVector<FieldDecl*>& orderedFields,
+    const Span<const FieldDecl* const> orderedFields,
     const MethodDecl& ctor
 )const{
     m_skippedCtorAssignExprs = nullptr;
@@ -205,10 +204,11 @@ void SourceEmitter::emitConstructorNotNullInitializers(
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type || m_symbols.resolveRefMode(field->type) == ParamPassingMode::None || field->defaultExpr || field->hasCtorInit)
             continue;
-        const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name);
+        const Expr* uniqueAssign = nullptr;
+        const Expr* rhs = __hidden_adhd_source_emitter::FindConstructorFieldAssignment(ctor.body, field->name, uniqueAssign);
         if(!rhs)
             continue;
-        if(const Expr* uniqueAssign = __hidden_adhd_source_emitter::FindUniqueTopLevelCtorAssignExpr(ctor.body, field->name))
+        if(uniqueAssign)
             skipped->push_back(uniqueAssign);
         out.append(firstInit ? " : " : ", ");
         firstInit = false;
@@ -219,6 +219,70 @@ void SourceEmitter::emitConstructorNotNullInitializers(
     }
     if(!skipped->empty())
         m_skippedCtorAssignExprs = skipped;
+}
+
+void SourceEmitter::emitCtorOrCallArgs(
+    MString& out,
+    const MStringView baseTypeName,
+    const Span<const Expr* const> arguments,
+    const MStringView injectedArenaName,
+    const b8 useBracesForList,
+    const b8 emptyUsesBraces
+)const{
+    if(!baseTypeName.empty() && m_symbols.isSimdMatrixType(baseTypeName)){
+        if(arguments.empty()){
+            out.append("{}");
+        }
+        else if(!useBracesForList && arguments.size() == 1u && arguments[0] && m_symbols.isSimdMatrixType(arguments[0]->resolvedSimdType)){
+            out.push_back('(');
+            emitExpr(out, *arguments[0]);
+            out.push_back(')');
+        }
+        else{
+            out.append("{ .raw = { ");
+            for(usize i = 0u; i < arguments.size(); ++i){
+                if(i > 0u)
+                    out.append(", ");
+                if(arguments[i])
+                    emitExpr(out, *arguments[i]);
+            }
+            out.append(" } }");
+        }
+        return;
+    }
+
+    if(arguments.empty() && injectedArenaName.empty() && emptyUsesBraces){
+        out.append("{}");
+        return;
+    }
+
+    out.push_back(useBracesForList ? '{' : '(');
+    u32 ctorVecLanes = 0u;
+    const b8 isScalarSplatCtor = !baseTypeName.empty()
+        && (m_symbols.isSimdVectorType(baseTypeName, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseTypeName, ctorVecLanes))
+        && arguments.size() == 1u && arguments[0]
+        && arguments[0]->resolvedSimdType.empty();
+    if(isScalarSplatCtor){
+        for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
+            if(lane > 0u)
+                out.append(", ");
+            emitExpr(out, *arguments[0]);
+        }
+    }
+    else{
+        for(usize i = 0u; i < arguments.size(); ++i){
+            if(i > 0u)
+                out.append(", ");
+            if(arguments[i])
+                emitExpr(out, *arguments[i]);
+        }
+        if(!injectedArenaName.empty()){
+            if(!arguments.empty())
+                out.append(", ");
+            out.append(injectedArenaName.data(), injectedArenaName.size());
+        }
+    }
+    out.push_back(useBracesForList ? '}' : ')');
 }
 
 

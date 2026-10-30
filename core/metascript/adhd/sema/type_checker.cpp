@@ -56,11 +56,9 @@ namespace __hidden_adhd_type_checker{
     if(!expr->resolvedSimdType.empty() || expr->kind == ExprKind::Lambda)
         return true;
     if(expr->kind == ExprKind::Call && expr->lhs && expr->lhs->kind == ExprKind::Identifier){
-        const MStringView callee = expr->lhs->text;
-#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
-        if(callee == adhdKeyword) return true;
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
+        DiagnosticKind::Enum diagKind = DiagnosticKind::Assert;
+        if(TryParseDiagnosticKind(expr->lhs->text, diagKind))
+            return true;
     }
     if(ExprUsesOutOfLineConstruct(expr->lhs) || ExprUsesOutOfLineConstruct(expr->rhs))
         return true;
@@ -71,7 +69,7 @@ namespace __hidden_adhd_type_checker{
     return false;
 }
 
-[[nodiscard]] b8 StmtListIsAutoInlineable(const MVector<Stmt*>& stmts, u32& inOutCount)noexcept{
+[[nodiscard]] b8 StmtListIsAutoInlineable(const Span<const Stmt* const> stmts, u32& inOutCount)noexcept{
     for(const Stmt* s : stmts){
         if(!s)
             continue;
@@ -127,38 +125,6 @@ namespace __hidden_adhd_type_checker{
     return StmtListIsAutoInlineable(fn.body, stmtCount);
 }
 
-[[nodiscard]] const MethodDecl* FindScoredClassCallable(
-    const SymbolTable& symbols,
-    const ClassDecl& classDecl,
-    const MStringView name,
-    const b8 isOperator,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const MVector<MStringView>* argTypeNames,
-    const MVector<b8>* argIsMut
-)noexcept{
-    const MethodDecl* bestMatch = nullptr;
-    i32 bestScore = -1;
-    for(const MethodDecl* m : classDecl.methods){
-        if(!m || m->isConstructor || m->isDestructor || m->isOperator != isOperator || m->name != name)
-            continue;
-        i32 score = 0;
-        if(!preferredArgCount || m->params.size() == *preferredArgCount)
-            score += 64;
-        if(!requirePublic || m->access == AccessSpecifier::Public)
-            score += 32;
-        score += ScoreCallableParams(symbols, m->params, argTypeNames, argIsMut);
-        if(m->isConst == preferConst)
-            score += 1;
-        if(score > bestScore){
-            bestScore = score;
-            bestMatch = m;
-        }
-    }
-    return bestMatch;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -168,6 +134,14 @@ namespace __hidden_adhd_type_checker{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const ScopedVarInfo* TypeChecker::findScopedVar(const Span<const ScopedVarInfo> scope, const MStringView name)noexcept{
+    for(usize i = scope.size(); i > 0u; --i){
+        if(scope[i - 1u].name == name)
+            return &scope[i - 1u];
+    }
+    return nullptr;
+}
 
 b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>& errors){
     b8 ok = true;
@@ -252,6 +226,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     for(Stmt* gc : unit.globalConstants){
         if(!gc || gc->isImported)
             continue;
+        MethodDecl dummyGlobalCtx(m_arena);
+        MVector<ScopedVarInfo> emptyScope(m_arena);
         if(gc->varType){
             if(!checkTypeRef(*gc->varType, nullptr, nullptr, errors))
                 ok = false;
@@ -265,16 +241,14 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 ok = false;
             }
             if(baseGcType == "Path"){
-                if(gc->expr && gc->expr->kind == ExprKind::StringLiteral)
-                    gc->expr->adaptToTChar = true;
+                if(gc->expr)
+                    markStringToPathAdaptation(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
                 for(Expr* arg : gc->arguments){
-                    if(arg && arg->kind == ExprKind::StringLiteral)
-                        arg->adaptToTChar = true;
+                    if(arg)
+                        markStringToPathAdaptation(nullptr, &dummyGlobalCtx, *arg, emptyScope);
                 }
             }
         }
-        MethodDecl dummyGlobalCtx(m_arena);
-        MVector<ScopedVarInfo> emptyScope(m_arena);
         if(gc->expr){
             if(!checkExpr(nullptr, dummyGlobalCtx, *gc->expr, emptyScope, false, errors))
                 ok = false;
@@ -551,10 +525,10 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
 void TypeChecker::buildCallArgHints(
     ClassDecl* ownerClass,
     const MethodDecl* method,
-    const MVector<Expr*>& args,
-    const MVector<ScopedVarInfo>& scope,
+    const Span<const Expr* const> args,
+    const Span<const ScopedVarInfo> scope,
     MVector<MStringView>& outArgTypes,
-    MVector<b8>& outArgIsMut
+    MVector<u8>& outArgIsMut
 )const{
     outArgTypes.clear();
     outArgIsMut.clear();
@@ -572,71 +546,123 @@ void TypeChecker::buildCallArgHints(
                     isMut = true;
             }
         }
-        outArgIsMut.push_back(isMut);
+        outArgIsMut.push_back(isMut ? 1u : 0u);
         outArgTypes.push_back(arg ? inferExprTypeName(ownerClass, method, *arg, scope) : MStringView{});
     }
 }
 
-const ScopedVarInfo* TypeChecker::findScopedVar(const MVector<ScopedVarInfo>& scope, const MStringView name)noexcept{
-    for(usize i = scope.size(); i > 0u; --i){
-        if(scope[i - 1u].name == name)
-            return &scope[i - 1u];
+MStringView TypeChecker::resolveScopedVarBaseType(const ScopedVarInfo& var)const noexcept{
+    if(!var.inferredTypeName.empty())
+        return var.inferredTypeName;
+    if(var.type)
+        return m_symbols.resolveBaseTypeName(var.type->name);
+    return {};
+}
+
+b8 TypeChecker::isThisConstInScope(const MethodDecl& method, const Span<const ScopedVarInfo> scope)const noexcept{
+    const ScopedVarInfo* lambdaThis = m_inLambda ? findScopedVar(scope, "this") : nullptr;
+    return method.isConst || (lambdaThis && lambdaThis->isConst);
+}
+
+b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStringView baseCallee)const noexcept{
+    return m_symbols.findClass(baseCallee) != nullptr
+        || m_symbols.findTypeAlias(calleeName) != nullptr
+        || SymbolTable::isSimdType(baseCallee)
+        || SymbolTable::isArenaBackedContainer(baseCallee)
+        || m_symbols.isSelfDefaultedType(baseCallee);
+}
+
+const MethodDecl* TypeChecker::resolveCustomOperator(
+    ClassDecl* ownerClass,
+    const MethodDecl* method,
+    const TypeRef* lhsTypeRef,
+    const MStringView lhsBaseType,
+    const MStringView opSym,
+    const usize arity,
+    const b8 recvIsConst,
+    const ClassDecl** outDeclaringClass
+)const noexcept{
+    if(outDeclaringClass)
+        *outDeclaringClass = nullptr;
+    if(opSym.empty())
+        return nullptr;
+    if(const ClassDecl* cls = m_symbols.findClass(lhsBaseType)){
+        if(outDeclaringClass)
+            *outDeclaringClass = cls;
+        return m_symbols.findClassOperator(*cls, opSym, &arity, recvIsConst, ownerClass != cls);
     }
-    return nullptr;
-}
-
-const FieldDecl* TypeChecker::findClassField(const ClassDecl& classDecl, const MStringView name)noexcept{
-    for(const FieldDecl* field : classDecl.fields){
-        if(field->name == name)
-            return field;
-    }
-    return nullptr;
-}
-
-const MethodDecl* TypeChecker::findClassMethod(
-    const ClassDecl& classDecl,
-    const MStringView name,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const MVector<MStringView>* argTypeNames,
-    const MVector<b8>* argIsMut
-)const noexcept{
-    return __hidden_adhd_type_checker::FindScoredClassCallable(m_symbols, classDecl, name, false, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
-}
-
-const MethodDecl* TypeChecker::findClassOperator(
-    const ClassDecl& classDecl,
-    const MStringView opName,
-    const usize* preferredArgCount,
-    const b8 preferConst,
-    const b8 requirePublic,
-    const MVector<MStringView>* argTypeNames,
-    const MVector<b8>* argIsMut
-)const noexcept{
-    return __hidden_adhd_type_checker::FindScoredClassCallable(m_symbols, classDecl, opName, true, preferredArgCount, preferConst, requirePublic, argTypeNames, argIsMut);
-}
-
-const MethodDecl* TypeChecker::findClassConstructor(
-    const ClassDecl& classDecl,
-    const usize argCount,
-    const b8 requirePublic,
-    const MVector<MStringView>* argTypeNames,
-    const MVector<b8>* argIsMut
-)const noexcept{
-    const MethodDecl* bestMatch = nullptr;
-    i32 bestScore = -1;
-    for(const MethodDecl* m : classDecl.methods){
-        if(!m || !m->isConstructor || m->params.size() != argCount)
-            continue;
-        i32 score = (!requirePublic || m->access == AccessSpecifier::Public) ? 32 : 1;
-        score += ScoreCallableParams(m_symbols, m->params, argTypeNames, argIsMut);
-        if(score > bestScore){
-            bestScore = score;
-            bestMatch = m;
+    if(lhsTypeRef && m_symbols.findInterface(lhsBaseType))
+        return m_symbols.findInterfaceMethod(*lhsTypeRef, opSym, &arity);
+    if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, method, lhsBaseType)){
+        for(const TypeRef* boundRef : tp->interfaceBounds){
+            if(!boundRef)
+                continue;
+            if(const MethodDecl* boundOp = m_symbols.findInterfaceMethod(*boundRef, opSym, &arity))
+                return boundOp;
         }
     }
-    return bestMatch;
+    return nullptr;
+}
+
+MStringView TypeChecker::resolveScopeAccessEnumTypeName(
+    ClassDecl* ownerClass,
+    const MethodDecl* method,
+    const Expr& expr,
+    const Span<const ScopedVarInfo> scope,
+    const ClassDecl** outAccessedClass,
+    const FieldDecl** outAccessedField
+)const noexcept{
+    if(outAccessedClass)
+        *outAccessedClass = nullptr;
+    if(outAccessedField)
+        *outAccessedField = nullptr;
+    if(expr.scopeChain.empty())
+        return {};
+
+    const MStringView rootName = expr.scopeChain[0];
+    if(expr.text == "this"){
+        if(ownerClass){
+            if(const FieldDecl* field = SymbolTable::findClassField(*ownerClass, rootName); field && field->type){
+                const MStringView fieldTypeName = m_symbols.resolveBaseTypeName(field->type->name);
+                if(m_symbols.findEnum(fieldTypeName))
+                    return fieldTypeName;
+            }
+        }
+        return {};
+    }
+    if(expr.lhs){
+        const TypeRef* lhsTypeRef = nullptr;
+        const MStringView lhsBase = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
+        if(const ClassDecl* targetCls = m_symbols.findClass(lhsBase)){
+            if(const FieldDecl* field = SymbolTable::findClassField(*targetCls, rootName); field && field->type){
+                if(outAccessedClass)
+                    *outAccessedClass = targetCls;
+                if(outAccessedField)
+                    *outAccessedField = field;
+                const TypeRef* ft = m_symbols.substituteTypeParams(field->type, targetCls->templateParams, lhsTypeRef);
+                const MStringView fieldTypeName = ft ? m_symbols.resolveBaseTypeName(ft->name) : MStringView{};
+                if(!fieldTypeName.empty() && m_symbols.findEnum(fieldTypeName))
+                    return fieldTypeName;
+            }
+        }
+        return {};
+    }
+    if(const ScopedVarInfo* local = findScopedVar(scope, rootName)){
+        const MStringView localTypeName = resolveScopedVarBaseType(*local);
+        if(!localTypeName.empty() && m_symbols.findEnum(localTypeName))
+            return localTypeName;
+        return {};
+    }
+    if(const Stmt* gc = m_symbols.findGlobalConstant(rootName); gc && gc->varType){
+        const MStringView gcTypeName = m_symbols.resolveBaseTypeName(gc->varType->name);
+        if(!gcTypeName.empty() && m_symbols.findEnum(gcTypeName))
+            return gcTypeName;
+        return {};
+    }
+    const MStringView resolvedRoot = m_symbols.resolveBaseTypeName(rootName);
+    if(!resolvedRoot.empty() && m_symbols.findEnum(resolvedRoot))
+        return resolvedRoot;
+    return {};
 }
 
 void TypeChecker::reportError(MVector<ParseError>& errors, const SourceSpan span, const MStringView message)const{
@@ -651,3 +677,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

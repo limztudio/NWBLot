@@ -29,7 +29,7 @@ public:
 
 
 private:
-    [[nodiscard]] b8 validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors);
+    [[nodiscard]] b8 validateBlock(Span<const Stmt* const> statements, MVector<ParseError>& errors);
 
 
 private:

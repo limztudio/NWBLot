@@ -33,6 +33,7 @@ public:
 
 
 private:
+    [[nodiscard]] b8 tryResolveSubsystemFieldAssetType(const FieldDecl& field, MStringView& outAssetTypeName, b8& outIsVector)const noexcept;
     void emitEnumDecl(MString& out, const EnumDecl& decl)const;
     void emitTypeAliasDecl(MString& out, const TypeAliasDecl& decl)const;
     void emitInterfaceDecl(MString& out, const InterfaceDecl& decl)const;
@@ -40,8 +41,8 @@ private:
     void emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const;
     void emitClassDecl(MString& out, const ClassDecl& decl)const;
     void emitClassTemplateSpecialization(MString& out, const ClassTemplateInstantiation& inst)const;
-    void emitClassMethodsCpp(MString& out, const ClassDecl& decl, const MVector<FieldDecl*>& orderedFields, b8 forceInlineBody)const;
-    void emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const;
+    void emitClassMethodsCpp(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> orderedFields, b8 forceInlineBody)const;
+    void emitClassFieldsCpp(MString& out, Span<const FieldDecl* const> orderedFields)const;
 
 
 private:
@@ -59,3 +60,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

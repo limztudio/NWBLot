@@ -28,6 +28,14 @@ void EmitSimdMatrixRowLoopSuffix(MString& out, const MStringView matRegType, con
     out.append("; return __r; }())");
 }
 
+void EmitSimdIntTwosComplementNegatePrefix(MString& out, const b8 isDouble){
+    out.append(isDouble ? "::VectorDoubleAddInt(::VectorDoubleXorInt(" : "::VectorAddInt(::VectorXorInt(");
+}
+
+void EmitSimdIntTwosComplementNegateSuffix(MString& out, const b8 isDouble){
+    out.append(isDouble ? ", ::VectorDoubleTrueInt()), ::VectorDoubleReplicateInt(1ull))" : ", ::VectorTrueInt()), ::VectorReplicateInt(1u))");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,6 +45,40 @@ void EmitSimdMatrixRowLoopSuffix(MString& out, const MStringView matRegType, con
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void SourceEmitter::emitSimdLaneGetExpr(
+    MString& out,
+    const Expr& vecExpr,
+    const u32 lane,
+    const Expr* dynamicIndexExpr
+)const{
+    const MStringView lhsSimd = vecExpr.resolvedSimdType;
+    const b8 isDouble = IsDoubleSimdType(lhsSimd);
+    const b8 isInt = IsIntSimdType(lhsSimd);
+    const b8 isSignedInt = IsSignedIntSimdType(lhsSimd);
+
+    if(isSignedInt)
+        out.append(isDouble ? "static_cast<i64>(" : "static_cast<i32>(");
+    if(isInt)
+        out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
+    else
+        out.append(isDouble ? "::VectorDoubleGet" : "::VectorGet");
+    if(dynamicIndexExpr){
+        out.append("ByIndex(");
+        emitSimdRegExpr(out, vecExpr, lhsSimd);
+        out.append(", static_cast<usize>(");
+        emitExpr(out, *dynamicIndexExpr);
+        out.append("))");
+    }
+    else{
+        const MStringView laneSuffix = SimdLaneCallSuffix(lane);
+        out.append(laneSuffix.data(), laneSuffix.size());
+        emitSimdRegExpr(out, vecExpr, lhsSimd);
+        out.push_back(')');
+    }
+    if(isSignedInt)
+        out.push_back(')');
+}
 
 b8 SourceEmitter::tryEmitSimdBinaryOpReg(
     MString& out,
@@ -139,9 +181,11 @@ b8 SourceEmitter::tryEmitSimdBinaryOpReg(
         if(isInt){
             out.append(isDouble ? "::VectorDoubleAddInt(" : "::VectorAddInt(");
             emitSimdRegExpr(out, lhs, simdType);
-            out.append(isDouble ? ", ::VectorDoubleAddInt(::VectorDoubleXorInt(" : ", ::VectorAddInt(::VectorXorInt(");
+            out.append(", ");
+            __hidden_adhd_simd_expr::EmitSimdIntTwosComplementNegatePrefix(out, isDouble);
             emitSimdRegExpr(out, rhs, simdType);
-            out.append(isDouble ? ", ::VectorDoubleTrueInt()), ::VectorDoubleReplicateInt(1ull)))" : ", ::VectorTrueInt()), ::VectorReplicateInt(1u)))");
+            __hidden_adhd_simd_expr::EmitSimdIntTwosComplementNegateSuffix(out, isDouble);
+            out.push_back(')');
             return true;
         }
         if(IsSimdMulExpr(&lhs, mulA, mulB)){
@@ -311,9 +355,9 @@ void SourceEmitter::emitSimdRegExpr(
                     return;
                 }
                 if(isInt){
-                    out.append(isDouble ? "::VectorDoubleAddInt(::VectorDoubleXorInt(" : "::VectorAddInt(::VectorXorInt(");
+                    __hidden_adhd_simd_expr::EmitSimdIntTwosComplementNegatePrefix(out, isDouble);
                     emitSimdRegExpr(out, *expr.lhs, simdType);
-                    out.append(isDouble ? ", ::VectorDoubleTrueInt()), ::VectorDoubleReplicateInt(1ull))" : ", ::VectorTrueInt()), ::VectorReplicateInt(1u))");
+                    __hidden_adhd_simd_expr::EmitSimdIntTwosComplementNegateSuffix(out, isDouble);
                     return;
                 }
                 out.append(isDouble ? "::VectorDoubleNegate(" : "::VectorNegate(");

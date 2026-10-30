@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeChecker::statementsContainReturnOrNative(const MVector<Stmt*>& stmts)noexcept{
+b8 TypeChecker::statementsContainReturnOrNative(const Span<const Stmt* const> stmts)noexcept{
     for(const Stmt* stmt : stmts){
         if(!stmt)
             continue;
@@ -85,6 +85,50 @@ b8 TypeChecker::checkStatementList(
     return ok;
 }
 
+b8 TypeChecker::checkConstructorInitArguments(
+    ClassDecl* ownerClass,
+    MethodDecl& method,
+    const TypeRef* targetType,
+    MVector<Expr*>& arguments,
+    const Span<const ScopedVarInfo> scope,
+    const SourceSpan errorSpan,
+    MVector<ParseError>& errors
+){
+    b8 ok = true;
+    const TypeRef* resolvedTargetType = targetType ? m_symbols.unwrapTypeAlias(targetType) : nullptr;
+    const ClassDecl* ctorCls = resolvedTargetType
+        ? m_symbols.findClass(m_symbols.resolveBaseTypeName(resolvedTargetType->name))
+        : nullptr;
+    const MethodDecl* matchedCtor = nullptr;
+    if(ctorCls){
+        MVector<MStringView> argTypeHints(m_arena);
+        MVector<u8> argIsMutHints(m_arena);
+        buildCallArgHints(ownerClass, &method, arguments, scope, argTypeHints, argIsMutHints);
+        matchedCtor = m_symbols.findClassConstructor(*ctorCls, arguments.size(), ownerClass != ctorCls, argTypeHints, argIsMutHints);
+        if(matchedCtor && ownerClass != ctorCls && matchedCtor->access != AccessSpecifier::Public){
+            reportError(errors, errorSpan, "cannot call 'private' or 'protected' constructor outside of its declaring class");
+            ok = false;
+        }
+    }
+    if(!checkCallableArguments(
+        ownerClass,
+        method,
+        arguments,
+        scope,
+        matchedCtor,
+        ctorCls,
+        resolvedTargetType,
+        {},
+        nullptr,
+        nullptr,
+        MStringView{},
+        errors
+    )){
+        ok = false;
+    }
+    return ok;
+}
+
 b8 TypeChecker::checkVarDeclStatement(
     ClassDecl* ownerClass,
     MethodDecl& method,
@@ -127,6 +171,7 @@ b8 TypeChecker::checkVarDeclStatement(
         if(varRefMode == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(baseVarTypeName)){
             stmt.usesScratchArena = true;
             method.usesScratchArena = true;
+            m_activeParallelBlockUsesScratch = true;
         }
         propagateFuncCaptureBytes(stmt.varType, stmt.expr, scope, m_symbols);
         if(stmt.isCtorInit){
@@ -137,11 +182,11 @@ b8 TypeChecker::checkVarDeclStatement(
         }
         if(baseVarTypeName == "Path"){
             if(stmt.expr)
-                markStringToPathAdaptation(ownerClass, method, *stmt.expr, scope);
+                markStringToPathAdaptation(ownerClass, &method, *stmt.expr, scope);
             if(stmt.isCtorInit){
                 for(Expr* arg : stmt.arguments){
                     if(arg)
-                        markStringToPathAdaptation(ownerClass, method, *arg, scope);
+                        markStringToPathAdaptation(ownerClass, &method, *arg, scope);
                 }
             }
         }
@@ -157,35 +202,13 @@ b8 TypeChecker::checkVarDeclStatement(
         }
     }
 
-    const ClassDecl* ctorCls = nullptr;
-    const MethodDecl* matchedCtor = nullptr;
-    const TypeRef* resolvedCtorVarType = stmt.varType ? m_symbols.unwrapTypeAlias(stmt.varType) : nullptr;
-    if(stmt.isCtorInit && stmt.varType){
-        const MStringView baseVarTypeName = m_symbols.resolveBaseTypeName(stmt.varType->name);
-        ctorCls = m_symbols.findClass(baseVarTypeName);
-        if(ctorCls){
-            MVector<MStringView> argTypeHints(m_arena);
-            MVector<b8> argIsMutHints(m_arena);
-            buildCallArgHints(ownerClass, &method, stmt.arguments, scope, argTypeHints, argIsMutHints);
-            matchedCtor = findClassConstructor(*ctorCls, stmt.arguments.size(), ownerClass != ctorCls, &argTypeHints, &argIsMutHints);
-            if(matchedCtor && ownerClass != ctorCls && matchedCtor->access != AccessSpecifier::Public){
-                reportError(errors, stmt.span, "cannot call 'private' or 'protected' constructor outside of its declaring class");
-                ok = false;
-            }
-        }
-    }
-    if(!checkCallableArguments(
+    if(!checkConstructorInitArguments(
         ownerClass,
         method,
+        stmt.isCtorInit ? stmt.varType : nullptr,
         stmt.arguments,
         scope,
-        matchedCtor,
-        ctorCls,
-        resolvedCtorVarType,
-        nullptr,
-        nullptr,
-        nullptr,
-        MStringView{},
+        stmt.span,
         errors
     )){
         ok = false;
@@ -237,7 +260,7 @@ b8 TypeChecker::checkReturnStatement(
     ClassDecl* ownerClass,
     MethodDecl& method,
     Stmt& stmt,
-    const MVector<ScopedVarInfo>& scope,
+    const Span<const ScopedVarInfo> scope,
     MVector<ParseError>& errors
 ){
     b8 ok = true;
@@ -261,7 +284,7 @@ b8 TypeChecker::checkReturnStatement(
         propagateFuncCaptureBytes(const_cast<TypeRef*>(activeRetType), stmt.expr, scope, m_symbols);
         const MStringView baseRetTypeName = m_symbols.resolveBaseTypeName(activeRetType->name);
         if(baseRetTypeName == "Path")
-            markStringToPathAdaptation(ownerClass, method, *stmt.expr, scope);
+            markStringToPathAdaptation(ownerClass, &method, *stmt.expr, scope);
         if(retRefMode != ParamPassingMode::None){
             stmt.wrapReturnNotNull = true;
             b8 isDanglingReturn = false;
@@ -330,12 +353,16 @@ b8 TypeChecker::checkStatement(
         method.usesTaskScope = true;
         const u32 savedLoop = m_loopDepth;
         const u32 savedSwitch = m_switchDepth;
+        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
         m_loopDepth = 0u;
         m_switchDepth = 0u;
+        m_activeParallelBlockUsesScratch = false;
         ++m_parallelDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
         --m_parallelDepth;
+        stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
+        m_activeParallelBlockUsesScratch = savedParScratch;
         m_loopDepth = savedLoop;
         m_switchDepth = savedSwitch;
         break;
@@ -405,6 +432,7 @@ b8 TypeChecker::checkStatement(
         if(stmt.expr){
             if(!checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
                 ok = false;
+            const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
             if(!subjectType.empty()
                 && (IsFloatScalarType(subjectType)
@@ -418,35 +446,25 @@ b8 TypeChecker::checkStatement(
             if(SymbolTable::isStringSwitchType(subjectType)){
                 stmt.lowerSwitchToIfChain = true;
             }
-            else if(const ClassDecl* switchCls = m_symbols.findClass(subjectType)){
-                b8 hasEq = false;
-                for(const MethodDecl* m : switchCls->methods){
-                    if(m && m->isOperator && m->name == "=="){
-                        hasEq = true;
-                        break;
+            else{
+                const ClassDecl* switchCls = nullptr;
+                const MethodDecl* eqOp = resolveCustomOperator(ownerClass, &method, subjTypeRef, subjectType, "==", 1u, true, &switchCls);
+                if(switchCls){
+                    if(!eqOp){
+                        reportError(errors, stmt.span, "switch on custom class requires 'operator==' to be defined on the class");
+                        ok = false;
                     }
+                    stmt.lowerSwitchToIfChain = true;
                 }
-                if(!hasEq){
-                    reportError(errors, stmt.span, "switch on custom class requires 'operator==' to be defined on the class");
-                    ok = false;
-                }
-                stmt.lowerSwitchToIfChain = true;
-            }
-            else if(const TypeRef* subjTypeRef = stmt.expr ? inferExprTypeRef(ownerClass, &method, *stmt.expr, scope) : nullptr; subjTypeRef && m_symbols.findInterface(subjectType)){
-                const usize oneArg = 1u;
-                if(!m_symbols.findInterfaceMethod(*subjTypeRef, "==", &oneArg)){
-                    reportError(errors, stmt.span, "switch on interface requires 'operator==' to be declared on the interface");
-                    ok = false;
-                }
-                stmt.lowerSwitchToIfChain = true;
-            }
-            else if(const TemplateParamDecl* tp = findTemplateParam(ownerClass, &method, subjectType)){
-                const usize oneArg = 1u;
-                for(const TypeRef* boundRef : tp->interfaceBounds){
-                    if(boundRef && m_symbols.findInterfaceMethod(*boundRef, "==", &oneArg)){
-                        stmt.lowerSwitchToIfChain = true;
-                        break;
+                else if(subjTypeRef && m_symbols.findInterface(subjectType)){
+                    if(!eqOp){
+                        reportError(errors, stmt.span, "switch on interface requires 'operator==' to be declared on the interface");
+                        ok = false;
                     }
+                    stmt.lowerSwitchToIfChain = true;
+                }
+                else if(eqOp){
+                    stmt.lowerSwitchToIfChain = true;
                 }
             }
         }
@@ -510,14 +528,7 @@ b8 TypeChecker::checkStatement(
                 const TypeRef* containerType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
                 if(isPar && containerType){
                     const MStringView containerBaseName = m_symbols.resolveBaseTypeName(containerType->name);
-                    b8 isNonRandomAccess = false;
-#define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
-                    if constexpr(isNonRandomAccessContainer){ \
-                        if(containerBaseName == adhdName) isNonRandomAccess = true; \
-                    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_GENERIC_TYPE
-                    if(isNonRandomAccess){
+                    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(containerBaseName); genericInfo && genericInfo->isNonRandomAccessContainer){
                         reportError(errors, stmt.span, "range-based 'parallel_for' requires a random-access indexable container (such as 'Vector', 'Array', or 'Span')");
                         ok = false;
                     }
@@ -556,9 +567,11 @@ b8 TypeChecker::checkStatement(
         scope.push_back(loopVar);
         const u32 savedLoop = m_loopDepth;
         const u32 savedSwitch = m_switchDepth;
+        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
         if(isPar){
             m_loopDepth = 0u;
             m_switchDepth = 0u;
+            m_activeParallelBlockUsesScratch = false;
             ++m_parallelDepth;
         }
         else{
@@ -566,8 +579,11 @@ b8 TypeChecker::checkStatement(
         }
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
-        if(isPar)
+        if(isPar){
             --m_parallelDepth;
+            stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
+            m_activeParallelBlockUsesScratch = savedParScratch;
+        }
         m_loopDepth = savedLoop;
         m_switchDepth = savedSwitch;
         while(scope.size() > saved)
@@ -602,11 +618,13 @@ b8 TypeChecker::checkStatement(
             ok = false;
         const u32 savedLoop = m_loopDepth;
         const u32 savedSwitch = m_switchDepth;
+        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
         if(isPar){
             for(usize i = saved; i < scope.size(); ++i)
                 scope[i].isConst = true;
             m_loopDepth = 0u;
             m_switchDepth = 0u;
+            m_activeParallelBlockUsesScratch = false;
             ++m_parallelDepth;
         }
         else{
@@ -614,8 +632,11 @@ b8 TypeChecker::checkStatement(
         }
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
-        if(isPar)
+        if(isPar){
             --m_parallelDepth;
+            stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
+            m_activeParallelBlockUsesScratch = savedParScratch;
+        }
         m_loopDepth = savedLoop;
         m_switchDepth = savedSwitch;
         while(scope.size() > saved)
@@ -660,7 +681,7 @@ b8 TypeChecker::checkStatement(
                 ok = false;
             const b8 isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
             if(isAfterCond)
-                markStringToPathAdaptation(ownerClass, method, *arg, scope);
+                markStringToPathAdaptation(ownerClass, &method, *arg, scope);
         }
         break;
     }
@@ -679,3 +700,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

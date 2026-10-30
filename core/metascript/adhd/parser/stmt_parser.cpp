@@ -62,19 +62,14 @@ b8 StmtParser::parseBlockStatements(MVector<Stmt*>& outStatements){
 
 Stmt* StmtParser::parseStatement(){
     MVector<ParsedAttribute> attributes(m_cursor.arena());
-    if(m_cursor.check(TokenType::LeftBracket)){
-        AttributeParser attrParser(m_cursor);
-        if(!attrParser.parseSingleBracketList(attributes))
-            return nullptr;
-    }
+    if(!AttributeParser::ParseOptionalList(m_cursor, attributes))
+        return nullptr;
 
     const SourceSpan span{m_cursor.current().line, m_cursor.current().column};
 
     if(m_cursor.check(TokenType::LeftBrace)){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on a plain block statement");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on a plain block statement"))
             return nullptr;
-        }
         Stmt* block = AllocateAstNode<Stmt>(m_cursor.arena());
         block->kind = StmtKind::Block;
         block->span = span;
@@ -83,35 +78,28 @@ Stmt* StmtParser::parseStatement(){
         return block;
     }
 
-#define NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD(keyword, errorMessage) \
-    if(m_cursor.checkIdentifier(keyword)){ \
-        m_cursor.error(errorMessage); \
-        return nullptr; \
-    }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PROHIBITED_STMT_KEYWORD
-
-#define NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD(keyword, isClassNestedKeyword) \
-    if(m_cursor.checkIdentifier(keyword)){ \
-        m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope"); \
-        return nullptr; \
-    }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
-
-    if(m_cursor.matchIdentifier("if")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'if' statements");
+    if(m_cursor.check(TokenType::Identifier)){
+        const MStringView tokText = m_cursor.current().text;
+        const MStringView prohibitedErr = FindProhibitedStmtKeywordError(tokText);
+        if(!prohibitedErr.empty()){
+            m_cursor.error(prohibitedErr);
             return nullptr;
         }
+        if(IsNestedTypeKeyword(tokText)){
+            m_cursor.error("local or nested type declarations are prohibited in adhd; declare types at top-level file scope");
+            return nullptr;
+        }
+    }
+
+    if(m_cursor.matchIdentifier("if")){
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'if' statements"))
+            return nullptr;
         return parseIfStatement(span);
     }
 
     if(m_cursor.matchIdentifier("switch")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'switch' statements");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'switch' statements"))
             return nullptr;
-        }
         return parseSwitchStatement(span);
     }
 
@@ -122,52 +110,26 @@ Stmt* StmtParser::parseStatement(){
         return parseForOrParallelFor(span, true, attributes);
 
     if(m_cursor.matchIdentifier("while")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'while' statements");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'while' statements"))
             return nullptr;
-        }
         return parseWhileStatement(span);
     }
 
     if(m_cursor.matchIdentifier("do")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'do-while' statements");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'do-while' statements"))
             return nullptr;
-        }
         return parseDoWhileStatement(span);
     }
 
-    if(m_cursor.matchIdentifier("break")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'break' statements");
-            return nullptr;
-        }
-        if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'break'"))
-            return nullptr;
-        Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-        stmt->kind = StmtKind::Break;
-        stmt->span = span;
-        return stmt;
-    }
+    if(m_cursor.matchIdentifier("break"))
+        return parseSimpleKeywordStatement(StmtKind::Break, span, attributes, "attributes are not permitted on 'break' statements", "expected ';' after 'break'");
 
-    if(m_cursor.matchIdentifier("continue")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'continue' statements");
-            return nullptr;
-        }
-        if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'continue'"))
-            return nullptr;
-        Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-        stmt->kind = StmtKind::Continue;
-        stmt->span = span;
-        return stmt;
-    }
+    if(m_cursor.matchIdentifier("continue"))
+        return parseSimpleKeywordStatement(StmtKind::Continue, span, attributes, "attributes are not permitted on 'continue' statements", "expected ';' after 'continue'");
 
     if(m_cursor.matchIdentifier("return")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'return' statements");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'return' statements"))
             return nullptr;
-        }
         return parseReturnStatement(span);
     }
 
@@ -175,37 +137,33 @@ Stmt* StmtParser::parseStatement(){
         return parseParallelStatement(span, attributes);
 
     if(m_cursor.matchIdentifier("native")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on 'native' blocks");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on 'native' blocks"))
             return nullptr;
-        }
         return parseNativeStatement(span);
     }
 
-#define NWB_ADHD_EXPORT_DIAGNOSTIC_KIND(adhdKeyword, astEnum, defaultMacroPrefix, essentialMacroPrefix, defaultMsgMacroPrefix, essentialMsgMacroPrefix) \
-    if(m_cursor.matchIdentifier(adhdKeyword)) \
-        return parseDiagnosticStatement(span, astEnum, attributes);
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_DIAGNOSTIC_KIND
+    if(m_cursor.check(TokenType::Identifier)){
+        DiagnosticKind::Enum diagKind = DiagnosticKind::Assert;
+        if(TryParseDiagnosticKind(m_cursor.current().text, diagKind)){
+            m_cursor.advance();
+            return parseDiagnosticStatement(span, diagKind, attributes);
+        }
+    }
 
     if(m_cursor.matchIdentifier("const")){
-        if(!attributes.empty()){
-            m_cursor.error(span.line, span.column, "attributes are not permitted on local 'const' declarations");
+        if(!rejectStatementAttributes(attributes, span, "attributes are not permitted on local 'const' declarations"))
             return nullptr;
-        }
         return parseConstDeclaration(span);
     }
 
-    if(!attributes.empty()){
-        m_cursor.error(span.line, span.column, "unexpected attributes before statement");
+    if(!rejectStatementAttributes(attributes, span, "unexpected attributes before statement"))
         return nullptr;
-    }
 
     if(m_cursor.check(TokenType::Identifier)){
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
         if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
-            return parseVarDeclAfterType(maybeType, span);
+            return parseVarDeclWithType(maybeType, span, false);
         m_cursor.restore(cp);
         m_typeParser.resetPendingRightAngles();
     }
@@ -223,8 +181,40 @@ Stmt* StmtParser::parseStatement(){
     return stmt;
 }
 
-b8 StmtParser::parseRawNativeBlock(MStringView& outCode){
-    return m_cursor.consumeBalancedBracesRaw(outCode);
+Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
+    TypeRef* varType = m_typeParser.parseType(false, true);
+    if(!varType)
+        return nullptr;
+
+    if(!m_cursor.check(TokenType::Identifier)){
+        m_cursor.errorExpected("expected constant name after type");
+        return nullptr;
+    }
+    return parseVarDeclWithType(varType, span, true);
+}
+
+b8 StmtParser::rejectStatementAttributes(const Span<const ParsedAttribute> attributes, const SourceSpan span, const MStringView message){
+    if(attributes.empty())
+        return true;
+    m_cursor.error(span.line, span.column, message);
+    return false;
+}
+
+Stmt* StmtParser::parseSimpleKeywordStatement(
+    const StmtKind::Enum kind,
+    const SourceSpan span,
+    const Span<const ParsedAttribute> attributes,
+    const MStringView rejectAttrMsg,
+    const MStringView missingSemiMsg
+){
+    if(!rejectStatementAttributes(attributes, span, rejectAttrMsg))
+        return nullptr;
+    if(!m_cursor.expect(TokenType::Semicolon, missingSemiMsg))
+        return nullptr;
+    Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
+    stmt->kind = kind;
+    stmt->span = span;
+    return stmt;
 }
 
 b8 StmtParser::parseScopedBodyStatements(MVector<Stmt*>& outStatements){
@@ -344,7 +334,7 @@ Stmt* StmtParser::parseSwitchStatement(const SourceSpan span){
     return stmt;
 }
 
-Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const b8 isParallel, const MVector<ParsedAttribute>& attributes){
+Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const b8 isParallel, const Span<const ParsedAttribute> attributes){
     ParallelCoreKind::Enum coreKind = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum priorityKind = ParallelPriorityKind::Normal;
     if(isParallel){
@@ -359,11 +349,7 @@ Stmt* StmtParser::parseForOrParallelFor(const SourceSpan span, const b8 isParall
     if(!m_cursor.expect(TokenType::LeftParen, "expected '(' after loop keyword"))
         return nullptr;
 
-    ParamPassingMode::Enum rangeMode = ParamPassingMode::None;
-    if(m_cursor.matchIdentifier("in"))
-        rangeMode = ParamPassingMode::In;
-    else if(m_cursor.matchIdentifier("mut"))
-        rangeMode = ParamPassingMode::Mut;
+    const ParamPassingMode::Enum rangeMode = MatchParamPassingMode(m_cursor);
 
     if(rangeMode != ParamPassingMode::None){
         TypeRef* elemType = m_typeParser.parseType(false, true);

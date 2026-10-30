@@ -21,7 +21,7 @@ b8 ParallelGraphValidator::validateMethod(const MethodDecl& method, MVector<Pars
     return validateBlock(method.body, errors);
 }
 
-b8 ParallelGraphValidator::validateBlock(const MVector<Stmt*>& statements, MVector<ParseError>& errors){
+b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statements, MVector<ParseError>& errors){
     MVector<MStringView> declaredTaskNames(m_arena);
     b8 ok = true;
 

@@ -43,14 +43,8 @@ void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
                     collectTemplateInstantiationsInType(*baseIface, unit);
             }
             for(const MethodDecl* m : ifaceDecl->methods){
-                if(!m)
-                    continue;
-                if(m->returnType)
-                    collectTemplateInstantiationsInType(*m->returnType, unit);
-                for(const ParamDecl& p : m->params){
-                    if(p.type)
-                        collectTemplateInstantiationsInType(*p.type, unit);
-                }
+                if(m)
+                    collectTemplateInstantiationsInCallable(*m, unit);
             }
         }
         for(ClassDecl* classDecl : unit.classes){
@@ -73,50 +67,33 @@ void LayoutOptimizer::collectAllTemplateInstantiations(TranslationUnit& unit){
                 }
             }
             for(const MethodDecl* m : classDecl->methods){
-                if(!m || m->isImported != wantImported)
-                    continue;
-                if(m->returnType)
-                    collectTemplateInstantiationsInType(*m->returnType, unit);
-                for(const ParamDecl& p : m->params){
-                    if(p.type)
-                        collectTemplateInstantiationsInType(*p.type, unit);
-                }
-                for(const Stmt* s : m->body){
-                    if(s)
-                        collectTemplateInstantiationsInStmt(*s, unit);
-                }
+                if(m && m->isImported == wantImported)
+                    collectTemplateInstantiationsInCallable(*m, unit);
             }
         }
         for(const MethodDecl* fn : unit.freeFunctions){
-            if(!fn || fn->isImported != wantImported)
-                continue;
-            if(fn->returnType)
-                collectTemplateInstantiationsInType(*fn->returnType, unit);
-            for(const ParamDecl& p : fn->params){
-                if(p.type)
-                    collectTemplateInstantiationsInType(*p.type, unit);
-            }
-            for(const Stmt* s : fn->body){
-                if(s)
-                    collectTemplateInstantiationsInStmt(*s, unit);
-            }
+            if(fn && fn->isImported == wantImported)
+                collectTemplateInstantiationsInCallable(*fn, unit);
         }
         for(const MethodDecl* m : unit.outOfLineMethods){
-            if(!m || m->isImported != wantImported)
-                continue;
-            if(m->returnType)
-                collectTemplateInstantiationsInType(*m->returnType, unit);
-            for(const ParamDecl& p : m->params){
-                if(p.type)
-                    collectTemplateInstantiationsInType(*p.type, unit);
-            }
-            for(const Stmt* s : m->body){
-                if(s)
-                    collectTemplateInstantiationsInStmt(*s, unit);
-            }
+            if(m && m->isImported == wantImported)
+                collectTemplateInstantiationsInCallable(*m, unit);
         }
     }
     m_collectingImported = false;
+}
+
+void LayoutOptimizer::collectTemplateInstantiationsInCallable(const MethodDecl& callable, TranslationUnit& unit){
+    if(callable.returnType)
+        collectTemplateInstantiationsInType(*callable.returnType, unit);
+    for(const ParamDecl& p : callable.params){
+        if(p.type)
+            collectTemplateInstantiationsInType(*p.type, unit);
+    }
+    for(const Stmt* s : callable.body){
+        if(s)
+            collectTemplateInstantiationsInStmt(*s, unit);
+    }
 }
 
 void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
@@ -232,7 +209,7 @@ void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, T
 
 void LayoutOptimizer::instantiateClassTemplate(
     const ClassDecl& templateDecl,
-    const MVector<TypeArg>& templateArgs,
+    const Span<const TypeArg> templateArgs,
     TranslationUnit& unit
 ){
     if(!IsConcreteTemplateArgList(templateDecl.templateParams, templateArgs, m_symbols))
@@ -272,24 +249,12 @@ void LayoutOptimizer::instantiateClassTemplate(
             templateArgs
         );
         clonedField->type = resolvedType;
-        if(m_symbols.resolveRefMode(resolvedType) == ParamPassingMode::None && SymbolTable::isArenaBackedContainer(m_symbols.resolveBaseTypeName(resolvedType->name))){
-            clonedField->usesClassArena = true;
-            const_cast<ClassDecl&>(templateDecl).needsClassArena = true;
-        }
-        else if(TypeContainsArenaBackedContainer(*resolvedType, m_symbols)){
-            const_cast<ClassDecl&>(templateDecl).needsClassArena = true;
-        }
+        markFieldArenaUsage(*clonedField, *resolvedType, const_cast<ClassDecl&>(templateDecl));
         collectTemplateInstantiationsInType(*resolvedType, unit);
-
-        usize fieldSize = 8u;
-        usize fieldAlign = 8u;
-        resolveTypeSizeAndAlign(*resolvedType, fieldSize, fieldAlign);
-        clonedField->resolvedSize = fieldSize;
-        clonedField->resolvedAlign = templateDecl.isSerialize ? 1u : fieldAlign;
         inst->orderedFields.push_back(clonedField);
     }
 
-    sortAndPackFields(
+    finalizeClassFieldLayouts(
         inst->orderedFields,
         templateDecl.isSerialize,
         !templateDecl.implementedInterfaces.empty(),

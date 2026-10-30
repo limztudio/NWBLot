@@ -17,6 +17,18 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline ParamPassingMode::Enum MatchParamPassingMode(ParserCursor& cursor){
+    if(cursor.matchIdentifier("in"))
+        return ParamPassingMode::In;
+    if(cursor.matchIdentifier("mut"))
+        return ParamPassingMode::Mut;
+    return ParamPassingMode::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class TypeParser{
 public:
     explicit TypeParser(ParserCursor& cursor)noexcept

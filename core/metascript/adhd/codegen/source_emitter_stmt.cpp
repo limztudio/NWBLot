@@ -20,7 +20,7 @@ namespace __hidden_adhd_source_emitter_stmt{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 StatementsContainBreak(const MVector<Stmt*>& statements)noexcept{
+[[nodiscard]] b8 StatementsContainBreak(const Span<const Stmt* const> statements)noexcept{
     for(const Stmt* s : statements){
         if(!s)
             continue;
@@ -34,7 +34,7 @@ namespace __hidden_adhd_source_emitter_stmt{
     return false;
 }
 
-[[nodiscard]] b8 StatementsContainOuterLoopContinue(const MVector<Stmt*>& statements)noexcept{
+[[nodiscard]] b8 StatementsContainOuterLoopContinue(const Span<const Stmt* const> statements)noexcept{
     for(const Stmt* s : statements){
         if(!s)
             continue;
@@ -54,7 +54,7 @@ namespace __hidden_adhd_source_emitter_stmt{
     return false;
 }
 
-[[nodiscard]] b8 CaseNeedsDoWhileBreakLowering(const MVector<Stmt*>& statements)noexcept{
+[[nodiscard]] b8 CaseNeedsDoWhileBreakLowering(const Span<const Stmt* const> statements)noexcept{
     for(usize i = 0u; i < statements.size(); ++i){
         const Stmt* s = statements[i];
         if(!s)
@@ -85,7 +85,7 @@ namespace __hidden_adhd_source_emitter_stmt{
 
 void SourceEmitter::emitStatementList(
     MString& out,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const u32 indent
 )const{
     for(const Stmt* stmt : statements){
@@ -96,7 +96,7 @@ void SourceEmitter::emitStatementList(
 
 void SourceEmitter::emitSwitchIfChainStatements(
     MString& out,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const u32 indent
 )const{
     for(usize i = 0u; i < statements.size(); ++i){
@@ -147,6 +147,21 @@ void SourceEmitter::emitSwitchIfChainStatements(
     }
 }
 
+void SourceEmitter::emitLoopBodyStatements(
+    MString& out,
+    const Span<const Stmt* const> statements,
+    const u32 indent
+)const{
+    const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
+    m_activeSwitchBreakLabelLine = 0u;
+    ++m_activeSimdLoopInnerBreakDepth;
+    ++m_activeSimdLoopInnerContinueDepth;
+    emitStatementList(out, statements, indent);
+    --m_activeSimdLoopInnerBreakDepth;
+    --m_activeSimdLoopInnerContinueDepth;
+    m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+}
+
 void SourceEmitter::emitStmt(
     MString& out,
     const Stmt& stmt,
@@ -181,58 +196,15 @@ void SourceEmitter::emitStmt(
         }
         else if(stmt.isCtorInit){
             const MStringView baseVarType = stmt.varType ? m_symbols.resolveBaseTypeName(stmt.varType->name) : MStringView{};
-            if(!baseVarType.empty() && m_symbols.isSimdMatrixType(baseVarType)){
-                if(stmt.arguments.empty()){
-                    out.append("{};\r\n");
-                }
-                else if(stmt.arguments.size() == 1u && stmt.arguments[0] && m_symbols.isSimdMatrixType(stmt.arguments[0]->resolvedSimdType)){
-                    out.push_back('(');
-                    emitExpr(out, *stmt.arguments[0]);
-                    out.append(");\r\n");
-                }
-                else{
-                    out.append("{ .raw = { ");
-                    for(usize i = 0u; i < stmt.arguments.size(); ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        if(stmt.arguments[i])
-                            emitExpr(out, *stmt.arguments[i]);
-                    }
-                    out.append(" } };\r\n");
-                }
-            }
-            else if(stmt.arguments.empty() && !stmt.usesScratchArena){
-                out.append("{};\r\n");
-            }
-            else{
-                out.push_back('(');
-                u32 ctorVecLanes = 0u;
-                const b8 isScalarSplatCtor = !baseVarType.empty()
-                    && (m_symbols.isSimdVectorType(baseVarType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseVarType, ctorVecLanes))
-                    && stmt.arguments.size() == 1u && stmt.arguments[0]
-                    && stmt.arguments[0]->resolvedSimdType.empty();
-                if(isScalarSplatCtor){
-                    for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-                        if(lane > 0u)
-                            out.append(", ");
-                        emitExpr(out, *stmt.arguments[0]);
-                    }
-                }
-                else{
-                    for(usize i = 0u; i < stmt.arguments.size(); ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        if(stmt.arguments[i])
-                            emitExpr(out, *stmt.arguments[i]);
-                    }
-                }
-                if(stmt.usesScratchArena){
-                    if(!stmt.arguments.empty())
-                        out.append(", ");
-                    out.append("__adhd_scratch");
-                }
-                out.append(");\r\n");
-            }
+            emitCtorOrCallArgs(
+                out,
+                baseVarType,
+                stmt.arguments,
+                stmt.usesScratchArena ? MStringView("__adhd_scratch") : MStringView{},
+                false,
+                true
+            );
+            out.append(";\r\n");
         }
         else if(stmt.expr){
             if(stmt.usesScratchArena && stmt.expr->kind == ExprKind::StringLiteral){
@@ -575,14 +547,7 @@ void SourceEmitter::emitStmt(
         if(stmt.stepExpr)
             emitExpr(out, *stmt.stepExpr);
         out.append("){\r\n");
-        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
-        m_activeSwitchBreakLabelLine = 0u;
-        ++m_activeSimdLoopInnerBreakDepth;
-        ++m_activeSimdLoopInnerContinueDepth;
-        emitStatementList(out, stmt.statements, indent + 1u);
-        --m_activeSimdLoopInnerBreakDepth;
-        --m_activeSimdLoopInnerContinueDepth;
-        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+        emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -593,14 +558,7 @@ void SourceEmitter::emitStmt(
         if(stmt.condition)
             emitExpr(out, *stmt.condition);
         out.append("){\r\n");
-        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
-        m_activeSwitchBreakLabelLine = 0u;
-        ++m_activeSimdLoopInnerBreakDepth;
-        ++m_activeSimdLoopInnerContinueDepth;
-        emitStatementList(out, stmt.statements, indent + 1u);
-        --m_activeSimdLoopInnerBreakDepth;
-        --m_activeSimdLoopInnerContinueDepth;
-        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+        emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}\r\n");
         break;
@@ -608,14 +566,7 @@ void SourceEmitter::emitStmt(
     case StmtKind::DoWhile:{
         emitIndent(out, indent);
         out.append("do{\r\n");
-        const u32 prevSwitchBreakLabel = m_activeSwitchBreakLabelLine;
-        m_activeSwitchBreakLabelLine = 0u;
-        ++m_activeSimdLoopInnerBreakDepth;
-        ++m_activeSimdLoopInnerContinueDepth;
-        emitStatementList(out, stmt.statements, indent + 1u);
-        --m_activeSimdLoopInnerBreakDepth;
-        --m_activeSimdLoopInnerContinueDepth;
-        m_activeSwitchBreakLabelLine = prevSwitchBreakLabel;
+        emitLoopBodyStatements(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}while(");
         if(stmt.condition)
@@ -643,3 +594,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

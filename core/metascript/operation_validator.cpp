@@ -4,8 +4,6 @@
 
 #include "operation_validator.h"
 
-#include "arena_names.h"
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,6 +19,12 @@ namespace __hidden_metascript_operation_validator{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr AStringView s_DivisionByZeroText = "division by zero";
+inline constexpr AStringView s_ListAppendSizeOverflowText = "list append size overflow";
+inline constexpr AStringView s_StringConcatenationSizeOverflowText = "string concatenation size overflow";
+inline constexpr AStringView s_ListConcatenationSizeOverflowText = "list concatenation size overflow";
+inline constexpr AStringView s_StringAppendSizeOverflowText = "string append size overflow";
 
 [[nodiscard]] b8 BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
     switch(op){
@@ -62,20 +66,22 @@ namespace __hidden_metascript_operation_validator{
 
 
 b8 OperationValidator::validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
+    using namespace __hidden_metascript_operation_validator;
+
     switch(op){
     case TokenType::Plus:
         if(lhs.isNumeric() && rhs.isNumeric())
             return validateNumericOperands(op, lhs, rhs, line, column, {});
         if(lhs.isString() && rhs.isString()){
             if(AddOverflows<usize>(lhs.asString().size(), rhs.asString().size())){
-                m_cursor.error(line, column, MetascriptArenaScope::s_StringConcatenationSizeOverflowText);
+                m_cursor.error(line, column, s_StringConcatenationSizeOverflowText);
                 return false;
             }
             return true;
         }
         if(lhs.isList() && rhs.isList()){
             if(AddOverflows<usize>(lhs.asList().size(), rhs.asList().size())){
-                m_cursor.error(line, column, MetascriptArenaScope::s_ListConcatenationSizeOverflowText);
+                m_cursor.error(line, column, s_ListConcatenationSizeOverflowText);
                 return false;
             }
             return true;
@@ -97,6 +103,8 @@ b8 OperationValidator::validateBinaryOperation(const TokenType::Enum op, const V
 }
 
 b8 OperationValidator::validateAssignment(const TokenType::Enum op, const Value& target, const Value& rhs, const u32 line, const u32 column){
+    using namespace __hidden_metascript_operation_validator;
+
     switch(op){
     case TokenType::Equal:
         return true;
@@ -105,7 +113,7 @@ b8 OperationValidator::validateAssignment(const TokenType::Enum op, const Value&
             return validateNumericOperands(op, target, rhs, line, column, {});
         if(target.isString() && rhs.isString()){
             if(AddOverflows<usize>(target.asString().size(), rhs.asString().size())){
-                m_cursor.error(line, column, MetascriptArenaScope::s_StringAppendSizeOverflowText);
+                m_cursor.error(line, column, s_StringAppendSizeOverflowText);
                 return false;
             }
             return true;
@@ -113,7 +121,7 @@ b8 OperationValidator::validateAssignment(const TokenType::Enum op, const Value&
         if(target.isList()){
             const usize addedElements = rhs.isList() ? rhs.asList().size() : 1u;
             if(AddOverflows<usize>(target.asList().size(), addedElements)){
-                m_cursor.error(line, column, MetascriptArenaScope::s_ListAppendSizeOverflowText);
+                m_cursor.error(line, column, s_ListAppendSizeOverflowText);
                 return false;
             }
             return true;
@@ -144,11 +152,11 @@ b8 OperationValidator::validateNumericOperands(const TokenType::Enum op, const V
         return false;
     }
     if(rejectZeroDivisor && IsZero(rhs)){
-        m_cursor.error(line, column, MetascriptArenaScope::s_DivisionByZeroText);
+        m_cursor.error(line, column, s_DivisionByZeroText);
         return false;
     }
     if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-        m_cursor.error(line, column, MetascriptArenaScope::s_IntegerOverflowText);
+        m_cursor.error(line, column, s_IntegerOverflowText);
         return false;
     }
     return true;

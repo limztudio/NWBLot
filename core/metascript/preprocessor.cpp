@@ -48,14 +48,7 @@ constexpr u32 s_MaxIncludeDepth = 64u;
     usize i = 0u;
     while(i < text.size()){
         if(text[i] == '"' || text[i] == '\''){
-            const MChar quote = text[i++];
-            while(i < text.size() && text[i] != quote){
-                if(text[i] == '\\' && i + 1u < text.size())
-                    ++i;
-                ++i;
-            }
-            if(i < text.size())
-                ++i;
+            i = Preprocessor::SkipQuotedLiteral(text, i);
             continue;
         }
         if(i + 1u < text.size() && text[i] == '/' && text[i + 1u] == '/')
@@ -93,23 +86,19 @@ constexpr u32 s_MaxIncludeDepth = 64u;
                     continue;
                 }
                 if(ch == '"' || ch == '\''){
-                    const MChar quote = ch;
-                    ++scan;
-                    while(scan < text.size() && text[scan] != quote){
-                        if(text[scan] == '\\' && scan + 1u < text.size())
-                            ++scan;
-                        ++scan;
-                    }
+                    scan = Preprocessor::SkipQuotedLiteral(text, scan);
+                    continue;
                 }
-                else if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '/')
+                if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '/')
                     break;
-                else if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '*'){
+                if(scan + 1u < text.size() && ch == '/' && text[scan + 1u] == '*'){
                     const usize closeComment = text.find("*/", scan + 2u);
                     if(closeComment == MStringView::npos)
                         break;
-                    scan = closeComment + 1u;
+                    scan = closeComment + 2u;
+                    continue;
                 }
-                else if(ch == '(')
+                if(ch == '(')
                     ++parenDepth;
                 else if(ch == ')')
                     --parenDepth;
@@ -126,7 +115,56 @@ constexpr u32 s_MaxIncludeDepth = 64u;
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize Preprocessor::SkipQuotedLiteral(const MStringView text, usize index)noexcept{
+    const MChar quote = text[index++];
+    while(index < text.size() && text[index] != quote){
+        if(text[index] == '\\' && index + 1u < text.size())
+            ++index;
+        ++index;
+    }
+    if(index < text.size())
+        ++index;
+    return index;
+}
+
+usize Preprocessor::AppendQuotedLiteral(const MStringView text, usize index, MString& out){
+    const MChar quote = text[index];
+    out.push_back(text[index++]);
+    while(index < text.size() && text[index] != quote){
+        if(text[index] == '\\' && index + 1u < text.size())
+            out.push_back(text[index++]);
+        out.push_back(text[index++]);
+    }
+    if(index < text.size())
+        out.push_back(text[index++]);
+    return index;
+}
+
+usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index, MString& out, const b8 allowSignedExponent){
+    while(index < text.size()){
+        const MChar c = text[index];
+        if(allowSignedExponent && (c == 'e' || c == 'E' || c == 'p' || c == 'P') && index + 1u < text.size() && (text[index + 1u] == '+' || text[index + 1u] == '-')){
+            out.push_back(text[index++]);
+            out.push_back(text[index++]);
+            continue;
+        }
+        if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
+            out.push_back(text[index++]);
+            continue;
+        }
+        break;
+    }
+    return index;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -341,15 +379,7 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                     continue;
                 }
                 if(ch == '"' || ch == '\''){
-                    const MChar quote = ch;
-                    ++scanIdx;
-                    while(scanIdx < expandedLine.size() && expandedLine[scanIdx] != quote){
-                        if(expandedLine[scanIdx] == '\\' && scanIdx + 1u < expandedLine.size())
-                            ++scanIdx;
-                        ++scanIdx;
-                    }
-                    if(scanIdx < expandedLine.size())
-                        ++scanIdx;
+                    scanIdx = SkipQuotedLiteral(MStringView(expandedLine.data(), expandedLine.size()), scanIdx);
                     continue;
                 }
                 if(IsAsciiIdentifierStart(ch)){
@@ -576,9 +606,9 @@ b8 Preprocessor::handleInclude(const MStringView rest, const u32 line, const u32
     m_resolvedIncludedFiles.push_back(MString(resolvedKey.data(), resolvedKey.size(), m_arena));
 
     const usize startOffset = outProcessed.size();
-    outProcessed.append("/*__adhd_inc_push__*/");
+    outProcessed.append(s_IncludePushMarker.data(), s_IncludePushMarker.size());
     const b8 ok = processInternal(content, depth + 1u, MStringView(resolvedKey.data(), resolvedKey.size()), outProcessed);
-    outProcessed.append("/*__adhd_inc_pop__*/");
+    outProcessed.append(s_IncludePopMarker.data(), s_IncludePopMarker.size());
     m_includeResolver->popIncludeScope();
     if(!ok)
         return false;
@@ -668,3 +698,4 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

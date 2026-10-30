@@ -17,7 +17,48 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr MStringView s_AdhdGeneratedFileBanner = "// Compiled by ADHD Compiler " NWB_ADHD_COMPILER_VERSION "\r\n";
+
+inline void AppendCamelToSnakeCase(MString& out, const MStringView text){
+    for(usize i = 0u; i < text.size(); ++i){
+        const char ch = text[i];
+        if(ch >= 'A' && ch <= 'Z'){
+            if(i > 0u){
+                const char prev = text[i - 1u];
+                const b8 prevLowerOrDigit = (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9');
+                const b8 nextLower = (i + 1u < text.size()) && (text[i + 1u] >= 'a' && text[i + 1u] <= 'z');
+                if(prevLowerOrDigit || nextLower)
+                    out.push_back('_');
+            }
+            out.push_back(static_cast<char>(ch + ('a' - 'A')));
+        }
+        else{
+            out.push_back(ch);
+        }
+    }
+}
+
+inline void AppendAdhdTextCrlf(MString& out, const MStringView text){
+    for(usize i = 0u; i < text.size(); ++i){
+        const char ch = text[i];
+        if(ch == '\r')
+            continue;
+        if(ch == '\n')
+            out.append("\r\n");
+        else
+            out.push_back(ch);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class CppTypeEmitter{
+public:
+    [[nodiscard]] static MStringView mapBuiltinCppType(MStringView typeName)noexcept;
+
+
 public:
     explicit CppTypeEmitter(const SymbolTable& symbols)noexcept
         : m_symbols(symbols)
@@ -26,12 +67,10 @@ public:
 
 public:
     void emitTypeCpp(MString& out, const TypeRef& type)const;
-    void emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const;
+    void emitTypeArgListCpp(MString& out, Span<const TypeArg> args)const;
     void emitParamTypeCpp(MString& out, ParamPassingMode::Enum mode, const TypeRef& type, b8 topLevelConst = true)const;
-    void emitTemplateHeaderCpp(MString& out, const MVector<TemplateParamDecl>& params)const;
+    void emitTemplateHeaderCpp(MString& out, Span<const TemplateParamDecl> params)const;
     void emitMethodSignature(MString& out, const ClassDecl* ownerClass, const MethodDecl& method, b8 isDeclarationInClass)const;
-
-    [[nodiscard]] static b8 isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept;
 
 
 private:

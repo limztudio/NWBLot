@@ -43,6 +43,20 @@ public:
     using MapType = MStringMap<Value>;
 
 
+private:
+    template<typename Container>
+    static constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
+        && requires(Container& c, const MStringView text){ c.emplace_back(text); }
+    ;
+    template<typename Container>
+    static constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
+        && requires(Container& c){ c.get_allocator().arena(); }
+        && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
+            c.emplace_back(text, allocator);
+        }
+    ;
+
+
 public:
     [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
 
@@ -116,15 +130,6 @@ public:
 
     template<typename Container>
     [[nodiscard]] b8 copyStringList(Container& outList)const noexcept([]()consteval noexcept{
-        constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
-            && requires(Container& c, const MStringView text){ c.emplace_back(text); }
-        ;
-        constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
-            && requires(Container& c){ c.get_allocator().arena(); }
-            && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
-                c.emplace_back(text, allocator);
-            }
-        ;
         using SourceIterator = typename ListType::const_iterator;
         constexpr b8 s_ReadSourceNoThrow = noexcept(DeclVal<const Value&>().isList())
             && noexcept(DeclVal<const Value&>().asList())
@@ -139,7 +144,7 @@ public:
             && IsNothrowDestructible_V<MStringView>
         ;
         constexpr b8 s_ReadOffsetNoThrow = noexcept(DeclVal<void(*)(usize)noexcept>()(DeclVal<Container&>().size()));
-        if constexpr(s_CanAppendArenaString){
+        if constexpr(s_CanAppendArenaString<Container>){
             using ArenaReference = decltype(DeclVal<Container&>().get_allocator().arena());
             return
                 s_ReadSourceNoThrow && s_ReadOffsetNoThrow
@@ -148,7 +153,7 @@ public:
                 && noexcept(DeclVal<Container&>().emplace_back(DeclVal<const MStringView&>(), DeclVal<ArenaReference>()))
             ;
         }
-        else if constexpr(s_CanAppendString){
+        else if constexpr(s_CanAppendString<Container>){
             return s_ReadSourceNoThrow && s_ReadOffsetNoThrow && noexcept(DeclVal<Container&>().reserve(DeclVal<const usize&>() + DeclVal<const ListType&>().size())) && noexcept(DeclVal<Container&>().emplace_back(DeclVal<const MStringView&>()));
         }
         else{
@@ -167,17 +172,8 @@ public:
                 return false;
         }
 
-        constexpr b8 s_CanAppendString = requires(Container& c, usize n){ c.reserve(n); }
-            && requires(Container& c, const MStringView text){ c.emplace_back(text); }
-        ;
-        constexpr b8 s_CanAppendArenaString = requires(Container& c, usize n){ c.reserve(n); }
-            && requires(Container& c){ c.get_allocator().arena(); }
-            && requires(Container& c, const MStringView text, typename Container::value_type::allocator_type allocator){
-                c.emplace_back(text, allocator);
-            }
-        ;
         const usize listOffset = outList.size();
-        if constexpr(s_CanAppendArenaString){
+        if constexpr(s_CanAppendArenaString<Container>){
             auto& arena = outList.get_allocator().arena();
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
@@ -185,7 +181,7 @@ public:
                 outList.emplace_back(text, arena);
             }
         }
-        else if constexpr(s_CanAppendString){
+        else if constexpr(s_CanAppendString<Container>){
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
                 const MStringView text = elem.asString();
@@ -205,6 +201,7 @@ public:
 
 
 private:
+    void setStringOrReference(MStringView val, ValueType::Enum type);
     void destroy()noexcept;
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;

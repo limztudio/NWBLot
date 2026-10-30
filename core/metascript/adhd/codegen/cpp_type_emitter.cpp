@@ -14,6 +14,22 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+MStringView CppTypeEmitter::mapBuiltinCppType(const MStringView typeName)noexcept{
+    if(IsScalarType(typeName))
+        return typeName;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
+        return objInfo->cppExportName;
+    if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(typeName))
+        return unalignedInfo->cppExportName;
+    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(typeName))
+        return genericInfo->cppExportName;
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(typeName))
+        return vecInfo->cppExportName;
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(typeName))
+        return matInfo->cppExportName;
+    return {};
+}
+
 void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     if(type.refMode != ParamPassingMode::None){
         out.append("::NotNull<");
@@ -51,7 +67,7 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
     }
 
     const MStringView name = type.name;
-    if(const MStringView mappedBuiltin = SymbolTable::mapBuiltinCppType(name); !mappedBuiltin.empty()){
+    if(const MStringView mappedBuiltin = mapBuiltinCppType(name); !mappedBuiltin.empty()){
         out.append(mappedBuiltin.data(), mappedBuiltin.size());
         if(!type.templateArgs.empty())
             emitTypeArgListCpp(out, type.templateArgs);
@@ -69,7 +85,7 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type)const{
         emitTypeArgListCpp(out, type.templateArgs);
 }
 
-void CppTypeEmitter::emitTypeArgListCpp(MString& out, const MVector<TypeArg>& args)const{
+void CppTypeEmitter::emitTypeArgListCpp(MString& out, const Span<const TypeArg> args)const{
     out.push_back('<');
     for(usize i = 0u; i < args.size(); ++i){
         if(i > 0u)
@@ -95,7 +111,7 @@ void CppTypeEmitter::emitParamTypeCpp(
         return;
     }
 
-    if(isSmallValueType(type.name, m_symbols) && type.templateArgs.empty() && !type.isFuncType){
+    if(m_symbols.isSmallValueType(type.name) && type.templateArgs.empty() && !type.isFuncType){
         if(topLevelConst)
             out.append("const ");
         emitTypeCpp(out, type);
@@ -107,7 +123,7 @@ void CppTypeEmitter::emitParamTypeCpp(
     out.push_back('&');
 }
 
-void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const MVector<TemplateParamDecl>& params)const{
+void CppTypeEmitter::emitTemplateHeaderCpp(MString& out, const Span<const TemplateParamDecl> params)const{
     if(params.empty())
         return;
 
@@ -181,22 +197,6 @@ void CppTypeEmitter::emitMethodSignature(
         out.append("noexcept");
     if(isDeclarationInClass && method.isOverride)
         out.append(" override");
-}
-
-b8 CppTypeEmitter::isSmallValueType(MStringView typeName, const SymbolTable& symbols)noexcept{
-    typeName = symbols.resolveBaseTypeName(typeName);
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
-    if(typeName == adhdName) return true;
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
-    if constexpr(isSmallValue){ \
-        if(typeName == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_OBJECT_TYPE
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
-    if(symbols.findEnum(typeName))
-        return true;
-    return false;
 }
 
 

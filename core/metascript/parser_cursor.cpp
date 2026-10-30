@@ -34,7 +34,7 @@ struct TokenDescription{
 };
 
 
-[[nodiscard]] static TokenDescription DescribeToken(const Token& token)noexcept{
+[[nodiscard]] TokenDescription DescribeToken(const Token& token)noexcept{
     switch(token.type){
     case TokenType::Identifier: return { "identifier '", token.text, "'" };
     case TokenType::IntegerLiteral:

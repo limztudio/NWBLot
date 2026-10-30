@@ -20,7 +20,7 @@ namespace __hidden_adhd_simd_analyzer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 StmtsContainSimdMath(const MVector<Stmt*>& statements, const SymbolTable& symbols)noexcept;
+[[nodiscard]] b8 StmtsContainSimdMath(Span<const Stmt* const> statements, const SymbolTable& symbols)noexcept;
 
 [[nodiscard]] b8 StmtContainsSimdMath(const Stmt* stmt, const SymbolTable& symbols)noexcept{
     if(!stmt)
@@ -82,7 +82,7 @@ namespace __hidden_adhd_simd_analyzer{
     }
 }
 
-[[nodiscard]] b8 StmtsContainSimdMath(const MVector<Stmt*>& statements, const SymbolTable& symbols)noexcept{
+[[nodiscard]] b8 StmtsContainSimdMath(const Span<const Stmt* const> statements, const SymbolTable& symbols)noexcept{
     for(const Stmt* stmt : statements){
         if(StmtContainsSimdMath(stmt, symbols))
             return true;
@@ -127,7 +127,7 @@ void MarkPartialSimdBindingWrite(
 void PreRegisterLocalSimdDecls(
     MetaArena& arena,
     MVector<SimdVarBinding>& bindings,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const SymbolTable& symbols
 ){
     for(const Stmt* stmt : statements){
@@ -136,15 +136,7 @@ void PreRegisterLocalSimdDecls(
 
         switch(stmt->kind){
         case StmtKind::VarDecl:{
-            if(stmt->usesScratchArena || (stmt->varType && stmt->varType->refMode != ParamPassingMode::None))
-                break;
-
-            MStringView varSimdType;
-            if(stmt->varType && IsRegisterPromotableSimdType(symbols.resolveBaseTypeName(stmt->varType->name)))
-                varSimdType = symbols.resolveBaseTypeName(stmt->varType->name);
-            else if(stmt->expr && IsRegisterPromotableSimdType(stmt->expr->resolvedSimdType))
-                varSimdType = stmt->expr->resolvedSimdType;
-
+            const MStringView varSimdType = ResolveLocalVarDeclSimdType(*stmt, symbols);
             if(!varSimdType.empty()){
                 SimdVarBinding* binding = FindOrCreateBinding(arena, bindings, false, stmt->name, varSimdType);
                 binding->isLocalDecl = true;
@@ -188,7 +180,7 @@ void PreRegisterLocalSimdDecls(
 }
 
 void CollectLocalDeclConflicts(
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const SymbolTable& symbols,
     MVector<MStringView>& seenNames,
     MVector<MStringView>& seenSimdTypes,
@@ -224,13 +216,7 @@ void CollectLocalDeclConflicts(
             continue;
         switch(stmt->kind){
         case StmtKind::VarDecl:{
-            MStringView varSimdType;
-            if(!stmt->usesScratchArena && (!stmt->varType || stmt->varType->refMode == ParamPassingMode::None)){
-                if(stmt->varType && IsRegisterPromotableSimdType(symbols.resolveBaseTypeName(stmt->varType->name)))
-                    varSimdType = symbols.resolveBaseTypeName(stmt->varType->name);
-                else if(stmt->expr && IsRegisterPromotableSimdType(stmt->expr->resolvedSimdType))
-                    varSimdType = stmt->expr->resolvedSimdType;
-            }
+            const MStringView varSimdType = ResolveLocalVarDeclSimdType(*stmt, symbols);
             recordLocal(stmt->name, varSimdType, false);
             break;
         }
@@ -395,7 +381,7 @@ void AnalyzeSimdExprReads(
 void ScanStmtsForSimdBindings(
     MetaArena& arena,
     MVector<SimdVarBinding>& bindings,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const SymbolTable& symbols,
     const b8 inConditionalOrLoop,
     b8& ioHasSeenPossibleReturn
@@ -531,7 +517,7 @@ void MarkLambdaCapturedSimdBindingsInExpr(MVector<SimdVarBinding>& bindings, con
         MarkLambdaCapturedSimdBindingsInExpr(bindings, arg);
 }
 
-void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, const MVector<Stmt*>& statements)noexcept{
+void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, const Span<const Stmt* const> statements)noexcept{
     for(const Stmt* stmt : statements){
         if(!stmt)
             continue;
@@ -566,7 +552,7 @@ void MarkLambdaCapturedSimdBindingsInStmts(MVector<SimdVarBinding>& bindings, co
 void CollectScopedSimdBindings(
     MetaArena& arena,
     MVector<SimdVarBinding>& bindings,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const SymbolTable& symbols
 ){
     using namespace __hidden_adhd_simd_analyzer;
@@ -615,3 +601,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

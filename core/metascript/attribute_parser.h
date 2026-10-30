@@ -45,6 +45,10 @@ public:
 
 class AttributeParser{
 public:
+    [[nodiscard]] static b8 ParseOptionalList(ParserCursor& cursor, MVector<ParsedAttribute>& outAttributes);
+
+
+public:
     explicit AttributeParser(ParserCursor& cursor)noexcept
         : m_cursor(cursor)
     {}

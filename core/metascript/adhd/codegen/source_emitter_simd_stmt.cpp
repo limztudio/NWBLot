@@ -17,7 +17,7 @@ NWB_ADHD_BEGIN
 void SourceEmitter::emitSimdVectorCtorReg(
     MString& out,
     const MStringView simdType,
-    const MVector<Expr*>& arguments
+    const Span<const Expr* const> arguments
 )const{
     const b8 isDouble = IsDoubleSimdType(simdType);
     const b8 isInt = IsIntSimdType(simdType);
@@ -70,20 +70,7 @@ void SourceEmitter::emitSimdVectorCtorReg(
         return;
     }
     if(arguments.size() == 1u && arguments[0]){
-        if(!arguments[0]->resolvedSimdType.empty()){
-            emitSimdRegExpr(out, *arguments[0], simdType);
-            return;
-        }
-        if(isInt){
-            out.append(isDouble ? "::VectorDoubleReplicateInt(static_cast<u64>(" : "::VectorReplicateInt(static_cast<u32>(");
-            emitExpr(out, *arguments[0]);
-            out.append("))");
-        }
-        else{
-            out.append(isDouble ? "::VectorDoubleReplicate(" : "::VectorReplicate(");
-            emitExpr(out, *arguments[0]);
-            out.push_back(')');
-        }
+        emitSimdRegExpr(out, *arguments[0], simdType);
         return;
     }
 
@@ -135,6 +122,45 @@ const SimdVarBinding* SourceEmitter::findSimdBindingForExpr(const Expr* const ex
     return nullptr;
 }
 
+const SimdVarBinding* SourceEmitter::findSimdRootBindingForExpr(const Expr* const expr)const noexcept{
+    if(!expr)
+        return nullptr;
+    if(const SimdVarBinding* direct = findSimdBindingForExpr(expr))
+        return direct;
+    if((expr->kind == ExprKind::MemberAccess || expr->kind == ExprKind::Index) && expr->lhs)
+        return findSimdBindingForExpr(expr->lhs);
+    return nullptr;
+}
+
+void SourceEmitter::emitSimdBindingInitialDecl(
+    MString& out,
+    const SimdVarBinding& binding,
+    const b8 loadFromStorage,
+    const b8 qualifyThisMember,
+    const u32 indent
+)const{
+    const MStringView regType = SimdRegisterCppType(binding.simdType);
+    const MStringView loadFn = SimdLoadFunctionCpp(binding.simdType);
+    emitIndent(out, indent);
+    if(!binding.written && !binding.needsStorageSync)
+        out.append("const ");
+    out.append(regType.data(), regType.size());
+    out.push_back(' ');
+    out.append(binding.regName.data(), binding.regName.size());
+    if(loadFromStorage){
+        out.append(" = ");
+        out.append(loadFn.data(), loadFn.size());
+        out.push_back('(');
+        if(qualifyThisMember && binding.isThisMember)
+            out.append("this->");
+        out.append(binding.name.data(), binding.name.size());
+        out.append(");\r\n");
+    }
+    else{
+        out.append("{};\r\n");
+    }
+}
+
 void SourceEmitter::emitSimdStoreForBinding(
     MString& out,
     const SimdVarBinding& binding,
@@ -174,19 +200,7 @@ void SourceEmitter::emitSimdLoopElementLoad(
     const SimdVarBinding& loopBinding,
     const u32 indent
 )const{
-    const MStringView regType = SimdRegisterCppType(loopBinding.simdType);
-    const MStringView loadFn = SimdLoadFunctionCpp(loopBinding.simdType);
-    emitIndent(out, indent);
-    if(!loopBinding.written && !loopBinding.needsStorageSync)
-        out.append("const ");
-    out.append(regType.data(), regType.size());
-    out.push_back(' ');
-    out.append(loopBinding.regName.data(), loopBinding.regName.size());
-    out.append(" = ");
-    out.append(loadFn.data(), loadFn.size());
-    out.push_back('(');
-    out.append(loopBinding.name.data(), loopBinding.name.size());
-    out.append(");\r\n");
+    emitSimdBindingInitialDecl(out, loopBinding, true, false, indent);
 }
 
 void SourceEmitter::emitSimdMutCallReloads(
@@ -208,10 +222,7 @@ void SourceEmitter::emitSimdMutCallReloads(
         for(const Expr* arg : expr.arguments){
             if(!arg || !arg->isMutArg)
                 continue;
-            const SimdVarBinding* mutBinding = findSimdBindingForExpr(arg);
-            if(!mutBinding && (arg->kind == ExprKind::MemberAccess || arg->kind == ExprKind::Index) && arg->lhs)
-                mutBinding = findSimdBindingForExpr(arg->lhs);
-            if(mutBinding)
+            if(const SimdVarBinding* mutBinding = findSimdRootBindingForExpr(arg))
                 emitSimdLoadReloadForBinding(out, *mutBinding, indent);
         }
         const b8 isThisMethodCall = (expr.lhs && expr.lhs->kind == ExprKind::ThisMember);
@@ -249,7 +260,7 @@ void SourceEmitter::emitSimdBlockStores(MString& out, const u32 indent)const{
 
 void SourceEmitter::emitScopedSimdBody(
     MString& out,
-    const MVector<Stmt*>& statements,
+    const Span<const Stmt* const> statements,
     const u32 indent
 )const{
     MVector<SimdVarBinding> simdBindings(m_arena);
@@ -269,28 +280,7 @@ void SourceEmitter::emitScopedSimdBody(
     for(const SimdVarBinding& binding : simdBindings){
         if(binding.isLocalDecl || binding.isLoopElement)
             continue;
-
-        const MStringView regType = SimdRegisterCppType(binding.simdType);
-        const MStringView loadFn = SimdLoadFunctionCpp(binding.simdType);
-
-        emitIndent(out, indent);
-        if(!binding.written && !binding.needsStorageSync)
-            out.append("const ");
-        out.append(regType.data(), regType.size());
-        out.push_back(' ');
-        out.append(binding.regName.data(), binding.regName.size());
-        if(binding.readBeforeWrite || !binding.written){
-            out.append(" = ");
-            out.append(loadFn.data(), loadFn.size());
-            out.push_back('(');
-            if(binding.isThisMember)
-                out.append("this->");
-            out.append(binding.name.data(), binding.name.size());
-            out.append(");\r\n");
-        }
-        else{
-            out.append("{};\r\n");
-        }
+        emitSimdBindingInitialDecl(out, binding, binding.readBeforeWrite || !binding.written, true, indent);
     }
 
     emitStatementList(out, statements, indent);
@@ -315,11 +305,7 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
         return false;
     const SimdVarBinding* simdLocal = findSimdBinding(false, stmt.name);
     if(simdLocal && simdLocal->isLocalDecl){
-        MStringView varSimdType;
-        if(stmt.varType && IsRegisterPromotableSimdType(m_symbols.resolveBaseTypeName(stmt.varType->name)))
-            varSimdType = m_symbols.resolveBaseTypeName(stmt.varType->name);
-        else if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType))
-            varSimdType = stmt.expr->resolvedSimdType;
+        const MStringView varSimdType = ResolveLocalVarDeclSimdType(stmt, m_symbols);
         if(varSimdType != simdLocal->simdType)
             return false;
         const MStringView regType = SimdRegisterCppType(simdLocal->simdType);
@@ -330,22 +316,10 @@ b8 SourceEmitter::tryEmitSimdVarDeclStmt(MString& out, const Stmt& stmt, const u
         out.push_back(' ');
         out.append(simdLocal->regName.data(), simdLocal->regName.size());
         out.append(" = ");
-        if(stmt.isCtorInit){
-            emitSimdVectorCtorReg(out, simdLocal->simdType, stmt.arguments);
-        }
-        else if(stmt.expr){
+        if(stmt.expr && !stmt.isCtorInit)
             emitSimdRegExpr(out, *stmt.expr, simdLocal->simdType);
-        }
-        else{
-            const b8 isDouble = IsDoubleSimdType(simdLocal->simdType);
-            const b8 isInt = IsIntSimdType(simdLocal->simdType);
-            if(m_symbols.isSimdMatrixType(simdLocal->simdType))
-                out.append(isDouble ? "::SIMDMatrixDouble{}" : "::SIMDMatrix{}");
-            else if(isInt)
-                out.append(isDouble ? "::VectorDoubleFalseInt()" : "::VectorFalseInt()");
-            else
-                out.append(isDouble ? "::VectorDoubleZero()" : "::VectorZero()");
-        }
+        else
+            emitSimdVectorCtorReg(out, simdLocal->simdType, stmt.arguments);
         out.append(";\r\n");
 
         if(simdLocal->needsStorageSync){
@@ -404,12 +378,8 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
                     out.push_back('(');
                 }
 
-                if(stmt.expr->op == TokenType::Equal){
+                if(stmt.expr->op == TokenType::Equal || !tryEmitSimdBinaryOpReg(out, MapSimdAssignToBinaryOp(stmt.expr->op), lhs, rhs, simdType))
                     emitSimdRegExpr(out, rhs, simdType);
-                }
-                else{
-                    (void)tryEmitSimdBinaryOpReg(out, MapSimdAssignToBinaryOp(stmt.expr->op), lhs, rhs, simdType);
-                }
 
                 if(targetBinding){
                     out.append(";\r\n");
@@ -427,17 +397,19 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
         }
 
         u32 lane = 0u;
-        if(lhs.kind == ExprKind::MemberAccess && lhs.lhs
+        u32 vecLanes = 0u;
+        const b8 isStaticLaneAssign = lhs.kind == ExprKind::MemberAccess && lhs.lhs
             && IsRegisterPromotableSimdType(lhs.lhs->resolvedSimdType)
-            && IsSingleSwizzleLane(lhs.text, lane))
-        {
+            && IsSingleSwizzleLane(lhs.text, lane);
+        const b8 isDynamicIndexAssign = lhs.kind == ExprKind::Index && lhs.lhs && lhs.rhs
+            && IsRegisterPromotableSimdType(lhs.lhs->resolvedSimdType)
+            && m_symbols.isSimdVectorType(lhs.lhs->resolvedSimdType, vecLanes);
+        if(isStaticLaneAssign || isDynamicIndexAssign){
             const SimdVarBinding* targetBinding = findSimdBindingForExpr(lhs.lhs);
-
             if(targetBinding){
                 const MStringView simdType = targetBinding->simdType;
                 const b8 isDouble = IsDoubleSimdType(simdType);
                 const b8 isInt = IsIntSimdType(simdType);
-                static constexpr const char* s_LaneSuffix[4] = { "X(", "Y(", "Z(", "W(" };
 
                 emitIndent(out, indent);
                 out.append(targetBinding->regName.data(), targetBinding->regName.size());
@@ -446,7 +418,13 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
                     out.append(isDouble ? "::VectorDoubleSetInt" : "::VectorSetInt");
                 else
                     out.append(isDouble ? "::VectorDoubleSet" : "::VectorSet");
-                out.append(s_LaneSuffix[lane]);
+                if(isDynamicIndexAssign){
+                    out.append("ByIndex(");
+                }
+                else{
+                    const MStringView laneSuffix = SimdLaneCallSuffix(lane);
+                    out.append(laneSuffix.data(), laneSuffix.size());
+                }
                 out.append(targetBinding->regName.data(), targetBinding->regName.size());
                 out.append(", ");
                 if(isInt)
@@ -465,55 +443,14 @@ b8 SourceEmitter::tryEmitSimdAssignStmt(MString& out, const Stmt& stmt, const u3
                 }
                 if(isInt)
                     out.push_back(')');
-                out.append(");\r\n");
-
-                if(targetBinding->needsStorageSync)
-                    emitSimdStoreForBinding(out, *targetBinding, indent);
-                emitSimdMutCallReloads(out, rhs, indent);
-                return true;
-            }
-        }
-
-        u32 vecLanes = 0u;
-        if(lhs.kind == ExprKind::Index && lhs.lhs && lhs.rhs
-            && IsRegisterPromotableSimdType(lhs.lhs->resolvedSimdType)
-            && m_symbols.isSimdVectorType(lhs.lhs->resolvedSimdType, vecLanes))
-        {
-            const SimdVarBinding* targetBinding = findSimdBindingForExpr(lhs.lhs);
-
-            if(targetBinding){
-                const MStringView simdType = targetBinding->simdType;
-                const b8 isDouble = IsDoubleSimdType(simdType);
-                const b8 isInt = IsIntSimdType(simdType);
-
-                emitIndent(out, indent);
-                out.append(targetBinding->regName.data(), targetBinding->regName.size());
-                out.append(" = ");
-                if(isInt)
-                    out.append(isDouble ? "::VectorDoubleSetIntByIndex(" : "::VectorSetIntByIndex(");
-                else
-                    out.append(isDouble ? "::VectorDoubleSetByIndex(" : "::VectorSetByIndex(");
-                out.append(targetBinding->regName.data(), targetBinding->regName.size());
-                out.append(", ");
-                if(isInt)
-                    out.append(isDouble ? "static_cast<u64>(" : "static_cast<u32>(");
-                if(stmt.expr->op == TokenType::Equal){
-                    emitExpr(out, rhs);
+                if(isDynamicIndexAssign){
+                    out.append(", static_cast<usize>(");
+                    emitExpr(out, *lhs.rhs);
+                    out.append("));\r\n");
                 }
                 else{
-                    const MStringView opSym = SimdCompoundScalarOpSymbol(stmt.expr->op);
-                    out.push_back('(');
-                    emitExpr(out, lhs);
-                    out.append(opSym.data(), opSym.size());
-                    out.push_back('(');
-                    emitExpr(out, rhs);
-                    out.append("))");
+                    out.append(");\r\n");
                 }
-                if(isInt)
-                    out.push_back(')');
-                out.append(", static_cast<usize>(");
-                emitExpr(out, *lhs.rhs);
-                out.append("));\r\n");
 
                 if(targetBinding->needsStorageSync)
                     emitSimdStoreForBinding(out, *targetBinding, indent);

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "simd_binding_analyzer.h"
+#include "simd_codegen_utils.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,43 +20,12 @@ namespace __hidden_adhd_simd_codegen_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr const char* s_IntLaneGettersSingle[4] = {
-    "::VectorGetIntX(",
-    "::VectorGetIntY(",
-    "::VectorGetIntZ(",
-    "::VectorGetIntW("
+static constexpr MStringView s_LaneCallSuffixes[4] = {
+    "X(",
+    "Y(",
+    "Z(",
+    "W("
 };
-
-static constexpr const char* s_IntLaneGettersDouble[4] = {
-    "::VectorDoubleGetIntX(",
-    "::VectorDoubleGetIntY(",
-    "::VectorDoubleGetIntZ(",
-    "::VectorDoubleGetIntW("
-};
-
-[[nodiscard]] constexpr b8 IsFloatSimdVectorType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isFloatReg){ \
-        if(simdType == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-    return false;
-}
-
-[[nodiscard]] constexpr b8 TryMapSwizzleCharToLane(const char c, u32& outLane)noexcept{
-    switch(c){
-#define NWB_ADHD_EXPORT_SWIZZLE_COMPONENT(xyzwChar, rgbaChar, laneIndex) \
-    case xyzwChar: \
-    case rgbaChar: \
-        outLane = laneIndex; \
-        return true;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT
-    default:
-        return false;
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,65 +38,42 @@ static constexpr const char* s_IntLaneGettersDouble[4] = {
 
 
 [[nodiscard]] b8 IsRegisterPromotableSimdType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isFloatReg || isIntReg){ \
-        if(simdType == adhdName) return true; \
-    }
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if(simdType == adhdName) return true;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-    return false;
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType))
+        return vecInfo->isFloatReg || vecInfo->isIntReg;
+    return FindBuiltinSimdMatrixType(simdType) != nullptr;
 }
 
 [[nodiscard]] b8 IsDoubleSimdType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isDoubleReg && (isFloatReg || isIntReg)){ \
-        if(simdType == adhdName) return true; \
-    }
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isDoubleReg){ \
-        if(simdType == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType))
+        return vecInfo->isDoubleReg && (vecInfo->isFloatReg || vecInfo->isIntReg);
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
+        return matInfo->isDoubleReg;
     return false;
 }
 
 [[nodiscard]] b8 IsIntSimdType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isIntReg){ \
-        if(simdType == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-    return false;
+    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType);
+    return vecInfo && vecInfo->isIntReg;
 }
 
 [[nodiscard]] b8 IsSignedIntSimdType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isIntReg && isSignedInt){ \
-        if(simdType == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
-    return false;
+    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType);
+    return vecInfo && vecInfo->isIntReg && vecInfo->isSignedInt;
 }
 
 [[nodiscard]] MStringView IntSimdLaneType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isIntReg){ \
-        if(simdType == adhdName) return xyzScalarType; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType);
+    if(vecInfo && vecInfo->isIntReg)
+        return vecInfo->xyzScalarType;
     return "u64";
 }
 
 [[nodiscard]] MStringView IntSimdRawWordType(const b8 isDouble)noexcept{
     return isDouble ? "u64" : "u32";
+}
+
+[[nodiscard]] MStringView SimdLaneCallSuffix(const u32 lane)noexcept{
+    return __hidden_adhd_simd_codegen_utils::s_LaneCallSuffixes[lane < 4u ? lane : 3u];
 }
 
 void AppendIntSimdLaneExtract(
@@ -137,13 +83,12 @@ void AppendIntSimdLaneExtract(
     const b8 isDouble,
     const MStringView laneType
 ){
-    const char* const getter = isDouble
-        ? __hidden_adhd_simd_codegen_utils::s_IntLaneGettersDouble[lane]
-        : __hidden_adhd_simd_codegen_utils::s_IntLaneGettersSingle[lane];
+    const MStringView laneSuffix = SimdLaneCallSuffix(lane);
     out.append("static_cast<");
     out.append(laneType.data(), laneType.size());
     out.append(">(");
-    out.append(getter);
+    out.append(isDouble ? "::VectorDoubleGetInt" : "::VectorGetInt");
+    out.append(laneSuffix.data(), laneSuffix.size());
     out.append(varName.data(), varName.size());
     out.append("))");
 }
@@ -164,49 +109,32 @@ void AppendIntSimdLaneExtract(
 }
 
 [[nodiscard]] MStringView SimdRegisterCppType(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(!MStringView(regCppType).empty()){ \
-        if(simdType == adhdName) return regCppType; \
-    }
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if(simdType == adhdName) return regCppType;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType); vecInfo && !vecInfo->regCppType.empty())
+        return vecInfo->regCppType;
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
+        return matInfo->regCppType;
     return "::SIMDVectorSingle";
 }
 
 [[nodiscard]] MStringView SimdLoadFunctionCpp(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(!MStringView(loadCppFunc).empty()){ \
-        if(simdType == adhdName) return loadCppFunc; \
-    }
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if(simdType == adhdName) return loadCppFunc;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType); vecInfo && !vecInfo->loadCppFunc.empty())
+        return vecInfo->loadCppFunc;
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
+        return matInfo->loadCppFunc;
     return "::LoadFloat";
 }
 
 [[nodiscard]] MStringView SimdStoreFunctionCpp(const MStringView simdType)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(!MStringView(storeCppFunc).empty()){ \
-        if(simdType == adhdName) return storeCppFunc; \
-    }
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if(simdType == adhdName) return storeCppFunc;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(simdType); vecInfo && !vecInfo->storeCppFunc.empty())
+        return vecInfo->storeCppFunc;
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType))
+        return matInfo->storeCppFunc;
     return "::StoreFloat";
 }
 
 [[nodiscard]] MStringView MapBuiltinMathFunction(const MStringView name)noexcept{
-#define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule) \
-    if(name == adhdName) return cppExportName;
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_FUNCTION
+    if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(name))
+        return fnInfo->cppExportName;
     return {};
 }
 
@@ -259,23 +187,38 @@ void AppendSimdLaneCountIntrinsicPrefix(
 }
 
 [[nodiscard]] b8 IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{
-    return text.size() == 1u && __hidden_adhd_simd_codegen_utils::TryMapSwizzleCharToLane(text[0], outLane);
+    return text.size() == 1u && TryMapSwizzleCharToLane(text[0], outLane);
 }
 
 [[nodiscard]] u32 MapSwizzleCharToLane(const char c)noexcept{
     u32 lane = 3u;
-    (void)__hidden_adhd_simd_codegen_utils::TryMapSwizzleCharToLane(c, lane);
+    if(!TryMapSwizzleCharToLane(c, lane))
+        return 3u;
     return lane;
 }
 
 [[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{
     if(!expr || expr->kind != ExprKind::Binary || expr->op != TokenType::Star || !expr->lhs || !expr->rhs)
         return false;
-    if(expr->resolvedSimdType.empty() || !__hidden_adhd_simd_codegen_utils::IsFloatSimdVectorType(expr->resolvedSimdType))
+    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(expr->resolvedSimdType);
+    if(!vecInfo || !vecInfo->isFloatReg)
         return false;
     outMulA = expr->lhs;
     outMulB = expr->rhs;
     return true;
+}
+
+[[nodiscard]] MStringView ResolveLocalVarDeclSimdType(const Stmt& stmt, const SymbolTable& symbols)noexcept{
+    if(stmt.usesScratchArena || (stmt.varType && stmt.varType->refMode != ParamPassingMode::None))
+        return {};
+    if(stmt.varType){
+        const MStringView resolved = symbols.resolveBaseTypeName(stmt.varType->name);
+        if(IsRegisterPromotableSimdType(resolved))
+            return resolved;
+    }
+    if(stmt.expr && IsRegisterPromotableSimdType(stmt.expr->resolvedSimdType))
+        return stmt.expr->resolvedSimdType;
+    return {};
 }
 
 [[nodiscard]] b8 ExprContainsSimdMath(const Expr* expr, const SymbolTable& symbols)noexcept{
@@ -349,3 +292,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

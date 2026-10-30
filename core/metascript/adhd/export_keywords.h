@@ -120,7 +120,6 @@ NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("bool",  "'bool' is prohibited in adhd; 
 #undef NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD
 #endif
 
-
 #ifdef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD
@@ -168,3 +167,4 @@ NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("bool",  "'bool' is prohibited in adhd; 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -63,6 +63,12 @@ public:
 
 
 public:
+    [[nodiscard]] static usize SkipQuotedLiteral(MStringView text, usize index)noexcept;
+    [[nodiscard]] static usize AppendQuotedLiteral(MStringView text, usize index, MString& out);
+    [[nodiscard]] static usize AppendPreprocessorNumber(MStringView text, usize index, MString& out, b8 allowSignedExponent = true);
+
+
+public:
     Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver = nullptr);
 
 
@@ -70,12 +76,12 @@ public:
     void defineObjectMacro(MStringView name, MStringView body);
     void undefineMacro(MStringView name);
     [[nodiscard]] b8 isMacroDefined(MStringView name)const noexcept;
+    [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
 
     [[nodiscard]] b8 process(MStringView source, MString& outProcessed);
 
     [[nodiscard]] const IncludedList& includedFiles()const noexcept{ return m_includedFiles; }
     [[nodiscard]] const IncludedList& resolvedIncludedFiles()const noexcept{ return m_resolvedIncludedFiles; }
-    [[nodiscard]] b8 isOffsetInIncludedRange(usize offset)const noexcept;
 
 
 private:
@@ -94,8 +100,8 @@ private:
     [[nodiscard]] b8 handleInclude(MStringView rest, u32 line, u32 depth, MStringView currentFileKey, MString& outProcessed);
     [[nodiscard]] b8 handleDefine(MStringView rest, u32 line);
     [[nodiscard]] b8 handleUndef(MStringView rest, u32 line);
-    [[nodiscard]] b8 evaluateCondition(MStringView exprText, u32 line, b8& outResult);
     [[nodiscard]] b8 expandLineMacros(MStringView lineText, u32 line, MString& outExpanded);
+    [[nodiscard]] b8 evaluateCondition(MStringView exprText, u32 line, b8& outResult);
 
 
 private:

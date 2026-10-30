@@ -4,6 +4,8 @@
 
 #include "header_emitter.h"
 
+#include "reflection_emitter.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,29 +150,8 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
         out.append(" = 0;\r\n");
     }
 
-    if(!decl.assetTypeName.empty()){
-        out.append("\r\n    inline static constexpr AStringView s_AssetTypeName = \"");
-        out.append(decl.assetTypeName.data(), decl.assetTypeName.size());
-        out.append("\";\r\n");
-    }
-    MVector<MethodDecl*> allMethods(m_arena);
-    TypeRef selfIfaceRef(m_arena);
-    selfIfaceRef.name = decl.name;
-    m_symbols.collectAllInterfaceMethods(selfIfaceRef, allMethods);
-    out.append("    [[nodiscard]] static constexpr usize reflectedMethodCount()noexcept{ return ");
-    AppendAdhdUnsigned(out, allMethods.size());
-    out.append("u; }\r\n");
-    out.append("    [[nodiscard]] static constexpr AStringView reflectedMethodName([[maybe_unused]] const usize index)noexcept{\r\n");
-    for(usize i = 0u; i < allMethods.size(); ++i){
-        if(!allMethods[i])
-            continue;
-        out.append("        if(index == ");
-        AppendAdhdUnsigned(out, i);
-        out.append("u) return \"");
-        out.append(allMethods[i]->name.data(), allMethods[i]->name.size());
-        out.append("\";\r\n");
-    }
-    out.append("        return {};\r\n    }\r\n");
+    const ReflectionEmitter reflectionEmitter(m_symbols);
+    reflectionEmitter.emitInterfaceReflectionDeclarations(out, decl, m_arena);
 
     out.append("};\r\n\r\n");
 }
@@ -182,48 +163,8 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
     out.append(c.name.data(), c.name.size());
     if(c.isCtorInit){
         const MStringView baseConstType = m_symbols.resolveBaseTypeName(c.varType->name);
-        if(!baseConstType.empty() && m_symbols.isSimdMatrixType(baseConstType)){
-            if(c.arguments.empty()){
-                out.append("{};\r\n");
-            }
-            else{
-                out.append("{ .raw = { ");
-                for(usize i = 0u; i < c.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(c.arguments[i])
-                        m_sourceEmitter.emitExpr(out, *c.arguments[i]);
-                }
-                out.append(" } };\r\n");
-            }
-        }
-        else if(c.arguments.empty()){
-            out.append("{};\r\n");
-        }
-        else{
-            out.push_back('(');
-            u32 ctorVecLanes = 0u;
-            const b8 isScalarSplatCtor = !baseConstType.empty()
-                && (m_symbols.isSimdVectorType(baseConstType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseConstType, ctorVecLanes))
-                && c.arguments.size() == 1u && c.arguments[0]
-                && c.arguments[0]->resolvedSimdType.empty();
-            if(isScalarSplatCtor){
-                for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-                    if(lane > 0u)
-                        out.append(", ");
-                    m_sourceEmitter.emitExpr(out, *c.arguments[0]);
-                }
-            }
-            else{
-                for(usize i = 0u; i < c.arguments.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(c.arguments[i])
-                        m_sourceEmitter.emitExpr(out, *c.arguments[i]);
-                }
-            }
-            out.append(");\r\n");
-        }
+        m_sourceEmitter.emitCtorOrCallArgs(out, baseConstType, c.arguments, {}, false, true);
+        out.append(";\r\n");
     }
     else{
         out.append(" = ");
@@ -234,25 +175,8 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
 }
 
 void HeaderEmitter::emitFreeFunctionDecl(MString& out, const MethodDecl& fn)const{
-    const b8 emitInlineBody = fn.isInline || !fn.templateParams.empty();
-    m_typeEmitter.emitTemplateHeaderCpp(out, fn.templateParams);
-    if(emitInlineBody && fn.hasBody){
-        if(fn.isForceInline)
-            out.append("NWB_FORCE_INLINE ");
-        else if(fn.isNoInline)
-            out.append("NWB_NOINLINE ");
-        out.append("inline ");
-    }
-
-    m_typeEmitter.emitMethodSignature(out, nullptr, fn, false);
-    if(emitInlineBody && fn.hasBody){
-        out.append("{\r\n");
-        m_sourceEmitter.emitMethodBodyBlock(out, fn, 1u);
-        out.append("}\r\n\r\n");
-    }
-    else{
-        out.append(";\r\n\r\n");
-    }
+    const b8 emitInlineBody = (fn.isInline || !fn.templateParams.empty()) && fn.hasBody;
+    m_sourceEmitter.emitOutOfClassCallable(out, nullptr, fn, emitInlineBody, true);
 }
 
 
@@ -263,3 +187,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

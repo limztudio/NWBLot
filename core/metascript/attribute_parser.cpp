@@ -14,6 +14,13 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 AttributeParser::ParseOptionalList(ParserCursor& cursor, MVector<ParsedAttribute>& outAttributes){
+    if(!cursor.check(TokenType::LeftBracket))
+        return true;
+    AttributeParser attrParser(cursor);
+    return attrParser.parseSingleBracketList(outAttributes);
+}
+
 b8 AttributeParser::parseSingleBracketList(MVector<ParsedAttribute>& outAttributes){
     if(!m_cursor.check(TokenType::LeftBracket))
         return true;

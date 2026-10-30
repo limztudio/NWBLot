@@ -4,262 +4,13 @@
 
 #include "header_emitter.h"
 
+#include "../sema/layout_optimizer.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ADHD_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_adhd_header_emitter{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] b8 TypeRefReferencesSymbol(const TypeRef& type, const MStringView targetName, const u32 depth = 0u)noexcept{
-    if(depth > 16u)
-        return false;
-    if(type.name == targetName)
-        return true;
-    if(type.isFuncType){
-        if(type.funcReturnType && TypeRefReferencesSymbol(*type.funcReturnType, targetName, depth + 1u))
-            return true;
-        for(const FuncParamType& fp : type.funcParams){
-            if(fp.type && TypeRefReferencesSymbol(*fp.type, targetName, depth + 1u))
-                return true;
-        }
-    }
-    for(const TypeArg& targ : type.templateArgs){
-        if(targ.type && TypeRefReferencesSymbol(*targ.type, targetName, depth + 1u))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 ClassDependsOnClassByValue(
-    const ClassDecl& cls,
-    const MStringView targetClassName,
-    const SymbolTable& symbols,
-    u32 depth = 0u
-)noexcept;
-
-[[nodiscard]] b8 TypeRefReferencesSymbolByValue(
-    const TypeRef& type,
-    const MStringView targetName,
-    const SymbolTable& symbols,
-    const u32 depth = 0u
-)noexcept{
-    if(depth > 16u || type.isFuncType || symbols.resolveRefMode(&type) != ParamPassingMode::None)
-        return false;
-    if(type.name == targetName)
-        return true;
-    if(const TypeRef* unwrapped = symbols.unwrapTypeAlias(&type)){
-        if(unwrapped != &type && TypeRefReferencesSymbolByValue(*unwrapped, targetName, symbols, depth + 1u))
-            return true;
-    }
-    if(const ClassDecl* cls = symbols.findClass(type.name)){
-        if(!cls->templateParams.empty() && ClassDependsOnClassByValue(*cls, targetName, symbols, depth + 1u))
-            return true;
-    }
-    for(const TypeArg& targ : type.templateArgs){
-        if(targ.type && TypeRefReferencesSymbolByValue(*targ.type, targetName, symbols, depth + 1u))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 ClassDependsOnClassByValue(
-    const ClassDecl& cls,
-    const MStringView targetClassName,
-    const SymbolTable& symbols,
-    const u32 depth
-)noexcept{
-    for(const FieldDecl* field : cls.fields){
-        if(!field || !field->type)
-            continue;
-        if(TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols, depth))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 InstantiationDependsOnClassByValue(
-    const ClassTemplateInstantiation& inst,
-    const MStringView targetClassName,
-    const SymbolTable& symbols
-)noexcept{
-    for(const FieldDecl* field : inst.orderedFields){
-        if(field && field->type && TypeRefReferencesSymbolByValue(*field->type, targetClassName, symbols))
-            return true;
-    }
-    for(const TypeArg& targ : inst.templateArgs){
-        if(targ.type && TypeRefReferencesSymbolByValue(*targ.type, targetClassName, symbols))
-            return true;
-    }
-    return false;
-}
-
-void VisitTypeAliasTopo(
-    const usize idx,
-    const MVector<const TypeAliasDecl*>& aliases,
-    MVector<u8>& state,
-    MVector<const TypeAliasDecl*>& outSorted
-){
-    if(state[idx] != 0u)
-        return;
-    state[idx] = 1u;
-    const TypeAliasDecl* cur = aliases[idx];
-    if(cur && cur->aliasedType){
-        for(usize j = 0u; j < aliases.size(); ++j){
-            if(j != idx && state[j] == 0u && aliases[j] && TypeRefReferencesSymbol(*cur->aliasedType, aliases[j]->name))
-                VisitTypeAliasTopo(j, aliases, state, outSorted);
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-void VisitInterfaceTopo(
-    const usize idx,
-    const MVector<const InterfaceDecl*>& interfaces,
-    const SymbolTable& symbols,
-    MVector<u8>& state,
-    MVector<const InterfaceDecl*>& outSorted
-){
-    if(state[idx] != 0u)
-        return;
-    state[idx] = 1u;
-    const InterfaceDecl* cur = interfaces[idx];
-    if(cur){
-        for(const TypeRef* baseRef : cur->baseInterfaces){
-            if(!baseRef)
-                continue;
-            const MStringView baseName = symbols.resolveBaseTypeName(baseRef->name);
-            for(usize j = 0u; j < interfaces.size(); ++j){
-                if(j != idx && state[j] == 0u && interfaces[j] && interfaces[j]->name == baseName)
-                    VisitInterfaceTopo(j, interfaces, symbols, state, outSorted);
-            }
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-void VisitClassTopo(
-    const usize idx,
-    const MVector<const ClassDecl*>& classes,
-    const SymbolTable& symbols,
-    MVector<u8>& state,
-    MVector<const ClassDecl*>& outSorted
-){
-    if(state[idx] != 0u)
-        return;
-    state[idx] = 1u;
-    const ClassDecl* cur = classes[idx];
-    if(cur){
-        for(usize j = 0u; j < classes.size(); ++j){
-            if(j != idx && state[j] == 0u && classes[j] && ClassDependsOnClassByValue(*cur, classes[j]->name, symbols))
-                VisitClassTopo(j, classes, symbols, state, outSorted);
-        }
-    }
-    state[idx] = 2u;
-    outSorted.push_back(cur);
-}
-
-[[nodiscard]] b8 HasTemplateParamName(const MVector<TemplateParamDecl>* params, const MStringView name)noexcept{
-    if(!params)
-        return false;
-    for(const TemplateParamDecl& p : *params){
-        if(p.name == name)
-            return true;
-    }
-    return false;
-}
-
-void CollectExternalForwardDeclClasses(
-    const TypeRef& type,
-    const SymbolTable& symbols,
-    const MVector<TemplateParamDecl>* outerTemplateParams,
-    const MVector<TemplateParamDecl>* innerTemplateParams,
-    MVector<MStringView>& outNames,
-    const b8 inRefOrAssetContext = false,
-    const u32 depth = 0u
-){
-    if(depth > 16u || type.isAuto)
-        return;
-
-    if(type.isFuncType){
-        if(type.funcReturnType){
-            CollectExternalForwardDeclClasses(
-                *type.funcReturnType,
-                symbols,
-                outerTemplateParams,
-                innerTemplateParams,
-                outNames,
-                type.funcReturnType->refMode != ParamPassingMode::None,
-                depth + 1u
-            );
-        }
-        for(const FuncParamType& fp : type.funcParams){
-            if(fp.type){
-                CollectExternalForwardDeclClasses(
-                    *fp.type,
-                    symbols,
-                    outerTemplateParams,
-                    innerTemplateParams,
-                    outNames,
-                    true,
-                    depth + 1u
-                );
-            }
-        }
-        return;
-    }
-
-    const b8 isRefOrAsset = inRefOrAssetContext || (type.refMode != ParamPassingMode::None);
-    if(isRefOrAsset
-        && !type.name.empty()
-        && type.templateArgs.empty()
-        && !HasTemplateParamName(outerTemplateParams, type.name)
-        && !HasTemplateParamName(innerTemplateParams, type.name)
-        && !IsKnownConcreteTypeName(type.name, symbols))
-    {
-        b8 alreadyPresent = false;
-        for(const MStringView existing : outNames){
-            if(existing == type.name){
-                alreadyPresent = true;
-                break;
-            }
-        }
-        if(!alreadyPresent)
-            outNames.push_back(type.name);
-    }
-
-    const b8 childInAssetContext = (type.name == "AssetRef");
-    for(const TypeArg& targ : type.templateArgs){
-        if(targ.type){
-            CollectExternalForwardDeclClasses(
-                *targ.type,
-                symbols,
-                outerTemplateParams,
-                innerTemplateParams,
-                outNames,
-                childInAssetContext || (targ.type->refMode != ParamPassingMode::None),
-                depth + 1u
-            );
-        }
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -314,18 +65,12 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!classDecl->subsystemTypeName.empty()){
             hasSubsystemDecl = true;
             for(const FieldDecl* field : classDecl->fields){
-                if(!field || !field->type)
+                if(!field)
                     continue;
-                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
                 MStringView assetName;
-                if(resolved && resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                    const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-                    if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
-                        assetName = elemType->templateArgs[0].type->name;
-                }
-                else if(resolved && resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                    assetName = resolved->templateArgs[0].type->name;
-                }
+                b8 isVectorField = false;
+                if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
+                    continue;
 #define NWB_ADHD_EXPORT_ASSET_INCLUDE(assetTypeName, includeDirective) \
                 if(assetName == assetTypeName) addSubsystemInclude(includeDirective);
 #define NWB_ADHD_EXPORT_ASSET_SUFFIX_INCLUDE(assetTypeSuffix, includeDirective) \
@@ -388,22 +133,28 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
     }
 
     MVector<MStringView> externalForwardClasses(m_arena);
+    const auto collectCallableForwardDeclClasses = [&](
+        const MethodDecl& callable,
+        const Span<const TemplateParamDecl> outerTemplateParams,
+        const Span<const TemplateParamDecl> innerTemplateParams
+    ){
+        if(callable.returnType)
+            CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses);
+        for(const ParamDecl& p : callable.params){
+            if(p.type)
+                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses, true);
+        }
+    };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
         if(aliasDecl && !aliasDecl->isImported && aliasDecl->aliasedType)
-            __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, &aliasDecl->templateParams, nullptr, externalForwardClasses);
+            CollectExternalForwardDeclClasses(*aliasDecl->aliasedType, m_symbols, aliasDecl->templateParams, {}, externalForwardClasses);
     }
     for(const InterfaceDecl* ifaceDecl : unit.interfaces){
         if(!ifaceDecl || ifaceDecl->isImported)
             continue;
         for(const MethodDecl* m : ifaceDecl->methods){
-            if(!m)
-                continue;
-            if(m->returnType)
-                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &ifaceDecl->templateParams, nullptr, externalForwardClasses);
-            for(const ParamDecl& p : m->params){
-                if(p.type)
-                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &ifaceDecl->templateParams, nullptr, externalForwardClasses, true);
-            }
+            if(m)
+                collectCallableForwardDeclClasses(*m, ifaceDecl->templateParams, {});
         }
     }
     for(const ClassDecl* classDecl : unit.classes){
@@ -411,28 +162,16 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             continue;
         for(const FieldDecl* f : classDecl->fields){
             if(f && f->type)
-                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*f->type, m_symbols, &classDecl->templateParams, nullptr, externalForwardClasses);
+                CollectExternalForwardDeclClasses(*f->type, m_symbols, classDecl->templateParams, {}, externalForwardClasses);
         }
         for(const MethodDecl* m : classDecl->methods){
-            if(!m)
-                continue;
-            if(m->returnType)
-                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*m->returnType, m_symbols, &classDecl->templateParams, &m->templateParams, externalForwardClasses);
-            for(const ParamDecl& p : m->params){
-                if(p.type)
-                    __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &classDecl->templateParams, &m->templateParams, externalForwardClasses, true);
-            }
+            if(m)
+                collectCallableForwardDeclClasses(*m, classDecl->templateParams, m->templateParams);
         }
     }
     for(const MethodDecl* fn : unit.freeFunctions){
-        if(!fn || fn->isImported)
-            continue;
-        if(fn->returnType)
-            __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*fn->returnType, m_symbols, &fn->templateParams, nullptr, externalForwardClasses);
-        for(const ParamDecl& p : fn->params){
-            if(p.type)
-                __hidden_adhd_header_emitter::CollectExternalForwardDeclClasses(*p.type, m_symbols, &fn->templateParams, nullptr, externalForwardClasses, true);
-        }
+        if(fn && !fn->isImported)
+            collectCallableForwardDeclClasses(*fn, fn->templateParams, {});
     }
 
     b8 emittedForwardDecl = false;
@@ -467,7 +206,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const TypeAliasDecl* aliasDecl : unit.typeAliases){
-            if(aliasDecl && !aliasDecl->isImported && __hidden_adhd_header_emitter::TypeRefReferencesSymbol(*c.varType, aliasDecl->name))
+            if(aliasDecl && !aliasDecl->isImported && TypeRefReferencesSymbol(*c.varType, aliasDecl->name))
                 return true;
         }
         return false;
@@ -477,7 +216,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
         if(!c.varType)
             return false;
         for(const ClassDecl* classDecl : unit.classes){
-            if(classDecl && !classDecl->isImported && __hidden_adhd_header_emitter::TypeRefReferencesSymbolByValue(*c.varType, classDecl->name, m_symbols))
+            if(classDecl && !classDecl->isImported && TypeRefReferencesSymbolByValue(*c.varType, classDecl->name, m_symbols))
                 return true;
         }
         return false;
@@ -499,11 +238,8 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             localAliases.push_back(aliasDecl);
     }
     if(!localAliases.empty()){
-        MVector<u8> aliasState(localAliases.size(), 0u, m_arena);
         MVector<const TypeAliasDecl*> sortedAliases(m_arena);
-        sortedAliases.reserve(localAliases.size());
-        for(usize i = 0u; i < localAliases.size(); ++i)
-            __hidden_adhd_header_emitter::VisitTypeAliasTopo(i, localAliases, aliasState, sortedAliases);
+        SortTypeAliasesTopologically(localAliases, m_arena, sortedAliases);
         for(const TypeAliasDecl* aliasDecl : sortedAliases){
             if(aliasDecl)
                 emitTypeAliasDecl(out, *aliasDecl);
@@ -526,11 +262,8 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             localInterfaces.push_back(ifaceDecl);
     }
     if(!localInterfaces.empty()){
-        MVector<u8> ifaceState(localInterfaces.size(), 0u, m_arena);
         MVector<const InterfaceDecl*> sortedInterfaces(m_arena);
-        sortedInterfaces.reserve(localInterfaces.size());
-        for(usize i = 0u; i < localInterfaces.size(); ++i)
-            __hidden_adhd_header_emitter::VisitInterfaceTopo(i, localInterfaces, m_symbols, ifaceState, sortedInterfaces);
+        SortInterfacesTopologically(localInterfaces, m_symbols, m_arena, sortedInterfaces);
         for(const InterfaceDecl* ifaceDecl : sortedInterfaces){
             if(ifaceDecl)
                 emitInterfaceDecl(out, *ifaceDecl);
@@ -543,11 +276,8 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             allClasses.push_back(classDecl);
     }
     if(!allClasses.empty()){
-        MVector<u8> classState(allClasses.size(), 0u, m_arena);
         MVector<const ClassDecl*> sortedClasses(m_arena);
-        sortedClasses.reserve(allClasses.size());
-        for(usize i = 0u; i < allClasses.size(); ++i)
-            __hidden_adhd_header_emitter::VisitClassTopo(i, allClasses, m_symbols, classState, sortedClasses);
+        SortClassesTopologically(allClasses, m_symbols, m_arena, sortedClasses);
 
         MVector<u8> instEmitted(unit.templateInstantiations.size(), 0u, m_arena);
         MVector<const ClassDecl*> readyClasses(m_arena);
@@ -583,7 +313,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     for(const ClassDecl* depCls : sortedClasses){
                         if(!depCls || isClassReady(depCls))
                             continue;
-                        if(__hidden_adhd_header_emitter::InstantiationDependsOnClassByValue(*inst, depCls->name, m_symbols)){
+                        if(InstantiationDependsOnClassByValue(*inst, depCls->name, m_symbols)){
                             depsReady = false;
                             break;
                         }
@@ -617,21 +347,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
                     continue;
                 if(classDecl->templateParams.empty() && method->templateParams.empty() && !method->isInline)
                     continue;
-                if(!classDecl->templateParams.empty())
-                    m_typeEmitter.emitTemplateHeaderCpp(out, classDecl->templateParams);
-                if(!method->templateParams.empty())
-                    m_typeEmitter.emitTemplateHeaderCpp(out, method->templateParams);
-                if(method->isForceInline)
-                    out.append("NWB_FORCE_INLINE ");
-                else if(method->isNoInline)
-                    out.append("NWB_NOINLINE ");
-                out.append("inline ");
-                m_typeEmitter.emitMethodSignature(out, classDecl, *method, false);
-                if(method->isConstructor)
-                    m_sourceEmitter.emitConstructorNotNullInitializers(out, classDecl->orderedFields, *method);
-                out.append("{\r\n");
-                m_sourceEmitter.emitMethodBodyBlock(out, *method, 1u);
-                out.append("}\r\n\r\n");
+                m_sourceEmitter.emitOutOfClassCallable(out, classDecl, *method, true, true);
             }
         }
     }
@@ -657,6 +373,34 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
 
     out.append("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n");
     return out;
+}
+
+b8 HeaderEmitter::tryResolveSubsystemFieldAssetType(
+    const FieldDecl& field,
+    MStringView& outAssetTypeName,
+    b8& outIsVector
+)const noexcept{
+    outAssetTypeName = {};
+    outIsVector = false;
+    if(!field.type)
+        return false;
+
+    const TypeRef* resolved = m_symbols.unwrapTypeAlias(field.type);
+    if(!resolved)
+        return false;
+
+    if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+        outIsVector = true;
+        const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
+        if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
+            outAssetTypeName = elemType->templateArgs[0].type->name;
+        return true;
+    }
+    if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
+        outAssetTypeName = resolved->templateArgs[0].type->name;
+        return true;
+    }
+    return false;
 }
 
 

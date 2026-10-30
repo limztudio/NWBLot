@@ -14,16 +14,39 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const TemplateParamDecl* TypeChecker::findTemplateParam(
+    const ClassDecl* ownerClass,
+    const MethodDecl* method,
+    const MStringView name
+)noexcept{
+    if(method){
+        for(const TemplateParamDecl& tp : method->templateParams){
+            if(!tp.constValueType && tp.name == name)
+                return &tp;
+        }
+    }
+    if(ownerClass){
+        for(const TemplateParamDecl& tp : ownerClass->templateParams){
+            if(!tp.constValueType && tp.name == name)
+                return &tp;
+        }
+    }
+    return nullptr;
+}
+
 b8 TypeChecker::checkTemplateParamBounds(
-    const MVector<TemplateParamDecl>& params,
+    const Span<const TemplateParamDecl> params,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     MVector<ParseError>& errors
 ){
     b8 ok = true;
     MethodDecl tempMethodScope(m_arena);
-    if(!enclosingMethod)
-        tempMethodScope.templateParams = params;
+    if(!enclosingMethod){
+        tempMethodScope.templateParams.reserve(params.size());
+        for(const TemplateParamDecl& tp : params)
+            tempMethodScope.templateParams.push_back(tp);
+    }
     const MethodDecl* effectiveMethod = enclosingMethod ? enclosingMethod : &tempMethodScope;
 
     for(usize i = 0u; i < params.size(); ++i){
@@ -99,13 +122,10 @@ b8 TypeChecker::interfaceInheritsFrom(const TypeRef& ifaceRef, const TypeRef& re
     }
 
     if(const InterfaceDecl* ifaceDecl = m_symbols.findInterface(cleanIface.name)){
-        const b8 hasSubst = !ifaceDecl->templateParams.empty() && !cleanIface.templateArgs.empty();
         for(const TypeRef* rawBase : ifaceDecl->baseInterfaces){
             if(!rawBase)
                 continue;
-            const TypeRef* subBase = hasSubst
-                ? m_symbols.substituteTypeParams(*rawBase, ifaceDecl->templateParams, cleanIface.templateArgs)
-                : rawBase;
+            const TypeRef* subBase = m_symbols.substituteTypeParams(rawBase, ifaceDecl->templateParams, &cleanIface);
             if(subBase && interfaceInheritsFrom(*subBase, cleanReq, depth + 1u))
                 return true;
         }
@@ -119,13 +139,10 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
         return false;
 
     const TypeRef* unwrappedImplCls = implClassRef ? m_symbols.unwrapTypeAlias(implClassRef) : nullptr;
-    const b8 hasClsSubst = unwrappedImplCls && !cls.templateParams.empty() && !unwrappedImplCls->templateArgs.empty();
     for(const TypeRef* rawImpl : cls.implementedInterfaces){
         if(!rawImpl)
             continue;
-        const TypeRef* subImpl = hasClsSubst
-            ? m_symbols.substituteTypeParams(*rawImpl, cls.templateParams, unwrappedImplCls->templateArgs)
-            : rawImpl;
+        const TypeRef* subImpl = m_symbols.substituteTypeParams(rawImpl, cls.templateParams, unwrappedImplCls);
         if(subImpl && interfaceInheritsFrom(*subImpl, *unwrappedReq))
             return true;
     }
@@ -133,8 +150,8 @@ b8 TypeChecker::classImplementsInterface(const ClassDecl& cls, const TypeRef* im
 }
 
 b8 TypeChecker::checkTemplateArgBounds(
-    const MVector<TemplateParamDecl>& params,
-    const MVector<TypeArg>& args,
+    const Span<const TemplateParamDecl> params,
+    const Span<const TypeArg> args,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     const SourceSpan span,
@@ -206,7 +223,7 @@ b8 TypeChecker::checkTemplateArgBounds(
 }
 
 b8 TypeChecker::checkTemplateArgTypes(
-    const MVector<TypeArg>& templateArgs,
+    const Span<const TypeArg> templateArgs,
     const ClassDecl* enclosingClass,
     const MethodDecl* enclosingMethod,
     const SourceSpan fallbackSpan,
@@ -256,14 +273,8 @@ b8 TypeChecker::checkTypeRef(
         }
     }
     if(typeRef.isFuncType){
-        if(typeRef.funcReturnType){
-            if(!checkTypeRef(*typeRef.funcReturnType, enclosingClass, enclosingMethod, errors, true))
-                ok = false;
-            if(m_symbols.resolveRefMode(typeRef.funcReturnType) == ParamPassingMode::None && m_symbols.findInterface(m_symbols.resolveBaseTypeName(typeRef.funcReturnType->name))){
-                reportError(errors, typeRef.span, "cannot return an 'interface' type by value");
-                ok = false;
-            }
-        }
+        if(typeRef.funcReturnType && !checkReturnTypeRef(*typeRef.funcReturnType, enclosingClass, enclosingMethod, typeRef.span, errors))
+            ok = false;
         for(const FuncParamType& fp : typeRef.funcParams){
             if(fp.type && !checkTypeRef(*fp.type, enclosingClass, enclosingMethod, errors))
                 ok = false;
@@ -332,33 +343,30 @@ b8 TypeChecker::checkTypeRef(
     return ok;
 }
 
-const TemplateParamDecl* TypeChecker::findTemplateParam(
-    const ClassDecl* ownerClass,
-    const MethodDecl* method,
-    const MStringView name
-)noexcept{
-    if(method){
-        for(const TemplateParamDecl& tp : method->templateParams){
-            if(!tp.constValueType && tp.name == name)
-                return &tp;
-        }
+b8 TypeChecker::checkReturnTypeRef(
+    const TypeRef& returnType,
+    const ClassDecl* enclosingClass,
+    const MethodDecl* enclosingMethod,
+    const SourceSpan errorSpan,
+    MVector<ParseError>& errors
+){
+    b8 ok = checkTypeRef(returnType, enclosingClass, enclosingMethod, errors, true);
+    if(m_symbols.resolveRefMode(&returnType) == ParamPassingMode::None
+        && m_symbols.findInterface(m_symbols.resolveBaseTypeName(returnType.name)))
+    {
+        reportError(errors, errorSpan, "cannot return an 'interface' type by value");
+        ok = false;
     }
-    if(ownerClass){
-        for(const TemplateParamDecl& tp : ownerClass->templateParams){
-            if(!tp.constValueType && tp.name == name)
-                return &tp;
-        }
-    }
-    return nullptr;
+    return ok;
 }
 
 void TypeChecker::markStringToPathAdaptation(
     ClassDecl* ownerClass,
-    const MethodDecl& method,
+    const MethodDecl* method,
     Expr& expr,
-    const MVector<ScopedVarInfo>& scope
+    const Span<const ScopedVarInfo> scope
 )const noexcept{
-    const MStringView exprType = inferExprTypeName(ownerClass, &method, expr, scope);
+    const MStringView exprType = inferExprTypeName(ownerClass, method, expr, scope);
     if(expr.kind == ExprKind::StringLiteral || exprType == "String" || exprType == "StringView" || exprType == "CompactString")
         expr.adaptToTChar = true;
 }
@@ -368,7 +376,7 @@ b8 TypeChecker::verifyConcreteClassImplementsInterface(
     const MethodDecl& method,
     const Expr& rhsExpr,
     const TypeRef* expectedInterfaceType,
-    const MVector<ScopedVarInfo>& scope,
+    const Span<const ScopedVarInfo> scope,
     const SourceSpan errorSpan,
     const MStringView errorMessage,
     MVector<ParseError>& errors
@@ -377,10 +385,8 @@ b8 TypeChecker::verifyConcreteClassImplementsInterface(
     if(!resolvedExpected)
         return true;
 
-    const TypeRef* rhsTypeRef = inferExprTypeRef(ownerClass, &method, rhsExpr, scope);
-    const MStringView rhsType = rhsTypeRef
-        ? m_symbols.resolveBaseTypeName(rhsTypeRef->name)
-        : inferExprTypeName(ownerClass, &method, rhsExpr, scope);
+    const TypeRef* rhsTypeRef = nullptr;
+    const MStringView rhsType = inferExprBaseType(ownerClass, &method, rhsExpr, scope, &rhsTypeRef);
     if(rhsType.empty())
         return true;
 
@@ -424,3 +430,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

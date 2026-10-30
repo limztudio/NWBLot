@@ -214,7 +214,7 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
     defines.push_back(MString("FEATURE_ENABLED", 15u, arena.arena));
 
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, &defines));
+    ASSERT_TRUE(Compiler::compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, defines));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
 

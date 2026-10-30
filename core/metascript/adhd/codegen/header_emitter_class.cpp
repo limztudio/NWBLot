@@ -30,10 +30,11 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
 
         b8 hasVectorField = false;
         for(const FieldDecl* field : decl.fields){
-            if(!field || !field->type)
+            if(!field)
                 continue;
-            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-            if(resolved && resolved->name == "Vector"){
+            MStringView assetName;
+            b8 isVectorField = false;
+            if(tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
                 hasVectorField = true;
                 break;
             }
@@ -46,64 +47,46 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
             out.append(">::TypedSubsystem;\r\n\r\n");
         }
         else{
+            const auto emitVectorFieldInitializers = [&](){
+                for(const FieldDecl* field : decl.fields){
+                    if(!field)
+                        continue;
+                    MStringView assetName;
+                    b8 isVectorField = false;
+                    if(tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField) && isVectorField){
+                        out.append("        , ");
+                        out.append(field->name.data(), field->name.size());
+                        out.append("(arena)\r\n");
+                    }
+                }
+            };
             out.append("    explicit ");
             out.append(decl.name.data(), decl.name.size());
             out.append("(::NWB::Core::Assets::AssetArena& arena)noexcept\r\n");
             out.append("        : TypedSubsystem(arena)\r\n");
-            for(const FieldDecl* field : decl.fields){
-                if(!field || !field->type)
-                    continue;
-                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-                if(resolved && resolved->name == "Vector"){
-                    out.append("        , ");
-                    out.append(field->name.data(), field->name.size());
-                    out.append("(arena)\r\n");
-                }
-            }
+            emitVectorFieldInitializers();
             out.append("    {}\r\n");
             out.append("    ");
             out.append(decl.name.data(), decl.name.size());
             out.append("(::NWB::Core::Assets::AssetArena& arena, const ::Name& virtualPath)noexcept\r\n");
             out.append("        : TypedSubsystem(arena, virtualPath)\r\n");
-            for(const FieldDecl* field : decl.fields){
-                if(!field || !field->type)
-                    continue;
-                const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-                if(resolved && resolved->name == "Vector"){
-                    out.append("        , ");
-                    out.append(field->name.data(), field->name.size());
-                    out.append("(arena)\r\n");
-                }
-            }
+            emitVectorFieldInitializers();
             out.append("    {}\r\n\r\n");
         }
 
         out.append("public:\r\n");
         for(const FieldDecl* field : decl.fields){
-            if(!field || !field->type)
+            if(!field)
                 continue;
-            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-            if(!resolved)
+            MStringView assetName;
+            b8 isVectorField = false;
+            if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
                 continue;
-            if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-                const MStringView assetName = (elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
-                    ? elemType->templateArgs[0].type->name
-                    : MStringView{};
-                out.append("    ::NWB::Impl::SubsystemAssetRefVector<");
-                out.append(assetName.data(), assetName.size());
-                out.append("> ");
-                out.append(field->name.data(), field->name.size());
-                out.append(";\r\n");
-            }
-            else if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                const MStringView assetName = resolved->templateArgs[0].type->name;
-                out.append("    ::NWB::Core::Assets::AssetRef<");
-                out.append(assetName.data(), assetName.size());
-                out.append("> ");
-                out.append(field->name.data(), field->name.size());
-                out.append(";\r\n");
-            }
+            out.append(isVectorField ? "    ::NWB::Impl::SubsystemAssetRefVector<" : "    ::NWB::Core::Assets::AssetRef<");
+            out.append(assetName.data(), assetName.size());
+            out.append("> ");
+            out.append(field->name.data(), field->name.size());
+            out.append(";\r\n");
         }
 
         out.append("\r\npublic:\r\n");
@@ -111,20 +94,12 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append(decl.name.data(), decl.name.size());
         out.append("> s_Fields[] = {\r\n");
         for(const FieldDecl* field : decl.fields){
-            if(!field || !field->type)
-                continue;
-            const TypeRef* resolved = m_symbols.unwrapTypeAlias(field->type);
-            if(!resolved)
+            if(!field)
                 continue;
             MStringView assetName;
-            if(resolved->name == "Vector" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                const TypeRef* elemType = m_symbols.unwrapTypeAlias(resolved->templateArgs[0].type);
-                if(elemType && !elemType->templateArgs.empty() && elemType->templateArgs[0].type)
-                    assetName = elemType->templateArgs[0].type->name;
-            }
-            else if(resolved->name == "AssetRef" && !resolved->templateArgs.empty() && resolved->templateArgs[0].type){
-                assetName = resolved->templateArgs[0].type->name;
-            }
+            b8 isVectorField = false;
+            if(!tryResolveSubsystemFieldAssetType(*field, assetName, isVectorField))
+                continue;
             out.append("        ::NWB::Impl::MakeSubsystemFieldDescriptor<");
             out.append(decl.name.data(), decl.name.size());
             out.append(", ");
@@ -305,7 +280,7 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 void HeaderEmitter::emitClassMethodsCpp(
     MString& out,
     const ClassDecl& decl,
-    const MVector<FieldDecl*>& orderedFields,
+    const Span<const FieldDecl* const> orderedFields,
     const b8 forceInlineBody
 )const{
     if(decl.needsClassArena){
@@ -350,7 +325,7 @@ void HeaderEmitter::emitClassMethodsCpp(
     }
 }
 
-void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& orderedFields)const{
+void HeaderEmitter::emitClassFieldsCpp(MString& out, const Span<const FieldDecl* const> orderedFields)const{
     for(const FieldDecl* field : orderedFields){
         if(!field || !field->type)
             continue;
@@ -383,50 +358,14 @@ void HeaderEmitter::emitClassFieldsCpp(MString& out, const MVector<FieldDecl*>& 
         }
         else if(field->hasCtorInit){
             const MStringView baseFieldType = m_symbols.resolveBaseTypeName(field->type->name);
-            u32 ctorVecLanes = 0u;
-            const b8 isScalarSplatCtor = !baseFieldType.empty()
-                && (m_symbols.isSimdVectorType(baseFieldType, ctorVecLanes) || m_symbols.isUnalignedVectorType(baseFieldType, ctorVecLanes))
-                && field->ctorArgs.size() == 1u && field->ctorArgs[0]
-                && field->ctorArgs[0]->resolvedSimdType.empty();
-            if(!baseFieldType.empty() && m_symbols.isSimdMatrixType(baseFieldType)){
-                if(field->ctorArgs.empty()){
-                    out.append("{}");
-                }
-                else{
-                    out.append("{ .raw = { ");
-                    for(usize i = 0u; i < field->ctorArgs.size(); ++i){
-                        if(i > 0u)
-                            out.append(", ");
-                        if(field->ctorArgs[i])
-                            m_sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
-                    }
-                    out.append(" } }");
-                }
-            }
-            else if(isScalarSplatCtor){
-                out.push_back('{');
-                for(u32 lane = 0u; lane < ctorVecLanes; ++lane){
-                    if(lane > 0u)
-                        out.append(", ");
-                    m_sourceEmitter.emitExpr(out, *field->ctorArgs[0]);
-                }
-                out.push_back('}');
-            }
-            else{
-                out.push_back('{');
-                for(usize i = 0u; i < field->ctorArgs.size(); ++i){
-                    if(i > 0u)
-                        out.append(", ");
-                    if(field->ctorArgs[i])
-                        m_sourceEmitter.emitExpr(out, *field->ctorArgs[i]);
-                }
-                if(field->usesClassArena){
-                    if(!field->ctorArgs.empty())
-                        out.append(", ");
-                    out.append("s_ClassArena");
-                }
-                out.push_back('}');
-            }
+            m_sourceEmitter.emitCtorOrCallArgs(
+                out,
+                baseFieldType,
+                field->ctorArgs,
+                field->usesClassArena ? MStringView("s_ClassArena") : MStringView{},
+                true,
+                true
+            );
         }
         else if(field->usesClassArena){
             out.append("{s_ClassArena}");

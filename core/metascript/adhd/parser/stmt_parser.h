@@ -30,22 +30,23 @@ public:
     [[nodiscard]] b8 parseBlockStatements(MVector<Stmt*>& outStatements);
     [[nodiscard]] Stmt* parseStatement();
     [[nodiscard]] Stmt* parseConstDeclaration(SourceSpan span);
-    [[nodiscard]] b8 parseRawNativeBlock(MStringView& outCode);
 
 
 private:
+    [[nodiscard]] b8 rejectStatementAttributes(Span<const ParsedAttribute> attributes, SourceSpan span, MStringView message);
+    [[nodiscard]] Stmt* parseSimpleKeywordStatement(StmtKind::Enum kind, SourceSpan span, Span<const ParsedAttribute> attributes, MStringView rejectAttrMsg, MStringView missingSemiMsg);
     [[nodiscard]] b8 parseScopedBodyStatements(MVector<Stmt*>& outStatements);
     [[nodiscard]] Stmt* parseIfStatement(SourceSpan span);
     [[nodiscard]] Stmt* parseSwitchStatement(SourceSpan span);
-    [[nodiscard]] Stmt* parseForOrParallelFor(SourceSpan span, b8 isParallel, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] Stmt* parseForOrParallelFor(SourceSpan span, b8 isParallel, Span<const ParsedAttribute> attributes);
     [[nodiscard]] Stmt* parseWhileStatement(SourceSpan span);
     [[nodiscard]] Stmt* parseDoWhileStatement(SourceSpan span);
     [[nodiscard]] Stmt* parseReturnStatement(SourceSpan span);
-    [[nodiscard]] Stmt* parseParallelStatement(SourceSpan span, const MVector<ParsedAttribute>& attributes);
+    [[nodiscard]] Stmt* parseParallelStatement(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] Stmt* parseNativeStatement(SourceSpan span);
-    [[nodiscard]] Stmt* parseDiagnosticStatement(SourceSpan span, DiagnosticKind::Enum kind, const MVector<ParsedAttribute>& attributes);
-    [[nodiscard]] Stmt* parseVarDeclAfterType(TypeRef* varType, SourceSpan span);
-    [[nodiscard]] b8 applySchedulingAttributes(const MVector<ParsedAttribute>& attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority);
+    [[nodiscard]] Stmt* parseDiagnosticStatement(SourceSpan span, DiagnosticKind::Enum kind, Span<const ParsedAttribute> attributes);
+    [[nodiscard]] Stmt* parseVarDeclWithType(TypeRef* varType, SourceSpan span, b8 isConst);
+    [[nodiscard]] b8 applySchedulingAttributes(Span<const ParsedAttribute> attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority);
 
 
 private:

@@ -14,36 +14,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclParser::validateMemberOperatorArity(
-    const MStringView opName,
-    const usize paramCount,
-    MStringView& outErrorMsg
-)noexcept{
-    if((opName == "*" || opName == "&") && paramCount == 0u){
-        outErrorMsg = "unary 'operator*' (dereference) and unary 'operator&' (address-of) overloads are prohibited in adhd";
-        return false;
-    }
-    if(opName == "~"){
-        if(paramCount != 0u){
-            outErrorMsg = "member 'operator~' cannot take parameters";
-            return false;
-        }
-        return true;
-    }
-    if(opName == "+" || opName == "-"){
-        if(paramCount > 1u){
-            outErrorMsg = "member 'operator+' and 'operator-' may take at most 1 parameter";
-            return false;
-        }
-        return true;
-    }
-    if(paramCount != 1u){
-        outErrorMsg = "binary or indexing member operator overload must take exactly 1 parameter";
-        return false;
-    }
-    return true;
-}
-
 b8 DeclParser::parseCallableOwnerOrTemplateHeader(
     MVector<MStringView>& outOwnerTemplateParams,
     MVector<TemplateParamDecl>& outTemplateParams,
@@ -76,7 +46,7 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(
 
 MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
     const SourceSpan span,
-    const MVector<ParsedAttribute>& attributes
+    const Span<const ParsedAttribute> attributes
 ){
     MethodDecl* decl = AllocateAstNode<MethodDecl>(m_cursor.arena());
     decl->span = span;
@@ -91,9 +61,9 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 
         MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
         MVector<TemplateParamDecl> ownerTemplateParams(m_cursor.arena());
-        (void)parseCallableOwnerOrTemplateHeader(parsedOwnerTemplateParams, ownerTemplateParams, false);
-
-        if(m_cursor.match(TokenType::ColonColon)){
+        if(parseCallableOwnerOrTemplateHeader(parsedOwnerTemplateParams, ownerTemplateParams, false)
+            && m_cursor.match(TokenType::ColonColon))
+        {
             if(m_cursor.match(TokenType::Tilde)){
                 if(!m_cursor.checkIdentifier(maybeClass)){
                     m_cursor.errorExpected("expected class name after '~' in out-of-line destructor");
@@ -104,9 +74,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
                 decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
                 decl->name = maybeClass;
                 decl->isDestructor = true;
-                if(!m_cursor.expect(TokenType::LeftParen, "expected '(' in out-of-line destructor"))
-                    return nullptr;
-                if(!m_cursor.expect(TokenType::RightParen, "destructor cannot take parameters"))
+                if(!parseDestructorEmptyParams("expected '(' in out-of-line destructor"))
                     return nullptr;
                 decl->hasBody = true;
                 if(!m_stmtParser.parseBlockStatements(decl->body))
@@ -120,12 +88,8 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
                 decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
                 decl->name = maybeClass;
                 decl->isConstructor = true;
-                if(!m_typeParser.parseParamList(decl->params))
+                if(!parseConstructorParamsAndRejectInitList(decl->params))
                     return nullptr;
-                if(m_cursor.check(TokenType::Colon)){
-                    m_cursor.error("C++ constructor initializer lists are prohibited in adhd; initialize 'this.member' inside the constructor body");
-                    return nullptr;
-                }
                 decl->hasBody = true;
                 if(!m_stmtParser.parseBlockStatements(decl->body))
                     return nullptr;
@@ -190,15 +154,8 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
         return nullptr;
     }
 
-    if(!m_typeParser.parseParamList(decl->params))
+    if(!parseMethodParamsAndValidateArity(*decl, span))
         return nullptr;
-    if(decl->isOperator){
-        MStringView opErr;
-        if(!validateMemberOperatorArity(decl->name, decl->params.size(), opErr)){
-            m_cursor.error(span.line, span.column, opErr);
-            return nullptr;
-        }
-    }
 
     if(decl->ownerClassName.empty()){
         if(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
@@ -226,7 +183,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(
 }
 
 b8 DeclParser::applyCallableAttributes(
-    const MVector<ParsedAttribute>& attributes,
+    const Span<const ParsedAttribute> attributes,
     MethodDecl& decl
 ){
     for(const ParsedAttribute& attr : attributes){
@@ -264,14 +221,7 @@ b8 DeclParser::parseOperatorName(MStringView& outOpName){
     }
 
     const Token tok = m_cursor.current();
-    b8 isOverloadableOp = false;
-#define NWB_ADHD_EXPORT_OPERATOR_TOKEN(tokenType, symbol, isOverloadable, isAssignment, isCompoundAssignment) \
-    if constexpr(isOverloadable){ \
-        if(tok.type == tokenType) isOverloadableOp = true; \
-    }
-#include "../export_operators.h"
-#undef NWB_ADHD_EXPORT_OPERATOR_TOKEN
-    if(isOverloadableOp){
+    if(IsOverloadableOperatorToken(tok.type)){
         outOpName = tok.text;
         m_cursor.advance();
         return true;
@@ -288,3 +238,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

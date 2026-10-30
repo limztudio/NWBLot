@@ -48,6 +48,17 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
     }
 }
 
+[[nodiscard]] MString DeriveOutputFilename(const MStringView virtualFilePath, const MStringView suffix, MetaArena& arena){
+    const MStringView base = ExtractAdhdFileStem(virtualFilePath);
+    MString out(arena);
+    if(base.empty())
+        out.append("module");
+    else
+        out.append(base.data(), base.size());
+    out.append(suffix.data(), suffix.size());
+    return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,28 +76,26 @@ b8 Compiler::compile(
     CompileResult& outResult,
     IIncludeResolver* includeResolver,
     const MStringView customNamespace,
-    const MVector<MString>* macroDefinitions
+    const Span<const MString> macroDefinitions
 ){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
     Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver);
-    if(macroDefinitions){
-        for(const MString& defText : *macroDefinitions){
-            const MStringView defView(defText.data(), defText.size());
-            if(defView.empty())
-                continue;
-            usize eqPos = defView.size();
-            for(usize i = 0u; i < defView.size(); ++i){
-                if(defView[i] == '='){
-                    eqPos = i;
-                    break;
-                }
+    for(const MString& defText : macroDefinitions){
+        const MStringView defView(defText.data(), defText.size());
+        if(defView.empty())
+            continue;
+        usize eqPos = defView.size();
+        for(usize i = 0u; i < defView.size(); ++i){
+            if(defView[i] == '='){
+                eqPos = i;
+                break;
             }
-            if(eqPos < defView.size())
-                preprocessor.defineObjectMacro(defView.substr(0u, eqPos), defView.substr(eqPos + 1u));
-            else
-                preprocessor.defineObjectMacro(defView, "1");
         }
+        if(eqPos < defView.size())
+            preprocessor.defineObjectMacro(defView.substr(0u, eqPos), defView.substr(eqPos + 1u));
+        else
+            preprocessor.defineObjectMacro(defView, "1");
     }
     if(!preprocessor.process(source, outResult.preprocessedSource))
         return false;
@@ -172,15 +181,11 @@ MString Compiler::deriveNamespaceFromPath(const MStringView virtualFilePath, Met
 }
 
 MString Compiler::deriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){
-    const MStringView base = ExtractAdhdFileStem(virtualFilePath);
+    return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.h", arena);
+}
 
-    MString out(arena);
-    if(base.empty())
-        out.append("module");
-    else
-        out.append(base.data(), base.size());
-    out.append(".adhd.h");
-    return out;
+MString Compiler::deriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){
+    return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena);
 }
 
 

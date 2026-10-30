@@ -31,7 +31,7 @@ void AppendDepfileEscapedPath(NWB::Core::Metascript::MString& out, const NWB::Co
     NWB::Core::Metascript::MetaArena& arena,
     const Path<NWB::Core::Metascript::MetaArena>& inputPath,
     const NWB::Core::Metascript::MStringView rawInputView,
-    const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& includeDirs
+    const Span<const NWB::Core::Metascript::MString> includeDirs
 ){
     using namespace NWB::Core::Metascript;
 
@@ -67,7 +67,7 @@ public:
     FilesystemIncludeResolver(
         NWB::Core::Metascript::MetaArena& arena,
         const Path<NWB::Core::Metascript::MetaArena>& currentFileDir,
-        const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& includeDirs
+        const Span<const NWB::Core::Metascript::MString> includeDirs
     )
         : m_resolvedParentDirs(arena)
         , m_includeDirs(includeDirs)
@@ -86,8 +86,7 @@ public:
     )override{
         using namespace NWB::Core::Metascript;
 
-        const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-        if(!hasAdhdExt)
+        if(!Adhd::HasAdhdExtension(includePath))
             return false;
         const MString relPath(includePath.data(), includePath.size(), arena);
 
@@ -124,7 +123,7 @@ public:
 
 private:
     NWB::Core::Metascript::MVector<Path<NWB::Core::Metascript::MetaArena>> m_resolvedParentDirs;
-    const NWB::Core::Metascript::MVector<NWB::Core::Metascript::MString>& m_includeDirs;
+    Span<const NWB::Core::Metascript::MString> m_includeDirs;
 };
 
 
@@ -185,7 +184,7 @@ b8 RunAdhdCompilerDriver(
             result,
             &resolver,
             customNs,
-            &options.macroDefinitions
+            options.macroDefinitions
         )){
             for(const ParseError& err : result.errors){
                 NWB_LOGGER_ERROR(
@@ -202,12 +201,8 @@ b8 RunAdhdCompilerDriver(
         if(options.validateOnly)
             continue;
 
-        const MStringView stem = Adhd::ExtractAdhdFileStem(inputView);
-
-        MString headerRel(stem.data(), stem.size(), arena);
-        headerRel.append(".adhd.h");
-        MString sourceRel(stem.data(), stem.size(), arena);
-        sourceRel.append(".adhd.cpp");
+        const MString headerRel = Adhd::Compiler::deriveHeaderFilename(inputView, arena);
+        const MString sourceRel = Adhd::Compiler::deriveSourceFilename(inputView, arena);
 
         const Path<MetaArena> headerOutPath = outDir / Path<MetaArena>(arena, AStringView(headerRel.data(), headerRel.size()));
         const Path<MetaArena> sourceOutPath = outDir / Path<MetaArena>(arena, AStringView(sourceRel.data(), sourceRel.size()));

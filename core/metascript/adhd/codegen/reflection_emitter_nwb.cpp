@@ -24,11 +24,9 @@ namespace __hidden_adhd_reflection_emitter_nwb{
     return cls && (cls->isSerialize || cls->isReflect || !cls->assetTypeName.empty() || !cls->templateParams.empty());
 }
 
-[[nodiscard]] constexpr u32 SimdMatrixElementCount(const MStringView matTypeName)noexcept{
-#define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, rows, cols, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
-    if(matTypeName == adhdName) return elemCount;
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
+[[nodiscard]] u32 SimdMatrixElementCount(const MStringView matTypeName)noexcept{
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(matTypeName))
+        return matInfo->elemCount;
     return 16u;
 }
 
@@ -48,16 +46,11 @@ void EmitNwbListSizeContinueGuard(MString& out, const MStringView elemAccessor, 
     out.append("u) continue; ");
 }
 
-[[nodiscard]] constexpr b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
-#define NWB_ADHD_EXPORT_SCALAR_TYPE(adhdName, byteSize, byteAlign, isInteger, isFixedWidthInt, isSigned, isFloat, defaultLiteral) \
-    if(typeName == adhdName) return true;
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
-    if constexpr(isSelfDefaulted){ \
-        if(typeName == adhdName) return true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_OBJECT_TYPE
-#undef NWB_ADHD_EXPORT_SCALAR_TYPE
+[[nodiscard]] b8 IsScalarOrStringLikeNwbElement(const MStringView typeName)noexcept{
+    if(IsScalarType(typeName))
+        return true;
+    if(const BuiltinObjectTypeInfo* objInfo = FindBuiltinObjectType(typeName))
+        return objInfo->isSelfDefaulted;
     return typeName == "AssetRef";
 }
 
@@ -116,24 +109,19 @@ void EmitNwbSimdVectorCtorExpr(
     const u32 simdLanes,
     const MStringView listAccessor
 ){
-    const MStringView cppVecType = SymbolTable::mapBuiltinCppType(vecTypeName);
-    const MStringView laneScalar = vecTypeName.substr(0u, 3u);
-    const b8 isIntLane = (vecTypeName[0] == 'i' || vecTypeName[0] == 'u');
-    b8 isMixedVec = false;
-    MStringView wLaneScalar = laneScalar;
-#define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
-    if constexpr(isMixed){ \
-        if(vecTypeName == adhdName){ isMixedVec = true; wLaneScalar = wScalarType; } \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
+    const MStringView cppVecType = CppTypeEmitter::mapBuiltinCppType(vecTypeName);
+    const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(vecTypeName);
+    const BuiltinUnalignedVectorInfo* unalignedInfo = vecInfo ? nullptr : FindBuiltinUnalignedVectorType(vecTypeName);
+    const MStringView laneScalar = vecInfo ? vecInfo->xyzScalarType : (unalignedInfo ? unalignedInfo->laneScalarType : vecTypeName.substr(0u, 3u));
+    const b8 isMixedVec = vecInfo && vecInfo->isMixed;
+    const MStringView wLaneScalar = isMixedVec ? vecInfo->wScalarType : laneScalar;
     out.append(cppVecType.data(), cppVecType.size());
     out.push_back('(');
     for(u32 lane = 0u; lane < simdLanes; ++lane){
         if(lane > 0u)
             out.append(", ");
-        const b8 laneIsInt = isIntLane || (isMixedVec && lane == 3u);
         const MStringView curScalar = (isMixedVec && lane == 3u) ? wLaneScalar : laneScalar;
+        const b8 laneIsInt = IsIntegerScalarType(curScalar);
         out.append("static_cast<");
         out.append(curScalar.data(), curScalar.size());
         out.append(">(");
@@ -167,17 +155,18 @@ void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, cons
     out.append(" = *__e; }\r\n");
 }
 
-void EmitNwbSimdMatrixLocalInit(
+void EmitNwbSimdMatrixElementLoop(
     MString& out,
+    const MStringView targetPrefix,
+    const MStringView targetName,
     const MStringView matTypeName,
     const MStringView listAccessor,
-    const MStringView loopVar
+    const MStringView loopVar,
+    const u32 elemCount
 ){
-    const MStringView cppMatType = SymbolTable::mapBuiltinCppType(matTypeName);
-    const MStringView elemScalar = matTypeName.substr(0u, 3u);
-    const u32 elemCount = SimdMatrixElementCount(matTypeName);
-    out.append(cppMatType.data(), cppMatType.size());
-    out.append(" __m{}; for(usize ");
+    const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(matTypeName);
+    const MStringView elemScalar = matInfo ? matInfo->elemScalarType : matTypeName.substr(0u, 3u);
+    out.append("for(usize ");
     out.append(loopVar.data(), loopVar.size());
     out.append(" = 0u; ");
     out.append(loopVar.data(), loopVar.size());
@@ -185,7 +174,10 @@ void EmitNwbSimdMatrixLocalInit(
     AppendAdhdUnsigned(out, elemCount);
     out.append("u; ++");
     out.append(loopVar.data(), loopVar.size());
-    out.append(") __m.raw[");
+    out.append(") ");
+    out.append(targetPrefix.data(), targetPrefix.size());
+    out.append(targetName.data(), targetName.size());
+    out.append(".raw[");
     out.append(loopVar.data(), loopVar.size());
     out.append("] = static_cast<");
     out.append(elemScalar.data(), elemScalar.size());
@@ -193,7 +185,21 @@ void EmitNwbSimdMatrixLocalInit(
     out.append(listAccessor.data(), listAccessor.size());
     out.push_back('[');
     out.append(loopVar.data(), loopVar.size());
-    out.append("].toDouble()); ");
+    out.append("].toDouble());");
+}
+
+void EmitNwbSimdMatrixLocalInit(
+    MString& out,
+    const MStringView matTypeName,
+    const MStringView listAccessor,
+    const MStringView loopVar
+){
+    const MStringView cppMatType = CppTypeEmitter::mapBuiltinCppType(matTypeName);
+    const u32 elemCount = SimdMatrixElementCount(matTypeName);
+    out.append(cppMatType.data(), cppMatType.size());
+    out.append(" __m{}; ");
+    EmitNwbSimdMatrixElementLoop(out, "", "__m", matTypeName, listAccessor, loopVar, elemCount);
+    out.push_back(' ');
 }
 
 [[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(
@@ -434,13 +440,7 @@ void EmitNwbMapFieldDeserialize(
     const MStringView valName,
     const SymbolTable& symbols
 ){
-    b8 isStringLikeKey = false;
-#define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
-    if constexpr(isNwbMapKey){ \
-        if(keyName == adhdName) isStringLikeKey = true; \
-    }
-#include "../export_types.h"
-#undef NWB_ADHD_EXPORT_OBJECT_TYPE
+    const b8 isStringLikeKey = IsNwbMapKeyType(keyName);
     const b8 isEnumKey = symbols.findEnum(keyName) != nullptr;
     if(!isStringLikeKey && !isEnumKey)
         return;
@@ -545,6 +545,35 @@ void EmitNwbMapFieldDeserialize(
     }
 }
 
+void EmitNwbContainerElementDependencyExtract(
+    MString& out,
+    const TypeRef* itemTypeRef,
+    const MStringView itemBaseName,
+    const MStringView itemExpr,
+    const SymbolTable& symbols
+){
+    out.append("if(");
+    out.append(itemExpr.data(), itemExpr.size());
+    if(itemBaseName == "AssetRef"){
+        out.append(".isString()){ if(const auto __name = ::Name::FromText(");
+        out.append(itemExpr.data(), itemExpr.size());
+        out.append(".asString()); __name && *__name) callback(*__name); }");
+    }
+    else{
+        out.append(".isMap() && !");
+        if(itemTypeRef){
+            const CppTypeEmitter typeEmitter(symbols);
+            typeEmitter.emitTypeCpp(out, *itemTypeRef);
+        }
+        else{
+            out.append(itemBaseName.data(), itemBaseName.size());
+        }
+        out.append("::extractNwbAssetDependencies(");
+        out.append(itemExpr.data(), itemExpr.size());
+        out.append(", callback)) return false;");
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -555,7 +584,7 @@ void EmitNwbMapFieldDeserialize(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<FieldDecl*>& fields)const{
+void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const Span<const FieldDecl* const> fields)const{
     using namespace __hidden_adhd_reflection_emitter_nwb;
 
     out.append("    template<typename NwbValue>\r\n");
@@ -589,18 +618,13 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
             out.append(".virtualPath = *__name; }\r\n");
         }
         else if(SymbolTable::isSimdMatrixType(tname)){
-            const MStringView elemScalar = tname.substr(0u, 3u);
             const u32 elemCount = SimdMatrixElementCount(tname);
             EmitNwbFieldFindPrefix(out, field->name);
             out.append("__f->isList() && __f->asList().size() == ");
             AppendAdhdUnsigned(out, elemCount);
-            out.append("u){ for(usize __i = 0u; __i < ");
-            AppendAdhdUnsigned(out, elemCount);
-            out.append("u; ++__i) this->");
-            out.append(field->name.data(), field->name.size());
-            out.append(".raw[__i] = static_cast<");
-            out.append(elemScalar.data(), elemScalar.size());
-            out.append(">(__f->asList()[__i].toDouble()); }\r\n");
+            out.append("u){ ");
+            EmitNwbSimdMatrixElementLoop(out, "this->", field->name, tname, "__f->asList()", "__i", elemCount);
+            out.append(" }\r\n");
         }
         else if(IsDeserializableClass(m_symbols.findClass(tname))){
             EmitNwbFieldFindPrefix(out, field->name);
@@ -633,6 +657,75 @@ void ReflectionEmitter::emitDeserializeNwbMethod(MString& out, const MVector<Fie
     out.append("    }\r\n");
 }
 
+void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, const Span<const FieldDecl* const> fields)const{
+    using namespace __hidden_adhd_reflection_emitter_nwb;
+
+    out.append("    template<typename NwbValue, typename DependencyCallback>\r\n");
+    out.append("    [[nodiscard]] static b8 extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{\r\n");
+    out.append("        if(!inMap.isMap())\r\n");
+    out.append("            return false;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || !IsFieldReflected(*field) || !field->type || !IsAssetDependencyField(*field, m_symbols))
+            continue;
+        const TypeRef* resolvedFieldType = m_symbols.unwrapTypeAlias(field->type);
+        const MStringView tname = resolvedFieldType ? resolvedFieldType->name : field->type->name;
+        const TypeRef* effectiveTypeRef = (
+            tname == "Optional"
+            && resolvedFieldType
+            && !resolvedFieldType->templateArgs.empty()
+            && resolvedFieldType->templateArgs[0].type
+        )
+            ? m_symbols.unwrapTypeAlias(resolvedFieldType->templateArgs[0].type)
+            : resolvedFieldType;
+        const MStringView effectiveScalarOrClassType = effectiveTypeRef
+            ? m_symbols.resolveBaseTypeName(effectiveTypeRef->name)
+            : tname;
+
+        if(effectiveScalarOrClassType == "AssetRef"){
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isString()){ if(const auto __name = ::Name::FromText(__f->asString()); __name && *__name) callback(*__name); }\r\n");
+        }
+        else if(m_symbols.findClass(effectiveScalarOrClassType)){
+            EmitNwbFieldFindPrefix(out, field->name);
+            out.append("__f->isMap() && !");
+            if(effectiveTypeRef){
+                const CppTypeEmitter typeEmitter(m_symbols);
+                typeEmitter.emitTypeCpp(out, *effectiveTypeRef);
+            }
+            else{
+                out.append(effectiveScalarOrClassType.data(), effectiveScalarOrClassType.size());
+            }
+            out.append("::extractNwbAssetDependencies(*__f, callback)) return false;\r\n");
+        }
+        else if(IsReflectedLinearContainerType(effectiveScalarOrClassType)
+            && effectiveTypeRef && !effectiveTypeRef->templateArgs.empty() && effectiveTypeRef->templateArgs[0].type)
+        {
+            const TypeRef* elemTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[0].type);
+            const MStringView elemName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[0].type->name);
+            if(elemName == "AssetRef" || m_symbols.findClass(elemName)){
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isList()){ for(usize __i = 0u; __i < __f->asList().size(); ++__i){ ");
+                EmitNwbContainerElementDependencyExtract(out, elemTypeRef, elemName, "__f->asList()[__i]", m_symbols);
+                out.append(" } }\r\n");
+            }
+        }
+        else if(IsReflectedMapContainerType(effectiveScalarOrClassType)
+            && effectiveTypeRef && effectiveTypeRef->templateArgs.size() >= 2u && effectiveTypeRef->templateArgs[1].type)
+        {
+            const TypeRef* valTypeRef = m_symbols.unwrapTypeAlias(effectiveTypeRef->templateArgs[1].type);
+            const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
+            if(valName == "AssetRef" || m_symbols.findClass(valName)){
+                EmitNwbFieldFindPrefix(out, field->name);
+                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; ");
+                EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_symbols);
+                out.append(" } }\r\n");
+            }
+        }
+    }
+    out.append("        return true;\r\n");
+    out.append("    }\r\n");
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -641,3 +734,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

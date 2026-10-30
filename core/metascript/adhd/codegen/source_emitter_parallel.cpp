@@ -43,62 +43,6 @@ void AppendTaskOptions(MString& out, const Stmt& stmt){
     out.push_back('}');
 }
 
-[[nodiscard]] b8 ExprUsesScratchArena(const Expr* expr)noexcept{
-    if(!expr || expr->kind == ExprKind::Lambda)
-        return false;
-    if(expr->injectScratchArena)
-        return true;
-    if(ExprUsesScratchArena(expr->lhs) || ExprUsesScratchArena(expr->rhs))
-        return true;
-    for(const Expr* arg : expr->arguments){
-        if(ExprUsesScratchArena(arg))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StatementsUseScratchArena(const MVector<Stmt*>& statements)noexcept;
-
-[[nodiscard]] b8 StmtUsesScratchArena(const Stmt* stmt)noexcept{
-    if(!stmt)
-        return false;
-    if(stmt->kind == StmtKind::ParallelForRange
-        || stmt->kind == StmtKind::ParallelForIndex
-        || stmt->kind == StmtKind::ParallelBlock)
-    {
-        return false;
-    }
-    if(stmt->usesScratchArena)
-        return true;
-    if(stmt->initStmt && StmtUsesScratchArena(stmt->initStmt))
-        return true;
-    if(ExprUsesScratchArena(stmt->expr)
-        || ExprUsesScratchArena(stmt->condition)
-        || ExprUsesScratchArena(stmt->stepExpr))
-    {
-        return true;
-    }
-    for(const Expr* arg : stmt->arguments){
-        if(ExprUsesScratchArena(arg))
-            return true;
-    }
-    if(StatementsUseScratchArena(stmt->statements) || StatementsUseScratchArena(stmt->elseStatements))
-        return true;
-    for(const SwitchCase& sc : stmt->switchCases){
-        if(ExprUsesScratchArena(sc.matchExpr) || StatementsUseScratchArena(sc.statements))
-            return true;
-    }
-    return false;
-}
-
-[[nodiscard]] b8 StatementsUseScratchArena(const MVector<Stmt*>& statements)noexcept{
-    for(const Stmt* s : statements){
-        if(StmtUsesScratchArena(s))
-            return true;
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -169,7 +113,7 @@ void SourceEmitter::emitParallelStmt(
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
-        if(StatementsUseScratchArena(stmt.statements)){
+        if(stmt.usesScratchArena){
             emitIndent(out, indent + 1u);
             out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
         }
@@ -246,7 +190,7 @@ void SourceEmitter::emitParallelStmt(
             out.append("1u");
         }
         out.append(", [&](const usize __adhd_idx)noexcept{\r\n");
-        if(StatementsUseScratchArena(stmt.statements)){
+        if(stmt.usesScratchArena){
             emitIndent(out, indent + 1u);
             out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
         }
@@ -291,7 +235,7 @@ void SourceEmitter::emitParallelStmt(
         out.append("const auto __adhd_submit_");
         appendBlockSuffix();
         out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
-        if(StatementsUseScratchArena(stmt.statements)){
+        if(stmt.usesScratchArena){
             emitIndent(out, indent + 1u);
             out.append("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));\r\n");
         }
@@ -400,10 +344,7 @@ void SourceEmitter::emitParallelStmt(
         for(const NativeBinding& binding : stmt.nativeBindings){
             if(binding.mode != ParamPassingMode::Mut || !binding.sourceExpr)
                 continue;
-            const SimdVarBinding* mutBinding = findSimdBindingForExpr(binding.sourceExpr);
-            if(!mutBinding && (binding.sourceExpr->kind == ExprKind::MemberAccess || binding.sourceExpr->kind == ExprKind::Index))
-                mutBinding = findSimdBindingForExpr(binding.sourceExpr->lhs);
-            if(mutBinding)
+            if(const SimdVarBinding* mutBinding = findSimdRootBindingForExpr(binding.sourceExpr))
                 emitSimdLoadReloadForBinding(out, *mutBinding, indent + 1u);
         }
         emitIndent(out, indent);

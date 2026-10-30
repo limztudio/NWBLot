@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const MVector<ParsedAttribute>& attributes){
+Stmt* StmtParser::parseParallelStatement(const SourceSpan span, const Span<const ParsedAttribute> attributes){
     ParallelCoreKind::Enum coreKind = ParallelCoreKind::Any;
     ParallelPriorityKind::Enum priorityKind = ParallelPriorityKind::Normal;
     if(!applySchedulingAttributes(attributes, coreKind, priorityKind))
@@ -98,11 +98,8 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
             for(;;){
                 NativeBinding binding;
                 binding.span = SourceSpan{m_cursor.current().line, m_cursor.current().column};
-                if(m_cursor.matchIdentifier("in"))
-                    binding.mode = ParamPassingMode::In;
-                else if(m_cursor.matchIdentifier("mut"))
-                    binding.mode = ParamPassingMode::Mut;
-                else{
+                binding.mode = MatchParamPassingMode(m_cursor);
+                if(binding.mode == ParamPassingMode::None){
                     m_cursor.error("native block binding must explicitly specify 'in' or 'mut'");
                     return nullptr;
                 }
@@ -139,13 +136,13 @@ Stmt* StmtParser::parseNativeStatement(const SourceSpan span){
             return nullptr;
     }
 
-    if(!parseRawNativeBlock(stmt->nativeCode))
+    if(!m_cursor.consumeBalancedBracesRaw(stmt->nativeCode))
         return nullptr;
 
     return stmt;
 }
 
-Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const MVector<ParsedAttribute>& attributes){
+Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const DiagnosticKind::Enum kind, const Span<const ParsedAttribute> attributes){
     b8 isEssential = false;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "essential" && attr.arguments.empty()){
@@ -177,55 +174,11 @@ Stmt* StmtParser::parseDiagnosticStatement(const SourceSpan span, const Diagnost
     return stmt;
 }
 
-Stmt* StmtParser::parseConstDeclaration(const SourceSpan span){
-    TypeRef* varType = m_typeParser.parseType(false, true);
-    if(!varType)
-        return nullptr;
-
-    if(!m_cursor.check(TokenType::Identifier)){
-        m_cursor.errorExpected("expected constant name after type");
-        return nullptr;
-    }
-    const MStringView name = m_cursor.current().text;
-    m_cursor.advance();
-
-    Stmt* stmt = AllocateAstNode<Stmt>(m_cursor.arena());
-    stmt->kind = StmtKind::VarDecl;
-    stmt->varType = varType;
-    stmt->name = name;
-    stmt->isConst = true;
-    stmt->span = span;
-
-    if(m_cursor.match(TokenType::Equal)){
-        stmt->expr = m_exprParser.parseExpression();
-        if(!stmt->expr)
-            return nullptr;
-    }
-    else if(m_cursor.check(TokenType::LeftParen)){
-        if(varType->isAuto){
-            m_cursor.error(span.line, span.column, "'auto' constant must be initialized with '= expr'");
-            return nullptr;
-        }
-        stmt->isCtorInit = true;
-        if(!m_exprParser.parseArgumentList(stmt->arguments))
-            return nullptr;
-    }
-    else{
-        m_cursor.errorExpected("expected '=' or '(' to initialize 'const' value");
-        return nullptr;
-    }
-
-    if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after 'const' declaration"))
-        return nullptr;
-
-    return stmt;
-}
-
-Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span){
+Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, const b8 isConst){
     const MStringView varName = m_cursor.current().text;
     m_cursor.advance();
 
-    if(m_cursor.check(TokenType::LeftBracket)){
+    if(!isConst && m_cursor.check(TokenType::LeftBracket)){
         m_cursor.error(span.line, span.column, "C-style arrays ('T name[N]') are prohibited in adhd; use 'Array<T, N>' or 'Vector<T>'");
         return nullptr;
     }
@@ -234,6 +187,7 @@ Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span)
     stmt->kind = StmtKind::VarDecl;
     stmt->varType = varType;
     stmt->name = varName;
+    stmt->isConst = isConst;
     stmt->span = span;
 
     if(m_cursor.match(TokenType::Equal)){
@@ -243,44 +197,38 @@ Stmt* StmtParser::parseVarDeclAfterType(TypeRef* varType, const SourceSpan span)
     }
     else if(m_cursor.check(TokenType::LeftParen)){
         if(varType->isAuto){
-            m_cursor.error(span.line, span.column, "'auto' variable must be initialized with '= expr'");
+            m_cursor.error(span.line, span.column, isConst ? "'auto' constant must be initialized with '= expr'" : "'auto' variable must be initialized with '= expr'");
             return nullptr;
         }
         stmt->isCtorInit = true;
         if(!m_exprParser.parseArgumentList(stmt->arguments))
             return nullptr;
     }
-    else if(m_cursor.check(TokenType::Semicolon)){
+    else if(!isConst && m_cursor.check(TokenType::Semicolon)){
         if(varType->isAuto){
             m_cursor.error(span.line, span.column, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             return nullptr;
         }
     }
     else{
-        m_cursor.errorExpected("expected '=' or '(' to initialize local variable");
+        m_cursor.errorExpected(isConst ? "expected '=' or '(' to initialize 'const' value" : "expected '=' or '(' to initialize local variable");
         return nullptr;
     }
 
-    if(!m_cursor.expect(TokenType::Semicolon, "expected ';' after variable declaration"))
+    if(!m_cursor.expect(TokenType::Semicolon, isConst ? "expected ';' after 'const' declaration" : "expected ';' after variable declaration"))
         return nullptr;
 
     return stmt;
 }
 
-b8 StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority){
+b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority){
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "core"){
             if(attr.arguments.size() != 1u){
                 m_cursor.error(attr.line, attr.column, "'core' attribute requires exactly one argument (Heavy, Light, MainThread, or Any)");
                 return false;
             }
-            const MStringView arg = attr.arguments[0].text;
-            b8 matchedCore = false;
-#define NWB_ADHD_EXPORT_PARALLEL_CORE(adhdName, astEnum, cppCostEnum, cppTargetEnum) \
-            if(arg == adhdName){ outCore = astEnum; matchedCore = true; }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PARALLEL_CORE
-            if(!matchedCore){
+            if(!TryParseParallelCoreKind(attr.arguments[0].text, outCore)){
                 m_cursor.error(attr.line, attr.column, "invalid 'core' attribute value; expected Heavy, Light, MainThread, or Any");
                 return false;
             }
@@ -290,13 +238,7 @@ b8 StmtParser::applySchedulingAttributes(const MVector<ParsedAttribute>& attribu
                 m_cursor.error(attr.line, attr.column, "'priority' attribute requires exactly one argument (Critical, Normal, or Background)");
                 return false;
             }
-            const MStringView arg = attr.arguments[0].text;
-            b8 matchedPriority = false;
-#define NWB_ADHD_EXPORT_PARALLEL_PRIORITY(adhdName, astEnum, cppPriorityEnum) \
-            if(arg == adhdName){ outPriority = astEnum; matchedPriority = true; }
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PARALLEL_PRIORITY
-            if(!matchedPriority){
+            if(!TryParseParallelPriorityKind(attr.arguments[0].text, outPriority)){
                 m_cursor.error(attr.line, attr.column, "invalid 'priority' attribute value; expected Critical, Normal, or Background");
                 return false;
             }

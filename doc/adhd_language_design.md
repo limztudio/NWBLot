@@ -560,13 +560,14 @@ Every source and header file is strictly split by domain responsibility so that 
      - `source_emitter.h` / `source_emitter.cpp` / `source_emitter_expr.cpp` / `source_emitter_stmt.cpp` / `source_emitter_parallel.cpp` / `source_emitter_simd_expr.cpp` / `source_emitter_simd_stmt.cpp`: Emits `.adhd.cpp` method bodies, statement lists, `ScratchArena<>` injection, `CpuTaskScheduler` lowering for `parallel_for` / `parallel`, SIMD register lowering, and `native` blocks.
      - `reflection_emitter.h` / `reflection_emitter.cpp` / `reflection_emitter_nwb.cpp`: Emits `[serialize]` 1-byte packed binary serialization, `.nwb` property parsing, `AssetRef<T>` dependency extraction, and `[asset("...")]` registration.
 
-3. **CLI Executable (`pipeline/adhd_compiler/`)**:
-   - `compiler_options.h` / `compiler_options.cpp`: CLI argument parsing (input `.adhd`, include directories, `-D` macro definitions, `-MF` / `--depfile` output, output `.adhd.h` / `.adhd.cpp`, `--namespace`, `--validate-only`).
-   - `compiler_driver.h` / `compiler_driver.cpp`: Orchestrates file I/O and invokes the `core/metascript/adhd` pipeline.
-   - `main.cpp`: Standalone executable entry point invoked by CMake and build/validation tools.
+3. **Pipeline Tool (`pipeline/adhd_compiler/`)**:
+   - `global.h`: Defines `NWB_ADHD_COMPILER_BEGIN` / `NWB_ADHD_COMPILER_END` (`NWB::Pipeline::AdhdCompiler`).
+   - `compile.h` / `compile.cpp`: Declares `AdhdCompileOptions` and `CompileAdhd(const AdhdCompileOptions& options)` to orchestrate file I/O, include resolution, depfile emission, and `core/metascript/adhd` compilation.
+   - `module.cpp`: Implements `RunPipelineTool(int argc, char** argv)` using `PipelineCommandLine(PipelineTool::AdhdCompiler)` and shared `pipeline/main.cpp`.
 
 4. **Build & C++ Integration Rules**:
    - **CLI / CMake Namespace (`--namespace`)**: Since `.adhd` has no `namespace` keyword, the generated C++ declarations are wrapped in the C++ namespace passed via `--namespace <ns>` (defaulting to `NWB`).
    - **Cross-File `#include "other.adhd"`**: The compiler parses included `.adhd` files (with automatic deduplication) to resolve `interface` methods, `enum<SizeType>` sizes, and exact `sizeof` / `alignof` of embedded `class` types during member layout optimization, and emits `#include "other.adhd.h"` in the generated header.
    - **No Positional Aggregate Init (`Foo{a, b}`)**: Because `layout_optimizer` reorders class fields automatically, classes are constructed via constructors (`Foo(a, b)`) or default construction + named member assignment (`Foo f; f.x = ...;`).
    - **CMake Helper (`nwb_target_adhd_sources`)**: Runs `nwb_adhd_compiler` per `.adhd` source, emits `.adhd.h` / `.adhd.cpp` into the target's generated build directory, and attaches the generated C++ sources and include paths to the target.
+

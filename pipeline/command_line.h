@@ -21,6 +21,7 @@ namespace PipelineTool{
         DependencyComputer,
         AssetBuilder,
         AssetGatherer,
+        AdhdCompiler,
     };
 };
 
@@ -30,32 +31,46 @@ inline constexpr int s_PipelineExitFatal = -1;
 inline constexpr AStringView s_PipelineAppDescription = "NWB asset pipeline";
 inline constexpr AStringView s_PipelineInputOption = "input,--input";
 inline constexpr AStringView s_PipelineInputListOption = "--input-list";
-inline constexpr AStringView s_PipelineOutputOption = "-o,--output,--output-directory";
+inline constexpr AStringView s_PipelineOutputOption = "-o,--output,--output-dir,--output-directory";
 inline constexpr AStringView s_PipelineRepoRootOption = "--repo-root";
 inline constexpr AStringView s_PipelineAssetRootOption = "--asset-root";
 inline constexpr AStringView s_PipelineCacheDirectoryOption = "--cache-directory";
 inline constexpr AStringView s_PipelineAssetTypeOption = "--asset-type";
 inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
+inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
+inline constexpr AStringView s_PipelineDefineOption = "-D,--define";
+inline constexpr AStringView s_PipelineDepfileOption = "--depfile";
+inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
+inline constexpr AStringView s_PipelineValidateOnlyFlag = "--validate-only";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> inputs;
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> assetRoots;
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> includeDirectories;
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> macroDefinitions;
     NWB::Core::Assets::AssetString repoRoot;
     NWB::Core::Assets::AssetString outputPath;
     NWB::Core::Assets::AssetString cacheDirectory;
+    NWB::Core::Assets::AssetString depfilePath;
+    NWB::Core::Assets::AssetString customNamespace;
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
+    b8 validateOnly = false;
 
 
 public:
     explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)noexcept
         : inputs(arena)
         , assetRoots(arena)
+        , includeDirectories(arena)
+        , macroDefinitions(arena)
         , repoRoot(arena)
         , outputPath(arena)
         , cacheDirectory(arena)
+        , depfilePath(arena)
+        , customNamespace(arena)
     {}
 };
 
@@ -86,13 +101,18 @@ public:
 private:
     InteropVector<AInteropString> m_inputs;
     InteropVector<AInteropString> m_assetRoots;
+    InteropVector<AInteropString> m_includeDirectories;
+    InteropVector<AInteropString> m_macroDefinitions;
     AInteropString m_inputList;
     AInteropString m_repoRoot;
     AInteropString m_outputPath;
     AInteropString m_cacheDirectory;
+    AInteropString m_depfilePath;
+    AInteropString m_customNamespace;
     AInteropString m_configuration;
     AInteropString m_assetType;
     PipelineTool::Enum m_tool;
+    b8 m_validateOnly = false;
     CLI::App m_app;
 };
 

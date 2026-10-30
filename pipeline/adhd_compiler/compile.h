@@ -5,13 +5,49 @@
 #pragma once
 
 
-#include "compiler_options.h"
+#include "global.h"
+
+#include <core/metascript/adhd/compiler.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 RunAdhdCompilerDriver(const AdhdCompilerOptions& options, NWB::Core::Metascript::MetaArena& arena);
+NWB_ADHD_COMPILER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AdhdCompileOptions{
+    Core::Metascript::MVector<Core::Metascript::MString> inputs;
+    Core::Metascript::MVector<Core::Metascript::MString> includeDirectories;
+    Core::Metascript::MVector<Core::Metascript::MString> macroDefinitions;
+    Core::Metascript::MString outputDirectory;
+    Core::Metascript::MString customNamespace;
+    Core::Metascript::MString depfilePath;
+    b8 validateOnly = false;
+
+
+public:
+    explicit AdhdCompileOptions(Core::Metascript::MetaArena& arena)noexcept
+        : inputs(arena)
+        , includeDirectories(arena)
+        , macroDefinitions(arena)
+        , outputDirectory(arena)
+        , customNamespace(arena)
+        , depfilePath(arena)
+    {}
+};
+
+
+[[nodiscard]] b8 CompileAdhd(const AdhdCompileOptions& options);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_COMPILER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

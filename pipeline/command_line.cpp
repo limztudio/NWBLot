@@ -60,7 +60,9 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
 {
     m_app.add_option(s_PipelineInputOption.data(), m_inputs, "Input assets; accepts multiple paths and repeated options");
     m_app.add_option(s_PipelineInputListOption.data(), m_inputList, "UTF-8 newline-separated input paths");
-    m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
+    CLI::Option* outputOption = m_app.add_option(s_PipelineOutputOption.data(), m_outputPath, m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory");
+    if(m_tool != PipelineTool::AdhdCompiler)
+        outputOption->required();
     if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::DependencyComputer){
         m_app.add_option(s_PipelineRepoRootOption.data(), m_repoRoot, "Repository root; defaults to the working directory");
         m_app.add_option(s_PipelineAssetRootOption.data(), m_assetRoots, "Asset root directories used to resolve virtual paths");
@@ -69,8 +71,15 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
         m_app.add_option(s_PipelineCacheDirectoryOption.data(), m_cacheDirectory, "Asset build cache directory");
         m_app.add_option(s_PipelineAssetTypeOption.data(), m_assetType, "Asset build domain; graphics is currently supported");
     }
-    if(m_tool != PipelineTool::DependencyComputer)
+    if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::AssetGatherer)
         m_app.add_option(s_PipelineConfigurationOption.data(), m_configuration, "Build configuration label");
+    if(m_tool == PipelineTool::AdhdCompiler){
+        m_app.add_option(s_PipelineIncludeDirOption.data(), m_includeDirectories, "Include search directories");
+        m_app.add_option(s_PipelineDefineOption.data(), m_macroDefinitions, "Preprocessor macro definitions (NAME or NAME=VALUE)");
+        m_app.add_option(s_PipelineDepfileOption.data(), m_depfilePath, "Output Makefile-style dependency file");
+        m_app.add_option(s_PipelineNamespaceOption.data(), m_customNamespace, "Generated C++ enclosing namespace");
+        m_app.add_flag(s_PipelineValidateOnlyFlag.data(), m_validateOnly, "Validate inputs without writing generated outputs");
+    }
 }
 
 Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv, NWB::Core::Assets::AssetArena& arena){
@@ -82,15 +91,20 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
         return MakeUnexpected(Failure{});
     }
+    options.validateOnly = m_validateOnly;
     if(
         !__hidden_pipeline_command_line::AssignInputs(m_inputs, options.inputs)
         || !__hidden_pipeline_command_line::AssignInputs(m_assetRoots, options.assetRoots)
+        || !__hidden_pipeline_command_line::AssignInputs(m_includeDirectories, options.includeDirectories)
+        || !__hidden_pipeline_command_line::AssignInputs(m_macroDefinitions, options.macroDefinitions)
         || !__hidden_pipeline_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_pipeline_command_line::AssignText(m_cacheDirectory, options.cacheDirectory)
+        || !__hidden_pipeline_command_line::AssignText(m_depfilePath, options.depfilePath)
+        || !__hidden_pipeline_command_line::AssignText(m_customNamespace, options.customNamespace)
     )
         return MakeUnexpected(Failure{});
-    if(options.outputPath.empty()){
+    if(options.outputPath.empty() && !(m_tool == PipelineTool::AdhdCompiler && options.validateOnly)){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
         return MakeUnexpected(Failure{});
     }

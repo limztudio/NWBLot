@@ -27,7 +27,9 @@ namespace __hidden_assets_graphics_fixture{
 
 
 constexpr AStringView s_EngineDirectory = "impl";
-constexpr AStringView s_CacheDirectory = "cache";
+#if defined(NWB_FINAL)
+constexpr AStringView s_CacheDirectory = "__asset_cache";
+#endif
 constexpr AStringView s_TestsConfiguration = "tests";
 constexpr AStringView s_GraphicsDirectory = "graphics";
 constexpr AStringView s_AssetsDirectory = "assets";
@@ -108,7 +110,7 @@ AssetsGraphicsFixture::Path AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(As
     caseKey.reserve(1u + s_HexU32DigitCount);
     caseKey += AssetsGraphicsTestConfigurationName()[0u];
     AppendHexU32(static_cast<u32>(ComputeFnv64Text(caseName)), caseKey);
-    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "c" / "a" / caseKey;
+    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "tests" / caseKey;
 }
 
 Expected<AssetsGraphicsFixture::Path> AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(AssetsGraphicsFixture::TestArena& testArena, const AStringView caseName){
@@ -135,7 +137,16 @@ b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
 ){
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(workerThreadCount);
     NWB::Pipeline::AssetBuilder::AssetBuildOptions options(testArena.arena, cookCpuTaskScheduler);
-    options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
+    const Path normalRoot = root.lexicallyNormal();
+    b8 useCaseRootAsRepoRoot = !FileExists(root / __hidden_assets_graphics_fixture::s_AssetsDirectory / __hidden_assets_graphics_fixture::s_ShadersDirectory / "material_mesh.nwb").value_or(false);
+    for(const Path& assetRoot : assetRoots){
+        const Path normalAssetRoot = assetRoot.lexicallyNormal();
+        if(normalAssetRoot != normalRoot && !PathHasDirectoryAncestor(normalAssetRoot, normalRoot)){
+            useCaseRootAsRepoRoot = false;
+            break;
+        }
+    }
+    options.repoRoot = PathToString(testArena.arena, useCaseRootAsRepoRoot ? root : AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){
         auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
@@ -147,7 +158,6 @@ b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
         options.assetRoots.emplace_back(testArena.arena, assetRootText, virtualRoot);
     }
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, root / __hidden_assets_graphics_fixture::s_CacheDirectory);
     if(!options.configuration.assign(__hidden_assets_graphics_fixture::s_TestsConfiguration) || !options.assetType.assign(__hidden_assets_graphics_fixture::s_GraphicsDirectory))
         return false;
 

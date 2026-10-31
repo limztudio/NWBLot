@@ -49,7 +49,6 @@ struct AssetBuildOptions{
     Core::Assets::AssetString repoRoot;
     Core::Assets::AssetVector<AssetBuildRoot> assetRoots;
     Core::Assets::AssetString outputDirectory;
-    Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
     ACompactString assetType{ s_GraphicsAssetBuildType };
     AssetBuildServices services;
@@ -62,7 +61,6 @@ public:
         : repoRoot(arena)
         , assetRoots(arena)
         , outputDirectory(arena)
-        , cacheDirectory(arena)
         , services(cpuScheduler)
         , inputs(arena)
     {}

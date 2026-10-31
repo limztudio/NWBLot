@@ -27,13 +27,12 @@ MAIN_ENTRY = "__main__"
 INPUT_LIST_LINE_END = "\n"
 ASSET_EXTENSION = ".nwb"
 INPUT_LIST_NAME = "inputs.list"
-DEFAULT_CACHE_DIRECTORY = "__build_obj/asset_cache"
+ASSET_CACHE_DIRECTORY = "__asset_cache"
 ACTION_EXTEND = "extend"
 OPTION_OUTPUT_SHORT = "-o"
 OPTION_OUTPUT = "--output"
 OPTION_OUTPUT_DIRECTORY = "--output-directory"
 OPTION_ASSET_ROOT = "--asset-root"
-OPTION_CACHE_DIRECTORY = "--cache-directory"
 OPTION_CONFIGURATION = "--configuration"
 OPTION_ASSET_TYPE = "--asset-type"
 OPTION_INPUT_LIST = "--input-list"
@@ -46,7 +45,6 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(OPTION_ASSET_ROOT, type=Path, action=ACTION_EXTEND, nargs="+", required=True)
     parser.add_argument("--input", type=Path, action=ACTION_EXTEND, nargs="+", help="Explicit .nwb files or directories; defaults to the project.nwb root manifest")
     parser.add_argument(OPTION_OUTPUT_SHORT, OPTION_OUTPUT, OPTION_OUTPUT_DIRECTORY, type=Path, required=True)
-    parser.add_argument(OPTION_CACHE_DIRECTORY, type=Path)
     parser.add_argument("--build-directory", type=Path, help="Persistent directory for standalone .nwba artifacts")
     parser.add_argument(OPTION_CONFIGURATION, help="Asset configuration label; defaults to the selected --config")
     parser.add_argument(OPTION_ASSET_TYPE, default="graphics")
@@ -110,7 +108,7 @@ def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
     subprocess.run([str(executable), *arguments], cwd=repo_root, check=True)
 
 
-def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[Path], output: Path, cache: Path, built: Path, configuration: str, tools: tuple[Path, Path, Path], workspace: Path,) -> list[tuple[Path, list[str]]]:
+def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[Path], output: Path, built: Path, configuration: str, tools: tuple[Path, Path, Path], workspace: Path,) -> list[tuple[Path, list[str]]]:
     dependency, builder, gatherer = tools
     dependency_list = workspace / "dependencies.list"
     dependency_arguments = [OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT, str(dependency_list)]
@@ -119,7 +117,7 @@ def pipeline_commands(options: argparse.Namespace, repo_root: Path, roots: list[
         dependency_arguments.extend([OPTION_INPUT_LIST, str(initial_list)])
     for root in roots:
         dependency_arguments.extend([OPTION_ASSET_ROOT, str(root)])
-    builder_arguments = [OPTION_INPUT_LIST, str(dependency_list), OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT_DIRECTORY, str(built), OPTION_CACHE_DIRECTORY, str(cache), OPTION_ASSET_TYPE, options.asset_type,]
+    builder_arguments = [OPTION_INPUT_LIST, str(dependency_list), OPTION_REPO_ROOT, str(repo_root), OPTION_OUTPUT_DIRECTORY, str(built), OPTION_ASSET_TYPE, options.asset_type,]
     for root in roots:
         builder_arguments.extend([OPTION_ASSET_ROOT, str(root)])
     gatherer_arguments = [OPTION_INPUT_LIST, str(built / "assets.list"), OPTION_OUTPUT_DIRECTORY, str(output)]
@@ -136,7 +134,7 @@ def cook(options: argparse.Namespace) -> None:
     inputs = resolve_inputs(roots, options.input, repo_root)
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
-    cache = resolve_path(repo_root, options.cache_directory or Path(DEFAULT_CACHE_DIRECTORY))
+    cache = repo_root / ASSET_CACHE_DIRECTORY
     output_key = hashlib.sha256(str(output).encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     configuration_key = hashlib.sha256(configuration.encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
@@ -149,7 +147,7 @@ def cook(options: argparse.Namespace) -> None:
     tools = resolve_tools(options, settings)
     if options.dry_run:
         workspace = cache / "pipeline-dry-run"
-        for executable, arguments in pipeline_commands(options, repo_root, roots, output, cache, built, configuration, tools, workspace):
+        for executable, arguments in pipeline_commands(options, repo_root, roots, output, built, configuration, tools, workspace):
             ROOT_LAUNCHER.run_checked([executable, *arguments], repo_root, env, dry_run=True)
         return
 
@@ -158,7 +156,7 @@ def cook(options: argparse.Namespace) -> None:
         workspace = Path(temporary)
         if options.input is not None:
             write_inputs(workspace / INPUT_LIST_NAME, inputs)
-        for executable, arguments in pipeline_commands(options, repo_root, roots, output, cache, built, configuration, tools, workspace):
+        for executable, arguments in pipeline_commands(options, repo_root, roots, output, built, configuration, tools, workspace):
             run_stage(executable, arguments, repo_root)
 
 

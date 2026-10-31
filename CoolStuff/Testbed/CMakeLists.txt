@@ -24,20 +24,15 @@ if(TARGET nwb_logserver)
 endif()
 
 if(TARGET nwb_asset_builder)
-    # Object-cache paths include long content hashes.
-    # Keep the root compact so Windows builds remain below the legacy MAX_PATH limit.
-    set(_nwb_testbed_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
-
     file(GLOB_RECURSE _nwb_testbed_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*")
 
     set(_nwb_testbed_asset_stamp "${NWB_OUTPUT_ROOT}/res/.nwb_testbed_assets_$<CONFIG>.stamp")
     add_custom_command(OUTPUT "${_nwb_testbed_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${NWB_OUTPUT_ROOT}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
             --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "CoolStuff/Testbed/assets" --output-directory "${NWB_OUTPUT_ROOT}/res"
-            --cache-directory "${_nwb_testbed_asset_cache_directory}" --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
+            --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
             "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_testbed_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB graphics assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
     add_custom_target(nwb_testbed_assets DEPENDS "${_nwb_testbed_asset_stamp}")
     add_dependencies(testbed nwb_testbed_assets)
     unset(_nwb_testbed_asset_stamp)
     unset(_nwb_testbed_asset_inputs)
-    unset(_nwb_testbed_asset_cache_directory)
 endif()

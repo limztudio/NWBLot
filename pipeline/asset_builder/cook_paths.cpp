@@ -24,14 +24,13 @@ NWB_ASSET_BUILDER_BEGIN
 
 namespace Assets = Core::Assets;
 
-static constexpr AStringView s_DefaultCacheDirectory = "__build_obj/asset_cache";
 static constexpr AStringView s_AssetCacheDirectory = "__asset_cache";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena, Assets::ScratchArena& scratchArena){
+Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Assets::AssetArena& arena){
     if(options.assetRoots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
         return MakeUnexpected(Failure{});
@@ -71,28 +70,10 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     }
     paths.outputDirectory = Move(*outputDirectory);
 
-    const Path defaultCacheDirectory = paths.repoRoot / s_DefaultCacheDirectory;
-    const Assets::AssetString& requestedCacheDirectory = options.cacheDirectory;
-    Assets::ScratchString defaultCacheDirectoryText(scratchArena);
-    if(requestedCacheDirectory.empty())
-        defaultCacheDirectoryText = PathToString(scratchArena, defaultCacheDirectory);
-    const AStringView cacheText = requestedCacheDirectory.empty() ? AStringView(defaultCacheDirectoryText) : AStringView(requestedCacheDirectory);
-    auto cacheDirectory = ResolveAbsolutePath(arena, paths.repoRoot, cacheText);
-    if(!cacheDirectory){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}"), ConvertString(cacheText), ConvertString(cacheDirectory.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    paths.cacheDirectory = Move(*cacheDirectory);
+    paths.cacheDirectory = paths.repoRoot / s_AssetCacheDirectory;
     const auto created = EnsureDirectories(paths.cacheDirectory);
     if(!created){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}"), PathToString<tchar>(paths.cacheDirectory), ConvertString(created.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-
-    paths.assetCacheDirectory = paths.repoRoot / s_AssetCacheDirectory;
-    const auto assetCacheCreated = EnsureDirectories(paths.assetCacheDirectory);
-    if(!assetCacheCreated){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create asset cache directory '{}': {}"), PathToString<tchar>(paths.assetCacheDirectory), ConvertString(assetCacheCreated.error().message()));
         return MakeUnexpected(Failure{});
     }
     return paths;

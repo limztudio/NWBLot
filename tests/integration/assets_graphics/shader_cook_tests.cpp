@@ -41,7 +41,7 @@ constexpr AStringView s_CompilerProbeIncludeFilename = "bom_compiler_probe_inclu
 constexpr AStringView s_AssetsDirectory = "assets";
 constexpr AStringView s_ComputeStage = "cs";
 constexpr AStringView s_ExactEntryPointShaderPath = "project/shaders/exact_entry_point_ps";
-constexpr AStringView s_CacheDirectory = "cache";
+constexpr AStringView s_CacheDirectory = "__asset_cache";
 
 static constexpr AStringView s_Ps = "ps";
 static constexpr AStringView s_ProjectShadersStandalonePs = "project/shaders/standalone_ps";

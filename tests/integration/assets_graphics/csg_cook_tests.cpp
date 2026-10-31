@@ -31,7 +31,7 @@ namespace __hidden_assets_graphics_csg_cook_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_CacheDirectory = "cache";
+constexpr AStringView s_CacheDirectory = "__asset_cache";
 constexpr AStringView s_AuthoredDefine = "AUTHORED";
 constexpr AStringView s_ModuleOptionDefine = "MODULE_OPTION";
 constexpr AStringView s_PixelStage = "ps";

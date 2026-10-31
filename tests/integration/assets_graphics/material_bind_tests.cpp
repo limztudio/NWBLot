@@ -42,7 +42,7 @@ static constexpr AStringView s_MaterialInterfaces = "material_interfaces";
 static constexpr AStringView s_TestSurfaceBind = "test_surface.bind";
 static constexpr AStringView s_Shaders = "shaders";
 static constexpr AStringView s_EngineSamplersLinearClamp = "engine/samplers/linear_clamp";
-static constexpr AStringView s_Cache = "cache";
+static constexpr AStringView s_Cache = "__asset_cache";
 static constexpr AStringView s_AssetsDir = "assets";
 static constexpr AStringView s_Materials = "materials";
 

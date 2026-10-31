@@ -67,10 +67,8 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
         m_app.add_option(s_PipelineRepoRootOption.data(), m_repoRoot, "Repository root; defaults to the working directory");
         m_app.add_option(s_PipelineAssetRootOption.data(), m_assetRoots, "Asset root directories used to resolve virtual paths");
     }
-    if(m_tool == PipelineTool::AssetBuilder){
-        m_app.add_option(s_PipelineCacheDirectoryOption.data(), m_cacheDirectory, "Asset build cache directory");
+    if(m_tool == PipelineTool::AssetBuilder)
         m_app.add_option(s_PipelineAssetTypeOption.data(), m_assetType, "Asset build domain; graphics is currently supported");
-    }
     if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::AssetGatherer)
         m_app.add_option(s_PipelineConfigurationOption.data(), m_configuration, "Build configuration label");
     if(m_tool == PipelineTool::AdhdCompiler){
@@ -99,7 +97,6 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         || !__hidden_pipeline_command_line::AssignInputs(m_macroDefinitions, options.macroDefinitions)
         || !__hidden_pipeline_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_pipeline_command_line::AssignText(m_outputPath, options.outputPath)
-        || !__hidden_pipeline_command_line::AssignText(m_cacheDirectory, options.cacheDirectory)
         || !__hidden_pipeline_command_line::AssignText(m_depfilePath, options.depfilePath)
         || !__hidden_pipeline_command_line::AssignText(m_customNamespace, options.customNamespace)
     )

@@ -49,7 +49,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
 
     Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
 
-    auto paths = ResolveCookPaths(options, arena, scratchArena);
+    auto paths = ResolveCookPaths(options, arena);
     if(!paths)
         return false;
     const Assets::ResolvedCookPaths& resolvedPaths = *paths;
@@ -66,7 +66,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
     Assets::ParsedAssetMetadata parsedMetadata(arena);
     if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
         return false;
-    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata, resolvedPaths.repoRoot, resolvedPaths.assetCacheDirectory))
+    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory))
         return false;
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());

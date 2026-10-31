@@ -48,7 +48,6 @@ LIT_OUTPUT_DIRECTORY = "--output-directory"
 LIT_RUNTIME_RESOURCES = "runtime resources"
 LIT_OPT = "opt"
 LIT_REPO_ROOT = "--repo-root"
-LIT_CACHE_DIRECTORY = "--cache-directory"
 LIT_CUSTOM_ARTIFACTS = "custom artifacts"
 LIT_DEPENDENCY_COMPUTER_EXE = "dependency_computer.exe"
 LIT_ASSET_BUILDER_EXE = "asset_builder.exe"
@@ -201,10 +200,10 @@ class PipelineLauncherTests(unittest.TestCase):
         for index, asset_root in enumerate(self.asset_roots):
             asset_root.mkdir()
             (asset_root / f"asset-{index}.nwb").write_text("", encoding=LIT_UTF_8)
-        self.cache = self.root / "asset cache"
+        self.cache = self.root / "__asset_cache"
         self.output = self.root / LIT_RUNTIME_RESOURCES
         self.arguments = [LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_ASSET_ROOT, *(str(path) for path in self.asset_roots),
-            LIT_OUTPUT_DIRECTORY, str(self.output), LIT_CACHE_DIRECTORY, str(self.cache),]
+            LIT_OUTPUT_DIRECTORY, str(self.output),]
         self.tool_paths = { "nwb_dependency_computer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_DEPENDENCY_COMPUTER_EXE, LIT_NWB_ASSET_BUILDER: self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_BUILDER_EXE,
             "nwb_asset_gatherer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_GATHERER_EXE, }
         for path in self.tool_paths.values():

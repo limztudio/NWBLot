@@ -34,7 +34,6 @@ inline constexpr AStringView s_PipelineInputListOption = "--input-list";
 inline constexpr AStringView s_PipelineOutputOption = "-o,--output,--output-dir,--output-directory";
 inline constexpr AStringView s_PipelineRepoRootOption = "--repo-root";
 inline constexpr AStringView s_PipelineAssetRootOption = "--asset-root";
-inline constexpr AStringView s_PipelineCacheDirectoryOption = "--cache-directory";
 inline constexpr AStringView s_PipelineAssetTypeOption = "--asset-type";
 inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
 inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
@@ -51,7 +50,6 @@ struct PipelineOptions{
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> macroDefinitions;
     NWB::Core::Assets::AssetString repoRoot;
     NWB::Core::Assets::AssetString outputPath;
-    NWB::Core::Assets::AssetString cacheDirectory;
     NWB::Core::Assets::AssetString depfilePath;
     NWB::Core::Assets::AssetString customNamespace;
     ACompactString configuration;
@@ -68,7 +66,6 @@ public:
         , macroDefinitions(arena)
         , repoRoot(arena)
         , outputPath(arena)
-        , cacheDirectory(arena)
         , depfilePath(arena)
         , customNamespace(arena)
     {}
@@ -106,7 +103,6 @@ private:
     AInteropString m_inputList;
     AInteropString m_repoRoot;
     AInteropString m_outputPath;
-    AInteropString m_cacheDirectory;
     AInteropString m_depfilePath;
     AInteropString m_customNamespace;
     AInteropString m_configuration;

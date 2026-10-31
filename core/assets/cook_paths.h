@@ -52,7 +52,6 @@ struct ResolvedCookPaths{
     CookVector<ResolvedAssetRoot> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
-    Path assetCacheDirectory;
 
 
 public:
@@ -61,7 +60,6 @@ public:
         , assetRoots(arena)
         , outputDirectory(arena)
         , cacheDirectory(arena)
-        , assetCacheDirectory(arena)
     {}
 };
 

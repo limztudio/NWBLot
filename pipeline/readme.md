@@ -110,7 +110,7 @@ python -m launcher pipeline --help
 The launcher reuses the repository's `--config`, `--arch`, `--domain`,
 `--configure-preset`, `--build-dir`, `--jobs`, and other build options. The repository
 root defaults to the repository containing the script. Asset arguments
-`--repo-root`, `--asset-root`, `--output-directory`, `--cache-directory`,
+`--repo-root`, `--asset-root`, `--output-directory`,
 `--configuration`, and `--asset-type graphics` remain available. `--configuration`
 overrides the asset configuration label; otherwise it follows `--config`. Omitting `--asset-type` selects `graphics`;
 explicitly empty or unsupported values are rejected by the builder, including internal build requests.

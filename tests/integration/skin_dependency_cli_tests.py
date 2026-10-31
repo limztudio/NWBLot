@@ -17,7 +17,6 @@ LIT_UI = "ui"
 LIT_TEXTURE_NWB = "texture.nwb"
 LIT_TEXTURE_TEX = "texture.tex"
 LIT_ASSETS_LIST = "assets.list"
-LIT_C = "c"
 LIT_TESTS = "tests"
 LIT_PROJECT = "project"
 LIT_ATLAS_NWB = "atlas.nwb"
@@ -35,7 +34,6 @@ INPUT = "--input"
 INPUT_LIST = "--input-list"
 OUTPUT = "--output"
 OUTPUT_DIRECTORY = "--output-directory"
-CACHE_DIRECTORY = "--cache-directory"
 CONFIGURATION = "--configuration"
 TEXTURE_IDENTITY = "engine/ui/texture"
 TEXTURE_MAGIC = 0x54455831
@@ -182,7 +180,7 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
 def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pathlib.Path, roots: list[pathlib.Path], manifest: pathlib.Path, sidecar: pathlib.Path, invalid_skin: pathlib.Path, helpers: types.ModuleType,) -> None:
     artifacts = fixture / "built"
     packed = fixture / "volume"
-    build_command = [str(args.asset_builder), REPO_ROOT, str(fixture), INPUT_LIST, str(manifest), OUTPUT_DIRECTORY, str(artifacts), CACHE_DIRECTORY, str(root / LIT_C), CONFIGURATION, LIT_TESTS,]
+    build_command = [str(args.asset_builder), REPO_ROOT, str(fixture), INPUT_LIST, str(manifest), OUTPUT_DIRECTORY, str(artifacts), CONFIGURATION, LIT_TESTS,]
     for asset_root in roots:
         build_command.extend([ASSET_ROOT, str(asset_root)])
     gather_command = [str(args.asset_gatherer), INPUT_LIST, str(artifacts / LIT_ASSETS_LIST), OUTPUT_DIRECTORY, str(packed), CONFIGURATION, LIT_TESTS,]
@@ -223,8 +221,8 @@ def _run_package_tests(args: argparse.Namespace, root: pathlib.Path, fixture: pa
     if helpers.read_volume(packed) != refreshed:
         raise AssertionError("texture sidecar change was not reflected in the republished volume")
 
-    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", REPO_ROOT, str(args.repo_root), INPUT, str(fixture / LIT_PROJECT / LIT_ASSETS / LIT_UI / LIT_ATLAS_NWB), OUTPUT_DIRECTORY, str(packed),
-        CACHE_DIRECTORY, str(root / LIT_C), CONFIGURATION, LIT_TESTS, "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),]
+    launcher_command = [sys.executable, str(args.pipeline_launcher), "--skip-build", REPO_ROOT, str(fixture), INPUT, str(fixture / LIT_PROJECT / LIT_ASSETS / LIT_UI / LIT_ATLAS_NWB), OUTPUT_DIRECTORY, str(packed),
+        CONFIGURATION, LIT_TESTS, "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),]
     for asset_root in roots:
         launcher_command.extend([ASSET_ROOT, str(asset_root)])
     helpers.run_command(launcher_command, fixture)
@@ -317,11 +315,9 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
         str(args.pipeline_launcher),
         "--skip-build",
         REPO_ROOT,
-        str(args.repo_root),
+        str(fixture),
         OUTPUT_DIRECTORY,
         str(packed),
-        CACHE_DIRECTORY,
-        str(root / LIT_C),
         CONFIGURATION,
         LIT_TESTS,
         "--dependency-computer",

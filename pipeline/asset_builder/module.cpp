@@ -77,7 +77,6 @@ int RunPipelineTool(const int argc, char** argv){
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
         buildOptions.outputDirectory = options.outputPath;
-        buildOptions.cacheDirectory = options.cacheDirectory;
         buildOptions.configuration = options.configuration;
         if(options.assetType)
             buildOptions.assetType = *options.assetType;

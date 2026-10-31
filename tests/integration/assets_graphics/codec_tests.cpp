@@ -301,11 +301,10 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     const Name virtualPath("project/samplers/first_sampler");
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
 
-    const auto buildAndGatherWithRepoRoot = [&](const Path& builtDir, const Path& cacheDir, const Path& outDir) -> b8{
+    const auto buildAndGatherWithRepoRoot = [&](const Path& builtDir, const Path& outDir) -> b8{
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(testArena.arena, cookCpuTaskScheduler);
         buildOptions.repoRoot = PathToString(testArena.arena, root);
         buildOptions.outputDirectory = PathToString(testArena.arena, builtDir);
-        buildOptions.cacheDirectory = PathToString(testArena.arena, cacheDir);
         if(!buildOptions.configuration.assign(s_TestsConfiguration) || !buildOptions.assetType.assign("graphics"))
             return false;
         const auto assetRootText = PathToString(testArena.arena, assetRoot);
@@ -321,7 +320,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     };
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_SamplerMetadata));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_first", root / "cache_first", cookCase->outputDirectory));
+    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_first", cookCase->outputDirectory));
 
     const Sha1Digest expectedDigest = ComputeSha1Text("assets/samplers/first_sampler.nwb");
     NWB::Core::Assets::AssetString expectedSha1Name(testArena.arena);
@@ -338,8 +337,8 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     EXPECT_NE(initialHeader->flags & NWB::Core::Assets::s_NwbAssetCacheFlagStandalone, 0u);
     EXPECT_EQ(initialHeader->entryCount, 1u);
 
-    // Build again into a separate cacheDirectory and outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_second", root / "cache_second", root / "out_second"));
+    // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
+    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_second", root / "out_second"));
 
     const auto cachedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, root / "out_second", virtualPath, 1u);
     ASSERT_TRUE(cachedSampler);
@@ -351,14 +350,14 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     corruptedHeader.payloadSectionHashFnv64 ^= 1u;
     ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(corruptedCacheBytes, 0u, corruptedHeader));
     ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_repaired", root / "cache_repaired", root / "out_repaired"));
+    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_repaired", root / "out_repaired"));
     NWB::Core::Assets::AssetBytes repairedCacheBytes(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, repairedCacheBytes));
     EXPECT_EQ(repairedCacheBytes, initialCacheBytes);
 
     // Modify .nwb parameter; checksum changes and invalidates __asset_cache/<sha1>.
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_ModifiedSamplerMetadata));
-    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_third", root / "cache_third", root / "out_third"));
+    ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_third", root / "out_third"));
 
     NWB::Core::Assets::AssetBytes updatedCacheBytes(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(expectedCacheFilePath, updatedCacheBytes));

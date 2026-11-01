@@ -30,9 +30,6 @@ namespace __hidden_task_graph_object_geometry_cache{
 
 using namespace RendererTaskGraphDetail;
 
-// Instance read, cache write and cache raster read.
-inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
-
 [[nodiscard]] b8 SameDecode(const MaterialPassDrawItem& left, const MaterialPassDrawItem& right)noexcept{
     const auto& leftCache = left.meshResources.objectGeometryCache;
     const auto& rightCache = right.meshResources.objectGeometryCache;

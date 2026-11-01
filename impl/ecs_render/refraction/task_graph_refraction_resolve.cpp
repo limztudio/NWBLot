@@ -208,7 +208,6 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
         avboitForegroundExtinction,
     };
     // Mesh view, bindless slots, scene shading, lights, the resolve output, and tile scheduling buffers.
-    constexpr usize s_RefractionFixedUseCapacity = 8u;
     refractionUses.reserve(refractionInputs.size() + s_RefractionFixedUseCapacity + sceneReads.uses.size() + sceneReads.csgUses.size());
     for(const auto input : refractionInputs)
         refractionUses.push_back(ReadUse(input));
@@ -221,7 +220,6 @@ Expected<Core::GpuTaskId> FrameGraphRefractionResolve::declare(const FrameGraphR
     refractionUses.push_back(ReadUse(tileArguments, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndirectArgument));
     if(refractionCounters.valid())
         refractionUses.push_back(ReadWriteUse(refractionCounters, Core::ResourceStates::UnorderedAccess));
-    constexpr usize s_RefractionResourceSetUseCapacity = 3u;
     Array<Core::GpuTaskResourceSetUse, s_RefractionResourceSetUseCapacity> refractionSets{};
     usize refractionSetCount = 0;
     if(refractionResources.usesHardwareTrace){

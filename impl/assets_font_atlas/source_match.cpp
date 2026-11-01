@@ -4,8 +4,6 @@
 
 #include "model.h"
 
-#include <global/binary_big_endian.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,30 +20,20 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
+    u32 sourceUnitsPerEm = 0u;
+    u32 sourceGlyphCount = 0u;
+    if(!TryReadFontFaceMetricsFromSfnt(source, sourceUnitsPerEm, sourceGlyphCount) || sourceUnitsPerEm != payload.unitsPerEm || sourceGlyphCount != payload.sourceGlyphCount)
+        return false;
     FontSfntDirectory directory;
     if(!ReadFontSfntDirectory({ source.data(), source.size() }, directory))
         return false;
     usize matched = 0u;
-    b8 hasHead = false;
-    b8 hasMaxp = false;
     for(u16 index = 0u; index < directory.tableCount(); ++index){
         FontSfntTable sourceTable;
         if(!directory.table(index, sourceTable))
             return false;
         const u32 tag = sourceTable.tag;
-        if(tag == s_FontSfntHeadTag){
-            hasHead = true;
-            const auto unitsPerEmResult = ReadU16BigEndian(sourceTable.bytes, s_FontSfntHeadUnitsPerEmOffset);
-            if(!unitsPerEmResult || *unitsPerEmResult != payload.unitsPerEm)
-                return false;
-        }
-        else if(tag == s_FontSfntMaxpTag){
-            hasMaxp = true;
-            const auto glyphCountResult = ReadU16BigEndian(sourceTable.bytes, s_FontSfntMaxpGlyphCountOffset);
-            if(!glyphCountResult || *glyphCountResult != payload.sourceGlyphCount)
-                return false;
-        }
-        if((tag != s_FontAtlasKernTag && tag != s_FontAtlasGposTag && tag != s_FontAtlasGdefTag) || sourceTable.bytes.empty())
+        if(!IsFontAtlasPositioningTableTag(tag) || sourceTable.bytes.empty())
             continue;
         const FontAtlasPositioningTable* exported = nullptr;
         for(const FontAtlasPositioningTable& table : payload.positioningTables){
@@ -60,7 +48,7 @@ b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& fon
         }
         ++matched;
     }
-    if(!hasHead || !hasMaxp || matched != payload.positioningTables.size()){
+    if(matched != payload.positioningTables.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
         return false;
     }

@@ -71,15 +71,11 @@ using namespace SceneAssetCook;
     if(!x || !y || !z || !w)
         return MakeUnexpected(Failure{});
 
-    const SIMDVectorSingle rawQuaternion = VectorSet(*x, *y, *z, *w);
-    const SIMDVectorSingle lengthSq = QuaternionLengthSq(rawQuaternion);
-    if(!VectorIsFinite(lengthSq, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthSq, VectorReplicate(s_SceneMinQuaternionLengthSq))){
+    Float4 normalized;
+    if(!TryNormalizeTransformQuaternion(*x, *y, *z, *w, normalized)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
-
-    Float4 normalized;
-    StoreFloat(QuaternionNormalize(rawQuaternion), normalized);
     return normalized;
 }
 
@@ -173,7 +169,7 @@ Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(const 
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, { s_TransformPositionField, s_TransformRotationField, s_TransformRotationEulerField, s_TransformRotationEulerDegreesField, s_TransformScaleField }))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, &IsAllowedTransformComponentField))
             return MakeUnexpected(Failure{});
 
         if(const Core::Metascript::Value* positionValue = asset.findField(s_TransformPositionField)){
@@ -238,7 +234,7 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(const Name v
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, { s_CameraVerticalFovDegreesField, s_CameraVerticalFovRadiansField, s_CameraNearPlaneField, s_CameraFarPlaneField, s_CameraAspectRatioField }))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, &IsAllowedCameraComponentField))
             return MakeUnexpected(Failure{});
 
         const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_CameraVerticalFovDegreesField);
@@ -294,22 +290,7 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath,
-            asset,
-            s_LightDiagnosticPrefix,
-            {
-                s_LightTypeField,
-                s_LightColorField,
-                s_LightIntensityField,
-                s_LightRangeField,
-                s_LightInnerConeCosField,
-                s_LightOuterConeCosField,
-                s_LightAngularRadiusField,
-                s_LightSourceRadiusField,
-                s_LightEnableCausticsField
-            }
-        ))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_LightDiagnosticPrefix, &IsAllowedLightComponentField))
             return MakeUnexpected(Failure{});
 
         if(asset.findField(s_LightTypeField)){

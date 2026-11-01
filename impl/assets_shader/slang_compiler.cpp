@@ -63,20 +63,28 @@ using ScratchVector = SlangCompilerWorkspace::ScratchVector<T>;
 
 // Slang's SPIR-V 1.5 profile does not include the standard capability set used by the generated Vulkan shaders.
 // Declare it explicitly so Slang produces the same output without silently rewriting the requested profile.
-static constexpr Array<AStringView, 8u> s_SpirvBaselineCapabilities = { "SPV_KHR_non_semantic_info", "SPV_GOOGLE_user_type", "spvDerivativeControl", "spvImageQuery", "spvImageGatherExtended", "spvSparseResidency", "spvMinLod", "spvFragmentFullyCoveredEXT", };
+static constexpr Array<AStringView, s_SpirvBaselineCapabilityCount> s_SpirvBaselineCapabilities = {
+    s_SpirvCapabilityNonSemanticInfo,
+    s_SpirvCapabilityUserType,
+    s_SpirvCapabilityDerivativeControl,
+    s_SpirvCapabilityImageQuery,
+    s_SpirvCapabilityImageGatherExtended,
+    s_SpirvCapabilitySparseResidency,
+    s_SpirvCapabilityMinLod,
+    s_SpirvCapabilityFragmentFullyCovered,
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<AStringView, 8u> s_CommonCompilerArguments = {
-    "-target", "spirv",
-    "-emit-spirv-directly",
-    "-fvk-use-entrypoint-name",
-    "-warnings-as-errors", "all",
-    "-profile", ShaderBinaryPayload::s_Spirv15TargetProfileText,
+static constexpr Array<AStringView, s_CommonCompilerArgumentCount> s_CommonCompilerArguments = {
+    s_SlangTargetArgument, s_SlangTargetSpirv,
+    s_SlangEmitSpirvDirectlyArgument,
+    s_SlangUseEntryPointNameArgument,
+    s_SlangWarningsAsErrorsArgument, s_SlangWarningsAsErrorsAll,
+    s_SlangProfileArgument, ShaderBinaryPayload::s_Spirv15TargetProfileText,
 };
-static constexpr usize s_BaseCompilerArgumentCount = 8u + s_CommonCompilerArguments.size() + s_SpirvBaselineCapabilities.size() * 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,14 +298,14 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
     }
 
     const ScratchPath outputParent = request.outputPath.parentPath();
-    const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? ScratchPath(scratchArena, ".") : outputParent, scratchArena);
+    const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? ScratchPath(scratchArena, s_CurrentDirectoryPathText) : outputParent, scratchArena);
     if(!compilerWorkDirectoryResult)
         return false;
     const ScratchPath& compilerWorkDirectory = *compilerWorkDirectoryResult;
     SlangCompilerWorkspace::ScopedDirectoryCleanupGuard workDirectoryCleanup(compilerWorkDirectory);
-    const ScratchPath diagnosticsPath = compilerWorkDirectory / "compiler.diag";
-    const ScratchPath compilerOutputPath = compilerWorkDirectory / "module.spv";
-    const ScratchPath compilerOverlayRoot = compilerWorkDirectory / "sources";
+    const ScratchPath diagnosticsPath = compilerWorkDirectory / s_CompilerDiagFileName;
+    const ScratchPath compilerOutputPath = compilerWorkDirectory / s_ModuleSpvFileName;
+    const ScratchPath compilerOverlayRoot = compilerWorkDirectory / s_SourcesDirName;
     const auto compilerInputs = SlangCompilerWorkspace::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, scratchArena);
     if(!compilerInputs)
         return false;
@@ -305,7 +313,6 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
 
     const usize includeDirectoryCount = compilerIncludeDirectories.size();
     const usize defineCount = request.defines.size();
-    constexpr usize s_MaxFixedArgumentCount = s_BaseCompilerArgumentCount + s_SlangMaxTargetProfileCapabilityCount * 2u + s_SlangMaxOptimizationArgumentCount;
     if(AddOverflows<usize>(s_MaxFixedArgumentCount, defineCount) || includeDirectoryCount > (Limit<usize>::s_Max - s_MaxFixedArgumentCount - defineCount) / 2u){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), ConvertString(request.shaderName));
         return false;

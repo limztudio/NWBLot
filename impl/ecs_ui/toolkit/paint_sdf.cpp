@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 
 b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
-    if(!page || channel >= page->binding().channelCount || !IsValidUvRect(uv))
+    if(!page || channel >= page->binding().channelCount || !IsValidPaintUvRect(uv))
         return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_sdfPages.size(); ++index){

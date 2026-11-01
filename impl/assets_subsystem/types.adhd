@@ -35,6 +35,18 @@ class SubsystemHeaderBinary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SubsystemFieldValueDescriptor MakeSubsystemFieldValueDescriptor(
+    in StringView fieldName,
+    in Name expectedAssetType,
+    in b8 isArray
+){
+    SubsystemFieldValueDescriptor descriptor;
+    descriptor.fieldName = fieldName;
+    descriptor.expectedAssetType = expectedAssetType;
+    descriptor.isArray = isArray;
+    return descriptor;
+}
+
 SubsystemHeaderBinary BuildSubsystemHeaderBinary(
     in NameHash subsystemTypeHash,
     in u64 subsystemCount,

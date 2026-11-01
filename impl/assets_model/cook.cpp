@@ -86,7 +86,7 @@ template<typename ObjectT, typename ParseObjectFn>
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkeletonObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, { s_ModelSkeletonField, s_ModelTransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, &IsAllowedModelSkeletonObjectField))
         return MakeUnexpected(Failure{});
 
     auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, s_ModelSkeletonField, true);
@@ -106,7 +106,7 @@ template<typename ObjectT, typename ParseObjectFn>
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelStaticMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, { s_ModelMeshField, s_ModelMaterialField, s_ModelParentObjectField, s_ModelParentJointField, s_ModelTransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, &IsAllowedModelStaticMeshObjectField))
         return MakeUnexpected(Failure{});
 
     auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, s_ModelMeshField, true);
@@ -138,7 +138,7 @@ template<typename ObjectT, typename ParseObjectFn>
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkinnedMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, { s_ModelSkinField, s_ModelMaterialField, s_ModelSkeletonField, s_ModelTransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, &IsAllowedModelSkinnedMeshObjectField))
         return MakeUnexpected(Failure{});
 
     auto skinResult = Core::Assets::ReadMetadataAssetRefField<Skin>(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, s_ModelSkinField, true);
@@ -226,7 +226,7 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, { s_ModelSkeletonsField, s_ModelStaticMeshesField, s_ModelSkinnedMeshesField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, &IsAllowedModelMetadataField))
         return MakeUnexpected(Failure{});
 
     auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(nwbFilePath, asset, s_ModelSkeletonsField, s_ModelSkeletonObjectKind, [&](const Core::Metascript::Value& objectValue){

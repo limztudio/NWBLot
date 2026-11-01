@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 #include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
@@ -20,9 +21,6 @@ TESTBED_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_RadioGroupLabelCount = 3u;
-inline constexpr u64 s_RadioGroupDisabledKey = 3u;
 
 class UiRadioGroupSource final : public UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>{
     friend class UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>;

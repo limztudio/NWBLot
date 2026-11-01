@@ -33,7 +33,7 @@ CsgDeformViability CheckCsgDeformCutsViability(
     CsgDeformVertexVector<ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<ScratchArena> triangles(scratchArena);
     const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, vertices, triangles);
-    return result ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok } : CsgDeformViability{ false, result.error().reason };
+    return result ? MakeCsgDeformViability(true, CsgDeformViabilityReason::Ok) : MakeCsgDeformViability(false, result.error().reason);
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
@@ -147,5 +147,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

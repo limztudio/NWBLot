@@ -40,7 +40,6 @@ namespace __hidden_task_graph_reflection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ReflectionCsgHardwareSliceFamily("render.reflection.hardware.csg_slice");
 inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
 inline constexpr TStringView s_HardwareReflectionResolveLogMessage = NWB_TEXT("Reflection resolve: hardware");
 
@@ -252,7 +251,7 @@ Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(const u32 slice){
     const auto index = FormatI64(static_cast<i64>(slice), suffix);
     if(!index)
         return MakeUnexpected(index.error());
-    const auto identity = DeriveName(__hidden_task_graph_reflection::s_ReflectionCsgHardwareSliceFamily, *index);
+    const auto identity = DeriveName(s_ReflectionCsgHardwareSliceFamily, *index);
     if(!identity)
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
     return *identity;

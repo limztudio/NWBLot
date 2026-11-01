@@ -81,8 +81,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         }
     }
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
-    constexpr usize s_LightSpaceReadCapacity = 9u;
-    lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size() + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
+    lightSpaceReads.reserve(s_SoftShadowLightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size() + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, m_graph, lightSpaceReads))
         return MakeUnexpected(Failure{});
     lightSpaceReads.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));

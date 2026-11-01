@@ -20,19 +20,10 @@ NWB_IMPL_UI_BEGIN
 
 
 const HitTarget* InputRouter::FindTargetInTable(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const WidgetId id, const u64 declarationGeneration)noexcept{
-    usize begin = 0u;
-    usize end = lookup.size();
-    while(begin < end){
-        const usize middle = begin + (end - begin) / 2u;
-        if(lookup[middle].value < id.value)
-            begin = middle + 1u;
-        else
-            end = middle;
-    }
-    if(begin == lookup.size() || lookup[begin].value != id.value)
+    usize targetIndex = 0u;
+    if(!FindTargetIndexInTable(targets, lookup, id, declarationGeneration, targetIndex))
         return nullptr;
-    const HitTarget& target = targets[lookup[begin].index];
-    return declarationGeneration == 0u || target.declarationGeneration == declarationGeneration ? &target : nullptr;
+    return &targets[targetIndex];
 }
 
 

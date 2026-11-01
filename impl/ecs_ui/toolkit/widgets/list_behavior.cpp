@@ -52,25 +52,6 @@ namespace __hidden_ui_list_behavior{
     return key;
 }
 
-[[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const f64 delta, const f64 step, const f64 maximum)noexcept{
-    if(!IsFinite(delta) || !IsFinite(step) || step <= 0.0 || !IsFinite(maximum) || maximum < 0.0)
-        return MakeUnexpected(Failure{});
-    f64 candidateValue = Min(current, maximum);
-    if(delta > 0.0){
-        const f64 distanceInSteps = candidateValue / step;
-        candidateValue = delta >= distanceInSteps ? 0.0 : candidateValue - delta * step;
-    }
-    else if(delta < 0.0){
-        const f64 reverseDelta = -delta;
-        const f64 distanceInSteps = (maximum - candidateValue) / step;
-        candidateValue = reverseDelta >= distanceInSteps ? maximum : candidateValue + reverseDelta * step;
-    }
-    const f64 candidate = candidateValue > 0.0 ? Min(maximum, candidateValue) : 0.0;
-    if(!IsFinite(candidate))
-        return MakeUnexpected(Failure{});
-    return candidate;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -139,8 +120,8 @@ b8 ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSour
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        const auto offset = WheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
-        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset))
+        f64 offset = 0.0;
+        if(!TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum, offset) || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(offset))
             return false;
         state.m_ensureCursor = false;
         result.valid = true;

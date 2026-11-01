@@ -154,6 +154,11 @@ CausticPhotonPushConstants ResolveCausticPhotonPushConstants(
 // The caustic resolve chain works on targets reduced by this factor in each axis.
 const u32 s_CausticResolveDownscaleFactor = 2u;
 const u32 s_CausticResolveGroupSize = 8u;
+const usize s_CausticResolveActivityBufferCount = 2u;
+const Name s_CausticResolveActivityBufferAName = "caustic_resolve_activity_a";
+const Name s_CausticResolveActivityBufferBName = "caustic_resolve_activity_b";
+const u32 s_CausticWaveletStepOneWidth = 1u;
+const u32 s_CausticWaveletStepTwoWidth = 2u;
 
 class CausticResolveActivityLayout{
     public u64 bufferByteSize = 0u;
@@ -244,6 +249,26 @@ const f32 s_CausticIntensity = 2.0f;
 // Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
 const f32 s_CausticRuntimeBoundsInflation = 1.25f;
 
+f32 EffectiveCausticIntensity(in f32 decay){
+    if(decay > 0.0f)
+        return s_CausticIntensity * (1.0f - decay);
+    return s_CausticIntensity;
+}
+
+CausticAccumulatorDecayPushConstants ResolveCausticAccumulatorDecayPushConstants(
+    in u32 width,
+    in u32 height,
+    in f32 decayFactor,
+    in u32 accumulatorStorageSlot
+){
+    CausticAccumulatorDecayPushConstants decayPush;
+    decayPush.width = width;
+    decayPush.height = height;
+    decayPush.decayFactor = decayFactor;
+    decayPush.accumulatorStorageSlot = accumulatorStorageSlot;
+    return decayPush;
+}
+
 const StringView s_CausticHwRaygenExportName = "CausticHwRayGen";
 const StringView s_CausticHwMissExportName = "CausticHwMiss";
 const StringView s_CausticHwHitGroupExportName = "CausticHwHitGroup";
@@ -254,6 +279,12 @@ const StringView s_CausticResolveWaveletStepTwoVariant = "NWB_CAUSTIC_RESOLVE_CO
 const StringView s_CausticResolveWaveletDirectVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=4";
 const StringView s_CausticResolveUpsampleVariant = "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2";
 const f32 s_CausticBoundsMidpointWeight = 0.5f;
+const usize s_CausticActivityUsesPerStage = 2u;
+const usize s_CausticMaxStageResourceUses = 8u;
+const usize s_HardwarePhotonResourceSetUseCapacity = 2u;
+const usize s_HardwarePhotonResourceUseCapacity = 15u;
+const usize s_SoftwarePhotonResourceUseCapacity = 20u;
+const usize s_SoftwarePhotonResourceSetUseCapacity = 2u;
 
 CausticResolvePushConstants ResolveCausticResolvePushConstants(
     in u32 width,

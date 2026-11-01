@@ -262,6 +262,8 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
             reportError(errors, expr.span, "dynamic indexing '[]' is not supported on mixed float/integer SIMD vector types; use explicit .x/.y/.z/.w lane access");
             ok = false;
         }
+        else if(SymbolTable::IsSimdMatrixType(lhsBaseType))
+            expr.isMatrixRowIndex = true;
         else if(SymbolTable::IsSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
             expr.isVectorRawIndex = true;
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
@@ -762,5 +764,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

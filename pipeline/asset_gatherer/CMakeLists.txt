@@ -8,6 +8,9 @@ target_sources(nwb_pipeline_asset_gatherer PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
+nwb_target_adhd_sources(nwb_pipeline_asset_gatherer NAMESPACE "NWB::Pipeline::AssetGatherer" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/constants.adhd"
+)
 target_link_libraries(nwb_pipeline_asset_gatherer PUBLIC nwb_assets_volume_cook)
 target_compile_definitions(nwb_pipeline_asset_gatherer PRIVATE NWB_COOK=1)
 

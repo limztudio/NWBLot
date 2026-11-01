@@ -160,11 +160,7 @@ Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const AStringVi
             return MakeUnexpected(Failure{});
     }
 
-    const u64 keyHash = ComputeMaterialBindParameterKeyHash(key);
-    parameter.meta.x = static_cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask);
-    parameter.meta.y = static_cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift);
-    parameter.meta.z = static_cast<u32>(type.valueType);
-    parameter.meta.w = type.componentCount;
+    parameter.meta = PackMaterialTypedValueMeta(key, type);
     return parameter;
 }
 

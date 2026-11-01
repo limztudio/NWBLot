@@ -17,20 +17,9 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_controls{
-static constexpr f32 s_OverviewWidth = 360.0f;
-static constexpr f32 s_OverviewHeight = 160.0f;
-static constexpr StringView s_RendererLine = "Renderer: mesh / compute emulation";
-static constexpr StringView s_CharacterLine = "Character: female model";
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::WindowOptions options;
-    options.initialBounds = { s_GalleryMargin, s_GalleryMargin, __hidden_ui_controls::s_OverviewWidth, __hidden_ui_controls::s_OverviewHeight };
+    options.initialBounds = { s_GalleryMargin, s_GalleryMargin, s_OverviewWidth, s_OverviewHeight };
     options.contentHeightFirstUse = true;
     const auto gallery = m_uiPreview.galleryBounds(context);
     if(!gallery)
@@ -42,7 +31,7 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::SeparatorOptions separator;
     separator.thickness = 1.0f;
     if(context.ui.beginWindow("testbed_window", s_WindowTitleText, m_uiWindow, options)){
-        const b8 declared = context.ui.label("renderer", __hidden_ui_controls::s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", __hidden_ui_controls::s_CharacterLine);
+        const b8 declared = context.ui.label("renderer", s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", s_CharacterLine);
         NWB_FATAL_ASSERT(declared);
     }
     const b8 ended = context.ui.endWindow();

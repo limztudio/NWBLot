@@ -101,8 +101,7 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
     const Core::GpuGraphResourceId shadowInstances = *shadowInstancesResult;
 
     // The opaque callback has no temporal/coarse access. Keep its writes apart so a fresh target never reads as synthetic-first.
-    constexpr usize s_OpaqueResourceUseCapacity = 18u;
-    uses.opaque.reserve(s_OpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
+    uses.opaque.reserve(s_SoftShadowOpaqueResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     uses.opaque.push_back(ReadUse(inputs.worldPosition));
     uses.opaque.push_back(ReadUse(inputs.normal));
     uses.opaque.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));
@@ -180,8 +179,7 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
         uses.opaqueResolve[uses.opaqueResolveCount++] = ReadUse(inputs.sceneShading, Core::ResourceStates::ConstantBuffer);
     }
 
-    constexpr usize s_TransparentTraceResourceUseCapacity = 16u;
-    uses.transparentTrace.reserve(s_TransparentTraceResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
+    uses.transparentTrace.reserve(s_SoftShadowTransparentTraceResourceUseCapacity + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
     uses.transparentTrace.push_back(ReadUse(inputs.worldPosition, Core::ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
     uses.transparentTrace.push_back(ReadUse(inputs.depth, Core::ResourceStates::ShaderResource));

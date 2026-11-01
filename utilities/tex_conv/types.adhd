@@ -1,0 +1,73 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> AlphaSourceMode{
+    Original,
+    Constant,
+    Image
+}
+
+b8 IsValidAlphaSourceMode(in AlphaSourceMode mode){
+    return mode == AlphaSourceMode::Original || mode == AlphaSourceMode::Constant || mode == AlphaSourceMode::Image;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_UtilityArena = "utilities/tex_conv/utility";
+const Name s_ConversionScratchArena = "utilities/tex_conv/conversion";
+const i32 s_TexConvEntryFailure = -1;
+
+const StringView s_AlphaWhiteKeyword = "white";
+const StringView s_AlphaBlackKeyword = "black";
+const f32 s_AlphaWhiteConstant = 1.0f;
+const f32 s_AlphaBlackConstant = 0.0f;
+const StringView s_PngExtension = ".png";
+const StringView s_JpgExtension = ".jpg";
+const StringView s_JpegExtension = ".jpeg";
+const StringView s_JfifExtension = ".jfif";
+const StringView s_TgaExtension = ".tga";
+const StringView s_QoiExtension = ".qoi";
+const StringView s_ExrExtension = ".exr";
+const StringView s_HdrExtension = ".hdr";
+
+const u32 s_ColorChannelCount = 4u;
+const f32 s_UastcHdrMaximum = 65216.0f;
+const f32 s_SrgbLinearSegmentScale = 12.92f;
+const f32 s_SrgbOffset = 0.055f;
+const f32 s_SrgbOffsetScale = 1.055f;
+const f32 s_SrgbDecodeExponent = 2.4f;
+const f32 s_SrgbLinearThreshold = 0.04045f;
+
+const u32 s_EncoderWorkerCount = 1u;
+const f32 s_UnormScale = 255.0f;
+const f32 s_UnormRoundingBias = 0.5f;
+const u32 s_SeparateAlphaPayloadMultiplier = 2u;
+const StringView s_MipFilter = "box";
+const usize s_InvalidSlice = ~cast<usize>(0u);
+
+const StringView s_NewLine = "\r\n";
+const StringView s_PublicationDiagnosticTag = "tex_conv_publication";
+
+const StringView s_InputOptionName = "input";
+const StringView s_CubeOptionName = "--cube";
+const StringView s_VolumeOptionName = "--volume";
+const StringView s_OutputOptionName = "-o,--output";
+const StringView s_AlphaOptionName = "--alpha";
+const StringView s_LinearFlagName = "--linear";
+const StringView s_ForceFlagName = "--force";
+const i32 s_MinVolumeSliceCount = 1;
+const i32 s_UnboundedOptionCount = -1;
+const u32 s_SingleTextureInputModeCount = 1u;
+const i32 s_AlphaOptionPresentCount = 0;
+const i32 s_TexConvExitSuccess = 0;
+const i32 s_TexConvExitFailure = 1;
+const i32 s_TexConvExitFatal = -1;
+const usize s_CompletionReportReserveSlack = 128u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -97,7 +97,7 @@ void ModelSystem::updateStaticMeshAttachments(){
                 return;
             if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
                 sharedParent = false;
-            jointQueries.push_back(ModelAttachmentJointQuery{ .parentEntity = attachment.parentEntity, .parentJointIndex = attachment.parentJointIndex, });
+            jointQueries.push_back(MakeModelAttachmentJointQuery(attachment.parentEntity, attachment.parentJointIndex));
         });
         const Span<ModelAttachmentJointQuery> queries(jointQueries.data(), jointQueries.size());
         if(sharedParent)

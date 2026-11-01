@@ -77,8 +77,12 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
     const b8 softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
-    constexpr usize s_PhotonResourceUseCapacity = 20u;
-    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResources.size()));
+    photonResourceUses.reserve(
+        s_SoftwarePhotonResourceUseCapacity
+        + (rayTracingResources.csgTraceContextBuffer ? 1u : 0u)
+        + rayTracingResources.csgTraceBoundsBuffers.size()
+        + (softwareTraceGeometryStatesGraphOwned ? 0u : softwareTraceGeometryResources.size())
+    );
     photonResourceUses.push_back(ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
     // Declared layout must match the shader read.
     photonResourceUses.push_back(ReadTextureUse(depth, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource));
@@ -128,8 +132,7 @@ b8 RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     }
     const Core::GpuTaskResourceSetUse softwareTraceGeometrySetUse{ .resourceSet = softwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    constexpr usize s_PhotonResourceSetUseCapacity = 2u;
-    Array<Core::GpuTaskResourceSetUse, s_PhotonResourceSetUseCapacity> photonResourceSetUses{};
+    Array<Core::GpuTaskResourceSetUse, s_SoftwarePhotonResourceSetUseCapacity> photonResourceSetUses{};
     usize photonResourceSetUseCount = 0u;
     if(softwareTraceGeometryStatesGraphOwned)
         photonResourceSetUses[photonResourceSetUseCount++] = softwareTraceGeometrySetUse;

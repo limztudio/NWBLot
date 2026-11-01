@@ -304,6 +304,78 @@ b8 IsValidLightComponentParameters(in LightComponent component){
     return true;
 }
 
+b8 IsAllowedTransformComponentField(in StringView fieldName){
+    return
+        fieldName == s_TransformPositionField
+        || fieldName == s_TransformRotationField
+        || fieldName == s_TransformRotationEulerField
+        || fieldName == s_TransformRotationEulerDegreesField
+        || fieldName == s_TransformScaleField
+    ;
+}
+
+b8 IsAllowedCameraComponentField(in StringView fieldName){
+    return
+        fieldName == s_CameraVerticalFovDegreesField
+        || fieldName == s_CameraVerticalFovRadiansField
+        || fieldName == s_CameraNearPlaneField
+        || fieldName == s_CameraFarPlaneField
+        || fieldName == s_CameraAspectRatioField
+    ;
+}
+
+b8 IsAllowedLightComponentField(in StringView fieldName){
+    return
+        fieldName == s_LightTypeField
+        || fieldName == s_LightColorField
+        || fieldName == s_LightIntensityField
+        || fieldName == s_LightRangeField
+        || fieldName == s_LightInnerConeCosField
+        || fieldName == s_LightOuterConeCosField
+        || fieldName == s_LightAngularRadiusField
+        || fieldName == s_LightSourceRadiusField
+        || fieldName == s_LightEnableCausticsField
+    ;
+}
+
+b8 IsAllowedEntityAssetField(in StringView fieldName){
+    return fieldName == s_EntityComponentsField;
+}
+
+b8 IsAllowedProjectAssetField(in StringView fieldName){
+    return fieldName == s_SceneStartSceneField;
+}
+
+b8 IsAllowedSceneAssetField(in StringView fieldName){
+    return
+        fieldName == s_SceneSubsystemsField
+        || fieldName == s_SceneEntitiesField
+        || fieldName == s_SceneAssetsField
+    ;
+}
+
+b8 TryNormalizeTransformQuaternion(in f32 x, in f32 y, in f32 z, in f32 w, mut f32x4 outRotation){
+    const f32x4 rawQuaternion(x, y, z, w);
+    const f32 lenSq = lengthSq(rawQuaternion);
+    if(!isFinite(lenSq) || lenSq <= s_SceneMinQuaternionLengthSq)
+        return false;
+
+    outRotation = normalize(rawQuaternion);
+    return true;
+}
+
+b8 IsValidTransformComponentParameters(in TransformComponent component){
+    if(
+        !isFinite(component.position.x) || !isFinite(component.position.y) || !isFinite(component.position.z)
+        || !isFinite(component.rotation.x) || !isFinite(component.rotation.y) || !isFinite(component.rotation.z) || !isFinite(component.rotation.w)
+        || !isFinite(component.scale.x) || !isFinite(component.scale.y) || !isFinite(component.scale.z)
+    )
+        return false;
+
+    const f32 rotationLengthSq = lengthSq(component.rotation);
+    return isFinite(rotationLengthSq) && abs(rotationLengthSq - 1.0f) <= s_TransformRotationUnitLengthSquaredTolerance;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -157,8 +157,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
 
         Core::GpuTaskDesc deformationDesc;
         deformationDesc
-            .setIdentity(Name("mesh_skinning.frame_deformation"))
-            .setMarkerLabel("Runtime Skinning Deformation")
+            .setIdentity(s_FrameDeformationTaskName)
+            .setMarkerLabel(s_FrameDeformationTaskLabel)
             .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
             .setResourceUses(resourceUses->deformation)
         ;
@@ -178,8 +178,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     TaskGraphSkinningPostDispatchTask::Payload postDispatchPayload(*this, timingTicket, allDispatchPlans);
     Core::GpuTaskDesc postDispatchDesc;
     postDispatchDesc
-        .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
-        .setMarkerLabel("Runtime Skinning Bounds and Repack")
+        .setIdentity(s_FrameBoundsRepackTaskName)
+        .setMarkerLabel(s_FrameBoundsRepackTaskLabel)
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setResourceUses(resourceUses->postDispatch)
     ;
@@ -196,8 +196,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
 
     Core::GpuTaskDesc localBoundsDesc;
     localBoundsDesc
-        .setIdentity(Name("mesh_skinning.frame_local_bounds"))
-        .setMarkerLabel("Runtime Skinning Local Bounds")
+        .setIdentity(s_FrameLocalBoundsTaskName)
+        .setMarkerLabel(s_FrameLocalBoundsTaskLabel)
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setDependencies({ &postDispatchTask, 1u })
         .setResourceUses(resourceUses->localBounds)
@@ -212,8 +212,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     const Core::GpuTaskId localBoundsTask = *localBoundsTaskResult;
 
     const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
-        .setIdentity(Name("mesh_skinning.frame_finalize_states"))
-        .setMarkerLabel("Runtime Skinning Finalize States")
+        .setIdentity(s_FrameFinalizeStatesTaskName)
+        .setMarkerLabel(s_FrameFinalizeStatesTaskLabel)
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
         .setDependencies({ &localBoundsTask, 1u })
         .setResourceUses(resourceUses->finalizer)

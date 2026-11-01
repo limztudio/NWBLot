@@ -117,14 +117,12 @@ using namespace Core::Metascript;
 
     const u32 jointCount = static_cast<u32>(entry.inverseBindMatrices.size());
     for(usize influenceIndex = 0u; influenceIndex < entry.influences.size(); ++influenceIndex){
-        const SkinInfluence4& influence = entry.influences[influenceIndex];
-        for(usize componentIndex = 0u; componentIndex < s_SkinInfluenceJointCount; ++componentIndex){
-            if(static_cast<u32>(influence.joint[componentIndex]) < jointCount)
-                continue;
+        usize componentIndex = 0u;
+        if(!TryFindOutOfRangeSkinInfluenceJoint(entry.influences[influenceIndex], jointCount, componentIndex))
+            continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, componentIndex);
-            return false;
-        }
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range"), PathToString<tchar>(nwbFilePath), influenceIndex, componentIndex);
+        return false;
     }
     return true;
 }
@@ -163,7 +161,7 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkinMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_SkinMetaMeshField, s_SkinMetaSkeletonField, s_SkinInfluencesField, s_SkinInverseBindMatricesField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, &IsAllowedSkinMetadataField))
         return MakeUnexpected(Failure{});
     auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
     if(!meshResult)

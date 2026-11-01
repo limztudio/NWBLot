@@ -157,3 +157,38 @@ class SceneLight{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+CameraProjection MakeFallbackCameraProjection(){
+    CameraProjection projection;
+    projection.projectionParams = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+    projection.aspectRatio = 1.0f;
+    projection.tanHalfVerticalFov = 1.0f;
+    projection.nearPlane = s_CameraNearPlane;
+    projection.farPlane = s_CameraFarPlane;
+    return projection;
+}
+
+SceneLight MakeSceneLight(in f32x4 position, in f32x4 direction, in LightComponent light){
+    SceneLight out;
+    out.position = position;
+    out.direction = direction;
+    out.colorIntensity = light.colorIntensity;
+    if(light.type != LightType::Directional)
+        out.range = light.range;
+    out.angularRadius = light.angularRadius;
+    out.sourceRadius = light.sourceRadius;
+    out.type = light.type;
+    out.enableCaustics = light.enableCaustics;
+    return out;
+}
+
+SceneLight MakeDefaultSceneLight(in f32x4 direction){
+    SceneLight out;
+    out.direction = direction;
+    out.colorIntensity = f32x4(1.0f, 1.0f, 1.0f, 1.0f);
+    return out;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

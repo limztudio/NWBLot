@@ -107,6 +107,39 @@ b8 IsValidSamplerBinaryHeader(in SamplerBinaryHeader header){
     ;
 }
 
+b8 IsAllowedSamplerMetadataField(in StringView fieldName){
+    return
+        fieldName == s_SamplerMinFilterField
+        || fieldName == s_SamplerMagFilterField
+        || fieldName == s_SamplerMipFilterField
+        || fieldName == s_SamplerAddressUField
+        || fieldName == s_SamplerAddressVField
+        || fieldName == s_SamplerAddressWField
+        || fieldName == s_SamplerReductionField
+        || fieldName == s_SamplerMaxAnisotropyField
+        || fieldName == s_SamplerMipBiasField
+    ;
+}
+
+b8 IsValidSamplerScalarParameters(
+    in f32 borderColorR,
+    in f32 borderColorG,
+    in f32 borderColorB,
+    in f32 borderColorA,
+    in f32 maxAnisotropy,
+    in f32 mipBias
+){
+    return
+        borderColorR == 0.0f
+        && borderColorG == 0.0f
+        && borderColorB == 0.0f
+        && borderColorA == 0.0f
+        && isFinite(maxAnisotropy)
+        && maxAnisotropy >= 1.0f
+        && isFinite(mipBias)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

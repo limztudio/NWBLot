@@ -24,16 +24,6 @@ namespace FbxSkinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f64 s_UniformScaleNumerator = 1.0;
-static constexpr f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
-static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
-inline constexpr StringView s_NullNodeLabel = "<null>";
-inline constexpr StringView s_UnnamedNodeLabel = "<unnamed node>";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SIMDMatrixDouble LoadUfbxMatrix(const ufbx_matrix& matrix)noexcept{
     SIMDMatrixDouble result{};
     result.v[0u] = VectorDoubleSet(static_cast<f64>(matrix.m00), static_cast<f64>(matrix.m01), static_cast<f64>(matrix.m02), static_cast<f64>(matrix.m03));

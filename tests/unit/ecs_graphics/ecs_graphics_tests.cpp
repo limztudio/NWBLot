@@ -138,31 +138,31 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     parameters.halfExtents = Float4(0.25f, 0.125f, 0.5f, 0.0f);
     const SIMDMatrix shapeToWorld = MatrixTranslation(0.5f, 0.25f, 2.0f);
     NWB::Impl::CsgClipWorkBounds receiver;
-    receiver.minBounds = VectorSet(-20.0f, -20.0f, -20.0f, 0.0f);
-    receiver.maxBounds = VectorSet(-10.0f, -10.0f, -10.0f, 0.0f);
+    receiver.minBounds = Float4(-20.0f, -20.0f, -20.0f, 0.0f);
+    receiver.maxBounds = Float4(-10.0f, -10.0f, -10.0f, 0.0f);
     NWB::Impl::CsgClipWorkBounds work;
     const BinaryByteView parameterBytes(reinterpret_cast<const u8*>(&parameters), sizeof(parameters));
-    ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, parameterBytes, receiver));
+    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.25f);
-    EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.125f);
-    EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 1.5f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 0.75f);
-    EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
-    EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
+    EXPECT_FLOAT_EQ(work.minBounds.x, 0.25f);
+    EXPECT_FLOAT_EQ(work.minBounds.y, 0.125f);
+    EXPECT_FLOAT_EQ(work.minBounds.z, 1.5f);
+    EXPECT_FLOAT_EQ(work.maxBounds.x, 0.75f);
+    EXPECT_FLOAT_EQ(work.maxBounds.y, 0.375f);
+    EXPECT_FLOAT_EQ(work.maxBounds.z, 2.5f);
     receiver.valid = true;
-    EXPECT_FALSE(work.resolveCutter(registry, shape, shapeToWorld, parameterBytes, receiver));
+    EXPECT_FALSE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = VectorSet(0.5f, 0.25f, 1.75f, 0.0f);
-    receiver.maxBounds = VectorSet(1.0f, 1.0f, 3.0f, 0.0f);
-    ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, parameterBytes, receiver));
+    receiver.minBounds = Float4(0.5f, 0.25f, 1.75f, 0.0f);
+    receiver.maxBounds = Float4(1.0f, 1.0f, 3.0f, 0.0f);
+    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, shapeToWorld, parameterBytes, receiver, work));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.5f);
-    EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.25f);
-    EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 1.75f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 0.75f);
-    EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
-    EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
+    EXPECT_FLOAT_EQ(work.minBounds.x, 0.5f);
+    EXPECT_FLOAT_EQ(work.minBounds.y, 0.25f);
+    EXPECT_FLOAT_EQ(work.minBounds.z, 1.75f);
+    EXPECT_FLOAT_EQ(work.maxBounds.x, 0.75f);
+    EXPECT_FLOAT_EQ(work.maxBounds.y, 0.375f);
+    EXPECT_FLOAT_EQ(work.maxBounds.z, 2.5f);
 }
 
 TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds){
@@ -175,29 +175,29 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     shape = *foundShape2;
     NWB::Impl::CsgClipWorkBounds receiver;
     NWB::Impl::CsgClipWorkBounds work;
-    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver));
+    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
     ASSERT_TRUE(work.valid);
 
     NWB::Impl::CsgBoxShapeParameters invalidParameters;
     invalidParameters.halfExtents.x = 0.0f;
     const BinaryByteView invalidParameterBytes(reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters));
-    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver));
+    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver, work));
     EXPECT_FALSE(work.valid);
-    receiver.minBounds = VectorReplicate(-2.0f);
-    receiver.maxBounds = VectorReplicate(2.0f);
+    receiver.minBounds = Float4(-2.0f, -2.0f, -2.0f, -2.0f);
+    receiver.maxBounds = Float4(2.0f, 2.0f, 2.0f, 2.0f);
     receiver.valid = true;
-    EXPECT_FALSE(work.resolveCutter(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver));
+    EXPECT_FALSE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), invalidParameterBytes, receiver, work));
     EXPECT_FALSE(work.valid);
 
     const auto foundShape3 = registry.findShapeType(NWB::Impl::s_CsgPlaneShapeName);
     ASSERT_TRUE(foundShape3);
     shape = *foundShape3;
-    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver));
+    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -2.0f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 2.0f);
+    EXPECT_FLOAT_EQ(work.minBounds.x, -2.0f);
+    EXPECT_FLOAT_EQ(work.maxBounds.x, 2.0f);
     receiver.valid = false;
-    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver));
+    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
     EXPECT_FALSE(work.valid);
 
     const auto foundShape4 = registry.findShapeType(NWB::Impl::s_CsgBoxShapeName);
@@ -212,13 +212,13 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     const auto foundShape5 = registry.findShapeType(*customId);
     ASSERT_TRUE(foundShape5);
     shape = *foundShape5;
-    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver));
+    EXPECT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
     EXPECT_FALSE(work.valid);
     receiver.valid = true;
-    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver));
+    ASSERT_TRUE(NWB::Impl::ResolveCsgClipWorkBounds(registry, shape, MatrixIdentity(), BinaryByteView{}, receiver, work));
     ASSERT_TRUE(work.valid);
-    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -1.0f);
-    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.0f);
+    EXPECT_FLOAT_EQ(work.minBounds.x, -1.0f);
+    EXPECT_FLOAT_EQ(work.maxBounds.x, 1.0f);
 }
 
 TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections){

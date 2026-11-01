@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u64 s_RtFnv64OffsetBasis = 14695981039346656037ull;
 const f32 s_ShadowSlotUnassigned = -1.0f;
 const f32 s_DirectionalShadowImportanceBoost = 4.0f;
 const f32 s_ShadowImportanceDistanceSquaredEpsilon = 0.0001f;
@@ -104,21 +103,6 @@ u32 ResolveSoftShadowSlotMask(in Span<SceneLightGpuData> lights){
         }
     }
     return mask;
-}
-const u64 s_RtFnv64Prime = 1099511628211ull;
-
-void RtFnv64AppendU32(mut u64 hash, in u32 value){
-    hash = (hash ^ cast<u64>(value & 0xffu)) * s_RtFnv64Prime;
-    hash = (hash ^ cast<u64>((value >> 8u) & 0xffu)) * s_RtFnv64Prime;
-    hash = (hash ^ cast<u64>((value >> 16u) & 0xffu)) * s_RtFnv64Prime;
-    hash = (hash ^ cast<u64>((value >> 24u) & 0xffu)) * s_RtFnv64Prime;
-}
-
-void RtFnv64AppendF32x4(mut u64 hash, in f32x4 value){
-    RtFnv64AppendU32(hash, bit_cast<u32>(value.x));
-    RtFnv64AppendU32(hash, bit_cast<u32>(value.y));
-    RtFnv64AppendU32(hash, bit_cast<u32>(value.z));
-    RtFnv64AppendU32(hash, bit_cast<u32>(value.w));
 }
 
 // Only accepted static scene/light identities can authorize a reduced per-pixel sampling budget.
@@ -394,9 +378,6 @@ class ShadowReprojectMergePushConstants{
     public u32 receiverFactor = s_ShadowReceiverFactorHalf;
 }
 
-// Conservative top-level bounds for transparent-shadow rays.
-const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
-const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 const StringView s_SwTransparentAdaptiveDisabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=0";
 const StringView s_SwTransparentAdaptiveEnabledVariant = "NWB_SW_TRANSPARENT_ADAPTIVE=1";
 
@@ -476,7 +457,73 @@ const u32 s_ShadowTracePositionMember = 0u;
 const u32 s_ShadowTraceIndexMember = 1u;
 const u32 s_ShadowTraceAttributeMember = 2u;
 const u32 s_ShadowTraceNodeMember = 3u;
+const usize s_ShadowTraceMemberCount = 4u;
+const usize s_ShadowTraceMissingIndex = usize.max;
 const u32 s_ShadowTraceInlineCapacity = cast<u32>(s_SmallInlineIndexCapacity);
+
+class ShadowTraceBufferRecord{
+    public ShadowTraceBufferRecord(){
+        this.firstMesh[0u] = usize.max;
+        this.firstMesh[1u] = usize.max;
+        this.firstMesh[2u] = usize.max;
+        this.firstMesh[3u] = usize.max;
+        this.preparedIndex = usize.max;
+        this.accepted = false;
+    }
+
+    public Array<usize, 4u> firstMesh;
+    public usize preparedIndex;
+    public b8 accepted;
+}
+
+const usize s_MaxOpaqueFirstWaveletUses = 12u;
+const usize s_MaxOpaqueResolveUses = 8u;
+const usize s_MaxTransparentTemporalMergeUses = 13u;
+const usize s_MaxTransparentFirstWaveletUses = 7u;
+const usize s_MaxTransparentFoldUses = 9u;
+
+void RtFnv64AppendInstanceMaterial(mut u64 hash, in NwbRtInstanceMaterialGpu material){
+    RtFnv64AppendU32(hash, material.surfaceDispatchId);
+    RtFnv64AppendU32(hash, material.flags);
+    RtFnv64AppendU32(hash, material.shadingModelId);
+    RtFnv64AppendU32(hash, material.materialConstantByteOffset);
+    RtFnv64AppendU32(hash, material.meshInstanceIndex);
+    RtFnv64AppendU32(hash, material.indexSlot);
+    RtFnv64AppendU32(hash, material.attributeSlot);
+    RtFnv64AppendU32(hash, material.positionSlot);
+    RtFnv64AppendU32(hash, material.nodeSlot);
+}
+
+void RtFnv64AppendInstanceGpuData(mut u64 hash, in InstanceGpuData instance){
+    RtFnv64AppendF32x4(hash, instance.rotation);
+    RtFnv64AppendF32(hash, instance.translation.x);
+    RtFnv64AppendF32(hash, instance.translation.y);
+    RtFnv64AppendF32(hash, instance.translation.z);
+    RtFnv64AppendU32(hash, instance.translation.w);
+    RtFnv64AppendF32(hash, instance.scale.x);
+    RtFnv64AppendF32(hash, instance.scale.y);
+    RtFnv64AppendF32(hash, instance.scale.z);
+    RtFnv64AppendU32(hash, instance.scale.w);
+    for(u32 slotIndex = 0u; slotIndex < s_MeshInstanceGeometrySlotCount; ++slotIndex)
+        RtFnv64AppendU32(hash, instance.geometryHeapSlots[slotIndex]);
+}
+
+u64 ComputeShadowMaterialContextHash(
+    in Span<NwbRtInstanceMaterialGpu> instanceMaterials,
+    in Span<InstanceGpuData> instanceData,
+    in Span<u8> materialTypedBytes
+){
+    assert(instanceMaterials.size() == instanceData.size());
+
+    u64 hash = s_RtFnv64OffsetBasis;
+    RtFnv64AppendU32(hash, s_SceneStaticCacheHashVersion);
+    for(usize index = 0u; index < instanceMaterials.size(); ++index)
+        RtFnv64AppendInstanceMaterial(hash, instanceMaterials[index]);
+    for(usize index = 0u; index < instanceData.size(); ++index)
+        RtFnv64AppendInstanceGpuData(hash, instanceData[index]);
+    RtFnv64AppendBytes(hash, materialTypedBytes);
+    return hash;
+}
 const StringView s_ShadowTraceHardwarePositionIdentitySuffix = ":shadow_trace_hw_position";
 const StringView s_ShadowTraceHardwareIndexIdentitySuffix = ":shadow_trace_hw_index";
 const StringView s_ShadowTraceHardwareAttributeIdentitySuffix = ":shadow_trace_hw_attribute";
@@ -496,6 +543,16 @@ u32 ResolveSoftShadowLightSlotRangeCount(in u32 softShadowSlotMask){
     }
     return slotRangeCount;
 }
+
+const usize s_ShadowPrepareResourceSetUseCapacity = 3u;
+const usize s_ShadowPrepareResourceUseCapacity = 19u;
+const usize s_ShadowPrepareSingleDependencyCount = 1u;
+const usize s_ShadowVisibilityStateSourceCapacity = 2u;
+const usize s_ShadowVisibilityResourceUseCapacity = 40u;
+const u32 s_ShadowHistorySelectorCount = 2u;
+const usize s_SoftShadowOpaqueResourceUseCapacity = 18u;
+const usize s_SoftShadowTransparentTraceResourceUseCapacity = 16u;
+const usize s_SoftShadowLightSpaceReadCapacity = 9u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

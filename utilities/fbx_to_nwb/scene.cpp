@@ -24,13 +24,6 @@ namespace __hidden_fbx_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_UfbxErrorBufferSize = 4096u;
-static constexpr f32 s_TargetUnitMeters = 1.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void AppendMeshDisplayName(const MeshInstance& instance, ScratchStringStream& inOutReport){
     AStringView nodeName = UfbxStringView(instance.node->name);
     AStringView meshName = UfbxStringView(instance.mesh->name);
@@ -101,7 +94,7 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
         loadOptions.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
         loadOptions.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
         loadOptions.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
-        loadOptions.target_unit_meters = __hidden_fbx_scene::s_TargetUnitMeters;
+        loadOptions.target_unit_meters = s_TargetUnitMeters;
     }
 
     const ScratchPath nativeInputPath(scratchArena, options.inputPath);

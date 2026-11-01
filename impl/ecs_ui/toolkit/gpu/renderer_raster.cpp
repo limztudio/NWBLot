@@ -17,35 +17,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuPaintPushConstants> GpuRasterGeometry::initializePushConstants(const u32 samplerSlot)const noexcept{
-    const SIMDVectorSingle projection = VectorMultiply(VectorSet(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent), pixelScale);
-    const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
-    GpuPaintPushConstants push;
-    push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
-    push.translate = { -1.0f, 1.0f };
-    push.samplerSlot = samplerSlot;
-    if(!IsFinite(push.scale.x) || !IsFinite(push.scale.y))
-        return MakeUnexpected(Failure{});
-    return push;
-}
-
-Optional<Core::Rect> GpuRasterGeometry::scissor(const DrawCommand& draw)const noexcept{
-    const SIMDVectorSingle clip = VectorSet(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y);
-    const SIMDVectorSingle extent = VectorSet(0.0f, 0.0f, draw.clip.width, draw.clip.height);
-    const SIMDVectorSingle ends = VectorAdd(clip, extent);
-    const SIMDVectorSingle coordinates = VectorPermute<0, 1, 6, 7>(clip, ends);
-    const SIMDVectorSingle physicalClip = VectorMultiply(coordinates, pixelScale);
-    const SIMDVectorSingle first = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physicalClip));
-    const SIMDVectorSingle last = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physicalClip));
-    const SIMDVectorSingle minimum = VectorSelect(first, VectorZero(), VectorGreater(VectorZero(), first));
-    const SIMDVectorSingle maximum = VectorSelect(last, targetSize, VectorLess(targetSize, last));
-    const f32 minX = VectorGetX(minimum);
-    const f32 minY = VectorGetY(minimum);
-    const f32 maxX = VectorGetX(maximum);
-    const f32 maxY = VectorGetY(maximum);
-    if(maxX <= minX || maxY <= minY)
+Optional<Core::Rect> ResolveGpuScissorRect(const GpuRasterGeometry& geometry, const DrawCommand& draw)noexcept{
+    Int4 bounds{};
+    if(!TryComputeGpuScissorBounds(geometry, draw, bounds))
         return {};
-    return Core::Rect(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
+    return Core::Rect(bounds.x, bounds.y, bounds.z, bounds.w);
 }
 
 b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
@@ -108,17 +84,16 @@ b8 GpuRasterTask::Record(const Payload& payload, Core::CommandList& commands, co
     if(frame->m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
         return RecordRasterCommandIr(payload, context, commands);
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
-    const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target);
-    const auto initialPush = geometry.initializePushConstants(frame->m_resources->m_samplerDescriptor.slot());
-    if(!initialPush)
+    const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target.width, target.height);
+    GpuPaintPushConstants push;
+    if(!TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot(), push))
         return false;
-    GpuPaintPushConstants push = *initialPush;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
     b8 heapBound = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
-        const auto resolvedScissor = geometry.scissor(draw);
+        const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
         if(!resolvedScissor)
             continue;
         const Core::Rect& scissor = *resolvedScissor;

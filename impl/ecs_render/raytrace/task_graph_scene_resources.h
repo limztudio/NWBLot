@@ -50,7 +50,7 @@ public:
 };
 
 struct RayTracingSceneGraphReads{
-    static constexpr usize s_FixedSceneResourceUseCount = 6u;
+    static constexpr usize s_FixedSceneResourceUseCount = ::NWB::Impl::s_FixedSceneResourceUseCount;
 
 
 public:

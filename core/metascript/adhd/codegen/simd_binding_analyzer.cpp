@@ -250,6 +250,8 @@ void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8
             binding->needsStorageSync = true;
         else
             binding->readAsRegister = true;
+        if(expr->isMutArg)
+            binding->written = true;
         return;
     }
 
@@ -577,5 +579,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

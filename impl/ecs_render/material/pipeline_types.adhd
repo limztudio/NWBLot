@@ -87,6 +87,46 @@ class ShaderVariantDefineAssignment{
     public StringView assignment;
 }
 
+StringView VariantSegmentDefineName(in StringView segment){
+    const usize equalPos = segment.find('=');
+    if(equalPos >= segment.size())
+        return "";
+    return segment.substr(0u, equalPos);
+}
+
+b8 TryFindVariantDefineAssignment(
+    in StringView variant,
+    in StringView defineName,
+    in StringView defaultVariant,
+    mut StringView outAssignment
+){
+    outAssignment = "";
+    if(variant.empty() || defineName.empty() || variant == defaultVariant)
+        return false;
+
+    usize begin = 0u;
+    while(begin < variant.size()){
+        usize segmentEnd = variant.find(';', begin);
+        if(segmentEnd >= variant.size())
+            segmentEnd = variant.size();
+
+        const StringView segment = variant.substr(begin, segmentEnd - begin);
+        const StringView segmentDefineName = VariantSegmentDefineName(segment);
+        if(segmentDefineName.empty())
+            return false;
+        if(segmentDefineName == defineName){
+            const usize valueBegin = segmentDefineName.size() + 1u;
+            if(valueBegin >= segment.size())
+                return false;
+            outAssignment = segment;
+            return true;
+        }
+
+        begin = segmentEnd + 1u;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -172,6 +212,33 @@ MaterialInstanceParameter BuildMaterialInstanceParameter(
     parameter.fieldType = fieldType;
     parameter.value = value;
     return parameter;
+}
+
+u32 ReadMaterialInstanceWordBytes(in Span<u8> bytes, in usize byteOffset){
+    u32 word = 0u;
+    const usize size = bytes.size();
+    if(byteOffset < size)
+        word = word | cast<u32>(bytes[byteOffset]);
+    if(byteOffset + 1u < size)
+        word = word | (cast<u32>(bytes[byteOffset + 1u]) << 8u);
+    if(byteOffset + 2u < size)
+        word = word | (cast<u32>(bytes[byteOffset + 2u]) << 16u);
+    if(byteOffset + 3u < size)
+        word = word | (cast<u32>(bytes[byteOffset + 3u]) << 24u);
+    return word;
+}
+
+u32x4u PackMaterialInstanceBytes(in Span<u8> bytes){
+    assert(bytes.size() <= 16u);
+    if(bytes.empty())
+        return u32x4u(0u, 0u, 0u, 0u);
+
+    return u32x4u(
+        ReadMaterialInstanceWordBytes(bytes, 0u),
+        ReadMaterialInstanceWordBytes(bytes, 4u),
+        ReadMaterialInstanceWordBytes(bytes, 8u),
+        ReadMaterialInstanceWordBytes(bytes, 12u)
+    );
 }
 
 b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter){
@@ -330,6 +397,62 @@ class MaterialTypedByteAppendRange{
     public usize alignedByteEnd = 0u;
 }
 
+class MaterialTypedByteContentLookup{
+    public MaterialTypedByteContentLookup(){
+        this.byteHash = 0u;
+    }
+
+    public MaterialTypedByteContentLookup(in u64 inByteHash, in Span<u8> inBytes){
+        this.byteHash = inByteHash;
+        this.bytes = inBytes;
+    }
+
+    public u64 byteHash;
+    public Span<u8> bytes;
+}
+
+enum<u8> MaterialTypedByteAppendStatus{
+    Success = 0u,
+    AppendCountExceedsU32 = 1u,
+    BeginAlignmentOverflow = 2u,
+    TotalCountOverflow = 3u,
+    EndAlignmentOverflow = 4u,
+    TotalCountExceedsU32 = 5u
+}
+
+MaterialTypedByteAppendStatus ResolveMaterialTypedByteAppendRange(
+    in usize currentByteCount,
+    in usize appendByteCount,
+    mut MaterialTypedByteAppendRange outRange
+){
+    outRange = MaterialTypedByteAppendRange();
+    if(appendByteCount == 0u)
+        return MaterialTypedByteAppendStatus::Success;
+
+    if(appendByteCount > cast<usize>(u32.max))
+        return MaterialTypedByteAppendStatus::AppendCountExceedsU32;
+
+    const usize wordBytes = cast<usize>(s_MaterialTypedWordBytes);
+    const usize wordMask = wordBytes - 1u;
+    if(currentByteCount > usize.max - wordMask)
+        return MaterialTypedByteAppendStatus::BeginAlignmentOverflow;
+    const usize alignedByteBegin = (currentByteCount + wordMask) & ~wordMask;
+    if(appendByteCount > usize.max - alignedByteBegin)
+        return MaterialTypedByteAppendStatus::TotalCountOverflow;
+
+    const usize byteEnd = alignedByteBegin + appendByteCount;
+    if(byteEnd > usize.max - wordMask)
+        return MaterialTypedByteAppendStatus::EndAlignmentOverflow;
+    const usize alignedByteEnd = (byteEnd + wordMask) & ~wordMask;
+    if(alignedByteBegin > cast<usize>(u32.max) || alignedByteEnd > cast<usize>(u32.max))
+        return MaterialTypedByteAppendStatus::TotalCountExceedsU32;
+
+    outRange.byteRange.byteOffset = cast<u32>(alignedByteBegin);
+    outRange.byteRange.byteCount = cast<u32>(appendByteCount);
+    outRange.alignedByteEnd = alignedByteEnd;
+    return MaterialTypedByteAppendStatus::Success;
+}
+
 b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){
     return range.byteCount != 0u || range.byteOffset == 0u;
 }
@@ -398,6 +521,7 @@ u32 ResolveMaterialPassDrawDispatchFlags(
 
 const usize s_ModuleAssignmentPunctuationSize = 3u;
 const usize s_ObjectGeometryVertexAttributeCount = 5u;
+const usize s_DecodeExtraResourceUseCount = 3u;
 
 const Name s_InvalidAvboitPixelShaderDebugName = "ECSRender_InvalidAvboitPixelShader";
 const Name s_AvboitOccupancyPsDebugName = "ECSRender_AvboitOccupancyPS";

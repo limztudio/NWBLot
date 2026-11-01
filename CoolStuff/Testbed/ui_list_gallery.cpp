@@ -32,8 +32,6 @@ Expected<u64> UiListSource::findEnabled(const u64 start, [[maybe_unused]] const 
 }
 
 StringView UiListSource::text(const u64 index)const noexcept{
-    constexpr usize s_MaxDecimalDigits = 20u;
-    constexpr usize s_RowPrefixLength = 4u;
     const u64 rowKey = key(index);
     if(rowKey == 0u)
         return {};
@@ -41,11 +39,11 @@ StringView UiListSource::text(const u64 index)const noexcept{
     m_label[1] = 'o';
     m_label[2] = 'w';
     m_label[3] = ' ';
-    Array<char, s_MaxDecimalDigits> digits{};
+    Array<char, s_VirtualListMaxDecimalDigits> digits{};
     const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
     for(usize offset = 0u; offset < formatted.size(); ++offset)
-        m_label[s_RowPrefixLength + offset] = formatted[offset];
-    return { m_label.data(), s_RowPrefixLength + formatted.size() };
+        m_label[s_VirtualListRowPrefixLength + offset] = formatted[offset];
+    return { m_label.data(), s_VirtualListRowPrefixLength + formatted.size() };
 }
 
 
@@ -54,16 +52,14 @@ StringView UiListSource::text(const u64 index)const noexcept{
 
 void UiListGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
-    constexpr f32 s_PanelHeight = 258.0f;
-    constexpr f32 s_ListHeight = 180.0f;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("list_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
+    if(!ui.beginPanel("list_gallery", { x, y, s_OrdinaryGalleryWidth, s_ListGalleryPanelHeight }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
     b8 valid = ui.label(s_TitleKey, "100000 virtual rows");
     ListOptions options;
-    options.height = { LayoutSizePolicy::Fixed, s_ListHeight };
+    options.height = { LayoutSizePolicy::Fixed, s_ListGalleryListHeight };
     const ListResult result = ui.virtualList("rows", m_source, m_state, options);
     if(result.activated)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom list selected key={}"), m_state.selectedKey());

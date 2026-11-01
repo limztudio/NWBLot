@@ -27,9 +27,8 @@ UiEditGallery::UiEditGallery(NWB::Core::Alloc::GlobalArena& arena)
 
 void UiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
-    constexpr f32 s_PanelHeight = 154.0f;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("edit_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
+    if(!ui.beginPanel("edit_gallery", { x, y, s_OrdinaryGalleryWidth, s_EditGalleryPanelHeight }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;

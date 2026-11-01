@@ -5,6 +5,7 @@
 #include "coincident_volumes.h"
 
 #include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/optics/types.adhd.h>
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -61,7 +62,7 @@ public:
     b8 operator()(const CandidatePointer lhs, const CandidatePointer rhs)const noexcept{
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
-            || !equalTransformLanes(LoadFloat(lhs->position), LoadFloat(lhs->rotation), LoadFloat(lhs->scale), LoadFloat(rhs->position), LoadFloat(rhs->rotation), LoadFloat(rhs->scale))
+            || !CoincidentOpticalVolumeTransformsEqual(lhs->position, lhs->rotation, lhs->scale, rhs->position, rhs->rotation, rhs->scale)
         )
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
@@ -74,12 +75,6 @@ public:
                 && (lhs->mutableTypedBytes.empty() || NWB_MEMCMP(lhs->mutableTypedBytes.data(), rhs->mutableTypedBytes.data(), lhs->mutableTypedBytes.size()) == 0)
             )
         ;
-    }
-
-
-private:
-    b8 equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
-        return Vector3Equal(lhsPosition, rhsPosition) && Vector4Equal(lhsRotation, rhsRotation) && Vector3Equal(lhsScale, rhsScale);
     }
 };
 

@@ -7,6 +7,7 @@
 
 #include "asset.h"
 #include "cook.h"
+#include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

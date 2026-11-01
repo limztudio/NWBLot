@@ -20,7 +20,6 @@ namespace __hidden_tex_conv_main{
 
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv");
 inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logger.init() failed");
-inline constexpr int s_TexConvEntryFailure = -1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,7 +29,7 @@ int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
-        return s_TexConvEntryFailure;
+        return NWB::TexConv::s_TexConvEntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 

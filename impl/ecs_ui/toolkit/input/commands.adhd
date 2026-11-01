@@ -83,6 +83,38 @@ class InputCommandIntent{
     public b8 allowText = false;
 }
 
+b8 IsValidInputKeyBinding(in InputKeyBinding binding, in b8 validKey, in i32 modifierMask){
+    return validKey
+        && binding.command != InputCommand::None
+        && binding.command <= InputCommand::ContextMenu
+        && binding.selection <= InputSelectionPolicy::Shift
+        && ((binding.modifiers | binding.ignoredModifiers) & ~modifierMask) == 0
+        && (binding.modifiers & binding.ignoredModifiers) == 0;
+}
+
+b8 InputKeyBindingsOverlap(in InputKeyBinding first, in InputKeyBinding second, in i32 modifierMask){
+    i32 common = modifierMask & ~(first.ignoredModifiers | second.ignoredModifiers);
+    return first.key == second.key && ((first.modifiers ^ second.modifiers) & common) == 0;
+}
+
+InputCommandIntent ResolveInputKeyBinding(in Span<InputKeyBinding> bindings, in i32 key, in i32 modifiers, in b8 validKey, in i32 modifierMask, in i32 lockModifiers, in i32 shiftModifier){
+    InputCommandIntent result;
+    if(!validKey || (modifiers & ~(modifierMask | lockModifiers)) != 0)
+        return result;
+    i32 chord = modifiers & modifierMask;
+    for(usize i = 0u; i < bindings.size(); ++i){
+        InputKeyBinding binding = bindings[i];
+        if(binding.key != key || (chord & ~binding.ignoredModifiers) != binding.modifiers)
+            continue;
+        result.command = binding.command;
+        result.extend = binding.selection == InputSelectionPolicy::Always || (binding.selection == InputSelectionPolicy::Shift && (chord & shiftModifier) != 0);
+        result.edit = binding.edit;
+        result.allowText = binding.allowText;
+        return result;
+    }
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

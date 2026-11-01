@@ -351,8 +351,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::BufferRange csgReceiverRange(0u, csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData));
     const Core::BufferRange csgCutterRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData));
 
-    constexpr usize s_CsgReceiverSpanResourceUseCapacity = 6u;
-    constexpr usize s_CsgIntervalCombineResourceUseCapacity = 11u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
     Array<Core::GpuTaskResourceUse, s_CsgReceiverSpanResourceUseCapacity> csgReceiverSpanResourceUses = {};
     usize csgReceiverSpanResourceUseCount = 0u;
@@ -485,10 +483,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"));
     gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
 
-    constexpr usize s_OpaqueDrawResourceUseCount = 8u;
-    constexpr usize s_NoOpaqueDrawResourceUseCount = 6u;
-    // Cap back resources.normal, interval resources.depth, interval id, receiver event data, and receiver event count.
-    constexpr usize s_OpaqueCsgFrameResourceUseCount = 5u;
     gbufferResourceUses.reserve((hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount) + (hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u) + (hasOpaqueCsgFrameWork ? s_OpaqueCsgFrameResourceUseCount : 0u));
     gbufferResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
@@ -554,7 +548,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    constexpr usize s_GbufferMaterialResourceSetUseCapacity = 4u;
     Array<Core::GpuTaskResourceSetUse, s_GbufferMaterialResourceSetUseCapacity> gbufferMaterialResourceSetUses = {};
     usize gbufferMaterialResourceSetUseCount = 0u;
     if(gbufferPayload.materialGeometryStatesGraphOwned)
@@ -710,7 +703,6 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ scratchArena };
-    constexpr usize s_NormalizeResourceUseCapacity = 9u;
     normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResources.size()));
     normalizeResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(resources.normal, Core::ResourceStates::ShaderResource));

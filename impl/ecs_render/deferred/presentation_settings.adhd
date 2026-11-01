@@ -62,6 +62,15 @@ class OpaqueEmulationMergeValidationResult{
     public b8 csgIntervalClearBundleMerged = false;
 }
 
+const usize s_FrameExecuteLifecycleCallbackCapacity = 6u;
+const usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
+const usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
+const usize s_SinglePersistentResourceCapacity = 1u;
+const usize s_ShadowComputeScratchTextureCapacity = 15u;
+const usize s_ShadowComputeScratchBufferCapacity = 12u;
+const usize s_CausticsComputeScratchTextureCapacity = 4u;
+const usize s_SurfelGiComputeScratchBufferCapacity = 6u;
+
 [reflect]
 class PresentationSettings{
     public PresentationToneMap toneMap = PresentationToneMap::Reinhard;
@@ -144,6 +153,21 @@ DeferredLightingPushConstants ResolveDeferredLightingPushConstants(
         pushConstants.presentationMode = s_DeferredPresentationHdr10;
     return pushConstants;
 }
+
+const u32 s_IrradianceHistoryCopyRegionCount = 2u;
+const StringView s_CausticIrradianceLabel = "Caustic Irradiance";
+const StringView s_SurfelIrradianceLabel = "Surfel Irradiance";
+const Name s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
+const StringView s_DeferredBindlessSlotsLabel = "Deferred Bindless Slots";
+const usize s_TransparentLaggedLightingDependencyCount = 2u;
+const usize s_TransparentLaggedSelectorDependencyCount = 3u;
+const usize s_OpaqueLaggedSelectorDependencyCount = 2u;
+const usize s_OpaqueProducerResourceSetUseCapacity = 3u;
+const usize s_OpaqueSharedRasterResourceUseCapacity = 9u;
+const usize s_OpaqueSharedResourceSetUseCapacity = 2u;
+const usize s_PresentBaseResourceUseCount = 3u;
+const usize s_PresentMaxResourceUseCount = 4u;
+const usize s_PresentMaxDependencyCount = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

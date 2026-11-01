@@ -1,0 +1,19 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_DefaultPipelineConfig = "default";
+const StringView s_AssetCacheDirectory = "__asset_cache";
+const StringView s_DefaultRepoRoot = ".";
+const Name s_AssetBuilderArena = "pipeline/asset_builder";
+const u32 s_MinParallelCoreCount = 1u;
+
+u32 ComputeWorkerCoreCount(in u32 cores){
+    if(cores > s_MinParallelCoreCount)
+        return cores - s_MinParallelCoreCount;
+    return 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

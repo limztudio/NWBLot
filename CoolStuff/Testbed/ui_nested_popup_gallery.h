@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 #include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
@@ -20,9 +21,6 @@ TESTBED_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_NestedPopupLabelCount = 5u;
-inline constexpr u64 s_NestedPopupDisabledKey = 3u;
 
 class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>{
     friend class UiImmutableListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey, NWB::Impl::Ui::ISearchableListDataSource>;

@@ -6,6 +6,7 @@
 
 
 #include "cook_meshlet_triangles.h"
+#include <impl/assets_mesh/cook_types.adhd.h>
 
 #include <core/task/cpu/scheduler.h>
 
@@ -191,13 +192,7 @@ f32 MeshletCandidateSearch::ScoreMeshletCandidate(
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWidening(triangleIndices, state, triangleIndex, triangleVectors.areaNormal, triangleAreaNormalAt);
-    return static_cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight
-        - static_cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight
-        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
-        - s_MeshletScoreCentroidWeight * centroidDistance
-        + s_MeshletScoreNormalWeight * normalCoherence
-        - s_MeshletScoreConePenaltyWeight * coneWidening
-        - (disconnected ? s_MeshletScoreDisconnectedPenalty : 0.0f);
+    return EvaluateMeshletCandidateScore(sharedVertexCount, missingVertexCount, predictedRadiusGrowth, centroidDistance, normalCoherence, coneWidening, disconnected);
 }
 
 

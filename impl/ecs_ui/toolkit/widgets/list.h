@@ -41,24 +41,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ListMeasureKey{
-    u64 sourceGeneration = 0u;
-    u64 sourceRevision = 0u;
-    u64 rowCount = 0u;
-    u64 textIdentity = 0u;
-    u64 textGeneration = 0u;
-    f32 fontSize = 0.0f;
-    f32 pixelScaleX = 0.0f;
-    f32 pixelScaleY = 0.0f;
-    Array<f32, s_ListRowMetricCount> rowMetrics{};
-    Array<char, s_ListLanguageBufferBytes> language{};
-    u32 scriptTag = 0u;
-
-
-public:
-    [[nodiscard]] constexpr b8 operator==(const ListMeasureKey&)const noexcept = default;
-};
-
 class ListState final : NoCopy{
     friend class Builder;
     friend class BuilderScopeFrame;

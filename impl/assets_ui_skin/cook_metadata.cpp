@@ -145,7 +145,7 @@ template<usize Count>
 
     Array<b8, UiSkinColorRole::kCount> seen{};
     for(const Value& value : (*colors)->asList()){
-        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_UiSkinDiagnosticPrefix, { s_UiSkinNameField, s_UiSkinRgbaField }))
+        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, value, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinPaletteRoleField))
             return MakeUnexpected(Failure{});
         auto nameResultValue = Core::Assets::ReadMetadataStringField(path, value, s_UiSkinDiagnosticPrefix, s_UiSkinNameField, true);
         if(!nameResultValue)
@@ -172,7 +172,7 @@ template<usize Count>
                 return MakeUnexpected(Failure{});
             }
         }
-        palette.colors[role] = { components[0u], components[1u], components[2u], components[3u] };
+        palette.colors[role] = MakeUiSkinColor(components[0u], components[1u], components[2u], components[3u]);
         seen[role] = true;
     }
     return palette;
@@ -186,7 +186,7 @@ template<usize Count>
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size"), ConvertString(s_UiSkinDiagnosticPrefix), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
-    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_UiSkinDiagnosticPrefix, { s_UiSkinDefaultFontSizeField }))
+    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_UiSkinDiagnosticPrefix) || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_UiSkinDiagnosticPrefix, &IsAllowedUiSkinTypographyField))
         return MakeUnexpected(Failure{});
     auto defaultFontSizeResult = Core::Assets::ReadMetadataFiniteF32Field(path, *typography, s_UiSkinDiagnosticPrefix, s_UiSkinDefaultFontSizeField, true);
     if(!defaultFontSizeResult)

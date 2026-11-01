@@ -110,19 +110,6 @@ namespace __hidden_ui_edit_caret_geometry{
     return static_cast<u32>(next - layout.lines().begin() - 1);
 }
 
-[[nodiscard]] static f32 LoadScalarFraction(const StringView text, const usize begin, const usize end, const usize position)noexcept{
-    usize total = 0u;
-    usize before = 0u;
-    for(usize index = begin; index < end; ++index){
-        if(!IsUtf8Continuation(static_cast<u8>(text[index]))){
-            ++total;
-            if(index < position)
-                ++before;
-        }
-    }
-    return total == 0u ? 0.0f : static_cast<f32>(before) / static_cast<f32>(total);
-}
-
 [[nodiscard]] static Expected<SIMDVectorSingleResult> LoadCaretRect(const TextLayout& layout, const Span<const usize> boundaries, const usize byte)noexcept{
     if(layout.lines().empty() || !IsUtf8ScalarBoundary(layout.utf8(), byte))
         return MakeUnexpected(Failure{});
@@ -151,7 +138,7 @@ namespace __hidden_ui_edit_caret_geometry{
             else{
                 const usize begin = next == first ? cluster->byteBegin : *(next - 1);
                 const usize end = next == last ? cluster->byteEnd : *next;
-                ordinal += LoadScalarFraction(layout.utf8(), begin, end, byte);
+                ordinal += ComputeEditScalarFraction(layout.utf8(), begin, end, byte);
             }
             const f32 span = cluster->trailingX - cluster->leadingX;
             x = cluster->leadingX + ((span * ordinal) / static_cast<f32>(intervals));
@@ -163,46 +150,10 @@ namespace __hidden_ui_edit_caret_geometry{
 }
 
 [[nodiscard]] static Expected<usize> NearestStop(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const u32 lineIndex, const Point point)noexcept{
-    if(stops.empty() || lineIndex >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
+    usize committedByte = 0u;
+    if(!TryFindNearestEditCaretStop(lines, stops, lineIndex, point, committedByte))
         return MakeUnexpected(Failure{});
-    const EditCaretLine& line = lines[lineIndex];
-    if(line.firstStop > stops.size() || line.stopCount > stops.size() - line.firstStop)
-        return MakeUnexpected(Failure{});
-    if(line.stopCount == 0u && (line.firstStop == 0u || line.firstStop >= stops.size()))
-        return MakeUnexpected(Failure{});
-    const usize first = line.stopCount == 0u ? line.firstStop - 1u : line.firstStop;
-    const usize end = line.stopCount == 0u ? static_cast<usize>(line.firstStop) + 1u : first + line.stopCount;
-    f32 minimumX = stops[first].x;
-    if(!IsFinite(minimumX) || minimumX < 0.0f)
-        return MakeUnexpected(Failure{});
-    f32 maximumX = minimumX;
-    for(usize index = first + 1u; index < end; ++index){
-        if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
-            return MakeUnexpected(Failure{});
-        minimumX = Min(minimumX, stops[index].x);
-        maximumX = Max(maximumX, stops[index].x);
-    }
-    const f32 queryX = Clamp(point.x, minimumX, maximumX);
-    f64 nearestY = Limit<f64>::s_Max;
-    f32 nearestX = Limit<f32>::s_Max;
-    usize result = 0u;
-    for(usize index = first; index < end; ++index){
-        const EditBoxCaretStop& stop = stops[index];
-        if(stop.lineIndex >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
-            return MakeUnexpected(Failure{});
-        const EditCaretLine& stopLine = lines[stop.lineIndex];
-        if(!IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f || !IsFinite(stopLine.top + stopLine.height))
-            return MakeUnexpected(Failure{});
-        const f64 lineCenter = static_cast<f64>(stopLine.top) + (static_cast<f64>(stopLine.height) * s_RectCenterFractionF64);
-        const f64 distanceY = line.stopCount == 0u ? Abs(static_cast<f64>(point.y) - lineCenter) : 0.0;
-        const f32 distanceX = Abs(queryX - stop.x);
-        if(distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
-            nearestY = distanceY;
-            nearestX = distanceX;
-            result = stop.committedByte;
-        }
-    }
-    return result;
+    return committedByte;
 }
 
 
@@ -216,22 +167,10 @@ namespace __hidden_ui_edit_caret_geometry{
 
 
 Expected<usize> HitEditCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
-    if(lines.empty() || lines.size() > Limit<u32>::s_Max || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
+    usize committedByte = 0u;
+    if(!TryHitEditCaretGeometry(lines, stops, localPoint, committedByte))
         return MakeUnexpected(Failure{});
-    u32 lineIndex = static_cast<u32>(lines.size() - 1u);
-    for(u32 index = 0u; index < lines.size(); ++index){
-        const EditCaretLine& line = lines[index];
-        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f)
-            return MakeUnexpected(Failure{});
-        const f32 bottom = line.top + line.height;
-        if(!IsFinite(bottom))
-            return MakeUnexpected(Failure{});
-        if(localPoint.y < bottom){
-            lineIndex = index;
-            break;
-        }
-    }
-    return __hidden_ui_edit_caret_geometry::NearestStop(lines, stops, lineIndex, localPoint);
+    return committedByte;
 }
 
 

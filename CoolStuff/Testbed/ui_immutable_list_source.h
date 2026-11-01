@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
@@ -75,10 +76,6 @@ template<typename Source, usize LabelCount, u64 DisabledKey>
 class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource>{
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
-    private:
-        static constexpr u64 s_FilteredInstanceGeneration = 2u;
-
-
     public:
         explicit View(const UiFilteredListSource& source)noexcept
             : m_source(source)

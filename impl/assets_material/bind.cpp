@@ -41,17 +41,6 @@ void MaterialBindTypedLayoutCache::reserve(const usize count){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanceName, const AStringView fieldName)noexcept{
-    ACompactString key;
-    if(!key.assign(instanceName) || !key.pushBack('.') || !key.append(fieldName))
-        return MakeUnexpected(Failure{});
-    return key;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
     outLayoutHash = layout.layoutHash;
     outBlocks.reserve(layout.typedLayoutBlocks.size());

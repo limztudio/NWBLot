@@ -21,7 +21,6 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(AStringView parameterName);
-[[nodiscard]] UInt4U PackMaterialInstanceBytes(Span<const u8> bytes)noexcept;
 
 template<typename TElement>
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{

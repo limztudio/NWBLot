@@ -90,12 +90,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, *skinningPipeline);
 
-    MeshSkinningPushConstants pushConstants;
-    pushConstants.meshletCount = plan.meshletCount;
-    pushConstants.skinCount = plan.skinCount;
-    pushConstants.jointCount = plan.jointCount;
-    pushConstants.skinningMode = plan.skinningMode;
-    pushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+    const MeshSkinningPushConstants pushConstants = MakeMeshSkinningPushConstants(plan.meshletCount, plan.skinCount, plan.jointCount, plan.skinningMode, plan.bindlessResourceSlots);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, device, commandList);
@@ -137,9 +132,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, *boundsPipeline);
 
-    MeshletBoundsPushConstants boundsPushConstants;
-    boundsPushConstants.meshletCount = plan.meshletCount;
-    boundsPushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+    const MeshletBoundsPushConstants boundsPushConstants = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
     commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, device, commandList);
@@ -160,9 +153,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
         commandList.setComputeState(computeState);
         heap.bindCompute(commandList, *repackPipeline);
 
-        MeshletRepackPushConstants repackPushConstants;
-        repackPushConstants.meshletCount = plan.meshletCount;
-        repackPushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+        const MeshletRepackPushConstants repackPushConstants = MakeMeshletRepackPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
         commandList.setPushConstants(&repackPushConstants, sizeof(repackPushConstants));
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);

@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/list.h>
@@ -23,17 +24,12 @@ TESTBED_BEGIN
 
 
 class UiListSource final : public NWB::Impl::Ui::IListDataSource, NoCopy{
-private:
-    static constexpr u64 s_RowCount = 100000u;
-    static constexpr usize s_LabelCapacity = 32u;
-
-
 public:
     virtual u64 instanceGeneration()const noexcept override{ return 1u; }
 
     virtual u64 revision()const noexcept override{ return 1u; }
 
-    virtual u64 rowCount()const noexcept override{ return s_RowCount; }
+    virtual u64 rowCount()const noexcept override{ return s_VirtualListRowCount; }
 
     virtual u64 key(u64 index)const noexcept override{ return index < rowCount() ? index + 1u : 0u; }
     virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
@@ -43,7 +39,7 @@ public:
 
 
 private:
-    mutable Array<char, s_LabelCapacity> m_label{};
+    mutable Array<char, s_VirtualListLabelCapacity> m_label{};
 };
 
 class UiListGallery final : NoCopy{

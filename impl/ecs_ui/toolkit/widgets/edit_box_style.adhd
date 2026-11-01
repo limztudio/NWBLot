@@ -154,16 +154,7 @@ class TextAreaModelStamp{
         this.textMode = EditTextMode::SingleLine;
     }
 
-    public TextAreaModelStamp(
-        in u64 inInstanceGeneration,
-        in u64 inRevision,
-        in u64 inExternalRevision,
-        in u64 inSelectionGeneration,
-        in u64 inCompositionGeneration,
-        in usize inAnchor,
-        in usize inCaret,
-        in EditTextMode inTextMode
-    ){
+    public TextAreaModelStamp(in u64 inInstanceGeneration, in u64 inRevision, in u64 inExternalRevision, in u64 inSelectionGeneration, in u64 inCompositionGeneration, in usize inAnchor, in usize inCaret, in EditTextMode inTextMode){
         this.instanceGeneration = inInstanceGeneration;
         this.revision = inRevision;
         this.externalRevision = inExternalRevision;
@@ -274,6 +265,104 @@ class TextAreaScrollSnapshot{
     public usize caret;
     public b8 enabled;
     public b8 readOnly;
+}
+
+void ApplySkinPaletteToEditBoxStyle(in UiSkinPalette palette, mut EditBoxStyle style){
+    style.background = ResolveUiSkinColor(palette, UiSkinColorRole::EditBackground);
+    style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+    style.disabledText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.selection = ResolveUiSkinColor(palette, UiSkinColorRole::EditSelection);
+    style.inactiveSelection = ResolveUiSkinColor(palette, UiSkinColorRole::EditInactiveSelection);
+    style.caret = ResolveUiSkinColor(palette, UiSkinColorRole::EditCaret);
+    style.preedit = ResolveUiSkinColor(palette, UiSkinColorRole::EditPreedit);
+}
+
+f32 ComputeEditScalarFraction(in StringView text, in usize begin, in usize end, in usize position){
+    usize total = 0u;
+    usize before = 0u;
+    for(usize index = begin; index < end; ++index){
+        if(!IsUtf8Continuation(cast<u8>(text[index]))){
+            ++total;
+            if(index < position)
+                ++before;
+        }
+    }
+    if(total == 0u)
+        return 0.0f;
+    return cast<f32>(before) / cast<f32>(total);
+}
+
+b8 TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in u32 lineIndex, in Point point, mut usize outCommittedByte){
+    outCommittedByte = 0u;
+    if(stops.empty() || cast<usize>(lineIndex) >= lines.size() || !isFinite(point.x) || !isFinite(point.y))
+        return false;
+    const EditCaretLine line = lines[lineIndex];
+    if(cast<usize>(line.firstStop) > stops.size() || cast<usize>(line.stopCount) > stops.size() - cast<usize>(line.firstStop))
+        return false;
+    if(line.stopCount == 0u && (line.firstStop == 0u || cast<usize>(line.firstStop) >= stops.size()))
+        return false;
+    usize first = cast<usize>(line.firstStop);
+    usize end = first + cast<usize>(line.stopCount);
+    if(line.stopCount == 0u){
+        first = cast<usize>(line.firstStop) - 1u;
+        end = cast<usize>(line.firstStop) + 1u;
+    }
+    f32 minimumX = stops[first].x;
+    if(!isFinite(minimumX) || minimumX < 0.0f)
+        return false;
+    f32 maximumX = minimumX;
+    for(usize index = first + 1u; index < end; ++index){
+        if(!isFinite(stops[index].x) || stops[index].x < 0.0f)
+            return false;
+        minimumX = min(minimumX, stops[index].x);
+        maximumX = max(maximumX, stops[index].x);
+    }
+    const f32 queryX = clamp(point.x, minimumX, maximumX);
+    f64 nearestY = 0.0;
+    f32 nearestX = 0.0f;
+    b8 haveBest = false;
+    usize result = 0u;
+    for(usize index = first; index < end; ++index){
+        const EditBoxCaretStop stop = stops[index];
+        if(cast<usize>(stop.lineIndex) >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
+            return false;
+        const EditCaretLine stopLine = lines[stop.lineIndex];
+        if(!isFinite(stopLine.top) || !isFinite(stopLine.height) || stopLine.height <= 0.0f || !isFinite(stopLine.top + stopLine.height))
+            return false;
+        const f64 lineCenter = cast<f64>(stopLine.top) + (cast<f64>(stopLine.height) * 0.5);
+        f64 distanceY = 0.0;
+        if(line.stopCount == 0u)
+            distanceY = abs(cast<f64>(point.y) - lineCenter);
+        const f32 distanceX = abs(queryX - stop.x);
+        if(!haveBest || distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
+            nearestY = distanceY;
+            nearestX = distanceX;
+            result = stop.committedByte;
+            haveBest = true;
+        }
+    }
+    outCommittedByte = result;
+    return haveBest;
+}
+
+b8 TryHitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint, mut usize outCommittedByte){
+    outCommittedByte = 0u;
+    if(lines.empty() || lines.size() > cast<usize>(0xffffffffu) || stops.empty() || !isFinite(localPoint.x) || !isFinite(localPoint.y))
+        return false;
+    u32 lineIndex = cast<u32>(lines.size() - 1u);
+    for(u32 index = 0u; cast<usize>(index) < lines.size(); ++index){
+        const EditCaretLine line = lines[index];
+        if(!isFinite(line.top) || !isFinite(line.height) || line.height <= 0.0f)
+            return false;
+        const f32 bottom = line.top + line.height;
+        if(!isFinite(bottom))
+            return false;
+        if(localPoint.y < bottom){
+            lineIndex = index;
+            break;
+        }
+    }
+    return TryFindNearestEditCaretStop(lines, stops, lineIndex, localPoint, outCommittedByte);
 }
 
 

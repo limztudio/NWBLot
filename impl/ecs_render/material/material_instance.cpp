@@ -43,14 +43,6 @@ Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(cons
     return result;
 }
 
-UInt4U PackMaterialInstanceBytes(const Span<const u8> bytes)noexcept{
-    UInt4U packed = {};
-    NWB_ASSERT(bytes.size() <= sizeof(packed.raw));
-    if(!bytes.empty())
-        NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes.data(), bytes.size());
-    return packed;
-}
-
 b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
     if(!materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), ConvertString(parameterNameText));

@@ -27,17 +27,10 @@ namespace __hidden_asset_builder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_AssetBuilderArena("pipeline/asset_builder");
-inline constexpr u32 s_MinParallelCoreCount = 1u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena& scratchArena, AssetBuilder::AssetBuildOptions& options){
     namespace Assets = Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
-    const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)));
+    const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AssetBuilder::s_DefaultRepoRoot : AStringView(options.repoRoot)));
     if(!repoRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repository root"));
         return false;
@@ -74,12 +67,12 @@ static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena
 
 
 int RunPipelineTool(const int argc, char** argv){
-    Core::Assets::AssetArena arena(__hidden_asset_builder::s_AssetBuilderArena);
-    Core::Assets::ScratchArena scratchArena(__hidden_asset_builder::s_AssetBuilderArena);
+    Core::Assets::AssetArena arena(AssetBuilder::s_AssetBuilderArena);
+    Core::Assets::ScratchArena scratchArena(AssetBuilder::s_AssetBuilderArena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
     return commandLine.run(argc, argv, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
+        Core::CpuTaskScheduler cpuScheduler(AssetBuilder::ComputeWorkerCoreCount(cores));
         AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
         buildOptions.outputDirectory = options.outputPath;

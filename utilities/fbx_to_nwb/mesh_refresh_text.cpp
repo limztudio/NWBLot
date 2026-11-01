@@ -30,20 +30,6 @@ namespace MeshRefreshTextDetail{
 using TextWrite::WriteVec2;
 using TextWrite::WriteVec3;
 using TextWrite::WriteVec4;
-using TextWrite::s_OutputFloatPrecision;
-
-static constexpr AStringView s_ListOpenText = "[\n";
-static constexpr AStringView s_ListCloseText = "]";
-static constexpr AStringView s_ListItemIndentText = "    ";
-static constexpr AStringView s_ListItemSuffixText = ",\n";
-static constexpr AStringView s_RowOpenText = "    [";
-static constexpr AStringView s_RowItemSeparatorText = ", ";
-static constexpr AStringView s_RowSuffixText = "],\n";
-
-struct AssignmentRange{
-    usize begin = 0u;
-    usize end = 0u;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

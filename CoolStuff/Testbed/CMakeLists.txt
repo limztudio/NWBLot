@@ -12,8 +12,14 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
+nwb_target_adhd_sources(testbed NAMESPACE "Testbed" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/ui_gallery_constants.adhd"
+)
 set_target_properties(testbed PROPERTIES DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}")
-nwb_target_link_libraries_whole_archive(testbed nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics)
+nwb_target_link_libraries_whole_archive(testbed
+    nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_ui_skin
+    nwb_assets_font nwb_assets_font_atlas nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics
+)
 target_link_libraries(testbed PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_skeleton nwb_ecs_model nwb_ecs_mesh_skinning nwb_ecs_render nwb_ecs_model_renderer nwb_ecs_ui nwb_ui_widgets)
 
 # Place the NVIDIA Aftermath runtime next to testbed so the device-side dynamic load resolves it.
@@ -36,3 +42,4 @@ if(TARGET nwb_asset_builder)
     unset(_nwb_testbed_asset_stamp)
     unset(_nwb_testbed_asset_inputs)
 endif()
+

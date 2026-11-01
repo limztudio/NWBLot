@@ -57,7 +57,6 @@ NWB_IMPL_BEGIN
     const Array<Core::GpuTaskId, 4u> softwareLightingDependencies = { inputs.shadowVisibilityTask, inputs.softwareCausticsTask, inputs.surfelGiTask, inputs.avboitFinalTask, };
     // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
     const Array<Core::GpuTaskId, 2u> laggedLightingDependencies = { inputs.graphicsPrefixTask, inputs.avboitFinalTask, };
-    constexpr usize s_TransparentLaggedLightingDependencyCount = 2u;
     const usize laggedLightingDependencyCount = hasTransparentRenderers ? s_TransparentLaggedLightingDependencyCount : 1u;
     const Array<Core::GpuTaskId, 1u> laggedLightingSelectorUploadDependencies = { inputs.graphicsPrefixTask };
     const b8 laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
@@ -99,8 +98,6 @@ NWB_IMPL_BEGIN
         : (useLaggedLightingHistory ? laggedLightingDependencies.data() : softwareLightingDependencies.data())
     ;
     const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned ? laggedLightingWithSelectorDependencies.data() : lightingDependencies;
-    constexpr usize s_TransparentLaggedSelectorDependencyCount = 3u;
-    constexpr usize s_OpaqueLaggedSelectorDependencyCount = 2u;
     const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
         ? (hasTransparentRenderers ? s_TransparentLaggedSelectorDependencyCount : s_OpaqueLaggedSelectorDependencyCount)
         : (useLaggedLightingHistory ? laggedLightingDependencyCount : hardwareLightingDependencies.size())

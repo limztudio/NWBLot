@@ -47,7 +47,7 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto found = edgeUses.find(CsgDeformEdgeKey(corners[corner][0u], corners[corner][1u]));
             if(found != edgeUses.end() && found.value() == 1u)
-                outEdges.push_back(CsgDeformCutLoopEdge{ corners[corner][0u], corners[corner][1u] });
+                outEdges.push_back(MakeCsgDeformCutLoopEdge(corners[corner][0u], corners[corner][1u]));
         }
     }
     // Deterministic boundary order: traversal input matches emitted triangle order.
@@ -153,7 +153,7 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
         if(inOutTriangles.size() + 1u > s_MaxDeformTriangles)
             return MakeUnexpected(Failure{});
         const u32 first = loop[vertexIndex];
-        const u32 second = loop[(vertexIndex + 1u) % loop.size()];
+        const u32 second = loop[NextLoopVertexIndex(vertexIndex, loop.size())];
         inOutTriangles.push_back(MakeCsgDeformTriangle(centerIndex, second, first));
         ++capTriangles;
     }

@@ -217,7 +217,7 @@ Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDepen
         const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
         if(!documentAssetType)
             return MakeUnexpected(Failure{});
-        const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, "DependencyComputer");
+        const auto assetValue = Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(files[fileIndex].filePath, *document, s_DiagnosticPrefix);
         if(!assetValue)
             return MakeUnexpected(Failure{});
         if(!processAssetItem(fileIndex, *documentAssetType, catalog.m_virtualPaths[fileIndex], **assetValue, &*document))

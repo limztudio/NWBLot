@@ -696,6 +696,25 @@ MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshl
     return metrics;
 }
 
+u32 PackMeshletConeCutoffUnorm8(in f32 value){
+    return cast<u32>(clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
+}
+
+b8 ValidDirectionVector(in f32x4 direction){
+    if(!isFinite(direction.x) || !isFinite(direction.y) || !isFinite(direction.z))
+        return false;
+    return abs(lengthSq(direction.xyz) - 1.0f) <= s_DirectionLengthTolerance;
+}
+
+b8 ValidTangentVector(in f32x4 tangent){
+    if(!isFinite(tangent.x) || !isFinite(tangent.y) || !isFinite(tangent.z) || !isFinite(tangent.w))
+        return false;
+    return
+        abs(lengthSq(tangent.xyz) - 1.0f) <= s_DirectionLengthTolerance
+        && abs(abs(tangent.w) - 1.0f) <= s_TangentHandednessTolerance
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

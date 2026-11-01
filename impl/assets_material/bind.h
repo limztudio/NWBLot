@@ -212,10 +212,6 @@ public:
 
 
 [[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName)noexcept;
-[[nodiscard]] inline u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey)noexcept{
-    return UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, parameterKey);
-}
 [[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes);

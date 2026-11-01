@@ -19,33 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 ComputeShadowMaterialContextHash(const Span<const NwbRtInstanceMaterialGpu> instanceMaterials, const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)noexcept{
-    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
-
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    Fnv64AppendBuffer(hash, Span<const u8>(static_cast<const u8*>(static_cast<const void*>(instanceMaterials.data())), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu)));
-    Fnv64AppendBuffer(hash, Span<const u8>(static_cast<const u8*>(static_cast<const void*>(instanceData.data())), instanceData.size() * sizeof(InstanceGpuData)));
-    Fnv64AppendBuffer(hash, materialTypedBytes);
-    return hash;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& state, const usize instanceMaterialCount, const usize instanceCount, const usize materialTypedByteCount)noexcept{
     return
         state.m_shadowInstanceMaterialBuffer

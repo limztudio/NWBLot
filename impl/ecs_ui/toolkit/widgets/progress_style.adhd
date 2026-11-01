@@ -48,6 +48,103 @@ class ProgressFrame{
     public ProgressMetrics metrics;
 }
 
+void ApplySkinPaletteToProgressStyle(in UiSkinPalette palette, mut ProgressStyle style){
+    style.trackTint = ResolveUiSkinColor(palette, UiSkinColorRole::ProgressTrackTint);
+    style.fillTint = ResolveUiSkinColor(palette, UiSkinColorRole::ProgressFillTint);
+}
+
+b8 IsValidProgressMetrics(in ProgressMetrics metrics){
+    if(
+        !IsValidUiPadding(metrics.padding)
+        || !IsValidUiExtent(metrics.fillMinimum)
+        || !IsValidUiExtent(metrics.contentSize)
+    )
+        return false;
+    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
+    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
+    if(padW > s_UiMaxFloatF64 || padH > s_UiMaxFloatF64)
+        return false;
+    const f64 width = padW + cast<f64>(metrics.fillMinimum.x);
+    const f64 height = padH + cast<f64>(metrics.fillMinimum.y);
+    return width <= s_UiMaxFloatF64
+        && height <= s_UiMaxFloatF64
+        && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(width))
+        && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
+}
+
+b8 TryMeasureProgress(in ProgressOptions options, in ProgressStyle style, in UiSkinRegion track, in UiSkinRegion fill, in f32 density, mut ProgressMetrics outMetrics){
+    outMetrics = ProgressMetrics();
+    if(
+        options.width.policy > LayoutSizePolicy::Stretch
+        || !isFinite(options.width.value)
+        || options.width.value < 0.0f
+        || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value == 0.0f)
+        || !isFinite(options.height)
+        || options.height < 0.0f
+        || !IsBoundedUiPadding(style.padding)
+        || !IsValidUiColor(style.trackTint)
+        || !IsValidUiColor(style.fillTint)
+        || !isFinite(density)
+        || density <= 0.0f
+    )
+        return false;
+    if(!IsBoundedUiPadding(track.padding) || !IsBoundedUiPadding(fill.padding))
+        return false;
+    f32x4 trackMin(0.0f, 0.0f, 0.0f, 0.0f);
+    f32x4 fillMin(0.0f, 0.0f, 0.0f, 0.0f);
+    if(!TryLoadUiSkinMinimumSize(track, cast<f64>(density), trackMin) || !TryLoadUiSkinMinimumSize(fill, cast<f64>(density), fillMin))
+        return false;
+    ProgressMetrics candidate;
+    candidate.padding = MaxUiPadding(style.padding, track.padding);
+    candidate.fillMinimum = Point(fillMin.x, fillMin.y);
+    const f64 innerW = (cast<f64>(candidate.padding.left) + cast<f64>(candidate.padding.right)) + cast<f64>(fillMin.x);
+    const f64 innerH = (cast<f64>(candidate.padding.top) + cast<f64>(candidate.padding.bottom)) + cast<f64>(fillMin.y);
+    const f64 width = max(cast<f64>(trackMin.x), innerW);
+    const f64 height = max(cast<f64>(options.height), max(cast<f64>(trackMin.y), innerH));
+    if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
+        return false;
+    candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
+    if(!IsValidProgressMetrics(candidate))
+        return false;
+    outMetrics = candidate;
+    return true;
+}
+
+b8 TryPlaceProgress(in Rect bounds, in Rect clip, in ProgressMetrics metrics, in f64 fraction, mut ProgressPlacement outPlacement){
+    outPlacement = ProgressPlacement();
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !IsValidProgressMetrics(metrics) || !isFinite(fraction))
+        return false;
+    ProgressPlacement candidate;
+    candidate.bounds = bounds;
+    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint, candidate.clip))
+        return false;
+    if(!TryInsetUiRect(bounds, metrics.padding, UiRectPrecision::EmptyPaint, candidate.content))
+        return false;
+    const f64 normalized = clamp(fraction, 0.0, 1.0);
+    candidate.fillReveal = candidate.content;
+    candidate.fillCanvas = candidate.content;
+    if(normalized == 0.0){
+        candidate.fillReveal.width = 0.0f;
+        candidate.fillCanvas.width = 0.0f;
+    }
+    else if(normalized != 1.0){
+        const f64 contentX = cast<f64>(candidate.content.x);
+        const f64 contentY = cast<f64>(candidate.content.y);
+        const f64 contentW = cast<f64>(candidate.content.width);
+        const f64 contentH = cast<f64>(candidate.content.height);
+        const f64 revealW = contentW * normalized;
+        if(!TryMakeUiRect(contentX, contentY, revealW, contentH, UiRectPrecision::EmptyPaint, candidate.fillReveal))
+            return false;
+        f64 canvasW = 0.0;
+        if(candidate.fillReveal.width != 0.0f)
+            canvasW = min(contentW, max(cast<f64>(candidate.fillReveal.width), cast<f64>(metrics.fillMinimum.x)));
+        if(!TryMakeUiRect(contentX, contentY, canvasW, contentH, UiRectPrecision::EmptyPaint, candidate.fillCanvas))
+            return false;
+    }
+    outPlacement = candidate;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

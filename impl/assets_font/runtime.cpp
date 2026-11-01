@@ -41,7 +41,7 @@ b8 Font::loadBinary(const Span<const u8> binary){
     if(!headerResult)
         return false;
     const FontBinaryHeader& header = *headerResult;
-    if(header.version != s_FontBinaryVersion || header.reserved != 0u || header.faceIndex != 0u){
+    if(!IsValidFontBinaryHeader(header)){
         NWB_LOGGER_ERROR(NWB_TEXT("Font::loadBinary failed: unsupported version, flags, or face index; recook required"));
         return false;
     }

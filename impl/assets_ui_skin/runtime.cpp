@@ -37,28 +37,6 @@ static_assert(UiSkinColorRole::kCount == s_UiSkinPaletteColorCount, "UI skin pal
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight)noexcept{
-    if(!region.name || region.name == Name(""))
-        return false;
-    if(!IsValidUiSkinRegionRectAndSlices(region.rectangle, region.sliceInsets, region.drawMode, atlasWidth, atlasHeight))
-        return false;
-
-    const UiSkinInsets& padding = region.padding;
-    return
-        IsFinite(padding.left) && padding.left >= 0.0f
-        && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f
-        && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-        && VectorIsFinite(VectorAdd(VectorSet(padding.left, padding.top, 0.0f, 0.0f), VectorSet(padding.right, padding.bottom, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-        && IsFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
-        && IsFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -75,7 +53,7 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
     }
-    if(header.reserved0 != 0u || header.reserved1 != 0u){
+    if(!IsValidUiSkinHeaderFlags(header)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: header contains unsupported flags"));
         return false;
     }
@@ -101,7 +79,7 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
             return false;
         }
         const UiSkinRegionBinary& packed = *packedResult;
-        if(packed.reserved != 0u || packed.drawMode > static_cast<u32>(UiSkinDrawMode::NineSlice)){
+        if(!IsValidUiSkinRegionBinaryFlags(packed)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
             return false;
         }
@@ -153,7 +131,7 @@ b8 UiSkin::validatePayload()const{
     }
     for(usize index = 0u; index < m_regions.size(); ++index){
         const UiSkinRegion& region = m_regions[index];
-        if(!__hidden_ui_skin_runtime::IsValidRegion(region, m_atlasWidth, m_atlasHeight)){
+        if(!IsValidUiSkinRegion(region, m_atlasWidth, m_atlasHeight)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics"), index, ConvertString(region.name.resolvedText()));
             return false;
         }
@@ -167,12 +145,7 @@ b8 UiSkin::validatePayload()const{
     }
     for(usize index = 0u; index < m_palette.colors.size(); ++index){
         const UiSkinColor& color = m_palette.colors[index];
-        if(
-            !IsFinite(color.r) || !IsValidUiSkinPaletteChannelValue(color.r, 0u)
-            || !IsFinite(color.g) || !IsValidUiSkinPaletteChannelValue(color.g, 1u)
-            || !IsFinite(color.b) || !IsValidUiSkinPaletteChannelValue(color.b, 2u)
-            || !IsFinite(color.a) || !IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
-        ){
+        if(!IsValidUiSkinPaletteColor(color)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
             return false;
         }

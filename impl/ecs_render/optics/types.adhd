@@ -117,6 +117,47 @@ class OpticalBoundsFinalizePushConstants{
     public u32 staticBoundsComplete = 0u;
 }
 
+OpticalBoundsFinalizePushConstants ResolveOpticalBoundsFinalizePushConstants(
+    in u32 sourceSceneSlot,
+    in u32 runtimeInputsSlot,
+    in u32 outputSceneSlot,
+    in u32 instanceCount,
+    in u32 runtimeCount,
+    in b8 staticBoundsComplete
+){
+    OpticalBoundsFinalizePushConstants push;
+    push.sourceSceneSlot = sourceSceneSlot;
+    push.runtimeInputsSlot = runtimeInputsSlot;
+    push.outputSceneSlot = outputSceneSlot;
+    push.instanceCount = instanceCount;
+    push.runtimeCount = runtimeCount;
+    if(staticBoundsComplete)
+        push.staticBoundsComplete = 1u;
+    return push;
+}
+
+b8 CoincidentOpticalVolumeTransformsEqual(
+    in f32x3u lhsPosition,
+    in f32x4u lhsRotation,
+    in f32x3u lhsScale,
+    in f32x3u rhsPosition,
+    in f32x4u rhsRotation,
+    in f32x3u rhsScale
+){
+    return
+        lhsPosition.x == rhsPosition.x
+        && lhsPosition.y == rhsPosition.y
+        && lhsPosition.z == rhsPosition.z
+        && lhsRotation.x == rhsRotation.x
+        && lhsRotation.y == rhsRotation.y
+        && lhsRotation.z == rhsRotation.z
+        && lhsRotation.w == rhsRotation.w
+        && lhsScale.x == rhsScale.x
+        && lhsScale.y == rhsScale.y
+        && lhsScale.z == rhsScale.z
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

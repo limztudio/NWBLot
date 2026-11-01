@@ -18,24 +18,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_builder_asset_writer{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_PublicationDiagnosticTag = "font_builder_publication";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes, const Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch){
     auto fontBinary = BuildPreparedFont(sourceFontBytes, payload, scratch);
     MetadataString metadata(scratch);
@@ -81,7 +63,7 @@ b8 WriteOutputs(const BakeOptions& options, const Span<const u8> sourceFontBytes
         options.overwrite,
         true,
         true,
-        __hidden_font_builder_asset_writer::s_PublicationDiagnosticTag
+        s_PublicationDiagnosticTag
     );
     const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> outputs = { MakeNotNull(&paths.primary), MakeNotNull(&paths.secondary) };
     const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> backups = { MakeNotNull(&paths.primaryBackup), MakeNotNull(&paths.secondaryBackup) };

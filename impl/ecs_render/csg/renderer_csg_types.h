@@ -62,17 +62,8 @@ namespace CsgFrameCacheDetail{
 
 [[nodiscard]] Expected<BinaryByteView> ResolveCsgCutterParameterBytes(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept;
 
-// Call-scoped calculation scratch; retained scene/GPU values use Float storage.
-struct CsgClipWorkBounds{
-    SIMDVectorSingle minBounds = VectorZero();
-    SIMDVectorSingle maxBounds = VectorZero();
-    b8 valid = false;
-
-
-public:
-    // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
-    [[nodiscard]] b8 resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, BinaryByteView parameterBytes, const CsgClipWorkBounds& receiverBounds);
-};
+// False rejects the cutter; accepted bounds with valid=false require full screen coverage.
+[[nodiscard]] b8 ResolveCsgClipWorkBounds(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, BinaryByteView parameterBytes, const CsgClipWorkBounds& receiverBounds, CsgClipWorkBounds& outWorkBounds);
 
 struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;

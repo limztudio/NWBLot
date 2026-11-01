@@ -114,6 +114,12 @@ class UiSkinSelectionState{
     public b8 changeFailed = false;
 }
 
+UiSkinSelectionState MakeUiSkinSelectionState(in AssetRef<UiSkin> requested){
+    UiSkinSelectionState state;
+    state.requested = requested;
+    return state;
+}
+
 enum<u8> UiTextEditStatus{
     Idle,
     Applied,

@@ -112,64 +112,14 @@ namespace __hidden_ui_text_layout{
 
 
 TextHit TextLayout::hitTest(Point point)const noexcept{
-    TextHit hit;
-    if(m_lines.empty() || !IsFinite(point.x) || !IsFinite(point.y))
-        return hit;
-    usize lineIndex = m_lines.size() - 1u;
-    for(usize index = 0u; index < m_lines.size(); ++index){
-        if(point.y < m_lines[index].top + m_lines[index].height){
-            lineIndex = index;
-            break;
-        }
-    }
-    const TextLine& line = m_lines[lineIndex];
-    hit.byteOffset = line.byteBegin;
-    if(line.clusterCount == 0u)
-        return hit;
-    f32 nearest = Limit<f32>::s_Max;
-    for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
-        const TextCluster& cluster = m_clusters[index];
-        const SIMDVectorSingle difference = VectorSubtract(VectorReplicate(point.x), VectorSet(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
-        const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
-        const f32 leadingDistance = VectorGetX(magnitude);
-        const f32 trailingDistance = VectorGetY(magnitude);
-        if(leadingDistance <= nearest){
-            nearest = leadingDistance;
-            hit.byteOffset = cluster.byteBegin;
-        }
-        if(trailingDistance < nearest){
-            nearest = trailingDistance;
-            hit.byteOffset = cluster.byteEnd;
-        }
-    }
-    return hit;
+    return HitTestTextLayout(m_lines, m_clusters, point);
 }
 
 Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept{
-    if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
+    Rect rect;
+    if(!TryResolveTextCaretRect(m_lines, m_clusters, m_direction, byteOffset, edge, rect))
         return MakeUnexpected(Failure{});
-    const TextCluster* alternate = nullptr;
-    for(const TextCluster& cluster : m_clusters){
-        if(edge == TextCaretEdge::Leading ? cluster.byteBegin == byteOffset : cluster.byteEnd == byteOffset){
-            const TextLine& line = m_lines[cluster.lineIndex];
-            return Rect{ edge == TextCaretEdge::Leading ? cluster.leadingX : cluster.trailingX, line.top, 0.0f, line.height };
-        }
-        if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset)
-            alternate = &cluster;
-    }
-    if(alternate){
-        const TextLine& line = m_lines[alternate->lineIndex];
-        const f32 x = alternate->byteBegin == byteOffset ? alternate->leadingX : alternate->trailingX;
-        return Rect{ x, line.top, 0.0f, line.height };
-    }
-    for(const TextLine& line : m_lines){
-        if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
-            const b8 atBegin = byteOffset == line.byteBegin;
-            const f32 x = (atBegin == (m_direction == TextDirection::LeftToRight)) ? 0.0f : line.advance;
-            return Rect{ x, line.top, 0.0f, line.height };
-        }
-    }
-    return MakeUnexpected(Failure{});
+    return rect;
 }
 
 

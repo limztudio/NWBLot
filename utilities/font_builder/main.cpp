@@ -20,7 +20,6 @@ namespace __hidden_font_builder_main{
 
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("font_builder");
 inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[font_builder] logger.init() failed");
-inline constexpr int s_FontBuilderEntryFailure = -1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,7 +29,7 @@ int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
-        return s_FontBuilderEntryFailure;
+        return NWB::FontBuilderUtility::s_FontBuilderEntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 

@@ -199,13 +199,14 @@ public:
         state.setPipeline(resources.pipeline.get());
         commandList.setComputeState(state);
         resources.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *resources.pipeline);
-        OpticalBoundsFinalizePushConstants push;
-        push.sourceSceneSlot = resources.sourceDescriptor.slot();
-        push.runtimeInputsSlot = resources.inputDescriptor.slot();
-        push.outputSceneSlot = resources.outputDescriptor.slot();
-        push.instanceCount = resources.instanceCount;
-        push.runtimeCount = static_cast<u32>(resources.inputs.size());
-        push.staticBoundsComplete = resources.staticBoundsComplete ? 1u : 0u;
+        const OpticalBoundsFinalizePushConstants push = ResolveOpticalBoundsFinalizePushConstants(
+            resources.sourceDescriptor.slot(),
+            resources.inputDescriptor.slot(),
+            resources.outputDescriptor.slot(),
+            resources.instanceCount,
+            static_cast<u32>(resources.inputs.size()),
+            resources.staticBoundsComplete
+        );
         commandList.setPushConstants(&push, sizeof(push));
         {
             Core::GpuTimingMeasure timing(resources.graphics.gpuTiming(), RendererGpuTimingScope::s_OpticalBoundsFinalize, resources.graphics.getDevice(), commandList);

@@ -205,7 +205,7 @@ public:
     [[nodiscard]] virtual SubsystemFieldValueDescriptor fieldDescriptor(const usize index)const noexcept override{
         const auto descriptors = FieldDescriptors();
         NWB_ASSERT(index < descriptors.size());
-        return SubsystemFieldValueDescriptor{ descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray };
+        return MakeSubsystemFieldValueDescriptor(descriptors[index].fieldName, descriptors[index].expectedAssetType, descriptors[index].isArray);
     }
 
     [[nodiscard]] virtual usize fieldValueCount(const usize index)const noexcept override{

@@ -17,10 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value)noexcept{
-    return static_cast<u32>(Clamp(value, 0.0f, 1.0f) * s_MeshletUnorm8Max);
-}
-
 [[nodiscard]] SIMDVectorSingle FoldMeshletConeOctAxis(SIMDVectorSingle axis)noexcept;
 [[nodiscard]] u32 PackMeshletConeOct16(SIMDVectorSingle axis)noexcept;
 [[nodiscard]] SIMDVectorSingle UnpackMeshletConeOct16Axis(u32 conePacked)noexcept;

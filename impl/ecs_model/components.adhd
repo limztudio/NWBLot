@@ -74,6 +74,13 @@ ModelObjectComponent MakeModelObjectComponent(in EntityID owner, in Name model, 
     return out;
 }
 
+ModelAttachmentJointQuery MakeModelAttachmentJointQuery(in EntityID parentEntity, in u32 parentJointIndex){
+    ModelAttachmentJointQuery out;
+    out.parentEntity = parentEntity;
+    out.parentJointIndex = parentJointIndex;
+    return out;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

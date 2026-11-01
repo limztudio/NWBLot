@@ -82,7 +82,7 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_EntityDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, { s_EntityComponentsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, &IsAllowedEntityAssetField))
         return MakeUnexpected(Failure{});
 
     const Core::Metascript::Value* componentsValue = asset.findField(s_EntityComponentsField);
@@ -123,7 +123,7 @@ Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, cons
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ProjectDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, { s_SceneStartSceneField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, &IsAllowedProjectAssetField))
         return MakeUnexpected(Failure{});
 
     const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
@@ -162,7 +162,7 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SceneDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, { s_SceneSubsystemsField, s_SceneEntitiesField, s_SceneAssetsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, &IsAllowedSceneAssetField))
         return MakeUnexpected(Failure{});
 
     const Core::Metascript::Value* subsystemsValue = asset.findField(s_SceneSubsystemsField);

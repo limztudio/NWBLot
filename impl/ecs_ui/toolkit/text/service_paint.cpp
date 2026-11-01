@@ -31,27 +31,10 @@ namespace __hidden_ui_text_service_paint{
 
 
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
-    const f64 left = VectorDoubleGetX(minimum);
-    const f64 top = VectorDoubleGetY(minimum);
-    const f64 right = VectorDoubleGetX(maximum);
-    const f64 bottom = VectorDoubleGetY(maximum);
-    if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < -Limit<f32>::s_Max || top < -Limit<f32>::s_Max || right > Limit<f32>::s_Max || bottom > Limit<f32>::s_Max || right < left || bottom < top)
+    Rect measured;
+    if(!TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum), measured))
         return MakeUnexpected(Failure{});
-    const f32 x = RoundMeasuredTextBound(left, false);
-    const f32 y = RoundMeasuredTextBound(top, false);
-    const SIMDVectorDouble size = VectorDoubleSubtract(VectorDoubleSet(RoundMeasuredTextBound(right, true), RoundMeasuredTextBound(bottom, true), 0.0, 0.0), VectorDoubleSet(x, y, 0.0, 0.0));
-    const f64 width = VectorDoubleGetX(size);
-    const f64 height = VectorDoubleGetY(size);
-    if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
-        return MakeUnexpected(Failure{});
-    const f32 roundedWidth = RoundMeasuredTextBound(width, true);
-    const f32 roundedHeight = RoundMeasuredTextBound(height, true);
-    if(
-        !IsFinite(roundedWidth) || roundedWidth < 0.0f || !IsFinite(roundedHeight) || roundedHeight < 0.0f
-        || !IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight)
-    )
-        return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ VectorDoubleSet(x, y, roundedWidth, roundedHeight) };
+    return SIMDVectorDoubleResult{ VectorDoubleSet(measured.x, measured.y, measured.width, measured.height) };
 }
 
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> LoadSdfSupport(const PlacedGlyph& placed, const BakedFontAtlas& atlas, const f32 fontSize, const DisplayMetrics& display)noexcept{
@@ -132,24 +115,6 @@ namespace __hidden_ui_text_service_paint{
     return MeasuredRectangle(minimum, maximum);
 }
 
-struct RasterMetrics{
-    f32 physicalSize = 0.0f;
-    f32 rasterPpem = 0.0f;
-    f32 rasterScale = 0.0f;
-    u32 pixelSize = 0u;
-};
-
-[[nodiscard]] static Expected<RasterMetrics> ResolveRasterMetrics(const f32 fontSize, const DisplayMetrics& display)noexcept{
-    if(!IsValidTextFontSize(fontSize) || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
-        return MakeUnexpected(Failure{});
-    const f32 physicalSize = fontSize * Max(display.pixelScaleX, display.pixelScaleY);
-    const f32 rasterPpem = Ceil(physicalSize);
-    if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
-        return MakeUnexpected(Failure{});
-    const f32 rasterScale = rasterPpem / fontSize;
-    return RasterMetrics{ physicalSize, rasterPpem, rasterScale, static_cast<u32>(rasterPpem) };
-}
-
 struct PreparedGlyph{
     Rect rectangle;
     Rect uv;
@@ -172,12 +137,12 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
     using namespace __hidden_ui_text_service_paint;
     if(layout.lines().empty())
         return MakeUnexpected(Failure{});
-    const auto rasterMetrics = ResolveRasterMetrics(layout.fontSize(), display);
-    if(!rasterMetrics)
+    TextRasterMetrics rasterMetrics;
+    if(!TryResolveTextRasterMetrics(layout.fontSize(), display, rasterMetrics))
         return MakeUnexpected(Failure{});
-    const f32 physicalSize = rasterMetrics->physicalSize;
-    const f32 rasterScale = rasterMetrics->rasterScale;
-    const u32 pixelSize = rasterMetrics->pixelSize;
+    const f32 physicalSize = rasterMetrics.physicalSize;
+    const f32 rasterScale = rasterMetrics.rasterScale;
+    const u32 pixelSize = rasterMetrics.pixelSize;
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
@@ -220,16 +185,16 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
         minimum = VectorDoubleSelect(minimum, first, VectorDoubleLess(first, minimum));
         maximum = VectorDoubleSelect(maximum, last, VectorDoubleGreater(last, maximum));
     }
-    const auto rectangle = MeasuredRectangle(minimum, maximum);
-    if(!rectangle)
+    Rect measured;
+    if(!TryMakeMeasuredTextRect(VectorDoubleGetX(minimum), VectorDoubleGetY(minimum), VectorDoubleGetX(maximum), VectorDoubleGetY(maximum), measured))
         return MakeUnexpected(Failure{});
-    return Rect{ static_cast<f32>(VectorDoubleGetX(rectangle->value)), static_cast<f32>(VectorDoubleGetY(rectangle->value)), static_cast<f32>(VectorDoubleGetZ(rectangle->value)), static_cast<f32>(VectorDoubleGetW(rectangle->value)) };
+    return measured;
 }
 
 b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
-    const auto rasterMetrics = __hidden_ui_text_service_paint::ResolveRasterMetrics(layout.fontSize(), metrics);
-    if(layout.lines().empty() || !rasterMetrics || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
+    TextRasterMetrics rasterMetrics;
+    if(layout.lines().empty() || !TryResolveTextRasterMetrics(layout.fontSize(), metrics, rasterMetrics) || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
         return false;
     const Rect clip = paint.currentClip();
     const TextGlyphIntersection::Enum clipStatus = TextGlyphVisibility::Intersect(clip, clip);
@@ -237,10 +202,10 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
         return false;
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
-    const f32 physicalSize = rasterMetrics->physicalSize;
-    const f32 rasterPpem = rasterMetrics->rasterPpem;
-    const u32 pixelSize = rasterMetrics->pixelSize;
-    const f32 rasterScale = rasterMetrics->rasterScale;
+    const f32 physicalSize = rasterMetrics.physicalSize;
+    const f32 rasterPpem = rasterMetrics.rasterPpem;
+    const u32 pixelSize = rasterMetrics.pixelSize;
+    const f32 rasterScale = rasterMetrics.rasterScale;
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);

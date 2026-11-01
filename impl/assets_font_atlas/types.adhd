@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const u32 s_FontAtlasMaxGlyphCount = 65535u;
 const u32 s_FontAtlasMaxGroupCount = 8u;
 const u32 s_FontAtlasMaxChannelCount = 4u;
@@ -35,6 +41,7 @@ const u32 s_FontAtlasBinaryTableHeaderBytes = 40u;
 const u32 s_FontAtlasQwordHighWordShift = 32u;
 
 const usize s_FontAtlasOccupiedWordLastBit = 63u;
+const usize s_FontAtlasBitsPerOccupiedWord = 64u;
 const f32 s_FontAtlasGlyphPlaneSizeRelativeTolerance = 0.0001f;
 
 const Name s_AssetsFontAtlasLoadBinaryArena = "impl/assets_font_atlas/load_binary";
@@ -158,6 +165,112 @@ b8 IsValidNondrawableFontAtlasGlyph(in FontAtlasGlyph glyph){
         && glyph.planeRight == 0.0f
         && glyph.planeBottom == 0.0f
     ;
+}
+
+f32 ComputeFontAtlasUnitsPerPixel(in u32 unitsPerEm, in u32 bakePpem){
+    return cast<f32>(unitsPerEm) / cast<f32>(bakePpem);
+}
+
+void ComputeFontAtlasGlyphPlaneBounds(in f32 unitsPerPixel, mut FontAtlasGlyph inOutGlyph){
+    inOutGlyph.planeRight = inOutGlyph.planeLeft + cast<f32>(inOutGlyph.width) * unitsPerPixel;
+    inOutGlyph.planeBottom = inOutGlyph.planeTop + cast<f32>(inOutGlyph.height) * unitsPerPixel;
+    inOutGlyph.drawable = 1u;
+}
+
+b8 IsValidFontAtlasGlyphPlaneBounds(in FontAtlasGlyph glyph, in f32 unitsPerPixel){
+    const f32 expectedWidth = cast<f32>(glyph.width) * unitsPerPixel;
+    const f32 expectedHeight = cast<f32>(glyph.height) * unitsPerPixel;
+    const f32 planeWidth = glyph.planeRight - glyph.planeLeft;
+    const f32 planeHeight = glyph.planeBottom - glyph.planeTop;
+    return
+        abs(planeWidth - expectedWidth) <= expectedWidth * s_FontAtlasGlyphPlaneSizeRelativeTolerance
+        && abs(planeHeight - expectedHeight) <= expectedHeight * s_FontAtlasGlyphPlaneSizeRelativeTolerance
+    ;
+}
+
+b8 IsValidFontAtlasGroupDimensions(in u32 width, in u32 height, in u32 channelCount){
+    return
+        width > 0u
+        && width <= s_FontAtlasMaxExtent
+        && height > 0u
+        && height <= s_FontAtlasMaxExtent
+        && channelCount > 0u
+        && channelCount <= s_FontAtlasMaxChannelCount
+    ;
+}
+
+b8 TryComputeFontAtlasOccupancyWordCount(in u32 width, in u32 height, in u32 channelCount, mut usize outWordCount){
+    if(!IsValidFontAtlasGroupDimensions(width, height, channelCount))
+        return false;
+    const usize totalBits = cast<usize>(width) * cast<usize>(height) * cast<usize>(channelCount);
+    outWordCount = (totalBits + s_FontAtlasOccupiedWordLastBit) / s_FontAtlasBitsPerOccupiedWord;
+    return true;
+}
+
+b8 IsValidFontAtlasBakeParameters(in u32 bakePpem, in u32 spreadPixels, in u32 guardTexels, in FontAtlasRasterMode rasterMode){
+    return
+        bakePpem >= s_FontAtlasMinBakePpem
+        && bakePpem <= s_FontAtlasMaxBakePpem
+        && spreadPixels >= s_FontAtlasMinSpreadPixels
+        && spreadPixels <= s_FontAtlasMaxSpreadPixels
+        && guardTexels == s_FontAtlasDefaultGuardTexels
+        && cast<u32>(rasterMode) <= cast<u32>(FontAtlasRasterMode::Bitmap)
+    ;
+}
+
+b8 IsAllowedFontAtlasMetadataField(in StringView field){
+    return
+        field == s_FontAtlasMetaFontField
+        || field == s_FontAtlasBakePpemField
+        || field == s_FontAtlasSpreadPixelsField
+        || field == s_FontAtlasRasterModeField
+        || field == s_FontAtlasAscenderUnitsField
+        || field == s_FontAtlasDescenderUnitsField
+        || field == s_FontAtlasLineGapUnitsField
+        || field == s_FontAtlasGlyphsField
+    ;
+}
+
+b8 IsFontAtlasPositioningTableTag(in u32 tag){
+    return tag == s_FontAtlasKernTag || tag == s_FontAtlasGposTag || tag == s_FontAtlasGdefTag;
+}
+
+b8 TryReadFontFaceMetricsFromSfnt(in Span<u8> fontBytes, mut u32 outUnitsPerEm, mut u32 outSourceGlyphCount){
+    FontSfntDirectory directory;
+    if(!ReadFontSfntDirectory(fontBytes, directory))
+        return false;
+    u32 unitsPerEm = 0u;
+    u32 sourceGlyphCount = 0u;
+    b8 hasHead = false;
+    b8 hasMaxp = false;
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        FontSfntTable table;
+        if(!directory.table(cast<usize>(index), table))
+            return false;
+        if(table.tag == s_FontSfntHeadTag){
+            if(table.bytes.size() < s_FontSfntHeadUnitsPerEmOffset + s_FontSfntU16Bytes)
+                return false;
+            unitsPerEm = cast<u32>(ReadFontSfntU16BigEndian(table.bytes, s_FontSfntHeadUnitsPerEmOffset));
+            hasHead = true;
+        }
+        else if(table.tag == s_FontSfntMaxpTag){
+            if(table.bytes.size() < s_FontSfntMaxpGlyphCountOffset + s_FontSfntU16Bytes)
+                return false;
+            sourceGlyphCount = cast<u32>(ReadFontSfntU16BigEndian(table.bytes, s_FontSfntMaxpGlyphCountOffset));
+            hasMaxp = true;
+        }
+    }
+    if(
+        !hasHead
+        || !hasMaxp
+        || unitsPerEm < s_FontAtlasMinUnitsPerEm
+        || unitsPerEm > s_FontAtlasMaxUnitsPerEm
+        || sourceGlyphCount == 0u
+    )
+        return false;
+    outUnitsPerEm = unitsPerEm;
+    outSourceGlyphCount = sourceGlyphCount;
+    return true;
 }
 
 

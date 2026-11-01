@@ -26,8 +26,6 @@ namespace __hidden_dependency_provider_catalog{
 
 namespace Assets = Core::Assets;
 
-inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,7 +63,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 
 b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
-    const AStringView repoText = options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot);
+    const AStringView repoText = options.repoRoot.empty() ? s_DefaultRepoRoot : AStringView(options.repoRoot);
     const auto absoluteRoot = AbsolutePath(Path(m_arena, repoText));
     if(!absoluteRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve repository root"));
@@ -183,9 +181,9 @@ Expected<usize> DependencyProviderCatalog::resolve(
     const AStringView virtualPathText = !virtualPathTextHint.empty() ? virtualPathTextHint : virtualPath.resolvedText();
     const Optional<Name> parentVirtualPath = ExtractParentVirtualPath(virtualPathText);
 
-    usize matched = Limit<usize>::s_Max;
+    usize matched = s_InvalidProviderIndex;
     const auto recordMatch = [&](const usize index) -> b8{
-        if(matched != Limit<usize>::s_Max && matched != index){
+        if(matched != s_InvalidProviderIndex && matched != index){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), ConvertString(virtualPath));
             return false;
         }
@@ -276,7 +274,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
         }
     }
 
-    if(matched == Limit<usize>::s_Max){
+    if(matched == s_InvalidProviderIndex){
         if(assetType)
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no typed '{}' provider for '{}'"), ConvertString(assetType), ConvertString(virtualPathText));
         else

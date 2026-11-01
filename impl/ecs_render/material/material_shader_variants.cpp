@@ -20,35 +20,11 @@ namespace ECSRenderMaterialShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView VariantSegmentDefineName(const AStringView segment)noexcept{
-    const usize equalPos = segment.find('=');
-    return equalPos == AStringView::npos ? AStringView{} : segment.substr(0u, equalPos);
-}
-
 Expected<AStringView> FindVariantDefineAssignment(const AStringView variant, const AStringView defineName)noexcept{
-    if(variant.empty() || defineName.empty() || variant == Core::ShaderArchive::s_DefaultVariant)
+    AStringView assignment;
+    if(!TryFindVariantDefineAssignment(variant, defineName, Core::ShaderArchive::s_DefaultVariant, assignment))
         return MakeUnexpected(Failure{});
-
-    usize begin = 0u;
-    while(begin < variant.size()){
-        usize segmentEnd = variant.find(';', begin);
-        if(segmentEnd == AStringView::npos)
-            segmentEnd = variant.size();
-
-        const AStringView segment = variant.substr(begin, segmentEnd - begin);
-        const AStringView segmentDefineName = VariantSegmentDefineName(segment);
-        if(segmentDefineName.empty())
-            return MakeUnexpected(Failure{});
-        if(segmentDefineName == defineName){
-            const usize valueBegin = segmentDefineName.size() + 1u;
-            if(valueBegin >= segment.size())
-                return MakeUnexpected(Failure{});
-            return segment;
-        }
-
-        begin = segmentEnd + 1u;
-    }
-    return MakeUnexpected(Failure{});
+    return assignment;
 }
 
 Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const Span<const ShaderVariantDefineAssignment> defineAssignments){

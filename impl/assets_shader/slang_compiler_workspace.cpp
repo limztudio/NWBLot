@@ -64,7 +64,13 @@ SlangCompilerWorkspace::ScopedDirectoryCleanupGuard::~ScopedDirectoryCleanupGuar
         return;
 
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("ShaderCook: failed to remove temporary compiler directory '{}', error {}", m_path.c_str(), removed.error().value());
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = ShaderBinaryPayload::s_SlangWorkspaceDiagnosticWarningEventName, .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = ShaderBinaryPayload::s_SlangWorkspaceDiagnosticWarningEventName,
+        .category = ShaderBinaryPayload::s_SlangWorkspaceCleanupDiagnosticCategory,
+        .message = diagnostic.view(),
+        .file = __FILE__,
+        .line = __LINE__,
+    });
 }
 
 
@@ -84,8 +90,8 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateComp
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler temporary sequence overflow"));
             return MakeUnexpected(Failure{});
         }
-        ScratchString directoryName(".nwb_shader_", scratchArena);
-        directoryName.reserve(directoryName.size() + 2u * sizeof(u64) * 2u + 1u);
+        ScratchString directoryName(ShaderBinaryPayload::s_ShaderWorkspacePrefix, scratchArena);
+        directoryName.reserve(directoryName.size() + ShaderBinaryPayload::s_ShaderWorkspaceHexPidAndSeqReserveBytes);
         AppendHexU64(CurrentProcessId(), directoryName);
         directoryName += '_';
         AppendHexU64(sequence, directoryName);
@@ -101,7 +107,7 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateComp
 }
 
 Expected<usize> SlangCompilerWorkspace::CompilerPathTextCapacity(const ScratchPath& path){
-    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<ScratchPath::value_type, char> ? 1u : 4u;
+    constexpr usize s_MaxEncodedBytesPerUnit = IsSame_V<ScratchPath::value_type, char> ? ShaderBinaryPayload::s_MaxEncodedPathBytesPerCharUnit : ShaderBinaryPayload::s_MaxEncodedPathBytesPerWideUnit;
     if(path.native().size() > Limit<usize>::s_Max / s_MaxEncodedBytesPerUnit){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler path text exceeds representable size"));
         return MakeUnexpected(Failure{});

@@ -76,7 +76,6 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> reflectionHardwareReads{scratchArena};
     // Scene shading and lights follow the scene reads.
-    constexpr usize s_ReflectionExtraHardwareReadCapacity = 2u;
     reflectionHardwareReads.reserve(sceneReads.uses.size() + sceneReads.csgUses.size() + s_ReflectionExtraHardwareReadCapacity);
     if(sceneReads.valid()){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
@@ -86,7 +85,6 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
         reflectionHardwareReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         reflectionHardwareReads.push_back(ReadUse(lights));
     }
-    constexpr usize s_ReflectionResourceSetUseCapacity = 2u;
     Array<Core::GpuTaskResourceSetUse, s_ReflectionResourceSetUseCapacity> reflectionSets{};
     usize reflectionSetCount = 0u;
     for(const Core::GpuGraphResourceSetId set : {hardwareTraceGeometrySet, traceMaterialSampledTextureSet}){
@@ -108,11 +106,11 @@ Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare
     if(!reflectionGraphResult)
         return MakeUnexpected(Failure{});
     result.reflectionGraph = Move(*reflectionGraphResult);
-    result.reflectionCompositeInputs = ReflectionCompositeInputs{
-        .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot,
-        .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot,
-        .debugView = reflectionSettings.debugView,
-    };
+    result.reflectionCompositeInputs = MakeReflectionCompositeInputs(
+        reflectionResources.parameters.opaqueRadianceSlot,
+        reflectionResources.parameters.glassRadianceSlot,
+        reflectionSettings.debugView
+    );
     return result;
 }
 

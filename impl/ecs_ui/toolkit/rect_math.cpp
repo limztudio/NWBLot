@@ -45,13 +45,6 @@ SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(const SIMDVectorSingle rectangle, 
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }
 
-Insets MaxUiPadding(const Insets& lhs, const Insets& rhs)noexcept{
-    const SIMDVectorSingle first = VectorSet(lhs.left, lhs.top, lhs.right, lhs.bottom);
-    const SIMDVectorSingle second = VectorSet(rhs.left, rhs.top, rhs.right, rhs.bottom);
-    const SIMDVectorSingle maximum = VectorSelect(second, first, VectorGreater(first, second));
-    return { VectorGetX(maximum), VectorGetY(maximum), VectorGetZ(maximum), VectorGetW(maximum) };
-}
-
 b8 AreUiMatrixRowsFinite(const SIMDMatrixDouble& values, const u32 rowCount)noexcept{
     for(u32 index = 0u; index < rowCount; ++index){
         if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)

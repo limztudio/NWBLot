@@ -80,6 +80,15 @@ UiSkinInsets MakeUiSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bott
     return insets;
 }
 
+UiSkinColor MakeUiSkinColor(in f32 r, in f32 g, in f32 b, in f32 a){
+    UiSkinColor color;
+    color.r = r;
+    color.g = g;
+    color.b = b;
+    color.a = a;
+    return color;
+}
+
 // Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
 [reflect]
 class UiSkinRect{
@@ -310,6 +319,14 @@ b8 IsAllowedUiSkinRegionField(in StringView field, in b8 hasSlice){
     ;
 }
 
+b8 IsAllowedUiSkinPaletteRoleField(in StringView field){
+    return field == s_UiSkinNameField || field == s_UiSkinRgbaField;
+}
+
+b8 IsAllowedUiSkinTypographyField(in StringView field){
+    return field == s_UiSkinDefaultFontSizeField;
+}
+
 u64 ResolveUiSkinColorRole(in StringView name){
     if(name == "text.normal")
         return cast<u64>(UiSkinColorRole::TextNormal);
@@ -369,6 +386,83 @@ b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRect rectangle, in UiSkinSliceInset
     if(drawMode == UiSkinDrawMode::NineSlice)
         return cast<u64>(slice.left) + cast<u64>(slice.right) <= cast<u64>(rectangle.width) && cast<u64>(slice.top) + cast<u64>(slice.bottom) <= cast<u64>(rectangle.height);
     return false;
+}
+
+b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
+    return isFinite(color.r) && IsValidUiSkinPaletteChannelValue(color.r, 0u)
+        && isFinite(color.g) && IsValidUiSkinPaletteChannelValue(color.g, 1u)
+        && isFinite(color.b) && IsValidUiSkinPaletteChannelValue(color.b, 2u)
+        && isFinite(color.a) && IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
+    ;
+}
+
+b8 IsValidUiSkinHeaderFlags(in UiSkinHeaderBinary header){
+    return header.reserved0 == 0u && header.reserved1 == 0u;
+}
+
+b8 IsValidUiSkinRegionBinaryFlags(in UiSkinRegionBinary packed){
+    return packed.reserved == 0u && packed.drawMode <= cast<u32>(UiSkinDrawMode::NineSlice);
+}
+
+b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
+    if(region.name == s_NameNone || region.name == Name(""))
+        return false;
+    if(!IsValidUiSkinRegionRectAndSlices(region.rectangle, region.sliceInsets, region.drawMode, atlasWidth, atlasHeight))
+        return false;
+
+    const UiSkinInsets padding = region.padding;
+    if(
+        !isFinite(padding.left) || padding.left < 0.0f
+        || !isFinite(padding.top) || padding.top < 0.0f
+        || !isFinite(padding.right) || padding.right < 0.0f
+        || !isFinite(padding.bottom) || padding.bottom < 0.0f
+    )
+        return false;
+
+    const f32 paddingHorizontal = padding.left + padding.right;
+    const f32 paddingVertical = padding.top + padding.bottom;
+    return isFinite(paddingHorizontal)
+        && isFinite(paddingVertical)
+        && isFinite(region.minimumWidth) && region.minimumWidth >= 0.0f
+        && isFinite(region.minimumHeight) && region.minimumHeight >= 0.0f
+    ;
+}
+
+b8 TryFindUiSkinRegionIndex(
+    in Span<UiSkinRegion> regions,
+    in Span<u32> regionIndex,
+    in Name name,
+    mut usize outIndex
+){
+    if(regions.size() <= s_UiSkinLinearLookupRegionLimit || regions.size() > s_UiSkinMaxRegionCount){
+        for(usize i = 0u; i < regions.size(); ++i){
+            if(regions[i].name == name){
+                outIndex = i;
+                return true;
+            }
+        }
+        return false;
+    }
+    usize first = 0u;
+    usize count = regionIndex.size();
+    while(count > 0u){
+        const usize step = count / 2u;
+        const usize middle = first + step;
+        const usize regionPosition = cast<usize>(regionIndex[middle]);
+        if(regions[regionPosition].name < name){
+            first = middle + 1u;
+            count -= step + 1u;
+        }
+        else
+            count = step;
+    }
+    if(first == regionIndex.size())
+        return false;
+    const usize matchedPosition = cast<usize>(regionIndex[first]);
+    if(regions[matchedPosition].name != name)
+        return false;
+    outIndex = matchedPosition;
+    return true;
 }
 
 UiSkinHeaderBinary BuildUiSkinHeaderBinary(in NameHash textureNameHash, in u32 atlasWidth, in u32 atlasHeight, in f32 referenceDensity, in u32 regionCount){
@@ -454,6 +548,62 @@ UiSkinTypography UnpackUiSkinTypographyBinary(in UiSkinTypographyBinary packed){
     UiSkinTypography typography;
     typography.defaultFontSize = packed.defaultFontSize;
     return typography;
+}
+
+f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region){
+    return max(minimumExtent, max(region.minimumWidth, region.minimumHeight));
+}
+
+f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f32 density){
+    const f32 sourceExtent = cast<f32>(max(region.rectangle.width, region.rectangle.height)) / density;
+    return max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
+}
+
+b8 TryLoadUiSkinSliceExtents(in UiSkinRegion region, mut f64x4 outSliceExtents){
+    outSliceExtents = f64x4(0.0, 0.0, 0.0, 0.0);
+    if(region.rectangle.width == 0u || region.rectangle.height == 0u)
+        return false;
+    const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
+    const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
+    if(region.drawMode == UiSkinDrawMode::Sprite){
+        if(horizontal != 0u || vertical != 0u)
+            return false;
+    }
+    else if(region.drawMode == UiSkinDrawMode::NineSlice){
+        if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
+            return false;
+    }
+    else
+        return false;
+    outSliceExtents = f64x4(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
+    return true;
+}
+
+b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 sliceExtents, in f64x4 density, mut f32x4 outMinimumSize){
+    outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    if(!isFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !isFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
+        return false;
+    const f64 maxFloatF64 = cast<f64>(f32.max);
+    const f64x2 minimumSize(cast<f64>(region.minimumWidth), cast<f64>(region.minimumHeight));
+    const f64x2 scaledSlices = f64x2(sliceExtents.x, sliceExtents.y) / f64x2(density.x, density.y);
+    const f64x2 widthHeight = max(minimumSize, scaledSlices);
+    if(!isFinite(widthHeight.x) || widthHeight.x > maxFloatF64 || !isFinite(widthHeight.y) || widthHeight.y > maxFloatF64)
+        return false;
+    outMinimumSize = f32x4(cast<f32>(widthHeight.x), cast<f32>(widthHeight.y), 0.0f, 0.0f);
+    return true;
+}
+
+b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 density, mut f32x4 outMinimumSize){
+    f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
+    if(!TryLoadUiSkinSliceExtents(region, sliceExtents)){
+        outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        return false;
+    }
+    return TryLoadUiSkinMinimumSize(region, sliceExtents, density, outMinimumSize);
+}
+
+b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density, mut f32x4 outMinimumSize){
+    return TryLoadUiSkinMinimumSize(region, f64x4(density, density, 0.0, 0.0), outMinimumSize);
 }
 
 [subsystem("ui_subsystem")]

@@ -37,10 +37,10 @@ public:
 
     [[nodiscard]] b8 hasPreferredX()const noexcept{ return m_valid; }
     [[nodiscard]] EditNavigationSnapshot snapshot()const noexcept{
-        return { m_instanceGeneration, m_generation, m_preferredX, m_valid };
+        return EditNavigationSnapshot(m_instanceGeneration, m_generation, m_preferredX, m_valid);
     }
     [[nodiscard]] b8 matches(const EditNavigationSnapshot& snapshot)const noexcept{
-        return snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid;
+        return snapshot == this->snapshot();
     }
     [[nodiscard]] b8 setPreferredX(f32 preferredX)noexcept;
     void reset()noexcept;

@@ -92,6 +92,78 @@ PopupPlacementSide OppositePopupPlacementSide(in PopupPlacementSide side){
     }
 }
 
+void ApplySkinPaletteToPopupStyle(in UiSkinPalette palette, mut PopupStyle style){
+    style.backdrop = ResolveUiSkinColor(palette, UiSkinColorRole::PopupBackdrop);
+}
+
+b8 TryPlacePopup(in PopupOptions options, in DisplayMetrics display, mut PopupPlacement outPlacement){
+    outPlacement = PopupPlacement();
+    if(!IsValidPopupOptions(options, display))
+        return false;
+    const f32 width = min(options.size.x, display.logicalWidth);
+    const f32 height = min(options.size.y, display.logicalHeight);
+    PopupPlacementSide side = options.side;
+    if(side != PopupPlacementSide::Center){
+        const b8 vertical = side == PopupPlacementSide::Below || side == PopupPlacementSide::Above;
+        f64 required = cast<f64>(width);
+        f64 anchorOrigin = cast<f64>(options.anchor.x);
+        f64 anchorExtent = cast<f64>(options.anchor.width);
+        f64 displayExtent = cast<f64>(display.logicalWidth);
+        if(vertical){
+            required = cast<f64>(height);
+            anchorOrigin = cast<f64>(options.anchor.y);
+            anchorExtent = cast<f64>(options.anchor.height);
+            displayExtent = cast<f64>(display.logicalHeight);
+        }
+        const f64 forwardDist = (displayExtent - anchorOrigin - anchorExtent) - cast<f64>(options.gap);
+        const f64 backwardDist = anchorOrigin - cast<f64>(options.gap);
+        const f64 forwardRoom = clamp(forwardDist, 0.0, displayExtent);
+        const f64 backwardRoom = clamp(backwardDist, 0.0, displayExtent);
+        const b8 forward = side == PopupPlacementSide::Below || side == PopupPlacementSide::Right;
+        f64 preferredRoom = backwardRoom;
+        f64 oppositeRoom = forwardRoom;
+        if(forward){
+            preferredRoom = forwardRoom;
+            oppositeRoom = backwardRoom;
+        }
+        if(preferredRoom < required){
+            const PopupPlacementSide opposite = OppositePopupPlacementSide(side);
+            if(oppositeRoom >= required || oppositeRoom > preferredRoom)
+                side = opposite;
+        }
+    }
+    f64 originX = cast<f64>(options.anchor.x);
+    f64 originY = cast<f64>(options.anchor.y);
+    switch(side){
+    case PopupPlacementSide::Below:
+        originY = originY + (cast<f64>(options.anchor.height) + cast<f64>(options.gap));
+        break;
+    case PopupPlacementSide::Above:
+        originY = originY - (cast<f64>(options.gap) + cast<f64>(height));
+        break;
+    case PopupPlacementSide::Right:
+        originX = originX + (cast<f64>(options.anchor.width) + cast<f64>(options.gap));
+        break;
+    case PopupPlacementSide::Left:
+        originX = originX - (cast<f64>(options.gap) + cast<f64>(width));
+        break;
+    case PopupPlacementSide::Center:
+        originX = (cast<f64>(display.logicalWidth) - cast<f64>(width)) * 0.5;
+        originY = (cast<f64>(display.logicalHeight) - cast<f64>(height)) * 0.5;
+        break;
+    }
+    const f64 maxX = cast<f64>(display.logicalWidth) - cast<f64>(width);
+    const f64 maxY = cast<f64>(display.logicalHeight) - cast<f64>(height);
+    const f32 x = cast<f32>(clamp(originX, 0.0, maxX));
+    const f32 y = cast<f32>(clamp(originY, 0.0, maxY));
+    if(!isFinite(x + width) || !isFinite(y + height))
+        return false;
+    outPlacement.bounds = Rect(x, y, width, height);
+    outPlacement.viewport = Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
+    outPlacement.side = side;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

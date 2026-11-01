@@ -13,6 +13,9 @@ target_sources(nwb_dependency_computer PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
+nwb_target_adhd_sources(nwb_dependency_computer NAMESPACE "NWB::Pipeline::DependencyComputer" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/constants.adhd"
+)
 nwb_target_link_libraries_whole_archive(nwb_dependency_computer
     nwb_assets_bunch_cook
     nwb_assets_csg_volume_entry

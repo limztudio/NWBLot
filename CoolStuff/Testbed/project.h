@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 #include "ui_skin_preview.h"
 
 #include <loader/project_entry.h>
@@ -27,7 +28,6 @@ TESTBED_BEGIN
 
 #define TESTBED_WINDOW_TITLE "NWB Testbed"
 
-inline constexpr StringView s_WindowTitleText = TESTBED_WINDOW_TITLE;
 inline constexpr TStringView s_WindowTitle = NWB_TEXT(TESTBED_WINDOW_TITLE);
 
 

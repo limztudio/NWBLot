@@ -387,6 +387,25 @@ const StringView s_RendererFrameTitle = "Renderer Frame";
 const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
 const f64 s_PercentScaleTelemetry = 100.0;
 
+const usize s_CsgReceiverSpanResourceUseCapacity = 6u;
+const usize s_CsgIntervalCombineResourceUseCapacity = 11u;
+const usize s_OpaqueDrawResourceUseCount = 8u;
+const usize s_NoOpaqueDrawResourceUseCount = 6u;
+const usize s_OpaqueCsgFrameResourceUseCount = 5u;
+const usize s_GbufferMaterialResourceSetUseCapacity = 4u;
+const usize s_NormalizeResourceUseCapacity = 9u;
+
+const StringView s_PassAvboitDepthWarpName = "render.avboit.depth_warp";
+const StringView s_PassAvboitDepthWarpLabel = "AVBOIT Depth Warp";
+const StringView s_PassAvboitExtinctionName = "render.avboit.extinction";
+const StringView s_PassAvboitExtinctionLabel = "AVBOIT Extinction";
+const StringView s_PassAvboitIntegrationLabel = "AVBOIT Integration";
+const StringView s_PassTransparentCsgIntervalsLabel = "Transparent CSG Intervals";
+const StringView s_PassShadowVisibilityLabel = "Shadow Visibility";
+const StringView s_PassDeferredLightingLabel = "Deferred Lighting";
+const StringView s_PassDeferredCompositeLabel = "Deferred Composite";
+const StringView s_PassDeferredPresentLabel = "Deferred Present";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

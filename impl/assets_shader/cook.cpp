@@ -98,11 +98,7 @@ static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseD
             return MakeUnexpected(Failure{});
         }
         for(const CookString& defineValue : defineValues){
-            const AStringView valueView(defineValue);
-            if(valueView.empty() || TrimView(valueView) != valueView || FindIf(valueView.begin(), valueView.end(), [](const char ch)noexcept{
-                return ch == ';' || ch == '\0' || ch == '\r' || ch == '\n';
-            }
-            ) != valueView.end()){
+            if(!IsValidShaderDefineValueText(AStringView(defineValue))){
                 NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace"), PathToString<tchar>(nwbFilePath), ConvertString(defineName));
                 return MakeUnexpected(Failure{});
             }
@@ -305,7 +301,7 @@ Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(const Path& nwbF
         return MakeUnexpected(assetValue.error());
     const Metascript::Value& asset = **assetValue;
 
-    if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_IncludeMetaDiagnosticPrefix, { s_ShaderDefinesField }))
+    if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_IncludeMetaDiagnosticPrefix, &IsAllowedIncludeMetadataField))
         return MakeUnexpected(Failure{});
     auto defines = __hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena);
     if(!defines)

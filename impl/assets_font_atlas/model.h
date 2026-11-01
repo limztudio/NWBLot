@@ -84,25 +84,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr f32 ComputeFontAtlasUnitsPerPixel(const u32 unitsPerEm, const u32 bakePpem)noexcept{
-    return static_cast<f32>(unitsPerEm) / static_cast<f32>(bakePpem);
-}
-
-constexpr void ComputeFontAtlasGlyphPlaneBounds(const f32 unitsPerPixel, FontAtlasGlyph& inOutGlyph)noexcept{
-    inOutGlyph.planeRight = inOutGlyph.planeLeft + static_cast<f32>(inOutGlyph.width) * unitsPerPixel;
-    inOutGlyph.planeBottom = inOutGlyph.planeTop + static_cast<f32>(inOutGlyph.height) * unitsPerPixel;
-    inOutGlyph.drawable = 1u;
-}
-
-[[nodiscard]] constexpr b8 IsValidFontAtlasGlyphPlaneBounds(const FontAtlasGlyph& glyph, const f32 unitsPerPixel)noexcept{
-    const f32 expectedWidth = static_cast<f32>(glyph.width) * unitsPerPixel;
-    const f32 expectedHeight = static_cast<f32>(glyph.height) * unitsPerPixel;
-    const f32 planeWidth = glyph.planeRight - glyph.planeLeft;
-    const f32 planeHeight = glyph.planeBottom - glyph.planeTop;
-    return Abs(planeWidth - expectedWidth) <= expectedWidth * s_FontAtlasGlyphPlaneSizeRelativeTolerance
-        && Abs(planeHeight - expectedHeight) <= expectedHeight * s_FontAtlasGlyphPlaneSizeRelativeTolerance;
-}
-
 [[nodiscard]] b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
 [[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(Span<const u8> fontBytes, u32 faceIndex, u32 sourceGlyphCount, b8 validateSource, Core::Assets::AssetArena& arena);

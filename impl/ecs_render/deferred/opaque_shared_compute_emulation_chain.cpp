@@ -19,28 +19,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_opaque_shared_compute_emulation_chain{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr usize s_RasterResourceUseCapacity = 9u;
-constexpr usize s_ResourceSetUseCapacity = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationChainBuilder::declare(const OpaqueSharedComputeEmulationChainInputs& inputs, Core::Alloc::ScratchArena& scratchArena, const Span<Core::GpuTaskId> tasks){
     using namespace RendererTaskGraphDetail;
-    using namespace __hidden_opaque_shared_compute_emulation_chain;
     using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;
 
     const DeferredGraphResourceImportResult& resources = inputs.resources;
@@ -52,7 +32,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     };
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> rasterResourceUses{ scratchArena };
-    rasterResourceUses.reserve(inputs.objectGeometryReads.size() + s_RasterResourceUseCapacity);
+    rasterResourceUses.reserve(inputs.objectGeometryReads.size() + s_OpaqueSharedRasterResourceUseCapacity);
     rasterResourceUses.insert(rasterResourceUses.end(), inputs.objectGeometryReads.begin(), inputs.objectGeometryReads.end());
     rasterResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange));
@@ -64,7 +44,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     rasterResourceUses.push_back(ReadWriteUse(resources.specularRoughness, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.depth, Core::ResourceStates::DepthWrite));
 
-    Array<Core::GpuTaskResourceSetUse, s_ResourceSetUseCapacity> resourceSetUses = {};
+    Array<Core::GpuTaskResourceSetUse, s_OpaqueSharedResourceSetUseCapacity> resourceSetUses = {};
     usize resourceSetUseCount = 0u;
     resourceSetUses[resourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid())

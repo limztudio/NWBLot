@@ -172,23 +172,19 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultF
             break;
         }
         if(resolvedLight){
-            SceneLight& destination = outLights[count];
-            StoreFloat(resolvedLight->v[0], destination.position);
-            StoreFloat(resolvedLight->v[1], destination.direction);
-            StoreFloat(colorIntensity, destination.colorIntensity);
-            destination.range = light.type == LightType::Directional ? 0.0f : light.range;
-            destination.angularRadius = light.angularRadius;
-            destination.sourceRadius = light.sourceRadius;
-            destination.type = light.type;
-            destination.enableCaustics = light.enableCaustics;
+            Float4 position;
+            Float4 direction;
+            StoreFloat(resolvedLight->v[0], position);
+            StoreFloat(resolvedLight->v[1], direction);
+            outLights[count] = MakeSceneLight(position, direction, light);
             ++count;
         }
     }
 
     if(count == 0u){
-        outLights[0] = SceneLight{};
-        StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(defaultForward), outLights[0].direction);
-        StoreFloat(s_SIMDOne, outLights[0].colorIntensity);
+        Float4 direction;
+        StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(defaultForward), direction);
+        outLights[0] = MakeDefaultSceneLight(direction);
         count = 1u;
     }
 

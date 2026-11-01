@@ -428,10 +428,9 @@ b8 RendererAvboitSystem::appendTaskGraphTimingTickets(
         return false;
 
     // Depth warp, extinction, integration, and accumulation tickets.
-    constexpr usize s_TransparentTimingTicketCount = 4u;
     usize requiredBindingCount = 1u;
     if(validation.stage().hasTransparentTasks){
-        requiredBindingCount += s_TransparentTimingTicketCount;
+        requiredBindingCount += s_AvboitTransparentTimingTicketCount;
         if(m_taskGraphStage.m_extinctionComputeEmulationTask.valid())
             ++requiredBindingCount;
         if(m_taskGraphStage.m_accumulationComputeEmulationTask.valid())

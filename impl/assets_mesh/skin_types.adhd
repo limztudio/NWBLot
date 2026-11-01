@@ -84,6 +84,26 @@ b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJ
     return skeletonJointCount != 0u && inverseBindMatrixCount == cast<usize>(skeletonJointCount);
 }
 
+b8 IsAllowedSkinMetadataField(in StringView fieldName){
+    return
+        fieldName == s_SkinMetaMeshField
+        || fieldName == s_SkinMetaSkeletonField
+        || fieldName == s_SkinInfluencesField
+        || fieldName == s_SkinInverseBindMatricesField
+    ;
+}
+
+b8 TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount, mut usize outComponentIndex){
+    for(usize componentIndex = 0u; componentIndex < cast<usize>(s_SkinInfluenceJointCount); ++componentIndex){
+        if(cast<u32>(skin.joint[componentIndex]) < skeletonJointCount)
+            continue;
+
+        outComponentIndex = componentIndex;
+        return true;
+    }
+    return false;
+}
+
 [subsystem("skinning_subsystem")]
 class SkinningSubsystem{
     public AssetRef<ComputeShader> localBoundsCs;

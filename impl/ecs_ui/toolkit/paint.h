@@ -93,16 +93,6 @@ private:
 
 
 class PaintBuilder final : NoCopy{
-private:
-    [[nodiscard]] static constexpr b8 IsValidUvRect(const Rect& uv)noexcept{
-        return
-            IsFinite(uv.x) && IsFinite(uv.y) && IsFinite(uv.width) && IsFinite(uv.height)
-            && uv.x >= 0.0f && uv.y >= 0.0f && uv.width > 0.0f && uv.height > 0.0f
-            && uv.x + uv.width <= 1.0f && uv.y + uv.height <= 1.0f
-        ;
-    }
-
-
 public:
     explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
         : m_snapshot(arena)

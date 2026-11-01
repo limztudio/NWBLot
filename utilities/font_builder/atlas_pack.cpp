@@ -18,28 +18,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_builder_atlas_pack{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct Shelf{
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 height = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& outPayload){
     Vector<u32, Core::Alloc::ScratchArena> order(scratch);
     order.reserve(glyphs.size());
@@ -59,7 +37,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
         outPayload.glyphs.push_back(glyph.record);
-    Array<__hidden_font_builder_atlas_pack::Shelf, Impl::s_FontAtlasMaxGroupCount * Impl::s_FontAtlasMaxChannelCount> shelves{};
+    Array<Shelf, Impl::s_FontAtlasMaxGroupCount * Impl::s_FontAtlasMaxChannelCount> shelves{};
     u32 lastPage = 0u;
     for(const u32 index : order){
         const RasterGlyph& glyph = glyphs[index];
@@ -67,13 +45,9 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
         const u32 height = glyph.record.height + s_GlyphGuardExtent;
         b8 placed = false;
         for(u32 page = 0u; page < options.maxGroups * Impl::s_FontAtlasMaxChannelCount; ++page){
-            auto next = shelves[page];
-            if(next.x + width > options.extent){
-                next.x = 0u;
-                next.y += next.height;
-                next.height = 0u;
-            }
-            if(next.y + height > options.extent)
+            u32 placedX = 0u;
+            u32 placedY = 0u;
+            if(!TryPlaceGlyphOnShelf(width, height, options.extent, shelves[page], placedX, placedY))
                 continue;
             const u32 groupIndex = page / Impl::s_FontAtlasMaxChannelCount;
             while(outPayload.groups.size() <= groupIndex){
@@ -87,8 +61,8 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
             auto& record = outPayload.glyphs[index];
             record.group = groupIndex;
             record.channel = page % Impl::s_FontAtlasMaxChannelCount;
-            record.x = next.x + 1u;
-            record.y = next.y + 1u;
+            record.x = placedX;
+            record.y = placedY;
             auto& pixels = outPayload.groups[groupIndex].pixels;
             for(u32 y = 0u; y < glyph.record.height; ++y){
                 for(u32 x = 0u; x < glyph.record.width; ++x){
@@ -96,9 +70,6 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
                     pixels[destination] = glyph.pixels[static_cast<usize>(y) * glyph.record.width + x];
                 }
             }
-            next.x += width;
-            next.height = Max(next.height, height);
-            shelves[page] = next;
             lastPage = Max(lastPage, page);
             placed = true;
             break;

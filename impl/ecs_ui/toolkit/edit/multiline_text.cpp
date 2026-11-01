@@ -26,21 +26,9 @@ namespace __hidden_ui_multiline_text{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
     const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
     NWB_ASSERT(decoded);
-    const u32 scalar = decoded->codePoint;
     MultilineTextStep step;
-    step.sourceBytes = static_cast<usize>(decoded->byteCount);
-    const b8 lineBreak = IsMultilineLineBreakScalar(scalar);
-    if(lineBreak || scalar == '\t'){
-        step.replacement = lineBreak ? static_cast<u8>('\n') : static_cast<u8>(' ');
-        step.outputBytes = 1u;
-        if(scalar == '\r' && offset + step.sourceBytes < source.size() && source[offset + step.sourceBytes] == '\n')
-            ++step.sourceBytes;
-    }
-    else{
-        if(!IsCanonicalMultilineScalar(scalar))
-            return MakeUnexpected(Failure{});
-        step.outputBytes = step.sourceBytes;
-    }
+    if(!TryBuildMultilineTextStep(source, offset, decoded->codePoint, static_cast<usize>(decoded->byteCount), step))
+        return MakeUnexpected(Failure{});
     return step;
 }
 

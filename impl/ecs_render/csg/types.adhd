@@ -459,6 +459,111 @@ class CsgReceiverClipDrawInfo{
     public u32 cutterCount = 0u;
 }
 
+class CsgClipWorkBounds{
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
+}
+
+class CsgReceiverLocalSpace{
+    public f32x4 localMinBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 localMaxBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4x4 localToWorld(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
+    public b8 boundsCanCull = false;
+    public b8 hasLocalToWorld = false;
+}
+
+class CsgCutterTransforms{
+    public f32x3x4 shapeToWorld(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    );
+    public f32x3x4 worldToShape(
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f
+    );
+}
+
+CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(
+    in b8 boundsCanCull,
+    in f32x4 localMinBounds,
+    in f32x4 localMaxBounds,
+    in b8 hasLocalToWorld,
+    in f32x4x4 localToWorld
+){
+    CsgReceiverLocalSpace localSpace;
+    localSpace.boundsCanCull = boundsCanCull;
+    localSpace.localMinBounds = localMinBounds;
+    localSpace.localMaxBounds = localMaxBounds;
+    if(hasLocalToWorld){
+        localSpace.localToWorld = localToWorld;
+        localSpace.hasLocalToWorld = true;
+    }
+    return localSpace;
+}
+
+b8 CsgClipCutterRequiresShapeBounds(in b8 receiverBoundsValid, in b8 hasShaderModule, in Name shapeName){
+    if(receiverBoundsValid)
+        return true;
+    return !hasShaderModule && (shapeName == s_CsgBoxShapeName || shapeName == s_CsgSphereShapeName || shapeName == s_CsgCapsuleShapeName);
+}
+
+b8 ResolveCsgClipWorkBoundsFromCutterBounds(
+    in CsgClipWorkBounds receiverBounds,
+    in b8 cutterBoundsResolved,
+    in b8 cutterFiniteBounds,
+    in f32x4 cutterMinBounds,
+    in f32x4 cutterMaxBounds,
+    mut CsgClipWorkBounds outWorkBounds
+){
+    outWorkBounds = CsgClipWorkBounds();
+    if(!cutterBoundsResolved)
+        return !receiverBounds.valid;
+    if(!cutterFiniteBounds){
+        outWorkBounds = receiverBounds;
+        return true;
+    }
+    if(!receiverBounds.valid){
+        outWorkBounds.minBounds = cutterMinBounds;
+        outWorkBounds.maxBounds = cutterMaxBounds;
+        outWorkBounds.valid = true;
+        return true;
+    }
+    if(
+        !isFinite(receiverBounds.minBounds.x) || !isFinite(receiverBounds.minBounds.y) || !isFinite(receiverBounds.minBounds.z)
+        || !isFinite(receiverBounds.maxBounds.x) || !isFinite(receiverBounds.maxBounds.y) || !isFinite(receiverBounds.maxBounds.z)
+        || !isFinite(cutterMinBounds.x) || !isFinite(cutterMinBounds.y) || !isFinite(cutterMinBounds.z)
+        || !isFinite(cutterMaxBounds.x) || !isFinite(cutterMaxBounds.y) || !isFinite(cutterMaxBounds.z)
+        || receiverBounds.minBounds.x > receiverBounds.maxBounds.x
+        || receiverBounds.minBounds.y > receiverBounds.maxBounds.y
+        || receiverBounds.minBounds.z > receiverBounds.maxBounds.z
+        || cutterMinBounds.x > cutterMaxBounds.x
+        || cutterMinBounds.y > cutterMaxBounds.y
+        || cutterMinBounds.z > cutterMaxBounds.z
+    )
+        return false;
+    if(
+        receiverBounds.maxBounds.x < cutterMinBounds.x || cutterMaxBounds.x < receiverBounds.minBounds.x
+        || receiverBounds.maxBounds.y < cutterMinBounds.y || cutterMaxBounds.y < receiverBounds.minBounds.y
+        || receiverBounds.maxBounds.z < cutterMinBounds.z || cutterMaxBounds.z < receiverBounds.minBounds.z
+    )
+        return false;
+
+    const f32x4 mergedMin = max(receiverBounds.minBounds, cutterMinBounds);
+    const f32x4 mergedMax = min(receiverBounds.maxBounds, cutterMaxBounds);
+    outWorkBounds.minBounds = mergedMin;
+    outWorkBounds.maxBounds = mergedMax;
+    outWorkBounds.valid = mergedMin.x <= mergedMax.x && mergedMin.y <= mergedMax.y && mergedMin.z <= mergedMax.z;
+    return true;
+}
+
 class CsgFrameStateCacheSignature{
     public b8 operator==(in CsgFrameStateCacheSignature rhs)const{
         return this.contentHash == rhs.contentHash && this.shapeRegistryRevision == rhs.shapeRegistryRevision;
@@ -492,6 +597,13 @@ b8 CsgFrameHasReceiverPassWork(in CsgFrameState csgFrameState, in CsgReceiverPas
         return false;
     }
 }
+
+const usize s_TransparentCsgIntervalResourceUseCapacity = 20u;
+const usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
+const usize s_OpaqueCsgMaterialBufferResourceUseCount = 2u;
+const usize s_OpaqueCsgRemovedIntervalResourceUseCount = 4u;
+const usize s_OpaqueCsgGbufferColorResourceUseCount = 4u;
+const usize s_OpaqueCsgIntervalSampleResourceSetUseCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

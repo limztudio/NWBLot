@@ -299,22 +299,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     }
 
     if(staticScene && opticalScene.boundsCompleteExceptRuntime && !csg.hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && singleRefractiveInstanceIndex < instances.size()){
-        const RayTracingInstanceWorldBounds& targetBounds = instanceWorldBounds[singleRefractiveInstanceIndex];
-        const SIMDVectorSingle margin = VectorReplicate(s_RefractionCertifiedBoundsMargin);
-        const SIMDVectorSingle expandedMin = VectorSubtract(LoadFloat(targetBounds.minimum), margin);
-        const SIMDVectorSingle expandedMax = VectorAdd(LoadFloat(targetBounds.maximum), margin);
-        b8 isolated = true;
-        for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
-            if(index == singleRefractiveInstanceIndex)
-                continue;
-            const RayTracingInstanceWorldBounds& otherBounds = instanceWorldBounds[index];
-            const SIMDVectorSingle separatedAxes = VectorOrInt(VectorLess(expandedMax, LoadFloat(otherBounds.minimum)), VectorLess(LoadFloat(otherBounds.maximum), expandedMin));
-            if((VectorMoveMask(separatedAxes) & VectorComponentMask::s_XYZ) == 0u){
-                isolated = false;
-                break;
-            }
-        }
-        if(isolated){
+        if(IsRefractiveInstanceBoundsIsolated(instanceWorldBounds, singleRefractiveInstanceIndex)){
             instanceMaterials[singleRefractiveInstanceIndex].flags |= RtInstanceMaterialFlag::RefractionEntryCertified;
             m_rayTracingState.m_refractionCertifiedInstanceIndex = singleRefractiveInstanceIndex;
         }

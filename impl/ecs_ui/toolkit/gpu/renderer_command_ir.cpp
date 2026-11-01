@@ -115,17 +115,16 @@ b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuT
     if(!descriptorOwner)
         return false;
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
-    const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target);
-    const auto initialPush = geometry.initializePushConstants(frame->m_resources->m_samplerDescriptor.slot());
-    if(!initialPush)
+    const GpuRasterGeometry geometry(frame->m_snapshot.displayMetrics(), target.width, target.height);
+    GpuPaintPushConstants push;
+    if(!TryInitializeGpuPaintPushConstants(geometry, frame->m_resources->m_samplerDescriptor.slot(), push))
         return false;
-    GpuPaintPushConstants push = *initialPush;
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
     Core::Rect boundScissor;
     b8 hasRasterState = false;
     b8 hasDraw = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
-        const auto resolvedScissor = geometry.scissor(draw);
+        const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
         if(!resolvedScissor || draw.indexCount == 0u)
             continue;
         const Core::Rect& scissor = *resolvedScissor;

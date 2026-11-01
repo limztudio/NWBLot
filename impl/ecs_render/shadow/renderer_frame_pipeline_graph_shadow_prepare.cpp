@@ -136,7 +136,6 @@ b8 RendererFramePipeline::declareDeferredShadowPrepareTask(
     const b8 pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate = meshSwBvhBuildsGraphOwned && !m_raytracingSystem.shadowVisibilityHardwareSupported();
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    constexpr usize s_ShadowPrepareResourceSetUseCapacity = 3u;
     Array<Core::GpuTaskResourceSetUse, s_ShadowPrepareResourceSetUseCapacity> resourceSetUses = {};
     usize resourceSetUseCount = 0u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
@@ -147,7 +146,6 @@ b8 RendererFramePipeline::declareDeferredShadowPrepareTask(
     PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources{ scratchArena };
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
-    constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
     resourceUses.reserve(s_ShadowPrepareResourceUseCapacity + (uploads.csgTraceContext.valid() ? 1u : 0u) + shadowTraceGeometryResources.size() + softwareBvhBuildStateResources.size() + liveMeshBlasGraphStates.size() + preparedMeshBlasBuilds.size() * 2u);
     accelStructFinalizeResourceUses.reserve((sceneTlasBuildGraphOwned ? 1u : 0u) + preparedMeshBlasBuilds.size());
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
@@ -428,14 +426,13 @@ b8 RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.mergeWithPrevious = true;
     // Software per-mesh chains precede this endpoint. Keep the whole packet even when later consumers form a frontier.
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
-    constexpr usize s_DependencyCount = 1u;
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{ .states = m_shadowPreparePersistentState.source(), };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
         .setScheduling(scheduling)
-        .setDependencies({ &shadowPrepareDependency, s_DependencyCount })
+        .setDependencies({ &shadowPrepareDependency, s_ShadowPrepareSingleDependencyCount })
         .setExternalStateSources({ shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr, shadowPrepareStateSource.states ? 1u : 0u })
         .setResourceUses(resourceUses)
         .setResourceSetUses({ resourceSetUses.data(), resourceSetUseCount })

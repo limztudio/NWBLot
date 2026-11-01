@@ -37,19 +37,6 @@ NWB_IMPL_UI_BEGIN
     return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) };
 }
 
-[[nodiscard]] Insets MaxUiPadding(const Insets& lhs, const Insets& rhs)noexcept;
-
-template<typename PaddingT>
-    requires (!IsSame_V<PaddingT, Insets>) && requires(const PaddingT& padding){
-        padding.left;
-        padding.top;
-        padding.right;
-        padding.bottom;
-    }
-[[nodiscard]] NWB_INLINE Insets MaxUiPadding(const Insets& lhs, const PaddingT& rhs)noexcept{
-    return MaxUiPadding(lhs, Insets{ rhs.left, rhs.top, rhs.right, rhs.bottom });
-}
-
 [[nodiscard]] NWB_INLINE SIMDMatrixDouble MakeInvalidUiMatrixDouble()noexcept{
     return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
 }

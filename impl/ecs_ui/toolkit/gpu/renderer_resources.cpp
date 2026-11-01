@@ -48,7 +48,7 @@ public:
     const auto& target = *MakeNotNull(static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget));
     const auto colorResult = graph.importTexture(
         target->m_color,
-        Core::GpuGraphResourceDesc().setIdentity(s_GpuTargetInitTextureName).setMarkerLabel("UI Target Initialization")
+        Core::GpuGraphResourceDesc().setIdentity(s_GpuTargetInitTextureName).setMarkerLabel(s_GpuTargetInitMarkerLabel)
             .setType(Core::GpuGraphResourceType::Texture).setInitialState(Core::ResourceStates::Unknown)
             .setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
@@ -56,7 +56,7 @@ public:
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId color = *colorResult;
     const auto clearResult = graph.addClearTextureTask(
-        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitClearTaskName).setMarkerLabel("UI Target Initialization Clear"),
+        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitClearTaskName).setMarkerLabel(s_GpuTargetInitClearMarkerLabel),
         Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
     if(!clearResult)
@@ -64,7 +64,7 @@ public:
     const Core::GpuTaskId clear = *clearResult;
     const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
     const auto readyResult = graph.addTask<TargetReadyTask>(
-        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitReadyTaskName).setMarkerLabel("UI Target Ready").setDependencies({ &clear, 1u }).setResourceUses({ &use, 1u }),
+        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitReadyTaskName).setMarkerLabel(s_GpuTargetInitReadyMarkerLabel).setDependencies({ &clear, 1u }).setResourceUses({ &use, 1u }),
         TargetReadyTask::Payload{ target, color }
     );
     if(!readyResult)
@@ -208,12 +208,7 @@ b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& firs
 }
 
 b8 GpuRendererState::ValidSnapshotImageCount(const DrawSnapshot& snapshot)noexcept{
-    return
-        snapshot.glyphPages().size() <= s_PaintMaxImages
-        && snapshot.sdfPages().size() <= s_PaintMaxImages
-        && snapshot.textureImages().size() <= s_PaintMaxImages
-        && snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size() <= s_PaintMaxImages
-    ;
+    return ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size());
 }
 
 b8 GpuRendererState::createResources(){

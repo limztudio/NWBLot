@@ -25,16 +25,9 @@ static Expected<SingleLineTextStep> ReadStep(const AStringView source, const usi
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
     const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
     NWB_ASSERT(decoded);
-    const u32 scalar = decoded->codePoint;
-    if(IsSingleLineRejectedScalar(scalar))
-        return MakeUnexpected(Failure{});
-    const b8 space = IsSingleLineSpaceScalar(scalar);
     SingleLineTextStep step;
-    step.sourceBytes = static_cast<usize>(decoded->byteCount);
-    step.outputBytes = space ? 1u : step.sourceBytes;
-    step.space = space;
-    if(scalar == s_UnicodeCarriageReturn && offset + step.sourceBytes < source.size() && source[offset + step.sourceBytes] == '\n')
-        ++step.sourceBytes;
+    if(!TryBuildSingleLineTextStep(source, offset, decoded->codePoint, static_cast<usize>(decoded->byteCount), step))
+        return MakeUnexpected(Failure{});
     return step;
 }
 

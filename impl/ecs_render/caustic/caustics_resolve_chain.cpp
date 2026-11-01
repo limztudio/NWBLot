@@ -41,8 +41,6 @@ struct ResolveStageDesc{
 };
 
 // One activity read of the previous stage and one activity write of this stage.
-inline constexpr usize s_ActivityUsesPerStage = 2u;
-inline constexpr usize s_MaxStageResourceUses = 8u;
 inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 2u;
 
 
@@ -327,7 +325,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
         { naming.wavelets[4u], inputs.wavelets[4u], result.causticResolveWaveletTasks[4u], 4u, true, false, nullptr },
         { naming.upsample, inputs.upsample, result.causticResolveUpsampleTask, 0u, false, false, &RendererRayTracingSystem::declareCausticResolveUpsampleTask },
     }};
-    Array<Core::GpuTaskResourceUse, __hidden_caustics_resolve_chain::s_MaxStageResourceUses + __hidden_caustics_resolve_chain::s_ActivityUsesPerStage> activityUses{};
+    Array<Core::GpuTaskResourceUse, s_CausticMaxStageResourceUses + s_CausticActivityUsesPerStage> activityUses{};
     Core::GpuTaskSchedulingHint stageScheduling = inputs.baseScheduling;
     stageScheduling.mergeWithPrevious = true;
     Core::GpuTaskId previousTask = inputs.geometryTask;
@@ -336,7 +334,7 @@ inline constexpr usize s_ResolveStageCount = s_CausticResolveWaveletPassCount + 
         Core::GpuTaskDesc stageDesc;
         stageDesc.setIdentity(stage.naming.identity).setMarkerLabel(stage.naming.label).setScheduling(stageScheduling).setDependencies({ &previousTask, 1u }).setResourceUses(stage.stageUses);
         if(activity.valid()){
-            if(stage.stageUses.size() > __hidden_caustics_resolve_chain::s_MaxStageResourceUses)
+            if(stage.stageUses.size() > s_CausticMaxStageResourceUses)
                 return MakeUnexpected(Failure{});
             usize activityUseCount = 0u;
             for(const Core::GpuTaskResourceUse& use : stage.stageUses)

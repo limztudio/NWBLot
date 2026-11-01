@@ -99,6 +99,11 @@ class SurfelHeapPushConstants{
     public u32 guidePoolHeapSlot = 0u;
 }
 
+const usize s_SurfelGiStateSourceCapacity = 3u;
+const usize s_SurfelResourceUseCapacity = 29u;
+const usize s_SurfelTraceResourceUseCapacity = 17u;
+const usize s_SurfelCsgTraceContextUseCapacity = 2u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

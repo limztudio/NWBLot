@@ -32,107 +32,68 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAsse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
-    if(blocks.empty() && fields.empty()){
+static b8 LogAndValidateMaterialTypedLayout(const u64 layoutHash, const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields, const Span<const u8> blockBytes, const TStringView failureContext){
+    usize failureIndex = 0u;
+    const MaterialTypedLayoutValidationStatus::Enum status = ValidateMaterialTypedLayout(layoutHash, blocks, fields, blockBytes.size(), failureIndex);
+    switch(status){
+    case MaterialTypedLayoutValidationStatus::Valid:
+        return true;
+    case MaterialTypedLayoutValidationStatus::EmptyLayout:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout is empty"), failureContext);
         return false;
-    }
-    if(layoutHash == 0u){
+    case MaterialTypedLayoutValidationStatus::ZeroHash:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout has zero hash"), failureContext);
         return false;
-    }
-    if(blocks.empty() || fields.empty()){
+    case MaterialTypedLayoutValidationStatus::MissingBlocksOrFields:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout blocks and fields must both be present"), failureContext);
         return false;
-    }
-
-    u32 nextFieldBegin = 0u;
-    for(usize blockIndex = 0u; blockIndex < blocks.size(); ++blockIndex){
-        const MaterialTypedLayoutBlock& block = blocks[blockIndex];
-        if(!block.blockName){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has empty name"), failureContext, blockIndex);
-            return false;
-        }
-        if(!IsValidMaterialBlockClass(block.blockClass)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has invalid class {}"), failureContext, blockIndex, static_cast<u32>(block.blockClass));
-            return false;
-        }
-        if(block.fieldBegin != nextFieldBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has non-contiguous field range"), failureContext, blockIndex);
-            return false;
-        }
-        // fieldBegin equals the running field total, so it never passes fields.size().
-        if(block.fieldCount == 0u || block.fieldCount > fields.size() - block.fieldBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} field range exceeds field count"), failureContext, blockIndex);
-            return false;
-        }
-
-        u32 expectedOffset = 0u;
-        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
-            const usize fieldIndex = static_cast<usize>(block.fieldBegin) + fieldOffset;
-            const MaterialTypedLayoutField& field = fields[fieldIndex];
-            if(!field.fieldName){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has empty name"), failureContext, fieldIndex);
-                return false;
-            }
-            if(!IsValidMaterialLayoutFieldType(field.fieldType)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has invalid type {}"), failureContext, fieldIndex, static_cast<u32>(field.fieldType));
-                return false;
-            }
-
-            u32 expectedFieldOffset = 0u;
-            if(!TryAlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType, expectedFieldOffset)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} alignment overflows"), failureContext, fieldIndex);
-                return false;
-            }
-            if(field.offset != expectedFieldOffset){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has misaligned offset"), failureContext, fieldIndex);
-                return false;
-            }
-
-            const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
-            if(fieldByteSize == 0u || expectedFieldOffset > Limit<u32>::s_Max - fieldByteSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} byte size overflows"), failureContext, fieldIndex);
-                return false;
-            }
-            expectedOffset = expectedFieldOffset + fieldByteSize;
-        }
-
-        u32 expectedBlockByteSize = 0u;
-        if(!TryAlignMaterialLayoutBlockByteSize(expectedOffset, expectedBlockByteSize)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size overflows"), failureContext, blockIndex);
-            return false;
-        }
-        if(expectedBlockByteSize != block.byteSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size does not match its fields"), failureContext, blockIndex);
-            return false;
-        }
-
-        nextFieldBegin += block.fieldCount;
-    }
-
-    if(nextFieldBegin != fields.size()){
+    case MaterialTypedLayoutValidationStatus::EmptyBlockName:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has empty name"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::InvalidBlockClass:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has invalid class {}"), failureContext, failureIndex, static_cast<u32>(blocks[failureIndex].blockClass));
+        return false;
+    case MaterialTypedLayoutValidationStatus::NonContiguousFieldRange:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} has non-contiguous field range"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::FieldRangeExceedsCount:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} field range exceeds field count"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::EmptyFieldName:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has empty name"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::InvalidFieldType:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has invalid type {}"), failureContext, failureIndex, static_cast<u32>(fields[failureIndex].fieldType));
+        return false;
+    case MaterialTypedLayoutValidationStatus::FieldAlignmentOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} alignment overflows"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::MisalignedFieldOffset:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has misaligned offset"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::FieldByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} byte size overflows"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::BlockByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size overflows"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::BlockByteSizeMismatch:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size does not match its fields"), failureContext, failureIndex);
+        return false;
+    case MaterialTypedLayoutValidationStatus::UnownedFields:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout has unowned fields"), failureContext);
         return false;
-    }
-
-    const u64 computedHash = ComputeMaterialTypedLayoutHash(blocks, fields);
-    if(computedHash != layoutHash){
+    case MaterialTypedLayoutValidationStatus::LayoutHashMismatch:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout hash mismatch"), failureContext);
         return false;
-    }
-
-    usize expectedBlockByteSize = 0u;
-    if(!ComputeMaterialTypedBlockByteSize(blocks, expectedBlockByteSize)){
+    case MaterialTypedLayoutValidationStatus::TotalBlockByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte size overflows"), failureContext);
         return false;
-    }
-    if(blockBytes.size() != expectedBlockByteSize){
+    case MaterialTypedLayoutValidationStatus::TotalBlockByteCountMismatch:
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed block byte count does not match typed layout"), failureContext);
         return false;
     }
-
-    return true;
+    return false;
 }
 
 struct MaterialTypedLayoutPayload final{
@@ -247,7 +208,7 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
         payload.resourceReferences.push_back(resourceReference);
     }
 
-    if(!ValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContext))
+    if(!LogAndValidateMaterialTypedLayout(layoutHash, payload.blocks, payload.fields, payload.blockBytes, s_MaterialLoadBinaryContext))
         return MakeUnexpected(Failure{});
     if(!ValidateMaterialResourceReferences(payload.blocks, payload.fields, payload.resourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));

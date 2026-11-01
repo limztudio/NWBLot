@@ -92,6 +92,97 @@ b8 IsReverseListControlAction(in ControlActionKind kind){
     return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
+class ListMeasureKey{
+    public b8 operator==(in ListMeasureKey rhs)const{
+        if(
+            this.sourceGeneration != rhs.sourceGeneration
+            || this.sourceRevision != rhs.sourceRevision
+            || this.rowCount != rhs.rowCount
+            || this.textIdentity != rhs.textIdentity
+            || this.textGeneration != rhs.textGeneration
+            || this.fontSize != rhs.fontSize
+            || this.pixelScaleX != rhs.pixelScaleX
+            || this.pixelScaleY != rhs.pixelScaleY
+            || this.scriptTag != rhs.scriptTag
+        )
+            return false;
+        for(usize i = 0u; i < s_ListRowMetricCount; ++i){
+            if(this.rowMetrics[i] != rhs.rowMetrics[i])
+                return false;
+        }
+        for(usize i = 0u; i < s_ListLanguageBufferBytes; ++i){
+            if(this.language[i] != rhs.language[i])
+                return false;
+        }
+        return true;
+    }
+
+    public b8 operator!=(in ListMeasureKey rhs)const{
+        if(
+            this.sourceGeneration != rhs.sourceGeneration
+            || this.sourceRevision != rhs.sourceRevision
+            || this.rowCount != rhs.rowCount
+            || this.textIdentity != rhs.textIdentity
+            || this.textGeneration != rhs.textGeneration
+            || this.fontSize != rhs.fontSize
+            || this.pixelScaleX != rhs.pixelScaleX
+            || this.pixelScaleY != rhs.pixelScaleY
+            || this.scriptTag != rhs.scriptTag
+        )
+            return true;
+        for(usize i = 0u; i < s_ListRowMetricCount; ++i){
+            if(this.rowMetrics[i] != rhs.rowMetrics[i])
+                return true;
+        }
+        for(usize i = 0u; i < s_ListLanguageBufferBytes; ++i){
+            if(this.language[i] != rhs.language[i])
+                return true;
+        }
+        return false;
+    }
+
+    public u64 sourceGeneration = 0u;
+    public u64 sourceRevision = 0u;
+    public u64 rowCount = 0u;
+    public u64 textIdentity = 0u;
+    public u64 textGeneration = 0u;
+    public f32 fontSize = 0.0f;
+    public f32 pixelScaleX = 0.0f;
+    public f32 pixelScaleY = 0.0f;
+    public Array<f32, s_ListRowMetricCount> rowMetrics;
+    public Array<u8, s_ListLanguageBufferBytes> language;
+    public u32 scriptTag = 0u;
+}
+
+b8 TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum, mut f64 outOffset){
+    outOffset = 0.0;
+    if(!isFinite(delta) || !isFinite(step) || step <= 0.0 || !isFinite(maximum) || maximum < 0.0)
+        return false;
+    f64 candidateValue = min(current, maximum);
+    if(delta > 0.0){
+        const f64 distanceInSteps = candidateValue / step;
+        if(delta >= distanceInSteps)
+            candidateValue = 0.0;
+        else
+            candidateValue = candidateValue - delta * step;
+    }
+    else if(delta < 0.0){
+        const f64 reverseDelta = -delta;
+        const f64 distanceInSteps = (maximum - candidateValue) / step;
+        if(reverseDelta >= distanceInSteps)
+            candidateValue = maximum;
+        else
+            candidateValue = candidateValue + reverseDelta * step;
+    }
+    f64 candidate = 0.0;
+    if(candidateValue > 0.0)
+        candidate = min(maximum, candidateValue);
+    if(!isFinite(candidate))
+        return false;
+    outOffset = candidate;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

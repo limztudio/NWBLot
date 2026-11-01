@@ -16,8 +16,6 @@
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 
-#include <global/binary_big_endian.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,32 +45,8 @@ static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSideca
 
 
 [[nodiscard]] static b8 ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
-    const Core::Assets::AssetBytes& bytes = font.fontBytes();
-    FontSfntDirectory directory;
-    const b8 directoryResult = ReadFontSfntDirectory({ bytes.data(), bytes.size() }, directory);
-    if(!directoryResult)
-        return false;
-
     payload.faceIndex = font.faceIndex();
-    for(u16 index = 0u; index < directory.tableCount(); ++index){
-        FontSfntTable table;
-        const b8 tableResult = directory.table(index, table);
-        if(!tableResult)
-            return false;
-        if(table.tag == s_FontSfntHeadTag){
-            const auto unitsPerEmResult = ReadU16BigEndian(BinaryByteView{ table.bytes.data(), table.bytes.size() }, s_FontSfntHeadUnitsPerEmOffset);
-            if(!unitsPerEmResult)
-                return false;
-            payload.unitsPerEm = *unitsPerEmResult;
-        }
-        else if(table.tag == s_FontSfntMaxpTag){
-            const auto glyphCountResult = ReadU16BigEndian(BinaryByteView{ table.bytes.data(), table.bytes.size() }, s_FontSfntMaxpGlyphCountOffset);
-            if(!glyphCountResult)
-                return false;
-            payload.sourceGlyphCount = *glyphCountResult;
-        }
-    }
-    return payload.unitsPerEm >= s_FontAtlasMinUnitsPerEm && payload.unitsPerEm <= s_FontAtlasMaxUnitsPerEm && payload.sourceGlyphCount > 0u;
+    return TryReadFontFaceMetricsFromSfnt(font.fontBytes(), payload.unitsPerEm, payload.sourceGlyphCount);
 }
 
 [[nodiscard]] static b8 ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
@@ -145,12 +119,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
     using namespace __hidden_font_atlas_cook_metadata;
     if(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath,
-            asset,
-            s_FontAtlasMetaDiagnosticPrefix,
-            { s_FontAtlasMetaFontField, s_FontAtlasBakePpemField, s_FontAtlasSpreadPixelsField, s_FontAtlasRasterModeField, s_FontAtlasAscenderUnitsField, s_FontAtlasDescenderUnitsField, s_FontAtlasLineGapUnitsField, s_FontAtlasGlyphsField }
-        )
+        || !Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_FontAtlasMetaDiagnosticPrefix, &IsAllowedFontAtlasMetadataField)
     )
         return MakeUnexpected(Failure{});
     FontAtlasCookEntry candidate(arena);

@@ -103,6 +103,7 @@ struct Expr{
     b8 hasMutLocalCapture = false;
     b8 hasMutContainerCapture = false;
     b8 isVectorRawIndex = false;
+    b8 isMatrixRowIndex = false;
 
 
 public:
@@ -125,5 +126,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

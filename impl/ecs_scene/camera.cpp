@@ -148,13 +148,7 @@ CameraProjection StoreDefaultCameraProjection(const f32 fallbackAspectRatio)noex
     if(defaultProjection)
         return StoreCameraProjection(*defaultProjection);
 
-    CameraProjection projection;
-    projection.projectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
-    projection.aspectRatio = 1.0f;
-    projection.tanHalfVerticalFov = 1.0f;
-    projection.nearPlane = s_CameraNearPlane;
-    projection.farPlane = s_CameraFarPlane;
-    return projection;
+    return MakeFallbackCameraProjection();
 }
 
 

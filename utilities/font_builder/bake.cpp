@@ -20,13 +20,12 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 b8 ValidateOptions(const BakeOptions& options){
-    constexpr u32 s_MinExtent = 32u;
     if(
         options.ppem < Impl::s_FontAtlasMinBakePpem
         || options.ppem > Impl::s_FontAtlasMaxBakePpem
         || options.spread < Impl::s_FontAtlasMinSpreadPixels
         || options.spread > Impl::s_FontAtlasMaxSpreadPixels
-        || options.extent < s_MinExtent
+        || options.extent < s_MinBakeExtent
         || options.extent > Impl::s_FontAtlasMaxExtent
         || options.maxGroups == 0u
         || options.maxGroups > Impl::s_FontAtlasMaxGroupCount

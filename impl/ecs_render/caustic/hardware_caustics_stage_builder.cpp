@@ -52,14 +52,12 @@ NWB_IMPL_BEGIN
     const b8 hardwareTraceGeometryStatesGraphOwned = inputs.hardwareTraceGeometrySet.valid();
     const Core::GpuTaskResourceSetUse hardwareTraceGeometrySetUse{ .resourceSet = inputs.hardwareTraceGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
     const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{ .resourceSet = inputs.traceMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read };
-    constexpr usize s_HardwarePhotonResourceSetUseCapacity = 2u;
     Array<Core::GpuTaskResourceSetUse, s_HardwarePhotonResourceSetUseCapacity> hardwarePhotonResourceSetUses{};
     usize hardwarePhotonResourceSetUseCount = 0u;
     if(hardwareTraceGeometryStatesGraphOwned)
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceGeometrySetUse;
     if(inputs.traceMaterialSampledTextureSet.valid())
         hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
-    constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
     hardwarePhotonResourceUses.reserve(
         s_HardwarePhotonResourceUseCapacity
         + (inputs.rayTracingResources.csgTraceContextBuffer ? 1u : 0u)

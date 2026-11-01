@@ -45,12 +45,11 @@ static Expected<UInt4U> BuildMaterialTypedLayoutDefaultValue(const Name& materia
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return UInt4U{};
 
-    const auto keyResult = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
-    if(!keyResult){
+    ACompactString key;
+    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), key)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(materialName.resolvedText()));
         return MakeUnexpected(Failure{});
     }
-    const ACompactString& key = *keyResult;
 
     ACompactString defaultText;
     const AStringView defaultArgument = bindField.defaultArgument();
@@ -248,12 +247,11 @@ static b8 BuildMaterialBindTypedLayoutParameterLookup(const AStringView contextL
             // Resource fields live in constant blocks, whose total size the builder already bounded to u32.
             NWB_ASSERT(!IsMaterialLayoutResourceFieldType(field.fieldType) || field.offset <= Limit<u32>::s_Max - blockEntry.constantByteBegin);
 
-            const auto parameterNameResult = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name));
-            if(!parameterNameResult){
+            ACompactString parameterName;
+            if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), parameterName)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity"), ConvertString(instance.name), ConvertString(bindField.name), ConvertString(contextLabel));
                 return false;
             }
-            const ACompactString& parameterName = *parameterNameResult;
 
             MaterialBindTypedLayoutParameterLookupEntry entry;
             entry.fieldIndex = static_cast<u32>(fieldIndex);

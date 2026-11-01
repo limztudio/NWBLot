@@ -71,16 +71,16 @@ Expected<void, NativeFontFailure> FreeTypeMemoryFace::openStaticScalableFace(con
     reset();
     const FT_Error libraryError = FT_New_Library(&m_memory, &m_library);
     if(libraryError != 0)
-        return MakeUnexpected(NativeFontFailure{ .operation = s_FontOpFtNewLibrary, .nativeError = libraryError, .hasNativeError = true });
+        return MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewLibrary, libraryError));
     FT_Add_Default_Modules(m_library);
     const FT_Error faceError = FT_New_Memory_Face(m_library, bytes.data(), static_cast<FT_Long>(bytes.size()), 0, &m_face);
     if(faceError != 0)
-        return MakeUnexpected(NativeFontFailure{ .operation = s_FontOpFtNewMemoryFace, .nativeError = faceError, .hasNativeError = true });
+        return MakeUnexpected(MakeNativeFontFailure(s_FontOpFtNewMemoryFace, faceError));
     if(m_face->num_faces != 1 || m_face->num_glyphs <= 0 || m_face->units_per_EM == 0u || !FT_IS_SFNT(m_face) || !FT_IS_SCALABLE(m_face) || FT_HAS_MULTIPLE_MASTERS(m_face))
-        return MakeUnexpected(NativeFontFailure{ .operation = s_FontOpAdmitStaticScalableFace });
+        return MakeUnexpected(MakeNativeFontPolicyFailure(s_FontOpAdmitStaticScalableFace));
     const FT_Error charmapError = FT_Select_Charmap(m_face, FT_ENCODING_UNICODE);
     if(charmapError != 0)
-        return MakeUnexpected(NativeFontFailure{ .operation = s_FontOpFtSelectCharmap, .nativeError = charmapError, .hasNativeError = true });
+        return MakeUnexpected(MakeNativeFontFailure(s_FontOpFtSelectCharmap, charmapError));
     return {};
 }
 

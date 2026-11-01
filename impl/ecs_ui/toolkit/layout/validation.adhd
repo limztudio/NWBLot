@@ -8,13 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
-const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 HasValidUiRectDimensions(in Rect rectangle){
     return isFinite(rectangle.x) && isFinite(rectangle.y) && isFinite(rectangle.width) && rectangle.width >= 0.0f && isFinite(rectangle.height) && rectangle.height >= 0.0f;
 }
@@ -75,6 +68,15 @@ b8 IsBoundedUiPadding(in Insets padding){
     return size.x <= s_UiMaxFloatF64 && size.y <= s_UiMaxFloatF64;
 }
 
+b8 IsBoundedUiPadding(in UiSkinInsets padding){
+    Insets converted;
+    converted.left = padding.left;
+    converted.top = padding.top;
+    converted.right = padding.right;
+    converted.bottom = padding.bottom;
+    return IsBoundedUiPadding(converted);
+}
+
 b8 IsValidUiColor(in Color color){
     return isFinite(color.r) && color.r >= 0.0f && isFinite(color.g) && color.g >= 0.0f && isFinite(color.b) && color.b >= 0.0f && isFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
@@ -98,6 +100,84 @@ b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
         && IsValidUiPadding(padding) && isFinite(padding.left + padding.right) && isFinite(padding.top + padding.bottom)
         && isFinite(description.gap) && description.gap >= 0.0f && IsValidUiExtent(description.intrinsicSize)
     ;
+}
+
+b8 TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPrecision precision, mut Rect outRect){
+    outRect = Rect();
+    if(
+        !isFinite(x) || x < -s_UiMaxFloatF64 || x > s_UiMaxFloatF64
+        || !isFinite(y) || y < -s_UiMaxFloatF64 || y > s_UiMaxFloatF64
+        || !isFinite(width) || width < 0.0 || width > s_UiMaxFloatF64
+        || !isFinite(height) || height < 0.0 || height > s_UiMaxFloatF64
+    )
+        return false;
+    if(precision != UiRectPrecision::RoundedEndpoints){
+        const f64 endX = x + width;
+        const f64 endY = y + height;
+        if(endX < -s_UiMaxFloatF64 || endX > s_UiMaxFloatF64 || endY < -s_UiMaxFloatF64 || endY > s_UiMaxFloatF64)
+            return false;
+    }
+    Rect candidate(cast<f32>(x), cast<f32>(y), cast<f32>(width), cast<f32>(height));
+    if(precision == UiRectPrecision::EmptyPaint){
+        if(candidate.width > 0.0f && candidate.x + candidate.width <= candidate.x)
+            candidate.width = 0.0f;
+        if(candidate.height > 0.0f && candidate.y + candidate.height <= candidate.y)
+            candidate.height = 0.0f;
+        if(!IsBoundedUiRect(candidate))
+            return false;
+    }
+    else{
+        if(!IsValidUiRect(candidate))
+            return false;
+        if(precision == UiRectPrecision::PreciseExtents){
+            if((width > 0.0 && candidate.x + candidate.width <= candidate.x) || (height > 0.0 && candidate.y + candidate.height <= candidate.y))
+                return false;
+        }
+    }
+    outRect = candidate;
+    return true;
+}
+
+f64x4 ComputeInsetUiRectBounds(in Rect bounds, in Insets padding){
+    const f64 boundsW = cast<f64>(bounds.width);
+    const f64 boundsH = cast<f64>(bounds.height);
+    const f64 firstW = min(cast<f64>(padding.left), boundsW);
+    const f64 firstH = min(cast<f64>(padding.top), boundsH);
+    const f64 remW = boundsW - firstW;
+    const f64 remH = boundsH - firstH;
+    const f64 lastW = min(cast<f64>(padding.right), remW);
+    const f64 lastH = min(cast<f64>(padding.bottom), remH);
+    return f64x4(cast<f64>(bounds.x) + firstW, cast<f64>(bounds.y) + firstH, remW - lastW, remH - lastH);
+}
+
+b8 TryInsetUiRect(in Rect bounds, in Insets padding, in UiRectPrecision precision, mut Rect outRect){
+    const f64x4 r = ComputeInsetUiRectBounds(bounds, padding);
+    return TryMakeUiRect(r.x, r.y, r.z, r.w, precision, outRect);
+}
+
+b8 TryIntersectUiRects(in Rect lhs, in Rect rhs, in UiRectPrecision precision, mut Rect outRect){
+    const f64 lhsX = cast<f64>(lhs.x);
+    const f64 lhsY = cast<f64>(lhs.y);
+    const f64 rhsX = cast<f64>(rhs.x);
+    const f64 rhsY = cast<f64>(rhs.y);
+    const f64 originX = max(lhsX, rhsX);
+    const f64 originY = max(lhsY, rhsY);
+    const f64 endX = min(lhsX + cast<f64>(lhs.width), rhsX + cast<f64>(rhs.width));
+    const f64 endY = min(lhsY + cast<f64>(lhs.height), rhsY + cast<f64>(rhs.height));
+    const f64 width = max(0.0, endX - originX);
+    const f64 height = max(0.0, endY - originY);
+    return TryMakeUiRect(originX, originY, width, height, precision, outRect);
+}
+
+Rect IntersectUiRectsBounds(in Rect lhs, in Rect rhs){
+    const f32x4 lhsOrigin(lhs.x, lhs.y, 0.0f, 0.0f);
+    const f32x4 rhsOrigin(rhs.x, rhs.y, 0.0f, 0.0f);
+    const f32x4 lhsEnd = lhsOrigin + f32x4(lhs.width, lhs.height, 0.0f, 0.0f);
+    const f32x4 rhsEnd = rhsOrigin + f32x4(rhs.width, rhs.height, 0.0f, 0.0f);
+    const f32x4 origin = max(lhsOrigin, rhsOrigin);
+    const f32x4 end = min(lhsEnd, rhsEnd);
+    const f32x4 size = max(f32x4(0.0f, 0.0f, 0.0f, 0.0f), end - origin);
+    return Rect(origin.x, origin.y, size.x, size.y);
 }
 
 

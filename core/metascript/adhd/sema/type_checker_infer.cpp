@@ -183,6 +183,8 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             return simdInfo->xyzScalarType;
         if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(lhsType))
             return unalignedInfo->laneScalarType;
+        if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(lhsType))
+            return (matInfo->adhdName == "f64x3x3") ? "f64x3u" : (matInfo->isDoubleReg ? "f64x4" : "f32x4");
     }
 
     if(const TypeRef* resolvedRef = inferExprTypeRef(ownerClass, method, expr, scope))
@@ -231,6 +233,9 @@ MStringView TypeChecker::inferExprTypeName(const ClassDecl* ownerClass, const Me
             }
             else if((recvBase == "String" || recvBase == "CompactString" || recvBase == "StringView") && mName == "find"){
                 return "usize";
+            }
+            else if(recvBase == "CompactString" && (mName == "assign" || mName == "append")){
+                return "b8";
             }
             if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(mName)){
                 if(memberInfo->returnRule == BuiltinMemberReturnRule::Void)
@@ -665,5 +670,4 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

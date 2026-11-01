@@ -154,9 +154,9 @@ b8 HasCsgFrameCandidates(Core::ECS::World& world)noexcept{
 
 Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, const Core::ECS::EntityID entity)noexcept{
     if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ receiver->asReceiver(), CsgReceiverKind::Static };
+        return MakeCsgResolvedReceiver(receiver->asReceiver(), CsgReceiverKind::Static);
     if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity))
-        return CsgResolvedReceiver{ receiver->asReceiver(), CsgReceiverKind::Skinned };
+        return MakeCsgResolvedReceiver(receiver->asReceiver(), CsgReceiverKind::Skinned);
     return MakeUnexpected(Failure{});
 }
 

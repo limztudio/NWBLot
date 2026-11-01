@@ -27,14 +27,6 @@ namespace AssetWriterSkeletonDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
-static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
-inline constexpr AStringView s_JointFallbackNamePrefix = "joint_";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
     SIMDVectorSingle determinant;
     const SIMDMatrix inverse = MatrixInverse(&determinant, matrix);
@@ -57,20 +49,15 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, 
     return localBindPose;
 }
 
-u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
-    return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
-}
-
 b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
-    static constexpr AStringView s_Context = "Failed to write NWB model";
-    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_Context))
+    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbModelContext))
         return false;
     if(mesh.skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
         return false;
     }
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(s_Context, s_SkinStreamLabel, ref.skin, mesh.skin.size()))
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(s_WriteNwbModelContext, s_SkinStreamLabel, ref.skin, mesh.skin.size()))
             return false;
     }
     return true;

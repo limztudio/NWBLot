@@ -85,7 +85,6 @@ void FrameRecoveryGraphTask::Discarded(Payload& payload)noexcept{
     if(inputs.capturesLaggedLightingHistory){
         // The built-in derives whole-resource copy declarations and retains imports; slices stay explicit only in the copy body.
         // Caustic and surfel irradiance copy regions follow the shadow visibility slots.
-        constexpr u32 s_IrradianceHistoryCopyRegionCount = 2u;
         Array<Core::GpuCopyTextureTaskRegion, NWB_SCENE_SHADOW_SLOT_COUNT + s_IrradianceHistoryCopyRegionCount> historyCopyRegions = {};
         for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
             Core::GpuCopyTextureTaskRegion& region = historyCopyRegions[shadowSlot];

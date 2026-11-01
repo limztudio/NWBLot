@@ -22,130 +22,17 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_slider_layout{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static SIMDMatrixDouble LoadMetrics(const SliderMetrics& metrics)noexcept{
-    if(
-        !IsFinite(metrics.padding.left)
-        || !IsFinite(metrics.padding.top)
-        || !IsFinite(metrics.padding.right)
-        || !IsFinite(metrics.padding.bottom)
-        || !IsFinite(metrics.thumbExtent.x)
-        || !IsFinite(metrics.thumbExtent.y)
-        || !IsFinite(metrics.trackHeight)
-        || !IsFinite(metrics.contentSize.x)
-        || !IsFinite(metrics.contentSize.y)
-    )
-        return MakeInvalidUiMatrixDouble();
-    return SIMDMatrixDouble{ .v = {
-        VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
-        VectorDoubleSet(metrics.thumbExtent.x, metrics.thumbExtent.y, metrics.trackHeight, 0.0),
-        VectorDoubleSet(metrics.contentSize.x, metrics.contentSize.y, 0.0, 0.0),
-        VectorDoubleZero()
-    } };
-}
-
-[[nodiscard]] static b8 ValidMetrics(const SIMDMatrixDouble& values)noexcept{
-    if(
-        !AreUiMatrixRowsFinite(values, 3u)
-        || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[0], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
-        || (VectorDoubleMoveMask(VectorDoubleGreater(values.v[1], VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXYZ) != VectorDoubleComponentMask::s_DoubleXYZ
-    )
-        return false;
-    const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
-    const SIMDVectorDouble size = VectorDoubleAdd(padding, VectorDoubleMax(values.v[1], VectorDoubleSwizzle<0, 2, 0, 2>(values.v[1])));
-    const f64 width = VectorDoubleGetX(size);
-    const f64 height = VectorDoubleGetY(size);
-    return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && VectorDoubleGetX(values.v[2]) >= static_cast<f32>(width) && VectorDoubleGetY(values.v[2]) >= static_cast<f32>(height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style)noexcept{
-    using namespace __hidden_ui_slider_layout;
-    if(
-        !IsValidSliderOptions(options) || !IsValidUiPadding(style.padding)
-        || !IsFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
-        || !IsFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
-        || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
-        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
-    )
-        return MakeUnexpected(Failure{});
     SliderMetrics candidate;
-    candidate.padding = style.padding;
-    candidate.thumbExtent = style.thumbExtent;
-    candidate.trackHeight = style.trackHeight;
-    const SIMDVectorDouble padding = VectorDoubleAdd(VectorDoubleSet(style.padding.left, style.padding.top, 0.0, 0.0), VectorDoubleSet(style.padding.right, style.padding.bottom, 0.0, 0.0));
-    const SIMDVectorDouble intrinsic = VectorDoubleAdd(padding, VectorDoubleMax(VectorDoubleSet(style.thumbExtent.x, style.thumbExtent.y, 0.0, 0.0), VectorDoubleSet(style.thumbExtent.x, style.trackHeight, 0.0, 0.0)));
-    const SIMDVectorDouble minimum = VectorDoubleSelect(intrinsic, VectorDoubleSet(0.0, options.height, 0.0, 0.0), s_DoubleSIMDMaskY);
-    const SIMDVectorDouble size = VectorDoubleSelect(intrinsic, minimum, VectorDoubleGreater(minimum, intrinsic));
-    const f64 width = VectorDoubleGetX(size);
-    const f64 height = VectorDoubleGetY(size);
-    if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
-        return MakeUnexpected(Failure{});
-    candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
-    if(!ValidMetrics(LoadMetrics(candidate)))
+    if(!TryMeasureSlider(options, style, candidate))
         return MakeUnexpected(Failure{});
     return candidate;
 }
 
 Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& clip, const SliderMetrics& metrics, const f64 normalized)noexcept{
-    using namespace __hidden_ui_slider_layout;
-    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(LoadMetrics(metrics)) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return MakeUnexpected(Failure{});
     SliderPlacement candidate;
-    candidate.bounds = bounds;
-    const auto intersection = IntersectUiRects<UiRectPrecision::PreciseExtents>(bounds, clip);
-    if(!intersection)
+    if(!TryPlaceSlider(bounds, clip, metrics, normalized, candidate))
         return MakeUnexpected(Failure{});
-    candidate.clip = *intersection;
-    const SIMDVectorDouble insetRect = InsetUiRectValue(bounds, metrics.padding);
-    const SIMDVectorDouble xYValue = VectorDoubleSwizzle<0, 1, 0, 1>(insetRect);
-    const SIMDVectorDouble xVector = VectorDoubleSplatX(xYValue);
-    const SIMDVectorDouble yVector = VectorDoubleSplatY(xYValue);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSwizzle<2, 3, 2, 3>(insetRect);
-    const SIMDVectorDouble heightVector = VectorDoubleSplatY(widthHeightValue);
-    const SIMDVectorDouble geometryPair4Operand0 = VectorDoubleSet(static_cast<f64>(metrics.thumbExtent.x), static_cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair4Operand1 = VectorDoubleSelect(VectorDoubleZero(), widthHeightValue, s_DoubleSIMDMaskXY);
-    const SIMDVectorDouble thumbWidthThumbHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
-    const f64 thumbWidth = VectorDoubleGetX(thumbWidthThumbHeightValue);
-    const f64 thumbHeight = VectorDoubleGetY(thumbWidthThumbHeightValue);
-    const SIMDVectorDouble trackHeightVector = VectorDoubleMin(VectorDoubleSelect(widthHeightValue, VectorDoubleReplicate(metrics.trackHeight), s_DoubleSIMDMaskY), widthHeightValue);
-    const SIMDVectorDouble travelVector = VectorDoubleSubtract(widthHeightValue, thumbWidthThumbHeightValue);
-    const SIMDVectorDouble offsets = VectorDoubleMultiply(VectorDoublePermute<0, 4, 2, 3>(thumbWidthThumbHeightValue, travelVector), VectorDoubleSet(s_RectCenterFractionF64, normalized, 0.0, 0.0));
-    const SIMDVectorDouble centers = VectorDoubleAdd(xVector, offsets);
-    const SIMDVectorDouble thumbXVector = normalized == 0.0 ? xVector : normalized == 1.0 ? VectorDoubleAdd(xVector, travelVector) : VectorDoubleSplatY(centers);
-    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(xYValue, widthHeightValue));
-    if(!travelBounds)
-        return MakeUnexpected(Failure{});
-    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoubleSelect(xYValue, centers, s_DoubleSIMDMaskX), VectorDoubleSelect(widthHeightValue, travelVector, s_DoubleSIMDMaskX)));
-    if(!centerTravel)
-        return MakeUnexpected(Failure{});
-    const SIMDVectorDouble verticalSpace = VectorDoubleSubtract(heightVector, VectorDoublePermute<1, 5, 2, 3>(trackHeightVector, thumbWidthThumbHeightValue));
-    const SIMDVectorDouble centeredY = VectorDoubleAdd(yVector, VectorDoubleMultiply(verticalSpace, VectorDoubleReplicate(s_RectCenterFractionF64)));
-    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoublePermute<0, 4, 2, 3>(centers, centeredY), VectorDoubleSelect(trackHeightVector, travelVector, s_DoubleSIMDMaskX)));
-    if(!track)
-        return MakeUnexpected(Failure{});
-    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(VectorDoublePermute<0, 1, 4, 5>(VectorDoubleSelect(thumbXVector, centeredY, s_DoubleSIMDMaskY), thumbWidthThumbHeightValue));
-    if(!thumb)
-        return MakeUnexpected(Failure{});
-    candidate.travelBounds = *travelBounds;
-    candidate.centerTravel = *centerTravel;
-    candidate.track = *track;
-    candidate.thumb = *thumb;
-    candidate.thumbExtent = { static_cast<f32>(thumbWidth), static_cast<f32>(thumbHeight) };
     return candidate;
 }
 

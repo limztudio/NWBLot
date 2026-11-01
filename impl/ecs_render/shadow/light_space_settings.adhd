@@ -543,6 +543,12 @@ class SoftShadowSplitRoute{
     public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
 }
 
+const Name s_LightSpaceDiagnosticsIdentity = "render.light_space_shadow.diagnostics";
+const StringView s_LightSpaceDiagnosticsLabel = "CSG Shadow Diagnostics";
+const Name s_LightSpaceViewUploadIdentity = "render.light_space_shadow.view_upload";
+const StringView s_LightSpaceViewUploadLabel = "Light-Space View Upload";
+const usize s_LightSpaceFixedResourceUseCount = 5u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

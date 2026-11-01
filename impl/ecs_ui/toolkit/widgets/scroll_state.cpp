@@ -47,34 +47,15 @@ b8 ScrollState::setOffset(const f64 offset)noexcept{
 }
 
 b8 ScrollState::ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{
-    if(!IsFinite(start) || start < 0.0 || !IsFinite(end) || end < start || !IsFinite(viewportHeight) || viewportHeight < 0.0)
-        return false;
-    f64 candidate = m_offset;
-    if(end - start > viewportHeight || start < candidate)
-        candidate = start;
-    else if(end > candidate && end - candidate > viewportHeight)
-        candidate = end - viewportHeight;
-    m_offset = candidate;
-    return true;
+    return TryEnsureScrollVisible(m_offset, start, end, viewportHeight, m_offset);
 }
 
 b8 ScrollState::scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{
-    if(!IsFinite(delta) || !IsValidScrollRange(contentHeight, viewportHeight))
-        return false;
-    const f64 maxOffset = Max(0.0, contentHeight - viewportHeight);
-    const f64 base = Min(m_offset, maxOffset);
-    if(delta >= 0.0)
-        m_offset = base + Min(delta, maxOffset - base);
-    else
-        m_offset = Max(0.0, base + delta);
-    return true;
+    return TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight, m_offset);
 }
 
 b8 ScrollState::clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{
-    if(!IsValidScrollRange(contentHeight, viewportHeight))
-        return false;
-    m_offset = Min(m_offset, Max(0.0, contentHeight - viewportHeight));
-    return true;
+    return TryClampScrollOffset(m_offset, contentHeight, viewportHeight, m_offset);
 }
 
 

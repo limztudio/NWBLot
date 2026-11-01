@@ -24,8 +24,6 @@ NWB_ASSET_BUILDER_BEGIN
 
 namespace Assets = Core::Assets;
 
-static constexpr AStringView s_AssetCacheDirectory = "__asset_cache";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +42,7 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     if(!options.resolvedRepoRoot.empty())
         paths.repoRoot = options.resolvedRepoRoot;
     else{
-        const Path requestedRepoRoot(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot));
+        const Path requestedRepoRoot(arena, options.repoRoot.empty() ? s_DefaultRepoRoot : AStringView(options.repoRoot));
         auto repoRoot = AbsolutePath(requestedRepoRoot);
         if(!repoRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), ConvertString(repoRoot.error().message()));

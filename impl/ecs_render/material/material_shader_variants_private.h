@@ -25,7 +25,7 @@ namespace ECSRenderMaterialShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView VariantSegmentDefineName(AStringView segment)noexcept;
+using ::NWB::Impl::VariantSegmentDefineName;
 [[nodiscard]] Expected<AStringView> FindVariantDefineAssignment(AStringView variant, AStringView defineName)noexcept;
 [[nodiscard]] Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(Core::GraphicsArena& arena, AStringView baseVariant, Span<const ShaderVariantDefineAssignment> defineAssignments);
 

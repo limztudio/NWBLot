@@ -43,13 +43,6 @@ Core::Alloc::GlobalArena& Arena(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_SourcePositionLabel = "position";
-inline constexpr StringView s_SourceNormalLabel = "normal";
-inline constexpr StringView s_SourceTangentLabel = "tangent";
-inline constexpr StringView s_SourceUv0Label = "uv0";
-inline constexpr StringView s_SourceColorLabel = "color";
-inline constexpr StringView s_SourceVertexRefLabel = "vertex_ref";
-
 template<typename Value, typename Lookup>
 [[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, UtilityVector<Value>& inOutStream, Lookup& inOutLookup){
     auto found = inOutLookup.find(value);
@@ -93,17 +86,11 @@ usize MeshSkinInfluenceHasher::operator()(const MeshSkinInfluence& value)const n
 }
 
 usize SourceVertexRefHasher::operator()(const SourceVertexRef& value)const noexcept{
-    usize seed = Hasher<u32>{}(value.position);
-    HashCombine(seed, value.normal);
-    HashCombine(seed, value.tangent);
-    HashCombine(seed, value.uv0);
-    HashCombine(seed, value.color);
-    HashCombine(seed, value.skin);
-    return seed;
+    return HashSourceVertexRef(value);
 }
 
 b8 SourceVertexRefEqual::operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
-    return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
+    return EqualSourceVertexRef(lhs, rhs);
 }
 
 SourceMeshBuildContext::SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)

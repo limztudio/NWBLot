@@ -1,0 +1,114 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/payload_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_MeshletBuildParallelTriangleThreshold = 256u;
+const usize s_MinTrianglesPerBatch = 64u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAllowedMeshAssetField(in StringView fieldName){
+    return
+        fieldName == s_MeshPositionsFieldNameView
+        || fieldName == s_MeshNormalsFieldNameView
+        || fieldName == s_MeshTangentsFieldNameView
+        || fieldName == s_MeshUv0FieldNameView
+        || fieldName == s_MeshColorsFieldNameView
+        || fieldName == s_MeshVertexRefsFieldNameView
+        || fieldName == s_MeshIndicesFieldNameView
+    ;
+}
+
+f32 EvaluateMeshletCandidateScore(
+    in u32 sharedVertexCount,
+    in u32 missingVertexCount,
+    in f32 predictedRadiusGrowth,
+    in f32 centroidDistance,
+    in f32 normalCoherence,
+    in f32 coneWidening,
+    in b8 disconnected
+){
+    f32 disconnectedPenalty = 0.0f;
+    if(disconnected)
+        disconnectedPenalty = s_MeshletScoreDisconnectedPenalty;
+    return cast<f32>(sharedVertexCount) * s_MeshletScoreSharedVertexWeight
+        - cast<f32>(missingVertexCount) * s_MeshletScoreNewVertexWeight
+        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
+        - s_MeshletScoreCentroidWeight * centroidDistance
+        + s_MeshletScoreNormalWeight * normalCoherence
+        - s_MeshletScoreConePenaltyWeight * coneWidening
+        - disconnectedPenalty;
+}
+
+b8 IsBetterMeshletCandidate(in f32 score, in u32 triangleIndex, in b8 hasExisting, in MeshletFrontierCandidate existing){
+    if(!hasExisting)
+        return true;
+    if(score > existing.score)
+        return true;
+    return score == existing.score && triangleIndex < existing.triangleIndex;
+}
+
+TriangleEdge MakeTriangleEdge(in u32 first, in u32 second, in u32 triangle){
+    TriangleEdge edge;
+    edge.positions = (cast<u64>(min(first, second)) << s_EdgeKeyVertexShift) | cast<u64>(max(first, second));
+    edge.triangle = triangle;
+    edge.forward = first < second;
+    return edge;
+}
+
+f64x4 LoadTrianglePositionDouble(in f32x3u position){
+    return f64x4(cast<f64>(position.x), cast<f64>(position.y), cast<f64>(position.z), 0.0);
+}
+
+b8 EqualDoubleLaneProducts(in f64x4 lhs, in f64x4 rhs){
+    const f64x4 products = lhs * rhs;
+    return products.x == products.y;
+}
+
+b8 DegenerateTriangle(in f64x4 a, in f64x4 b, in f64x4 c){
+    const f64x4 ab = b - a;
+    const f64x4 ac = c - a;
+    return
+        EqualDoubleLaneProducts(ab.yzww, ac.zyww)
+        && EqualDoubleLaneProducts(ab.zxww, ac.xzww)
+        && EqualDoubleLaneProducts(ab.xyww, ac.yxww)
+    ;
+}
+
+f64x4 RelativeTriangleVolume(in f64x4 a, in f64x4 b, in f64x4 c, in f64x4 origin){
+    const f64x4 relativeA = a - origin;
+    const f64x4 relativeB = b - origin;
+    const f64x4 relativeC = c - origin;
+    const f64x4 ax = relativeA.xxxx;
+    const f64x4 ay = relativeA.yyyy;
+    const f64x4 az = relativeA.zzzz;
+    const f64x4 bx = relativeB.xxxx;
+    const f64x4 by = relativeB.yyyy;
+    const f64x4 bz = relativeB.zzzz;
+    const f64x4 cx = relativeC.xxxx;
+    const f64x4 cy = relativeC.yyyy;
+    const f64x4 cz = relativeC.zzzz;
+    const f64x4 bycz = by * cz;
+    const f64x4 bzcy = bz * cy;
+    const f64x4 bzcx = bz * cx;
+    const f64x4 bxcz = bx * cz;
+    const f64x4 bxcy = bx * cy;
+    const f64x4 bycx = by * cx;
+    const f64x4 termX = ax * (bycz - bzcy);
+    const f64x4 termY = ay * (bzcx - bxcz);
+    const f64x4 termZ = az * (bxcy - bycx);
+    const f64x4 sumXY = termX + termY;
+    return sumXY + termZ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

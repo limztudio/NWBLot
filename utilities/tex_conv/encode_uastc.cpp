@@ -28,12 +28,6 @@ namespace __hidden_encode_uastc{
 
 using FloatMipChain = basisu::vector<FloatPlanes>;
 using EncodedMip = TextureFormat::MipLevelLayout;
-static constexpr u32 s_EncoderWorkerCount = 1u;
-static constexpr f32 s_UnormScale = 255.0f;
-static constexpr f32 s_UnormRoundingBias = 0.5f;
-static constexpr u32 s_SeparateAlphaPayloadMultiplier = 2u;
-static constexpr AStringView s_MipFilter = "box";
-static constexpr usize s_InvalidSlice = Limit<usize>::s_Max;
 
 struct AlphaTransport{
     TextureAlphaMode::Enum mode = TextureAlphaMode::Opaque;

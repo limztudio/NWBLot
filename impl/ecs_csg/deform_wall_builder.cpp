@@ -46,11 +46,11 @@ Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(const u32 first, const u32 s
     if(found != edgeSplits.end()){
         return found.value();
     }
-    const f32 denominator = firstDistance - secondDistance;
-    if(!IsFinite(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
-        return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
-    const SIMDVectorSingle blend = VectorReplicate(Saturate(Abs(secondDistance / denominator)));
+    f32 blendValue = 0.0f;
+    if(!TryComputeCsgDeformEdgeSplitBlend(firstDistance, secondDistance, blendValue))
+        return MakeUnexpected(Failure{});
+    const SIMDVectorSingle blend = VectorReplicate(blendValue);
     const SIMDVectorSingle other = VectorSubtract(s_SIMDOne, blend);
     const CsgDeformVertex& firstVertex = vertices[first];
     const CsgDeformVertex& secondVertex = vertices[second];
@@ -173,5 +173,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

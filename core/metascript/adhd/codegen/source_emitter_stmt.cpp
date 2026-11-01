@@ -116,6 +116,8 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
             if(child->condition)
                 emitExpr(out, *child->condition, true);
             out.append("){\r\n");
+            if(child->condition)
+                emitSimdMutCallReloads(out, *child->condition, indent + 1u);
             if(isLastInCase)
                 emitSwitchIfChainStatements(out, child->statements, indent + 1u);
             else
@@ -125,12 +127,17 @@ void SourceEmitter::emitSwitchIfChainStatements(MString& out, const Span<const S
             if(!child->elseStatements.empty()){
                 emitIndent(out, indent);
                 out.append("else{\r\n");
+                if(child->condition)
+                    emitSimdMutCallReloads(out, *child->condition, indent + 1u);
                 if(isLastInCase)
                     emitSwitchIfChainStatements(out, child->elseStatements, indent + 1u);
                 else
                     emitStatementList(out, child->elseStatements, indent + 1u);
                 emitIndent(out, indent);
                 out.append("}\r\n");
+            }
+            else if(child->condition){
+                emitSimdMutCallReloads(out, *child->condition, indent);
             }
         }
         else{
@@ -289,15 +296,22 @@ void SourceEmitter::emitStmt(MString& out, const Stmt& stmt, const u32 indent)co
         if(stmt.condition)
             emitExpr(out, *stmt.condition, true);
         out.append("){\r\n");
+        if(stmt.condition)
+            emitSimdMutCallReloads(out, *stmt.condition, indent + 1u);
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
         out.append("}\r\n");
         if(!stmt.elseStatements.empty()){
             emitIndent(out, indent);
             out.append("else{\r\n");
+            if(stmt.condition)
+                emitSimdMutCallReloads(out, *stmt.condition, indent + 1u);
             emitStatementList(out, stmt.elseStatements, indent + 1u);
             emitIndent(out, indent);
             out.append("}\r\n");
+        }
+        else if(stmt.condition){
+            emitSimdMutCallReloads(out, *stmt.condition, indent);
         }
         break;
     }

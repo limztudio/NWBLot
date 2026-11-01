@@ -50,7 +50,7 @@ u32 Skeleton::findJointIndex(const Name jointName)const noexcept{
 b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
-    if(m_joints.empty() || m_joints.size() > Limit<u32>::s_Max){
+    if(!IsValidSkeletonJointCount(m_joints.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
         return false;
     }
@@ -85,7 +85,7 @@ b8 Skeleton::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has non-finite local bind pose"), i);
             return false;
         }
-        if(joint.parentIndex != s_SkeletonInvalidJointIndex && joint.parentIndex >= i){
+        if(!IsValidSkeletonJointParentIndex(joint, i)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}"), i, joint.parentIndex);
             return false;
         }

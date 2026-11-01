@@ -15,6 +15,62 @@
 
 // Hash semantic scene inputs, not padded object representations.
 const u32 s_SceneStaticCacheHashVersion = 2u;
+const u64 s_RtFnv64OffsetBasis = 14695981039346656037ull;
+const u64 s_RtFnv64Prime = 1099511628211ull;
+
+void RtFnv64AppendU8(mut u64 hash, in u8 value){
+    hash = (hash ^ cast<u64>(value)) * s_RtFnv64Prime;
+}
+
+void RtFnv64AppendU32(mut u64 hash, in u32 value){
+    hash = (hash ^ cast<u64>(value & 0xffu)) * s_RtFnv64Prime;
+    hash = (hash ^ cast<u64>((value >> 8u) & 0xffu)) * s_RtFnv64Prime;
+    hash = (hash ^ cast<u64>((value >> 16u) & 0xffu)) * s_RtFnv64Prime;
+    hash = (hash ^ cast<u64>((value >> 24u) & 0xffu)) * s_RtFnv64Prime;
+}
+
+void RtFnv64AppendUsize(mut u64 hash, in usize value){
+    const u64 bits = cast<u64>(value);
+    hash = (hash ^ (bits & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 8ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 16ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 24ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 32ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 40ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 48ull) & 0xffull)) * s_RtFnv64Prime;
+    hash = (hash ^ ((bits >> 56ull) & 0xffull)) * s_RtFnv64Prime;
+}
+
+void RtFnv64AppendF32(mut u64 hash, in f32 value){
+    RtFnv64AppendU32(hash, bit_cast<u32>(value));
+}
+
+void RtFnv64AppendF32x4(mut u64 hash, in f32x4 value){
+    RtFnv64AppendU32(hash, bit_cast<u32>(value.x));
+    RtFnv64AppendU32(hash, bit_cast<u32>(value.y));
+    RtFnv64AppendU32(hash, bit_cast<u32>(value.z));
+    RtFnv64AppendU32(hash, bit_cast<u32>(value.w));
+}
+
+void RtFnv64AppendF32x3x4(mut u64 hash, in f32x3x4 value){
+    RtFnv64AppendF32(hash, value[0u][0u]);
+    RtFnv64AppendF32(hash, value[0u][1u]);
+    RtFnv64AppendF32(hash, value[0u][2u]);
+    RtFnv64AppendF32(hash, value[0u][3u]);
+    RtFnv64AppendF32(hash, value[1u][0u]);
+    RtFnv64AppendF32(hash, value[1u][1u]);
+    RtFnv64AppendF32(hash, value[1u][2u]);
+    RtFnv64AppendF32(hash, value[1u][3u]);
+    RtFnv64AppendF32(hash, value[2u][0u]);
+    RtFnv64AppendF32(hash, value[2u][1u]);
+    RtFnv64AppendF32(hash, value[2u][2u]);
+    RtFnv64AppendF32(hash, value[2u][3u]);
+}
+
+void RtFnv64AppendBytes(mut u64 hash, in Span<u8> bytes){
+    for(usize index = 0u; index < bytes.size(); ++index)
+        RtFnv64AppendU8(hash, bytes[index]);
+}
 const StringView s_SceneShadowInstanceMaterialName = "render.deferred_effects.instance_material";
 const StringView s_SceneShadowMaterialTypedName = "render.deferred_effects.material_typed";
 const StringView s_SceneShadowInstancesName = "render.deferred_effects.shadow_instances";
@@ -346,6 +402,100 @@ b8 IsValidSceneBvhNodeChildren(in u32 leftChild, in u32 rightChild, in u32 nodeI
         return (leftChild & ~leafFlag) < leafCount && rightChild == 1u;
     return leftChild > nodeIndex && rightChild > nodeIndex && leftChild < nodeCount && rightChild < nodeCount;
 }
+
+// Conservative top-level bounds for transparent-shadow rays.
+const f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
+const f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
+const f32 s_SceneBvhBoundsMidpointWeight = 0.5f;
+const u64 s_SoftwareNodeByteSize = 32u;
+const usize s_FixedSceneResourceUseCount = 6u;
+
+void InflateSwShadowSceneBoundsData(mut f32x4 boundsMin, mut f32x4 boundsMax){
+    const f32x4 extent = boundsMax - boundsMin;
+    const f32 maxExtent = max(extent.x, max(extent.y, extent.z));
+    const f32 padding = max(s_SwShadowSceneBoundsMinPadding, maxExtent * s_SwShadowSceneBoundsRelativePadding);
+    const f32x4 paddingVector(padding, padding, padding, 0.0f);
+    boundsMin = boundsMin - paddingVector;
+    boundsMax = boundsMax + paddingVector;
+}
+
+SceneBvhPrimitiveCalculation MakeSceneBvhPrimitiveCalculation(in f32x4 worldMin, in f32x4 worldMax, in b8 transparentOccluder){
+    SceneBvhPrimitiveCalculation primitive;
+    primitive.aabbMin = worldMin;
+    primitive.aabbMax = worldMax;
+    primitive.centroid = (worldMin + worldMax) * s_SceneBvhBoundsMidpointWeight;
+    primitive.transparentOccluder = transparentOccluder;
+    return primitive;
+}
+
+NwbBvhNodeGpu PackSceneBvhNodeGpu(in SceneBvhNodeCalculation buildNode){
+    NwbBvhNodeGpu node;
+    node.aabbMinLeftChild = f32x3_u32(buildNode.aabbMin.x, buildNode.aabbMin.y, buildNode.aabbMin.z, buildNode.leftChild);
+    u32 taggedRightChild = buildNode.rightChild;
+    if(buildNode.containsTransparentOccluder)
+        taggedRightChild |= cast<u32>(BvhNodeIndex::TransparentSubtreeFlag);
+    node.aabbMaxRightChild = f32x3_u32(buildNode.aabbMax.x, buildNode.aabbMax.y, buildNode.aabbMax.z, taggedRightChild);
+    return node;
+}
+
+u64 ComputeSceneSwBvhStaticSceneHash(in Span<SceneSwBvhInstanceGpu> instances, in Span<SceneBvhPrimitiveCalculation> primitives){
+    assert(instances.size() == primitives.size());
+
+    u64 hash = s_RtFnv64OffsetBasis;
+    RtFnv64AppendU32(hash, s_SceneStaticCacheHashVersion);
+    RtFnv64AppendUsize(hash, instances.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const SceneSwBvhInstanceGpu instance = instances[index];
+        const SceneBvhPrimitiveCalculation primitive = primitives[index];
+        RtFnv64AppendF32x3x4(hash, instance.worldToObject);
+        RtFnv64AppendU32(hash, instance.primitiveCount);
+        RtFnv64AppendF32(hash, primitive.aabbMin.x);
+        RtFnv64AppendF32(hash, primitive.aabbMin.y);
+        RtFnv64AppendF32(hash, primitive.aabbMin.z);
+        RtFnv64AppendF32(hash, 0.0f);
+        RtFnv64AppendF32(hash, primitive.aabbMax.x);
+        RtFnv64AppendF32(hash, primitive.aabbMax.y);
+        RtFnv64AppendF32(hash, primitive.aabbMax.z);
+        RtFnv64AppendF32(hash, 0.0f);
+        u8 transparentByte = 0u;
+        if(primitive.transparentOccluder)
+            transparentByte = 1u;
+        RtFnv64AppendU8(hash, transparentByte);
+    }
+    return hash;
+}
+
+b8 IsRefractiveInstanceBoundsIsolated(in Span<RayTracingInstanceWorldBounds> instanceWorldBounds, in usize targetIndex){
+    if(targetIndex >= instanceWorldBounds.size())
+        return false;
+
+    const RayTracingInstanceWorldBounds targetBounds = instanceWorldBounds[targetIndex];
+    const f32 expandedMinX = targetBounds.minimum.x - s_RefractionCertifiedBoundsMargin;
+    const f32 expandedMinY = targetBounds.minimum.y - s_RefractionCertifiedBoundsMargin;
+    const f32 expandedMinZ = targetBounds.minimum.z - s_RefractionCertifiedBoundsMargin;
+    const f32 expandedMaxX = targetBounds.maximum.x + s_RefractionCertifiedBoundsMargin;
+    const f32 expandedMaxY = targetBounds.maximum.y + s_RefractionCertifiedBoundsMargin;
+    const f32 expandedMaxZ = targetBounds.maximum.z + s_RefractionCertifiedBoundsMargin;
+    for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
+        if(index == targetIndex)
+            continue;
+        const RayTracingInstanceWorldBounds otherBounds = instanceWorldBounds[index];
+        const b8 separated =
+            expandedMaxX < otherBounds.minimum.x || otherBounds.maximum.x < expandedMinX
+            || expandedMaxY < otherBounds.minimum.y || otherBounds.maximum.y < expandedMinY
+            || expandedMaxZ < otherBounds.minimum.z || otherBounds.maximum.z < expandedMinZ
+        ;
+        if(!separated)
+            return false;
+    }
+    return true;
+}
+
+const usize s_SortBuildStateCapacity = 3u;
+const u32 s_SceneBuffersPerCandidate = 5u;
+const u32 s_SceneBuffersPerCsgCandidate = 7u;
+const usize s_SceneImportedBufferCount = 4u;
+const usize s_SceneShadowBufferCount = 5u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -39,8 +39,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
         ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
         ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
     };
-    constexpr usize s_ProducerResourceSetUseCapacity = 3u;
-    Array<Core::GpuTaskResourceSetUse, s_ProducerResourceSetUseCapacity> opaqueComputeEmulationResourceSetUses = {};
+    Array<Core::GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> opaqueComputeEmulationResourceSetUses = {};
     usize opaqueComputeEmulationResourceSetUseCount = 0u;
     opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid()){
@@ -100,8 +99,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
         ReadUse(inputs.resources.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer),
         ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
-    constexpr usize s_ProducerResourceSetUseCapacity = 3u;
-    Array<Core::GpuTaskResourceSetUse, s_ProducerResourceSetUseCapacity> opaqueCsgReceiverComputeEmulationResourceSetUses = {};
+    Array<Core::GpuTaskResourceSetUse, s_OpaqueProducerResourceSetUseCapacity> opaqueCsgReceiverComputeEmulationResourceSetUses = {};
     usize opaqueCsgReceiverComputeEmulationResourceSetUseCount = 0u;
     opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid()){

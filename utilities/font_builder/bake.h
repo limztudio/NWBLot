@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include "utilities/font_builder/bake_types.adhd.h"
+
 #include <impl/assets_font_atlas/model.h>
 
 
@@ -18,13 +20,6 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr AStringView s_TrueTypeExtension = ".ttf";
-inline constexpr AStringView s_OpenTypeExtension = ".otf";
-// One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
-inline constexpr u32 s_GlyphGuardExtent = 2u;
-
-inline constexpr u32 s_DefaultBakeExtent = 1024u;
 
 struct BakeOptions{
     Path source;

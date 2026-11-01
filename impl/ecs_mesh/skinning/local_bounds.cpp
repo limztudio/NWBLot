@@ -31,8 +31,8 @@ b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSki
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime local bounds partial count is empty or exceeds shader addressing"));
         return false;
     }
-    const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "meshlet_local_bounds");
-    const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "local_bounds");
+    const auto partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_MeshletLocalBoundsSuffix);
+    const auto outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_LocalBoundsSuffix);
     if(!partialName || !outputName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
         return false;
@@ -77,7 +77,7 @@ b8 MeshSkinningLocalBoundsTask::Record(const Payload& payload, Core::CommandList
         state.setPipeline(pipeline);
         commandList.setComputeState(state);
         heap.bindCompute(commandList, *pipeline);
-        const MeshletBoundsPushConstants push{plan.meshletCount, plan.bindlessResourceSlots};
+        const MeshletBoundsPushConstants push = MakeMeshletBoundsPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
         commandList.setPushConstants(&push, sizeof(push));
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_LocalBounds, device, commandList);
 

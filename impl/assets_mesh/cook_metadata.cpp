@@ -47,15 +47,7 @@ b8 AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize
 
 
 b8 MeshCookMetadata::IsAllowedMeshAssetField(const AStringView fieldName)noexcept{
-    return
-        fieldName == s_MeshPositionsFieldNameView
-        || fieldName == s_MeshNormalsFieldNameView
-        || fieldName == s_MeshTangentsFieldNameView
-        || fieldName == s_MeshUv0FieldNameView
-        || fieldName == s_MeshColorsFieldNameView
-        || fieldName == s_MeshVertexRefsFieldNameView
-        || fieldName == s_MeshIndicesFieldNameView
-    ;
+    return Impl::IsAllowedMeshAssetField(fieldName);
 }
 
 Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value)noexcept{

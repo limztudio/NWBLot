@@ -172,13 +172,10 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
     m_intervalSamplePayload.csgComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
     m_intervalSamplePayload.opaqueCsgComputeEmulationTiming = opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned ? &m_intervalSampleComputeEmulationTiming : nullptr;
     // Material instance and typed-material reads.
-    constexpr usize s_MaterialBufferResourceUseCount = 2u;
-    constexpr usize s_CsgRemovedIntervalResourceUseCount = 4u;
-    constexpr usize s_GbufferColorResourceUseCount = 4u;
     csgIntervalSampleResourceUses.reserve(
-        1u + (inputs.hasOpaqueDrawItems ? s_MaterialBufferResourceUseCount : 0u)
+        1u + (inputs.hasOpaqueDrawItems ? s_OpaqueCsgMaterialBufferResourceUseCount : 0u)
         + (inputs.hasCsgFrameGpuWork ? s_OpaqueCsgFrameGpuResourceUseCount : 0u)
-        + s_CsgRemovedIntervalResourceUseCount + s_GbufferColorResourceUseCount
+        + s_OpaqueCsgRemovedIntervalResourceUseCount + s_OpaqueCsgGbufferColorResourceUseCount
     );
     csgIntervalSampleResourceUses.push_back(ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer));
     if(inputs.hasOpaqueDrawItems){
@@ -220,8 +217,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
         .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    constexpr usize s_IntervalSampleResourceSetUseCapacity = 3u;
-    Array<Core::GpuTaskResourceSetUse, s_IntervalSampleResourceSetUseCapacity> csgIntervalSampleMaterialResourceSetUses = {};
+    Array<Core::GpuTaskResourceSetUse, s_OpaqueCsgIntervalSampleResourceSetUseCapacity> csgIntervalSampleMaterialResourceSetUses = {};
     usize csgIntervalSampleMaterialResourceSetUseCount = 0u;
     if(m_intervalSamplePayload.materialGeometryStatesGraphOwned)
         csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] = csgIntervalSampleMaterialGeometrySetUse;
@@ -261,7 +257,7 @@ Expected<OpaqueCsgIntervalStageTasks> OpaqueCsgIntervalStage::declare(const Opaq
             ReadTextureUse(inputs.resources.csgRemovedIntervalData, inputs.removedIntervalSubresources, Core::ResourceStates::UnorderedAccess),
             ReadTextureUse(inputs.resources.csgRemovedIntervalCount, inputs.removedIntervalCountSubresources, Core::ResourceStates::UnorderedAccess),
         };
-        Array<Core::GpuTaskResourceSetUse, s_IntervalSampleResourceSetUseCapacity> opaqueCsgIntervalSampleComputeEmulationResourceSetUses = {};
+        Array<Core::GpuTaskResourceSetUse, s_OpaqueCsgIntervalSampleResourceSetUseCapacity> opaqueCsgIntervalSampleComputeEmulationResourceSetUses = {};
         usize opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount = 0u;
         opaqueCsgIntervalSampleComputeEmulationResourceSetUses[opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount++] = csgIntervalSampleMaterialGeometrySetUse;
         if(csgIntervalSampleMaterialSampledTextureSet.valid())

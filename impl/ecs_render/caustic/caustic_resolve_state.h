@@ -23,12 +23,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_CausticResolveActivityBufferCount = 2u;
 inline constexpr usize s_CausticResolveWaveletPassCount = NWB_CAUSTIC_RESOLVE_PASS_COUNT;
 
-inline constexpr Array<Name, s_CausticResolveActivityBufferCount> s_CausticResolveActivityBufferNames = {
-    Name("caustic_resolve_activity_a"),
-    Name("caustic_resolve_activity_b"),
+inline const Array<Name, s_CausticResolveActivityBufferCount> s_CausticResolveActivityBufferNames = {
+    s_CausticResolveActivityBufferAName,
+    s_CausticResolveActivityBufferBName,
 };
 
 static_assert(NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE == 64u);
@@ -68,14 +67,6 @@ struct CausticResolveState{
     CausticResolveStageState m_upsample;
     b8 m_failed = false;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] constexpr f32 EffectiveCausticIntensity(const f32 decay)noexcept{
-    return decay > 0.0f ? s_CausticIntensity * (1.0f - decay) : s_CausticIntensity;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

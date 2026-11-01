@@ -164,7 +164,7 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
     if(m_textLanguage.size() >= key.language.size())
         return false;
     for(usize index = 0u; index < m_textLanguage.size(); ++index)
-        key.language[index] = m_textLanguage[index];
+        key.language[index] = static_cast<u8>(m_textLanguage[index]);
     frame.measureKey = key;
     ListState& state = *frame.state;
     if(key != state.m_measureKey || state.m_rowHeight <= 0.0f){

@@ -151,6 +151,245 @@ b8 IsValidSliderOptions(in SliderOptions options){
         && options.height >= 0.0f;
 }
 
+void ApplySkinPaletteToSliderStyle(in UiSkinPalette palette, mut SliderStyle style){
+    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
+    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
+    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
+}
+
+b8 IsValidSliderMetrics(in SliderMetrics metrics){
+    if(
+        !IsValidUiPadding(metrics.padding)
+        || !isFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
+        || !isFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
+        || !isFinite(metrics.trackHeight) || metrics.trackHeight <= 0.0f
+        || !IsValidUiExtent(metrics.contentSize)
+    )
+        return false;
+    const f64 padW = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right);
+    const f64 padH = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom);
+    const f64 width = padW + cast<f64>(metrics.thumbExtent.x);
+    const f64 height = padH + max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
+    return width <= s_UiMaxFloatF64
+        && height <= s_UiMaxFloatF64
+        && cast<f64>(metrics.contentSize.x) >= cast<f64>(cast<f32>(width))
+        && cast<f64>(metrics.contentSize.y) >= cast<f64>(cast<f32>(height));
+}
+
+b8 TryMeasureSlider(in SliderOptions options, in SliderStyle style, mut SliderMetrics outMetrics){
+    outMetrics = SliderMetrics();
+    if(
+        !IsValidSliderOptions(options)
+        || !IsValidUiPadding(style.padding)
+        || !isFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
+        || !isFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
+        || !isFinite(style.trackHeight) || style.trackHeight <= 0.0f
+        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
+    )
+        return false;
+    SliderMetrics candidate;
+    candidate.padding = style.padding;
+    candidate.thumbExtent = style.thumbExtent;
+    candidate.trackHeight = style.trackHeight;
+    const f64 padW = cast<f64>(style.padding.left) + cast<f64>(style.padding.right);
+    const f64 padH = cast<f64>(style.padding.top) + cast<f64>(style.padding.bottom);
+    const f64 width = padW + cast<f64>(style.thumbExtent.x);
+    const f64 intrinsicH = padH + max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
+    const f64 height = max(intrinsicH, cast<f64>(options.height));
+    if(!isFinite(width) || width > s_UiMaxFloatF64 || !isFinite(height) || height > s_UiMaxFloatF64)
+        return false;
+    candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
+    if(!IsValidSliderMetrics(candidate))
+        return false;
+    outMetrics = candidate;
+    return true;
+}
+
+b8 TryPlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized, mut SliderPlacement outPlacement){
+    outPlacement = SliderPlacement();
+    if(!IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !IsValidSliderMetrics(metrics) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
+        return false;
+    SliderPlacement candidate;
+    candidate.bounds = bounds;
+    if(!TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents, candidate.clip))
+        return false;
+    const f64x4 insetRect = ComputeInsetUiRectBounds(bounds, metrics.padding);
+    const f64 x = insetRect.x;
+    const f64 y = insetRect.y;
+    const f64 w = insetRect.z;
+    const f64 h = insetRect.w;
+    const f64 thumbW = min(cast<f64>(metrics.thumbExtent.x), max(0.0, w));
+    const f64 thumbH = min(cast<f64>(metrics.thumbExtent.y), max(0.0, h));
+    const f64 trackH = min(cast<f64>(metrics.trackHeight), h);
+    const f64 travelW = w - thumbW;
+    const f64 centerStartX = x + thumbW * 0.5;
+    const f64 thumbCenterX = x + travelW * normalized;
+    f64 thumbX = thumbCenterX;
+    if(normalized == 0.0)
+        thumbX = x;
+    else if(normalized == 1.0)
+        thumbX = x + travelW;
+    if(!TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents, candidate.travelBounds))
+        return false;
+    if(!TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents, candidate.centerTravel))
+        return false;
+    const f64 trackY = y + (h - trackH) * 0.5;
+    const f64 thumbY = y + (h - thumbH) * 0.5;
+    if(!TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents, candidate.track))
+        return false;
+    if(!TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents, candidate.thumb))
+        return false;
+    candidate.thumbExtent = Point(cast<f32>(thumbW), cast<f32>(thumbH));
+    outPlacement = candidate;
+    return true;
+}
+
+f64 ResolveSliderKeyStep(in f64 minimum, in f64 maximum, in f64 configuredStep){
+    if(configuredStep > 0.0)
+        return configuredStep;
+    const f64 span = maximum - minimum;
+    if(isFinite(span)){
+        const f64 step = span / s_SliderDefaultKeyStepDivisor;
+        if(step == 0.0)
+            return span;
+        return step;
+    }
+    return (maximum / s_SliderDefaultKeyStepDivisor) - (minimum / s_SliderDefaultKeyStepDivisor);
+}
+
+f64 StepSliderValueOnce(in f64 value, in f64 minimum, in f64 maximum, in f64 step, in b8 increasing){
+    const f64 current = clamp(value, minimum, maximum);
+    if(increasing){
+        const f64 distance = maximum - current;
+        if(step >= distance)
+            return maximum;
+        return clamp(current + step, minimum, maximum);
+    }
+    const f64 distance = current - minimum;
+    if(step >= distance)
+        return minimum;
+    return clamp(current - step, minimum, maximum);
+}
+
+b8 TryStepSliderValue(in f64 currentValue, in SliderOptions options, in ControlActionKind kind, mut f64 outValue){
+    outValue = currentValue;
+    f64 step = 0.0;
+    f64 value = currentValue;
+    switch(kind){
+    case ControlActionKind::Left:
+    case ControlActionKind::Down:
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        value = StepSliderValueOnce(value, options.minimum, options.maximum, step, false);
+        break;
+    case ControlActionKind::Right:
+    case ControlActionKind::Up:
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        value = StepSliderValueOnce(value, options.minimum, options.maximum, step, true);
+        break;
+    case ControlActionKind::PageDown:
+    case ControlActionKind::PageUp:
+        step = ResolveSliderKeyStep(options.minimum, options.maximum, options.keyStep);
+        for(u32 index = 0u; index < s_SliderPageStepCount; ++index)
+            value = StepSliderValueOnce(value, options.minimum, options.maximum, step, kind == ControlActionKind::PageUp);
+        break;
+    case ControlActionKind::Home:
+        value = options.minimum;
+        break;
+    case ControlActionKind::End:
+        value = options.maximum;
+        break;
+    default:
+        return true;
+    }
+    if(!isFinite(value))
+        return false;
+    outValue = value;
+    return true;
+}
+
+b8 TryNormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value, mut f64 outNormalized){
+    outNormalized = 0.0;
+    if(!IsValidSliderRange(minimum, maximum) || !isFinite(value))
+        return false;
+    f64 normalizedValue = 0.0;
+    if(minimum != maximum && value > minimum){
+        if(value >= maximum)
+            normalizedValue = 1.0;
+        else{
+            const f64 span = maximum - minimum;
+            if(isFinite(span))
+                normalizedValue = (value - minimum) / span;
+            else{
+                const f64 scaledValue = value * s_SliderOverflowGuardScale;
+                const f64 scaledMin = minimum * s_SliderOverflowGuardScale;
+                const f64 scaledMax = maximum * s_SliderOverflowGuardScale;
+                normalizedValue = (scaledValue - scaledMin) / (scaledMax - scaledMin);
+            }
+        }
+    }
+    if(!isFinite(normalizedValue))
+        return false;
+    if(normalizedValue > 0.0)
+        outNormalized = min(1.0, normalizedValue);
+    return true;
+}
+
+b8 TryInterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized, mut f64 outValue){
+    outValue = 0.0;
+    if(!IsValidSliderRange(minimum, maximum) || !isFinite(normalized) || normalized < 0.0 || normalized > 1.0)
+        return false;
+    f64 value = minimum;
+    if(normalized == 1.0)
+        value = maximum;
+    else if(normalized > 0.0 && minimum != maximum){
+        if(minimum < 0.0 && maximum > 0.0){
+            const f64 lowerWeight = 1.0 - normalized;
+            value = minimum * lowerWeight + maximum * normalized;
+        }
+        else{
+            const f64 span = maximum - minimum;
+            value = minimum + span * normalized;
+        }
+        value = clamp(value, minimum, maximum);
+    }
+    if(!isFinite(value))
+        return false;
+    outValue = value;
+    return true;
+}
+
+b8 TryComputeSliderSeekValue(in SliderOptions options, in PointerGesture gesture, mut f64 outValue){
+    outValue = 0.0;
+    const f64 normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
+    f64 normalized = 0.0;
+    if(normalizedValue > 0.0)
+        normalized = min(1.0, normalizedValue);
+    return TryInterpolateSliderValue(options.minimum, options.maximum, normalized, outValue);
+}
+
+b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOptions options, in PointerGesture gesture, in b8 previouslyMoved, mut f64 outValue, mut b8 outMoved){
+    outValue = currentValue;
+    outMoved = previouslyMoved;
+    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+    const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+    if(delta == 0.0){
+        if(previouslyMoved)
+            outValue = baseline;
+        return true;
+    }
+    f64 normalized = 0.0;
+    if(!TryNormalizeSliderValue(options.minimum, options.maximum, baseline, normalized))
+        return false;
+    const f64 normalizedValue = normalized + delta / travel;
+    f64 dragged = 0.0;
+    if(normalizedValue > 0.0)
+        dragged = min(1.0, normalizedValue);
+    if(!TryInterpolateSliderValue(options.minimum, options.maximum, dragged, outValue))
+        return false;
+    outMoved = true;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

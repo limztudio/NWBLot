@@ -19,40 +19,7 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_widget_gallery{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Section{
-    enum Enum : u32{
-        Controls, Edit, List, Combo, SearchCombo, PopupTools, NestedPopup,
-        NumericEdit, TextArea, RadioGroup, Slider, Progress, Image, kCount
-    };
-};
-
-static constexpr f32 s_SelectorHeight = 88.0f;
-static constexpr f32 s_ContentGap = 12.0f;
-static constexpr Name s_SelectorArena("testbed/ui/gallery_selector");
-static constexpr Array<StringView, Section::kCount> s_SectionNames{
-    "Controls and menu", "Text editing", "Virtual list", "Keyed combo", "Searchable combo",
-    "Tooltips and context menu", "Nested popups", "Numeric editing", "Multiline text",
-    "Radio choices", "Slider", "Progress", "Images"
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const f32 preferredTop)noexcept{
-    using namespace __hidden_ui_widget_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
     const SIMDVectorSingle size = VectorSet(s_SelectorWidth, height, 0.0f, 0.0f);
     const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_GalleryMargin));
@@ -70,14 +37,12 @@ SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySiz
 
 void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;
-    using namespace __hidden_ui_widget_gallery;
     Builder& ui = context.ui;
     const u32 previous = m_selectedGallery;
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))
         return;
     ContainerOptions row;
     b8 valid = ui.beginRow("navigation", row);
-    constexpr f32 s_NavigationButtonWidth = 100.0f;
     WidgetOptions navigation;
     navigation.width = { LayoutSizePolicy::Fixed, s_NavigationButtonWidth };
     navigation.enabled = m_selectedGallery != 0u && !ui.input().hasPopup();
@@ -89,7 +54,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     valid = ui.endContainer() && valid;
     const u32 selected = m_selectedGallery;
     NWB::Core::Alloc::ScratchArena scratchArena(s_SelectorArena);
-    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::kCount), s_SectionNames[selected]);
+    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::kCount), SectionName(static_cast<Section::Enum>(selected)));
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){
@@ -128,8 +93,7 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
 void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
-    constexpr f32 s_PanelHeight = 180.0f;
-    if(!ui.beginPanel("interactive_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
+    if(!ui.beginPanel("interactive_gallery", { x, y, s_OrdinaryGalleryWidth, s_ControlsPanelHeight }))
         return;
     b8 valid = ui.label(s_TitleKey, "Interactive custom UI");
     if(ui.checkbox(s_EnabledKey, "Enable counter", m_enabled))

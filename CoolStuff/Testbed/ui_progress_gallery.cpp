@@ -18,17 +18,14 @@ TESTBED_BEGIN
 
 
 void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
-    constexpr f32 s_PanelHeight = 180.0f;
-    constexpr f64 s_AdvanceFraction = s_DefaultProgressFraction;
-    constexpr f64 s_PercentScale = 100.0;
     NWB::Impl::Ui::Builder& ui = context.ui;
-    if(!ui.beginPanel("progress_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
+    if(!ui.beginPanel("progress_gallery", { x, y, s_OrdinaryGalleryWidth, s_ProgressGalleryPanelHeight }))
         return;
     b8 valid = ui.label(s_TitleKey, "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
-        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_AdvanceFraction;
+        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_ProgressAdvanceFraction;
     valid = ui.progress(s_AmountKey, m_fraction) && valid;
-    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", m_fraction * s_PercentScale);
+    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", m_fraction * s_ProgressPercentScale);
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid)

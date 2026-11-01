@@ -23,39 +23,17 @@ namespace __hidden_text_area_scroll_input{
 
 
 [[nodiscard]] static Expected<f32> Step(const f64 offset, const f64 delta, const f64 step, const f64 maximum)noexcept{
-    if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
+    f32 next = 0.0f;
+    if(!TryStepScrollbarOffset(offset, delta, step, maximum, next))
         return MakeUnexpected(Failure{});
-    f64 next = offset > 0.0 ? Min(maximum, offset) : 0.0;
-    if(step > 0.0 && delta > 0.0){
-        const f64 distanceInSteps = (maximum - next) / step;
-        next = delta >= distanceInSteps ? maximum : next + (delta * step);
-    }
-    else if(step > 0.0 && delta < 0.0){
-        const f64 distanceInSteps = next / step;
-        next = (-delta) >= distanceInSteps ? 0.0 : next + (delta * step);
-    }
-    if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
-        return MakeUnexpected(Failure{});
-    return static_cast<f32>(next);
+    return next;
 }
 
 [[nodiscard]] static Expected<f32> Drag(const PointerGesture& gesture, const b8 horizontal)noexcept{
-    const f64 currentTarget = horizontal ? gesture.targetRectangle.x : gesture.targetRectangle.y;
-    const f64 currentPointer = horizontal ? gesture.position.x : gesture.position.y;
-    const f64 referenceTarget = horizontal ? gesture.referenceRectangle.x : gesture.referenceRectangle.y;
-    const f64 referencePointer = horizontal ? gesture.origin.x : gesture.origin.y;
-    const f64 startDelta = currentTarget - referenceTarget;
-    const f64 pointerDelta = currentPointer - referencePointer;
-    const f64 travel = static_cast<f64>(horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height) - static_cast<f64>(horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height);
-    const f64 maximum = gesture.maximum;
-    if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(startDelta) || !IsFinite(pointerDelta) || !IsFinite(maximum) || maximum < 0.0)
+    f32 next = 0.0f;
+    if(!TryDragScrollbarOffset(gesture, horizontal, next))
         return MakeUnexpected(Failure{});
-    const f64 normalized = (startDelta + pointerDelta) / travel;
-    const f64 clamped = normalized > 0.0 ? Min(1.0, normalized) : 0.0;
-    const f64 next = clamped * maximum;
-    if(!IsFinite(next) || next > static_cast<f64>(Limit<f32>::s_Max))
-        return MakeUnexpected(Failure{});
-    return static_cast<f32>(next);
+    return next;
 }
 
 

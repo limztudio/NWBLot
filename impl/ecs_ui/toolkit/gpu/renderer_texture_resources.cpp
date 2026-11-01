@@ -156,7 +156,7 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
             GpuSampledTextureImportDesc{
                 .index = index,
                 .readyPrefix = s_GpuTextureImageReadyPrefix,
-                .readyMarkerLabel = "UI Texture Image Upload Completion",
+                .readyMarkerLabel = s_GpuTextureImageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("texture"),
                 .readinessToken = image->m_texture.readinessToken,
                 .texturePrefix = s_GpuTextureImagePrefix,

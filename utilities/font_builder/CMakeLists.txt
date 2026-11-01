@@ -14,6 +14,9 @@ target_sources(nwb_font_builder_bake PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
 )
+nwb_target_adhd_sources(nwb_font_builder_bake NAMESPACE "NWB::FontBuilderUtility" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/bake_types.adhd"
+)
 target_link_libraries(nwb_font_builder_bake PUBLIC nwb_assets_font_atlas PRIVATE nwb_assets_font nwb::freetype nwb_common)
 
 nwb_declare_executable(nwb_font_builder)

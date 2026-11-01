@@ -27,17 +27,6 @@ namespace __hidden_asset_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_MeshSplitFileName = "mesh.nwb";
-inline constexpr AStringView s_SkeletonSplitFileName = "skeleton.nwb";
-inline constexpr AStringView s_SkinSplitFileName = "skin.nwb";
-inline constexpr AStringView s_MeshNameSuffix = "/mesh";
-inline constexpr AStringView s_SkeletonNameSuffix = "/skeleton";
-inline constexpr AStringView s_SkinNameSuffix = "/skin";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringView virtualRoot){
     Core::Alloc::ScratchArena& scratchArena = outputPath.arena();
     const AStringView trimmedVirtualRoot = TrimView(virtualRoot);
@@ -132,14 +121,14 @@ b8 WriteNwbAsset(
 
     const b8 skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
     const ScratchPath packageDirectory = ScratchPath(scratchArena, outputPath.parentPathView()) / outputPath.stemView();
-    const ScratchPath meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
+    const ScratchPath meshPath = packageDirectory / s_MeshSplitFileName;
     const ScratchString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
-    const ScratchString meshName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_MeshNameSuffix, scratchArena);
+    const ScratchString meshName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, s_MeshNameSuffix, scratchArena);
 
     if(assetType == OutputAssetType::Model){
         if(skinnedModel){
-            const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkeletonNameSuffix, scratchArena);
-            const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkinNameSuffix, scratchArena);
+            const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, s_SkeletonNameSuffix, scratchArena);
+            const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, s_SkinNameSuffix, scratchArena);
             return AssetWriterFormatDetail::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName), scratchArena);
         }
         return AssetWriterFormatDetail::WriteModelAsset(outputPath, meshName, {}, {}, scratchArena);
@@ -174,10 +163,10 @@ b8 WriteNwbAsset(
     if(!AssetWriterSkeletonDetail::RemapSkinInfluences(skeletonOutput.oldToNewJointIndices, positionSkin))
         return false;
 
-    const ScratchPath skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
-    const ScratchPath skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
-    const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkeletonNameSuffix, scratchArena);
-    const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, __hidden_asset_writer::s_SkinNameSuffix, scratchArena);
+    const ScratchPath skeletonPath = packageDirectory / s_SkeletonSplitFileName;
+    const ScratchPath skinPath = packageDirectory / s_SkinSplitFileName;
+    const ScratchString skeletonName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, s_SkeletonNameSuffix, scratchArena);
+    const ScratchString skinName = __hidden_asset_writer::BuildSplitAssetName(virtualBase, s_SkinNameSuffix, scratchArena);
 
     if(assetType == OutputAssetType::Skeleton)
         return AssetWriterFormatDetail::WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices, scratchArena);

@@ -106,22 +106,7 @@ Expected<SamplerCookEntry> ParseSamplerCookMetadata(const Name virtualPath, cons
         return MakeUnexpected(Failure{});
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SamplerMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(
-        nwbFilePath,
-        asset,
-        s_SamplerMetaDiagnosticPrefix,
-        {
-            s_SamplerMinFilterField,
-            s_SamplerMagFilterField,
-            s_SamplerMipFilterField,
-            s_SamplerAddressUField,
-            s_SamplerAddressVField,
-            s_SamplerAddressWField,
-            s_SamplerReductionField,
-            s_SamplerMaxAnisotropyField,
-            s_SamplerMipBiasField,
-        }
-    ))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SamplerMetaDiagnosticPrefix, &IsAllowedSamplerMetadataField))
         return MakeUnexpected(Failure{});
 
     Core::SamplerDesc description;

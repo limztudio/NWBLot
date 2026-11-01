@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "utilities/fbx_to_nwb/types.adhd.h"
 
 #include <impl/assets_mesh/payload_types.adhd.h>
 #include <impl/assets_skeleton/joint_types.adhd.h>
@@ -26,15 +27,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using Vec2 = Float2U;
-using Vec3 = Float3U;
-using Vec4 = Float4U;
-
-static constexpr usize s_Vector2ComponentCount = 2u;
-static constexpr usize s_Vector3ComponentCount = 3u;
-static constexpr usize s_Vector4ComponentCount = 4u;
-static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::s_Max) + 1u;
-
 using MeshSkinInfluence = Impl::SkinInfluence4;
 static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * Impl::s_SkinInfluenceJointCount + sizeof(Float4U));
 static_assert(alignof(MeshSkinInfluence) <= alignof(f32));
@@ -50,15 +42,6 @@ using JointMatrix = Float34U;
 static_assert(sizeof(JointMatrix) == sizeof(f32) * Impl::s_SkeletonJointMatrixFloatCount);
 static_assert(alignof(JointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<JointMatrix>);
-
-struct SourceVertexRef{
-    u32 position = Impl::s_MeshMissingStreamIndex;
-    u32 normal = Impl::s_MeshMissingStreamIndex;
-    u32 tangent = Impl::s_MeshMissingStreamIndex;
-    u32 uv0 = Impl::s_MeshMissingStreamIndex;
-    u32 color = Impl::s_MeshMissingStreamIndex;
-    u32 skin = Impl::s_MeshMissingStreamIndex;
-};
 static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
 
 struct SourceMeshStreams{
@@ -72,57 +55,9 @@ struct SourceMeshStreams{
     UtilityVector<u32> indices;
 };
 
-struct SourceMeshStreamCounts{
-    usize positions = 0u;
-    usize normals = 0u;
-    usize tangents = 0u;
-    usize uv0 = 0u;
-    usize colors = 0u;
-    usize skin = 0u;
-    usize vertexRefs = 0u;
-    usize indices = 0u;
-};
-
-struct SourceMeshCanonicalizeReport{
-    SourceMeshStreamCounts before;
-    SourceMeshStreamCounts after;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace NormalMode{
-    enum Enum : u8{
-        Imported,
-        Smooth,
-        Regenerate
-    };
-};
-
-namespace SourceTangentMode{
-    enum Enum : u8{
-        Imported,
-        GeneratedUv,
-        GeneratedFallback
-    };
-};
-
-namespace OutputAssetType{
-    enum Enum : u8{
-        Bunch,
-        Mesh,
-        Model,
-        Skeleton,
-        Skin
-    };
-};
-
-struct SourceTangentReport{
-    SourceTangentMode::Enum mode = SourceTangentMode::Imported;
-    u32 degenerateUvTriangleCount = 0u;
-    u32 fallbackTangentVertexCount = 0u;
-};
 
 struct MeshBuildResult{
     SourceMeshStreams mesh;
@@ -137,28 +72,6 @@ struct MeshBuildResult{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
-static constexpr f64 s_DefaultImportScale = 1.0;
-inline constexpr AStringView s_DefaultOutputAssetTypeText = "bunch";
-inline constexpr AStringView s_MeshAssetTypeText = "mesh";
-inline constexpr AStringView s_ModelAssetTypeText = "model";
-inline constexpr AStringView s_SkeletonAssetTypeText = "skeleton";
-inline constexpr AStringView s_SkinAssetTypeText = "skin";
-inline constexpr AStringView s_DefaultVirtualRootText = "project";
-inline constexpr AStringView s_DefaultMeshSelectorText = "all";
-inline constexpr AStringView s_FirstMeshSelectorText = "first";
-inline constexpr AStringView s_DefaultNormalModeText = "imported";
-inline constexpr AStringView s_SmoothNormalModeText = "smooth";
-inline constexpr AStringView s_RegenerateNormalModeText = "regenerate";
-inline constexpr AStringView s_DefaultColorText = "1,1,1,1";
-inline constexpr AStringView s_GeneratedUvTangentModeText = "generated_uv";
-inline constexpr AStringView s_GeneratedFallbackTangentModeText = "generated_fallback";
-inline constexpr AStringView s_SkinStreamLabel = "skin";
-inline constexpr AStringView s_ImportedSourceLabel = "imported";
-inline constexpr AStringView s_DefaultSourceLabel = "default";
-inline constexpr AStringView s_SeparateAssetLayoutLabel = "separate";
-inline constexpr AStringView s_ReportLineEndText = "\n";
 
 struct ImportOptions{
     AString inputPath;
@@ -230,7 +143,6 @@ b8 ValidateAssetTypeText(AString& inOutValue);
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NormalMode::Enum> ParseNormalModeText(AStringView value)noexcept;
 b8 ValidateNormalModeText(AString& inOutValue);
-AStringView SourceTangentModeText(SourceTangentMode::Enum mode)noexcept;
 Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena);
 ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
 

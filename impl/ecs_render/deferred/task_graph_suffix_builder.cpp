@@ -160,9 +160,6 @@ NWB_IMPL_BEGIN
     }
     const Core::GpuGraphResourceId backbuffer = *backbufferResult;
 
-    constexpr usize s_PresentBaseResourceUseCount = 3u;
-    constexpr usize s_PresentMaxResourceUseCount = 4u;
-    constexpr usize s_PresentMaxDependencyCount = 4u;
     Array<Core::GpuTaskResourceUse, s_PresentMaxResourceUseCount> presentResourceUses = {
         ReadUse(compositeColor),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),

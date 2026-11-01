@@ -20,26 +20,6 @@ NWB_TEX_CONV_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AlphaSourceMode{
-    enum Enum : u8{
-        Original,
-        Constant,
-        Image
-    };
-};
-
-inline constexpr AStringView s_AlphaWhiteKeyword = "white";
-inline constexpr AStringView s_AlphaBlackKeyword = "black";
-inline constexpr f32 s_AlphaWhiteConstant = 1.0f;
-inline constexpr f32 s_AlphaBlackConstant = 0.0f;
-inline constexpr AStringView s_PngExtension = ".png";
-inline constexpr AStringView s_JpgExtension = ".jpg";
-inline constexpr AStringView s_JpegExtension = ".jpeg";
-inline constexpr AStringView s_JfifExtension = ".jfif";
-inline constexpr AStringView s_TgaExtension = ".tga";
-inline constexpr AStringView s_QoiExtension = ".qoi";
-inline constexpr AStringView s_ExrExtension = ".exr";
-inline constexpr AStringView s_HdrExtension = ".hdr";
 inline constexpr Array<AStringView, 8u> s_SupportedInputExtensions = { s_PngExtension, s_JpgExtension, s_JpegExtension, s_JfifExtension, s_TgaExtension, s_QoiExtension, s_ExrExtension, s_HdrExtension };
 inline constexpr Array<AStringView, 2u> s_HdrInputExtensions = { s_ExrExtension, s_HdrExtension };
 

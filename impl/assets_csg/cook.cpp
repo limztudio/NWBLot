@@ -91,12 +91,9 @@ using Core::Assets::ScratchString;
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a relative include path"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return false;
     }
-    for(auto componentIt = includePathValue.begin(); componentIt != includePathValue.end(); ++componentIt){
-        const auto componentText = componentIt.nativeComponent();
-        if(componentText.empty() || IsDot(componentText) || IsDotDot(componentText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(includePath));
-            return false;
-        }
+    if(!IsValidCsgRelativeIncludePathText(includePath)){
+        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(includePath));
+        return false;
     }
     return true;
 }
@@ -333,7 +330,6 @@ Expected<Path> EmitCsgShapeModuleIncludes(const Path& cacheDirectory, const AStr
             if(entry.shaderModule != moduleEntry.shaderModule)
                 continue;
 
-            static constexpr usize s_FixedShapeSourceBytes = s_CsgFixedShapeSourceTemplate.size() + 2u * s_CsgEvalShapeIdDefineName.size() + s_UsizeDecimalDigitCount;
             sourceBytes = AddSize(sourceBytes, AddSize(s_FixedShapeSourceBytes, entry.evalInclude.size()));
             if(entry.moduleInclude == moduleEntry.moduleInclude)
                 continue;

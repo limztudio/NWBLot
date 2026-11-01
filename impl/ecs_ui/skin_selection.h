@@ -22,8 +22,6 @@ NWB_IMPL_BEGIN
 
 class UiSkin;
 
-[[nodiscard]] UiSkinSelectionState MakeUiSkinSelectionState(const Core::Assets::AssetRef<UiSkin>& requested)noexcept;
-
 // Commits a skin identity only after its complete asset and GPU binding succeeds.
 template<typename TTryBind>
 [[nodiscard]] UiSkinSelectionResult::Enum EnsureUiSkinSelection(

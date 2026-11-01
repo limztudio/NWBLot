@@ -29,12 +29,6 @@ NWB_IMPL_UI_BEGIN
 [[nodiscard]] Expected<SIMDVectorSingleResult> LoadUiSkinMinimumSize(const UiSkinRegion& region, SIMDVectorDouble sliceExtents, SIMDVectorDouble density)noexcept;
 [[nodiscard]] Expected<SIMDVectorSingleResult> LoadUiSkinMinimumSize(const UiSkinRegion& region, SIMDVectorDouble density)noexcept;
 
-[[nodiscard]] NWB_INLINE f32 ResolveUiSkinSquareExtent(const f32 minimumExtent, const UiSkinRegion& region)noexcept{
-    return Max(minimumExtent, Max(region.minimumWidth, region.minimumHeight));
-}
-
-[[nodiscard]] f32 ResolveUiSkinSquareExtent(f32 minimumExtent, const UiSkinRegion& region, f32 density)noexcept;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "utilities/fbx_to_nwb/types.adhd.h"
 
 #include <global/simd/vector.h>
 
@@ -25,16 +26,13 @@ namespace TextWrite{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_CleanFloatEpsilon = 0.00000001f;
-inline constexpr i32 s_OutputFloatPrecision = 9;
+using FbxToNwb::CleanFloat;
+using FbxToNwb::s_CleanFloatEpsilon;
+using FbxToNwb::s_OutputFloatPrecision;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] constexpr f32 CleanFloat(const f32 value)noexcept{
-    return (value < 0.0f ? -value : value) < s_CleanFloatEpsilon ? 0.0f : value;
-}
 
 template<typename Stream>
 void WriteFloat(const f32 value, Stream& out)noexcept(noexcept(out << CleanFloat(value))){

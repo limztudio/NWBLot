@@ -17,9 +17,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(sizeof(RefractionPushConstants) == 11u * sizeof(u32));
-static_assert(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == 4u * sizeof(u32));
-static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == 8u * sizeof(u32));
+static_assert(sizeof(RefractionPushConstants) == s_RefractionPushConstantsByteSize);
+static_assert(NWB_REFRACTION_DENSE_ARGUMENT_OFFSET == s_RefractionDenseArgumentOffset);
+static_assert(NWB_REFRACTION_TILE_ARGUMENT_BYTES == s_RefractionTileArgumentBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

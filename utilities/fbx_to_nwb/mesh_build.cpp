@@ -20,30 +20,16 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PositionKey{
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 z = 0u;
-};
-
 struct PositionKeyHasher{
     usize operator()(const PositionKey& key)const noexcept{
-        usize seed = Hasher<u32>{}(key.x);
-        HashCombine(seed, key.y);
-        HashCombine(seed, key.z);
-        return seed;
+        return HashPositionKey(key);
     }
 };
 
 struct PositionKeyEqual{
     b8 operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
-        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+        return EqualPositionKey(lhs, rhs);
     }
-};
-
-// Summed normal for one source position. It stays in the map, so it uses Float storage.
-struct PositionNormalRecord{
-    Float4 value;
 };
 
 using PositionNormalMap = UtilityScratchMap<PositionKey, PositionNormalRecord, PositionKeyHasher, PositionKeyEqual>;

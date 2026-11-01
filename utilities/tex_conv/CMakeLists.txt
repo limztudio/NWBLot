@@ -13,5 +13,8 @@ target_sources(nwb_tex_conv PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     "${PROJECT_SOURCE_DIR}/global/texture_payload.h"
 )
+nwb_target_adhd_sources(nwb_tex_conv NAMESPACE "NWB::TexConv" SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/types.adhd"
+)
 target_link_libraries(nwb_tex_conv PRIVATE nwb_common nwb_alloc nwb_logclient nwb::basis_universal nwb::cli11_headers)
 

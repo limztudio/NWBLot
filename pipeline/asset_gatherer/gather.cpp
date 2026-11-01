@@ -15,8 +15,6 @@
 
 NWB_ASSET_GATHERER_BEGIN
 
-static constexpr AStringView s_DefaultGatherConfig = "default";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -157,7 +155,7 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
 }
 
 b8 GatherAssets(const AssetGatherOptions& options){
-    Core::Alloc::ScratchArena scratchArena(Name("assets/gather"));
+    Core::Alloc::ScratchArena scratchArena(s_AssetsGatherScratchArena);
     return GatherAssets(options, scratchArena);
 }
 

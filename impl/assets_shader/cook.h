@@ -33,12 +33,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace VariantSignatureSegmentError{
-    enum Enum : u8{
-        EmptySegment,
-        InvalidAssignment,
-    };
-};
+namespace VariantSignatureSegmentError = ShaderBinaryPayload::VariantSignatureSegmentError;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,33 +157,17 @@ public:
     ){
         usize begin = 0u;
         while(begin < variantSignature.size()){
-            usize segmentEnd = variantSignature.find(';', begin);
-            if(segmentEnd == AStringView::npos)
-                segmentEnd = variantSignature.size();
-
-            const AStringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
-            if(segment.empty()){
-                onError(VariantSignatureSegmentError::EmptySegment, segment);
-                return false;
-            }
-
-            const usize equalPos = segment.find('=');
-            if(equalPos == AStringView::npos || equalPos == 0u || equalPos + 1u >= segment.size()){
-                onError(VariantSignatureSegmentError::InvalidAssignment, segment);
-                return false;
-            }
-
-            const AStringView defineName = TrimView(segment.substr(0u, equalPos));
-            const AStringView defineValue = TrimView(segment.substr(equalPos + 1u));
-            if(defineName.empty() || defineValue.empty()){
-                onError(VariantSignatureSegmentError::InvalidAssignment, segment);
+            AStringView segment;
+            AStringView defineName;
+            AStringView defineValue;
+            VariantSignatureSegmentError::Enum error = VariantSignatureSegmentError::None;
+            if(!ShaderBinaryPayload::TryParseVariantSignatureSegment(variantSignature, begin, segment, defineName, defineValue, error)){
+                onError(error, segment);
                 return false;
             }
 
             if(!onAssignment(defineName, defineValue))
                 return false;
-
-            begin = segmentEnd + 1u;
         }
 
         return true;

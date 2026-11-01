@@ -49,7 +49,8 @@ b8 GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot)noexcept{
         }
     }
     for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::SdfGlyph && (command.sdfPageIndex >= pages.size() || command.sdfChannel >= pages[command.sdfPageIndex]->binding().channelCount))
+        const u32 channelCount = command.sdfPageIndex < pages.size() ? pages[command.sdfPageIndex]->binding().channelCount : 0u;
+        if(!ValidDrawCommandSdfBinding(command, pages.size(), channelCount))
             return false;
     }
     return true;
@@ -157,11 +158,11 @@ Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(Core::GpuTaskGr
             GpuSampledTextureImportDesc{
                 .index = index,
                 .readyPrefix = s_GpuSdfPageReadyPrefix,
-                .readyMarkerLabel = "UI SDF Page Upload Completion",
+                .readyMarkerLabel = s_GpuSdfPageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("SDF page"),
                 .readinessToken = page->m_readinessToken,
                 .texturePrefix = s_GpuSdfPagePrefix,
-                .textureMarkerLabel = "UI Linear SDF Page",
+                .textureMarkerLabel = s_GpuSdfPageMarkerLabel,
                 .texture = page->m_texture,
             },
             graph,

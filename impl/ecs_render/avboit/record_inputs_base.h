@@ -37,13 +37,13 @@ struct DeferredFrameTargets;
 
 
 struct AvboitRecordInputsBase : public FrameGraphAvboitMaterialUploadResult{
-    static constexpr usize s_ResourceBaseCount = 16u;
-    static constexpr usize s_StreamUseCount = 7u;
-    static constexpr usize s_CsgIntervalUseCount = 4u;
-    static constexpr usize s_EmulationBaseCount = 4u;
-    static constexpr usize s_EmulationPlanUseCount = 8u;
-    static constexpr usize s_MaterialResourceSetUseCapacity = 3u;
-    static constexpr usize s_ComputeEmulationResourceSetUseCapacity = 3u;
+    static constexpr usize s_ResourceBaseCount = s_AvboitResourceBaseCount;
+    static constexpr usize s_StreamUseCount = s_AvboitStreamUseCount;
+    static constexpr usize s_CsgIntervalUseCount = s_AvboitCsgIntervalUseCount;
+    static constexpr usize s_EmulationBaseCount = s_AvboitEmulationBaseCount;
+    static constexpr usize s_EmulationPlanUseCount = s_AvboitEmulationPlanUseCount;
+    static constexpr usize s_MaterialResourceSetUseCapacity = s_AvboitMaterialResourceSetUseCapacity;
+    static constexpr usize s_ComputeEmulationResourceSetUseCapacity = s_AvboitComputeEmulationResourceSetUseCapacity;
 
     DeferredFrameTargets& targets;
     Core::GpuGraphResourceId albedo;
@@ -95,23 +95,6 @@ public:
     }
 };
 
-struct AvboitRasterRecordPhaseDesc{
-    Name regularOutputSetIdentity;
-    AStringView regularOutputSetLabel;
-    Name csgOutputSetIdentity;
-    AStringView csgOutputSetLabel;
-    AStringView sharedOutputLabel;
-    Name regularComputeEmulationIdentity;
-    AStringView regularComputeEmulationLabel;
-    Name csgComputeEmulationIdentity;
-    AStringView csgComputeEmulationLabel;
-    Span<const Name> sharedPhaseIdentities;
-    Span<const AStringView> sharedPhaseLabels;
-    Name rasterIdentity;
-    AStringView rasterLabel;
-    usize resourceBaseCapacity = AvboitRecordInputsBase::s_ResourceBaseCount;
-};
-
 // The interval producer wrote these aliases; the graph lowers their same-UAV handoff.
 template<typename UseVector>
 inline void AppendCsgRemovedIntervalUses(
@@ -156,22 +139,22 @@ inline void AppendCsgRemovedIntervalUses(
     }
 
 #define NWB_MAKE_AVBOIT_RASTER_RECORD_PHASE_DESC(phaseIdPrefix, phaseLabelPrefix, rasterIdentityIn, rasterLabelIn, resourceBaseCapacityIn) \
-    AvboitRasterRecordPhaseDesc{ \
-        .regularOutputSetIdentity = Name(phaseIdPrefix ".compute_emulation.outputs"), \
-        .regularOutputSetLabel = phaseLabelPrefix " Compute Emulation Outputs", \
-        .csgOutputSetIdentity = Name(phaseIdPrefix ".csg_compute_emulation.outputs"), \
-        .csgOutputSetLabel = phaseLabelPrefix " CSG Compute Emulation Outputs", \
-        .sharedOutputLabel = phaseLabelPrefix " Shared Compute Emulation Output", \
-        .regularComputeEmulationIdentity = Name(phaseIdPrefix ".compute_emulation"), \
-        .regularComputeEmulationLabel = phaseLabelPrefix " Compute Emulation", \
-        .csgComputeEmulationIdentity = Name(phaseIdPrefix ".csg_compute_emulation"), \
-        .csgComputeEmulationLabel = phaseLabelPrefix " CSG Compute Emulation", \
-        .sharedPhaseIdentities = sharedPhaseIdentities, \
-        .sharedPhaseLabels = sharedPhaseMarkers, \
-        .rasterIdentity = (rasterIdentityIn), \
-        .rasterLabel = (rasterLabelIn), \
-        .resourceBaseCapacity = (resourceBaseCapacityIn), \
-    }
+    MakeAvboitRasterRecordPhaseDesc( \
+        Name(phaseIdPrefix ".compute_emulation.outputs"), \
+        phaseLabelPrefix " Compute Emulation Outputs", \
+        Name(phaseIdPrefix ".csg_compute_emulation.outputs"), \
+        phaseLabelPrefix " CSG Compute Emulation Outputs", \
+        phaseLabelPrefix " Shared Compute Emulation Output", \
+        Name(phaseIdPrefix ".compute_emulation"), \
+        phaseLabelPrefix " Compute Emulation", \
+        Name(phaseIdPrefix ".csg_compute_emulation"), \
+        phaseLabelPrefix " CSG Compute Emulation", \
+        sharedPhaseIdentities, \
+        sharedPhaseMarkers, \
+        (rasterIdentityIn), \
+        (rasterLabelIn), \
+        (resourceBaseCapacityIn) \
+    )
 
 struct AvboitRasterRecordStageOutputs{
     Core::GpuTaskId& reusedGeometryProducer;

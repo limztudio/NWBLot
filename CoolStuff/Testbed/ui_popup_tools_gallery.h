@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 #include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
@@ -23,9 +24,6 @@ TESTBED_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_PopupToolsLabelCount = 5u;
-inline constexpr u64 s_PopupToolsDisabledKey = 3u;
 
 class UiPopupToolsSource final : public UiImmutableListSource<UiPopupToolsSource, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>{
     friend class UiImmutableListSource<UiPopupToolsSource, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>;

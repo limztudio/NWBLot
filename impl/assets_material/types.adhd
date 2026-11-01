@@ -594,7 +594,124 @@ u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in 
     return hash;
 }
 
+[reflect]
+enum<u8> MaterialTypedLayoutValidationStatus{
+    Valid = 0u,
+    EmptyLayout,
+    ZeroHash,
+    MissingBlocksOrFields,
+    EmptyBlockName,
+    InvalidBlockClass,
+    NonContiguousFieldRange,
+    FieldRangeExceedsCount,
+    EmptyFieldName,
+    InvalidFieldType,
+    FieldAlignmentOverflow,
+    MisalignedFieldOffset,
+    FieldByteSizeOverflow,
+    BlockByteSizeOverflow,
+    BlockByteSizeMismatch,
+    UnownedFields,
+    LayoutHashMismatch,
+    TotalBlockByteSizeOverflow,
+    TotalBlockByteCountMismatch
+}
+
+MaterialTypedLayoutValidationStatus ValidateMaterialTypedLayout(
+    in u64 layoutHash,
+    in Span<MaterialTypedLayoutBlock> blocks,
+    in Span<MaterialTypedLayoutField> fields,
+    in usize blockByteCount,
+    mut usize outFailureIndex
+){
+    outFailureIndex = 0u;
+    if(blocks.empty() && fields.empty())
+        return MaterialTypedLayoutValidationStatus::EmptyLayout;
+    if(layoutHash == 0u)
+        return MaterialTypedLayoutValidationStatus::ZeroHash;
+    if(blocks.empty() || fields.empty())
+        return MaterialTypedLayoutValidationStatus::MissingBlocksOrFields;
+
+    u32 nextFieldBegin = 0u;
+    for(usize blockIndex = 0u; blockIndex < blocks.size(); ++blockIndex){
+        const MaterialTypedLayoutBlock block = blocks[blockIndex];
+        if(block.blockName == s_NameNone){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::EmptyBlockName;
+        }
+        if(!IsValidMaterialBlockClass(block.blockClass)){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::InvalidBlockClass;
+        }
+        if(block.fieldBegin != nextFieldBegin){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::NonContiguousFieldRange;
+        }
+        if(block.fieldCount == 0u || cast<usize>(block.fieldCount) > fields.size() - cast<usize>(block.fieldBegin)){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::FieldRangeExceedsCount;
+        }
+
+        u32 expectedOffset = 0u;
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const usize fieldIndex = cast<usize>(block.fieldBegin) + cast<usize>(fieldOffset);
+            const MaterialTypedLayoutField field = fields[fieldIndex];
+            if(field.fieldName == s_NameNone){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::EmptyFieldName;
+            }
+            if(!IsValidMaterialLayoutFieldType(field.fieldType)){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::InvalidFieldType;
+            }
+
+            u32 expectedFieldOffset = 0u;
+            if(!TryAlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType, expectedFieldOffset)){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::FieldAlignmentOverflow;
+            }
+            if(field.offset != expectedFieldOffset){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::MisalignedFieldOffset;
+            }
+
+            const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+            if(fieldByteSize == 0u || expectedFieldOffset > 0xFFFFFFFFu - fieldByteSize){
+                outFailureIndex = fieldIndex;
+                return MaterialTypedLayoutValidationStatus::FieldByteSizeOverflow;
+            }
+            expectedOffset = expectedFieldOffset + fieldByteSize;
+        }
+
+        u32 expectedBlockByteSize = 0u;
+        if(!TryAlignMaterialLayoutBlockByteSize(expectedOffset, expectedBlockByteSize)){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::BlockByteSizeOverflow;
+        }
+        if(expectedBlockByteSize != block.byteSize){
+            outFailureIndex = blockIndex;
+            return MaterialTypedLayoutValidationStatus::BlockByteSizeMismatch;
+        }
+
+        nextFieldBegin += block.fieldCount;
+    }
+
+    if(cast<usize>(nextFieldBegin) != fields.size())
+        return MaterialTypedLayoutValidationStatus::UnownedFields;
+
+    const u64 computedHash = ComputeMaterialTypedLayoutHash(blocks, fields);
+    if(computedHash != layoutHash)
+        return MaterialTypedLayoutValidationStatus::LayoutHashMismatch;
+
+    usize expectedBlockByteSize = 0u;
+    if(!ComputeMaterialTypedBlockByteSize(blocks, expectedBlockByteSize))
+        return MaterialTypedLayoutValidationStatus::TotalBlockByteSizeOverflow;
+    if(blockByteCount != expectedBlockByteSize)
+        return MaterialTypedLayoutValidationStatus::TotalBlockByteCountMismatch;
+
+    return MaterialTypedLayoutValidationStatus::Valid;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

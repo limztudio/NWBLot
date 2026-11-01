@@ -29,9 +29,6 @@ namespace __hidden_mesh_refresh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
-static constexpr usize s_MaxMeshReplacementCount = 8u;
-
 template<typename Value>
 struct StreamSortEntry{
     Value value;
@@ -267,27 +264,6 @@ template<typename Value>
 }
 
 
-void AccumulateReport(const SourceMeshCanonicalizeReport& item, SourceMeshCanonicalizeReport& inOutTotal)noexcept{
-    inOutTotal.before.positions += item.before.positions;
-    inOutTotal.before.normals += item.before.normals;
-    inOutTotal.before.tangents += item.before.tangents;
-    inOutTotal.before.uv0 += item.before.uv0;
-    inOutTotal.before.colors += item.before.colors;
-    inOutTotal.before.skin += item.before.skin;
-    inOutTotal.before.vertexRefs += item.before.vertexRefs;
-    inOutTotal.before.indices += item.before.indices;
-
-    inOutTotal.after.positions += item.after.positions;
-    inOutTotal.after.normals += item.after.normals;
-    inOutTotal.after.tangents += item.after.tangents;
-    inOutTotal.after.uv0 += item.after.uv0;
-    inOutTotal.after.colors += item.after.colors;
-    inOutTotal.after.skin += item.after.skin;
-    inOutTotal.after.vertexRefs += item.after.vertexRefs;
-    inOutTotal.after.indices += item.after.indices;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -351,14 +327,14 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
     ScratchString& source = *sourceResult;
     const b8 useCrlf = HasCrlfLineEndings(AStringView(source));
 
-    Core::Metascript::MetaArena metaArena(UtilityDetail::s_UtilityArena);
+    Core::Metascript::MetaArena metaArena(s_UtilityArena);
     auto docResult = __hidden_mesh_refresh::ParseMetascriptDocument(inputPath, source, metaArena);
     if(!docResult)
         return MakeUnexpected(Failure{});
     const Core::Metascript::Document& doc = *docResult;
 
     MeshRefreshTextDetail::TextReplacements replacements(scratchArena);
-    const auto replacementCapacity = TryMultiply<usize>(doc.declarations().size(), __hidden_mesh_refresh::s_MaxMeshReplacementCount);
+    const auto replacementCapacity = TryMultiply<usize>(doc.declarations().size(), s_MaxMeshReplacementCount);
     if(!replacementCapacity){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: replacement capacity overflows"));
         return MakeUnexpected(Failure{});
@@ -410,7 +386,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         if(!MeshRefreshTextDetail::AppendMeshReplacements(source, meshVariableName, itemReport.before, mesh, scratchArena, replacements))
             return MakeUnexpected(Failure{});
 
-        __hidden_mesh_refresh::AccumulateReport(itemReport, outReport);
+        AccumulateReport(itemReport, outReport);
     }
 
     if(!sawMesh){

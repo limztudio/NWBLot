@@ -3,6 +3,7 @@
 
 
 #include "project.h"
+#include "ui_gallery_constants.h"
 
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/skinning/system.h>
@@ -32,34 +33,11 @@ namespace __hidden_testbed_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
-static constexpr f32 s_QuarterTurnFraction = 0.25f;
-static constexpr f32 s_CameraStartDepth = 2.2f;
-static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
-static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
-static constexpr f32 s_FlyCameraBoostMultiplier = 4.0f;
-static constexpr f32 s_FlyCameraMouseSensitivityDegreesPerPixel = 0.12f;
-static constexpr f32 s_FlyCameraPitchLimitDegrees = 89.0f;
-static constexpr f32 s_FlyCameraMouseSensitivityRadiansPerPixel = s_FlyCameraMouseSensitivityDegreesPerPixel * s_DegreesToRadians;
-static constexpr f32 s_FlyCameraPitchLimitRadians = s_FlyCameraPitchLimitDegrees * s_DegreesToRadians;
-static constexpr f32 s_DefaultDirectionalLightPitch = s_PI * s_QuarterTurnFraction; // emission aimed 45 degrees below horizontal (sun shining down)
-static constexpr f32 s_DefaultDirectionalLightYaw = s_PI * s_QuarterTurnFraction;   // 45 degrees around the up axis
-static constexpr f32 s_DefaultDirectionalLightRoll = 0.0f;
-static constexpr f32 s_DefaultDirectionalLightIntensity = 1.0f;
-static constexpr Float4 s_DefaultDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
-static constexpr f32 s_CharacterCameraTargetY = 0.85f;
-// Face the model's front from +Z.
-static constexpr f32 s_CameraStartYaw = s_PI;
-static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
-static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
-static constexpr f32 s_PointLightIntensity = 2.0f;
-static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
 static constexpr TStringView s_DefaultSceneDescription = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 static constexpr TStringView s_InitWorldFailedText = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
 static constexpr TStringView s_SceneEntitiesInvalidText = NWB_TEXT("ProjectTestbed initialization failed: failed to instantiate scene entities");
 static constexpr TStringView s_StartupSceneText = NWB_TEXT("ProjectTestbed: startup scene created ({})");
 static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown");
-static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,7 +132,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::Pr
     auto world = CreateInitialProjectWorld(context);
     if(!world){
         NWB_LOGGER_FATAL(__hidden_testbed_runtime::s_InitWorldFailedText);
-        throw RuntimeException(__hidden_testbed_runtime::s_InitWorldFailedNarrow.data());
+        throw RuntimeException(s_InitWorldFailedNarrow.data());
     }
     return MakeNotNullUnique(Move(*world));
 }
@@ -178,25 +156,25 @@ b8 Project::onStartup(){
 
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
-    const Float4 cameraPosition(0.0f, __hidden_testbed_runtime::s_CharacterCameraTargetY, __hidden_testbed_runtime::s_CameraStartDepth);
+    const Float4 cameraPosition(0.0f, s_CharacterCameraTargetY, s_CameraStartDepth);
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     NWB_ASSERT(activeCamera.camera.valid());
     auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera));
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_testbed_runtime::s_CameraStartYaw, 0.0f), cameraTransform.rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_CameraStartYaw, 0.0f), cameraTransform.rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
-        __hidden_testbed_runtime::s_DefaultDirectionalLightPitch,
-        __hidden_testbed_runtime::s_DefaultDirectionalLightYaw,
-        __hidden_testbed_runtime::s_DefaultDirectionalLightRoll,
-        __hidden_testbed_runtime::s_DefaultDirectionalLightColor,
-        __hidden_testbed_runtime::s_DefaultDirectionalLightIntensity
+        s_DefaultDirectionalLightPitch,
+        s_DefaultDirectionalLightYaw,
+        s_DefaultDirectionalLightRoll,
+        s_DefaultDirectionalLightColor,
+        s_DefaultDirectionalLightIntensity
     );
     const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
         *m_world,
-        __hidden_testbed_runtime::s_PointLightPosition,
-        __hidden_testbed_runtime::s_PointLightColor,
-        __hidden_testbed_runtime::s_PointLightIntensity,
-        __hidden_testbed_runtime::s_PointLightRange
+        s_PointLightPosition,
+        s_PointLightColor,
+        s_PointLightIntensity,
+        s_PointLightRange
     );
     if(!directionalLight.valid() || !pointLight.valid())
         return false;

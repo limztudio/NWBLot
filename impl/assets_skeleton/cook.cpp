@@ -41,7 +41,7 @@ using namespace Core::Metascript;
 [[nodiscard]] Expected<SkeletonCookJoint> ParseSkeletonJoint(const Path& nwbFilePath, const Value& jointValue){
     SkeletonCookJoint joint{};
 
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, jointValue, s_SkeletonJointDiagnosticPrefix, { s_SkeletonNameField, s_SkeletonParentField, s_SkeletonLocalBindPoseField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, jointValue, s_SkeletonJointDiagnosticPrefix, &IsAllowedSkeletonJointMetadataField))
         return MakeUnexpected(Failure{});
     auto nameResult = Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_SkeletonNameField, true);
     if(!nameResult)
@@ -85,7 +85,7 @@ template<typename JointIndexMapT>
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: virtual path is invalid"));
         return false;
     }
-    if(skeletonEntry.joints.empty() || skeletonEntry.joints.size() > Limit<u32>::s_Max){
+    if(!IsValidSkeletonJointCount(skeletonEntry.joints.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton joint count must fit nonzero u32"));
         return false;
     }
@@ -188,8 +188,7 @@ b8 SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    SkeletonHeaderBinary header{};
-    header.jointCount = static_cast<u64>(skeleton.joints().size());
+    const SkeletonHeaderBinary header = BuildSkeletonHeaderBinary(static_cast<u64>(skeleton.joints().size()));
     AppendPOD(outBinary, header);
     for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
         const SkeletonJointBinary jointBinary = PackSkeletonJointBinary(jointNameHashes[jointIndex], skeleton.joints()[jointIndex]);
@@ -208,7 +207,7 @@ Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(const Name virtualPath, co
 
     if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkeletonMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, { s_SkeletonJointsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, &IsAllowedSkeletonMetadataField))
         return MakeUnexpected(Failure{});
 
     const auto joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkeletonMetaDiagnosticPrefix, s_SkeletonJointsField);

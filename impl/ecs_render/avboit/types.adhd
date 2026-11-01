@@ -45,6 +45,71 @@ const f32 s_AvboitRefractionDisabled = 0.0f;
 const f32 s_AvboitRefractionCapture = 1.0f;
 const f32 s_AvboitRefractionAccumulate = 2.0f;
 const usize s_AvboitTaskGraphTimingTicketCapacity = 7u;
+const usize s_AvboitTransparentTimingTicketCount = 4u;
+const usize s_AvboitOccupancyResourceBaseCount = 13u;
+const usize s_AvboitResourceBaseCount = 16u;
+const usize s_AvboitStreamUseCount = 7u;
+const usize s_AvboitCsgIntervalUseCount = 4u;
+const usize s_AvboitEmulationBaseCount = 4u;
+const usize s_AvboitEmulationPlanUseCount = 8u;
+const usize s_AvboitMaterialResourceSetUseCapacity = 3u;
+const usize s_AvboitComputeEmulationResourceSetUseCapacity = 3u;
+const usize s_RefractionCaptureGeometryAndTextureSetUseCount = 2u;
+const usize s_RefractionCaptureCommonUseCapacity = 4u;
+const usize s_RefractionCaptureCsgUseCapacity = 8u;
+const usize s_RefractionCaptureDrawExtraUseCapacity = 7u;
+const usize s_RefractionCaptureCapExtraUseCapacity = 6u;
+
+class AvboitRasterRecordPhaseDesc{
+    public Name regularOutputSetIdentity = s_NameNone;
+    public StringView regularOutputSetLabel = "";
+    public Name csgOutputSetIdentity = s_NameNone;
+    public StringView csgOutputSetLabel = "";
+    public StringView sharedOutputLabel = "";
+    public Name regularComputeEmulationIdentity = s_NameNone;
+    public StringView regularComputeEmulationLabel = "";
+    public Name csgComputeEmulationIdentity = s_NameNone;
+    public StringView csgComputeEmulationLabel = "";
+    public Span<Name> sharedPhaseIdentities;
+    public Span<StringView> sharedPhaseLabels;
+    public Name rasterIdentity = s_NameNone;
+    public StringView rasterLabel = "";
+    public usize resourceBaseCapacity = s_AvboitResourceBaseCount;
+}
+
+AvboitRasterRecordPhaseDesc MakeAvboitRasterRecordPhaseDesc(
+    in Name regularOutputSetIdentity,
+    in StringView regularOutputSetLabel,
+    in Name csgOutputSetIdentity,
+    in StringView csgOutputSetLabel,
+    in StringView sharedOutputLabel,
+    in Name regularComputeEmulationIdentity,
+    in StringView regularComputeEmulationLabel,
+    in Name csgComputeEmulationIdentity,
+    in StringView csgComputeEmulationLabel,
+    in Span<Name> sharedPhaseIdentities,
+    in Span<StringView> sharedPhaseLabels,
+    in Name rasterIdentity,
+    in StringView rasterLabel,
+    in usize resourceBaseCapacity
+){
+    AvboitRasterRecordPhaseDesc desc;
+    desc.regularOutputSetIdentity = regularOutputSetIdentity;
+    desc.regularOutputSetLabel = regularOutputSetLabel;
+    desc.csgOutputSetIdentity = csgOutputSetIdentity;
+    desc.csgOutputSetLabel = csgOutputSetLabel;
+    desc.sharedOutputLabel = sharedOutputLabel;
+    desc.regularComputeEmulationIdentity = regularComputeEmulationIdentity;
+    desc.regularComputeEmulationLabel = regularComputeEmulationLabel;
+    desc.csgComputeEmulationIdentity = csgComputeEmulationIdentity;
+    desc.csgComputeEmulationLabel = csgComputeEmulationLabel;
+    desc.sharedPhaseIdentities = sharedPhaseIdentities;
+    desc.sharedPhaseLabels = sharedPhaseLabels;
+    desc.rasterIdentity = rasterIdentity;
+    desc.rasterLabel = rasterLabel;
+    desc.resourceBaseCapacity = resourceBaseCapacity;
+    return desc;
+}
 
 const u32 s_AvboitResolutionBucketPixels = 64u;
 const u32 s_AvboitResolutionHeightShiftBits = 16u;

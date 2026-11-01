@@ -23,13 +23,20 @@ namespace __hidden_font_atlas_validation{
 [[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
     Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
     usize maxWords = 0u;
-    for(const FontAtlasGroup& group : payload.groups)
-        maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * group.channelCount + s_FontAtlasOccupiedWordLastBit) / s_BitsPerU64);
+    for(const FontAtlasGroup& group : payload.groups){
+        usize groupWords = 0u;
+        if(!TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount, groupWords))
+            return false;
+        maxWords = Max(maxWords, groupWords);
+    }
     occupied.reserve(maxWords);
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         const FontAtlasGroup& group = payload.groups[groupIndex];
         const usize planePixels = static_cast<usize>(group.width) * group.height;
-        occupied.assign((planePixels * group.channelCount + s_FontAtlasOccupiedWordLastBit) / s_BitsPerU64, 0u);
+        usize groupWords = 0u;
+        if(!TryComputeFontAtlasOccupancyWordCount(group.width, group.height, group.channelCount, groupWords))
+            return false;
+        occupied.assign(groupWords, 0u);
         for(const FontAtlasGlyph& glyph : payload.glyphs){
             if(glyph.drawable == 0u || glyph.group != groupIndex)
                 continue;
@@ -77,11 +84,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid face metrics or incomplete all-glyph policy"));
         return false;
     }
-    if(
-        payload.bakePpem < s_FontAtlasMinBakePpem || payload.bakePpem > s_FontAtlasMaxBakePpem
-        || payload.spreadPixels < s_FontAtlasMinSpreadPixels || payload.spreadPixels > s_FontAtlasMaxSpreadPixels
-        || payload.guardTexels != 1u || payload.rasterMode > FontAtlasRasterMode::Bitmap
-    ){
+    if(!IsValidFontAtlasBakeParameters(payload.bakePpem, payload.spreadPixels, payload.guardTexels, payload.rasterMode)){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
         return false;
     }
@@ -95,7 +98,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
     }
     u64 pixelBytes = 0u;
     for(const FontAtlasGroup& group : payload.groups){
-        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > s_FontAtlasMaxChannelCount){
+        if(!IsValidFontAtlasGroupDimensions(group.width, group.height, group.channelCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent or channel count"));
             return false;
         }

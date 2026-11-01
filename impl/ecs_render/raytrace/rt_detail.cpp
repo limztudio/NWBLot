@@ -24,10 +24,13 @@ namespace RayTracingDetail{
 
 
 void InflateSwShadowSceneBounds(SIMDVectorSingle& boundsMin, SIMDVectorSingle& boundsMax)noexcept{
-    const SIMDVectorSingle extent = VectorSubtract(boundsMax, boundsMin);
-    const SIMDVectorSingle paddingVector = VectorSetW(VectorMax(VectorReplicate(s_SwShadowSceneBoundsMinPadding), VectorScale(Vector3MaxComponent(extent), s_SwShadowSceneBoundsRelativePadding)), 0.0f);
-    boundsMin = VectorSubtract(boundsMin, paddingVector);
-    boundsMax = VectorAdd(boundsMax, paddingVector);
+    Float4 minData;
+    Float4 maxData;
+    StoreFloat(boundsMin, minData);
+    StoreFloat(boundsMax, maxData);
+    InflateSwShadowSceneBoundsData(minData, maxData);
+    boundsMin = LoadFloat(minData);
+    boundsMax = LoadFloat(maxData);
 }
 
 Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(MeshSystem& meshSystem, RendererMeshSystem& rendererMeshSystem, const Core::ECS::EntityID entity){

@@ -76,6 +76,21 @@ TextureMipLevel BuildTextureMipLevel(
     return mip;
 }
 
+TextureResolution MakeTextureResolution(in u32 width, in u32 height, in u32 depth){
+    TextureResolution resolution;
+    resolution.width = width;
+    resolution.height = height;
+    resolution.depth = depth;
+    return resolution;
+}
+
+PrimaryUastcSlice MakePrimaryUastcSlice(in Span<u8> bytes, in u64 blockCount){
+    PrimaryUastcSlice slice;
+    slice.bytes = bytes;
+    slice.blockCount = blockCount;
+    return slice;
+}
+
 b8 IsAllowedTextureMetadataField(in StringView fieldName, in b8 allowAlphaConstant){
     return
         fieldName == s_TextureFormatField
@@ -112,7 +127,60 @@ b8 TryComputeUastcSliceLayout(in TextureMipLevel mip, in u32 sliceIndex, mut Uas
     return true;
 }
 
+b8 TryComputeUastcSliceAbsoluteOffset(in TextureMipLevel mip, in UastcSliceLayout layout, mut u64 outOffsetBytes){
+    if(mip.offsetBytes > u64.max - layout.offsetBytes)
+        return false;
+
+    outOffsetBytes = mip.offsetBytes + layout.offsetBytes;
+    return true;
+}
+
+b8 IsUastcSliceRangeWithinPrimaryPayload(
+    in u64 sliceOffsetBytes,
+    in u64 sliceByteCount,
+    in u64 primaryPayloadByteCount,
+    in usize totalPayloadByteCount
+){
+    return primaryPayloadByteCount <= cast<u64>(totalPayloadByteCount)
+        && sliceOffsetBytes <= primaryPayloadByteCount
+        && sliceByteCount <= primaryPayloadByteCount - sliceOffsetBytes
+    ;
+}
+
+b8 TryComputeTextureMipUploadPitchAndSliceBytes(
+    in u32 rowUnits,
+    in u64 bytesPerUnit,
+    in u32 rowCount,
+    mut usize outRowPitch,
+    mut usize outSliceByteCount
+){
+    const u64 rowPitch64 = cast<u64>(rowUnits) * bytesPerUnit;
+    if(rowPitch64 > cast<u64>(usize.max))
+        return false;
+    if(rowCount != 0u && rowPitch64 > u64.max / cast<u64>(rowCount))
+        return false;
+
+    const u64 sliceByteCount64 = rowPitch64 * cast<u64>(rowCount);
+    if(sliceByteCount64 > cast<u64>(usize.max))
+        return false;
+
+    outRowPitch = cast<usize>(rowPitch64);
+    outSliceByteCount = cast<usize>(sliceByteCount64);
+    return true;
+}
+
+b8 TryComputeTextureMipUploadTotalBytes(
+    in usize sliceByteCount,
+    in u32 sliceCount,
+    mut usize outTotalByteCount
+){
+    if(sliceCount == 0u || sliceByteCount > usize.max / cast<usize>(sliceCount))
+        return false;
+
+    outTotalByteCount = sliceByteCount * cast<usize>(sliceCount);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

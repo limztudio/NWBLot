@@ -46,22 +46,21 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
     if(!resources.valid())
         return MakeUnexpected(Failure{});
 
-    constexpr usize s_ImportedBufferCount = 4u;
-    const Array<ReferenceWrapper<const Core::BufferHandle>, s_ImportedBufferCount> buffers = {
+    const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneImportedBufferCount> buffers = {
         resources.materialContextSlotsBuffer,
         resources.instanceMaterialBuffer,
         resources.materialTypedBuffer,
         resources.instanceBuffer,
     };
-    Array<Core::GpuGraphResourceId, s_ImportedBufferCount> importedBuffers{};
+    Array<Core::GpuGraphResourceId, s_SceneImportedBufferCount> importedBuffers{};
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid())
             return MakeUnexpected(Failure{});
-        for(usize index = 0u; index < s_ImportedBufferCount; ++index)
+        for(usize index = 0u; index < s_SceneImportedBufferCount; ++index)
             importedBuffers[index] = declarations.findImportedBuffer(buffers[index]);
     }
-    for(usize index = 0u; index < s_ImportedBufferCount; ++index){
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
         if(importedBuffers[index].valid())
             continue;
         const Core::BufferHandle& buffer = buffers[index];
@@ -91,7 +90,7 @@ Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(
 
     RayTracingSceneGraphReads result(scratchArena);
     result.uses[0] = RendererTaskGraphDetail::ReadUse(tlas, Core::ResourceStates::AccelStructRead);
-    for(usize index = 0u; index < s_ImportedBufferCount; ++index){
+    for(usize index = 0u; index < s_SceneImportedBufferCount; ++index){
         const Core::ResourceStates::Mask state = index == 0u ? Core::ResourceStates::ConstantBuffer : Core::ResourceStates::ShaderResource;
         result.uses[index + 1u] = RendererTaskGraphDetail::ReadUse(importedBuffers[index], state);
     }
@@ -124,7 +123,6 @@ b8 AppendRayTracingSceneShadowBuffers(
     Core::GpuTaskGraph& graph,
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses
 ){
-    constexpr usize s_SceneShadowBufferCount = 5u;
     const Array<ReferenceWrapper<const Core::BufferHandle>, s_SceneShadowBufferCount> sceneShadowBuffers = {
         rayTracingResources.sceneBvhNodeBuffer,
         rayTracingResources.sceneInstanceBuffer,

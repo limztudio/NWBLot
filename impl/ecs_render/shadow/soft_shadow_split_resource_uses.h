@@ -46,11 +46,11 @@ struct SoftShadowSplitResourceInputs{
 
 // Per-callback resource declarations of the prepared soft-transparent shadow route.
 struct SoftShadowSplitResourceUses{
-    static constexpr usize s_MaxOpaqueFirstWaveletUses = 12u;
-    static constexpr usize s_MaxOpaqueResolveUses = 8u;
-    static constexpr usize s_MaxTransparentTemporalMergeUses = 13u;
-    static constexpr usize s_MaxTransparentFirstWaveletUses = 7u;
-    static constexpr usize s_MaxTransparentFoldUses = 9u;
+    static constexpr usize s_MaxOpaqueFirstWaveletUses = ::NWB::Impl::s_MaxOpaqueFirstWaveletUses;
+    static constexpr usize s_MaxOpaqueResolveUses = ::NWB::Impl::s_MaxOpaqueResolveUses;
+    static constexpr usize s_MaxTransparentTemporalMergeUses = ::NWB::Impl::s_MaxTransparentTemporalMergeUses;
+    static constexpr usize s_MaxTransparentFirstWaveletUses = ::NWB::Impl::s_MaxTransparentFirstWaveletUses;
+    static constexpr usize s_MaxTransparentFoldUses = ::NWB::Impl::s_MaxTransparentFoldUses;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaque;
     Array<Core::GpuTaskResourceUse, s_MaxOpaqueFirstWaveletUses> opaqueFirstWavelet{};

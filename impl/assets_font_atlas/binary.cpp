@@ -199,7 +199,7 @@ namespace __hidden_font_atlas_binary{
             return MakeUnexpected(byteCount.error());
         if(!ReadBytes(bytes, sizeof(group.sha256.bytes), cursor, group.sha256.bytes))
             return MakeUnexpected(Failure{});
-        if(group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent || group.channelCount == 0u || group.channelCount > s_FontAtlasMaxChannelCount)
+        if(!IsValidFontAtlasGroupDimensions(group.width, group.height, group.channelCount))
             return MakeUnexpected(Failure{});
         const u64 expectedBytes = static_cast<u64>(group.width) * group.height * group.channelCount;
         if(expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes || cursor > bytes.size() || *byteCount > bytes.size() - cursor)

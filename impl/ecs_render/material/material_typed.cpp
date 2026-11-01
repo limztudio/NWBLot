@@ -63,41 +63,26 @@ b8 MaterialTypedByteContentKeyEqual::operator()(const MaterialTypedByteContentKe
 
 Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(const usize currentByteCount, const usize appendByteCount){
     MaterialTypedByteAppendRange appendRange;
-    if(appendByteCount == 0u)
+    switch(ResolveMaterialTypedByteAppendRange(currentByteCount, appendByteCount, appendRange)){
+    case MaterialTypedByteAppendStatus::Success:
         return appendRange;
-
-    if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
+    case MaterialTypedByteAppendStatus::AppendCountExceedsU32:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
         return MakeUnexpected(Failure{});
-    }
-
-    const auto alignedByteBeginResult = AlignUpChecked(currentByteCount, static_cast<usize>(s_MaterialTypedWordBytes));
-    if(!alignedByteBeginResult){
+    case MaterialTypedByteAppendStatus::BeginAlignmentOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
         return MakeUnexpected(Failure{});
-    }
-    const usize alignedByteBegin = *alignedByteBeginResult;
-    if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
+    case MaterialTypedByteAppendStatus::TotalCountOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
         return MakeUnexpected(Failure{});
-    }
-
-    const usize byteEnd = alignedByteBegin + appendByteCount;
-    const auto alignedByteEndResult = AlignUpChecked(byteEnd, static_cast<usize>(s_MaterialTypedWordBytes));
-    if(!alignedByteEndResult){
+    case MaterialTypedByteAppendStatus::EndAlignmentOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
         return MakeUnexpected(Failure{});
-    }
-    const usize alignedByteEnd = *alignedByteEndResult;
-    if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
+    case MaterialTypedByteAppendStatus::TotalCountExceedsU32:
+    default:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
         return MakeUnexpected(Failure{});
     }
-
-    appendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
-    appendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
-    appendRange.alignedByteEnd = alignedByteEnd;
-    return appendRange;
 }
 
 usize ResolveMaterialTypedUploadByteCount(const Span<const u8> materialTypedBytes)noexcept{

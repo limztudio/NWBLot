@@ -6,6 +6,7 @@
 
 
 #include "namespace.h"
+#include "ui_gallery_constants.h"
 #include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
@@ -21,9 +22,6 @@ TESTBED_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline constexpr usize s_SearchComboLabelCount = 12u;
-inline constexpr u64 s_SearchComboDisabledKey = 5u;
 
 class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey>{
     friend class UiImmutableListSource<UiSearchComboSource, s_SearchComboLabelCount, s_SearchComboDisabledKey, NWB::Impl::Ui::ISearchableListDataSource>;

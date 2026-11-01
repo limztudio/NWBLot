@@ -163,6 +163,25 @@ TEST(AdhdCompiler, RejectsMixedSimdSplatAndIndexInvalidVectorArityAndNonCanonica
         "}\r\n";
     CompileResult badMutThisParRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadMutThisLambdaInParSource, "impl/sim/bad_mut_this_par.adhd", arena.arena, badMutThisParRes));
+
+    static constexpr MStringView s_SimdMutCondSaturateMatRowSource =
+        "b8 tryLoadVec(mut f32x4 outVec) {\r\n"
+        "    outVec = f32x4(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
+        "    return true;\r\n"
+        "}\r\n"
+        "f32 computeFromCondAndMat(in f32x3x4 mat) {\r\n"
+        "    f32x4 trackMin = f32x4(0.0f, 0.0f, 0.0f, 0.0f);\r\n"
+        "    if(!tryLoadVec(trackMin))\r\n"
+        "        return 0.0f;\r\n"
+        "    const f32x4 clamped = saturate(trackMin);\r\n"
+        "    return clamped.x + mat[0].x;\r\n"
+        "}\r\n";
+    CompileResult mutCondRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SimdMutCondSaturateMatRowSource, "impl/sim/mut_cond_mat.adhd", arena.arena, mutCondRes));
+    const MStringView mutCondView(mutCondRes.generatedSource.data(), mutCondRes.generatedSource.size());
+    EXPECT_NE(mutCondView.find("__adhd_simd_trackMin = ::LoadFloat(trackMin);"), MStringView::npos);
+    EXPECT_NE(mutCondView.find("::VectorSaturate("), MStringView::npos);
+    EXPECT_NE(mutCondView.find("mat.rows[0]"), MStringView::npos);
 }
 
 

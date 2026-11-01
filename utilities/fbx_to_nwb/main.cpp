@@ -22,10 +22,6 @@ namespace __hidden_fbx_to_nwb_main{
 
 inline constexpr TStringView s_LoggerAppName = NWB_TEXT("fbx_to_nwb");
 inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[fbx_to_nwb] logger.init() failed");
-inline constexpr int s_FbxToNwbEntryFailure = -1;
-inline constexpr u32 s_MinParallelCoreCount = 1u;
-inline constexpr u32 s_NoWorkerThreads = 0u;
-inline constexpr int s_PromptSuccessThreshold = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,19 +31,19 @@ int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
-        return s_FbxToNwbEntryFailure;
+        return NWB::FbxToNwb::s_FbxToNwbEntryFailure;
     }
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
 
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
-    const u32 workerCount = coreCount > s_MinParallelCoreCount ? coreCount - s_MinParallelCoreCount : s_NoWorkerThreads;
+    const u32 workerCount = NWB::FbxToNwb::ComputeWorkerCount(coreCount);
     NWB::Core::CpuTaskScheduler cpuScheduler(workerCount);
-    NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::UtilityDetail::s_UtilityScratch);
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::s_UtilityScratch);
 
     b8 prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, scratchArena, prompted);
     cpuScheduler.wait();
-    if(prompted && result >= s_PromptSuccessThreshold){
+    if(prompted && result >= NWB::FbxToNwb::s_PromptSuccessThreshold){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::ScratchString line(scratchArena);
         if(!ReadTextLine(NWB_CIN, line))

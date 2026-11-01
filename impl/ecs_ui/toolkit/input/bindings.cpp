@@ -14,36 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_input_bindings{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 ValidBinding(const InputKeyBinding& binding)noexcept{
-    return
-        InputBindings::ValidKey(binding.key) && binding.command != InputCommand::None && binding.command <= InputCommand::ContextMenu
-        && binding.selection <= InputSelectionPolicy::Shift
-        && ((binding.modifiers | binding.ignoredModifiers) & ~s_InputBindingModifierMask) == 0
-        && (binding.modifiers & binding.ignoredModifiers) == 0
-    ;
-}
-
-static b8 Overlaps(const InputKeyBinding& first, const InputKeyBinding& second)noexcept{
-    const i32 common = s_InputBindingModifierMask & ~(first.ignoredModifiers | second.ignoredModifiers);
-    return first.key == second.key && ((first.modifiers ^ second.modifiers) & common) == 0;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 InputBindings::ValidKey(const i32 key)noexcept{
     return
         key == Core::Key::Space || key == Core::Key::Apostrophe || (key >= Core::Key::Comma && key <= Core::Key::Number9)
@@ -71,10 +41,10 @@ b8 InputBindings::set(const Span<const InputKeyBinding> bindings){
     if(count > s_InputMaxBindings)
         return false;
     for(usize index = 0u; index < count; ++index){
-        if(!__hidden_ui_input_bindings::ValidBinding(bindings[index]))
+        if(!IsValidInputKeyBinding(bindings[index], ValidKey(bindings[index].key), s_InputBindingModifierMask))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
-            if(__hidden_ui_input_bindings::Overlaps(bindings[previous], bindings[index]))
+            if(InputKeyBindingsOverlap(bindings[previous], bindings[index], s_InputBindingModifierMask))
                 return false;
         }
     }
@@ -88,15 +58,7 @@ b8 InputBindings::set(const Span<const InputKeyBinding> bindings){
 
 InputCommandIntent InputBindings::resolve(const i32 key, const i32 modifiers)const noexcept{
     constexpr i32 s_LockModifiers = Core::InputModifier::CapsLock | Core::InputModifier::NumLock;
-    if(!ValidKey(key) || (modifiers & ~(s_InputBindingModifierMask | s_LockModifiers)) != 0)
-        return {};
-    const i32 chord = modifiers & s_InputBindingModifierMask;
-    for(const auto& binding : m_bindings){
-        if(binding.key != key || (chord & ~binding.ignoredModifiers) != binding.modifiers)
-            continue;
-        return { binding.command, binding.selection == InputSelectionPolicy::Always || (binding.selection == InputSelectionPolicy::Shift && (chord & Core::InputModifier::Shift) != 0), binding.edit, binding.allowText };
-    }
-    return {};
+    return ResolveInputKeyBinding(m_bindings, key, modifiers, ValidKey(key), s_InputBindingModifierMask, s_LockModifiers, Core::InputModifier::Shift);
 }
 
 

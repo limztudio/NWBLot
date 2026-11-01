@@ -19,16 +19,14 @@ TESTBED_BEGIN
 
 void UiComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
-    constexpr f32 s_PanelHeight = 130.0f;
-    constexpr f32 s_PopupHeight = 220.0f;
     Builder& ui = context.ui;
-    if(!ui.beginPanel("combo_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
+    if(!ui.beginPanel("combo_gallery", { x, y, s_OrdinaryGalleryWidth, s_ComboGalleryPanelHeight }))
         return;
     const f32 previousFontSize = ui.style().fontSize;
     ui.style().fontSize = s_GalleryFontSize;
     b8 valid = ui.label(s_TitleKey, "Keyed combo selection");
     ComboOptions options;
-    options.popupHeight = s_PopupHeight;
+    options.popupHeight = s_ComboGalleryPopupHeight;
     const ComboResult result = ui.comboBox(s_ChoiceKey, m_source, m_state, options);
     if(result.committed)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom combo selected key={}"), m_state.selectedKey());

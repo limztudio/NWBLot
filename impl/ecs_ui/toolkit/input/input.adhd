@@ -489,6 +489,29 @@ b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
         && source.commandControl.valid();
 }
 
+b8 FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration, mut usize outIndex){
+    outIndex = 0u;
+    usize begin = 0u;
+    usize end = lookup.size();
+    while(begin < end){
+        usize middle = begin + (end - begin) / 2u;
+        if(lookup[middle].value < id.value)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    if(begin == lookup.size() || lookup[begin].value != id.value)
+        return false;
+    usize targetIndex = cast<usize>(lookup[begin].index);
+    if(targetIndex >= targets.size())
+        return false;
+    HitTarget target = targets[targetIndex];
+    if(declarationGeneration != 0u && target.declarationGeneration != declarationGeneration)
+        return false;
+    outIndex = targetIndex;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -161,6 +161,74 @@ ModelSkinnedMeshObject UnpackModelSkinnedMeshObjectBinary(in ModelSkinnedMeshObj
     return object;
 }
 
+b8 IsAllowedModelMetadataField(in StringView fieldName){
+    return
+        fieldName == s_ModelSkeletonsField
+        || fieldName == s_ModelStaticMeshesField
+        || fieldName == s_ModelSkinnedMeshesField
+    ;
+}
+
+b8 IsAllowedModelSkeletonObjectField(in StringView fieldName){
+    return fieldName == s_ModelSkeletonField || fieldName == s_ModelTransformField;
+}
+
+b8 IsAllowedModelStaticMeshObjectField(in StringView fieldName){
+    return
+        fieldName == s_ModelMeshField
+        || fieldName == s_ModelMaterialField
+        || fieldName == s_ModelParentObjectField
+        || fieldName == s_ModelParentJointField
+        || fieldName == s_ModelTransformField
+    ;
+}
+
+b8 IsAllowedModelSkinnedMeshObjectField(in StringView fieldName){
+    return
+        fieldName == s_ModelSkinField
+        || fieldName == s_ModelMaterialField
+        || fieldName == s_ModelSkeletonField
+        || fieldName == s_ModelTransformField
+    ;
+}
+
+b8 IsValidModelHeaderBinary(in ModelHeaderBinary header){
+    return header.padding0 == 0u;
+}
+
+b8 TryComputeTotalModelObjectCount(in usize skeletonCount, in usize staticMeshCount, in usize skinnedMeshCount, mut usize outTotalCount){
+    usize objectCount = 0u;
+    if(skeletonCount > 0xffffffffffffffffu - objectCount)
+        return false;
+    objectCount += skeletonCount;
+    if(staticMeshCount > 0xffffffffffffffffu - objectCount)
+        return false;
+    objectCount += staticMeshCount;
+    if(skinnedMeshCount > 0xffffffffffffffffu - objectCount)
+        return false;
+    objectCount += skinnedMeshCount;
+    outTotalCount = objectCount;
+    return true;
+}
+
+b8 IsCompleteModelSkeletonObject(in ModelSkeletonObject object){
+    return object.name != s_NameNone && object.skeleton.valid();
+}
+
+b8 IsCompleteModelStaticMeshObject(in ModelStaticMeshObject object){
+    return object.name != s_NameNone && object.mesh.valid();
+}
+
+b8 IsValidOptionalModelMaterialRef(in AssetRef<Material> material){
+    if(material.virtualPath == s_NameNone)
+        return true;
+    return material.valid();
+}
+
+b8 IsCompleteModelSkinnedMeshObject(in ModelSkinnedMeshObject object){
+    return object.name != s_NameNone && object.skin.valid() && object.skeletonObject != s_NameNone;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

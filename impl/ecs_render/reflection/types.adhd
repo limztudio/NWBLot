@@ -52,6 +52,14 @@ class ReflectionCompositeInputs{
     public ReflectionDebugView debugView = ReflectionDebugView::None;
 }
 
+ReflectionCompositeInputs MakeReflectionCompositeInputs(in u32 opaqueRadianceSlot, in u32 glassRadianceSlot, in ReflectionDebugView debugView){
+    ReflectionCompositeInputs inputs;
+    inputs.opaqueRadianceSlot = opaqueRadianceSlot;
+    inputs.glassRadianceSlot = glassRadianceSlot;
+    inputs.debugView = debugView;
+    return inputs;
+}
+
 const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
 const u32 s_ReflectionDefaultSpatialRadius = 2u;
 const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
@@ -81,6 +89,8 @@ const u32 s_ReflectionSpatialDescriptorIndex = 2u;
 const usize s_ReflectionTemporalExtraResourceUseCount = 2u;
 const usize s_ReflectionSliceIndexTextBufferSize = 11u;
 const usize s_ReflectionUseCapacity = 12u;
+const usize s_ReflectionExtraHardwareReadCapacity = 2u;
+const usize s_ReflectionResourceSetUseCapacity = 2u;
 const u32 s_ReflectionCounterHighWordShiftBits = 32u;
 
 
@@ -177,6 +187,8 @@ class ReflectionFeedbackExtent{
 }
 
 const u32 s_ReflectionFeedbackGroupSize = 8u;
+const usize s_ReflectionFeedbackBankCount = 2u;
+const usize s_ReflectionPostprocessDescriptorCount = 4u;
 const u64 s_ReflectionFeedbackSurfaceCount = 2u;
 const u64 s_ReflectionFeedbackHeaderBytes = 16u;
 const u64 s_ReflectionFeedbackEntryBytes = 4u;
@@ -373,6 +385,7 @@ const Name s_ReflectionClearCountersTaskName = "render.reflection.clear_counters
 const Name s_ReflectionClassifyTaskName = "render.reflection.classify";
 const Name s_ReflectionBuildArgsTaskName = "render.reflection.build_args";
 const Name s_ReflectionHardwareTaskName = "render.reflection.hardware";
+const Name s_ReflectionCsgHardwareSliceFamily = "render.reflection.hardware.csg_slice";
 
 const StringView s_ReflectionBufferLabel = "Reflection Buffer";
 const StringView s_ReflectionHistoryImageLabel = "Reflection History Image";

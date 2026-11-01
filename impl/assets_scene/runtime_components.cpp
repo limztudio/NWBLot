@@ -135,18 +135,7 @@ b8 TransformComponentAsset::validatePayload()const{
     if(!checkVirtualPath(NWB_TEXT("TransformComponentAsset::validatePayload")))
         return false;
 
-    const SIMDVectorSingle position = LoadFloat(component.position);
-    const SIMDVectorSingle rotation = LoadFloat(component.rotation);
-    const SIMDVectorSingle scale = LoadFloat(component.scale);
-    const SIMDVectorSingle rotationLengthSq = QuaternionLengthSq(rotation);
-    if(
-        !Vector3IsFinite(position)
-        || QuaternionIsNaN(rotation)
-        || QuaternionIsInfinite(rotation)
-        || !VectorIsFinite(rotationLengthSq, VectorComponentMask::s_XYZW)
-        || !Vector4NearEqual(rotationLengthSq, s_SIMDOne, VectorReplicate(s_TransformRotationUnitLengthSquaredTolerance))
-        || !Vector3IsFinite(scale)
-    ){
+    if(!IsValidTransformComponentParameters(component)){
         NWB_LOGGER_ERROR(NWB_TEXT("TransformComponentAsset::validatePayload failed: transform '{}' must have finite position/scale and unit quaternion rotation"), ConvertString(virtualPath().resolvedText()));
         return false;
     }

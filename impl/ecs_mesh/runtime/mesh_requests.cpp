@@ -15,9 +15,7 @@ NWB_IMPL_BEGIN
 
 
 usize RuntimeMeshRequestSet::KeyHash::operator()(const Lookup& key)const noexcept{
-    usize hash = Hasher<NameHash>{}(key.name);
-    HashCombine(hash, key.version);
-    return hash;
+    return HashRuntimeMeshRequestKey(key.name, key.version);
 }
 
 RuntimeMeshRequestSet::RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
@@ -70,12 +68,7 @@ b8 RuntimeMeshRequestSet::containsLive(const Name& meshKey, const u64 version)co
 }
 
 usize RuntimeMeshRequestSet::findInline(const NameHash& name, const u64 version)const noexcept{
-    for(usize index = 0u; index < m_inlineCount; ++index){
-        const Key& key = m_inlineEntries[index].key;
-        if(key.version == version && key.name == name)
-            return index;
-    }
-    return m_inlineCount;
+    return FindInlineRuntimeMeshRequest(m_inlineEntries, m_inlineCount, name, version);
 }
 
 void RuntimeMeshRequestSet::promoteIndex(){

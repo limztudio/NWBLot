@@ -232,9 +232,9 @@ static b8 AppendMaterialBindFieldConstants(
     const AStringView defaultAttribute = field.defaultArgument();
     NWB_ASSERT(!defaultAttribute.empty());
 
-    const auto keyResult = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name));
-    NWB_ASSERT(keyResult);
-    const ACompactString& keyText = *keyResult;
+    ACompactString keyText;
+    const b8 keyBuilt = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText);
+    NWB_ASSERT(keyBuilt);
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
     if(!AppendMaterialBindU64Constant(includePath, keySymbol, keyHash, scratchArena, inOutSymbols, inOutSource))

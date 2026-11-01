@@ -63,13 +63,14 @@ b8 IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionT
 
 b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
     return
-        description.borderColor.r == 0.0f
-        && description.borderColor.g == 0.0f
-        && description.borderColor.b == 0.0f
-        && description.borderColor.a == 0.0f
-        && IsFinite(description.maxAnisotropy)
-        && description.maxAnisotropy >= 1.0f
-        && IsFinite(description.mipBias)
+        IsValidSamplerScalarParameters(
+            description.borderColor.r,
+            description.borderColor.g,
+            description.borderColor.b,
+            description.borderColor.a,
+            description.maxAnisotropy,
+            description.mipBias
+        )
         && IsValidSamplerAddressMode(description.addressU)
         && IsValidSamplerAddressMode(description.addressV)
         && IsValidSamplerAddressMode(description.addressW)

@@ -96,6 +96,8 @@ class DrawCommand{
 // Share of free space placed before an item to center it, or the midpoint of an extent.
 const f32 s_RectCenterFraction = 0.5f;
 const f64 s_RectCenterFractionF64 = 0.5;
+const f32 s_UiMaxFloat = 3.40282346638528859812e+38f;
+const f64 s_UiMaxFloatF64 = cast<f64>(s_UiMaxFloat);
 
 enum<u8> UiRectPrecision{
     RoundedEndpoints,
@@ -291,6 +293,76 @@ b8 ValidDrawCommandImageBinding(in DrawCommand command, in usize imageCount){
     return command.textureImageIndex == 0xffffffffu;
 }
 
+[inline]
+b8 ValidDrawCommandSdfBinding(in DrawCommand command, in usize pageCount, in u32 pageChannelCount){
+    if(command.material == PaintMaterial::SdfGlyph)
+        return cast<usize>(command.sdfPageIndex) < pageCount && command.sdfChannel < pageChannelCount;
+    return true;
+}
+
+[inline]
+b8 ValidSnapshotImageCounts(in usize glyphPageCount, in usize sdfPageCount, in usize textureImageCount){
+    return
+        glyphPageCount <= s_PaintMaxImages
+        && sdfPageCount <= s_PaintMaxImages
+        && textureImageCount <= s_PaintMaxImages
+        && glyphPageCount + sdfPageCount + textureImageCount <= s_PaintMaxImages
+    ;
+}
+
+b8 IsValidPaintUvRect(in Rect uv){
+    return
+        isFinite(uv.x) && isFinite(uv.y) && isFinite(uv.width) && isFinite(uv.height)
+        && uv.x >= 0.0f && uv.y >= 0.0f && uv.width > 0.0f && uv.height > 0.0f
+        && uv.x + uv.width <= 1.0f && uv.y + uv.height <= 1.0f
+    ;
+}
+
+Insets MaxUiPadding(in Insets lhs, in Insets rhs){
+    const f32x4 first(lhs.left, lhs.top, lhs.right, lhs.bottom);
+    const f32x4 second(rhs.left, rhs.top, rhs.right, rhs.bottom);
+    const f32x4 maximum = max(first, second);
+    Insets out;
+    out.left = maximum.x;
+    out.top = maximum.y;
+    out.right = maximum.z;
+    out.bottom = maximum.w;
+    return out;
+}
+
+Insets MaxUiPadding(in Insets lhs, in UiSkinInsets rhs){
+    Insets converted;
+    converted.left = rhs.left;
+    converted.top = rhs.top;
+    converted.right = rhs.right;
+    converted.bottom = rhs.bottom;
+    return MaxUiPadding(lhs, converted);
+}
+
+
+
+enum<u8> GpuSampledTextureImportError{
+    Identity,
+    Completion,
+    Texture,
+}
+
+// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
+class GpuRasterGeometry{
+    public GpuRasterGeometry(){
+        this.pixelScale = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.targetSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+
+    public GpuRasterGeometry(in DisplayMetrics display, in u32 targetWidth, in u32 targetHeight){
+        this.pixelScale = f32x4(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
+        this.targetSize = f32x4(cast<f32>(targetWidth), cast<f32>(targetHeight), cast<f32>(targetWidth), cast<f32>(targetHeight));
+    }
+
+    public f32x4 pixelScale;
+    public f32x4 targetSize;
+}
+
 const usize s_GpuTargetSlotCount = 3u;
 const usize s_GpuFrameCount = 4u;
 // Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
@@ -306,6 +378,31 @@ const u32 s_GpuRgbaChannelCount = 4u;
 const u32 s_GpuOutputResourceUseCount = 2u;
 const f32 s_GpuClipSpaceExtent = 2.0f;
 const StringView s_GpuTextureImageMarkerLabel = "UI Texture Image";
+const StringView s_GpuTextureImageReadyMarkerLabel = "UI Texture Image Upload Completion";
+const StringView s_GpuLayerReadyMarkerLabel = "UI Layer Initialization Completion";
+const StringView s_GpuLayerMarkerLabel = "UI Linear Layer";
+const StringView s_GpuAtlasReadyMarkerLabel = "UI Atlas Upload Completion";
+const StringView s_GpuAtlasMarkerLabel = "UI Atlas";
+const StringView s_GpuRasterPipelineMarkerLabel = "UI Raster Pipeline";
+const StringView s_GpuVerticesMarkerLabel = "UI Vertices";
+const StringView s_GpuIndicesMarkerLabel = "UI Indices";
+const StringView s_GpuVertexUploadMarkerLabel = "UI Vertex Upload";
+const StringView s_GpuIndexUploadMarkerLabel = "UI Index Upload";
+const StringView s_GpuClearMarkerLabel = "UI Transparent Clear";
+const StringView s_GpuRasterMarkerLabel = "UI Raster";
+const StringView s_GpuTargetInitMarkerLabel = "UI Target Initialization";
+const StringView s_GpuTargetInitClearMarkerLabel = "UI Target Initialization Clear";
+const StringView s_GpuTargetInitReadyMarkerLabel = "UI Target Ready";
+const StringView s_GpuGlyphPageReadyMarkerLabel = "UI Glyph Page Upload Completion";
+const StringView s_GpuGlyphPageMarkerLabel = "UI Glyph Coverage Page";
+const StringView s_GpuSdfPageReadyMarkerLabel = "UI SDF Page Upload Completion";
+const StringView s_GpuSdfPageMarkerLabel = "UI Linear SDF Page";
+const StringView s_GpuFrameTimingBeginMarkerLabel = "UI Frame Timing Begin";
+const StringView s_GpuAcquiredMarkerLabel = "UI Acquired Image";
+const StringView s_GpuBackBufferMarkerLabel = "UI Acquired Backbuffer";
+const StringView s_GpuOutputPipelineMarkerLabel = "UI Output Pipeline";
+const StringView s_GpuStandaloneOutputMarkerLabel = "UI Standalone Output";
+const StringView s_GpuFrameTimingEndMarkerLabel = "UI Frame Timing End";
 const Name s_GpuLayerTextureName = "ui.layer";
 const Name s_GpuLayerReadyName = "ui.layer_ready";
 const Name s_GpuAtlasTextureName = "ui.atlas";
@@ -342,6 +439,32 @@ const Name s_GpuBackBufferTextureName = "ui.backbuffer";
 const Name s_GpuOutputPipelineName = "ui.output_pipeline";
 const Name s_GpuOutputTaskName = "ui.output";
 const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
+
+b8 TryInitializeGpuPaintPushConstants(in GpuRasterGeometry geometry, in u32 samplerSlot, mut GpuPaintPushConstants outPush){
+    outPush = GpuPaintPushConstants();
+    const f32x4 projection = f32x4(s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent, s_GpuClipSpaceExtent, -s_GpuClipSpaceExtent) * geometry.pixelScale;
+    const f32x4 projectionScale = projection / geometry.targetSize;
+    outPush.scale.x = projectionScale.x;
+    outPush.scale.y = projectionScale.y;
+    outPush.translate.x = -1.0f;
+    outPush.translate.y = 1.0f;
+    outPush.samplerSlot = samplerSlot;
+    return isFinite(outPush.scale.x) && isFinite(outPush.scale.y);
+}
+
+b8 TryComputeGpuScissorBounds(in GpuRasterGeometry geometry, in DrawCommand draw, mut i32x4 outScissor){
+    outScissor = i32x4(0, 0, 0, 0);
+    const f32x4 coordinates(draw.clip.x, draw.clip.y, draw.clip.x + draw.clip.width, draw.clip.y + draw.clip.height);
+    const f32x4 physicalClip = coordinates * geometry.pixelScale;
+    const f32x4 first = floor(f32x4(physicalClip.x, physicalClip.y, 0.0f, 0.0f));
+    const f32x4 last = ceil(f32x4(physicalClip.z, physicalClip.w, 0.0f, 0.0f));
+    const f32x4 minimum = max(first, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+    const f32x4 maximum = min(last, f32x4(geometry.targetSize.x, geometry.targetSize.y, 0.0f, 0.0f));
+    if(maximum.x <= minimum.x || maximum.y <= minimum.y)
+        return false;
+    outScissor = i32x4(cast<i32>(minimum.x), cast<i32>(maximum.x), cast<i32>(minimum.y), cast<i32>(maximum.y));
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

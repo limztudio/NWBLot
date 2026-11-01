@@ -153,10 +153,32 @@ enum<u8> EditNavigationDirection{
 }
 
 class EditNavigationSnapshot{
-    public u64 instanceGeneration = 0u;
-    public u64 generation = 0u;
-    public f32 preferredX = 0.0f;
-    public b8 valid = false;
+    public EditNavigationSnapshot(){
+        this.instanceGeneration = 0u;
+        this.generation = 0u;
+        this.preferredX = 0.0f;
+        this.valid = false;
+    }
+
+    public EditNavigationSnapshot(in u64 inInstanceGeneration, in u64 inGeneration, in f32 inPreferredX, in b8 inValid){
+        this.instanceGeneration = inInstanceGeneration;
+        this.generation = inGeneration;
+        this.preferredX = inPreferredX;
+        this.valid = inValid;
+    }
+
+    public b8 operator==(in EditNavigationSnapshot rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.generation == rhs.generation && this.preferredX == rhs.preferredX && this.valid == rhs.valid;
+    }
+
+    public b8 operator!=(in EditNavigationSnapshot rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.generation != rhs.generation || this.preferredX != rhs.preferredX || this.valid != rhs.valid;
+    }
+
+    public u64 instanceGeneration;
+    public u64 generation;
+    public f32 preferredX;
+    public b8 valid;
 }
 
 class EditNavigationResult{
@@ -419,7 +441,62 @@ EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
     return EditNavigationRunClass::Text;
 }
 
+// The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
+f64 AdvanceCaretPhase(in f64 phase, in f64 deltaSeconds){
+    const b8 validPhase = isFinite(phase) && phase > 0.0;
+    const b8 validDelta = isFinite(deltaSeconds) && deltaSeconds > 0.0;
+    f64 phaseIn = 0.0;
+    if(validPhase)
+        phaseIn = phase;
+    f64 deltaIn = 0.0;
+    if(validDelta)
+        deltaIn = deltaSeconds;
+    const f64x4 inputs = f64x4(phaseIn, deltaIn, 0.0, 0.0);
+    const f64x4 wrapped = inputs - floor(inputs);
+    if(!validDelta)
+        return wrapped.x;
+    const f64 next = wrapped.x + wrapped.y;
+    if(next >= 1.0)
+        return next - 1.0;
+    return next;
+}
+
+b8 TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes, mut MultilineTextStep outStep){
+    outStep = MultilineTextStep();
+    outStep.sourceBytes = decodedBytes;
+    const b8 lineBreak = IsMultilineLineBreakScalar(scalar);
+    if(lineBreak || scalar == s_EditUnicodeTab){
+        if(lineBreak)
+            outStep.replacement = cast<u8>(s_EditUnicodeLineFeed);
+        else
+            outStep.replacement = cast<u8>(s_TextUnicodeSpace);
+        outStep.outputBytes = 1u;
+        if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
+            ++outStep.sourceBytes;
+        return true;
+    }
+    if(!IsCanonicalMultilineScalar(scalar))
+        return false;
+    outStep.outputBytes = outStep.sourceBytes;
+    return true;
+}
+
+b8 TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes, mut SingleLineTextStep outStep){
+    outStep = SingleLineTextStep();
+    if(IsSingleLineRejectedScalar(scalar))
+        return false;
+    const b8 space = IsSingleLineSpaceScalar(scalar);
+    outStep.sourceBytes = decodedBytes;
+    if(space)
+        outStep.outputBytes = 1u;
+    else
+        outStep.outputBytes = outStep.sourceBytes;
+    outStep.space = space;
+    if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
+        ++outStep.sourceBytes;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

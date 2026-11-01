@@ -23,6 +23,8 @@
 #include <global/text_utils.h>
 #include <global/type.h>
 
+#include "utilities/fbx_to_nwb/types.adhd.h"
+
 #include <ufbx.h>
 
 
@@ -43,13 +45,6 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 namespace UtilityDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_UtilityArena("utilities/fbx_to_nwb/utility");
-inline constexpr Name s_UtilityScratch("utilities/fbx_to_nwb/utility_scratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

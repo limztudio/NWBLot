@@ -18,28 +18,9 @@ NWB_PIPELINE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_dependency_computer{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr Name s_DependencyComputerArena("pipeline/dependency_computer");
-inline constexpr usize s_LineFeedReserveBytes = 1u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 int RunPipelineTool(const int argc, char** argv){
-    Core::Assets::AssetArena arena(__hidden_dependency_computer::s_DependencyComputerArena);
-    Core::Alloc::ScratchArena scratchArena(__hidden_dependency_computer::s_DependencyComputerArena);
+    Core::Assets::AssetArena arena(DependencyComputer::s_DependencyComputerArena);
+    Core::Alloc::ScratchArena scratchArena(DependencyComputer::s_DependencyComputerArena);
     PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
     return commandLine.run(argc, argv, [&](PipelineOptions& parsed){
         const auto resolvedInputs = DependencyComputer::ComputeAssetDependencies(parsed, arena, scratchArena);
@@ -49,7 +30,7 @@ int RunPipelineTool(const int argc, char** argv){
 
         usize outputReserveBytes = 0u;
         for(const auto& input : inputs)
-            outputReserveBytes += input.size() + __hidden_dependency_computer::s_LineFeedReserveBytes;
+            outputReserveBytes += input.size() + DependencyComputer::s_LineFeedReserveBytes;
         AString<Core::Alloc::ScratchArena> text(scratchArena);
         text.reserve(outputReserveBytes);
         for(const auto& input : inputs){

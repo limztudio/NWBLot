@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/paint_types.adhd>
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -327,7 +328,167 @@ f32 RoundMeasuredTextBound(in f64 value, in b8 upper){
     return bit_cast<f32>(bits - 1u);
 }
 
+class TextRasterMetrics{
+    public f32 physicalSize = 0.0f;
+    public f32 rasterPpem = 0.0f;
+    public f32 rasterScale = 0.0f;
+    public u32 pixelSize = 0u;
+}
+
+b8 TryResolveTextRasterMetrics(in f32 fontSize, in DisplayMetrics display, mut TextRasterMetrics outMetrics){
+    outMetrics = TextRasterMetrics();
+    if(!IsValidTextFontSize(fontSize) || !isFinite(display.pixelScaleX) || !isFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+        return false;
+    const f32 physicalSize = fontSize * max(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = ceil(physicalSize);
+    if(!isFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+        return false;
+    outMetrics.physicalSize = physicalSize;
+    outMetrics.rasterPpem = rasterPpem;
+    outMetrics.rasterScale = rasterPpem / fontSize;
+    outMetrics.pixelSize = cast<u32>(rasterPpem);
+    return true;
+}
+
+b8 TryMakeMeasuredTextRect(in f64 left, in f64 top, in f64 right, in f64 bottom, mut Rect outRect){
+    outRect = Rect();
+    if(
+        !isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)
+        || left < -s_TextMaxCoordinateF64 || top < -s_TextMaxCoordinateF64
+        || right > s_TextMaxCoordinateF64 || bottom > s_TextMaxCoordinateF64
+        || right < left || bottom < top
+    )
+        return false;
+    const f32 x = RoundMeasuredTextBound(left, false);
+    const f32 y = RoundMeasuredTextBound(top, false);
+    const f64 width = cast<f64>(RoundMeasuredTextBound(right, true)) - cast<f64>(x);
+    const f64 height = cast<f64>(RoundMeasuredTextBound(bottom, true)) - cast<f64>(y);
+    if(width > s_TextMaxCoordinateF64 || height > s_TextMaxCoordinateF64)
+        return false;
+    const f32 roundedWidth = RoundMeasuredTextBound(width, true);
+    const f32 roundedHeight = RoundMeasuredTextBound(height, true);
+    if(
+        !isFinite(roundedWidth) || roundedWidth < 0.0f
+        || !isFinite(roundedHeight) || roundedHeight < 0.0f
+        || !isFinite(x + roundedWidth) || !isFinite(y + roundedHeight)
+    )
+        return false;
+    outRect = Rect(x, y, roundedWidth, roundedHeight);
+    return true;
+}
+
+TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters, in Point point){
+    TextHit hit;
+    if(lines.empty() || !isFinite(point.x) || !isFinite(point.y))
+        return hit;
+    usize lineIndex = lines.size() - 1u;
+    for(usize index = 0u; index < lines.size(); ++index){
+        if(point.y < lines[index].top + lines[index].height){
+            lineIndex = index;
+            break;
+        }
+    }
+    const TextLine line = lines[lineIndex];
+    hit.byteOffset = line.byteBegin;
+    if(line.clusterCount == 0u)
+        return hit;
+    f32 nearest = s_TextMaxCoordinateF32;
+    for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
+        const TextCluster cluster = clusters[cast<usize>(index)];
+        const f32 leadingDistance = abs(point.x - cluster.leadingX);
+        const f32 trailingDistance = abs(point.x - cluster.trailingX);
+        if(leadingDistance <= nearest){
+            nearest = leadingDistance;
+            hit.byteOffset = cluster.byteBegin;
+        }
+        if(trailingDistance < nearest){
+            nearest = trailingDistance;
+            hit.byteOffset = cluster.byteEnd;
+        }
+    }
+    return hit;
+}
+
+b8 TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in u32 byteOffset, in TextCaretEdge edge, mut Rect outRect){
+    outRect = Rect();
+    if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
+        return false;
+    b8 hasAlternate = false;
+    TextCluster alternate;
+    for(usize i = 0u; i < clusters.size(); ++i){
+        const TextCluster cluster = clusters[i];
+        b8 matched = false;
+        if(edge == TextCaretEdge::Leading)
+            matched = cluster.byteBegin == byteOffset;
+        else
+            matched = cluster.byteEnd == byteOffset;
+        if(matched){
+            const TextLine line = lines[cast<usize>(cluster.lineIndex)];
+            f32 x = cluster.trailingX;
+            if(edge == TextCaretEdge::Leading)
+                x = cluster.leadingX;
+            outRect = Rect(x, line.top, 0.0f, line.height);
+            return true;
+        }
+        if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset){
+            alternate = cluster;
+            hasAlternate = true;
+        }
+    }
+    if(hasAlternate){
+        const TextLine line = lines[cast<usize>(alternate.lineIndex)];
+        f32 x = alternate.trailingX;
+        if(alternate.byteBegin == byteOffset)
+            x = alternate.leadingX;
+        outRect = Rect(x, line.top, 0.0f, line.height);
+        return true;
+    }
+    for(usize i = 0u; i < lines.size(); ++i){
+        const TextLine line = lines[i];
+        if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
+            const b8 atBegin = byteOffset == line.byteBegin;
+            f32 x = line.advance;
+            if(atBegin == (direction == TextDirection::LeftToRight))
+                x = 0.0f;
+            outRect = Rect(x, line.top, 0.0f, line.height);
+            return true;
+        }
+    }
+    return false;
+}
+
+TextGlyphIntersection TryIntersectTextBounds(in f64 minX, in f64 minY, in f64 maxX, in f64 maxY, in Rect clip){
+    if(
+        !FitsTextCoordinate(minX) || !FitsTextCoordinate(minY)
+        || !FitsTextCoordinate(maxX) || !FitsTextCoordinate(maxY)
+        || maxX < minX || maxY < minY
+    )
+        return TextGlyphIntersection::Invalid;
+    const f64 extentX = maxX - minX;
+    const f64 extentY = maxY - minY;
+    if(extentX > s_TextMaxCoordinateF64 || extentY > s_TextMaxCoordinateF64)
+        return TextGlyphIntersection::Invalid;
+    const f64 clipX = cast<f64>(clip.x);
+    const f64 clipY = cast<f64>(clip.y);
+    if(maxX <= minX || maxY <= minY || clip.width <= 0.0f || clip.height <= 0.0f || maxX <= clipX || maxY <= clipY)
+        return TextGlyphIntersection::Invisible;
+    const f64 clipEndX = clipX + cast<f64>(clip.width);
+    const f64 clipEndY = clipY + cast<f64>(clip.height);
+    if(minX >= clipEndX || minY >= clipEndY)
+        return TextGlyphIntersection::Invisible;
+    return TextGlyphIntersection::Visible;
+}
+
+TextGlyphIntersection TryIntersectTextRects(in Rect rectangle, in Rect clip){
+    if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
+        return TextGlyphIntersection::Invalid;
+    const f64 minX = cast<f64>(rectangle.x);
+    const f64 minY = cast<f64>(rectangle.y);
+    const f64 maxX = minX + cast<f64>(rectangle.width);
+    const f64 maxY = minY + cast<f64>(rectangle.height);
+    return TryIntersectTextBounds(minX, minY, maxX, maxY, clip);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

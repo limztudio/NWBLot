@@ -58,27 +58,6 @@ namespace TexConvCliDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_InputOptionName = "input";
-inline constexpr StringView s_CubeOptionName = "--cube";
-inline constexpr StringView s_VolumeOptionName = "--volume";
-inline constexpr StringView s_OutputOptionName = "-o,--output";
-inline constexpr StringView s_AlphaOptionName = "--alpha";
-inline constexpr StringView s_LinearFlagName = "--linear";
-inline constexpr StringView s_ForceFlagName = "--force";
-inline constexpr i32 s_MinVolumeSliceCount = 1;
-inline constexpr i32 s_UnboundedOptionCount = -1;
-inline constexpr u32 s_SingleTextureInputModeCount = 1u;
-inline constexpr i32 s_AlphaOptionPresentCount = 0;
-inline constexpr i32 s_TexConvExitSuccess = 0;
-inline constexpr i32 s_TexConvExitFailure = 1;
-inline constexpr i32 s_TexConvExitFatal = -1;
-inline constexpr usize s_CompletionReportReserveSlack = 128u;
-inline constexpr Name s_ConversionScratchArena("utilities/tex_conv/conversion");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<b8 AlphaMask>
 [[nodiscard]] b8 ValidateInputImage(const ScratchPath& path){
     const auto isRegularFile = IsRegularFile(path);
@@ -126,17 +105,17 @@ i32 Run(const i32 argc, char** argv){
     b8 linear = false;
 
     CLI::App app{ "Convert LDR or HDR images into prepared linear UASTC texture assets." };
-    app.add_option(TexConvCliDetail::s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<i32>(TextureFormat::s_TextureCubeFaceCount));
-    app.add_option(TexConvCliDetail::s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
-    app.add_option(TexConvCliDetail::s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
-    CLI::Option& alphaOption = *app.add_option(TexConvCliDetail::s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
-    app.add_flag(TexConvCliDetail::s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
-    app.add_flag(TexConvCliDetail::s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
+    app.add_option(s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
+    app.add_option(s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<i32>(TextureFormat::s_TextureCubeFaceCount));
+    app.add_option(s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(s_MinVolumeSliceCount, s_UnboundedOptionCount);
+    app.add_option(s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
+    CLI::Option& alphaOption = *app.add_option(s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
+    app.add_flag(s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
+    app.add_flag(s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
-        Core::Alloc::ScratchArena scratchArena(TexConvCliDetail::s_ConversionScratchArena);
+        Core::Alloc::ScratchArena scratchArena(s_ConversionScratchArena);
 
         {
             const AStringView outputPathText(outputArgument);
@@ -145,9 +124,9 @@ i32 Run(const i32 argc, char** argv){
             AlphaSource alphaSource(scratchArena);
 
             const u32 modeCount = static_cast<u32>(!inputArgument.empty()) + static_cast<u32>(!cubeArguments.empty()) + static_cast<u32>(!volumeArguments.empty());
-            if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
+            if(modeCount != s_SingleTextureInputModeCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
-                return TexConvCliDetail::s_TexConvExitFailure;
+                return s_TexConvExitFailure;
             }
 
             if(!inputArgument.empty()){
@@ -172,7 +151,7 @@ i32 Run(const i32 argc, char** argv){
                 }
             }
 
-            if(alphaOption.count() > TexConvCliDetail::s_AlphaOptionPresentCount){
+            if(alphaOption.count() > s_AlphaOptionPresentCount){
                 const AStringView alphaText(alphaArgument);
                 if(EqualsAsciiIgnoreCase(alphaText, s_AlphaWhiteKeyword)){
                     alphaSource.mode = AlphaSourceMode::Constant;
@@ -184,7 +163,7 @@ i32 Run(const i32 argc, char** argv){
                 }
                 else if(alphaText.empty()){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
-                    return TexConvCliDetail::s_TexConvExitFailure;
+                    return s_TexConvExitFailure;
                 }
                 else{
                     alphaSource.mode = AlphaSourceMode::Image;
@@ -194,25 +173,25 @@ i32 Run(const i32 argc, char** argv){
 
             for(const ScratchPath& inputPath : inputPaths){
                 if(!TexConvCliDetail::ValidateInputImage<false>(inputPath))
-                    return TexConvCliDetail::s_TexConvExitFailure;
+                    return s_TexConvExitFailure;
             }
             if(alphaSource.mode == AlphaSourceMode::Image && !TexConvCliDetail::ValidateInputImage<true>(alphaSource.path))
-                return TexConvCliDetail::s_TexConvExitFailure;
+                return s_TexConvExitFailure;
 
             const auto outputPaths = ResolveOutputPaths(inputPaths.front(), outputPathText, scratchArena);
             if(!outputPaths || !ValidateOutputPaths(*outputPaths, force, scratchArena))
-                return TexConvCliDetail::s_TexConvExitFailure;
+                return s_TexConvExitFailure;
 
             const auto payload = PrepareTexture(inputPaths, dimension, !linear, alphaSource, scratchArena);
             if(!payload)
-                return TexConvCliDetail::s_TexConvExitFailure;
+                return s_TexConvExitFailure;
             if(!WriteOutputs(*outputPaths, *payload, force, scratchArena))
-                return TexConvCliDetail::s_TexConvExitFailure;
+                return s_TexConvExitFailure;
 
             const auto metadataPathText = PathToGenericString(scratchArena, outputPaths->metadata);
             const auto dataPathText = PathToGenericString(scratchArena, outputPaths->data);
             ScratchString report(scratchArena);
-            report.reserve(AddSize(AddSize(metadataPathText.size(), dataPathText.size()), TexConvCliDetail::s_CompletionReportReserveSlack));
+            report.reserve(AddSize(AddSize(metadataPathText.size(), dataPathText.size()), s_CompletionReportReserveSlack));
             StringAppendFormat(report, "Wrote {}\nWrote {}\n  {}x{}", metadataPathText, dataPathText, payload->width, payload->height);
             if(payload->dimension == TextureDimension::TextureCube)
                 report += " cube";
@@ -220,9 +199,9 @@ i32 Run(const i32 argc, char** argv){
                 StringAppendFormat(report, "x{}", payload->depth);
             StringAppendFormat(report, ", {} linear UASTC mips, {} raw bytes\n", payload->mipCount, payload->bytes.size());
             NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report));
-            return TexConvCliDetail::s_TexConvExitSuccess;
+            return s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return TexConvCliDetail::s_TexConvExitFatal; }
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, []()noexcept{ return s_TexConvExitFatal; }
     );
 }
 

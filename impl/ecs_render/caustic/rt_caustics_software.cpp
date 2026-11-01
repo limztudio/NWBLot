@@ -24,11 +24,12 @@ b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(Core::CommandList& 
     // The task declares the accumulator write and the photon producer dependency.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
 
-    CausticAccumulatorDecayPushConstants decayPush;
-    decayPush.width = targets.width;
-    decayPush.height = targets.height;
-    decayPush.decayFactor = s_DefaultCausticTemporalDecay;
-    decayPush.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
+    const CausticAccumulatorDecayPushConstants decayPush = ResolveCausticAccumulatorDecayPushConstants(
+        targets.width,
+        targets.height,
+        s_DefaultCausticTemporalDecay,
+        targets.bindless.causticAccumulatorStorage.slot()
+    );
 
     Core::ComputeState decayState;
     decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
@@ -78,11 +79,9 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(Core::CommandLi
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB = RayTracingCausticsTaskDetail::MakeCausticHalfResolvePassResources(targets);
     const u32 stepWidth = 1u << passIndex;
     const CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
-    constexpr u32 s_WaveletStepOneWidth = 1u;
-    constexpr u32 s_WaveletStepTwoWidth = 2u;
     const CausticResolveStageState& wavelet =
-        stepWidth == s_WaveletStepOneWidth ? resolve.m_waveletStepOne
-        : stepWidth == s_WaveletStepTwoWidth ? resolve.m_waveletStepTwo
+        stepWidth == s_CausticWaveletStepOneWidth ? resolve.m_waveletStepOne
+        : stepWidth == s_CausticWaveletStepTwoWidth ? resolve.m_waveletStepTwo
         : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect
         : resolve.m_wavelet;
     NWB_ASSERT(wavelet.m_pipeline);

@@ -21,7 +21,7 @@ NWB_PIPELINE_BEGIN
 
 
 int RunPipelineTool(const int argc, char** argv){
-    Core::Assets::AssetArena arena(Name("pipeline/asset_gatherer"));
+    Core::Assets::AssetArena arena(AssetGatherer::s_AssetGathererArena);
     Core::Alloc::ScratchArena scratchArena(Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
     PipelineCommandLine commandLine(PipelineTool::AssetGatherer);
     return commandLine.run(argc, argv, [&](PipelineOptions& options){

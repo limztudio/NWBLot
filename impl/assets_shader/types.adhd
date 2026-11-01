@@ -43,11 +43,40 @@ const StringView s_SlangStageArgument = "-stage";
 const StringView s_SlangIncludeArgument = "-I";
 const StringView s_SlangDefineArgument = "-D";
 const StringView s_SlangOutputArgument = "-o";
+const StringView s_SlangTargetArgument = "-target";
+const StringView s_SlangTargetSpirv = "spirv";
+const StringView s_SlangEmitSpirvDirectlyArgument = "-emit-spirv-directly";
+const StringView s_SlangUseEntryPointNameArgument = "-fvk-use-entrypoint-name";
+const StringView s_SlangWarningsAsErrorsArgument = "-warnings-as-errors";
+const StringView s_SlangWarningsAsErrorsAll = "all";
+const StringView s_SlangProfileArgument = "-profile";
+const StringView s_SpirvCapabilityNonSemanticInfo = "SPV_KHR_non_semantic_info";
+const StringView s_SpirvCapabilityUserType = "SPV_GOOGLE_user_type";
+const StringView s_SpirvCapabilityDerivativeControl = "spvDerivativeControl";
+const StringView s_SpirvCapabilityImageQuery = "spvImageQuery";
+const StringView s_SpirvCapabilityImageGatherExtended = "spvImageGatherExtended";
+const StringView s_SpirvCapabilitySparseResidency = "spvSparseResidency";
+const StringView s_SpirvCapabilityMinLod = "spvMinLod";
+const StringView s_SpirvCapabilityFragmentFullyCovered = "spvFragmentFullyCoveredEXT";
+const usize s_CommonCompilerArgumentCount = 8u;
+const usize s_SpirvBaselineCapabilityCount = 8u;
+const usize s_BaseCompilerArgumentCount = 8u + s_CommonCompilerArgumentCount + s_SpirvBaselineCapabilityCount * 2u;
 const usize s_SlangMaxTargetProfileCapabilityCount = 1u;
 const usize s_SlangMaxOptimizationArgumentCount = 1u;
+const usize s_MaxFixedArgumentCount = s_BaseCompilerArgumentCount + s_SlangMaxTargetProfileCapabilityCount * 2u + s_SlangMaxOptimizationArgumentCount;
 const usize s_SlangFixedOwnedArgumentCount = 2u;
 const usize s_SlangFingerprintReadBufferBytes = 8192u;
 const usize s_SlangQuotePairByteCount = 2u;
+
+const StringView s_CurrentDirectoryPathText = ".";
+const StringView s_CompilerDiagFileName = "compiler.diag";
+const StringView s_ModuleSpvFileName = "module.spv";
+const StringView s_SourcesDirName = "sources";
+const StringView s_ShaderWorkspacePrefix = ".nwb_shader_";
+const StringView s_SlangWorkspaceCleanupDiagnosticCategory = "shader_compiler_cleanup";
+const usize s_ShaderWorkspaceHexPidAndSeqReserveBytes = 33u;
+const usize s_MaxEncodedPathBytesPerCharUnit = 1u;
+const usize s_MaxEncodedPathBytesPerWideUnit = 4u;
 
 const StringView s_SlangWorkspaceRootKeyPrefix = "root_";
 const StringView s_SlangWorkspaceDiagnosticWarningEventName = "warning";
@@ -115,6 +144,13 @@ enum<u8> IncludeKind{
     Standard,
     Macro,
     Unsupported
+}
+
+[reflect]
+enum<u8> VariantSignatureSegmentError{
+    None,
+    EmptySegment,
+    InvalidAssignment
 }
 
 [reflect]
@@ -298,6 +334,71 @@ b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclud
     }
     include.name = line.substr(cursor, closingDelimiterPos - cursor);
     outInclude = include;
+    return true;
+}
+
+b8 IsAllowedIncludeMetadataField(in StringView field){
+    return field == s_ShaderDefinesField;
+}
+
+b8 IsValidShaderDefineValueText(in StringView valueView){
+    if(valueView.empty() || TrimShaderSourceView(valueView) != valueView)
+        return false;
+    for(usize i = 0u; i < valueView.size(); ++i){
+        const i8 ch = valueView[i];
+        if(ch == ';' || ch == '\0' || ch == '\r' || ch == '\n')
+            return false;
+    }
+    return true;
+}
+
+b8 TryParseVariantSignatureSegment(
+    in StringView variantSignature,
+    mut usize inOutCursor,
+    mut StringView outSegment,
+    mut StringView outDefineName,
+    mut StringView outDefineValue,
+    mut VariantSignatureSegmentError outError
+){
+    const usize begin = inOutCursor;
+    usize segmentEnd = variantSignature.size();
+    for(usize i = begin; i < variantSignature.size(); ++i){
+        if(variantSignature[i] == ';'){
+            segmentEnd = i;
+            break;
+        }
+    }
+    inOutCursor = segmentEnd + 1u;
+
+    const StringView segment = TrimShaderSourceView(variantSignature.substr(begin, segmentEnd - begin));
+    outSegment = segment;
+    if(segment.empty()){
+        outError = VariantSignatureSegmentError::EmptySegment;
+        return false;
+    }
+
+    usize equalPos = segment.size();
+    for(usize i = 0u; i < segment.size(); ++i){
+        if(segment[i] == '='){
+            equalPos = i;
+            break;
+        }
+    }
+    if(equalPos == 0u || equalPos + 1u >= segment.size()){
+        outError = VariantSignatureSegmentError::InvalidAssignment;
+        return false;
+    }
+
+    const StringView defineName = TrimShaderSourceView(segment.substr(0u, equalPos));
+    const StringView defineValue = TrimShaderSourceView(segment.substr(equalPos + 1u));
+    if(defineName.empty() || defineValue.empty()){
+        outError = VariantSignatureSegmentError::InvalidAssignment;
+        return false;
+    }
+
+    outDefineName = defineName;
+    outDefineValue = defineValue;
+    outError = VariantSignatureSegmentError::None;
     return true;
 }
 

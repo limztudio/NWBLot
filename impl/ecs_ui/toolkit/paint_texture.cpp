@@ -22,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
-        !source || !IsValidUiRect(rectangle) || !IsValidUvRect(uv)
+        !source || !IsValidUiRect(rectangle) || !IsValidPaintUvRect(uv)
         || !IsFinite(tint.r) || !IsFinite(tint.g) || !IsFinite(tint.b) || !IsFinite(tint.a)
         || tint.a < 0.0f || tint.a > 1.0f
     )

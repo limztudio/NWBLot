@@ -286,8 +286,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         {.resourceSet = *geometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
         {.resourceSet = *sampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
     }};
-    constexpr usize s_GeometryAndTextureSetUseCount = 2u;
-    const usize setUseCount = sampledTextureSet->valid() ? s_GeometryAndTextureSetUseCount : 1u;
+    const usize setUseCount = sampledTextureSet->valid() ? s_RefractionCaptureGeometryAndTextureSetUseCount : 1u;
 
     materialSystem.prepareMaterialPassInstanceUploadData(csgResources, instances);
     const b8 producesReusableGeometry = generatedGeometry.capture(drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture);
@@ -327,8 +326,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         return MakeUnexpected(Failure{});
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> commonUses{scratchArena};
-    constexpr usize s_CommonUseCapacity = 4u;
-    commonUses.reserve(s_CommonUseCapacity);
+    commonUses.reserve(s_RefractionCaptureCommonUseCapacity);
     commonUses.push_back(ReadBufferUse(materialInstances, Core::BufferRange(0u, instances.size() * sizeof(InstanceGpuData))));
     commonUses.push_back(ReadBufferUse(materialTyped, Core::BufferRange(0u, typedBytes.size())));
     commonUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -336,8 +334,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses{scratchArena};
     if(hasCsg){
-        constexpr usize s_CsgUseCapacity = 8u;
-        csgUses.reserve(s_CsgUseCapacity);
+        csgUses.reserve(s_RefractionCaptureCsgUseCapacity);
         const auto clipContext = csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings);
         if(!clipContext)
             return MakeUnexpected(Failure{});
@@ -383,8 +380,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         if(items.empty())
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-        constexpr usize s_DrawExtraUseCapacity = 7u;
-        uses.reserve(commonUses.size() + (csg ? csgUses.size() : 0u) + s_DrawExtraUseCapacity);
+        uses.reserve(commonUses.size() + (csg ? csgUses.size() : 0u) + s_RefractionCaptureDrawExtraUseCapacity);
         uses.assign(commonUses.begin(), commonUses.end());
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());
@@ -447,8 +443,7 @@ Expected<Core::GpuTaskId> DeclareAvboitRefractionCapture(
         if(!csgResources.refractionCapFillPipeline)
             return MakeUnexpected(Failure{});
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-        constexpr usize s_CapExtraUseCapacity = 6u;
-        uses.reserve(commonUses.size() + csgUses.size() + s_CapExtraUseCapacity);
+        uses.reserve(commonUses.size() + csgUses.size() + s_RefractionCaptureCapExtraUseCapacity);
         uses.assign(commonUses.begin(), commonUses.end());
         uses.insert(uses.end(), csgUses.begin(), csgUses.end());
         uses.push_back(ReadUse(opaqueDepth));

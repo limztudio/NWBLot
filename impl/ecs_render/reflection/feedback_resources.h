@@ -66,7 +66,7 @@ public:
 // Creation belongs to preflight; frozen snapshots retain buffers.
 class RendererReflectionFeedback final : NoCopy{
 private:
-    static constexpr usize s_FeedbackBankCount = 2u;
+    static constexpr usize s_FeedbackBankCount = s_ReflectionFeedbackBankCount;
 
 
 public:

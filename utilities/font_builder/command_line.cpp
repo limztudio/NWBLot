@@ -25,15 +25,15 @@ int Run(const int argc, char** argv){
     AInteropString outputArgument;
     AInteropString rendererArgument(Impl::s_FontAtlasRasterModeBitmap.data(), Impl::s_FontAtlasRasterModeBitmap.size());
     BakeOptions options(UtilityDetail::Arena());
-    CLI::App app{ "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images." };
-    app.add_option("--font", sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
-    app.add_option("-o,--output", outputArgument, "Output .nwb asset bunch; paired binary .font shares its stem")->required();
-    app.add_option("--ppem", options.ppem, "Bake pixels per em (16..256, default64)");
-    app.add_option("--spread", options.spread, "SDF distance range (2..32, default8)");
-    app.add_option("--extent", options.extent, "Maximum square packing extent; final groups are cropped (32..2048, default1024)");
-    app.add_option("--max-groups", options.maxGroups, "Maximum four-plane packing groups (1..8, default8)");
-    app.add_option("--renderer", rendererArgument, "bitmap (default) or outline; errors never switch algorithms");
-    app.add_flag("--overwrite", options.overwrite, "Replace an existing complete .nwb/.font pair");
+    CLI::App app{ AInteropString(s_FontBuilderAppDescription.data(), s_FontBuilderAppDescription.size()) };
+    app.add_option(AInteropString(s_FontOptionFlag.data(), s_FontOptionFlag.size()), sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
+    app.add_option(AInteropString(s_OutputOptionFlag.data(), s_OutputOptionFlag.size()), outputArgument, "Output .nwb asset bunch; paired binary .font shares its stem")->required();
+    app.add_option(AInteropString(s_PpemOptionFlag.data(), s_PpemOptionFlag.size()), options.ppem, "Bake pixels per em (16..256, default64)");
+    app.add_option(AInteropString(s_SpreadOptionFlag.data(), s_SpreadOptionFlag.size()), options.spread, "SDF distance range (2..32, default8)");
+    app.add_option(AInteropString(s_ExtentOptionFlag.data(), s_ExtentOptionFlag.size()), options.extent, "Maximum square packing extent; final groups are cropped (32..2048, default1024)");
+    app.add_option(AInteropString(s_MaxGroupsOptionFlag.data(), s_MaxGroupsOptionFlag.size()), options.maxGroups, "Maximum four-plane packing groups (1..8, default8)");
+    app.add_option(AInteropString(s_RendererOptionFlag.data(), s_RendererOptionFlag.size()), rendererArgument, "bitmap (default) or outline; errors never switch algorithms");
+    app.add_flag(AInteropString(s_OverwriteOptionFlag.data(), s_OverwriteOptionFlag.size()), options.overwrite, "Replace an existing complete .nwb/.font pair");
     return InvokeTerminalEntry<CLI::ParseError>([&](){
                 app.parse(argc, argv);
                 if(rendererArgument != Impl::s_FontAtlasRasterModeBitmap && rendererArgument != Impl::s_FontAtlasRasterModeOutline){
@@ -43,7 +43,7 @@ int Run(const int argc, char** argv){
                 options.outline = rendererArgument == Impl::s_FontAtlasRasterModeOutline;
                 options.source = AStringView(sourceArgument.data(), sourceArgument.size());
                 options.output = AStringView(outputArgument.data(), outputArgument.size());
-                Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
+                Core::Alloc::ScratchArena scratch(s_FontBuilderBakeArena);
                 if(!ValidateOptions(options))
                     return 1;
                 const auto exists = FileExists(options.output);

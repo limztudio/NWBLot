@@ -52,6 +52,10 @@ b8 IsValidTooltipOptions(in TooltipOptions options){
         && options.side <= PopupPlacementSide::Center;
 }
 
+void ApplySkinPaletteToTooltipStyle(in UiSkinPalette palette, mut TooltipStyle style){
+    style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextTooltip);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

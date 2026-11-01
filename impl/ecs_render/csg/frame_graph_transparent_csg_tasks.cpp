@@ -78,8 +78,7 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     const Core::BufferRange transparentCsgCutterRange(0u, avboitPrePayload.transparentCsgSnapshot.csgCutters.size() * sizeof(CsgCutterGpuData));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ scratchArena };
-    constexpr usize s_IntervalResourceUseCapacity = 20u;
-    avboitIntervalResourceUses.reserve(s_IntervalResourceUseCapacity);
+    avboitIntervalResourceUses.reserve(s_TransparentCsgIntervalResourceUseCapacity);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         // The receiver raster binds the framebuffer with LOAD, writes off; declare every attachment to preserve contents.
         avboitIntervalResourceUses.push_back(ReadUse(albedo, Core::ResourceStates::RenderTarget));
@@ -103,7 +102,6 @@ Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::decl
     }
     const Core::GpuTaskResourceSetUse intervalMaterialGeometrySetUse{ .resourceSet = intervalMaterialGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse intervalMaterialSampledTextureSetUse{ .resourceSet = intervalMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
-    constexpr usize s_TransparentCsgMaterialResourceSetUseCapacity = 2u;
     Array<Core::GpuTaskResourceSetUse, s_TransparentCsgMaterialResourceSetUseCapacity> transparentCsgMaterialResourceSetUses = {};
     usize transparentCsgMaterialResourceSetUseCount = 0u;
     if(avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)

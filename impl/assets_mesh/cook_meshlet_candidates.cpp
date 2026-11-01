@@ -95,7 +95,7 @@ void MeshletCandidateSearch::UpdateBestMeshletCandidateIfBetter(
         return LoadFloat(trianglePrecompute.triangleCalculations[otherTriangleIndex].areaNormal);
     };
     const f32 score = ScoreMeshletCandidate(triangleIndices, scoreState, triangleIndex, triangleVectors, triangleAreaNormalAt, vertexCounts.shared, vertexCounts.missing, disconnected);
-    if(found && (score < outCandidate.score || (score == outCandidate.score && triangleIndex > outCandidate.triangleIndex)))
+    if(!IsBetterMeshletCandidate(score, triangleIndex, found, outCandidate))
         return;
 
     found = true;

@@ -31,7 +31,7 @@ namespace UtilityDetail{
 
 
 Core::Alloc::GlobalArena& Arena(){
-    static Core::Alloc::GlobalArena s_Arena(Name("utilities/font_builder"));
+    static Core::Alloc::GlobalArena s_Arena(s_FontBuilderArena);
     return s_Arena;
 }
 

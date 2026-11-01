@@ -1,0 +1,328 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type Vec2 = f32x2u;
+type Vec3 = f32x3u;
+type Vec4 = f32x4u;
+
+const Name s_UtilityArena = "utilities/fbx_to_nwb/utility";
+const Name s_UtilityScratch = "utilities/fbx_to_nwb/utility_scratch";
+
+const u32 s_MeshMissingStreamIndex = 0xffffffffu;
+const usize s_Vector2ComponentCount = 2u;
+const usize s_Vector3ComponentCount = 3u;
+const usize s_Vector4ComponentCount = 4u;
+const usize s_MaxSkeletonJointCount = cast<usize>(u16.max) + 1u;
+
+const f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
+const f64 s_DefaultImportScale = 1.0;
+const StringView s_DefaultOutputAssetTypeText = "bunch";
+const StringView s_MeshAssetTypeText = "mesh";
+const StringView s_ModelAssetTypeText = "model";
+const StringView s_SkeletonAssetTypeText = "skeleton";
+const StringView s_SkinAssetTypeText = "skin";
+const StringView s_DefaultVirtualRootText = "project";
+const StringView s_DefaultMeshSelectorText = "all";
+const StringView s_FirstMeshSelectorText = "first";
+const StringView s_DefaultNormalModeText = "imported";
+const StringView s_SmoothNormalModeText = "smooth";
+const StringView s_RegenerateNormalModeText = "regenerate";
+const StringView s_DefaultColorText = "1,1,1,1";
+const StringView s_GeneratedUvTangentModeText = "generated_uv";
+const StringView s_GeneratedFallbackTangentModeText = "generated_fallback";
+const StringView s_SkinStreamLabel = "skin";
+const StringView s_ImportedSourceLabel = "imported";
+const StringView s_DefaultSourceLabel = "default";
+const StringView s_SeparateAssetLayoutLabel = "separate";
+const StringView s_ReportLineEndText = "\n";
+
+const StringView s_OptionSeparatorText = ", ";
+const StringView s_OptionLastSeparatorText = ", or ";
+
+const i32 s_FbxToNwbEntryFailure = -1;
+const u32 s_MinParallelCoreCount = 1u;
+const u32 s_NoWorkerThreads = 0u;
+const i32 s_PromptSuccessThreshold = 0;
+
+const i32 s_FbxToNwbExitSuccess = 0;
+const i32 s_FbxToNwbExitFailure = 1;
+const StringView s_FbxToNwbAppName = "fbx_to_nwb";
+const StringView s_FbxToNwbHelpFlag = "-h,--help";
+const StringView s_FbxToNwbInputOption = "input";
+const StringView s_FbxToNwbOutputOption = "-o,--output";
+const StringView s_FbxToNwbAssetTypeOption = "--asset-type";
+const StringView s_FbxToNwbVirtualRootOption = "--virtual-root";
+const StringView s_FbxToNwbMeshOption = "-m,--mesh";
+const StringView s_FbxToNwbNormalModeOption = "--normal-mode";
+const StringView s_FbxToNwbScaleOption = "--scale";
+const StringView s_FbxToNwbTriangleAreaEpsilonOption = "--triangle-area-length-squared-epsilon";
+const StringView s_FbxToNwbDefaultColorOption = "--default-color";
+const StringView s_FbxToNwbPreserveSpaceFlag = "--preserve-space";
+const StringView s_FbxToNwbIncludeHiddenFlag = "--include-hidden";
+const StringView s_FbxToNwbLocalFlag = "--local";
+const StringView s_FbxToNwbIgnoreColorsFlag = "--ignore-colors";
+const StringView s_FbxToNwbFlipWindingFlag = "--flip-winding";
+const StringView s_FbxToNwbSeparateAssetsFlag = "--separate-assets";
+const StringView s_FbxToNwbRefreshNwbFlag = "--refresh-nwb";
+const StringView s_FbxToNwbForceFlag = "--force";
+const StringView s_FbxToNwbYesFlag = "-y,--yes";
+const StringView s_FbxToNwbListMeshesFlag = "--list-meshes";
+const StringView s_OutputPathPromptLabel = "Output .nwb path";
+const StringView s_OutputPathEmptyText = "Output path is empty.";
+const u32 s_CliOptionPresentCount = 0u;
+
+const usize s_UfbxErrorBufferSize = 4096u;
+const f32 s_TargetUnitMeters = 1.0f;
+
+const f64 s_UniformScaleNumerator = 1.0;
+const f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
+const f32 s_JointMatrixRowEpsilon = 0.0001f;
+const StringView s_NullNodeLabel = "<null>";
+const StringView s_UnnamedNodeLabel = "<unnamed node>";
+
+const usize s_DeduplicateParallelGrainSize = 4096u;
+const usize s_MaxMeshReplacementCount = 8u;
+
+const StringView s_ListOpenText = "[\n";
+const StringView s_ListCloseText = "]";
+const StringView s_ListItemIndentText = "    ";
+const StringView s_ListItemSuffixText = ",\n";
+const StringView s_RowOpenText = "    [";
+const StringView s_RowItemSeparatorText = ", ";
+const StringView s_RowSuffixText = "],\n";
+
+const StringView s_MeshSplitFileName = "mesh.nwb";
+const StringView s_SkeletonSplitFileName = "skeleton.nwb";
+const StringView s_SkinSplitFileName = "skin.nwb";
+const StringView s_MeshNameSuffix = "/mesh";
+const StringView s_SkeletonNameSuffix = "/skeleton";
+const StringView s_SkinNameSuffix = "/skin";
+
+const StringView s_AssetVariableName = "asset";
+const StringView s_AssetBunchDisplayName = "asset bunch";
+const StringView s_WriteNwbMeshContext = "Failed to write NWB mesh";
+const StringView s_WriteNwbModelContext = "Failed to write NWB model";
+const usize s_EscapedTextReserveFactor = 2u;
+const StringView s_LineBreakText = "\r\n";
+const StringView s_EntrySuffixText = ",\n";
+const StringView s_FormatListCloseText = "];\n";
+const StringView s_ListCloseSectionText = "];\n\n";
+const StringView s_FieldAccessText = ".";
+const StringView s_ListAssignOpenText = " = [\n";
+const StringView s_StatementEndText = ";\n";
+const StringView s_StatementEndSectionText = ";\n\n";
+const StringView s_TableEntryCloseText = "    },\n";
+const StringView s_TableCloseText = "};\n";
+const StringView s_TableCloseSectionText = "};\n\n";
+const StringView s_SkeletonPropertyText = "        \"skeleton\": ";
+const StringView s_AssetSectionSeparatorText = "\n\n";
+const usize s_UniqueNameSuffixReserve = 11u;
+
+const f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
+const u32 s_PositionSkinKeySkinShiftBits = 32u;
+const StringView s_JointFallbackNamePrefix = "joint_";
+
+const StringView s_SourcePositionLabel = "position";
+const StringView s_SourceNormalLabel = "normal";
+const StringView s_SourceTangentLabel = "tangent";
+const StringView s_SourceUv0Label = "uv0";
+const StringView s_SourceColorLabel = "color";
+const StringView s_SourceVertexRefLabel = "vertex_ref";
+
+const f32 s_CleanFloatEpsilon = 0.00000001f;
+const i32 s_OutputFloatPrecision = 9;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+enum<u8> NormalMode{
+    Imported,
+    Smooth,
+    Regenerate
+}
+
+[reflect]
+enum<u8> SourceTangentMode{
+    Imported,
+    GeneratedUv,
+    GeneratedFallback
+}
+
+[reflect]
+enum<u8> OutputAssetType{
+    Bunch,
+    Mesh,
+    Model,
+    Skeleton,
+    Skin
+}
+
+class SourceVertexRef{
+    public u32 position = s_MeshMissingStreamIndex;
+    public u32 normal = s_MeshMissingStreamIndex;
+    public u32 tangent = s_MeshMissingStreamIndex;
+    public u32 uv0 = s_MeshMissingStreamIndex;
+    public u32 color = s_MeshMissingStreamIndex;
+    public u32 skin = s_MeshMissingStreamIndex;
+}
+
+class SourceMeshStreamCounts{
+    public usize positions = 0u;
+    public usize normals = 0u;
+    public usize tangents = 0u;
+    public usize uv0 = 0u;
+    public usize colors = 0u;
+    public usize skin = 0u;
+    public usize vertexRefs = 0u;
+    public usize indices = 0u;
+}
+
+class SourceMeshCanonicalizeReport{
+    public SourceMeshStreamCounts before;
+    public SourceMeshStreamCounts after;
+}
+
+class SourceTangentReport{
+    public u32 degenerateUvTriangleCount = 0u;
+    public u32 fallbackTangentVertexCount = 0u;
+    public SourceTangentMode mode = SourceTangentMode::Imported;
+}
+
+class OptionPresence{
+    public b8 output = false;
+    public b8 assetType = false;
+    public b8 mesh = false;
+    public b8 normalMode = false;
+    public b8 defaultColor = false;
+    public b8 scale = false;
+    public b8 preserveSpace = false;
+    public b8 includeHidden = false;
+    public b8 local = false;
+    public b8 ignoreColors = false;
+    public b8 flipWinding = false;
+}
+
+class PositionKey{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 z = 0u;
+}
+
+class PositionNormalRecord{
+    public f32x4 value(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class AssignmentRange{
+    public usize begin = 0u;
+    public usize end = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 ComputeWorkerCount(in u32 coreCount){
+    if(coreCount > s_MinParallelCoreCount)
+        return coreCount - s_MinParallelCoreCount;
+    return s_NoWorkerThreads;
+}
+
+StringView OutputAssetTypeText(in OutputAssetType assetType){
+    switch(assetType){
+        case OutputAssetType::Bunch: return s_DefaultOutputAssetTypeText;
+        case OutputAssetType::Mesh: return s_MeshAssetTypeText;
+        case OutputAssetType::Model: return s_ModelAssetTypeText;
+        case OutputAssetType::Skeleton: return s_SkeletonAssetTypeText;
+        case OutputAssetType::Skin: return s_SkinAssetTypeText;
+    }
+    return "";
+}
+
+StringView NormalModeText(in NormalMode normalMode){
+    switch(normalMode){
+        case NormalMode::Imported: return s_DefaultNormalModeText;
+        case NormalMode::Smooth: return s_SmoothNormalModeText;
+        case NormalMode::Regenerate: return s_RegenerateNormalModeText;
+    }
+    return "";
+}
+
+StringView SourceTangentModeText(in SourceTangentMode mode){
+    switch(mode){
+        case SourceTangentMode::Imported: return s_DefaultNormalModeText;
+        case SourceTangentMode::GeneratedUv: return s_GeneratedUvTangentModeText;
+        case SourceTangentMode::GeneratedFallback: return s_GeneratedFallbackTangentModeText;
+    }
+    return "";
+}
+
+b8 AssetTypeRequiresSkinning(in OutputAssetType assetType){
+    return assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin;
+}
+
+b8 AssetTypeCanUseSkinning(in OutputAssetType assetType){
+    return assetType == OutputAssetType::Bunch || assetType == OutputAssetType::Model || AssetTypeRequiresSkinning(assetType);
+}
+
+usize HashSourceVertexRef(in SourceVertexRef value){
+    usize seed = hashValue(value.position);
+    seed = hashCombineValue(seed, value.normal);
+    seed = hashCombineValue(seed, value.tangent);
+    seed = hashCombineValue(seed, value.uv0);
+    seed = hashCombineValue(seed, value.color);
+    return hashCombineValue(seed, value.skin);
+}
+
+b8 EqualSourceVertexRef(in SourceVertexRef lhs, in SourceVertexRef rhs){
+    return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
+}
+
+usize HashPositionKey(in PositionKey key){
+    usize seed = hashValue(key.x);
+    seed = hashCombineValue(seed, key.y);
+    return hashCombineValue(seed, key.z);
+}
+
+b8 EqualPositionKey(in PositionKey lhs, in PositionKey rhs){
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+void AccumulateReport(in SourceMeshCanonicalizeReport item, mut SourceMeshCanonicalizeReport inOutTotal){
+    inOutTotal.before.positions += item.before.positions;
+    inOutTotal.before.normals += item.before.normals;
+    inOutTotal.before.tangents += item.before.tangents;
+    inOutTotal.before.uv0 += item.before.uv0;
+    inOutTotal.before.colors += item.before.colors;
+    inOutTotal.before.skin += item.before.skin;
+    inOutTotal.before.vertexRefs += item.before.vertexRefs;
+    inOutTotal.before.indices += item.before.indices;
+
+    inOutTotal.after.positions += item.after.positions;
+    inOutTotal.after.normals += item.after.normals;
+    inOutTotal.after.tangents += item.after.tangents;
+    inOutTotal.after.uv0 += item.after.uv0;
+    inOutTotal.after.colors += item.after.colors;
+    inOutTotal.after.skin += item.after.skin;
+    inOutTotal.after.vertexRefs += item.after.vertexRefs;
+    inOutTotal.after.indices += item.after.indices;
+}
+
+u64 PositionSkinKey(in u32 position, in u32 skin){
+    return (cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | cast<u64>(skin);
+}
+
+f32 CleanFloat(in f32 value){
+    f32 absValue = value;
+    if(absValue < 0.0f)
+        absValue = -absValue;
+    if(absValue < s_CleanFloatEpsilon)
+        return 0.0f;
+    return value;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

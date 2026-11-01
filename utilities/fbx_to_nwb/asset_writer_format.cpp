@@ -32,27 +32,6 @@ using TextWrite::WriteFloat;
 using TextWrite::WriteVec2;
 using TextWrite::WriteVec3;
 using TextWrite::WriteVec4;
-using TextWrite::s_OutputFloatPrecision;
-
-inline constexpr AStringView s_AssetVariableName = "asset";
-inline constexpr AStringView s_AssetBunchDisplayName = "asset bunch";
-inline constexpr AStringView s_LineBreakText = "\r\n";
-inline constexpr AStringView s_ListOpenText = "[\n";
-inline constexpr AStringView s_EntrySuffixText = ",\n";
-inline constexpr AStringView s_RowSuffixText = "],\n";
-inline constexpr AStringView s_ListCloseText = "];\n";
-inline constexpr AStringView s_ListCloseSectionText = "];\n\n";
-inline constexpr AStringView s_FieldAccessText = ".";
-inline constexpr AStringView s_ListAssignOpenText = " = [\n";
-inline constexpr AStringView s_StatementEndText = ";\n";
-inline constexpr AStringView s_StatementEndSectionText = ";\n\n";
-inline constexpr AStringView s_TableEntryCloseText = "    },\n";
-inline constexpr AStringView s_TableCloseText = "};\n";
-inline constexpr AStringView s_TableCloseSectionText = "};\n\n";
-inline constexpr AStringView s_SkeletonPropertyText = "        \"skeleton\": ";
-inline constexpr AStringView s_AssetSectionSeparatorText = "\n\n";
-// '_' plus the decimal digits of a u32 suffix.
-inline constexpr usize s_UniqueNameSuffixReserve = 11u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,8 +141,7 @@ void WriteJointMatrix(const JointMatrix& matrix, const AStringView indent, Strea
 }
 
 b8 ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
-    static constexpr AStringView s_Context = "Failed to write NWB mesh";
-    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_Context))
+    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_WriteNwbMeshContext))
         return false;
     if(!mesh.skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh asset cannot contain a source skin stream"));
@@ -213,7 +191,7 @@ void WriteMeshAssetBody(const SourceMeshStreams& mesh, const AStringView variabl
     && noexcept(WriteVertexRef(DeclVal<const SourceVertexRef&>(), file))
     && noexcept(file << variableName << s_FieldAccessText << Impl::s_MeshIndicesFieldNameView << s_ListAssignOpenText)
     && noexcept(file << indent << "    [" << mesh.indices[DeclVal<usize>() + 0u] << ", " << mesh.indices[DeclVal<usize>() + 1u] << ", " << mesh.indices[DeclVal<usize>() + 2u] << s_RowSuffixText)
-    && noexcept(file << indent << s_ListCloseText)
+    && noexcept(file << indent << s_FormatListCloseText)
 ){
     file << variableName << s_FieldAccessText << Impl::s_MeshPositionsFieldNameView << s_ListAssignOpenText;
     for(const Vec3& position : mesh.positions){
@@ -266,7 +244,7 @@ void WriteMeshAssetBody(const SourceMeshStreams& mesh, const AStringView variabl
     file << variableName << s_FieldAccessText << Impl::s_MeshIndicesFieldNameView << s_ListAssignOpenText;
     for(usize i = 0u; i < mesh.indices.size(); i += Impl::s_MeshletTriangleIndexCount)
         file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << s_RowSuffixText;
-    file << indent << s_ListCloseText;
+    file << indent << s_FormatListCloseText;
 }
 
 b8 NameUsed(const Span<const ScratchString> names, const AStringView name)noexcept{
@@ -303,7 +281,6 @@ UtilityScratchVector<ScratchString> BuildUniqueJointNames(const Span<ufbx_node* 
 
 template<typename Stream>
 void WriteReferenceValue(const AStringView value, const b8 quote, Core::Alloc::ScratchArena& scratchArena, Stream& file){
-    constexpr usize s_EscapedTextReserveFactor = 2u;
     if(quote){
         ScratchString escaped(scratchArena);
         escaped.reserve(SizeOf<s_EscapedTextReserveFactor>(value.size()));
@@ -348,7 +325,7 @@ b8 WriteSkeletonAssetBody(const AStringView variableName, const Span<ufbx_node* 
         file << s_EntrySuffixText;
         file << s_TableEntryCloseText;
     }
-    file << s_ListCloseText;
+    file << s_FormatListCloseText;
     return true;
 }
 
@@ -386,7 +363,7 @@ void WriteSkinAssetBody(
         WriteJointMatrix(matrix, "    ", file);
         file << s_EntrySuffixText;
     }
-    file << s_ListCloseText;
+    file << s_FormatListCloseText;
 }
 
 template<typename Stream>
@@ -609,7 +586,7 @@ b8 WriteAssetBunch(
         file << "    skin,\n";
     }
     file << "    model,\n";
-    file << s_ListCloseText;
+    file << s_FormatListCloseText;
 
     rawFile.close();
     if(!file){

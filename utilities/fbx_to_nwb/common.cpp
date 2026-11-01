@@ -22,8 +22,6 @@ namespace __hidden_common{
 
 inline constexpr Array<OutputAssetType::Enum, 5u> s_OutputAssetTypeValues = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin };
 inline constexpr Array<NormalMode::Enum, 3u> s_NormalModeValues = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate };
-inline constexpr AStringView s_OptionSeparatorText = ", ";
-inline constexpr AStringView s_OptionLastSeparatorText = ", or ";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,36 +67,6 @@ b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, AStri
     return false;
 }
 
-[[nodiscard]] constexpr AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType)noexcept{
-    switch(assetType){
-    case OutputAssetType::Bunch:
-        return s_DefaultOutputAssetTypeText;
-    case OutputAssetType::Mesh:
-        return s_MeshAssetTypeText;
-    case OutputAssetType::Model:
-        return s_ModelAssetTypeText;
-    case OutputAssetType::Skeleton:
-        return s_SkeletonAssetTypeText;
-    case OutputAssetType::Skin:
-        return s_SkinAssetTypeText;
-    default:
-        return {};
-    }
-}
-
-[[nodiscard]] constexpr AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
-    switch(normalMode){
-    case NormalMode::Imported:
-        return s_DefaultNormalModeText;
-    case NormalMode::Smooth:
-        return s_SmoothNormalModeText;
-    case NormalMode::Regenerate:
-        return s_RegenerateNormalModeText;
-    default:
-        return {};
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -110,7 +78,7 @@ b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, AStri
 
 
 ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), __hidden_common::OutputAssetTypeText, scratchArena);
+    return __hidden_common::BuildOptionTexts(Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText, scratchArena);
 }
 
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
@@ -122,15 +90,15 @@ ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), __hidden_common::OutputAssetTypeText);
+    return __hidden_common::ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), OutputAssetTypeText);
 }
 
 b8 ValidateAssetTypeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(__hidden_common::OutputAssetTypeText, ParseAssetTypeText, inOutValue);
+    return __hidden_common::ValidateOptionText(OutputAssetTypeText, ParseAssetTypeText, inOutValue);
 }
 
 ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), __hidden_common::NormalModeText, scratchArena);
+    return __hidden_common::BuildOptionTexts(Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText, scratchArena);
 }
 
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
@@ -142,24 +110,11 @@ ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), __hidden_common::NormalModeText);
+    return __hidden_common::ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), NormalModeText);
 }
 
 b8 ValidateNormalModeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(__hidden_common::NormalModeText, ParseNormalModeText, inOutValue);
-}
-
-AStringView SourceTangentModeText(const SourceTangentMode::Enum mode)noexcept{
-    switch(mode){
-    case SourceTangentMode::Imported:
-        return s_DefaultNormalModeText;
-    case SourceTangentMode::GeneratedUv:
-        return s_GeneratedUvTangentModeText;
-    case SourceTangentMode::GeneratedFallback:
-        return s_GeneratedFallbackTangentModeText;
-    default:
-        return {};
-    }
+    return __hidden_common::ValidateOptionText(NormalModeText, ParseNormalModeText, inOutValue);
 }
 
 Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena& scratchArena){

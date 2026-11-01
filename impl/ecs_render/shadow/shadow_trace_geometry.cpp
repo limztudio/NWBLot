@@ -27,14 +27,10 @@ namespace __hidden_shadow_trace_geometry{
 
 
 using MeshSnapshot = ECSRenderDetail::MeshRayTracingResourceSnapshot;
-inline constexpr usize s_MissingIndex = Limit<usize>::s_Max;
-inline constexpr Array<Core::BufferHandle MeshSnapshot::*, 4> s_BufferMembers = { &MeshSnapshot::positionBuffer, &MeshSnapshot::triangleIndexBuffer, &MeshSnapshot::attributeBuffer, &MeshSnapshot::swBvhNodeBuffer, };
-
-struct BufferRecord{
-    Array<usize, s_BufferMembers.size()> firstMesh = { s_MissingIndex, s_MissingIndex, s_MissingIndex, s_MissingIndex };
-    usize preparedIndex = s_MissingIndex;
-    b8 accepted = false;
-};
+using BufferRecord = ShadowTraceBufferRecord;
+using ::NWB::Impl::s_ShadowTraceMissingIndex;
+inline constexpr usize s_MissingIndex = s_ShadowTraceMissingIndex;
+inline constexpr Array<Core::BufferHandle MeshSnapshot::*, s_ShadowTraceMemberCount> s_BufferMembers = { &MeshSnapshot::positionBuffer, &MeshSnapshot::triangleIndexBuffer, &MeshSnapshot::attributeBuffer, &MeshSnapshot::swBvhNodeBuffer, };
 
 class BufferIndex final : NoCopy{
 private:

@@ -191,14 +191,14 @@ b8 MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningR
     Expected<Core::GpuGraphPipelineId> skinningPipelineResult = MakeUnexpected(Failure{});
     Expected<Core::GpuGraphPipelineId> repackPipelineResult = MakeUnexpected(Failure{});
 
-    bindlessResourceSlotsResourceResult = importBuffer(plan.bindlessResourceSlotsBuffer, "Skinning Bindless Slots");
+    bindlessResourceSlotsResourceResult = importBuffer(plan.bindlessResourceSlotsBuffer, s_BindlessSlotsLabel);
     if(hasActiveSkin || copiesRestStreams){
-        restPositionResourceResult = importBuffer(instance.restPositionBuffer, "Runtime Rest Positions");
-        restNormalResourceResult = importBuffer(instance.restNormalBuffer, "Runtime Rest Normals");
-        restTangentResourceResult = importBuffer(instance.restTangentBuffer, "Runtime Rest Tangents");
+        restPositionResourceResult = importBuffer(instance.restPositionBuffer, s_RestPositionsLabel);
+        restNormalResourceResult = importBuffer(instance.restNormalBuffer, s_RestNormalsLabel);
+        restTangentResourceResult = importBuffer(instance.restTangentBuffer, s_RestTangentsLabel);
         skinnedPositionResourceResult = importBuffer(instance.skinnedPositionBuffer, s_SkinnedPositionsLabel);
         skinnedNormalResourceResult = importBuffer(instance.skinnedNormalBuffer, s_SkinnedNormalsLabel);
-        skinnedTangentResourceResult = importBuffer(instance.skinnedTangentBuffer, "Runtime Skinned Tangents");
+        skinnedTangentResourceResult = importBuffer(instance.skinnedTangentBuffer, s_SkinnedTangentsLabel);
     }
     const auto importBufferIfNeeded = [this](Expected<Core::GpuGraphResourceId>& slot, const Core::BufferHandle& buffer, const AStringView label){
         if(!slot.has_value())
@@ -207,18 +207,18 @@ b8 MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningR
     if(updatesMeshletBounds){
         importBufferIfNeeded(skinnedPositionResourceResult, instance.skinnedPositionBuffer, s_SkinnedPositionsLabel);
         meshletDescResourceResult = importBuffer(instance.meshletDescBuffer, s_MeshletDescriptorsLabel);
-        meshletPositionRefDeltaResourceResult = importBuffer(instance.meshletPositionRefDeltaBuffer, "Runtime Meshlet Position Deltas");
+        meshletPositionRefDeltaResourceResult = importBuffer(instance.meshletPositionRefDeltaBuffer, s_MeshletPositionDeltasLabel);
         meshletLocalVertexRefResourceResult = importBuffer(instance.meshletLocalVertexRefBuffer, s_MeshletLocalVertexRefsLabel);
         meshletPrimitiveIndexResourceResult = importBuffer(instance.meshletPrimitiveIndexBuffer, s_MeshletPrimitiveIndicesLabel);
-        meshletBoundsResourceResult = importBuffer(instance.meshletBoundsBuffer, "Runtime Meshlet Bounds");
-        meshletLocalBoundsResourceResult = importBuffer(instance.meshletLocalBoundsBuffer, "Runtime Meshlet Local Bounds");
-        localBoundsResourceResult = importBuffer(instance.localBoundsBuffer, "Runtime Local Bounds");
+        meshletBoundsResourceResult = importBuffer(instance.meshletBoundsBuffer, s_MeshletBoundsLabel);
+        meshletLocalBoundsResourceResult = importBuffer(instance.meshletLocalBoundsBuffer, s_MeshletLocalBoundsLabel);
+        localBoundsResourceResult = importBuffer(instance.localBoundsBuffer, s_LocalBoundsLabel);
     }
     if(hasActiveSkin){
         meshletAttributeRefDeltaResourceResult = importBuffer(instance.meshletAttributeRefDeltaBuffer, s_MeshletAttributeDeltasLabel);
-        attributeSkinResourceResult = importBuffer(instance.attributeSkinBuffer, "Runtime Attribute Skins");
-        skinResourceResult = importBuffer(resources.skinBuffer, "Skinning Influences");
-        jointPaletteResourceResult = importBuffer(resources.jointPaletteBuffer, "Skinning Joint Palette");
+        attributeSkinResourceResult = importBuffer(instance.attributeSkinBuffer, s_AttributeSkinsLabel);
+        skinResourceResult = importBuffer(resources.skinBuffer, s_SkinningInfluencesLabel);
+        jointPaletteResourceResult = importBuffer(resources.jointPaletteBuffer, s_SkinningJointPaletteLabel);
     }
     if(plan.repacksNormals){
         importBufferIfNeeded(skinnedNormalResourceResult, instance.skinnedNormalBuffer, s_SkinnedNormalsLabel);
@@ -226,16 +226,16 @@ b8 MeshSkinningSystem::FramePlanBuilder::importPlanResources(const MeshSkinningR
         importBufferIfNeeded(meshletPrimitiveIndexResourceResult, instance.meshletPrimitiveIndexBuffer, s_MeshletPrimitiveIndicesLabel);
         importBufferIfNeeded(meshletAttributeRefDeltaResourceResult, instance.meshletAttributeRefDeltaBuffer, s_MeshletAttributeDeltasLabel);
         importBufferIfNeeded(meshletLocalVertexRefResourceResult, instance.meshletLocalVertexRefBuffer, s_MeshletLocalVertexRefsLabel);
-        attributeResourceResult = importBuffer(instance.attributeBuffer, "Runtime Ray Trace Attributes");
+        attributeResourceResult = importBuffer(instance.attributeBuffer, s_RayTraceAttributesLabel);
     }
 
-    boundsPipelineResult = importComputePipeline(m_system.m_boundsComputePipeline, s_GraphBoundsPipelineName, "Skinning Bounds Pipeline");
-    localBoundsPipelineResult = importComputePipeline(m_system.m_localBoundsComputePipeline, s_GraphLocalBoundsPipelineName, "Skinning Local Bounds Pipeline");
+    boundsPipelineResult = importComputePipeline(m_system.m_boundsComputePipeline, s_GraphBoundsPipelineName, s_BoundsPipelineLabel);
+    localBoundsPipelineResult = importComputePipeline(m_system.m_localBoundsComputePipeline, s_GraphLocalBoundsPipelineName, s_LocalBoundsPipelineLabel);
     if(hasActiveSkin){
-        skinningPipelineResult = importComputePipeline(m_system.m_skinningComputePipeline, s_GraphSkinningPipelineName, "Skinning Compute Pipeline");
+        skinningPipelineResult = importComputePipeline(m_system.m_skinningComputePipeline, s_GraphSkinningPipelineName, s_SkinningPipelineLabel);
     }
     if(plan.repacksNormals){
-        repackPipelineResult = importComputePipeline(m_system.m_repackComputePipeline, s_GraphRepackPipelineName, "Skinning Repack Pipeline");
+        repackPipelineResult = importComputePipeline(m_system.m_repackComputePipeline, s_GraphRepackPipelineName, s_RepackPipelineLabel);
     }
 
     const b8 importsValid =
@@ -362,8 +362,8 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareBindlessSlotsUpload(const MeshSk
     // The following graph-owned compute task declares the descriptor-visible ConstantBuffer state.
     if(!declareUploadTask(
         instance,
-        "mesh_skinning_bindless_slots_upload",
-        "Skinning Bindless Slots Upload",
+        s_BindlessSlotsUploadSuffix,
+        s_BindlessSlotsUploadLabel,
         BinaryByteView{ reinterpret_cast<const u8*>(&resources.bindlessResourceSlots), sizeof(resources.bindlessResourceSlots) },
         alignof(MeshSkinningBindlessResourceSlots),
         plan.bindlessResourceSlotsResource,
@@ -394,12 +394,12 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareRestToSkinnedCopy(const MeshSkin
         Core::GpuCopyBufferTaskRegion{ .source = plan.restTangentResource, .destination = plan.skinnedTangentResource, .dataSizeBytes = copyByteCounts->tangentBytes, },
     };
     Core::GpuTaskDesc copyDesc;
-    const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_rest_to_skinned_copy");
+    const auto copyDescIdentity = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_RestToSkinnedCopySuffix);
     if(!copyDescIdentity){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
         return false;
     }
-    copyDesc.setIdentity(copyDescIdentity).setMarkerLabel("Skinning Rest-to-Skinned Copy").setScheduling(MeshSkinningGraphDetail::JointPaletteUploadScheduling());
+    copyDesc.setIdentity(copyDescIdentity).setMarkerLabel(s_RestToSkinnedCopyLabel).setScheduling(MeshSkinningGraphDetail::JointPaletteUploadScheduling());
 
     if(m_terminalTask.valid())
         copyDesc.setDependencies({ &m_terminalTask, 1u });
@@ -422,8 +422,8 @@ b8 MeshSkinningSystem::FramePlanBuilder::declareJointPaletteUpload(const MeshSki
     }
     return declareUploadTask(
         instance,
-        "mesh_skinning_joint_palette_upload",
-        "Skinning Joint Palette Upload",
+        s_JointPaletteUploadSuffix,
+        s_JointPaletteUploadLabel,
         BinaryByteView{ reinterpret_cast<const u8*>(jointPaletteUpload.data()), jointPaletteBytes },
         alignof(SkeletonJointMatrix),
         plan.jointPaletteResource,

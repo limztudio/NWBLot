@@ -66,7 +66,7 @@ struct ReflectionPostprocessSnapshot{
 // Only the extra opaque history bank and spatial destination live here.
 class RendererReflectionPostprocess final : NoCopy{
 private:
-    static constexpr usize s_PostprocessDescriptorCount = 4u;
+    static constexpr usize s_PostprocessDescriptorCount = s_ReflectionPostprocessDescriptorCount;
 
 
 public:

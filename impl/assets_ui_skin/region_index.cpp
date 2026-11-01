@@ -28,30 +28,10 @@ void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, 
 }
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
-    // Small skins scan faster; oversized programmatic objects remain inspectable without an unbounded index.
-    if(m_regions.size() <= s_UiSkinLinearLookupRegionLimit || m_regions.size() > s_UiSkinMaxRegionCount){
-        for(const UiSkinRegion& region : m_regions){
-            if(region.name == name)
-                return &region;
-        }
+    usize regionPosition = 0u;
+    if(!TryFindUiSkinRegionIndex(Span<const UiSkinRegion>(m_regions), Span<const u32>(m_regionIndex), name, regionPosition))
         return nullptr;
-    }
-    usize first = 0u;
-    usize count = m_regionIndex.size();
-    while(count > 0u){
-        const usize step = count / 2u;
-        const usize middle = first + step;
-        if(m_regions[m_regionIndex[middle]].name < name){
-            first = middle + 1u;
-            count -= step + 1u;
-        }
-        else
-            count = step;
-    }
-    if(first == m_regionIndex.size())
-        return nullptr;
-    const UiSkinRegion& region = m_regions[m_regionIndex[first]];
-    return region.name == name ? &region : nullptr;
+    return &m_regions[regionPosition];
 }
 
 void UiSkin::rebuildRegionIndex(){

@@ -29,8 +29,6 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
     const usize candidateCount = rendererView.candidateCount();
     BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, false);
     // Position, index, attribute, meshlet descriptor and meshlet bounds buffers; CSG gathering adds runtime bounds and software BVH nodes.
-    constexpr u32 s_SceneBuffersPerCandidate = 5u;
-    constexpr u32 s_SceneBuffersPerCsgCandidate = 7u;
     m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? s_SceneBuffersPerCsgCandidate : s_SceneBuffersPerCandidate));
 
     // Parallel instance records and CPU BVH build values.
@@ -227,12 +225,15 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
         instanceMaterial.nodeSlot = m_rayTracingState.m_swShadowMeshNodeHandles[meshSlot].slot();
-        SceneBvhPrimitiveCalculation bvhPrimitive;
-        StoreFloat(worldMin, bvhPrimitive.aabbMin);
-        StoreFloat(worldMax, bvhPrimitive.aabbMax);
-        constexpr f32 s_BoundsMidpointWeight = 0.5f;
-        StoreFloat(VectorScale(VectorAdd(worldMin, worldMax), s_BoundsMidpointWeight), bvhPrimitive.centroid);
-        bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
+        Float4 worldMinData;
+        Float4 worldMaxData;
+        StoreFloat(worldMin, worldMinData);
+        StoreFloat(worldMax, worldMaxData);
+        const SceneBvhPrimitiveCalculation bvhPrimitive = MakeSceneBvhPrimitiveCalculation(
+            worldMinData,
+            worldMaxData,
+            (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u
+        );
 
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
@@ -389,11 +390,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAren
             const u32 nodeIndex = static_cast<u32>(nodes.size());
             if(!IsValidSceneBvhNodeChildren(buildNode.leftChild, buildNode.rightChild, nodeIndex, static_cast<u32>(buildNodes.size()), instanceCount))
                 return false;
-            NwbBvhNodeGpu node;
-            StoreFloatInt(LoadFloat(buildNode.aabbMin), buildNode.leftChild, node.aabbMinLeftChild);
-            const u32 taggedRightChild = buildNode.rightChild | (buildNode.containsTransparentOccluder ? BvhNodeIndex::TransparentSubtreeFlag : 0u);
-            StoreFloatInt(LoadFloat(buildNode.aabbMax), taggedRightChild, node.aabbMaxRightChild);
-            nodes.push_back(node);
+            nodes.push_back(PackSceneBvhNodeGpu(buildNode));
         }
 
         if(!capturePreparedSceneBvh(staticScene, sceneStaticHash, nodes, instances))

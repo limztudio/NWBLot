@@ -156,11 +156,11 @@ Expected<GpuGlyphGraphResources> GpuRendererState::declareGlyphPages(Core::GpuTa
             GpuSampledTextureImportDesc{
                 .index = index,
                 .readyPrefix = s_GpuGlyphPageReadyPrefix,
-                .readyMarkerLabel = "UI Glyph Page Upload Completion",
+                .readyMarkerLabel = s_GpuGlyphPageReadyMarkerLabel,
                 .completionLabel = NWB_TEXT("glyph page"),
                 .readinessToken = page->m_readinessToken,
                 .texturePrefix = s_GpuGlyphPagePrefix,
-                .textureMarkerLabel = "UI Glyph Coverage Page",
+                .textureMarkerLabel = s_GpuGlyphPageMarkerLabel,
                 .texture = page->m_texture,
             },
             graph,

@@ -27,17 +27,6 @@ namespace __hidden_encode{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_UastcHdrMaximum = 65216.0f;
-inline constexpr f32 s_SrgbLinearSegmentScale = 12.92f;
-inline constexpr f32 s_SrgbOffset = 0.055f;
-inline constexpr f32 s_SrgbOffsetScale = 1.055f;
-inline constexpr f32 s_SrgbDecodeExponent = 2.4f;
-inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static Expected<basisu::imagef> LoadImage(const ScratchPath& path, Core::Alloc::ScratchArena& scratchArena){
     basisu::imagef image;
     const auto pathText = PathToGenericString(scratchArena, path);
@@ -109,7 +98,7 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture dimension and input image count do not match."));
         return MakeUnexpected(Failure{});
     }
-    if(alphaSource.mode != AlphaSourceMode::Original && alphaSource.mode != AlphaSourceMode::Constant && alphaSource.mode != AlphaSourceMode::Image){
+    if(!IsValidAlphaSourceMode(alphaSource.mode)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
         return MakeUnexpected(Failure{});
     }

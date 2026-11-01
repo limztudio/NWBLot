@@ -50,12 +50,9 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     }
 
     usize objectCount = 0u;
-    for(const usize count : { m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size() }){
-        if(count > Limit<usize>::s_Max - objectCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: total object count overflows"));
-            return false;
-        }
-        objectCount += count;
+    if(!TryComputeTotalModelObjectCount(m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size(), objectCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: total object count overflows"));
+        return false;
     }
     Optional<__hidden_model_runtime::ObjectNameMap> objectNames;
     // One object is necessarily unique and a mesh cannot have a separate skeleton parent in that model.
@@ -88,7 +85,7 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} has non-finite transform"), i);
             return false;
         }
-        if(!object.name || !object.skeleton.valid()){
+        if(!IsCompleteModelSkeletonObject(object)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
             return false;
         }
@@ -104,11 +101,11 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has non-finite transform"), i);
             return false;
         }
-        if(!object.name || !object.mesh.valid()){
+        if(!IsCompleteModelStaticMeshObject(object)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
             return false;
         }
-        if(object.material.name() && !object.material.valid()){
+        if(!IsValidOptionalModelMaterialRef(object.material)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
             return false;
         }
@@ -144,11 +141,11 @@ b8 Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has non-finite transform"), i);
             return false;
         }
-        if(!object.name || !object.skin.valid() || !object.skeletonObject){
+        if(!IsCompleteModelSkinnedMeshObject(object)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
             return false;
         }
-        if(object.material.name() && !object.material.valid()){
+        if(!IsValidOptionalModelMaterialRef(object.material)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
             return false;
         }
@@ -178,7 +175,7 @@ b8 Model::loadBinary(const Span<const u8> binary){
         return false;
     const ModelHeaderBinary& header = *headerResult;
 
-    if(header.padding0 != 0u){
+    if(!IsValidModelHeaderBinary(header)){
         NWB_LOGGER_ERROR(NWB_TEXT("Model::loadBinary failed: reserved header fields must be zero"));
         return false;
     }

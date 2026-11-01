@@ -124,6 +124,32 @@ CsgDeformFailure MakeCsgDeformFailure(in CsgDeformViabilityReason reason, in Csg
     return out;
 }
 
+CsgDeformViability MakeCsgDeformViability(in b8 viable, in CsgDeformViabilityReason reason){
+    CsgDeformViability out;
+    out.viable = viable;
+    out.reason = reason;
+    return out;
+}
+
+CsgDeformCutLoopEdge MakeCsgDeformCutLoopEdge(in u32 first, in u32 second){
+    CsgDeformCutLoopEdge out;
+    out.first = first;
+    out.second = second;
+    return out;
+}
+
+usize NextLoopVertexIndex(in usize vertexIndex, in usize loopSize){
+    return (vertexIndex + 1u) % loopSize;
+}
+
+b8 TryComputeCsgDeformEdgeSplitBlend(in f32 firstDistance, in f32 secondDistance, mut f32 outBlend){
+    const f32 denominator = firstDistance - secondDistance;
+    if(!isFinite(denominator) || abs(denominator) < s_SplitDenominatorEpsilon)
+        return false;
+    outBlend = saturate(abs(secondDistance / denominator));
+    return true;
+}
+
 b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
     return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
@@ -181,5 +207,4 @@ CsgShapeInlineParameters MakeCsgDeformShapeInlineParameters(in CsgDeformShape sh
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

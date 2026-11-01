@@ -1,0 +1,238 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_WindowTitleText = "NWB Testbed";
+
+// The gallery selector reserves this content area; the text area fills it at selector width.
+const f32 s_SelectorWidth = 400.0f;
+const f32 s_ContentHeight = 260.0f;
+const f32 s_OrdinaryGalleryWidth = 280.0f;
+const f32 s_GalleryFontSize = 14.0f;
+const f32 s_GalleryMargin = 18.0f;
+
+// Stable widget keys reused by several sample panels.
+const StringView s_TitleKey = "title";
+const StringView s_HintKey = "hint";
+const StringView s_SelectedKey = "selected";
+const StringView s_ChoiceKey = "choice";
+const StringView s_ReadOnlyKey = "read_only";
+const StringView s_EnabledKey = "enabled";
+const StringView s_AmountKey = "amount";
+const StringView s_CommandsKey = "commands";
+
+// Sample text format shared by the selection read-outs.
+const StringView s_SelectedTextFormat = "Selected: {}";
+
+// Default skin regions drawn by more than one sample.
+const Name s_ButtonNormal = "button.normal";
+const Name s_ComboArrow = "combo.arrow";
+
+[reflect]
+enum<u32> Section{
+    Controls,
+    Edit,
+    List,
+    Combo,
+    SearchCombo,
+    PopupTools,
+    NestedPopup,
+    NumericEdit,
+    TextArea,
+    RadioGroup,
+    Slider,
+    Progress,
+    Image,
+    kCount
+}
+
+StringView SectionName(in Section section){
+    switch(section){
+        case Section::Controls: return "Controls and menu";
+        case Section::Edit: return "Text editing";
+        case Section::List: return "Virtual list";
+        case Section::Combo: return "Keyed combo";
+        case Section::SearchCombo: return "Searchable combo";
+        case Section::PopupTools: return "Tooltips and context menu";
+        case Section::NestedPopup: return "Nested popups";
+        case Section::NumericEdit: return "Numeric editing";
+        case Section::TextArea: return "Multiline text";
+        case Section::RadioGroup: return "Radio choices";
+        case Section::Slider: return "Slider";
+        case Section::Progress: return "Progress";
+        case Section::Image: return "Images";
+        case Section::kCount: return "";
+    }
+    return "";
+}
+
+const f32 s_SelectorHeight = 88.0f;
+const f32 s_ContentGap = 12.0f;
+const Name s_SelectorArena = "testbed/ui/gallery_selector";
+const f32 s_NavigationButtonWidth = 100.0f;
+const f32 s_ControlsPanelHeight = 180.0f;
+
+const u64 s_FilteredInstanceGeneration = 2u;
+const u64 s_VirtualListRowCount = 100000u;
+const usize s_VirtualListLabelCapacity = 32u;
+const usize s_VirtualListMaxDecimalDigits = 20u;
+const usize s_VirtualListRowPrefixLength = 4u;
+const f32 s_ListGalleryPanelHeight = 258.0f;
+const f32 s_ListGalleryListHeight = 180.0f;
+
+const f32 s_ComboGalleryPanelHeight = 130.0f;
+const f32 s_ComboGalleryPopupHeight = 220.0f;
+const f32 s_EditGalleryPanelHeight = 154.0f;
+
+const f32 s_ImageGalleryPanelHeight = 220.0f;
+const f32 s_ImageGallerySpriteSize = 64.0f;
+const f32 s_ImageGallerySliceWidth = 96.0f;
+const f32x4 s_ImageGallerySliceTint(0.8f, 0.9f, 1.0f, 0.8f);
+const f32 s_ImageGalleryTextureHeight = 48.0f;
+const Name s_RadioMarkRegion = "radio.mark";
+
+const usize s_NestedPopupLabelCount = 5u;
+const u64 s_NestedPopupDisabledKey = 3u;
+const f32 s_NestedPopupCompactGap = 4.0f;
+const StringView s_NestedPopupActionKey = "action";
+const StringView s_NestedPopupEditKey = "edit";
+const StringView s_NestedPopupMenuAnchorKey = "menu_anchor";
+const f32 s_NestedPopupFontSize = 12.0f;
+const f32 s_NestedPopupPanelHeight = 92.0f;
+const f32 s_NestedPopupParentAnchorInset = 8.0f;
+const f32 s_NestedPopupParentAnchorTop = 28.0f;
+const f32 s_NestedPopupParentAnchorWidth = 264.0f;
+const f32 s_NestedPopupParentAnchorHeight = 28.0f;
+const f32 s_NestedPopupParentWidth = 300.0f;
+const f32 s_NestedPopupParentHeight = 420.0f;
+const f32 s_NestedPopupButtonWidth = 100.0f;
+const f32 s_NestedPopupListHeight = 56.0f;
+const f32 s_NestedPopupComboPopupHeight = 172.0f;
+const f32 s_NestedPopupSearchPopupHeight = 196.0f;
+const f32 s_NestedPopupMenuWidth = 200.0f;
+const f32 s_NestedPopupMenuHeight = 172.0f;
+const f32 s_NestedPopupChildAnchorTop = 124.0f;
+const f32 s_NestedPopupChildAnchorWidth = 8.0f;
+const f32 s_NestedPopupChildAnchorHeight = 32.0f;
+const f32 s_NestedPopupChildWidth = 220.0f;
+const f32 s_NestedPopupChildHeight = 178.0f;
+
+const i64 s_NumericEditInitialInteger = 9007199254740993;
+const f64 s_NumericEditInitialDecimal = 1.25;
+const f32 s_NumericEditPanelHeight = 200.0f;
+const f64 s_NumericEditDecimalLimit = 10.0;
+
+const f32 s_PopupMenuButtonWidth = 60.0f;
+const u32 s_PopupFirstChoice = 1u;
+const u32 s_PopupSecondChoice = 2u;
+const f32 s_PopupAnchorLeft = 196.0f;
+const f32 s_PopupAnchorTop = 68.0f;
+const f32 s_PopupAnchorHeight = 36.0f;
+const f32 s_PopupGalleryWidth = 220.0f;
+const f32 s_PopupGalleryHeight = 180.0f;
+
+const usize s_PopupToolsLabelCount = 5u;
+const u64 s_PopupToolsDisabledKey = 3u;
+const f32 s_PopupToolsPanelHeight = 132.0f;
+const f32 s_PopupToolsMenuWidth = 220.0f;
+const f32 s_PopupToolsMenuHeight = 180.0f;
+const StringView s_PopupToolsAnchorKey = "anchor";
+
+const usize s_RadioGroupLabelCount = 3u;
+const u64 s_RadioGroupDisabledKey = 3u;
+const f32 s_RadioGroupPanelHeight = 208.0f;
+
+const usize s_SearchComboLabelCount = 12u;
+const u64 s_SearchComboDisabledKey = 5u;
+const f32 s_SearchComboPanelHeight = 130.0f;
+const f32 s_SearchComboPopupHeight = 240.0f;
+
+const f64 s_DefaultProgressFraction = 0.25;
+const f32 s_ProgressGalleryPanelHeight = 180.0f;
+const f64 s_ProgressAdvanceFraction = s_DefaultProgressFraction;
+const f64 s_ProgressPercentScale = 100.0;
+
+const f32 s_SliderGalleryPanelHeight = 180.0f;
+const f64 s_SliderKeyStep = 0.05;
+
+const f32 s_OverviewWidth = 360.0f;
+const f32 s_OverviewHeight = 160.0f;
+const StringView s_RendererLine = "Renderer: mesh / compute emulation";
+const StringView s_CharacterLine = "Character: female model";
+
+const f32 s_PanelBaseHeight = 170.0f;
+const f32 s_PanelBottomGap = 12.0f;
+const f32 s_CaptionPadding = 8.0f;
+const f32 s_MinimumGalleryX = 390.0f;
+const f32 s_LabelFontSize = 13.0f;
+const f32 s_LeftColumnX = 12.0f;
+const f32 s_RightColumnX = 146.0f;
+const f32 s_ButtonTopY = 12.0f;
+const f32 s_ButtonBottomY = 50.0f;
+const f32 s_ButtonWidth = 122.0f;
+const f32 s_ButtonHeight = 30.0f;
+const f32 s_EditFocusedY = 88.0f;
+const f32 s_EditFocusedWidth = 218.0f;
+const f32 s_EditFocusedHeight = 32.0f;
+const f32 s_ComboArrowX = 204.0f;
+const f32 s_ComboArrowY = 96.0f;
+const f32 s_ComboArrowSize = 16.0f;
+const f32 s_CheckboxX = 242.0f;
+const f32 s_CheckboxY = 90.0f;
+const f32 s_CheckboxSize = 26.0f;
+const f32 s_CheckboxMarkX = 247.0f;
+const f32 s_CheckboxMarkY = 95.0f;
+const f32 s_CheckboxMarkSize = 16.0f;
+const f32 s_ProgressTrackY = 132.0f;
+const f32 s_ProgressTrackWidth = 256.0f;
+const f32 s_ProgressTrackHeight = 16.0f;
+const f32 s_ProgressFillX = 14.0f;
+const f32 s_ProgressFillY = 134.0f;
+const f32 s_ProgressFillWidth = 168.0f;
+const f32 s_ProgressFillHeight = 12.0f;
+const f32 s_EditNormalY = 158.0f;
+const f32 s_EditNormalWidth = 256.0f;
+const f32 s_CaptionX = 18.0f;
+const f32 s_CaptionY = 162.0f;
+const f32 s_CaptionWidth = 244.0f;
+const f32 s_LeftTextX = 20.0f;
+const f32 s_RightTextX = 154.0f;
+const f32 s_ButtonTextWidth = 106.0f;
+const f32 s_EditTextWidth = 178.0f;
+const Name s_Panel = "panel.normal";
+const Name s_ButtonHover = "button.hover";
+const Name s_ButtonPressed = "button.pressed";
+const Name s_ButtonDisabled = "button.disabled";
+const Name s_EditNormal = "edit.normal";
+const Name s_EditFocused = "edit.focused";
+const Name s_Checkbox = "checkbox.checked";
+const Name s_CheckboxMark = "checkbox.mark";
+const Name s_ProgressTrack = "progress.track";
+const Name s_ProgressFill = "progress.fill";
+
+const f32 s_DegreesToRadians = s_PI / 180.0f;
+const f32 s_QuarterTurnFraction = 0.25f;
+const f32 s_CameraStartDepth = 2.2f;
+const f32 s_CameraMoveEpsilon = 0.000001f;
+const f32 s_FlyCameraMoveSpeed = 2.5f;
+const f32 s_FlyCameraBoostMultiplier = 4.0f;
+const f32 s_FlyCameraMouseSensitivityDegreesPerPixel = 0.12f;
+const f32 s_FlyCameraPitchLimitDegrees = 89.0f;
+const f32 s_FlyCameraMouseSensitivityRadiansPerPixel = s_FlyCameraMouseSensitivityDegreesPerPixel * s_DegreesToRadians;
+const f32 s_FlyCameraPitchLimitRadians = s_FlyCameraPitchLimitDegrees * s_DegreesToRadians;
+const f32 s_DefaultDirectionalLightPitch = s_PI * s_QuarterTurnFraction;
+const f32 s_DefaultDirectionalLightYaw = s_PI * s_QuarterTurnFraction;
+const f32 s_DefaultDirectionalLightRoll = 0.0f;
+const f32 s_DefaultDirectionalLightIntensity = 1.0f;
+const f32x4 s_DefaultDirectionalLightColor(1.0f, 0.96f, 0.88f, 0.0f);
+const f32 s_CharacterCameraTargetY = 0.85f;
+const f32 s_CameraStartYaw = s_PI;
+const f32x4 s_PointLightPosition(1.5f, 1.6f, 1.5f, 0.0f);
+const f32x4 s_PointLightColor(0.6f, 0.74f, 1.0f, 0.0f);
+const f32 s_PointLightIntensity = 2.0f;
+const f32 s_PointLightRange = 16.0f;
+const StringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

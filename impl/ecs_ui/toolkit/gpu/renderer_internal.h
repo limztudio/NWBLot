@@ -70,14 +70,6 @@ using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxI
 using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
 using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
 
-namespace GpuSampledTextureImportError{
-    enum Enum : u8{
-        Identity,
-        Completion,
-        Texture,
-    };
-};
-
 struct GpuSampledTextureImportDesc{
     usize index = 0u;
     Name readyPrefix;
@@ -283,23 +275,7 @@ struct GpuFrameSlot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Call-scoped calculation scratch shared by native commands and command IR; never retained or uploaded.
-struct GpuRasterGeometry{
-    SIMDVectorSingle pixelScale;
-    SIMDVectorSingle targetSize;
-
-
-public:
-    GpuRasterGeometry(const DisplayMetrics& display, const Core::TextureDesc& target)noexcept
-        : pixelScale(VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY))
-        , targetSize(VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height), static_cast<f32>(target.width), static_cast<f32>(target.height)))
-    {}
-
-
-public:
-    [[nodiscard]] Expected<GpuPaintPushConstants> initializePushConstants(u32 samplerSlot)const noexcept;
-    [[nodiscard]] Optional<Core::Rect> scissor(const DrawCommand& draw)const noexcept;
-};
+[[nodiscard]] Optional<Core::Rect> ResolveGpuScissorRect(const GpuRasterGeometry& geometry, const DrawCommand& draw)noexcept;
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
 [[nodiscard]] b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept;

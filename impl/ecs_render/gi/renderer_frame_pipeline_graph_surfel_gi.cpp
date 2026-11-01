@@ -77,9 +77,8 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuTaskExternalStateSource surfelGiComputeStateSource{ .states = m_surfelGiComputePersistentState.source(), };
     const Core::GpuTaskExternalStateSource surfelGiCounterStateSource{ .states = m_surfelGiCounterPersistentState.source(), };
     const Core::GpuTaskExternalStateSource surfelIrradianceReturnStateSource{ .states = m_surfelIrradianceReturnState.source(), .applicableConsumerQueueClass = Core::CommandQueue::Compute, };
-    constexpr usize s_StateSourceCapacity = 3u;
     struct SurfelGiTaskStateSourceSet{
-        Array<Core::GpuTaskExternalStateSource, s_StateSourceCapacity> values{};
+        Array<Core::GpuTaskExternalStateSource, s_SurfelGiStateSourceCapacity> values{};
         usize count = 0u;
     };
     const auto makeSurfelGiTaskStateSources = [&](const b8 includeCompute, const b8 includeCounter, const b8 includeIrradianceReturn)noexcept{
@@ -113,10 +112,6 @@ b8 RendererFramePipeline::declareDeferredSurfelGiTask(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
-    constexpr usize s_SurfelResourceUseCapacity = 29u;
-    constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
-    // The CSG trace context and the surfel counter it updates.
-    constexpr usize s_SurfelCsgTraceContextUseCapacity = 2u;
     const b8 hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
     resourceUses.reserve(s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u) + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? s_SurfelCsgTraceContextUseCapacity : 0u) + rayTracingResources.csgTraceBoundsBuffers.size() + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));

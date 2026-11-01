@@ -195,15 +195,6 @@ static b8 AppendShaderIndexToManifest(
     return false;
 }
 
-static u64 BuildShaderVariantCookKeyHash(const NameHash& virtualPathHash, const u64 sourceChecksum, const u64 bytecodeChecksum)noexcept{
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
-    Fnv64AppendValue(hash, virtualPathHash);
-    Fnv64AppendValue(hash, sourceChecksum);
-    Fnv64AppendValue(hash, bytecodeChecksum);
-    return hash;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -294,7 +285,7 @@ b8 AppendPreparedShadersToManifest(
             }
 
             const u64 bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
-            const u64 cookKeyHash = __hidden_shader_volume_writer::BuildShaderVariantCookKeyHash(virtualPathHash, sourceChecksum, bytecodeChecksum);
+            const u64 cookKeyHash = BuildShaderVariantCookKeyHash(virtualPathHash, sourceChecksum, bytecodeChecksum);
             const ShaderBinaryPayload::AssetPayloadEncodeFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(AStringView(entry.entryPoint), cookedBytecode, shaderAssetPayload);
             if(payloadFailure != ShaderBinaryPayload::AssetPayloadEncodeFailure::None){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})"), ConvertString(virtualPath.resolvedText()), static_cast<u32>(payloadFailure));

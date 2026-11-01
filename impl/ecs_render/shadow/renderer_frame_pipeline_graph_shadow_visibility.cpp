@@ -94,7 +94,6 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
     )
         return false;
 
-    constexpr usize s_ShadowVisibilityStateSourceCapacity = 2u;
     Array<Core::GpuTaskExternalStateSource, s_ShadowVisibilityStateSourceCapacity> shadowVisibilityStateSources = {};
     usize shadowVisibilityStateSourceCount = 0u;
     const auto* const shadowScratchStates = m_shadowComputePersistentState.source();
@@ -166,7 +165,6 @@ b8 RendererFramePipeline::declareDeferredShadowVisibilityTask(
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     const b8 traceGeometryStatesGraphOwned = traceGeometrySet.valid();
-    constexpr usize s_ShadowVisibilityResourceUseCapacity = 40u;
     resourceUses.reserve(s_ShadowVisibilityResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResources.size()));
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));

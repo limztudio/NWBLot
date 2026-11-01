@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_TrueTypeExtension = ".ttf";
+const StringView s_OpenTypeExtension = ".otf";
+// One guard pixel on each side keeps neighbouring glyphs from bleeding into each other.
+const u32 s_GlyphGuardExtent = 2u;
+const u32 s_DefaultBakeExtent = 1024u;
+const u32 s_MinBakeExtent = 32u;
+
+const StringView s_PublicationDiagnosticTag = "font_builder_publication";
+const Name s_FontBuilderArena = "utilities/font_builder";
+const Name s_FontBuilderBakeArena = "utilities/font_builder/bake";
+const i32 s_FontBuilderEntryFailure = -1;
+
+const StringView s_FontBuilderAppDescription = "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images.";
+const StringView s_FontOptionFlag = "--font";
+const StringView s_OutputOptionFlag = "-o,--output";
+const StringView s_PpemOptionFlag = "--ppem";
+const StringView s_SpreadOptionFlag = "--spread";
+const StringView s_ExtentOptionFlag = "--extent";
+const StringView s_MaxGroupsOptionFlag = "--max-groups";
+const StringView s_RendererOptionFlag = "--renderer";
+const StringView s_OverwriteOptionFlag = "--overwrite";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Shelf{
+    public u32 x = 0u;
+    public u32 y = 0u;
+    public u32 height = 0u;
+}
+
+b8 TryPlaceGlyphOnShelf(in u32 width, in u32 height, in u32 extent, mut Shelf inOutShelf, mut u32 outX, mut u32 outY){
+    Shelf next = inOutShelf;
+    if(next.x + width > extent){
+        next.x = 0u;
+        next.y += next.height;
+        next.height = 0u;
+    }
+    if(next.y + height > extent)
+        return false;
+    outX = next.x + 1u;
+    outY = next.y + 1u;
+    next.x += width;
+    if(height > next.height)
+        next.height = height;
+    inOutShelf = next;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/execute/frame_execute_lifecycle.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
@@ -25,15 +26,15 @@ NWB_IMPL_BEGIN
 // Contexts point at sibling members, so the set stays in place for the whole execution.
 struct FrameExecuteStateLifecycleSet final : NoCopy{
     // Capacity, not a runtime packet-count assumption.
-    static constexpr usize s_CallbackCapacity = 6u;
+    static constexpr usize s_CallbackCapacity = s_FrameExecuteLifecycleCallbackCapacity;
     // Scene TLAS backing and the three BVH sort buffers; the CSG trace context adds one.
-    static constexpr usize s_ShadowPrepareFixedStateBufferCapacity = 4u;
-    static constexpr usize s_ShadowPrepareCsgStateBufferCapacity = 5u;
-    static constexpr usize s_SinglePersistentResourceCapacity = 1u;
-    static constexpr usize s_ShadowComputeScratchTextureCapacity = 15u;
-    static constexpr usize s_ShadowComputeScratchBufferCapacity = 12u;
-    static constexpr usize s_CausticsComputeScratchTextureCapacity = 4u;
-    static constexpr usize s_SurfelGiComputeScratchBufferCapacity = 6u;
+    static constexpr usize s_ShadowPrepareFixedStateBufferCapacity = ::NWB::Impl::s_ShadowPrepareFixedStateBufferCapacity;
+    static constexpr usize s_ShadowPrepareCsgStateBufferCapacity = ::NWB::Impl::s_ShadowPrepareCsgStateBufferCapacity;
+    static constexpr usize s_SinglePersistentResourceCapacity = ::NWB::Impl::s_SinglePersistentResourceCapacity;
+    static constexpr usize s_ShadowComputeScratchTextureCapacity = ::NWB::Impl::s_ShadowComputeScratchTextureCapacity;
+    static constexpr usize s_ShadowComputeScratchBufferCapacity = ::NWB::Impl::s_ShadowComputeScratchBufferCapacity;
+    static constexpr usize s_CausticsComputeScratchTextureCapacity = ::NWB::Impl::s_CausticsComputeScratchTextureCapacity;
+    static constexpr usize s_SurfelGiComputeScratchBufferCapacity = ::NWB::Impl::s_SurfelGiComputeScratchBufferCapacity;
 
     // Prep/prefix stay serial; later upload packets may use workers.
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena;

@@ -23,13 +23,6 @@ namespace __hidden_output{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_NewLine = "\r\n";
-inline constexpr AStringView s_PublicationDiagnosticTag = "tex_conv_publication";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename ArenaT>
 [[nodiscard]] const ::Path<ArenaT>& FailedValidationPath(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result)noexcept{
     if(
@@ -178,7 +171,7 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
         force,
         false,
         false,
-        __hidden_output::s_PublicationDiagnosticTag
+        s_PublicationDiagnosticTag
     );
     const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> outputs = { MakeNotNull(&paths.primary), MakeNotNull(&paths.secondary) };
     const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> temporaries = { MakeNotNull(&paths.primaryTemporary), MakeNotNull(&paths.secondaryTemporary) };

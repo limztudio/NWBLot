@@ -137,8 +137,8 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
         if(!skinInfluences)
             return MakeUnexpected(Failure{});
 
-        const auto skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
-        const auto jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
+        const auto skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_SkinBufferSuffix);
+        const auto jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_JointPaletteBufferSuffix);
         if(!skinBufferName || !jointPaletteBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
@@ -168,7 +168,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
         rebuilt.jointPaletteBuffer = Move(*jointPaletteBufferResult);
     }
 
-    const auto bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_bindless_slots");
+    const auto bindlessSlotsBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, s_BindlessSlotsBufferSuffix);
     if(!bindlessSlotsBufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
         return MakeUnexpected(Failure{});

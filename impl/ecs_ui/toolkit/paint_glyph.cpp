@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 
 b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
-    if(!page || !IsValidUvRect(uv))
+    if(!page || !IsValidPaintUvRect(uv))
         return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_glyphPages.size(); ++index){

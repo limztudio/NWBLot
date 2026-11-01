@@ -35,11 +35,6 @@ NWB_IMPL_BEGIN
     const b8 capturesLaggedLightingHistory = inputs.capturesLaggedLightingHistory;
     const b8 hasCsgFrameWork = inputs.hasCsgFrameWork;
 
-    constexpr AStringView s_CausticIrradianceLabel = "Caustic Irradiance";
-    constexpr AStringView s_SurfelIrradianceLabel = "Surfel Irradiance";
-    constexpr AStringView s_LightingBindlessSlotsName = "render.deferred_lighting.bindless_slots";
-    constexpr AStringView s_BindlessSlotsLabel = "Deferred Bindless Slots";
-
     // Outputs begin with a graph-owned write; fresh resources start Undefined.
     const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return RendererTaskGraphDetail::ImportExternalTexture(m_graph, texture, identity, label, Core::ResourceStates::Unknown);
@@ -197,9 +192,9 @@ NWB_IMPL_BEGIN
             csgIntervalSampleStateResult = Optional<Core::GpuGraphResourceId>{*importedResource};
     }
     bindlessSlotsResult = history
-        ? RendererTaskGraphDetail::ImportExternalBuffer(m_graph, history->slotsBuffer, Name(s_LightingBindlessSlotsName), "Lagged Deferred Bindless Slots")
-        : importCurrentBindlessSlots(Name(s_LightingBindlessSlotsName), s_BindlessSlotsLabel);
-    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), s_BindlessSlotsLabel);
+        ? RendererTaskGraphDetail::ImportExternalBuffer(m_graph, history->slotsBuffer, s_LightingBindlessSlotsName, "Lagged Deferred Bindless Slots")
+        : importCurrentBindlessSlots(s_LightingBindlessSlotsName, s_DeferredBindlessSlotsLabel);
+    currentBindlessSlotsResult = !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get() ? bindlessSlotsResult : importCurrentBindlessSlots(Name("render.deferred_composite.bindless_slots"), s_DeferredBindlessSlotsLabel);
     if(rayTracingGraphResources.materialContextSlotsBuffer){
         const auto importedResource = RendererTaskGraphDetail::ImportExternalBuffer(m_graph, rayTracingGraphResources.materialContextSlotsBuffer, Name("render.deferred.material_context_slots"), "Ray Trace Material Context Slots");
         if(!importedResource)

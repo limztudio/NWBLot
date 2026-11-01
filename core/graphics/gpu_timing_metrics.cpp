@@ -87,14 +87,16 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Sp
     outQueueMetrics.clear();
 
     const usize packetEnvelopeCount = packetEnvelopes.size();
+    if(packetEnvelopeCount == 0u || packetEnvelopeCount > static_cast<usize>(Limit<u16>::s_Max))
+        return MakeUnexpected(Failure{});
     const GpuComparableTimestampRange* const packetEnvelopeData = packetEnvelopes.data();
+    if(!packetEnvelopeData)
+        return MakeUnexpected(Failure{});
     const auto eventCapacity = TryMultiply<usize>(packetEnvelopeCount, s_TimestampEventsPerEnvelope);
     if(!eventCapacity)
         return MakeUnexpected(Failure{});
-    if(packetEnvelopeCount == 0u || !packetEnvelopeData)
-        return MakeUnexpected(Failure{});
 
-    const usize queueCapacity = Min(packetEnvelopeCount, static_cast<usize>(Limit<u16>::s_Max));
+    const usize queueCapacity = packetEnvelopeCount;
     TimestampRangeVector sortedRanges{scratchArena};
     TimestampEventVector events{scratchArena};
     if(packetEnvelopeCount > sortedRanges.max_size() || queueCapacity > outQueueMetrics.max_size() || *eventCapacity > events.max_size())

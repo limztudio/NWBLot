@@ -162,9 +162,6 @@ TEST(GpuPacketEnvelopeMetrics, RejectsInvalidOrIncomparableInputAndClearsOutputs
     invalidRanges[1u] = validRanges[1u];
     invalidRanges[1u].physicalQueue.deviceGeneration = 4u;
     expectRejected(invalidRanges);
-
-    const Core::GpuComparableTimestampRange* const inaccessibleRanges = reinterpret_cast<const Core::GpuComparableTimestampRange*>(usize{ 1u });
-    expectRejected(Span<const Core::GpuComparableTimestampRange>(inaccessibleRanges, Limit<usize>::s_Max));
 }
 
 

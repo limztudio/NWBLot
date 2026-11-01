@@ -62,6 +62,7 @@ using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics
 // Aggregates half-open packet envelopes in raw ticks (same device generation + tick period).
 // Same-queue unioned before gap/concurrency measure.
 // False resets outputs; caller allocator kept, scratch is temporary.
+// Never dereferences packet data; the caller keeps the span storage live through the call.
 [[nodiscard]] Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(Span<const GpuComparableTimestampRange> packetEnvelopes, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics);
 
 

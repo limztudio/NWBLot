@@ -38,6 +38,23 @@ const f32 s_SurfelNormalBias = 0.05f;
 const u32 s_SurfelCountLogInterval = 120u;
 const u32 s_SurfelCountLogDelay = 3u;
 
+const StringView s_GiCsgDisabledVariant = "NWB_GI_CSG_ENABLED=0";
+const StringView s_GiCsgEnabledVariant = "NWB_GI_CSG_ENABLED=1";
+const StringView s_SurfelConstantsName = "render.surfel_gi.constants";
+const StringView s_SurfelConstantsLabel = "Surfel Constants";
+const StringView s_SurfelCounterName = "render.surfel_gi.counter";
+const StringView s_SurfelCounterLabel = "Surfel Counter";
+const StringView s_SurfelCounterReadbackName = "render.surfel_gi.counter_readback";
+const StringView s_SurfelCounterReadbackLabel = "Surfel Counter Readback";
+
+const u32 s_SurfelUpdateDivisor = 4u;
+const f32 s_SurfelCellSize = 0.6f;
+const f32 s_SurfelDefaultRadius = 0.9f;
+const u32 s_SurfelMaxAccum = 64u;
+const u32 s_SurfelMaxAge = 60u;
+const u32 s_SurfelRaysPerSurfel = 64u;
+const u32 s_SurfelSpawnTile = 16u;
+
 // CPU/shader ABI mirror for surfel constants.
 [serialize]
 class NwbSurfelConstantsGpu{
@@ -45,6 +62,41 @@ class NwbSurfelConstantsGpu{
     public f32x4 cellSizeRadiusBiasAccum(0.0f, 0.0f, 0.0f, 0.0f); // x = hash cell size, y = default radius, z = normal bias, w = accumulation cap
     public f32x4 ageRaysTileScreen(0.0f, 0.0f, 0.0f, 0.0f);       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
     public f32x4 screenHeightPad(0.0f, 0.0f, 0.0f, 0.0f);         // x = screen height, y = resolve factor, zw = pad
+}
+
+NwbSurfelConstantsGpu BuildSurfelFrameConstants(in b8 surfelSeeded, in u32 surfelHashCellCount, in u32 surfelPoolCapacity, in u32 surfelFrameIndex, in u32 width, in u32 height, in u32 surfelResolveFactor){
+    // First frame traces every surfel; later frames use round-robin updates.
+    u32 updateDivisor = 1u;
+    if(surfelSeeded)
+        updateDivisor = max(s_SurfelUpdateDivisor, 1u);
+
+    NwbSurfelConstantsGpu params;
+    params.hashPoolFrameDivisor = f32x4(cast<f32>(surfelHashCellCount), cast<f32>(surfelPoolCapacity), cast<f32>(surfelFrameIndex), cast<f32>(updateDivisor));
+    params.cellSizeRadiusBiasAccum = f32x4(s_SurfelCellSize, s_SurfelDefaultRadius, s_SurfelNormalBias, cast<f32>(s_SurfelMaxAccum));
+    params.ageRaysTileScreen = f32x4(cast<f32>(s_SurfelMaxAge), cast<f32>(s_SurfelRaysPerSurfel), cast<f32>(s_SurfelSpawnTile), cast<f32>(width));
+    params.screenHeightPad = f32x4(cast<f32>(height), cast<f32>(surfelResolveFactor), 0.0f, 0.0f);
+    return params;
+}
+
+
+// Heap-only selector ABI shared by every surfel GI pass.
+[serialize]
+class SurfelHeapPushConstants{
+    public u32 constantsHeapSlot = 0u;
+    public u32 poolHeapSlot = 0u;
+    public u32 cellHeadHeapSlot = 0u;
+    public u32 counterHeapSlot = 0u;
+    public u32 freeListHeapSlot = 0u;
+    public u32 snapshotPoolHeapSlot = 0u;
+    public u32 snapshotCellHeadHeapSlot = 0u;
+    public u32 traceIndirectArgsHeapSlot = 0u;
+    public u32 deferredResourcesHeapSlot = 0u;
+    public u32 materialContextSlotsHeapSlot = 0u;
+    public u32 worldPositionSlot = 0u;
+    public u32 normalSlot = 0u;
+    public u32 outputStorageHeapSlot = 0u;
+    public u32 halfIrradianceSlot = 0u;
+    public u32 guidePoolHeapSlot = 0u;
 }
 
 

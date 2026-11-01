@@ -2,15 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "volume_build.h"
 #include "volume_file_system.h"
 #include "volume_storage_detail.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-
 #include <global/binary.h>
-#include <global/limit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,19 +30,6 @@ static Expected<u64> ComputeVolumeIndexBytes(const u64 fileCount)noexcept{
     return fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
 }
 
-static Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
-    const auto indexBytes = ComputeVolumeIndexBytes(fileCount);
-    if(!indexBytes)
-        return indexBytes;
-
-    u64 metadataBytes = 0u;
-    const auto metadataBytesResult = AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), *indexBytes);
-    if(!metadataBytesResult)
-        return MakeUnexpected(Failure{});
-    metadataBytes = *metadataBytesResult;
-    return metadataBytes;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,7 +41,16 @@ static Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexce
 
 
 Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
-    return FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
+    const auto indexBytes = FilesystemVolumeDetail::ComputeVolumeIndexBytes(fileCount);
+    if(!indexBytes)
+        return indexBytes;
+
+    u64 metadataBytes = 0u;
+    const auto metadataBytesResult = AddNoOverflow(static_cast<u64>(sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)), *indexBytes);
+    if(!metadataBytesResult)
+        return MakeUnexpected(Failure{});
+    metadataBytes = *metadataBytesResult;
+    return metadataBytes;
 }
 
 
@@ -73,7 +64,7 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
         return false;
     }
 
-    if(NWB_MEMCMP(header.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic)) != 0){
+    if(header.magic != FilesystemVolumeDetail::s_VolumeMagic){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, FilesystemVolumeDetail::s_VolumeDetailMagicMismatch);
         return false;
     }
@@ -194,8 +185,8 @@ b8 VolumeFileSystem::loadMetadataLocked(Alloc::ScratchArena& scratchArena){
     return true;
 }
 
-b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath){
-    NWB_ASSERT(excludedPath == nullptr || m_files.find(*excludedPath) != m_files.end());
+b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name& excludedPath){
+    NWB_ASSERT(!excludedPath || m_files.find(excludedPath) != m_files.end());
     if(m_segmentPaths.empty()){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, FilesystemVolumeDetail::s_VolumeDetailNoSegmentsMounted);
         return false;
@@ -216,10 +207,10 @@ b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, cons
     }
 
     FilesystemVolumeDetail::VolumeHeaderDisk header;
-    NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(FilesystemVolumeDetail::s_VolumeMagic));
+    header.magic = FilesystemVolumeDetail::s_VolumeMagic;
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;
-    header.fileCount = static_cast<u64>(m_files.size() - (excludedPath != nullptr ? 1u : 0u));
+    header.fileCount = static_cast<u64>(m_files.size() - (excludedPath ? 1u : 0u));
     header.nextFreeOffset = m_nextFreeOffset;
 
     using FilesystemVolumeDetail::VolumeIndexEntryDisk;
@@ -250,7 +241,7 @@ b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, cons
     Vector<VolumeIndexEntryDisk, Core::Alloc::ScratchArena> sortedRecords{scratchArena};
     sortedRecords.reserve(static_cast<usize>(header.fileCount));
     for(const auto& [path, record] : m_files){
-        if(excludedPath != nullptr && path == *excludedPath)
+        if(excludedPath && path == excludedPath)
             continue;
         sortedRecords.push_back(VolumeIndexEntryDisk{ path.hash(), record.offset, record.size });
     }
@@ -272,7 +263,7 @@ b8 VolumeFileSystem::flushMetadataLocked(Alloc::ScratchArena& scratchArena, cons
 }
 
 b8 VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const noexcept{
-    const auto metadataBytes = FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
+    const auto metadataBytes = ComputeVolumeMetadataRequirement(fileCount);
     return metadataBytes && *metadataBytes <= m_metadataBytes;
 }
 

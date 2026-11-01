@@ -7,8 +7,12 @@
 
 #include "../global.h"
 
+#include <impl/assets_shader/types.adhd.h>
+
 #include <core/assets/module.h>
 #include <core/graphics/rhi/shader.h>
+
+#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,9 +24,51 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ShaderBinaryPayload{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename PayloadContainer>
+[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(const AStringView entryPoint, const Span<const u8> bytecode, PayloadContainer& outPayload){
+    if(entryPoint.empty() || entryPoint.size() > s_MaxShaderEntryPointBytes)
+        return AssetPayloadEncodeFailure::InvalidEntryPoint;
+    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
+        return AssetPayloadEncodeFailure::InvalidBytecode;
+
+    usize payloadBytes = 0u;
+    if(!TryComputeShaderAssetPayloadByteCount(entryPoint.size(), bytecode.size(), payloadBytes))
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+
+    outPayload.clear();
+    ReserveAppendBytesIfSupported(outPayload, payloadBytes);
+    AppendPOD(outPayload, s_AssetPayloadMagic);
+    AppendPOD(outPayload, s_AssetPayloadVersion);
+    if(!AppendString(outPayload, entryPoint))
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+    AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
+    return AssetPayloadEncodeFailure::None;
+}
+
+// The result borrows the serialized payload, which must outlive both views.
+[[nodiscard]] Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(Span<const u8> payload)noexcept;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface IShader : Core::Assets::IAsset{
 public:
     virtual ~IShader()noexcept override = 0;
+
+
 protected:
     IShader(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
@@ -32,15 +78,14 @@ protected:
     IShader(const IShader&) = default;
     IShader(IShader&&)noexcept = default;
 
+
 protected:
     IShader& operator=(const IShader&) = default;
-
     IShader& operator=(IShader&&)noexcept = default;
 
 
 public:
     [[nodiscard]] const Core::Assets::AssetString& entryPoint()const noexcept{ return m_entryPoint; }
-
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const noexcept{ return m_bytecode; }
 
 
@@ -73,7 +118,6 @@ public:
 
 public:
     TypedShader& operator=(const TypedShader&) = default;
-
     TypedShader& operator=(TypedShader&&)noexcept = default;
 
 

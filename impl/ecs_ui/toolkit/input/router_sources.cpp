@@ -14,14 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 InputRouter::setBindings(const InputKeyBinding* bindings, const usize count){
-    return m_bindings.set(bindings, count);
-}
-
-void InputRouter::restoreDefaultBindings(){
-    m_bindings.restoreDefaults();
-}
-
 void InputRouter::cancelDeviceInput(const u64 device)noexcept{
     if(m_activePointerSource.valid() && m_activePointerSource.device == device)
         terminatePointerSource(m_activePointerSource);
@@ -52,19 +44,6 @@ void InputRouter::cancelDeviceInput(const u64 device)noexcept{
         if(event.source.valid() && event.source.device == device)
             m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
     }
-}
-
-b8 InputRouter::wantsCommands()const noexcept{
-    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{ return source.consumed; }) != m_commandSources.end();
-}
-
-b8 InputRouter::ownsKey(const i32 key)const noexcept{
-    return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
-}
-
-b8 InputRouter::ownsSource(const InputSource& source)const noexcept{
-    const CommandSource* held = findCommandSource(source);
-    return held && held->consumed;
 }
 
 b8 InputRouter::canEditCommand(const InputEvent& event)const noexcept{
@@ -132,20 +111,6 @@ Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
     if(resolved.type == InputEventType::CommandUp)
         resolved.repeat = false;
     return resolved;
-}
-
-InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
-        return current.source == source;
-    });
-    return found == m_commandSources.end() ? nullptr : &*found;
-}
-
-const InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)const noexcept{
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
-        return current.source == source;
-    });
-    return found == m_commandSources.end() ? nullptr : &*found;
 }
 
 

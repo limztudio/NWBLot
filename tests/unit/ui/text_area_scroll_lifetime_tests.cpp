@@ -87,8 +87,8 @@ protected:
     }
 
     [[nodiscard]] WidgetId popupArea()const{
-        const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey));
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, s_ChildPopupKey)), s_TextAreaKey));
+        const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey), s_TextAreaKey);
     }
 
     [[nodiscard]] b8 popupFrame(const u64 generation){
@@ -107,12 +107,12 @@ protected:
     }
 
     [[nodiscard]] b8 startThumb(const WidgetId area){
-        const WidgetId thumbId = UiTestSupport::RequireWidgetId(MakeWidgetId(area, "scroll.y.thumb"));
+        const WidgetId thumbId = UiTestSupport::RequireWidgetId(area, "scroll.y.thumb");
         const HitTarget* thumb = target(thumbId);
         if(thumb == nullptr)
             return false;
         const Point origin = UiWidgetTests::Center(thumb->rectangle);
-        const Point destination{ origin.x, VectorGetX(VectorAdd(VectorReplicate(origin.y), VectorReplicate(24.0f))) };
+        const Point destination{ origin.x, origin.y + 24.0f };
         return send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed && send({ .position = destination , .type = InputEventType::PointerMove }).pointerConsumed && m_context.input().capture() == thumbId;
     }
 
@@ -146,7 +146,7 @@ protected:
 TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcceptedTrackPage){
     ASSERT_TRUE(prepareOverflow());
     const AreaModelSnapshot model(m_arena, m_model);
-    const WidgetId afterId = UiTestSupport::RequireWidgetId(MakeWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), "scroll.y.after"));
+    const WidgetId afterId = UiTestSupport::RequireWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), "scroll.y.after");
     const HitTarget* after = target(afterId);
     ASSERT_NE(after, nullptr);
     click(UiWidgetTests::Center(after->rectangle));

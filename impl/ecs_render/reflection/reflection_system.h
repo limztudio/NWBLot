@@ -10,9 +10,7 @@
 #include "postprocess_resources.h"
 #include "feedback_resources.h"
 
-#include <impl/assets/graphics/reflection/frame_constants.h>
-#include <impl/assets/graphics/reflection/depth_constants.h>
-#include <impl/ecs_render/raytrace/scene_resources.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/alloc/global.h>
@@ -59,11 +57,9 @@ static_assert(offsetof(ReflectionFrameParameters, screenThickness) == 164u);
 
 struct ReflectionDepthPyramidSnapshot{
     // A native mip chain for u32 extents cannot contain more than 32 levels.
-    static constexpr u32 s_MaxMipCount = NWB_REFLECTION_MAX_DEPTH_MIPS;
-
     Core::TextureHandle texture;
     Core::ComputePipelineHandle pipeline;
-    ReflectionDepthPyramidMip mips[s_MaxMipCount];
+    Array<ReflectionDepthPyramidMip, s_ReflectionMaxDepthMips> mips{};
     u32 mipCount = 0u;
     u32 sampledSlot = 0u;
     u32 sourceDepthSlot = 0u;
@@ -71,7 +67,7 @@ struct ReflectionDepthPyramidSnapshot{
 
 public:
     [[nodiscard]] b8 valid()const noexcept{
-        return texture && pipeline && mipCount > 0u && mipCount <= s_MaxMipCount;
+        return texture && pipeline && mipCount > 0u && mipCount <= s_ReflectionMaxDepthMips;
     }
 };
 
@@ -118,11 +114,19 @@ using ReflectionCsgDispatchHandle = RefCountPtr< ReflectionCsgDispatchControl, A
 
 class RendererReflectionSystem final : NoCopy{
 private:
-    static constexpr usize s_ReflectionDescriptorCount = 8u;
+    static constexpr usize s_ReflectionDescriptorCount = ::NWB::Impl::s_ReflectionDescriptorCount;
 
 
 public:
-    RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept;
+    RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_shaders(shaders)
+        , m_statistics(arena, graphics)
+        , m_postprocess(arena, graphics, shaders)
+        , m_feedback(arena, graphics)
+        , m_csgDispatchStates(arena)
+    {}
 
 
 public:
@@ -130,8 +134,8 @@ public:
     void invalidateResources();
     [[nodiscard]] b8 prepareResources(u32 width, u32 height, b8 prepareHardware, b8 prepareCsgHardware, const ReflectionSettings& settings);
     [[nodiscard]] Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(const ReflectionFrameSnapshot& resources)noexcept;
-    void pollStatistics();
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
+    void pollStatistics(){ m_statistics.pollCompleted(); }
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept{ return m_statistics.latestStatistics(); }
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
         const DeferredFrameTargets& targets,
         const ECSRenderDetail::MeshViewBufferSnapshot& view,
@@ -179,10 +183,10 @@ private:
     Core::ComputePipelineHandle m_csgPlainHardwarePipeline;
     Core::ComputePipelineHandle m_csgUnspecifiedHardwarePipeline;
     Core::ShaderHandle m_depthShader;
-    Core::GpuDescriptorHandle m_descriptors[s_ReflectionDescriptorCount];
+    Array<Core::GpuDescriptorHandle, s_ReflectionDescriptorCount> m_descriptors{};
     Core::GpuDescriptorHandle m_depthSampledDescriptor;
-    Core::GpuDescriptorHandle m_depthMipSampledDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];
-    Core::GpuDescriptorHandle m_depthMipStorageDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];
+    Array<Core::GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipSampledDescriptors{};
+    Array<Core::GpuDescriptorHandle, s_ReflectionMaxDepthMips> m_depthMipStorageDescriptors{};
 };
 
 

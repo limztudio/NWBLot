@@ -36,23 +36,26 @@ public:
     static constexpr u32 s_CpuScopeCount = 8u;
     static constexpr u32 s_GpuScopeCount = 18u;
     static constexpr u32 s_ArenaScopeCount = 3u;
-    static constexpr StringView s_CpuNames[s_CpuScopeCount] = { "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes", "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame", };
-    static constexpr StringView s_GpuNames[s_GpuScopeCount] = {
+    static constexpr Array<StringView, s_CpuScopeCount> s_CpuNames = {
+        "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes",
+        "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame",
+    };
+    static constexpr Array<StringView, s_GpuScopeCount> s_GpuNames = {
         "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
         "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
         "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
         "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
         "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
     };
-    static constexpr StringView s_ArenaNames[s_ArenaScopeCount] = { "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph", };
+    static constexpr Array<StringView, s_ArenaScopeCount> s_ArenaNames = { "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph", };
 
 
 private:
     struct CpuSample{
+        Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> memory = {};
+        Array<f64, s_CpuScopeCount> milliseconds = {};
         u64 sourceFrame = 0u;
         u64 publishFrame = 0u;
-        Array<f64, s_CpuScopeCount> milliseconds = {};
-        Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> memory = {};
     };
     struct GpuSample{
         Core::Perf::TimingStats timing;
@@ -61,7 +64,7 @@ private:
 
 
 private:
-    static void WriteMemory(OutputFileStream& output, Span<const Core::Perf::MemorySnapshot> snapshots);
+    static void WriteMemory(Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output);
 
 
 public:
@@ -79,13 +82,13 @@ public:
 
 
 private:
+    Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
+    Array<u64, s_GpuScopeCount> m_gpuPublish = {};
     Vector<CpuSample, Core::Alloc::GlobalArena> m_cpu;
     Vector<GpuSample, Core::Alloc::GlobalArena> m_gpu;
-    Array<u64, s_GpuScopeCount> m_gpuPublish = {};
-    Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount> m_memoryBaseline = {};
+    Array<b8, s_GpuScopeCount> m_hasGpuPublication = {};
     u64 m_lastPublish = 0u;
     u32 m_successfulFrames = 0u;
-    Array<b8, s_GpuScopeCount> m_hasGpuPublication = {};
     b8 m_hasPublication = false;
 };
 

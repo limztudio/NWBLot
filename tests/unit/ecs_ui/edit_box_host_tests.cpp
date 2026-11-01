@@ -55,7 +55,7 @@ TEST_F(UiEditBoxHostTests, QueuedCommitCannotReachAReplacementModelAtTheSameWidg
     EXPECT_EQ(m_model.text(), "old");
     EXPECT_EQ(replacement.text(), "replacement");
     EXPECT_FALSE(replacement.canUndo());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditBoxHostTests, RemovingThenRedeclaringTheWidgetFencesItsOldNativeQueue){
@@ -72,7 +72,7 @@ TEST_F(UiEditBoxHostTests, RemovingThenRedeclaringTheWidgetFencesItsOldNativeQue
     EXPECT_NE(m_widget.declarationGeneration, oldWidget.declarationGeneration);
     EXPECT_EQ(m_model.text(), "base");
     EXPECT_FALSE(m_model.canUndo());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditBoxHostTests, ExternalSameTextResetFencesAnAlreadyCollectedCommit){
@@ -89,7 +89,7 @@ TEST_F(UiEditBoxHostTests, ExternalSameTextResetFencesAnAlreadyCollectedCommit){
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.text(), "base");
     EXPECT_FALSE(m_model.canUndo());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditBoxHostTests, FocusLossAndImmediateRefocusCannotReviveAnOwnedOldCommit){
@@ -212,11 +212,11 @@ TEST_F(UiEditBoxHostTests, SurroundingDeletionCannotFollowALocalMoveAgainstOldNa
 TEST_F(UiEditBoxHostTests, CandidateGeometryCannotMoveTheNativeCaretBeforeContextAcceptance){
     ASSERT_TRUE(m_model.setText("abc"));
     ASSERT_TRUE(activate());
-    const TextInputRect displayed = m_textInput.nativeCaret();
+    const TextInputRect displayed = m_textInput.caretRect();
     ASSERT_TRUE(prepare(m_model, {}, { 200.0f, 20.0f, 180.0f, 30.0f }));
     EXPECT_EQ(m_context.input().layoutGeneration(), m_generation - 1u);
     m_host.commitFrame(m_generation);
-    EXPECT_EQ(m_textInput.nativeCaret().x, displayed.x);
+    EXPECT_EQ(m_textInput.caretRect().x, displayed.x);
     ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
     ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(commit());
@@ -228,7 +228,7 @@ TEST_F(UiEditBoxHostTests, CandidateGeometryCannotMoveTheNativeCaretBeforeContex
 TEST_F(UiEditBoxHostTests, RepeatedCandidatePublicationAcceptsOnlyTheLastGeometryAndPreservesDisplayedHits){
     ASSERT_TRUE(m_model.setText("abc"));
     ASSERT_TRUE(activate());
-    const TextInputRect displayed = m_textInput.nativeCaret();
+    const TextInputRect displayed = m_textInput.caretRect();
     const Ui::Rect bounds{ 200.0f, 20.0f, 180.0f, 30.0f };
     ASSERT_TRUE(prepare(m_model, {}, bounds));
     Ui::EditBoxView replacement(m_arena);
@@ -242,18 +242,18 @@ TEST_F(UiEditBoxHostTests, RepeatedCandidatePublicationAcceptsOnlyTheLastGeometr
     Ui::EditBoxView rejected(m_arena);
     EXPECT_FALSE(m_host.publish(m_widget, rejected, *placement, {}));
     m_host.commitFrame(m_generation);
-    EXPECT_EQ(m_textInput.nativeCaret().x, displayed.x);
+    EXPECT_EQ(m_textInput.caretRect().x, displayed.x);
     ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryDown}));
     ASSERT_TRUE(dispatch({ .position = { 20.0f, 25.0f } , .type = Ui::InputEventType::PrimaryUp}));
     ASSERT_TRUE(commit());
-    EXPECT_EQ(m_textInput.nativeCaret().x, 240);
+    EXPECT_EQ(m_textInput.caretRect().x, 240);
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.anchor(), 1u);
     EXPECT_EQ(m_model.caret(), 1u);
 }
 
 TEST_F(UiEditBoxHostTests, GeometryPublicationShrinksAndGrowsCaretStopsWithoutRetainingOldEndPositions){
-    const AStringView values[]{ "abcdefghi", "ab", "abcdefghijklmnopqrstuvwxyzabcdef", "", "abcdefghijklmnopqrstuvwxyzabcdef" };
+    const Array<AStringView, 5u> values = { "abcdefghi", "ab", "abcdefghijklmnopqrstuvwxyzabcdef", "", "abcdefghijklmnopqrstuvwxyzabcdef" };
     ASSERT_TRUE(activate());
     for(const AStringView value : values){
         ASSERT_TRUE(m_model.setText(value));

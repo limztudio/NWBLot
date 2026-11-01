@@ -35,8 +35,8 @@ TEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering){
     const SIMDVectorDouble rhs{ 1.0, 0.0, Limit<f64>::s_QuietNaN, 0x1p+40 + 1.0 };
     const SIMDVectorDouble equal = VectorDoubleEqual(lhs, rhs);
     const SIMDVectorDouble greater = VectorDoubleGreater(lhs, rhs);
-    const u64 equalBits[]{ 0u, Limit<u64>::s_Max, 0u, 0u };
-    const u64 greaterBits[]{ Limit<u64>::s_Max, 0u, 0u, 0u };
+    const Array<u64, 4u> equalBits = { 0u, Limit<u64>::s_Max, 0u, 0u };
+    const Array<u64, 4u> greaterBits = { Limit<u64>::s_Max, 0u, 0u, 0u };
     for(usize lane = 0u; lane < 4u; ++lane){
         EXPECT_EQ(BitCast<u64>(equal[lane]), equalBits[lane]) << lane;
         EXPECT_EQ(BitCast<u64>(greater[lane]), greaterBits[lane]) << lane;
@@ -46,14 +46,14 @@ TEST(Math, DoubleComparisonAndSelectionKeepAll64MaskBitsAndNaNOrdering){
     const SIMDVectorDouble second = VectorDoubleSetInt(0xfedcba9876543210u, 0u, 0x7ff800009abcdef0u, Limit<u64>::s_Max);
     const SIMDVectorDouble control = VectorDoubleSetInt(0xffffffff00000000u, 0x8000000000000000u, 0x00000000ffffffffu, 0u);
     const SIMDVectorDouble selected = VectorDoubleSelect(first, second, control);
-    const u64 selectedBits[]{ 0xfedcba9889abcdefu, 0u, 0x7ff800009abcdef0u, 1u };
+    const Array<u64, 4u> selectedBits = { 0xfedcba9889abcdefu, 0u, 0x7ff800009abcdef0u, 1u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(BitCast<u64>(selected[lane]), selectedBits[lane]) << lane;
 }
 
 TEST(Math, DoubleIntegerAdditionWrapsAcross64BitLaneBoundaries){
     const SIMDVectorDouble sum = VectorDoubleAddInt(VectorDoubleSetInt(Limit<u64>::s_Max, 0xffffffffu, 0x8000000000000000u, 0xfffffffffffffffeu), VectorDoubleSetInt(1u, 1u, 0x8000000000000000u, 3u));
-    const u64 expected[]{ 0u, 0x100000000u, 0u, 1u };
+    const Array<u64, 4u> expected = { 0u, 0x100000000u, 0u, 1u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(BitCast<u64>(sum[lane]), expected[lane]) << lane;
 }
@@ -72,12 +72,9 @@ TEST(Math, SinglePartialLaneDotIgnoresNonfiniteInactiveLanesWithoutInvalidExcept
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u } };
+    Array<Array<volatile u32, 2u>, 4u> inactiveBits = {{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u } }};
     for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
         const f32 inactiveLeft = BitCast<f32>(inactiveBits[index][0]);
         const f32 inactiveRight = BitCast<f32>(inactiveBits[index][1]);
@@ -105,12 +102,9 @@ TEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes){
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    volatile u32 inactiveBits[][2]{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u }, { 0u, 0x7f800001u }, { 0x7f7fffffu, 0x7f7fffffu } };
+    Array<Array<volatile u32, 2u>, 6u> inactiveBits = {{ { 0x7f800000u, 0u }, { 0u, 0x7f800000u }, { 0x7fc01234u, 0u }, { 0x7f800001u, 0u }, { 0u, 0x7f800001u }, { 0x7f7fffffu, 0x7f7fffffu } }};
     for(usize index = 0u; index < LengthOf(inactiveBits); ++index){
         const SIMDVectorSingle lhs2 = VectorSetInt(0x40000000u, 0x40400000u, inactiveBits[index][0], inactiveBits[index][0]);
         const SIMDVectorSingle rhs2 = VectorSetInt(0x40a00000u, 0x40e00000u, inactiveBits[index][1], inactiveBits[index][1]);
@@ -127,7 +121,7 @@ TEST(Math, SinglePartialLaneCrossIgnoresNonfiniteAndOverflowingInactiveLanes){
         const SIMDVectorSingle cross3 = Vector3Cross(lhs3, rhs3);
         const i32 cross3Exceptions = TestFloatingPointExceptions(FE_INVALID | FE_OVERFLOW);
         EXPECT_EQ(cross3Exceptions, 0) << index;
-        const f32 cross3Expected[]{ 5.0f, -2.0f, -1.0f };
+        const Array<f32, 3u> cross3Expected = { 5.0f, -2.0f, -1.0f };
         for(usize lane = 0u; lane < 3u; ++lane)
             EXPECT_EQ(VectorGetByIndex(cross3, lane), cross3Expected[lane]) << index << ':' << lane;
         EXPECT_EQ(VectorGetIntW(cross3), 0u) << index;
@@ -148,12 +142,9 @@ TEST(Math, DoublePartialLaneDotAndCrossIgnoreNonfiniteInactiveLanesWithoutInvali
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
-    const f64 lhsInactive[]{ Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_QuietNaN };
-    const f64 rhsInactive[]{ 0.0, Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN };
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    const Array<f64, 4u> lhsInactive = { Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_QuietNaN };
+    const Array<f64, 4u> rhsInactive = { 0.0, Limit<f64>::s_Infinity, 0.0, Limit<f64>::s_QuietNaN };
     for(usize index = 0u; index < LengthOf(lhsInactive); ++index){
         const SIMDVectorDouble lhs2{ 2.0, 3.0, lhsInactive[index], lhsInactive[index] };
         const SIMDVectorDouble rhs2{ 5.0, 7.0, rhsInactive[index], rhsInactive[index] };
@@ -200,7 +191,7 @@ TEST(Math, SingleLog2KeepsSubnormalExponentsAndZeroInfinityNaNDomains){
         EXPECT_EQ(VectorGetZ(logarithm), -126.0f) << bitIndex;
         EXPECT_EQ(VectorGetW(logarithm), 0.0f) << bitIndex;
     }
-    volatile u32 domainBits[]{ 0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u };
+    Array<volatile u32, 4u> domainBits = { 0x80000000u, 0x7f800000u, 0xbf800000u, 0x7fc01234u };
     const SIMDVectorSingle special = VectorLog2(VectorSetInt(domainBits[0], domainBits[1], domainBits[2], domainBits[3]));
     EXPECT_EQ(VectorGetIntX(special), 0xff800000u);
     EXPECT_EQ(VectorGetIntY(special), 0x7f800000u);
@@ -245,7 +236,7 @@ TEST(Math, DoubleTranscendentalsHandleLargeArgumentsNonfiniteDomainsAndSignedZer
 
 TEST(Math, DoubleModAvoidsQuotientOverflowAndUnderflowWhileKeepingDivisorSign){
     const SIMDVectorDouble overflow = VectorDoubleMod(SIMDVectorDouble{ Limit<f64>::s_Max, -Limit<f64>::s_Max, Limit<f64>::s_Max, -Limit<f64>::s_Max }, SIMDVectorDouble{ 0x1p-1000, 0x1p-1000, -0x1p-1000, -0x1p-1000 });
-    const u64 overflowBits[]{ 0u, 0u, 0x8000000000000000u, 0x8000000000000000u };
+    const Array<u64, 4u> overflowBits = { 0u, 0u, 0x8000000000000000u, 0x8000000000000000u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(BitCast<u64>(overflow[lane]), overflowBits[lane]) << lane;
 
@@ -283,11 +274,11 @@ TEST(Math, DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries){
 
 TEST(Math, DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengths){
     const SIMDVectorDouble fallback{ 0.0, 1.0, 0.0, 9.0 };
-    const SIMDVectorDouble invalid[]{
-        { 0.0, 0.0, 0.0, 5.0 },
-        { Limit<f64>::s_Infinity, 0.0, 0.0, 0.0 },
-        { 0.0, Limit<f64>::s_QuietNaN, 0.0, 0.0 },
-        { 0x1p-1074, 0.0, 0.0, 0.0 },
+    const Array<SIMDVectorDouble, 4u> invalid = {
+        SIMDVectorDouble{ 0.0, 0.0, 0.0, 5.0 },
+        SIMDVectorDouble{ Limit<f64>::s_Infinity, 0.0, 0.0, 0.0 },
+        SIMDVectorDouble{ 0.0, Limit<f64>::s_QuietNaN, 0.0, 0.0 },
+        SIMDVectorDouble{ 0x1p-1074, 0.0, 0.0, 0.0 },
     };
     for(const SIMDVectorDouble input : invalid){
         EXPECT_FALSE(VectorDouble3TryNormalize(input));
@@ -437,8 +428,8 @@ TEST(Math, FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary){
     frustum.leftSlope = -1.0f;
     frustum.topSlope = 1.0f;
     frustum.bottomSlope = -1.0f;
-    SIMDVectorSingle planes[CollisionDetail::s_FrustumPlaneCount];
-    CollisionDetail::FrustumPlanes(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, planes);
+    Array<SIMDVectorSingle, CollisionDetail::s_FrustumPlaneCount> planes{};
+    frustum.getPlanes(&planes[0], &planes[1], &planes[2], &planes[3], &planes[4], &planes[5]);
     const Array<f32, 6u> centers = { 0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f };
     const Array<ContainmentType::Enum, 6u> expected = { ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains, ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains, };
     for(usize index = 0u; index < centers.size(); ++index){
@@ -513,7 +504,7 @@ TEST(Math, DegeneratePlaneNormalUsesFallback){
 }
 
 TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
-    const SIMDMatrix matrices[]{
+    const Array<SIMDMatrix, 4u> matrices = {
         MatrixSet(-1.0f, 0.0f, 0.0f, 3.0f, -1.0f, 0.0f, 0.0f, -2.0f, -1.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
         MatrixSet(0.0f, -1.0f, 0.0f, 3.0f, 0.0f, -1.0f, 0.0f, -2.0f, 0.0f, -1.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
         MatrixSet(0.0f, 0.0f, -1.0f, 3.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f, 0.0f, -1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
@@ -574,16 +565,16 @@ TEST(Math, UnsignedFloatClampsNegativeOverflowAndNonfiniteInput){
 }
 
 TEST(Math, PartialHalfFloatBuffersPreserveSubnormalsAndNonfiniteInput){
-    f32 source[6] = { 0.0f, -1.5f, 1.0f, 65504.0f, 5.9604644775390625e-8f, Limit<f32>::s_Infinity };
-    Half packed[6] = {};
-    f32 unpacked[6] = {};
+    Array<f32, 6u> source = { 0.0f, -1.5f, 1.0f, 65504.0f, 5.9604644775390625e-8f, Limit<f32>::s_Infinity };
+    Array<Half, 6u> packed = {};
+    Array<f32, 6u> unpacked = {};
 
-    ASSERT_EQ(ConvertFloatBufferToHalf(MakeNotNull(packed), MakeNotNull(source), 6u).get(), packed);
+    ASSERT_EQ(ConvertFloatBufferToHalf(MakeNotNull(packed.data()), MakeNotNull(source.data()), 6u).get(), packed.data());
     EXPECT_EQ(packed[3], static_cast<Half>(0x7bffu));
     EXPECT_EQ(packed[4], static_cast<Half>(0x0001u));
     EXPECT_EQ(packed[5], static_cast<Half>(0x7c00u));
 
-    ASSERT_EQ(ConvertHalfBufferToFloat(MakeNotNull(unpacked), MakeNotNull(packed), 6u).get(), unpacked);
+    ASSERT_EQ(ConvertHalfBufferToFloat(MakeNotNull(unpacked.data()), MakeNotNull(packed.data()), 6u).get(), unpacked.data());
     EXPECT_TRUE(NearlyEqual(unpacked[3], 65504.0f));
     EXPECT_TRUE(NearlyEqual(unpacked[4], 5.9604644775390625e-8f));
     EXPECT_EQ(unpacked[5], Limit<f32>::s_Infinity);

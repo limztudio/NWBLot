@@ -68,11 +68,46 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
                 subArg.type = SubstituteAliasTypeRef(*arg.type, templateParams, templateArgs, arena);
         }
         else if(!arg.constantText.empty()){
+            b8 exactMatch = false;
             for(usize p = 0u; p < count; ++p){
                 if(templateParams[p].constValueType && arg.constantText == templateParams[p].name){
                     subArg.constantText = templateArgs[p].constantOrTypeName();
+                    exactMatch = true;
                     break;
                 }
+            }
+            if(!exactMatch){
+                MString rewritten(arena);
+                b8 anyReplaced = false;
+                usize idx = 0u;
+                while(idx < arg.constantText.size()){
+                    if(IsAsciiIdentifierStart(arg.constantText[idx])){
+                        const usize start = idx;
+                        while(idx < arg.constantText.size() && IsAsciiIdentifierChar(arg.constantText[idx]))
+                            ++idx;
+                        const MStringView token = arg.constantText.substr(start, idx - start);
+                        const bool isScopedMember = (start >= 2u && arg.constantText[start - 1u] == ':' && arg.constantText[start - 2u] == ':');
+                        b8 replacedToken = false;
+                        if(!isScopedMember){
+                            for(usize p = 0u; p < count; ++p){
+                                if(templateParams[p].constValueType && token == templateParams[p].name){
+                                    const MStringView repl = templateArgs[p].constantOrTypeName();
+                                    rewritten.append(repl.data(), repl.size());
+                                    anyReplaced = true;
+                                    replacedToken = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if(!replacedToken)
+                            rewritten.append(token.data(), token.size());
+                    }
+                    else{
+                        rewritten.push_back(arg.constantText[idx++]);
+                    }
+                }
+                if(anyReplaced)
+                    subArg.constantText = MStringView(rewritten.data(), rewritten.size());
             }
         }
         cloned->templateArgs.push_back(subArg);
@@ -107,7 +142,7 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
 
 [[nodiscard]] b8 ConsiderScoredCallableCandidate(
     const SymbolTable& symbols,
-    MethodDecl* candidate,
+    MethodDecl& candidate,
     const usize* preferredArgCount,
     const Span<const MStringView> argTypeNames,
     const Span<const u8> argIsMut,
@@ -115,18 +150,18 @@ TypeRef* SubstituteAliasTypeRef(const TypeRef& origType, const Span<const Templa
     i32& inOutBestScore
 )noexcept{
     if(argTypeNames.empty() && argIsMut.empty()){
-        if(!preferredArgCount || candidate->params.size() == *preferredArgCount){
-            inOutBestMatch = candidate;
+        if(!preferredArgCount || candidate.params.size() == *preferredArgCount){
+            inOutBestMatch = &candidate;
             return true;
         }
         if(!inOutBestMatch)
-            inOutBestMatch = candidate;
+            inOutBestMatch = &candidate;
         return false;
     }
-    const i32 score = ScoreCandidateParams(symbols, candidate->params, preferredArgCount, argTypeNames, argIsMut);
+    const i32 score = ScoreCandidateParams(symbols, candidate.params, preferredArgCount, argTypeNames, argIsMut);
     if(score > inOutBestScore){
         inOutBestScore = score;
-        inOutBestMatch = candidate;
+        inOutBestMatch = &candidate;
     }
     return false;
 }
@@ -195,7 +230,8 @@ b8 SymbolTable::IsUnalignedVectorType(const MStringView typeName, u32& outLanes)
 }
 
 b8 SymbolTable::IsUnalignedVectorType(const MStringView typeName)noexcept{
-    return FindBuiltinUnalignedVectorType(typeName) != nullptr;
+    u32 lanes = 0;
+    return IsUnalignedVectorType(typeName, lanes);
 }
 
 b8 SymbolTable::IsSimdMatrixType(const MStringView typeName)noexcept{
@@ -313,7 +349,7 @@ MethodDecl* SymbolTable::findFreeFunction(const MStringView name, const usize* p
     for(MethodDecl* fn : m_freeFunctions){
         if(!fn || fn->name != name)
             continue;
-        if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, fn, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+        if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *fn, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
             return bestMatch;
     }
     return bestMatch;
@@ -384,7 +420,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
     for(MethodDecl* method : iface->methods){
         if(method && method->name == methodName){
             MethodDecl* subMethod = __hidden_adhd_symbol_table::SubstituteInterfaceMethod(*this, method, hasSubst, iface->templateParams, resolvedIface->templateArgs, m_arena);
-            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, subMethod, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *subMethod, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
                 return bestMatch;
         }
     }
@@ -397,7 +433,7 @@ MethodDecl* SymbolTable::findInterfaceMethod(const TypeRef& ifaceType, const MSt
             continue;
         MethodDecl* inherited = findInterfaceMethod(*subBase, methodName, preferredArgCount, depth + 1u, argTypeNames, argIsMut);
         if(inherited){
-            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, inherited, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
+            if(__hidden_adhd_symbol_table::ConsiderScoredCallableCandidate(*this, *inherited, preferredArgCount, argTypeNames, argIsMut, bestMatch, bestScore))
                 return bestMatch;
         }
     }

@@ -29,27 +29,27 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Graphics::GpuTaskId s_CommandIrTask{ .generation = 17u, .index = 4u };
-inline constexpr Graphics::GpuSubmissionPacketId s_CommandIrPacket{ .generation = 19u, .index = 2u };
-inline constexpr Graphics::GpuPhysicalQueueId s_CommandIrQueue{ .index = 1u, .deviceGeneration = 3u };
-inline constexpr Graphics::GpuGraphResourceId s_CommandIrSource{ .generation = 17u, .index = 5u };
-inline constexpr Graphics::GpuGraphResourceId s_CommandIrDestination{ .generation = 17u, .index = 6u };
+inline constexpr Core::GpuTaskId s_CommandIrTask{ .generation = 17u, .index = 4u };
+inline constexpr Core::GpuSubmissionPacketId s_CommandIrPacket{ .generation = 19u, .index = 2u };
+inline constexpr Core::GpuPhysicalQueueId s_CommandIrQueue{ .index = 1u, .deviceGeneration = 3u };
+inline constexpr Core::GpuGraphResourceId s_CommandIrSource{ .generation = 17u, .index = 5u };
+inline constexpr Core::GpuGraphResourceId s_CommandIrDestination{ .generation = 17u, .index = 6u };
 
-inline constexpr usize s_CommandIrCopyBufferOffset = sizeof(Graphics::GpuCommandIrStreamHeader);
-inline constexpr usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffset + sizeof(Graphics::GpuCommandIrCopyBufferRecord);
-inline constexpr usize s_CommandIrClearBufferOffset = s_CommandIrCopyTextureOffset + sizeof(Graphics::GpuCommandIrCopyTextureRecord);
-inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOffset + sizeof(Graphics::GpuCommandIrClearBufferRecord);
+inline constexpr usize s_CommandIrCopyBufferOffset = sizeof(Core::GpuCommandIrStreamHeader);
+inline constexpr usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffset + sizeof(Core::GpuCommandIrCopyBufferRecord);
+inline constexpr usize s_CommandIrClearBufferOffset = s_CommandIrCopyTextureOffset + sizeof(Core::GpuCommandIrCopyTextureRecord);
+inline constexpr usize s_CommandIrClearTextureOffset = s_CommandIrClearBufferOffset + sizeof(Core::GpuCommandIrClearBufferRecord);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture);
+[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Core::GpuCommandIrCapture& capture);
 
-void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source);
+void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes);
 
 template<typename PodT>
-inline void WriteCommandIrPod(const Span<u8> bytes, const usize byteOffset, const PodT& value)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
+inline void WriteCommandIrPod(const usize byteOffset, const PodT& value, const Span<u8> bytes)noexcept(noexcept(NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value)))){
     NWB_ASSERT(byteOffset <= bytes.size());
     NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
     NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));

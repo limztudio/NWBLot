@@ -41,23 +41,16 @@ namespace GpuTaskSubmissionDetail{
 using namespace __hidden_gpu_task_scheduler_submission_bindings;
 
 
-TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)noexcept
-    : scratchArena(scratchArena)
-    , timingTickets(scratchArena)
-    , submissionHooks(scratchArena)
-    , nextTimingTicket(scratchArena)
-{}
-
 [[nodiscard]] b8 TaskSubmissionBindings::resolve(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
-    const usize taskTimingTicketCount,
-    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
+    const Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
+    const Span<const GpuTaskGraphTaskSubmissionHook> taskSubmissionHooks
 ){
-    if((taskTimingTicketCount != 0u && !taskTimingTickets) || (taskSubmissionHookCount != 0u && !taskSubmissionHooks))
+    const usize taskTimingTicketCount = taskTimingTickets.size();
+    const usize taskSubmissionHookCount = taskSubmissionHooks.size();
+    if((taskTimingTicketCount != 0u && !taskTimingTickets.data()) || (taskSubmissionHookCount != 0u && !taskSubmissionHooks.data()))
         return false;
     timingTickets.clear();
     submissionHooks.clear();

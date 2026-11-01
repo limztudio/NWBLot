@@ -22,13 +22,8 @@ namespace __hidden_ui_skin_toolkit_contract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RequiredRegion{
-    Name name;
-    StringView text;
-};
-
-#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) { s_##Key##RegionName, Text },
-static constexpr RequiredRegion s_RequiredRegions[] = {
+#define NWB_UI_SKIN_REQUIRED_REGION(Key, Text) UiSkinRequiredRegion(s_##Key##RegionName, Text),
+static const Array<UiSkinRequiredRegion, 30u> s_RequiredRegions = {
     NWB_UI_SKIN_REQUIRED_REGION(PanelNormal, "panel.normal")
     NWB_UI_SKIN_REQUIRED_REGION(WindowNormal, "window.normal")
     NWB_UI_SKIN_REQUIRED_REGION(WindowTitle, "window.title")

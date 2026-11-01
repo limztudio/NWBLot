@@ -28,8 +28,6 @@ constexpr u32 s_SystemCompletionTimeoutMS = 2000u;
 constexpr u32 s_PollIntervalMS = 1u;
 constexpr u32 s_EntityWaitIntervalMS = 25u;
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,7 +62,7 @@ public:
 };
 
 struct alignas(32) OverAlignedComponent{
-    u8 value[32] = {};
+    Array<u8, 32> value{};
 };
 
 template<usize I>
@@ -115,8 +113,7 @@ public:
 
 
 public:
-    virtual void prepare(NWB::Core::ECS::World& world)noexcept override{
-        static_cast<void>(world);
+    virtual void prepare([[maybe_unused]] NWB::Core::ECS::World& world)noexcept override{
         ++prepares;
     }
 
@@ -151,9 +148,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override{
-        static_cast<void>(world);
-        static_cast<void>(delta);
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] NWB::Core::ECS::World& world, [[maybe_unused]] f32 delta)override{
         m_update();
         return {};
     }
@@ -177,8 +172,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)override{
-        static_cast<void>(delta);
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, [[maybe_unused]] f32 delta)override{
         NWB::Core::CpuTaskOptions options;
         options.target = static_cast<NWB::Core::CpuTaskTarget::Enum>(NWB::Core::CpuTaskTarget::MainThread + 1u);
         return world.taskScope().parallelFor(0u, 1u, 1u, [this](usize)noexcept{ ++callbacks; }, options);
@@ -354,18 +348,18 @@ TEST(Ecs, DuplicateAddAndRemovePreserveComponentMutationVersions){
     EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 1u);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), s_ExpectedDualCount);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), s_ExpectedDualCount);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
 
     entity.destroy();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), s_ExpectedDualCount);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 2u);
 }
 
 TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
     const auto typeIds = RegisterPoolSlotTypes(IndexSequence<
-        0u, 1u, s_ExpectedDualCount, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
         32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
         48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
@@ -473,10 +467,8 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     }
 
     Atomic<u32> visits{ 0u };
-    EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&](usize outerIndex){
-        static_cast<void>(outerIndex);
-        EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
-            static_cast<void>(position);
+    EXPECT_TRUE((world.taskScope().parallelFor(static_cast<usize>(0), s_OuterCount, [&]([[maybe_unused]] usize outerIndex){
+        EXPECT_TRUE((world.view<PositionComponent>().parallelEach(world.taskScope(), 1u, [&visits](NWB::Core::ECS::EntityID, [[maybe_unused]] PositionComponent& position)noexcept{
             visits.fetch_add(1u, MemoryOrder::relaxed);
         }
         )));
@@ -593,7 +585,7 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
 
 TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     s_EcsCallerThread = true;
@@ -620,7 +612,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
 
 TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     static constexpr usize s_EntityCount = 512u;
     for(usize i = 0u; i < s_EntityCount; ++i)
@@ -650,7 +642,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
 
 TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     Atomic<i32> value{ 0 };
@@ -680,7 +672,7 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
 
 TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::CpuTaskScope unrelatedTasks(taskScheduler);
     NWB::Core::ECS::World world(arena, taskScheduler);
     Atomic<b8> started{ false };

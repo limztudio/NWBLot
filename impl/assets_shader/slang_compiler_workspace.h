@@ -27,9 +27,9 @@ NWB_IMPL_BEGIN
 class SlangCompilerWorkspace final : NoCopy{
 public:
     using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
-    using ScratchString = AString<Core::Alloc::ScratchArena>;
+    using ScratchString = Core::Assets::ScratchString;
     template<typename T>
-    using ScratchVector = Vector<T, Core::Alloc::ScratchArena>;
+    using ScratchVector = Core::Assets::ScratchVector<T>;
 
 
 public:
@@ -53,10 +53,6 @@ public:
     };
 
 
-private:
-    [[nodiscard]] static b8 WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Core::Alloc::ScratchArena& scratchArena);
-
-
 public:
     [[nodiscard]] static Expected<ScratchPath> CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static Expected<usize> CompilerPathTextCapacity(const ScratchPath& path);
@@ -65,6 +61,10 @@ public:
     [[nodiscard]] static Expected<ScratchPath> BuildCompilerOverlayPath(const ScratchPath& overlayRoot, const ScratchPath& absolutePath, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] static b8 IsCompilerDependency(Span<const Path> dependencies, const ScratchPath& absolutePath)noexcept;
     [[nodiscard]] static Expected<CompilerInputs> PrepareBomStrippedCompilerInputs(const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Core::Alloc::ScratchArena& scratchArena);
+
+
+private:
+    [[nodiscard]] static b8 WriteBomStrippedCompilerInput(const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, ScratchString& source, Core::Alloc::ScratchArena& scratchArena);
 
 
 public:

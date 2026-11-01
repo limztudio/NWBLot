@@ -8,6 +8,7 @@
 #include "array.h"
 #include "expected.h"
 #include "optional.h"
+#include "span.h"
 #include "generic.h"
 #include "algorithm.h"
 #include "limit.h"
@@ -152,11 +153,14 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceValue* sourceData, const usize sourceSize)noexcept(noexcept(static_cast<b8>(destination.empty() || sourceSize == 0u)) && noexcept(destination.data()) && noexcept(static_cast<b8>(DeclVal<const usize&>() >= destination.size()))){
-    if(destination.empty() || sourceSize == 0u)
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const Span<const SourceValue> source)noexcept(
+    noexcept(static_cast<b8>(destination.empty() || source.empty())) && noexcept(destination.data()) && noexcept(static_cast<b8>(DeclVal<const usize&>() >= destination.size()))
+){
+    if(destination.empty() || source.empty())
         return MakeUnexpected(Failure{});
 
     const auto* const destinationData = destination.data();
+    const auto* const sourceData = source.data();
     if(destinationData == nullptr || sourceData == nullptr)
         return MakeUnexpected(Failure{});
 
@@ -178,8 +182,11 @@ template<typename DestinationVector, typename SourceValue>
 }
 
 template<typename DestinationVector, typename SourceVector>
-[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source)noexcept(noexcept(SourceAliasesDestination(destination, source.data(), source.size()))){
-    return SourceAliasesDestination(destination, source.data(), source.size());
+    requires(!IsSame_V<RemoveCVRef_T<SourceVector>, Span<const typename SourceVector::value_type>>)
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source)noexcept(
+    noexcept(SourceAliasesDestination(destination, Span<const typename SourceVector::value_type>(source.data(), source.size())))
+){
+    return SourceAliasesDestination(destination, Span<const typename SourceVector::value_type>(source.data(), source.size()));
 }
 
 template<typename Container>

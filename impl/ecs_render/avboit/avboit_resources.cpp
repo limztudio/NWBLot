@@ -2,8 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_private.h>
-#include <impl/assets_graphics/transparent/subsystem.adhd.h>
+#include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/kernel/renderer_format_private.h>
+#include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/shader/shader_system.h>
+#include <impl/assets_graphics/components.adhd.h>
+
+#include <core/common/log.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +28,7 @@ namespace __hidden_avboit_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 CreateHeapComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
+static b8 CreateHeapComputePipeline(const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::Device& device, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -64,13 +71,13 @@ b8 RendererAvboitSystem::createAvboitResources(){
     if(!createAvboitSampler())
         return false;
 
-    auto loadAvboitComputeShader = [&](Core::ShaderHandle& outShader, const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* member, const Name& debugName) -> b8{
-        return m_shaderSystem.loadShader<ComputeShader>(outShader, member, Core::ShaderArchive::s_DefaultVariant, debugName);
+    auto loadAvboitComputeShader = [&](const Core::Assets::AssetRef<ComputeShader> TransparentSubsystem::* member, const Name& debugName, Core::ShaderHandle& outShader) -> b8{
+        return m_shaderSystem.loadShader<ComputeShader>(member, Core::ShaderArchive::s_DefaultVariant, debugName, outShader);
     };
 
     if(
-        !loadAvboitComputeShader(m_avboitState.m_depthWarpComputeShader, &TransparentSubsystem::avboitDepthWarpCs, "ECSRender_AvboitDepthWarpCS")
-        || !loadAvboitComputeShader(m_avboitState.m_integrateComputeShader, &TransparentSubsystem::avboitIntegrateCs, "ECSRender_AvboitIntegrateCS")
+        !loadAvboitComputeShader(&TransparentSubsystem::avboitDepthWarpCs, "ECSRender_AvboitDepthWarpCS", m_avboitState.m_depthWarpComputeShader)
+        || !loadAvboitComputeShader(&TransparentSubsystem::avboitIntegrateCs, "ECSRender_AvboitIntegrateCS", m_avboitState.m_integrateComputeShader)
     )
         return false;
 
@@ -88,12 +95,12 @@ b8 RendererAvboitSystem::createAvboitPipelines(){
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, m_avboitState.m_depthWarpPipeline)){
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(m_avboitState.m_depthWarpComputeShader, *materialPassBindingLayout, device, m_avboitState.m_depthWarpPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateHeapComputePipeline(device, m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, m_avboitState.m_integratePipeline)){
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(m_avboitState.m_integrateComputeShader, *materialPassBindingLayout, device, m_avboitState.m_integratePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;
     }

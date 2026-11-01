@@ -97,7 +97,7 @@ void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expect
         const DrawCommand& e = expected.commands()[index];
         UiPaintAssertions::ExpectSameCommandFields(a, e);
         EXPECT_EQ(a.textureImageIndex, e.textureImageIndex);
-        ExpectRect(a.clip, e.clip);
+        UiPaintAssertions::ExpectRect(a.clip, e.clip);
     }
 }
 
@@ -156,7 +156,7 @@ Expected<SharedSdfAtlasPage> PaintImageFixture::makeSdf(const u64 atlasIdentity)
 Expected<SharedImageSource> PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
     if(path.empty() || width == 0u || height == 0u)
         return MakeUnexpected(Failure{});
-    return UiFixtureSupport::MakeSeededImage(m_arena, path, seed, width, height);
+    return UiFixtureSupport::MakeSeededImage(path, seed, width, height, m_arena);
 }
 
 

@@ -24,7 +24,7 @@ TESTBED_BEGIN
 
 class UiImageGallery final : NoCopy{
 public:
-    UiImageGallery() = default;
+    UiImageGallery()noexcept = default;
 
 
 public:
@@ -35,6 +35,9 @@ public:
 private:
     NWB::Impl::Ui::SharedImageSource m_source;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

@@ -20,23 +20,11 @@ namespace __hidden_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ActiveCutter(const CsgCutterComponent& cutter)noexcept{
-    return cutter.active && cutter.shapeType != s_NameNone;
-}
-
 [[nodiscard]] b8 ReceiverVisible(Core::ECS::World& world, const Core::ECS::EntityID entity, const CsgReceiverKind::Enum receiverKind, const CsgReceiverComponent& receiver, const CsgFrameBuildDesc& desc){
     if(!desc.receiverVisible)
         return true;
 
     return desc.receiverVisible(world, entity, receiverKind, receiver, desc.receiverVisibleUserData);
-}
-
-[[nodiscard]] b8 ReceiverPassEnabled(const CsgReceiverComponent& receiver, const CsgReceiverPass::Enum receiverPass)noexcept{
-    switch(receiverPass){
-    case CsgReceiverPass::Opaque: return receiver.affectOpaquePass;
-    case CsgReceiverPass::Transparent: return receiver.affectTransparentPass;
-    default: return false;
-    }
 }
 
 template<typename ComponentT>
@@ -62,7 +50,7 @@ void GatherReceiverState(Core::ECS::World& world, const CsgReceiverKind::Enum re
             return;
 
         const CsgReceiverDrawState& receiverState = opaqueWork ? *opaqueState : *transparentState;
-        AddCsgFrameReceiverWork(inOutState, receiverKind, opaqueWork, transparentWork, receiverState.cutterCount);
+        AddCsgFrameReceiverWork(receiverKind, opaqueWork, transparentWork, receiverState.cutterCount, inOutState);
     });
 }
 
@@ -84,12 +72,11 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     auto cutterView = m_world.view<CsgCutterComponent>();
     m_cutterRanges.reserve(cutterView.candidateCount());
 
-    cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
-        static_cast<void>(entity);
-        if(!__hidden_frame_state::ActiveCutter(cutter))
+    cutterView.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
+        if(!IsActiveCsgCutter(cutter))
             return;
 
-        auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CutterRangeEntry{});
+        auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CsgFrameCutterRangeEntry{});
         CsgFrameCutterRange& range = result.first.value().range;
         range.cutterCount = AddSaturating<u32>(range.cutterCount, 1u);
     });
@@ -107,13 +94,13 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
     m_cutterRefs.resize(static_cast<usize>(firstCutter));
 
     cutterView.each([&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter)noexcept{
-        if(!__hidden_frame_state::ActiveCutter(cutter))
+        if(!IsActiveCsgCutter(cutter))
             return;
 
         const auto foundRange = m_cutterRanges.find(cutter.receiverGroup);
         NWB_ASSERT(foundRange != m_cutterRanges.end());
 
-        CutterRangeEntry& entry = foundRange.value();
+        CsgFrameCutterRangeEntry& entry = foundRange.value();
         u32& writtenCount = entry.writtenCount;
         const CsgFrameCutterRange& range = entry.range;
         if(writtenCount >= range.cutterCount)
@@ -127,37 +114,27 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
 }
 
 Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(const Core::ECS::EntityID entity, const CsgReceiverPass::Enum receiverPass)const noexcept{
-    if(m_cutterRanges.empty())
-        return MakeUnexpected(Failure{});
-
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
-    if(!resolvedReceiver)
-        return MakeUnexpected(Failure{});
-    const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
-    if(!receiver.enabled || !__hidden_frame_state::ReceiverPassEnabled(receiver, receiverPass))
+    if(!resolvedReceiver || !IsCsgReceiverPassEnabled(resolvedReceiver->receiver, receiverPass))
         return MakeUnexpected(Failure{});
 
-    const auto foundCutterRange = m_cutterRanges.find(receiver.receiverGroup);
-    if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().range.cutterCount == 0u)
+    const auto range = resolveReceiverCutterRange(resolvedReceiver->receiver);
+    if(!range)
         return MakeUnexpected(Failure{});
 
-    CsgReceiverDrawState state;
-    state.active = true;
-    state.receiverKind = resolvedReceiver->receiverKind;
-    state.firstCutter = foundCutterRange.value().range.firstCutter;
-    state.cutterCount = foundCutterRange.value().range.cutterCount;
-    return state;
+    return MakeCsgReceiverDrawState(resolvedReceiver->receiverKind, *range);
 }
 
 Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const Core::ECS::EntityID entity)const noexcept{
-    if(m_cutterRanges.empty())
-        return MakeUnexpected(Failure{});
-
     const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
     if(!resolvedReceiver)
         return MakeUnexpected(Failure{});
-    const CsgReceiverComponent& receiver = resolvedReceiver->receiver;
-    if(!receiver.enabled)
+
+    return resolveReceiverCutterRange(resolvedReceiver->receiver);
+}
+
+Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const CsgReceiverComponent& receiver)const noexcept{
+    if(m_cutterRanges.empty() || !receiver.enabled)
         return MakeUnexpected(Failure{});
 
     const auto foundCutterRange = m_cutterRanges.find(receiver.receiverGroup);

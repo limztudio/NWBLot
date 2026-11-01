@@ -18,12 +18,6 @@ namespace __hidden_model_attachment_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::ModelTests;
@@ -64,8 +58,8 @@ TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
     RuntimeContext context;
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
-    const auto parent = MakeSkeleton(context, owner, s_ExpectedDualCount, 1.0f, 5.0f);
-    const auto replacement = MakeSkeleton(context, owner, s_ExpectedDualCount, 4.0f, 10.0f);
+    const auto parent = MakeSkeleton(context, owner, 2u, 1.0f, 5.0f);
+    const auto replacement = MakeSkeleton(context, owner, 2u, 4.0f, 10.0f);
     const auto attached = MakeAttachment(context, owner, parent, 1u, 2.0f);
     ASSERT_TRUE(context.system.update(world, 0.0f));
     EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, 9.0f);
@@ -94,7 +88,7 @@ TEST(ModelAttachment, InvalidUnrequestedJointsRejectWholePoseAndRecover){
     RuntimeContext context;
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
-    const auto parent = MakeSkeleton(context, owner, s_ExpectedDualCount);
+    const auto parent = MakeSkeleton(context, owner, 2u);
     const auto attached = MakeAttachment(context, owner, parent, 0u, 2.0f);
     world.entity(attached).getComponent<Scene::TransformComponent>().position.x = 123.0f;
     world.entity(parent).getComponent<SkeletonPoseComponent>().localJoints[1u]._11 = 0.0f;
@@ -137,7 +131,7 @@ TEST(ModelAttachment, GroupedQueriesRejectShrunkAndEmptyPalettesAndRecover){
     RuntimeContext context;
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
-    const auto parent = MakeSkeleton(context, owner, s_ExpectedDualCount);
+    const auto parent = MakeSkeleton(context, owner, 2u);
     const auto firstJoint = MakeAttachment(context, owner, parent, 0u);
     const auto secondJoint = MakeAttachment(context, owner, parent, 1u);
     ASSERT_TRUE(context.system.update(world, 0.0f));
@@ -174,7 +168,7 @@ TEST(ModelAttachment, SingleQueryRejectsMissingJointBoundsAndRetainsReusableCapa
     RuntimeContext context;
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
-    const auto parent = MakeSkeleton(context, owner, s_ExpectedDualCount);
+    const auto parent = MakeSkeleton(context, owner, 2u);
     const auto attached = MakeAttachment(context, owner, parent, 1u);
     ASSERT_TRUE(context.system.update(world, 0.0f));
     auto& pose = world.entity(parent).getComponent<SkeletonPoseComponent>();
@@ -197,8 +191,8 @@ TEST(ModelAttachment, InterleavedParentsKeepIndependentQueriesAndEntityGeneratio
     RuntimeContext context;
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
-    const auto firstParent = MakeSkeleton(context, owner, s_ExpectedDualCount, 1.0f);
-    const auto secondParent = MakeSkeleton(context, owner, s_ExpectedDualCount, 3.0f);
+    const auto firstParent = MakeSkeleton(context, owner, 2u, 1.0f);
+    const auto secondParent = MakeSkeleton(context, owner, 2u, 3.0f);
     const auto first = MakeAttachment(context, owner, firstParent, 1u);
     const auto second = MakeAttachment(context, owner, secondParent, 0u);
     const auto third = MakeAttachment(context, owner, firstParent, 0u);
@@ -210,7 +204,7 @@ TEST(ModelAttachment, InterleavedParentsKeepIndependentQueriesAndEntityGeneratio
     EXPECT_FLOAT_EQ(world.entity(fourth).getComponent<Scene::TransformComponent>().position.x, 6.0f);
 
     world.destroyEntity(firstParent);
-    const auto replacement = MakeSkeleton(context, owner, s_ExpectedDualCount, 5.0f);
+    const auto replacement = MakeSkeleton(context, owner, 2u, 5.0f);
     ASSERT_EQ(replacement.index(), firstParent.index());
     ASSERT_NE(replacement.generation(), firstParent.generation());
     world.entity(third).getComponent<ModelStaticMeshAttachmentComponent>().parentEntity = replacement;

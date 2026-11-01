@@ -30,7 +30,14 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
             const auto property = ReadX11Property(m_display, event.requestor, event.property, false, s_MaxMultipleAtoms * s_X11WireUnitBytes);
             if(!property)
                 propertyFailure = property.error();
-            if(property.has_value() && (property->type == m_atomPairAtom || property->type == XA_ATOM) && property->format == s_X11PropertyLongFormat && property->count <= s_MaxMultipleAtoms && (property->count % s_AtomPairLength) == 0u && property->remaining == 0u){
+            if(
+                property.has_value()
+                && (property->type == m_atomPairAtom || property->type == XA_ATOM)
+                && property->format == s_X11PropertyLongFormat
+                && property->count <= s_MaxMultipleAtoms
+                && (property->count % s_AtomPairLength) == 0u
+                && property->remaining == 0u
+            ){
                 Array<Atom, s_MaxMultipleAtoms> pairs;
                 if(property->count)
                     NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));

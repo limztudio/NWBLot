@@ -8,6 +8,9 @@
 #include <core/alloc/scratch.h>
 #include <core/ecs/entity_id.h>
 
+#include <global/containers.h>
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -38,12 +41,12 @@ namespace NWB::Tests::Smoke{
 
 class StressCsgScene final{
 public:
-    [[nodiscard]] b8 initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* owners, usize ownerCount, b8 opaqueOnly);
-    [[nodiscard]] b8 update(Core::ECS::World& world, f32 yaw);
+    [[nodiscard]] b8 initialize(Span<const Core::ECS::EntityID> owners, b8 opaqueOnly, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 update(f32 yaw, Core::ECS::World& world);
 
 
 private:
-    Core::ECS::EntityID m_cutters[2] = {};
+    Array<Core::ECS::EntityID, 2> m_cutters = {};
     b8 m_enabled = false;
 };
 

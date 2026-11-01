@@ -157,7 +157,7 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
     }
 
     const auto& limits = m_context.physicalDeviceProperties.limits;
-    if(!VulkanDetail::AreDispatchGroupCountsValid(groupsX, groupsY, groupsZ, limits.maxComputeWorkGroupCount)){
+    if(!VulkanDetail::AreDispatchGroupCountsValid(groupsX, groupsY, groupsZ, { limits.maxComputeWorkGroupCount[0u], limits.maxComputeWorkGroupCount[1u], limits.maxComputeWorkGroupCount[2u] })){
         rejectCommandRecording(s_OperationName, NWB_TEXT("group counts exceed device limits"));
         return;
     }

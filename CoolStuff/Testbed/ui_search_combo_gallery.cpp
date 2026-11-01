@@ -17,11 +17,6 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiSearchComboGallery::UiSearchComboGallery(NWB::Core::Alloc::GlobalArena& arena)
-    : m_source(arena)
-    , m_state(arena)
-{}
-
 void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     constexpr f32 s_PanelHeight = 130.0f;
@@ -44,6 +39,9 @@ void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom searchable combo declaration failed"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

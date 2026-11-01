@@ -22,37 +22,6 @@ namespace __hidden_shadow_cutter_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] u32 ResolveShapeKind(const CsgShapeTypeInfo& shapeType)noexcept{
-    if(shapeType.desc.shaderModule)
-        return NWB_CSG_RAY_SHAPE_UNSUPPORTED;
-    const Name shapeName = shapeType.desc.name;
-    if(shapeName == s_CsgPlaneShapeName)
-        return NWB_CSG_RAY_SHAPE_PLANE;
-    if(shapeName == s_CsgBoxShapeName)
-        return NWB_CSG_RAY_SHAPE_BOX;
-    if(shapeName == s_CsgSphereShapeName)
-        return NWB_CSG_RAY_SHAPE_SPHERE;
-    if(shapeName == s_CsgCapsuleShapeName)
-        return NWB_CSG_RAY_SHAPE_CAPSULE;
-    return NWB_CSG_RAY_SHAPE_UNSUPPORTED;
-}
-
-[[nodiscard]] Expected<BinaryByteView> ResolveParameters(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept{
-    const u8* parameterBytes = nullptr;
-    usize parameterByteCount = 0u;
-    if(cutter.parameterBytes.empty()){
-        parameterBytes = shapeType.desc.defaultParameterBytes.data();
-        parameterByteCount = shapeType.desc.defaultParameterBytes.size();
-    }
-    else{
-        parameterBytes = cutter.parameterBytes.data();
-        parameterByteCount = cutter.parameterBytes.size();
-    }
-    if(parameterByteCount != shapeType.desc.parameterByteSize || (parameterByteCount != 0u && !parameterBytes))
-        return MakeUnexpected(Failure{});
-    return BinaryByteView(parameterBytes, parameterByteCount);
-}
-
 void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState, const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry, CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range){
     const SIMDVectorSingle receiverMin = LoadFloat(receiver.worldMin);
     const SIMDVectorSingle receiverMax = LoadFloat(receiver.worldMax);
@@ -62,14 +31,14 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
         const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
         if(!shapeType)
             return;
-        const auto parameters = ResolveParameters(*shapeType, cutter);
+        const auto parameters = ResolveCsgCutterParameterBytes(*shapeType, cutter);
         if(!parameters)
             return;
         const u8* parameterBytes = parameters->data();
         const usize parameterByteCount = parameters->size();
 
         const SIMDMatrix shapeToWorld = LoadFloat(cutter.shapeToWorld);
-        const auto bounds = shapeRegistry.buildShapeBounds(shapeType->id, shapeToWorld, parameterBytes, parameterByteCount);
+        const auto bounds = shapeRegistry.buildShapeBounds(shapeType->id, shapeToWorld, *parameters);
         if(!bounds)
             return;
         if(boundsCanCull && bounds->finiteBounds && !AabbTests::Intersects(receiverMin, receiverMax, bounds->minBounds, bounds->maxBounds))
@@ -77,14 +46,14 @@ void AppendReceiverCutters(const CsgShadowReceiverInput& receiver, const CsgRece
 
         Fnv64AppendValue(snapshot.contentIdentity, entity.id);
         Fnv64AppendValue(snapshot.contentIdentity, cutter.shapeType.hash());
-        Fnv64AppendBuffer(snapshot.contentIdentity, parameterBytes, parameterByteCount);
+        Fnv64AppendBuffer(snapshot.contentIdentity, *parameters);
         Fnv64AppendValue(snapshot.identity, entity.id);
         Fnv64AppendValue(snapshot.identity, cutter.shapeType.hash());
         Fnv64AppendValue(snapshot.identity, cutter.worldToShape);
         Fnv64AppendValue(snapshot.identity, cutter.shapeToWorld);
-        Fnv64AppendBuffer(snapshot.identity, parameterBytes, parameterByteCount);
+        Fnv64AppendBuffer(snapshot.identity, *parameters);
         range.flags |= NWB_CSG_RAY_RECEIVER_ACTIVE;
-        const u32 shapeKind = ResolveShapeKind(*shapeType);
+        const u32 shapeKind = ResolveCsgShapeGpuKind(static_cast<b8>(shapeType->desc.shaderModule), shapeType->desc.name);
         const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
         if(
             shapeKind == NWB_CSG_RAY_SHAPE_UNSUPPORTED

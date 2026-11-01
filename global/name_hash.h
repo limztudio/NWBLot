@@ -23,7 +23,7 @@ class Name;
 inline constexpr u32 s_NameHashLaneCount = 8u;
 
 struct NameHash{
-    u64 qwords[s_NameHashLaneCount];
+    Array<u64, s_NameHashLaneCount> qwords;
 };
 
 
@@ -62,7 +62,7 @@ inline constexpr u64 s_LaneSeedSalt4 = 0x8796A5B4C3D2E1F0ull;
 inline constexpr u64 s_LaneSeedSalt5 = 0xDEADBEEFCAFEBABEull;
 inline constexpr u64 s_LaneSeedSalt6 = 0x1234ABCD5678EF01ull;
 inline constexpr u64 s_LaneSeedSalt7 = 0xA0B1C2D3E4F50617ull;
-inline constexpr u64 s_LaneSeeds[s_HashLaneCount] = {
+inline constexpr Array<u64, s_HashLaneCount> s_LaneSeeds = {
     s_Fnv64OffsetBasis,
     s_Fnv64OffsetBasis ^ s_LaneSeedSalt1,
     s_Fnv64OffsetBasis ^ s_LaneSeedSalt2,

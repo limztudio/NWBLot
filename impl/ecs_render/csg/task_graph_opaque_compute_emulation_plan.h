@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 #include <impl/ecs_render/material/generated_geometry_validation.h>
+#include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,105 +66,9 @@ public:
 
 
 public:
-    void reset()noexcept{
-        meshDrawItems.clear();
-        indexedDrawItems.clear();
-        drawItems.clear();
-        regularDrawItems.clear();
-        outputBuffers.clear();
-        outputLayouts.clear();
-        regularOutputBuffers.clear();
-        regularOutputLayouts.clear();
-        receiverRanges.clear();
-        cutters.clear();
-        workRegion = {};
-        captured = false;
-    }
-
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
-        reset();
-        if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
-            return false;
-
-        meshDrawItems.reserve(receiverSurfaceDrawItems.meshDrawItems.size());
-        meshDrawItems.assign(receiverSurfaceDrawItems.meshDrawItems.begin(), receiverSurfaceDrawItems.meshDrawItems.end());
-        indexedDrawItems.reserve(receiverSurfaceDrawItems.indexedDrawItems.size());
-        indexedDrawItems.assign(receiverSurfaceDrawItems.indexedDrawItems.begin(), receiverSurfaceDrawItems.indexedDrawItems.end());
-        regularDrawItems.reserve(sourceRegularDrawItems.computeDrawItems.size());
-        regularDrawItems.assign(sourceRegularDrawItems.computeDrawItems.begin(), sourceRegularDrawItems.computeDrawItems.end());
-        drawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
-        outputBuffers.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
-        outputLayouts.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
-        regularOutputBuffers.reserve(regularDrawItems.size());
-        regularOutputLayouts.reserve(regularDrawItems.size());
-        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
-        for(const MaterialPassDrawItem& regularDrawItem : regularDrawItems){
-            const MaterialPassMeshResourceSnapshot& regularMesh = regularDrawItem.meshResources;
-            if(!regularMesh.emulationVertexBuffer || !regularMesh.emulationVertexHeapHandle.valid()){
-                reset();
-                return false;
-            }
-            regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
-            regularOutputLayouts.push_back({ regularMesh.emulationIndexByteOffset, regularDrawItem.pipelineResources.indexedGeometryOutput });
-            outputs.include(MakeNotNull(regularMesh.emulationVertexBuffer.get()));
-        }
-        for(const MaterialPassDrawItem& drawItem : receiverSurfaceDrawItems.computeDrawItems){
-            if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
-                reset();
-                return false;
-            }
-            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
-                reset();
-                return false;
-            }
-            // Earlier ownership and receiver outputs both exclude this receiver.
-            if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get()))){
-                reset();
-                return false;
-            }
-            drawItems.push_back(drawItem);
-            outputBuffers.push_back(mesh.emulationVertexBuffer);
-            outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
-        }
-        receiverRanges.reserve(csgFrameData.receiverRanges.size());
-        receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
-        cutters.reserve(csgFrameData.cutters.size());
-        cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
-        workRegion = csgFrameData.workRegion;
-        captured = drawItems.size() == outputBuffers.size() && !drawItems.empty();
-        return captured;
-    }
-
-    [[nodiscard]] b8 matches(Core::Alloc::ScratchArena& scratchArena)const{
-        if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || regularOutputBuffers.size() != regularDrawItems.size() || regularOutputLayouts.size() != regularDrawItems.size())
-            return false;
-        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> receiverOutputs(scratchArena);
-        for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
-            const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-                || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-                || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
-            )
-                return false;
-            receiverOutputs.include(MakeNotNull(mesh.emulationVertexBuffer.get()));
-        }
-        for(usize drawIndex = 0u; drawIndex < regularDrawItems.size(); ++drawIndex){
-            const MaterialPassMeshResourceSnapshot& mesh = regularDrawItems[drawIndex].meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-                || mesh.emulationVertexBuffer.get() != regularOutputBuffers[drawIndex].get()
-                || !regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, regularDrawItems[drawIndex].pipelineResources.indexedGeometryOutput)
-            )
-                return false;
-            if(receiverOutputs.contains(MakeNotNull(mesh.emulationVertexBuffer.get())))
-                return false;
-        }
-        return true;
-    }
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& receiverSurfaceDrawItems, const MaterialPassDrawItemsView& sourceRegularDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] b8 matches(Core::Alloc::ScratchArena& scratchArena)const;
 
     [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
         return { meshDrawItems, indexedDrawItems, drawItems };
@@ -175,84 +80,28 @@ public:
 };
 
 
-struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
-    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
-    using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
+struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan : OpaqueRegularComputeEmulationGraphPlan{
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
 
 public:
-    DrawItemVector meshDrawItems;
-    DrawItemVector indexedDrawItems;
-    DrawItemVector drawItems;
-    BufferVector outputBuffers;
-    OutputLayoutVector outputLayouts;
-    HeapSlotVector outputHeapSlots;
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
     CsgFrameWorkRegion workRegion;
-    b8 captured = false;
 
 
 public:
     explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
-        : meshDrawItems(arena)
-        , indexedDrawItems(arena)
-        , drawItems(arena)
-        , outputBuffers(arena)
-        , outputLayouts(arena)
-        , outputHeapSlots(arena)
+        : OpaqueRegularComputeEmulationGraphPlan(arena)
         , receiverRanges(arena)
         , cutters(arena)
     {}
 
 
 public:
-    void reset()noexcept{
-        meshDrawItems.clear();
-        indexedDrawItems.clear();
-        drawItems.clear();
-        outputBuffers.clear();
-        outputLayouts.clear();
-        outputHeapSlots.clear();
-        receiverRanges.clear();
-        cutters.clear();
-        workRegion = {};
-        captured = false;
-    }
-
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena){
-        reset();
-        if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
-            return false;
-
-        meshDrawItems.reserve(sourceDrawItems.meshDrawItems.size());
-        meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
-        indexedDrawItems.reserve(sourceDrawItems.indexedDrawItems.size());
-        indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
-        if(!CaptureAliasFreeGeneratedGeometryDraws(*this, sourceDrawItems, scratchArena, [](const MaterialPipelineCsgMode::Enum mode)noexcept{ return mode != MaterialPipelineCsgMode::None; })){
-            reset();
-            return false;
-        }
-        receiverRanges.reserve(csgFrameData.receiverRanges.size());
-        receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
-        cutters.reserve(csgFrameData.cutters.size());
-        cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
-        workRegion = csgFrameData.workRegion;
-        captured = drawItems.size() == outputBuffers.size() && outputBuffers.size() == outputHeapSlots.size() && !drawItems.empty();
-        return captured;
-    }
-
-    [[nodiscard]] b8 matches()const noexcept{
-        return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
-    }
-
-    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
-        return { meshDrawItems, indexedDrawItems, drawItems };
-    }
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const CsgFrameGpuDataView& csgFrameData, Core::Alloc::ScratchArena& scratchArena);
 
     [[nodiscard]] CsgFrameGpuDataView csgFrameDataView()const noexcept{
         return { receiverRanges, cutters, workRegion };

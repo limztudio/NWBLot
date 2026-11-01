@@ -5,6 +5,7 @@
 #include "scrollbar.h"
 
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/result.h>
 #include <global/simd/vector.h>
@@ -27,15 +28,6 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bar value rows 0..2 carry data; row 3 is padding.
-inline constexpr u32 s_BarValueRowCount = 3u;
-// Each axis can add a reservation once, then both axes are rechecked.
-inline constexpr u32 s_ReservationPassLimit = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static SIMDMatrixDouble LoadBarValues(const ScrollbarPlacement& bar)noexcept{
     if(
         !IsFinite(bar.track.x)
@@ -51,7 +43,7 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
         || !IsFinite(bar.maximum)
         || !IsFinite(bar.offset)
     )
-        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+        return MakeInvalidUiMatrixDouble();
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(bar.track.x, bar.track.y, bar.track.width, bar.track.height),
         VectorDoubleSet(bar.thumb.x, bar.thumb.y, bar.thumb.width, bar.thumb.height),
@@ -61,10 +53,8 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
 }
 
 [[nodiscard]] static b8 ValidBar(const SIMDMatrixDouble& values, const ScrollAxis::Enum axis)noexcept{
-    for(u32 index = 0u; index < s_BarValueRowCount; ++index){
-        if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
-            return false;
-    }
+    if(!AreUiMatrixRowsFinite(values, s_ScrollbarValueRowCount))
+        return false;
     const SIMDVectorSingle trackSingle = ConvertVectorDoubleToSingle(values.v[0]);
     const SIMDVectorSingle thumbSingle = ConvertVectorDoubleToSingle(values.v[1]);
     const f32 trackX = VectorGetX(trackSingle);
@@ -81,13 +71,13 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     const f64 offset = VectorDoubleGetW(values.v[2]);
     if(contentExtent < 0.0 || viewportExtent < 0.0)
         return false;
-    const SIMDVectorDouble expectedMaximum = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatX(values.v[2]), VectorDoubleSplatY(values.v[2])));
+    const f64 expectedMaximum = Max(0.0, contentExtent - viewportExtent);
     // Lanes are track right, track bottom, thumb right, thumb bottom.
     const SIMDVectorSingle end = VectorAdd(VectorPermute<0, 1, 4, 5>(trackSingle, thumbSingle), VectorPermute<2, 3, 6, 7>(trackSingle, thumbSingle));
     if(
         trackWidth < 0.0f || trackHeight < 0.0f || thumbWidth < 0.0f || thumbHeight < 0.0f
         || !VectorIsFinite(end, VectorComponentMask::s_XYZW)
-        || contentExtent < 0.0 || viewportExtent < 0.0 || maximum != VectorDoubleGetX(expectedMaximum)
+        || contentExtent < 0.0 || viewportExtent < 0.0 || maximum != expectedMaximum
         || offset < 0.0 || offset > maximum || (viewportExtent > 0.0 && maximum > 0.0 && maximum >= contentExtent)
     )
         return false;
@@ -101,30 +91,36 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     return viewportExtent == static_cast<f64>(trackHeight) && thumbX == trackX && thumbWidth == trackWidth && thumbY >= trackY && thumbHeight <= trackHeight && VectorGetW(end) <= VectorGetY(end);
 }
 
-[[nodiscard]] static Expected<SIMDVectorDoubleResult> MoveThumb(const SIMDVectorDouble offset, const SIMDVectorDouble maximum, const SIMDVectorSingle track, const b8 visible)noexcept{
-    const SIMDVectorDouble acceptedOffset = VectorDoubleMin(offset, maximum);
+struct MovedThumb{
+    f64 offset = 0.0;
+    f32 origin = 0.0f;
+};
+
+[[nodiscard]] static Expected<MovedThumb> MoveThumb(const f64 offset, const f64 maximum, const f32 trackOrigin, const f32 trackLength, const f32 thumbLength, const b8 visible)noexcept{
+    const f64 acceptedOffset = Min(offset, maximum);
     if(!visible)
-        return SIMDVectorDoubleResult{ VectorDoubleSelect(VectorDoubleZero(), acceptedOffset, s_DoubleSIMDMaskX) };
-    const SIMDVectorDouble trackValues = ConvertVectorSingleToDouble(track);
-    const SIMDVectorDouble travel = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleSplatY(trackValues), VectorDoubleSplatZ(trackValues)));
-    const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSplatX(trackValues), VectorDoubleMultiply(travel, VectorDoubleDivide(acceptedOffset, maximum)));
-    if(!IsFinite(VectorDoubleGetX(position)) || VectorDoubleGetX(position) < -Limit<f32>::s_Max || VectorDoubleGetX(position) > Limit<f32>::s_Max)
+        return MovedThumb{ acceptedOffset, 0.0f };
+    const f64 travel = Max(0.0, static_cast<f64>(trackLength) - static_cast<f64>(thumbLength));
+    const f64 position = static_cast<f64>(trackOrigin) + travel * (acceptedOffset / maximum);
+    if(!IsFinite(position) || position < -Limit<f32>::s_Max || position > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle first = VectorSplatX(track);
-    const SIMDVectorSingle last = VectorMax(first, VectorSubtract(VectorAdd(first, VectorSplatY(track)), VectorSplatZ(track)));
-    const SIMDVectorSingle positionSingle = ConvertVectorDoubleToSingle(position);
-    const SIMDVectorSingle origin = VectorSelect(first, VectorMin(last, positionSingle), VectorGreater(positionSingle, first));
-    return SIMDVectorDoubleResult{ VectorDoubleSelect(acceptedOffset, ConvertVectorSingleToDouble(origin), s_DoubleSIMDMaskY) };
+    const f32 first = trackOrigin;
+    const f32 last = Max(first, (first + trackLength) - thumbLength);
+    const f32 positionSingle = static_cast<f32>(position);
+    const f32 origin = positionSingle > first ? Min(last, positionSingle) : first;
+    return MovedThumb{ acceptedOffset, origin };
 }
 
-[[nodiscard]] static b8 StoreBarOffset(const SIMDVectorDouble offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
-    const SIMDVectorSingle track = axis == ScrollAxis::Horizontal ? VectorSet(bar.track.x, bar.track.width, bar.thumb.width, 0.0f) : VectorSet(bar.track.y, bar.track.height, bar.thumb.height, 0.0f);
-    const auto values = MoveThumb(offset, VectorDoubleReplicate(bar.maximum), track, bar.visible);
+[[nodiscard]] static b8 StoreBarOffset(const f64 offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
+    const f32 trackOrigin = axis == ScrollAxis::Horizontal ? bar.track.x : bar.track.y;
+    const f32 trackLength = axis == ScrollAxis::Horizontal ? bar.track.width : bar.track.height;
+    const f32 thumbLength = axis == ScrollAxis::Horizontal ? bar.thumb.width : bar.thumb.height;
+    const auto values = MoveThumb(offset, bar.maximum, trackOrigin, trackLength, thumbLength, bar.visible);
     if(!values)
         return false;
-    bar.offset = VectorDoubleGetX(values->value);
+    bar.offset = values->offset;
     if(bar.visible)
-        (axis == ScrollAxis::Horizontal ? bar.thumb.x : bar.thumb.y) = static_cast<f32>(VectorDoubleGetY(values->value));
+        (axis == ScrollAxis::Horizontal ? bar.thumb.x : bar.thumb.y) = values->origin;
     return !bar.visible || ValidBar(LoadBarValues(bar), axis);
 }
 
@@ -132,7 +128,7 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
-    candidate.maximum = VectorDoubleGetX(VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleReplicate(contentExtent), VectorDoubleReplicate(viewportExtent))));
+    candidate.maximum = Max(0.0, contentExtent - viewportExtent);
     if(!IsFinite(candidate.maximum) || (viewportExtent > 0.0 && candidate.maximum > 0.0 && candidate.maximum >= contentExtent))
         return MakeUnexpected(Failure{});
     candidate.visible = track.width > 0.0f && track.height > 0.0f;
@@ -141,17 +137,16 @@ inline constexpr u32 s_ReservationPassLimit = 3u;
             return MakeUnexpected(Failure{});
         candidate.track = track;
         const f64 length = axis == ScrollAxis::Horizontal ? track.width : track.height;
-        const SIMDVectorDouble lengthValue = VectorDoubleReplicate(length);
-        const SIMDVectorDouble proportional = VectorDoubleMultiply(lengthValue, VectorDoubleDivide(VectorDoubleReplicate(viewportExtent), VectorDoubleReplicate(contentExtent)));
-        const SIMDVectorDouble minimum = VectorDoubleMin(VectorDoubleReplicate(minThumb), lengthValue);
-        const SIMDVectorSingle thumbExtent = ConvertVectorDoubleToSingle(VectorDoubleSelect(minimum, VectorDoubleMin(lengthValue, proportional), VectorDoubleGreater(proportional, minimum)));
+        const f64 proportional = length * (viewportExtent / contentExtent);
+        const f64 minimum = Min(static_cast<f64>(minThumb), length);
+        const f32 thumbExtent = static_cast<f32>(proportional > minimum ? Min(length, proportional) : minimum);
         candidate.thumb = track;
         if(axis == ScrollAxis::Horizontal)
-            candidate.thumb.width = VectorGetX(VectorMin(thumbExtent, VectorReplicate(track.width)));
+            candidate.thumb.width = Min(thumbExtent, track.width);
         else
-            candidate.thumb.height = VectorGetX(VectorMin(thumbExtent, VectorReplicate(track.height)));
+            candidate.thumb.height = Min(thumbExtent, track.height);
     }
-    if(!StoreBarOffset(VectorDoubleReplicate(offset), axis, candidate) || !ValidBar(LoadBarValues(candidate), axis))
+    if(!StoreBarOffset(offset, axis, candidate) || !ValidBar(LoadBarValues(candidate), axis))
         return MakeUnexpected(Failure{});
     return candidate;
 }
@@ -175,19 +170,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
         || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
     )
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble geometryPair2Operand0 = VectorDoubleSet(static_cast<f64>(padding.left), static_cast<f64>(padding.top), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair2Operand1 = VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0);
-    const SIMDVectorDouble xYValue = VectorDoubleAdd(
-        VectorDoubleSet(static_cast<f64>(bounds.x), static_cast<f64>(bounds.y), 0.0, 0.0),
-        VectorDoubleSelect(geometryPair2Operand1, geometryPair2Operand0, VectorDoubleLess(geometryPair2Operand0, geometryPair2Operand1))
-    );
-    const SIMDVectorDouble geometryPair3Operand0 = VectorDoubleZero();
-    const SIMDVectorDouble geometryPair3Operand1 = VectorDoubleSubtract(
-        VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(bounds.width), static_cast<f64>(bounds.height), 0.0, 0.0), VectorDoubleSet(padding.left, padding.top, 0.0, 0.0)),
-        VectorDoubleSet(padding.right, padding.bottom, 0.0, 0.0)
-    );
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair3Operand1, geometryPair3Operand0, VectorDoubleGreater(geometryPair3Operand0, geometryPair3Operand1));
-    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(xYValue, widthHeightValue));
+    const auto padded = InsetUiRect<UiRectPrecision::RoundedEndpoints>(bounds, padding);
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
@@ -197,14 +180,14 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     const SIMDVectorDouble verticalWidthHorizontalHeightValue = VectorDoubleSelect(geometryPair4Operand1, geometryPair4Operand0, VectorDoubleLess(geometryPair4Operand0, geometryPair4Operand1));
     const f64 verticalWidth = VectorDoubleGetX(verticalWidthHorizontalHeightValue);
     const f64 horizontalHeight = VectorDoubleGetY(verticalWidthHorizontalHeightValue);
-    const f64 contentWidth = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(contentMeasure.x), VectorDoubleReplicate(caretWidth)));
+    const f64 contentWidth = static_cast<f64>(contentMeasure.x) + static_cast<f64>(caretWidth);
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))
         return MakeUnexpected(Failure{});
     b8 horizontal = false;
     b8 vertical = false;
     // Each axis can only add a reservation; the other axis is rechecked after either addition.
-    for(u32 iteration = 0u; iteration < s_ReservationPassLimit; ++iteration){
+    for(u32 iteration = 0u; iteration < s_ScrollbarReservationPassLimit; ++iteration){
         const SIMDVectorDouble viewportSize = VectorDoubleSubtract(VectorDoubleSet(availableWidth, availableHeight, 0.0, 0.0), VectorDoubleSet(vertical ? verticalWidth : 0.0, horizontal ? horizontalHeight : 0.0, 0.0, 0.0));
         const f64 viewportWidth = static_cast<f32>(VectorDoubleGetX(viewportSize));
         const f64 viewportHeight = static_cast<f32>(VectorDoubleGetY(viewportSize));
@@ -265,19 +248,19 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(const Rect& bounds,
     return candidate;
 }
 
-b8 ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept{
+b8 ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& placement)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
-        !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)
-        || out.horizontal.viewportExtent != static_cast<f64>(out.viewport.width)
-        || out.vertical.viewportExtent != static_cast<f64>(out.viewport.height)
-        || !ValidBar(LoadBarValues(out.horizontal), ScrollAxis::Horizontal) || !ValidBar(LoadBarValues(out.vertical), ScrollAxis::Vertical)
+        !IsValidUiExtent(scroll) || !IsValidUiRect(placement.viewport) || !IsValidUiRect(placement.contentClip) || !IsValidUiRect(placement.corner)
+        || placement.horizontal.viewportExtent != static_cast<f64>(placement.viewport.width)
+        || placement.vertical.viewportExtent != static_cast<f64>(placement.viewport.height)
+        || !ValidBar(LoadBarValues(placement.horizontal), ScrollAxis::Horizontal) || !ValidBar(LoadBarValues(placement.vertical), ScrollAxis::Vertical)
     )
         return false;
-    ScrollViewportPlacement candidate = out;
-    if(!StoreBarOffset(VectorDoubleReplicate(scroll.x), ScrollAxis::Horizontal, candidate.horizontal) || !StoreBarOffset(VectorDoubleReplicate(scroll.y), ScrollAxis::Vertical, candidate.vertical))
+    ScrollViewportPlacement candidate = placement;
+    if(!StoreBarOffset(scroll.x, ScrollAxis::Horizontal, candidate.horizontal) || !StoreBarOffset(scroll.y, ScrollAxis::Vertical, candidate.vertical))
         return false;
-    out = candidate;
+    placement = candidate;
     return true;
 }
 

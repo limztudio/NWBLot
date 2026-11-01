@@ -3,10 +3,9 @@
 
 
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/csg/frame_state_cache.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
-#include <impl/ecs_render/raytrace/instance_material.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_mesh/system.h>
 #include <impl/ecs_scene/components.adhd.h>
@@ -36,7 +35,7 @@ using namespace NWB::Impl;
 inline constexpr Name s_ReceiverGroup("tests/csg_shadow/group");
 inline constexpr Name s_OtherGroup("tests/csg_shadow/other");
 inline constexpr Name s_CustomShape("tests/csg_shadow/custom");
-inline constexpr u32 s_OpenTriangleWords[] = { 0u };
+inline constexpr Array<u32, 1> s_OpenTriangleWords = { 0u };
 inline constexpr i32 s_FrameCacheBindingFailure = 43;
 
 
@@ -100,13 +99,13 @@ public:
     return input;
 }
 
-void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
+void SetParameters(const Float4& parameter, CsgCutterComponent& cutter){
     cutter.parameterBytes.resize(sizeof(parameter));
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const u8*, const usize parameterByteSize)noexcept{
-    if(parameterByteSize != 0u)
+[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameters)noexcept{
+    if(!parameters.empty())
         return MakeUnexpected(Failure{});
     const auto bounds = AabbTests::Transform(shapeToWorld, VectorReplicate(-1.0f), VectorReplicate(1.0f));
     if(!bounds)
@@ -168,7 +167,7 @@ TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
     auto* receiver = context.testWorld.world.tryGetComponent<StaticCsgMeshComponent>(receiverEntity);
     ASSERT_NE(receiver, nullptr);
     receiver->affectTransparentPass = false;
-    CsgShadowReceiverInput inputs[] = { ReceiverInput(otherReceiver), ReceiverInput(receiverEntity), ReceiverInput(receiverEntity) };
+    Array<CsgShadowReceiverInput, 3> inputs = { ReceiverInput(otherReceiver), ReceiverInput(receiverEntity), ReceiverInput(receiverEntity) };
     inputs[1].receiverPass = CsgReceiverPass::Transparent;
     ASSERT_TRUE(context.build(inputs));
     ASSERT_TRUE(context.snapshot.hasCsg);
@@ -183,7 +182,7 @@ TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
 TEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds){
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    CsgShadowReceiverInput inputs[] = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_ReceiverGroup, true)) };
+    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_ReceiverGroup, true)) };
     inputs[1].boundsValid = false;
     const Core::ECS::EntityID sphereEntity = context.addCutter(s_CsgSphereShapeName);
     const Core::ECS::EntityID planeEntity = context.addCutter(s_CsgPlaneShapeName);
@@ -270,7 +269,7 @@ TEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceive
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
     ASSERT_TRUE(RegisterCustomShape(context));
-    CsgShadowReceiverInput inputs[] = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
+    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
     const Core::ECS::EntityID firstCutter = context.addCutter(s_CsgBoxShapeName);
     const Core::ECS::EntityID secondCutter = context.addCutter(s_CsgSphereShapeName, s_OtherGroup);
     ASSERT_TRUE(secondCutter.valid());
@@ -317,7 +316,7 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     mesh.csgLocalBounds.maxBounds = Float3Int(2.0f, 2.0f, 2.0f, 0);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
     ASSERT_TRUE(state.snapshot.hasCsg);
     const usize rangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
     u32 membershipOffset = 0u;
@@ -331,11 +330,11 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
     EXPECT_EQ(state.instances[0].meshRootSlot, Limit<u32>::s_Max);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
     EXPECT_EQ(state.instances[0].meshRootSlot, s_SoftwareRootSlot);
 
     auto* cutterComponent = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutter);
@@ -343,7 +342,7 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     cutterComponent->active = false;
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-    ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+    ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
     EXPECT_FALSE(state.snapshot.hasCsg);
     EXPECT_EQ(state.snapshot.identity, 0u);
     EXPECT_TRUE(state.bytes.empty());
@@ -359,12 +358,12 @@ TEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext){
     LightSpaceCsgState state(context.testWorld.arena);
     ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
     mesh.meshletPrimitiveIndexCount = 3u;
-    const u32 extraWords[] = { 0u, 0u };
+    const Array<u32, 2> extraWords = { 0u, 0u };
     for(const Span<const u32> words : { Span<const u32>{}, Span<const u32>(extraWords) }){
         mesh.solidTriangleWords = words;
         BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
         AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-        EXPECT_FALSE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+        EXPECT_FALSE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
         EXPECT_TRUE(state.bytes.empty());
     }
     EXPECT_EQ(logger.errorCount(), 2u);
@@ -376,11 +375,11 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         SoftwareShadowCaptureCadence::Enum cadence;
         u32 refreshInterval;
     };
-    const CaptureCase cases[] = {
+    const Array<CaptureCase, 3> cases = {{
         { SoftwareShadowCaptureCadence::EveryFrame, 1u },
         { SoftwareShadowCaptureCadence::ReuseOneFrame, 2u },
         { SoftwareShadowCaptureCadence::ReuseTwoFrames, 3u },
-    };
+    }};
     for(const auto& captureCase : cases){
         SnapshotContext context;
         ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
@@ -401,17 +400,16 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         u64 previousExact = 0u;
         u64 previousContent = 0u;
         for(u32 frame = 0u; frame < 7u; ++frame){
-            const SIMDVectorSingle shift = VectorScale(VectorReplicate(static_cast<f32>(frame)), 0.25f);
-            const f32 x = VectorGetX(shift);
+            const f32 x = static_cast<f32>(frame) * 0.25f;
             // Move only lane X.
-            const SIMDMatrix inverseShift = MatrixTranslationFromVector(VectorAndInt(VectorNegate(shift), s_SIMDMaskX));
+            const SIMDMatrix inverseShift = MatrixTranslation(-x, 0.0f, 0.0f);
             StoreFloat(MatrixTranslation(x, 0.0f, 0.0f), cutter->shapeToWorld);
             StoreFloat(inverseShift, cutter->worldToShape);
             instance.translation.x = x;
             StoreFloat(QuaternionRotationRollPitchYaw(0.0f, x, 0.0f), instance.rotation);
             BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
             AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.0f, 0.0f), inverseShift, LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-            ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
             ASSERT_TRUE(state.snapshot.hasCsg);
             ASSERT_TRUE(state.captureGeometryTrusted);
             const u64 content = BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{});
@@ -435,7 +433,7 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
 TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges){
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    Core::ECS::EntityID receivers[] = { context.addReceiver(), context.addReceiver() };
+    Array<Core::ECS::EntityID, 2> receivers = { context.addReceiver(), context.addReceiver() };
     const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
     auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
     ASSERT_NE(cutter, nullptr);
@@ -446,14 +444,14 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.meshletPrimitiveIndexCount = 3u;
     mesh.solidTriangleWords = s_OpenTriangleWords;
-    NwbRtInstanceMaterialGpu materials[LengthOf(receivers)];
-    InstanceGpuData instances[LengthOf(receivers)];
-    u8 materialBytes[] = { 1u, 2u, 3u, 4u };
+    Array<NwbRtInstanceMaterialGpu, 2> materials{};
+    Array<InstanceGpuData, 2> instances{};
+    Array<u8, 4> materialBytes = { 1u, 2u, 3u, 4u };
     const auto build = [&](){
         BeginLightSpaceCsgGather(state, context.testWorld.world, LengthOf(receivers), false);
         for(const auto receiver : receivers)
             AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-        return FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch);
+        return FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch);
     };
     const auto identity = [&]()noexcept{
         return LightSpaceCaptureIdentity{ BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<const Core::TextureHandle>{}), 11u, 13u, state.captureGeometryTrusted };
@@ -461,8 +459,8 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     const auto expectRefresh = [&](const auto& change){
         ASSERT_TRUE(build());
         ASSERT_TRUE(state.snapshot.hasCsg);
-        const SoftwareShadowCaptureCadence::Enum cadences[] = { SoftwareShadowCaptureCadence::ReuseOneFrame, SoftwareShadowCaptureCadence::ReuseTwoFrames };
-        LightSpaceCaptureHistory histories[LengthOf(cadences)];
+        const Array<SoftwareShadowCaptureCadence::Enum, 2> cadences = { SoftwareShadowCaptureCadence::ReuseOneFrame, SoftwareShadowCaptureCadence::ReuseTwoFrames };
+        Array<LightSpaceCaptureHistory, 2> histories{};
         for(usize index = 0u; index < LengthOf(cadences); ++index){
             auto& history = histories[index];
             history.beginFrame();
@@ -490,7 +488,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&]()noexcept{ ++instances[0].translation.w; });
     expectRefresh([&]()noexcept{ ++instances[0].geometryHeapSlots[0]; });
     expectRefresh([&]()noexcept{ ++materialBytes[0]; });
-    expectRefresh([&](){ SetParameters(*cutter, Float4(0.5f, 1.0f, 1.0f, 0.0f)); });
+    expectRefresh([&](){ SetParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), *cutter); });
     expectRefresh([&]()noexcept{ Swap(receivers[0], receivers[1]); });
     expectRefresh([&](){ ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry)); });
     expectRefresh([&]()noexcept{ cutter->active = false; });
@@ -515,7 +513,7 @@ TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
             mesh.runtimeGeometryContentRevision = revision;
             BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
             AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), LoadFloatInt(mesh.csgLocalBounds.minBounds), LoadFloatInt(mesh.csgLocalBounds.maxBounds), mesh);
-            ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+            ASSERT_TRUE(FinishLightSpaceCsgGather(context.registry, state, context.testWorld.world, context.scratch));
             EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
             const LightSpaceCaptureIdentity identity{
                 BuildLightSpaceCsgCaptureIdentity(state, Span<const NwbRtInstanceMaterialGpu>(&material, 1u), Span<const InstanceGpuData>(&instance, 1u), Span<const u8>{}, Span<const Core::TextureHandle>{}),
@@ -535,7 +533,7 @@ TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
 TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder){
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    CsgShadowReceiverInput inputs[] = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
+    Array<CsgShadowReceiverInput, 2> inputs = { ReceiverInput(context.addReceiver()), ReceiverInput(context.addReceiver(s_OtherGroup)) };
     const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
     ASSERT_TRUE(context.build(inputs));
     u64 identity = context.snapshot.identity;
@@ -545,7 +543,7 @@ TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrd
 
     auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
     ASSERT_NE(cutter, nullptr);
-    SetParameters(*cutter, Float4(0.5f, 1.0f, 1.0f, 0.0f));
+    SetParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), *cutter);
     ASSERT_TRUE(context.build(inputs));
     EXPECT_NE(context.snapshot.identity, identity);
     identity = context.snapshot.identity;
@@ -563,7 +561,7 @@ TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrd
     ASSERT_TRUE(context.build(inputs));
     EXPECT_NE(context.snapshot.identity, identity);
     identity = context.snapshot.identity;
-    inputs[1].worldMin.x = VectorGetX(VectorSubtract(VectorReplicate(inputs[1].worldMin.x), VectorSplatOne()));
+    inputs[1].worldMin.x = inputs[1].worldMin.x - 1.0f;
     ASSERT_TRUE(context.build(inputs));
     EXPECT_NE(context.snapshot.identity, identity);
 

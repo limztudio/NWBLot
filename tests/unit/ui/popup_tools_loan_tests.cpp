@@ -61,15 +61,15 @@ public:
     [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return m_rows.enabled(index); }
 
 
+public:
+    mutable u64 textCalls = 0u;
+    mutable b8 armed = false;
+
+
 private:
     PopupToolsSource& m_menuSource;
     ComboState& m_combo;
     PopupToolsSource m_rows;
-
-
-public:
-    mutable u64 textCalls = 0u;
-    mutable b8 armed = false;
 };
 
 

@@ -11,5 +11,10 @@ target_sources(nwb_ecs_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.inl"
     "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
+    "${CMAKE_SOURCE_DIR}/tests/unit/ui/multiline_fixture.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/unit/ui/multiline_fixture.h"
+    "${CMAKE_SOURCE_DIR}/tests/unit/ui/native_input.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/unit/ui/native_input.h"
 )
 target_link_libraries(nwb_ecs_ui_tests PRIVATE nwb_ecs_ui nwb_ui_edit)
+

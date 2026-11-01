@@ -7,9 +7,7 @@
 
 #include "bake.h"
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_SYSTEM_H
+#include <impl/assets_font/freetype_face.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,33 +20,27 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 class FontSource final : NoCopy{
-    friend Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
+    friend Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont);
     friend b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
-
-
-private:
-    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size)noexcept;
-    static void Release(FT_Memory memory, void* block)noexcept;
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block)noexcept;
 
 
 public:
     explicit FontSource(Core::Assets::AssetArena& arena)noexcept;
-    ~FontSource()noexcept;
+    ~FontSource()noexcept = default;
 
 
 public:
-    [[nodiscard]] b8 open(const BakeOptions& options, Impl::FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratch);
+    [[nodiscard]] b8 open(const BakeOptions& options, Core::Alloc::ScratchArena& scratch, Impl::FontAtlasPayload& payload);
+    [[nodiscard]] Span<const u8> bytes()const noexcept{ return m_bytes; }
+    [[nodiscard]] Core::Assets::AssetBytes takeBytes()noexcept;
 
 
 private:
     Core::Assets::AssetBytes m_bytes;
-    FT_MemoryRec_ m_memory{};
-    FT_Library m_library = nullptr;
-    FT_Face m_face = nullptr;
+    Impl::FreeTypeMemoryFace m_freeType;
 };
 
-[[nodiscard]] Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
+[[nodiscard]] Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont);
 [[nodiscard]] b8 ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
 
 

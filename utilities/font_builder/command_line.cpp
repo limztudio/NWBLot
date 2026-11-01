@@ -23,7 +23,7 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 int Run(const int argc, char** argv){
     AInteropString sourceArgument;
     AInteropString outputArgument;
-    AInteropString rendererArgument(s_RasterModeBitmapText.data(), s_RasterModeBitmapText.size());
+    AInteropString rendererArgument(Impl::s_FontAtlasRasterModeBitmap.data(), Impl::s_FontAtlasRasterModeBitmap.size());
     BakeOptions options(UtilityDetail::Arena());
     CLI::App app{ "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images." };
     app.add_option("--font", sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
@@ -36,11 +36,11 @@ int Run(const int argc, char** argv){
     app.add_flag("--overwrite", options.overwrite, "Replace an existing complete .nwb/.font pair");
     return InvokeTerminalEntry<CLI::ParseError>([&](){
                 app.parse(argc, argv);
-                if(rendererArgument != s_RasterModeBitmapText && rendererArgument != s_RasterModeOutlineText){
+                if(rendererArgument != Impl::s_FontAtlasRasterModeBitmap && rendererArgument != Impl::s_FontAtlasRasterModeOutline){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
                     return 1;
                 }
-                options.outline = rendererArgument == s_RasterModeOutlineText;
+                options.outline = rendererArgument == Impl::s_FontAtlasRasterModeOutline;
                 options.source = AStringView(sourceArgument.data(), sourceArgument.size());
                 options.output = AStringView(outputArgument.data(), outputArgument.size());
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
@@ -55,8 +55,9 @@ int Run(const int argc, char** argv){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
                     return 1;
                 }
-                auto payload = Bake(options, UtilityDetail::Arena(), scratch);
-                if(!payload || !WriteOutputs(options, *payload, scratch))
+                Core::Assets::AssetBytes sourceFontBytes(UtilityDetail::Arena());
+                auto payload = Bake(options, UtilityDetail::Arena(), scratch, sourceFontBytes);
+                if(!payload || !WriteOutputs(options, sourceFontBytes, *payload, scratch))
                     return 1;
                 NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());
                 return 0;

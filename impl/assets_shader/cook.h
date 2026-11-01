@@ -15,11 +15,13 @@
 #include <impl/assets_shader/types.adhd.h>
 
 #include <core/alloc/scratch.h>
+#include <core/assets/cook_paths.h>
 #include <core/graphics/rhi/shader.h>
 #include <core/metascript/parser.h>
 
 #include <global/not_null.h>
 #include <global/span.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,32 +33,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ShaderOptimizationLevel = ::NWB::Impl::ShaderBinaryPayload::ShaderOptimizationLevel;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ShaderCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct StringEqual{
-    using is_transparent = void;
-
-
-public:
-    [[nodiscard]] b8 operator()(const AStringView lhs, const AStringView rhs)const noexcept{
-        return lhs == rhs;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+namespace VariantSignatureSegmentError{
+    enum Enum : u8{
+        EmptySegment,
+        InvalidAssignment,
+    };
 };
 
 
@@ -65,36 +46,31 @@ public:
 
 class ShaderCook : NoCopy{
 public:
-    using CookArena = Core::Alloc::GlobalArena;
-    using CookString = AString<CookArena>;
+    using CookArena = Core::Assets::CookArena;
+    using CookString = Core::Assets::CookString;
     template<typename T>
-    using CookVector = Vector<T, CookArena>;
+    using CookVector = Core::Assets::CookVector<T>;
 
     template<typename T, typename V>
-    using CookMap = HashMap<
-        T, V, CookArena,
-        Conditional_T<IsSame_V<T, CookString>, Hasher<AStringView>, Hasher<T>>,
-        Conditional_T<IsSame_V<T, CookString>, ShaderCookDetail::StringEqual, EqualTo<T>>
-    >;
+    using CookMap = Core::Assets::CookMap<T, V>;
+
+    // Combos borrow define text from the expanded entry's defineValues or static literals; use them only while that entry is unchanged.
+    using DefineCombo = CookMap<AStringView, AStringView>;
 
 
 public:
-    using ShaderMacroDefinition = ::NWB::Impl::ShaderBinaryPayload::ShaderMacroDefinition;
-    using DependencyChecksum = ::NWB::Impl::ShaderBinaryPayload::DependencyChecksum;
-
     struct ShaderCompilerRequest{
         AStringView shaderName;
         AStringView stage;
         AStringView entryPoint;
         AStringView variantName;
-        const ShaderMacroDefinition* defines = nullptr;
+        Span<const ShaderBinaryPayload::ShaderMacroDefinition> defines;
         Span<const Path> includeDirectories;
         Span<const Path> dependencies;
         Span<const AStringView> externallyPlannedMacroIncludes;
         const Path& sourcePath;
         const ::Path<Core::Alloc::ScratchArena>& outputPath;
-        u32 defineCount = 0;
-        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
+        ShaderBinaryPayload::ShaderOptimizationLevel::Enum optimizationLevel = ShaderBinaryPayload::ShaderOptimizationLevel::Default;
         b8 rayQuery = false;
         b8 compilerInputsHaveBom = false;
     };
@@ -111,13 +87,6 @@ public:
         {}
     };
 
-
-public:
-    // Combos borrow define text from the expanded entry's defineValues or static literals; use them only while that entry is unchanged.
-    using DefineCombo = CookMap<AStringView, AStringView>;
-
-
-public:
     struct DefineEntry{
         CookVector<CookString> values;
 
@@ -154,7 +123,7 @@ public:
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
-        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
+        ShaderBinaryPayload::ShaderOptimizationLevel::Enum optimizationLevel = ShaderBinaryPayload::ShaderOptimizationLevel::Default;
         b8 rayQuery = false;
         b8 emitMeshComputeShadow = true;
 
@@ -178,10 +147,109 @@ private:
         NotNull<const typename MapT::mapped_type*> value;
     };
 
+    template<typename MapT>
+    using ScratchDefineEntryVector = Core::Assets::ScratchVector<DefineEntryPtr<MapT>>;
+
+
+public:
+    [[nodiscard]] static b8 ValidateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
+
+    template<typename OnAssignmentFn, typename OnErrorFn>
+    [[nodiscard]] static b8 ParseVariantSignatureAssignments(
+        const AStringView variantSignature,
+        OnAssignmentFn&& onAssignment,
+        OnErrorFn&& onError
+    ){
+        usize begin = 0u;
+        while(begin < variantSignature.size()){
+            usize segmentEnd = variantSignature.find(';', begin);
+            if(segmentEnd == AStringView::npos)
+                segmentEnd = variantSignature.size();
+
+            const AStringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
+            if(segment.empty()){
+                onError(VariantSignatureSegmentError::EmptySegment, segment);
+                return false;
+            }
+
+            const usize equalPos = segment.find('=');
+            if(equalPos == AStringView::npos || equalPos == 0u || equalPos + 1u >= segment.size()){
+                onError(VariantSignatureSegmentError::InvalidAssignment, segment);
+                return false;
+            }
+
+            const AStringView defineName = TrimView(segment.substr(0u, equalPos));
+            const AStringView defineValue = TrimView(segment.substr(equalPos + 1u));
+            if(defineName.empty() || defineValue.empty()){
+                onError(VariantSignatureSegmentError::InvalidAssignment, segment);
+                return false;
+            }
+
+            if(!onAssignment(defineName, defineValue))
+                return false;
+
+            begin = segmentEnd + 1u;
+        }
+
+        return true;
+    }
+
+    template<typename MapT, typename ArenaT>
+    [[nodiscard]] static AString<ArenaT> BuildCanonicalVariantName(const MapT& combo, ArenaT& arena, Core::Alloc::ScratchArena& scratchArena){
+        if(combo.empty())
+            return AString<ArenaT>(ShaderBinaryPayload::s_ShaderDefaultVariantText, arena);
+
+        if(combo.size() == 1u){
+            const auto& [defineName, defineValue] = *combo.begin();
+            AString<ArenaT> variantName{arena};
+            variantName.reserve(defineName.size() + defineValue.size() + 1u);
+            variantName += defineName;
+            variantName += '=';
+            variantName += defineValue;
+            return variantName;
+        }
+
+        const auto entries = SortedDefineEntries(combo, scratchArena);
+        usize variantNameSize = entries.size() - 1u;
+        for(const auto& entry : entries)
+            variantNameSize += entry.key->size() + entry.value->size() + 1u;
+
+        AString<ArenaT> variantName{arena};
+        variantName.reserve(variantNameSize);
+        b8 first = true;
+        for(const auto& entry : entries){
+            if(!first)
+                variantName += ';';
+            first = false;
+
+            variantName += *entry.key;
+            variantName += '=';
+            variantName += *entry.value;
+        }
+
+        return variantName;
+    }
+
+    [[nodiscard]] static Expected<ShaderBinaryPayload::DependencyChecksum> ComputeDependencyChecksum(
+        Span<const Path> dependencies,
+        Span<const Path> includeDirectories,
+        InitializerList<DependencyRootAlias> dependencyRootAliases,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+    [[nodiscard]] static u64 ComputeSourceChecksum(const ShaderEntry& entry, AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
+
 
 private:
     template<typename MapT>
-    using ScratchDefineEntryVector = Vector<DefineEntryPtr<MapT>, Core::Alloc::ScratchArena>;
+    [[nodiscard]] static ScratchDefineEntryVector<MapT> SortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena& scratchArena){
+        using EntryPtr = DefineEntryPtr<MapT>;
+        ScratchDefineEntryVector<MapT> entries{scratchArena};
+        entries.reserve(map.size());
+        for(const auto& [name, value] : map)
+            entries.push_back(EntryPtr{ MakeNotNull(&name), MakeNotNull(&value) });
+        Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs)noexcept(noexcept(*lhs.key < *rhs.key)){ return *lhs.key < *rhs.key; });
+        return entries;
+    }
 
 
 public:
@@ -194,28 +262,12 @@ public:
     [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Alloc::ScratchArena& scratchArena);
 
-    [[nodiscard]] b8 validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena);
-
-    void mergeInheritedDefines(ShaderEntry& inOutEntry, Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena);
+    void mergeInheritedDefines(Span<const Path> dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata, Core::Alloc::ScratchArena& scratchArena, ShaderEntry& inOutEntry);
 
     [[nodiscard]] b8 expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, Core::Alloc::ScratchArena& scratchArena, CookVector<DefineCombo>& outCombinations);
 
-    [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena);
-
-    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(Span<const Path> dependencies, Span<const Path> includeDirectories, InitializerList<DependencyRootAlias> dependencyRootAliases, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] u64 computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64 compilerFingerprint, Core::Alloc::ScratchArena& scratchArena);
-
-
-private:
-    template<typename MapT>
-    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena& scratchArena){
-        using EntryPtr = DefineEntryPtr<MapT>;
-        ScratchDefineEntryVector<MapT> entries{scratchArena};
-        entries.reserve(map.size());
-        for(const auto& [name, value] : map)
-            entries.push_back(EntryPtr{ MakeNotNull(&name), MakeNotNull(&value) });
-        Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs)noexcept(noexcept(*lhs.key < *rhs.key)){ return *lhs.key < *rhs.key; });
-        return entries;
+    [[nodiscard]] CookString buildVariantName(const DefineCombo& combo, Core::Alloc::ScratchArena& scratchArena){
+        return BuildCanonicalVariantName(combo, m_memoryArena, scratchArena);
     }
 
 

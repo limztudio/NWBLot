@@ -23,7 +23,6 @@ namespace Tests{
 
 
 #if defined(NWB_FINAL)
-constexpr u32 s_ExpectedDualCount = 2u;
 #endif
 
 
@@ -50,8 +49,6 @@ static constexpr AStringView s_Materials = "materials";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -78,7 +75,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
         return MakeUnexpected(bindRootResult.error());
     Path bindRoot = Move(*bindRootResult);
     Expected<NWB::Impl::Material> built = MakeUnexpected(Failure{});
-    auto bindEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, bindRoot, scratchArena);
+    auto bindEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(bindText, bindRoot, testArena, scratchArena);
     if(bindEntryResult){
         NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
         bindEntry.virtualPath = s_ProjectMaterialInterfacesTestSurface;
@@ -99,7 +96,7 @@ static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(const AStringV
 }
 
 #if defined(NWB_FINAL)
-static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec, const NWB::Impl::Material& material){
+static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(const NWB::Impl::Material& material, TestArena& testArena, NWB::Impl::MaterialAssetCodec& codec){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     const b8 serialized = codec.serialize(material, binary);
     EXPECT_TRUE(serialized);
@@ -107,7 +104,7 @@ static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCode
     if(!serialized || binary.empty())
         return MakeUnexpected(Failure{});
 
-    auto deserialized = codec.deserialize(testArena.arena, material.virtualPath(), binary);
+    auto deserialized = codec.deserialize(material.virtualPath(), binary, testArena.arena);
     EXPECT_TRUE(deserialized);
     return deserialized;
 }
@@ -139,7 +136,7 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
 
     EXPECT_FALSE(BuildMaterialFromBindAndMeta(AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_RefractiveMaterialMeta, "material_cook_missing_avboit_refractive", testArena, scratchArena));
 
-    EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
+    EXPECT_EQ(logger.errorCount(), 2u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("AVBOIT pixel shaders must be present if and only if it is transparent")));
 #endif
 }
@@ -320,7 +317,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("AVBOIT pixel shaders must be present if and only if the material is transparent")));
 
         SetGeneratedMaterialAvboitPixelShaders(material);
-        ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material));
+        ASSERT_TRUE(RoundTripMaterialAssetCodec(material, testArena, codec));
         EXPECT_EQ(logger.errorCount(), 1u);
     }
 
@@ -338,26 +335,26 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         const usize blockByteCountOffset = typedLayoutOffsets->blockByteCountOffset;
 
         NWB::Core::Assets::AssetBytes retiredFixtureLayoutBinary = binary;
-        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(retiredFixtureLayoutBinary, 0u, u32{ 0x4D544C39u }));
-        AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), retiredFixtureLayoutBinary);
+        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, u32{ 0x4D544C39u }, retiredFixtureLayoutBinary));
+        AssetsGraphicsFixture::CheckCodecRejectsBinary(codec, material.virtualPath(), retiredFixtureLayoutBinary, testArena);
 
         NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
         const u64 invalidLayoutHash = material.typedLayoutHash() == Limit<u64>::s_Max ? material.typedLayoutHash() - 1u : material.typedLayoutHash() + 1u;
-        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
-        AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), hashMismatchBinary);
+        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(layoutHashOffset, invalidLayoutHash, hashMismatchBinary));
+        AssetsGraphicsFixture::CheckCodecRejectsBinary(codec, material.virtualPath(), hashMismatchBinary, testArena);
 
         NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
         EXPECT_FALSE(material.typedBlockBytes().empty());
-        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(byteSizeMismatchBinary, blockByteCountOffset, static_cast<u32>(material.typedBlockBytes().size() - 1u)));
-        AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), byteSizeMismatchBinary);
+        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(blockByteCountOffset, static_cast<u32>(material.typedBlockBytes().size() - 1u), byteSizeMismatchBinary));
+        AssetsGraphicsFixture::CheckCodecRejectsBinary(codec, material.virtualPath(), byteSizeMismatchBinary, testArena);
 
         constexpr usize s_AvboitPixelShaderBinaryBytes = sizeof(u32) + sizeof(NameHash);
         ASSERT_GE(binary.size(), s_AvboitPixelShaderBinaryBytes * 3u);
-        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * s_ExpectedDualCount;
+        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * 2u;
         NWB::Core::Assets::AssetBytes missingOccupancyBinary = binary;
-        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(missingOccupancyBinary, occupancyPresenceOffset, static_cast<u32>(0u)));
+        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(occupancyPresenceOffset, static_cast<u32>(0u), missingOccupancyBinary));
         missingOccupancyBinary.erase(missingOccupancyBinary.begin() + occupancyPresenceOffset + sizeof(u32), missingOccupancyBinary.begin() + occupancyPresenceOffset + s_AvboitPixelShaderBinaryBytes);
-        AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), missingOccupancyBinary);
+        AssetsGraphicsFixture::CheckCodecRejectsBinary(codec, material.virtualPath(), missingOccupancyBinary, testArena);
 
         EXPECT_EQ(logger.errorCount(), 4u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch")));
@@ -400,20 +397,20 @@ TEST(AssetsGraphics, MaterialFailedReloadPreservesTypedLayoutStagesFlagsAndAvboi
         NWB::Core::Assets::AssetBytes malformed(binary);
         switch(invalidCase){
         case 0u:
-            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, 0u, u32{ 0u }));
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, u32{ 0u }, malformed));
             break;
         case 1u:
-            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, layoutOffsets->layoutHashOffset, u64{ 0u }));
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(layoutOffsets->layoutHashOffset, u64{ 0u }, malformed));
             break;
         case 2u:
-            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, binary.size() - sizeof(NameHash) - sizeof(u32), u32{ 2u }));
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(binary.size() - sizeof(NameHash) - sizeof(u32), u32{ 2u }, malformed));
             break;
         case 3u:
             malformed.push_back(0u);
             break;
         case 4u:
             // A vertex stage is a real shader stage, but materials only hold mesh and pixel.
-            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(malformed, firstStageOffset, NWB::Core::ShaderType::VertexStage));
+            ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(firstStageOffset, NWB::Core::ShaderType::VertexStage, malformed));
             break;
         }
         EXPECT_FALSE(material.loadBinary(malformed)) << invalidCase;

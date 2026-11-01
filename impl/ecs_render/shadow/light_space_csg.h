@@ -8,7 +8,7 @@
 #include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
-#include <impl/ecs_render/raytrace/instance_material.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/assets/graphics/shadow/csg_shadow_constants.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -66,8 +66,17 @@ public:
 [[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(const LightSpaceCsgState& state, Span<const NwbRtInstanceMaterialGpu> materials, Span<const InstanceGpuData> instances, Span<const u8> materialBytes, Span<const Core::TextureHandle> textures)noexcept;
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, b8 hardware);
-void AppendLightSpaceCsgReceiver(LightSpaceCsgState& state, Core::ECS::EntityID entity, b8 transparent, const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject, SIMDVectorSingle localMin, SIMDVectorSingle localMax, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh);
-[[nodiscard]] b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena);
+void AppendLightSpaceCsgReceiver(
+    LightSpaceCsgState& state,
+    Core::ECS::EntityID entity,
+    b8 transparent,
+    const SIMDMatrix& objectToWorld,
+    const SIMDMatrix& worldToObject,
+    SIMDVectorSingle localMin,
+    SIMDVectorSingle localMax,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+);
+[[nodiscard]] b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgState& state, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

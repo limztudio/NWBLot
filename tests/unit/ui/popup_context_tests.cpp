@@ -43,11 +43,10 @@ struct PopupStack{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiPopupContextTests : public testing::Test{
+class UiPopupContextTests : public UiTestSupport::ContextTestFixture{
 public:
     UiPopupContextTests()
-        : m_arena(Name("tests/ui/popup_context"))
-        , m_context(m_arena)
+        : ContextTestFixture(Name("tests/ui/popup_context"))
     {}
 
 
@@ -141,11 +140,6 @@ protected:
         return frame;
     }
 
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
-        return m_context.input().process();
-    }
-
     [[nodiscard]] Expected<PopupStack> prepareStack(const u64 generation){
         PopupStack stack;
         EXPECT_TRUE(begin(generation));
@@ -193,11 +187,6 @@ protected:
         return stack;
     }
 
-    void click(const Point& position){
-        EXPECT_TRUE(send({ .position = position , .type = InputEventType::PrimaryDown }).pointerConsumed);
-        EXPECT_TRUE(send({ .position = position , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    }
-
     [[nodiscard]] Expected<PopupFrame> focusBase(){
         const auto frameResult = prepare(1u);
         EXPECT_TRUE(frameResult);
@@ -215,11 +204,6 @@ protected:
             return MakeUnexpected(Failure{});
         return frame;
     }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    Context m_context;
 };
 
 
@@ -337,7 +321,7 @@ TEST_F(UiPopupContextTests, RootRetirementRemovesAcceptedAndPendingPopupOwnershi
     ASSERT_TRUE(pendingResult);
     const PopupFrame pending = *pendingResult;
     EXPECT_EQ(pending.popup.id, original.popup.id);
-    m_context.retainRoots(nullptr, 0u);
+    m_context.retainRoots({});
     EXPECT_TRUE(m_context.states().entries().empty());
     EXPECT_FALSE(m_context.input().hasPopup());
     EXPECT_FALSE(m_context.input().focus().valid());
@@ -517,7 +501,7 @@ TEST_F(UiPopupContextTests, CapacityRejectsNinthScopeBeforePublishingAnyCandidat
     ASSERT_TRUE(acceptedResult);
     const PopupFrame accepted = *acceptedResult;
     ASSERT_TRUE(begin(2u));
-    const AStringView keys[]{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
+    const Array<AStringView, 8> keys{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
     for(usize index = 0u; index < s_InputMaxPopups; ++index){
         const auto ownerResult = declare(keys[index], WidgetKind::Popup);
         ASSERT_TRUE(ownerResult);

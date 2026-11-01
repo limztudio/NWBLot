@@ -53,8 +53,7 @@ using float3 = ShaderFloat3;
 
 // Sum lanes in scalar left-to-right order.
 [[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
-    const SIMDVectorDouble partial = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.x), VectorDoubleReplicate(b.x), VectorDoubleMultiply(VectorDoubleReplicate(a.y), VectorDoubleReplicate(b.y)));
-    return VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(a.z), VectorDoubleReplicate(b.z), partial));
+    return (a.x * b.x + a.y * b.y) + a.z * b.z;
 }
 
 [[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
@@ -63,8 +62,7 @@ using float3 = ShaderFloat3;
 }
 
 [[nodiscard]] f32 saturate(const f32 a)noexcept{
-    const SIMDVectorSingle value = VectorReplicate(a);
-    return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), value), VectorGreater(value, VectorZero())));
+    return a > 0.0f ? Min(1.0f, a) : 0.0f;
 }
 
 [[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
@@ -111,7 +109,7 @@ TEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding){
     const float3 actual = nwbHdr10EncodeSceneWithUi(float3(0.), float3(0.5), 0.5f);
     ExpectColorNear(actual, nwbHdr10PqEncodeNits(float3(101.5)));
     const float3 encodedBlend = nwbHdr10EncodeUiLinear(float3(1.)) * 0.5;
-    EXPECT_GT(VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(actual.x), VectorDoubleReplicate(encodedBlend.x))), 0.1);
+    EXPECT_GT(actual.x - encodedBlend.x, 0.1);
 }
 
 TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound){

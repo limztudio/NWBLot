@@ -101,13 +101,11 @@ b8 UiEditSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.label("read_only_hint", m_readOnly ? "F5: primary read-only" : "F5: primary editable", label) || !ui.label("visibility_hint", "F6: hide primary / F7: reset", label) || !ui.endPanel())
         return false;
     observeState(context.text);
-    PaintSingleSmokeValueMarkers(context, values(), m_sequence);
+    PaintSingleSmokeValueMarkers(values(), m_sequence, context);
     return true;
 }
 
-b8 UiEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiEditSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
         return false;
     if(action == Core::InputAction::Press){

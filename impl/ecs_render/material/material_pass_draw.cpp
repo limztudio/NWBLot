@@ -46,12 +46,9 @@ static MeshFrameHeapSlots ResolveMeshFrameHeapSlots(const MaterialPassDrawContex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
-    return mesh.valid() && frameBindings.bindingValid();
-}
-
-b8 RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
-    return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
+void RendererMaterialSystem::invalidateResources(){
+    releaseMaterialResourceReferences();
+    m_materialState.invalidateResources();
 }
 
 b8 RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
@@ -82,29 +79,6 @@ b8 RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Span<cons
     return true;
 }
 
-u32 RendererMaterialSystem::meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, const MaterialPipelinePass::Enum pass, const b8 twoSided, const b8 meshletConeCullScaleSafe)const noexcept{
-    u32 flags = 0u;
-    const b8 meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
-    const b8 meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
-    // Runtime mesh providers own dynamic culling policy; the renderer only consumes the published freshness flags.
-    if(meshletBoundsFresh)
-        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
-    if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
-        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
-    if(!mesh.runtimeMesh)
-        flags |= ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
-    return flags;
-}
-
-u32 RendererMaterialSystem::materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const noexcept{
-    u32 flags = meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided, drawItem.meshletConeCullScaleSafe);
-    if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
-        flags &= ~ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
-    // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word.
-    flags = (flags & NWB_MESH_DISPATCH_FLAG_MASK) | ((drawItem.shadingModelId & NWB_MESH_DISPATCH_SHADING_MODEL_MASK) << NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT);
-    return flags;
-}
-
 void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh){
     if(!context.materialGeometryStatesGraphOwned){
         ForEachMaterialPassMeshSourceBuffer(mesh, [&](const Core::BufferHandle& buffer){
@@ -120,8 +94,17 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(const MaterialPas
 }
 
 b8 RendererMaterialSystem::setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh){
-    const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
-    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
+    const u32 dispatchFlags = ResolveMaterialPassDrawDispatchFlags(
+        mesh.runtimeMesh,
+        mesh.dynamicMeshletBoundsFresh,
+        mesh.dynamicMeshletConesFresh,
+        context.pass,
+        drawItem.pipelineKey.twoSided,
+        drawItem.meshletConeCullScaleSafe,
+        drawItem.pipelineKey.csgMode,
+        drawItem.shadingModelId
+    );
+    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey.csgMode, context.pass);
     u32 csgContextHeapSlot = 0u;
     if(csgBindingUse.clip){
         if(!context.csgResources)
@@ -167,17 +150,31 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(const MaterialP
 
     MeshFrameHeapSlots frameHeapSlots = __hidden_material_pass_draw::ResolveMeshFrameHeapSlots(context);
     frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
-    ShaderDrivenPushConstants pushConstants = ECSRenderDetail::BuildShaderDrivenPushConstants(
+    const b8 hasViewport = !context.viewportState.viewports.empty();
+    const Core::Viewport viewport = hasViewport ? context.viewportState.viewports[0] : Core::Viewport{};
+    const Core::Rect scissorRect = hasViewport ? (!context.viewportState.scissorRects.empty() ? context.viewportState.scissorRects[0] : Core::Rect::FromViewport(viewport)) : Core::Rect{};
+    ShaderDrivenPushConstants pushConstants = ResolveShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
-        context.viewportState,
+        hasViewport,
+        Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY),
+        Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY)),
         frameHeapSlots,
-        materialPassDrawDispatchFlags(context, drawItem, mesh)
+        ResolveMaterialPassDrawDispatchFlags(
+            mesh.runtimeMesh,
+            mesh.dynamicMeshletBoundsFresh,
+            mesh.dynamicMeshletConesFresh,
+            context.pass,
+            drawItem.pipelineKey.twoSided,
+            drawItem.meshletConeCullScaleSafe,
+            drawItem.pipelineKey.csgMode,
+            drawItem.shadingModelId
+        )
     );
     if(context.conservativeGeometryScissor){
         NWB_ASSERT(pipelineResources.sharedGeometryComputeProgram);
-        pushConstants.dispatchFlags &= ~ECSRenderDetail::s_MeshDispatchFlagScissorCull;
+        pushConstants.dispatchFlags &= ~s_MeshDispatchFlagScissorCull;
     }
     if(pipelineResources.indexedGeometryOutput){
         NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
@@ -315,7 +312,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(const MaterialPa
         // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
 
-        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), ECSRenderDetail::s_GeneratedGeometryRasterState);
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
 }

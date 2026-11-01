@@ -8,7 +8,7 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/assets_graphics/mesh/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -75,21 +75,21 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
         return false;
 
     if(!m_materialState.m_emulationVertexShader){
-        if(!m_shaderSystem.loadShader<VertexShader>(m_materialState.m_emulationVertexShader, &MeshSubsystem::emulationVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS"))
+        if(!m_shaderSystem.loadShader<VertexShader>(&MeshSubsystem::emulationVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_MeshEmulationVS", m_materialState.m_emulationVertexShader))
             return false;
     }
 
     if(!m_materialState.m_emulationInputLayout){
-        Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION], Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION], Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION], Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION], Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1");
+        Array<Core::VertexAttributeDesc, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT> attributes{};
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_POSITION_BYTE_OFFSET, "POSITION", attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET, "NORMAL", attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_TANGENT_BYTE_OFFSET, "TANGENT", attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RG32_FLOAT, NWB_MESH_EMULATION_VERTEX_UV0_BYTE_OFFSET, "TEXCOORD", attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA16_FLOAT, NWB_MESH_EMULATION_VERTEX_COLOR_BYTE_OFFSET, "COLOR", attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION]);
+        ECSRenderDetail::SetEmulatedVertexAttribute(Core::Format::RGBA32_FLOAT, NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_BYTE_OFFSET, "POSITION1", attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION]);
 
         auto& device = m_graphics.getDevice();
-        auto emulationInputLayoutResult = device.createInputLayout(attributes, NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
+        auto emulationInputLayoutResult = device.createInputLayout(attributes.data(), NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT, m_materialState.m_emulationVertexShader.get());
         if(emulationInputLayoutResult)
             m_materialState.m_emulationInputLayout = Move(*emulationInputLayoutResult);
         else
@@ -101,18 +101,6 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
     }
 
     return true;
-}
-
-b8 RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
-    return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
-}
-
-b8 RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
-    return prepareMaterialPassResourceBindingsImpl(drawItems, false);
-}
-
-b8 RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Span<const MaterialPassDrawItem> drawItems)noexcept{
-    return prepareMaterialPassResourceBindingsImpl(drawItems, true);
 }
 
 b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
@@ -135,7 +123,7 @@ b8 RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCou
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(ECSRenderDetail::s_InstanceBufferName)
+        .setDebugName(s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
@@ -175,7 +163,7 @@ b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCo
         .setByteSize(static_cast<u64>(capacity))
         .setStructStride(sizeof(u32))
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(ECSRenderDetail::s_MaterialTypedBufferName)
+        .setDebugName(s_MaterialTypedBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);

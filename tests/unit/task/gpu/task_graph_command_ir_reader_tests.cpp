@@ -21,12 +21,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_task_graph_command_ir_reader_tests{
 
 
@@ -39,27 +33,26 @@ using TaskGraphTestUtils::TestArena;
 
 TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsReportEndWithoutProducingARecord){
     TestArena testArena;
-    Graphics::GpuCommandIrCapture emptyCapture(testArena.arena);
-    Graphics::GpuCommandIrStreamReader emptyReader(emptyCapture.commandBytes());
+    Core::GpuCommandIrCapture emptyCapture(testArena.arena);
+    Core::GpuCommandIrStreamReader emptyReader(emptyCapture.commandBytes());
 
     const auto terminal1 = emptyReader.nextBuiltinTask();
     ASSERT_FALSE(terminal1);
-    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_EQ(terminal1.error(), Core::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(emptyReader.validation().valid());
 
-
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Core::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
-    Graphics::GpuCommandIrStreamReader reader(capture.commandBytes());
+    Core::GpuCommandIrStreamReader reader(capture.commandBytes());
     for(u32 recordIndex = 0u; recordIndex < 4u; ++recordIndex)
         ASSERT_TRUE(reader.nextBuiltinTask());
 
     const auto terminal2 = reader.nextBuiltinTask();
     ASSERT_FALSE(terminal2);
-    EXPECT_EQ(terminal2.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_EQ(terminal2.error(), Core::GpuCommandIrStreamReadStatus::End);
     const auto terminal3 = reader.nextBuiltinTask();
     ASSERT_FALSE(terminal3);
-    EXPECT_EQ(terminal3.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_EQ(terminal3.error(), Core::GpuCommandIrStreamReadStatus::End);
 
     EXPECT_TRUE(reader.validation().complete);
     EXPECT_TRUE(reader.validation().valid());
@@ -69,26 +62,26 @@ TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsReportEndWithoutProducing
 
 TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
     TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Core::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
     const BinaryByteView validBytes = capture.commandBytes();
 
-    const Graphics::GpuCommandIrStreamValidationResult nullData = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ nullptr, 1u });
-    EXPECT_EQ(nullData.error, Graphics::GpuCommandIrStreamValidationError::NullData);
+    const Core::GpuCommandIrStreamValidationResult nullData = Core::ValidateGpuCommandIrStream(BinaryByteView{ nullptr, 1u });
+    EXPECT_EQ(nullData.error, Core::GpuCommandIrStreamValidationError::NullData);
     EXPECT_TRUE(nullData.complete);
     EXPECT_FALSE(nullData.valid());
     EXPECT_EQ(nullData.recordIndex, Limit<u64>::s_Max);
 
-    const Graphics::GpuCommandIrStreamValidationResult truncatedHeader = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ validBytes.data(), sizeof(Graphics::GpuCommandIrStreamHeader) - 1u });
-    EXPECT_EQ(truncatedHeader.error, Graphics::GpuCommandIrStreamValidationError::TruncatedStreamHeader);
+    const Core::GpuCommandIrStreamValidationResult truncatedHeader = Core::ValidateGpuCommandIrStream(BinaryByteView{ validBytes.data(), sizeof(Core::GpuCommandIrStreamHeader) - 1u });
+    EXPECT_EQ(truncatedHeader.error, Core::GpuCommandIrStreamValidationError::TruncatedStreamHeader);
     EXPECT_TRUE(truncatedHeader.complete);
     EXPECT_FALSE(truncatedHeader.valid());
 
-    const auto expectHeaderError = [&testArena, validBytes](const auto& mutate, const Graphics::GpuCommandIrStreamValidationError::Enum expectedError){
-        Graphics::GraphicsBytes corruptedBytes(testArena.arena);
-        CopyCommandIrBytes(corruptedBytes, validBytes);
+    const auto expectHeaderError = [&testArena, validBytes](const auto& mutate, const Core::GpuCommandIrStreamValidationError::Enum expectedError){
+        Core::GraphicsBytes corruptedBytes(testArena.arena);
+        CopyCommandIrBytes(validBytes, corruptedBytes);
         mutate(corruptedBytes);
-        const Graphics::GpuCommandIrStreamValidationResult result = Graphics::ValidateGpuCommandIrStream(BinaryByteView{ corruptedBytes.data(), corruptedBytes.size() });
+        const Core::GpuCommandIrStreamValidationResult result = Core::ValidateGpuCommandIrStream(BinaryByteView{ corruptedBytes.data(), corruptedBytes.size() });
         EXPECT_EQ(result.error, expectedError);
         EXPECT_TRUE(result.complete);
         EXPECT_TRUE(result.failed());
@@ -97,70 +90,68 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
         EXPECT_EQ(result.recordIndex, Limit<u64>::s_Max);
     };
 
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, magic), 0u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, magic), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidMagic
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, magic), 0u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, magic), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidMagic
     );
-    for(u16 version = 0u; version < Graphics::s_GpuCommandIrStreamVersion; ++version){
-        expectHeaderError([version](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), version))){
-            WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), version);
-        }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+    for(u16 version = 0u; version < Core::s_GpuCommandIrStreamVersion; ++version){
+        expectHeaderError([version](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), version, bytes))){
+            WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), version, bytes);
+        }, Core::GpuCommandIrStreamValidationError::UnsupportedVersion
         );
     }
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion + 1u)))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion + 1u));
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), static_cast<u16>(Core::s_GpuCommandIrStreamVersion + 1u), bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), static_cast<u16>(Core::s_GpuCommandIrStreamVersion + 1u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::UnsupportedVersion
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max, bytes);
+    }, Core::GpuCommandIrStreamValidationError::UnsupportedVersion
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u)))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidHeaderReserved
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u), bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidHeaderReserved
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size())))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size()));
-    }, Graphics::GpuCommandIrStreamValidationError::PayloadSizeMismatch
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size()), bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size()), bytes);
+    }, Core::GpuCommandIrStreamValidationError::PayloadSizeMismatch
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, graphGeneration), 0u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, graphGeneration), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, graphGeneration), 0u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, graphGeneration), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidGraphGeneration
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, planGeneration), 0u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, planGeneration), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidPlanGeneration
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, planGeneration), 0u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, planGeneration), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidPlanGeneration
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 0u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidGraphGeneration
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 0u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidGraphGeneration
     );
-    expectHeaderError([](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 64u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 64u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordCount
+    expectHeaderError([](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 64u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 64u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecordCount
     );
 }
 
 TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutProducingPartialValues){
     TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Core::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
     const BinaryByteView validBytes = capture.commandBytes();
 
-    const auto expectRecordError = [&testArena, validBytes](const usize validPrefixCount, const usize expectedByteOffset, const auto& mutate, const Graphics::GpuCommandIrStreamValidationError::Enum expectedError){
-        Graphics::GraphicsBytes corruptedBytes(testArena.arena);
-        CopyCommandIrBytes(corruptedBytes, validBytes);
+    const auto expectRecordError = [&testArena, validBytes](const usize validPrefixCount, const usize expectedByteOffset, const auto& mutate, const Core::GpuCommandIrStreamValidationError::Enum expectedError){
+        Core::GraphicsBytes corruptedBytes(testArena.arena);
+        CopyCommandIrBytes(validBytes, corruptedBytes);
         mutate(corruptedBytes);
 
-        Graphics::GpuCommandIrStreamReader reader(BinaryByteView{ corruptedBytes.data(), corruptedBytes.size() });
+        Core::GpuCommandIrStreamReader reader(BinaryByteView{ corruptedBytes.data(), corruptedBytes.size() });
         for(usize recordIndex = 0u; recordIndex < validPrefixCount; ++recordIndex)
             ASSERT_TRUE(reader.nextBuiltinTask());
 
-
         const auto terminal4 = reader.nextBuiltinTask();
         ASSERT_FALSE(terminal4);
-        EXPECT_EQ(terminal4.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
-
+        EXPECT_EQ(terminal4.error(), Core::GpuCommandIrStreamReadStatus::Error);
 
         EXPECT_EQ(reader.validation().error, expectedError);
         EXPECT_TRUE(reader.validation().complete);
@@ -169,90 +160,98 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutProducingPartialVal
         EXPECT_EQ(reader.validation().recordIndex, validPrefixCount);
         const auto terminal5 = reader.nextBuiltinTask();
         ASSERT_FALSE(terminal5);
-        EXPECT_EQ(terminal5.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
+        EXPECT_EQ(terminal5.error(), Core::GpuCommandIrStreamReadStatus::Error);
     };
 
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), static_cast<u16>(3u)))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), static_cast<u16>(3u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, byteSize), static_cast<u16>(3u), bytes))){
+        WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, byteSize), static_cast<u16>(3u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecordSize
     );
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), Limit<u16>::s_Max))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, byteSize), Limit<u16>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordSize
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, byteSize), Limit<u16>::s_Max, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, byteSize), Limit<u16>::s_Max, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecordSize
     );
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::SetGraphicsState))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::SetGraphicsState);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, opcode), Core::GpuCommandIrWireOpcode::SetGraphicsState, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, opcode), Core::GpuCommandIrWireOpcode::SetGraphicsState, bytes);
+    }, Core::GpuCommandIrStreamValidationError::UnsupportedOpcode
     );
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::Count))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrHeader, opcode), Graphics::GpuCommandIrWireOpcode::Count);
-    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, opcode), Core::GpuCommandIrWireOpcode::Count, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrHeader, opcode), Core::GpuCommandIrWireOpcode::Count, bytes);
+    }, Core::GpuCommandIrStreamValidationError::UnsupportedOpcode
     );
-    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, dataSizeBytes), 0u))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, dataSizeBytes), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, dataSizeBytes), 0u, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, dataSizeBytes), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, sourceResourceIndex), Limit<u32>::s_Max))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, sourceResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, sourceResourceIndex), Limit<u32>::s_Max, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, sourceResourceIndex), Limit<u32>::s_Max, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Graphics::GraphicsBytes& bytes)noexcept(
-        noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, context) + offsetof(Graphics::GpuCommandIrRecordContext, queueDeviceGeneration), static_cast<u16>(0u)))
+    expectRecordError(0u, s_CommandIrCopyBufferOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, context) + offsetof(Core::GpuCommandIrRecordContext, queueDeviceGeneration), static_cast<u16>(0u), bytes))
     ){
-        WriteCommandIrPod(bytes, s_CommandIrCopyBufferOffset + offsetof(Graphics::GpuCommandIrCopyBufferRecord, context) + offsetof(Graphics::GpuCommandIrRecordContext, queueDeviceGeneration), static_cast<u16>(0u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+        WriteCommandIrPod(s_CommandIrCopyBufferOffset + offsetof(Core::GpuCommandIrCopyBufferRecord, context) + offsetof(Core::GpuCommandIrRecordContext, queueDeviceGeneration), static_cast<u16>(0u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrCopyTextureRecord, destinationResourceIndex), Limit<u32>::s_Max))){
-        WriteCommandIrPod(bytes, s_CommandIrCopyTextureOffset + offsetof(Graphics::GpuCommandIrCopyTextureRecord, destinationResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrCopyTextureRecord, destinationResourceIndex), Limit<u32>::s_Max, bytes))){
+        WriteCommandIrPod(s_CommandIrCopyTextureOffset + offsetof(Core::GpuCommandIrCopyTextureRecord, destinationResourceIndex), Limit<u32>::s_Max, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(s_ExpectedDualCount, s_CommandIrClearBufferOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrClearBufferOffset + offsetof(Graphics::GpuCommandIrClearBufferRecord, destinationResourceIndex), Limit<u32>::s_Max))){
-        WriteCommandIrPod(bytes, s_CommandIrClearBufferOffset + offsetof(Graphics::GpuCommandIrClearBufferRecord, destinationResourceIndex), Limit<u32>::s_Max);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
-    );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(
-        noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Graphics::GpuCommandIrTextureSubresourceSet, numMipLevels), 0u))
+    expectRecordError(2u, s_CommandIrClearBufferOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearBufferOffset + offsetof(Core::GpuCommandIrClearBufferRecord, destinationResourceIndex), Limit<u32>::s_Max, bytes))
     ){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Graphics::GpuCommandIrTextureSubresourceSet, numMipLevels), 0u);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+        WriteCommandIrPod(s_CommandIrClearBufferOffset + offsetof(Core::GpuCommandIrClearBufferRecord, destinationResourceIndex), Limit<u32>::s_Max, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::Count)))){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::Count));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
-    );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), static_cast<Graphics::GpuCommandIrClearTextureFlag::Mask>(4u)))){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), static_cast<Graphics::GpuCommandIrClearTextureFlag::Mask>(4u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
-    );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::None))){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::None);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
-    );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(
-        noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::Float)))
-        && noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::ClearDepth))
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Core::GpuCommandIrTextureSubresourceSet, numMipLevels), 0u, bytes))
     ){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Graphics::GpuClearTextureTaskValueType::Float));
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, clearFlags), Graphics::GpuCommandIrClearTextureFlag::ClearDepth);
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, destinationSubresources) + offsetof(Core::GpuCommandIrTextureSubresourceSet, numMipLevels), 0u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, reserved), static_cast<u8>(1u)))){
-        WriteCommandIrPod(bytes, s_CommandIrClearTextureOffset + offsetof(Graphics::GpuCommandIrClearTextureRecord, reserved), static_cast<u8>(1u));
-    }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Core::GpuClearTextureTaskValueType::Count), bytes))
+    ){
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Core::GpuClearTextureTaskValueType::Count), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 3u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 3u);
-    }, Graphics::GpuCommandIrStreamValidationError::TrailingPayload
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), static_cast<Core::GpuCommandIrClearTextureFlag::Mask>(4u), bytes))
+    ){
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), static_cast<Core::GpuCommandIrClearTextureFlag::Mask>(4u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(4u, validBytes.size(), [](Graphics::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 5u))){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), 5u);
-    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), Core::GpuCommandIrClearTextureFlag::None, bytes))
+    ){
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), Core::GpuCommandIrClearTextureFlag::None, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
     );
-    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){
-        bytes.resize(s_CommandIrCopyTextureOffset + sizeof(Graphics::GpuCommandIrHeader));
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, recordCount), s_ExpectedDualCount);
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size() - sizeof(Graphics::GpuCommandIrStreamHeader)));
-    }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(
+        noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Core::GpuClearTextureTaskValueType::Float), bytes))
+        && noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), Core::GpuCommandIrClearTextureFlag::ClearDepth, bytes))
+    ){
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearTextureValueType), static_cast<u8>(Core::GpuClearTextureTaskValueType::Float), bytes);
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, clearFlags), Core::GpuCommandIrClearTextureFlag::ClearDepth, bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
+    );
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, reserved), static_cast<u8>(1u), bytes))){
+        WriteCommandIrPod(s_CommandIrClearTextureOffset + offsetof(Core::GpuCommandIrClearTextureRecord, reserved), static_cast<u8>(1u), bytes);
+    }, Core::GpuCommandIrStreamValidationError::InvalidRecord
+    );
+    expectRecordError(3u, s_CommandIrClearTextureOffset, [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 3u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 3u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::TrailingPayload
+    );
+    expectRecordError(4u, validBytes.size(), [](Core::GraphicsBytes& bytes)noexcept(noexcept(WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 5u, bytes))){
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 5u, bytes);
+    }, Core::GpuCommandIrStreamValidationError::TruncatedRecord
+    );
+    expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Core::GraphicsBytes& bytes){
+        bytes.resize(s_CommandIrCopyTextureOffset + sizeof(Core::GpuCommandIrHeader));
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, recordCount), 2u, bytes);
+        WriteCommandIrPod(offsetof(Core::GpuCommandIrStreamHeader, commandBytes), static_cast<u64>(bytes.size() - sizeof(Core::GpuCommandIrStreamHeader)), bytes);
+    }, Core::GpuCommandIrStreamValidationError::TruncatedRecord
     );
 }
 

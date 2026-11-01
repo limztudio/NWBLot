@@ -13,7 +13,6 @@
 
 #include "asset.h"
 #include "bind.h"
-#include "cook_types.h"
 
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
@@ -80,31 +79,6 @@ public:
         , avboitExtinctionPixelShaderName(arena)
         , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
-
-
-public:
-    void reset()noexcept{
-        virtualPath.clear();
-        materialInterface.clear();
-        typedLayoutHash = 0u;
-        typedLayoutBlocks.clear();
-        typedLayoutFields.clear();
-        typedBlockBytes.clear();
-        resourceReferences.clear();
-        shaderVariant.clear();
-        bxdfSource.clear();
-        surfaceSource.clear();
-        shadingModelId = 0u;
-        surfaceDispatchId = 0u;
-        stageShaders.clear();
-        avboitAccumulatePixelShaderName.clear();
-        avboitOccupancyPixelShaderName.clear();
-        avboitExtinctionPixelShaderName.clear();
-        parameters.clear();
-        transparent = false;
-        twoSided = false;
-        refractive = false;
-    }
 };
 
 
@@ -128,10 +102,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
-[[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(MaterialCookArena& arena, const MaterialBindEntry& entry, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] Expected<Path> EmitMaterialBindIncludes(MaterialCookArena& arena, const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena);
 struct MaterialBindDependency{
     MaterialCookString interfacePath;
     // Authored `.bind` files behind the generated includes. They are not compiler inputs, but their edits must recook the shader.
@@ -147,12 +117,20 @@ public:
     {}
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 ValidateMaterialCookInterfaces(Span<const MaterialBindEntry> materialBindEntries, Core::Alloc::ScratchArena& scratchArena, MaterialCookVector<MaterialCookEntry>& materialEntries);
+[[nodiscard]] Expected<MaterialCookString> BuildMaterialBindIncludeSource(const MaterialBindEntry& entry, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<Path> EmitMaterialBindIncludes(const Path& cacheDirectory, AStringView configurationSafeName, Span<const MaterialBindEntry> materialBindEntries, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
-    MaterialCookArena& arena,
     AStringView shaderName,
     const Path& materialBindIncludeRoot,
     Span<const MaterialBindEntry> materialBindEntries,
     Span<const Path> dependencies,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] Expected<Material> BuildMaterialAsset(const MaterialCookEntry& materialEntry, Core::Assets::AssetArena& arena);

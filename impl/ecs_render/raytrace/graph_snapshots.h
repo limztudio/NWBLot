@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/raytrace/types.adhd.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
 #include <impl/ecs_render/refraction/statistics_readback.h>
 

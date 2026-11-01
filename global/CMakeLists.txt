@@ -55,3 +55,4 @@ target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/unicode/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/unicode/*.ixx"
 )
+

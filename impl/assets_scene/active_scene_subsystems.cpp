@@ -23,7 +23,6 @@ namespace __hidden_active_scene_subsystems{
 
 
 inline constexpr TStringView s_ActiveSceneSubsystemsOwner = NWB_TEXT("ActiveSceneSubsystems");
-using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,10 +38,10 @@ b8 ActiveSceneSubsystems::loadProjectStartScene(Core::Assets::AssetManager& asse
     auto projectAsset = assetManager.loadTypedSync<ProjectAsset>(project.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
     if(!projectAsset)
         return false;
-    return loadScene(assetManager, (*projectAsset)->startScene());
+    return loadScene((*projectAsset)->startScene(), assetManager);
 }
 
-b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene){
+b8 ActiveSceneSubsystems::loadScene(const SceneRef& scene, Core::Assets::AssetManager& assetManager){
     auto sceneAssetResult = assetManager.loadTypedSync<SceneAsset>(scene.name(), __hidden_active_scene_subsystems::s_ActiveSceneSubsystemsOwner);
     if(!sceneAssetResult)
         return false;
@@ -57,7 +56,7 @@ b8 ActiveSceneSubsystems::loadScene(Core::Assets::AssetManager& assetManager, co
         nextSceneAssets.emplace(nickname, asset);
 
     Core::Alloc::ScratchArena scratchArena(s_ActiveSceneLoadArena);
-    __hidden_active_scene_subsystems::NameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    SceneScratchNameHashSet seenSubsystems(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     Vector<SubsystemRef, Core::Alloc::ScratchArena> pendingSubsystems(scratchArena);
     pendingSubsystems.reserve(sceneAsset.subsystems().size());
 

@@ -34,16 +34,6 @@ const Skin& MeshSkinningRuntimeCache::MeshSkinningSource::skin()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningRuntimeCache::MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager)
-    : m_arena(arena)
-    , m_graphics(graphics)
-    , m_assetManager(assetManager)
-    , m_sources(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
-    , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), arena)
-{}
-
-
 void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
     auto skinningBindingView = world.view<SkinnedMeshBindingComponent>();
     const usize rendererCandidateCount = skinningBindingView.candidateCount();
@@ -72,10 +62,7 @@ void MeshSkinningRuntimeCache::prepareResources(Core::ECS::World& world, Core::A
             continue;
         }
 
-        const MeshSkinningRuntimeInstance& instance = it.value();
-        m_handleToEntity.erase(instance.handle.value);
-        releaseSource(instance.sourceName);
-        it = m_instances.erase(it);
+        it = eraseInstance(it);
     }
 }
 
@@ -86,11 +73,18 @@ void MeshSkinningRuntimeCache::clear()noexcept{
 }
 
 MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)noexcept{
-    return findInstanceByEntity(entityForHandle(handle));
+    return const_cast<MeshSkinningRuntimeInstance*>(static_cast<const MeshSkinningRuntimeCache&>(*this).findInstance(handle));
 }
 
 const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const noexcept{
-    return findInstanceByEntity(entityForHandle(handle));
+    const auto foundEntity = m_handleToEntity.find(handle.value);
+    if(foundEntity == m_handleToEntity.end() || !foundEntity.value().valid())
+        return nullptr;
+
+    const auto foundInstance = m_instances.find(foundEntity.value());
+    if(foundInstance == m_instances.end())
+        return nullptr;
+    return &foundInstance.value();
 }
 
 Expected<RuntimeMeshHandle> MeshSkinningRuntimeCache::allocateHandle(){
@@ -111,10 +105,14 @@ void MeshSkinningRuntimeCache::releaseRuntimeMesh(const Core::ECS::EntityID enti
     if(foundInstance == m_instances.end())
         return;
 
-    const MeshSkinningRuntimeInstance& instance = foundInstance.value();
+    eraseInstance(foundInstance);
+}
+
+MeshSkinningRuntimeCache::InstanceMap::iterator MeshSkinningRuntimeCache::eraseInstance(const InstanceMap::iterator it)noexcept{
+    const MeshSkinningRuntimeInstance& instance = it.value();
     m_handleToEntity.erase(instance.handle.value);
     releaseSource(instance.sourceName);
-    m_instances.erase(foundInstance);
+    return m_instances.erase(it);
 }
 
 void MeshSkinningRuntimeCache::releaseSource(const Name& sourceName)noexcept{
@@ -133,33 +131,6 @@ void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName)noexcept
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
         m_sources.erase(foundSource);
-}
-
-Core::ECS::EntityID MeshSkinningRuntimeCache::entityForHandle(const RuntimeMeshHandle handle)const noexcept{
-    const auto foundEntity = m_handleToEntity.find(handle.value);
-    if(foundEntity == m_handleToEntity.end())
-        return Core::ECS::s_InvalidEntityId;
-    return foundEntity.value();
-}
-
-MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity)noexcept{
-    if(!entity.valid())
-        return nullptr;
-
-    const auto foundInstance = m_instances.find(entity);
-    if(foundInstance == m_instances.end())
-        return nullptr;
-    return &foundInstance.value();
-}
-
-const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstanceByEntity(const Core::ECS::EntityID entity)const noexcept{
-    if(!entity.valid())
-        return nullptr;
-
-    const auto foundInstance = m_instances.find(entity);
-    if(foundInstance == m_instances.end())
-        return nullptr;
-    return &foundInstance.value();
 }
 
 

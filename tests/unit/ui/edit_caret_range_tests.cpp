@@ -84,7 +84,7 @@ TEST_F(EditCaretFixture, BreakCapWidthIsAppliedOnlyToSelectedLfBytes){
 
 TEST_F(EditCaretFixture, InvalidRangeEndpointsAndLineIndicesRejectQueries){
     ASSERT_TRUE(adoptText("e\xcc\x81\nx"));
-    const EditBoxRange invalid[]{ { 3u, 1u }, { 0u, 6u }, { 2u, 3u }, { 1u, 2u } };
+    const Array<EditBoxRange, 4> invalid = {{ { 3u, 1u }, { 0u, 6u }, { 2u, 3u }, { 1u, 2u } }};
     for(const EditBoxRange range : invalid){
         EXPECT_FALSE(m_geometry.rangeOnLine(range, 0u, 1.0f));
     }
@@ -93,7 +93,7 @@ TEST_F(EditCaretFixture, InvalidRangeEndpointsAndLineIndicesRejectQueries){
 
 TEST_F(EditCaretFixture, InvalidBreakCapsRejectEvenCollapsedRanges){
     ASSERT_TRUE(adoptText("ab\nc"));
-    const f32 invalid[]{ -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity };
+    const Array<f32, 4> invalid = { -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity };
     for(const f32 cap : invalid){
         EXPECT_FALSE(m_geometry.rangeOnLine({ 0u, 3u }, 0u, cap));
         EXPECT_FALSE(m_geometry.rangeOnLine({ 1u, 1u }, 0u, cap));

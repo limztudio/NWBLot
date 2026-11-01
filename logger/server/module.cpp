@@ -3,11 +3,9 @@
 
 
 #include "module.h"
-#include "crash_auth.h"
 #include "crash_paths.h"
 #include "frame.h"
 
-#include <core/crash/package_names.h>
 #include <core/alloc/module.h>
 #include <core/common/name_symbols.h>
 
@@ -45,8 +43,6 @@ inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
 inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = "/namesym";
 inline constexpr AStringView s_UploadDiagnosticCategory = "logger_server_upload";
-inline constexpr int s_LocalTimeYearBase = 1900;
-inline constexpr int s_LocalTimeMonthBase = 1;
 
 inline constexpr Name s_CrashIngestArena("logger/server/crash_ingest");
 
@@ -62,7 +58,7 @@ namespace ConnectionUploadKind{
     };
 };
 
-struct ConnectionInfo{
+struct ConnectionInfo : NoCopy{
     u8* buffer = nullptr;
     usize size = 0u;
     usize capacity = 0u;
@@ -76,8 +72,6 @@ public:
     explicit ConnectionInfo(LogArena& arena)
         : crashUploadPath(arena)
     {}
-    ConnectionInfo(ConnectionInfo&&) = delete;
-    ConnectionInfo(const ConnectionInfo&) = delete;
     ~ConnectionInfo()noexcept{
         if(crashUploadOwned)
             discardCrashUpload();
@@ -85,12 +79,6 @@ public:
             CaptureDiagnosticEvent(s_UploadDiagnosticCategory, "Failed to close crash upload stream", __FILE__, __LINE__);
         Core::Alloc::CoreFree(buffer);
     }
-
-
-public:
-    ConnectionInfo& operator=(ConnectionInfo&&) = delete;
-
-    ConnectionInfo& operator=(const ConnectionInfo&) = delete;
 
 
 public:
@@ -152,7 +140,7 @@ public:
 
         const usize newCapacity = ::NextGrowingCapacity(capacity, requiredSize, s_ConnectionInitialBufferCapacity);
 
-        auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(buffer, newCapacity));
+        auto* newBuffer = static_cast<u8*>(Core::Alloc::CoreRealloc(buffer, newCapacity));
         if(!newBuffer)
             return false;
 
@@ -296,10 +284,7 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContex
     connectionContext = nullptr;
 }
 
-static void RequestCompleted(void* serverContext, MHD_Connection* connection, void** connectionContextAddress, MHD_RequestTerminationCode terminationCode)noexcept{
-    static_cast<void>(serverContext);
-    static_cast<void>(connection);
-    static_cast<void>(terminationCode);
+static void RequestCompleted([[maybe_unused]] void* serverContext, [[maybe_unused]] MHD_Connection* connection, void** connectionContextAddress, [[maybe_unused]] MHD_RequestTerminationCode terminationCode)noexcept{
     if(!connectionContextAddress)
         return;
     auto* info = static_cast<ConnectionInfo*>(*connectionContextAddress);
@@ -316,9 +301,7 @@ static void RequestCompleted(void* serverContext, MHD_Connection* connection, vo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
-    static_cast<void>(version);
-
+MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, [[maybe_unused]] const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
     if(!serverContext || !connection || !url || !method || !uploadDataSizeAddress || !connectionContextAddress)
         return MHD_NO;
 
@@ -348,7 +331,10 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
 
         const auto info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            thisPtr->enqueue(StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), __hidden_logger_server::s_ServerName), Core::Common::LogType::Fatal);
+            thisPtr->enqueue(
+                StringFormat(thisPtr->arena(), NWB_TEXT("Failed to initialize connection upload state: [{}] {} on {}"), info.error().value(), ConvertString(info.error().message()), __hidden_logger_server::s_ServerName),
+                Core::Common::LogType::Fatal
+            );
             return MHD_NO;
         }
 
@@ -436,7 +422,7 @@ void Server::CrashIngestUpdate(Server& self){
             ingestConfig.symbolication.symbolStoreDirectory = self.m_crashIngestConfig.symbolication.symbolStoreDirectory;
             ingestConfig.retention = self.m_crashIngestConfig.retention;
 
-            const Path archivePath(ingestArena, AStringView(crashUpload->path));
+            const Path archivePath(ingestArena, AStringView(crashUpload->path.data()));
             CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
             self.enqueue(Move(ingestResult.message), ingestResult.type);
         }
@@ -522,10 +508,6 @@ b8 Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase, AStrin
     m_crashIngestExit.store(false, MemoryOrder::release);
     m_crashIngestThread = Thread([this](){ CrashIngestUpdate(*this); });
     return true;
-}
-
-void Server::internalDestroy(){
-    stopCrashIngestWorker();
 }
 
 b8 Server::internalUpdate(){

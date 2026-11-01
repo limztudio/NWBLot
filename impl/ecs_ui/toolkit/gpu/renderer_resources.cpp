@@ -6,9 +6,10 @@
 
 #include <impl/assets_shader/loader.h>
 
+#include <core/common/log.h>
 #include <core/graphics/shader_archive.h>
 
-#include <global/algorithm.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,19 +27,15 @@ namespace __hidden_ui_gpu_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_InitialVertexCapacity = 4096u;
-static constexpr usize s_InitialIndexCapacity = 12288u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct TargetReadyTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics, true };
     struct Payload{
         GpuVersion<GpuTargetVersion> target;
         Core::GpuGraphResourceId color;
     };
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics, true };
 
 
 public:
@@ -51,7 +48,7 @@ public:
     const auto& target = *MakeNotNull(static_cast<GpuVersion<GpuTargetVersion>*>(rawTarget));
     const auto colorResult = graph.importTexture(
         target->m_color,
-        Core::GpuGraphResourceDesc().setIdentity(Name("ui.target_initialization")).setMarkerLabel("UI Target Initialization")
+        Core::GpuGraphResourceDesc().setIdentity(s_GpuTargetInitTextureName).setMarkerLabel("UI Target Initialization")
             .setType(Core::GpuGraphResourceType::Texture).setInitialState(Core::ResourceStates::Unknown)
             .setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
@@ -59,7 +56,7 @@ public:
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId color = *colorResult;
     const auto clearResult = graph.addClearTextureTask(
-        Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_clear")).setMarkerLabel("UI Target Initialization Clear"),
+        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitClearTaskName).setMarkerLabel("UI Target Initialization Clear"),
         Core::GpuClearTextureTaskDesc{ .destination = color, .valueType = Core::GpuClearTextureTaskValueType::Float, .floatValue = Core::Color(0.0f, 0.0f, 0.0f, 0.0f), }
     );
     if(!clearResult)
@@ -67,7 +64,7 @@ public:
     const Core::GpuTaskId clear = *clearResult;
     const Core::GpuTaskResourceUse use{ color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read };
     const auto readyResult = graph.addTask<TargetReadyTask>(
-        Core::GpuTaskDesc().setIdentity(Name("ui.target_initialization_ready")).setMarkerLabel("UI Target Ready").setDependencies(&clear, 1u).setResourceUses(&use, 1u),
+        Core::GpuTaskDesc().setIdentity(s_GpuTargetInitReadyTaskName).setMarkerLabel("UI Target Ready").setDependencies({ &clear, 1u }).setResourceUses({ &use, 1u }),
         TargetReadyTask::Payload{ target, color }
     );
     if(!readyResult)
@@ -94,10 +91,10 @@ public:
 
 template<typename TShader>
 [[nodiscard]] static b8 LoadShader(
-    GpuRendererState& state,
-    Core::ShaderHandle& shader,
     const Core::Assets::AssetRef<TShader> UiSubsystem::* const member,
-    const Name& identity
+    const Name& identity,
+    GpuRendererState& state,
+    Core::ShaderHandle& outShader
 ){
     if(!state.m_activeSceneSubsystems)
         return false;
@@ -107,7 +104,7 @@ template<typename TShader>
     const Core::Assets::AssetRef<TShader>& resolved = uiSubsystem->*member;
     if(!resolved.valid())
         return false;
-    return ShaderAssetLoader::Load<TShader>(shader, resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, state.m_graphics, state.m_assets, state.m_resolver, s_GpuRendererContext);
+    return ShaderAssetLoader::Load<TShader>(resolved.name(), Core::ShaderArchive::s_DefaultVariant, identity, s_GpuRendererContext, state.m_graphics, state.m_assets, state.m_resolver, outShader);
 }
 
 
@@ -120,12 +117,102 @@ template<typename TShader>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept{
+    if(descriptor.valid())
+        graphics.getDevice().getDescriptorHeap().free(descriptor);
+}
+
+b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
+    if(inOutDescriptor.valid())
+        return true;
+    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
+    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(!descriptorResult)
+        return false;
+    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
+    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
+        return false;
+    inOutDescriptor = descriptor;
+    descriptorGuard.release();
+    return true;
+}
+
+b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
+    if(!token.valid())
+        return true;
+    if(!token.hasPhysicalQueueIdentity())
+        return false;
+    const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+    const auto timeline = device.getQueueTimelineSnapshot(queue);
+    return timeline && timeline->valid() && timeline->queue == queue && timeline->completedValue >= token.value;
+}
+
+Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpuSampledTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses){
+    Array<char, s_DecimalTextBufferBytes> identityText{};
+    const AStringView suffix = FormatDecimal(desc.index, identityText);
+    // Graph imports unify equal identities; every immutable snapshot page needs a distinct texture and completion name.
+    const auto readyIdentity = DeriveName(desc.readyPrefix, suffix);
+    const auto textureIdentity = DeriveName(desc.texturePrefix, suffix);
+    if(!readyIdentity || !textureIdentity)
+        return MakeUnexpected(GpuSampledTextureImportError::Identity);
+    const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel(desc.readyMarkerLabel).setToken(desc.readinessToken));
+    if(!readyResult){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("GpuRenderer: {} {} upload completion import failed (queue={}, generation={}, value={})"),
+            desc.completionLabel,
+            desc.index,
+            desc.readinessToken.physicalQueueIndex,
+            desc.readinessToken.deviceGeneration,
+            desc.readinessToken.value
+        );
+        return MakeUnexpected(GpuSampledTextureImportError::Completion);
+    }
+    const Core::GpuExternalCompletionId ready = *readyResult;
+    const auto textureResult = graph.importTexture(
+        desc.texture,
+        Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel(desc.textureMarkerLabel)
+            .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
+            .setExternalFinalState(Core::ResourceStates::ShaderResource)
+    );
+    if(!textureResult)
+        return MakeUnexpected(GpuSampledTextureImportError::Texture);
+    const Core::GpuGraphResourceId texture = *textureResult;
+    uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
+    return texture;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 GpuFrameData::prefixComplete(Core::Device& device)const{
+    return GpuTokenComplete(device, m_vertexUpload) && GpuTokenComplete(device, m_indexUpload) && GpuTokenComplete(device, m_clear) && GpuTokenComplete(device, m_raster);
+}
+
+b8 GpuFrameData::complete(Core::Device& device)const{
+    return m_finalConsumer.valid() && recyclable(device);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuRendererState::MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept{
     return
         first.valid() && second.valid()
         && first.backBuffer.texture == second.backBuffer.texture && first.framebuffer == second.framebuffer
         && first.backBuffer.index == second.backBuffer.index && first.backBuffer.nativeInitialState == second.backBuffer.nativeInitialState
         && first.backBuffer.availabilityCompletion == second.backBuffer.availabilityCompletion
+    ;
+}
+
+b8 GpuRendererState::ValidSnapshotImageCount(const DrawSnapshot& snapshot)noexcept{
+    return
+        snapshot.glyphPages().size() <= s_PaintMaxImages
+        && snapshot.sdfPages().size() <= s_PaintMaxImages
+        && snapshot.textureImages().size() <= s_PaintMaxImages
+        && snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size() <= s_PaintMaxImages
     ;
 }
 
@@ -141,17 +228,17 @@ b8 GpuRendererState::createResources(){
         return false;
     GpuVersion<GpuSharedResources> resources = Move(*resourcesResult);
     if(
-        !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_vertexShader, &UiSubsystem::vs, Name("UiLayer_VS"))
-        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_pixelShader, &UiSubsystem::ps, Name("UiLayer_PS"))
-        || !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_outputVertexShader, &UiSubsystem::outputVs, Name("UiLayer_OutputVS"))
-        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_outputPixelShader, &UiSubsystem::outputPs, Name("UiLayer_OutputPS"))
+        !__hidden_ui_gpu_resources::LoadShader<VertexShader>(&UiSubsystem::vs, s_GpuVertexShaderName, *this, resources->m_vertexShader)
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(&UiSubsystem::ps, s_GpuPixelShaderName, *this, resources->m_pixelShader)
+        || !__hidden_ui_gpu_resources::LoadShader<VertexShader>(&UiSubsystem::outputVs, s_GpuOutputVertexShaderName, *this, resources->m_outputVertexShader)
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(&UiSubsystem::outputPs, s_GpuOutputPixelShaderName, *this, resources->m_outputPixelShader)
     )
         return false;
-    Core::VertexAttributeDesc attributes[NWB_UI_VERTEX_ATTRIBUTE_COUNT];
-    attributes[NWB_UI_VERTEX_POSITION_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("POSITION"));
-    attributes[NWB_UI_VERTEX_UV_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("TEXCOORD"));
-    attributes[NWB_UI_VERTEX_COLOR_LOCATION].setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(Name("COLOR"));
-    auto inputLayoutResult = device.createInputLayout(attributes, NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
+    Array<Core::VertexAttributeDesc, NWB_UI_VERTEX_ATTRIBUTE_COUNT> attributes{};
+    attributes[NWB_UI_VERTEX_POSITION_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_POSITION_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexPositionSemantic);
+    attributes[NWB_UI_VERTEX_UV_LOCATION].setFormat(Core::Format::RG32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_UV_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexTexCoordSemantic);
+    attributes[NWB_UI_VERTEX_COLOR_LOCATION].setFormat(Core::Format::RGBA32_FLOAT).setBufferIndex(NWB_UI_VERTEX_BUFFER_INDEX).setOffset(NWB_UI_VERTEX_COLOR_BYTE_OFFSET).setElementStride(sizeof(Vertex)).setName(s_GpuVertexColorSemantic);
+    auto inputLayoutResult = device.createInputLayout(attributes.data(), NWB_UI_VERTEX_ATTRIBUTE_COUNT, resources->m_vertexShader.get());
     if(inputLayoutResult)
         resources->m_inputLayout = Move(*inputLayoutResult);
     else
@@ -268,7 +355,7 @@ b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snap
         return false;
     Core::Device& device = m_graphics.getDevice();
     if(slot.vertexCapacity < vertexCount){
-        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, __hidden_ui_gpu_resources::s_InitialVertexCapacity);
+        usize capacity = NextGrowingCapacity(slot.vertexCapacity, vertexCount, s_GpuInitialVertexCapacity);
         if(capacity > Limit<usize>::s_Max / sizeof(Vertex))
             capacity = vertexCount;
         Core::BufferDesc description;
@@ -284,7 +371,7 @@ b8 GpuRendererState::prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snap
         slot.vertexCapacity = capacity;
     }
     if(slot.indexCapacity < indexCount){
-        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, __hidden_ui_gpu_resources::s_InitialIndexCapacity);
+        usize capacity = NextGrowingCapacity(slot.indexCapacity, indexCount, s_GpuInitialIndexCapacity);
         if(capacity > Limit<usize>::s_Max / sizeof(u32))
             capacity = indexCount;
         Core::BufferDesc description;

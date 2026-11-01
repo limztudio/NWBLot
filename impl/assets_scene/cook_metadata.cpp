@@ -33,45 +33,9 @@ namespace __hidden_scene_cook_metadata{
 using namespace Core::Metascript;
 using namespace SceneAssetCook;
 
-static constexpr AStringView s_StartSceneField = "start_scene";
-static constexpr AStringView s_SubsystemsField = "subsystems";
-static constexpr AStringView s_EntitiesField = "entities";
-static constexpr AStringView s_AssetsField = "assets";
-static constexpr AStringView s_ComponentsField = "components";
-
-template<typename TAsset>
-[[nodiscard]] static Expected<Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>> ParseAssetRefList(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const Value& listValue,
-    const AStringView fieldLabel,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!listValue.isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-        return MakeUnexpected(Failure{});
-    }
-    const auto& items = listValue.asList();
-    Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>> refs(arena);
-    refs.reserve(items.size());
-    for(const Value& item : items){
-        if(!item.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-            return MakeUnexpected(Failure{});
-        }
-        const AStringView text(item.asString().data(), item.asString().size());
-        const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, diagnosticPrefix, fieldLabel, text, scratchArena);
-        if(!parsedRef)
-            return MakeUnexpected(Failure{});
-        refs.push_back(*parsedRef);
-    }
-    return refs;
-}
-
 [[nodiscard]] static Expected<SceneAsset::AssetMap> ParseAssetsMap(const Path& nwbFilePath, const Value& mapValue, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!mapValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_AssetsField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a map"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneAssetsField));
         return MakeUnexpected(Failure{});
     }
 
@@ -89,12 +53,7 @@ template<typename TAsset>
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset nickname '{}' contains an embedded null"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
             return MakeUnexpected(Failure{});
         }
-        if(!assetValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entries must be strings"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(nicknameView));
-            return MakeUnexpected(Failure{});
-        }
-        const AStringView text(assetValue.asString().data(), assetValue.asString().size());
-        const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefText<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, text, scratchArena);
+        const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefValue<Core::Assets::IAsset>(nwbFilePath, s_SceneDiagnosticPrefix, nicknameView, assetValue, "entries must be strings", scratchArena);
         if(!parsedRef)
             return MakeUnexpected(Failure{});
         if(!assets.emplace(*nickname, *parsedRef).second){
@@ -121,25 +80,25 @@ Expected<EntityCookEntry> ParseEntityCookMetadata(const Name virtualPath, const 
     EntityCookEntry entry(arena);
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_EntityDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_EntityDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_EntityDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, { s_ComponentsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_EntityDiagnosticPrefix, { s_EntityComponentsField }))
         return MakeUnexpected(Failure{});
 
-    const Core::Metascript::Value* componentsValue = asset.findField(s_ComponentsField);
+    const Core::Metascript::Value* componentsValue = asset.findField(s_EntityComponentsField);
     if(!componentsValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_ComponentsField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_EntityDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_EntityComponentsField));
         return MakeUnexpected(Failure{});
     }
-    auto components = ParseAssetRefList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_ComponentsField, arena, scratchArena);
+    auto components = Core::Assets::ParseMetadataReservedAssetRefList<IComponent>(nwbFilePath, s_EntityDiagnosticPrefix, *componentsValue, s_EntityComponentsField, arena, scratchArena);
     if(!components)
         return MakeUnexpected(Failure{});
-    entry.components = Move(*components);
 
     EntityAsset candidate(arena, entry.virtualPath);
-    candidate.setComponents(EntityAsset::ComponentRefVector(entry.components));
+    candidate.setComponents(Move(*components));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
+    entry.components = candidate.takeComponents();
 
     return entry;
 }
@@ -162,15 +121,15 @@ Expected<ProjectCookEntry> ParseProjectCookMetadata(const Name virtualPath, cons
     ProjectCookEntry entry(arena);
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ProjectDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_ProjectDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ProjectDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, { s_StartSceneField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ProjectDiagnosticPrefix, { s_SceneStartSceneField }))
         return MakeUnexpected(Failure{});
 
-    const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_StartSceneField, true);
+    const auto startSceneField = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, true);
     if(!startSceneField)
         return MakeUnexpected(Failure{});
-    const auto startSceneRef = Core::Assets::ParseMetadataReservedAssetRefText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_StartSceneField, startSceneField->text, scratchArena);
+    const auto startSceneRef = Core::Assets::ParseMetadataReservedAssetRefText<SceneAsset>(nwbFilePath, s_ProjectDiagnosticPrefix, s_SceneStartSceneField, startSceneField->text, scratchArena);
     if(!startSceneRef)
         return MakeUnexpected(Failure{});
     entry.startScene = *startSceneRef;
@@ -201,30 +160,30 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
     SceneCookEntry entry(arena);
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SceneDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SceneDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SceneDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, { s_SubsystemsField, s_EntitiesField, s_AssetsField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SceneDiagnosticPrefix, { s_SceneSubsystemsField, s_SceneEntitiesField, s_SceneAssetsField }))
         return MakeUnexpected(Failure{});
 
-    const Core::Metascript::Value* subsystemsValue = asset.findField(s_SubsystemsField);
+    const Core::Metascript::Value* subsystemsValue = asset.findField(s_SceneSubsystemsField);
     if(!subsystemsValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemsField));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(s_SceneDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SceneSubsystemsField));
         return MakeUnexpected(Failure{});
     }
-    auto subsystems = ParseAssetRefList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SubsystemsField, arena, scratchArena);
+    auto subsystems = Core::Assets::ParseMetadataReservedAssetRefList<ISubsystem>(nwbFilePath, s_SceneDiagnosticPrefix, *subsystemsValue, s_SceneSubsystemsField, arena, scratchArena);
     if(!subsystems)
         return MakeUnexpected(Failure{});
     SubsystemAssetRuntime::DeduplicateSubsystemRefs(*subsystems);
     entry.subsystems = Move(*subsystems);
 
-    if(const Core::Metascript::Value* entitiesValue = asset.findField(s_EntitiesField)){
-        auto entities = ParseAssetRefList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_EntitiesField, arena, scratchArena);
+    if(const Core::Metascript::Value* entitiesValue = asset.findField(s_SceneEntitiesField)){
+        auto entities = Core::Assets::ParseMetadataReservedAssetRefList<EntityAsset>(nwbFilePath, s_SceneDiagnosticPrefix, *entitiesValue, s_SceneEntitiesField, arena, scratchArena);
         if(!entities)
             return MakeUnexpected(Failure{});
         entry.entities = Move(*entities);
     }
 
-    if(const Core::Metascript::Value* assetsValue = asset.findField(s_AssetsField)){
+    if(const Core::Metascript::Value* assetsValue = asset.findField(s_SceneAssetsField)){
         auto assets = ParseAssetsMap(nwbFilePath, *assetsValue, arena, scratchArena);
         if(!assets)
             return MakeUnexpected(Failure{});
@@ -232,9 +191,10 @@ Expected<SceneCookEntry> ParseSceneCookMetadata(const Name virtualPath, const Pa
     }
 
     SceneAsset candidate(arena, entry.virtualPath);
-    candidate.setContents(SceneAsset::SubsystemRefVector(entry.subsystems), SceneAsset::AssetMap(entry.assets), SceneAsset::EntityRefVector(entry.entities));
+    candidate.setContents(Move(entry.subsystems), Move(entry.assets), Move(entry.entities));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
+    candidate.takeContents(entry.subsystems, entry.assets, entry.entities);
 
     return entry;
 }

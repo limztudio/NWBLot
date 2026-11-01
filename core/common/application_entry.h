@@ -6,7 +6,6 @@
 
 
 #include "module.h"
-#include "arena_names.h"
 #include "name_symbols.h"
 
 #include <core/alloc/scratch.h>
@@ -46,15 +45,10 @@ inline constexpr b8 s_TerminalFailureNoThrow = true;
 
 
 // RAII detach of Name callbacks on exit; WriteDefaultFile still works after uninstall.
-class ScopedNameSymbolRegistry final{
+class ScopedNameSymbolRegistry final : NoCopy{
 public:
     ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }
     ~ScopedNameSymbolRegistry()noexcept{ NameSymbols::UninstallRuntimeRegistry(); }
-    ScopedNameSymbolRegistry(const ScopedNameSymbolRegistry&) = delete;
-
-
-public:
-    ScopedNameSymbolRegistry& operator=(const ScopedNameSymbolRegistry&) = delete;
 };
 
 template<typename Invoke>
@@ -141,7 +135,6 @@ NWB_COMMON_END
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#include <stdlib.h>
 #include <windows.h>
 #if defined(NWB_UNICODE)
 #include <shellapi.h>
@@ -162,7 +155,7 @@ namespace ApplicationEntryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class WindowsCommandLineArgs final{
+class WindowsCommandLineArgs final : NoCopy{
 public:
     WindowsCommandLineArgs()noexcept{
         m_argv = CommandLineToArgvW(GetCommandLineW(), &m_argc);
@@ -171,11 +164,6 @@ public:
         if(m_argv)
             LocalFree(m_argv);
     }
-    WindowsCommandLineArgs(const WindowsCommandLineArgs&) = delete;
-
-
-public:
-    WindowsCommandLineArgs& operator=(const WindowsCommandLineArgs&) = delete;
 
 
 public:
@@ -230,10 +218,7 @@ NWB_COMMON_END
 
 
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine, _In_ int nCmdShow){ \
-        static_cast<void>(hPrevInstance); \
-        static_cast<void>(lpCmdLine); \
-        static_cast<void>(nCmdShow); \
+    int WINAPI wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPWSTR lpCmdLine, [[maybe_unused]] _In_ int nCmdShow){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeWindowsUnicodeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::UnicodeEntryPointFn>(entryPoint), hInstance); \
     } \
     int main(int, char**)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \
@@ -241,10 +226,7 @@ NWB_COMMON_END
     }
 #else
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
-    int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow){ \
-        static_cast<void>(hPrevInstance); \
-        static_cast<void>(lpCmdLine); \
-        static_cast<void>(nCmdShow); \
+    int WINAPI WinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPSTR lpCmdLine, [[maybe_unused]] _In_ int nCmdShow){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(__argc), __argv, hInstance); \
     } \
     int main(int argc, char** argv)noexcept(::NWB::Core::Common::ApplicationEntryDetail::s_TerminalFailureNoThrow){ \

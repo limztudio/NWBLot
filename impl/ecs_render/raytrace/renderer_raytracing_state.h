@@ -6,43 +6,20 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/caustic/rt_caustic_state.h>
+#include <impl/ecs_render/gi/rt_surfel_gi_state.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
-#include <impl/ecs_render/raytrace/caustic_resolve_state.h>
-#include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
-#include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
-#include <impl/ecs_render/raytrace/software_transparent_sampling.h>
-#include <impl/ecs_render/shadow/transparent_sampling_history.adhd.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/ecs_render/refraction/rt_refraction_state.h>
+#include <impl/ecs_render/shadow/hardware_transparent_shadow_state.h>
+#include <impl/ecs_render/shadow/rt_shadow_state.h>
 
 #include <core/graphics/rhi/device.h>
-
-#include <global/containers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererRayTracingSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
-struct RtMeshHeapHandleCacheEntry{
-    Core::BufferHandle keepAlive; // Pins the Buffer* key.
-    Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::Invalid();
-    b8 seenThisFrame = false;
-};
-
-using RtMeshHeapHandleCache = HashMap<NotNull<const Core::Buffer*>, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<NotNull<const Core::Buffer*>>, EqualTo<NotNull<const Core::Buffer*>>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,9 +32,6 @@ struct RtSceneBvhState{
     // Runtime meshes invalidate static-scene reuse because their BVHs can update in place.
     u64 m_tlasStaticSceneHash = 0u;
     u64 m_sceneSwBvhStaticSceneHash = 0u;
-    // HW and SW context hashes distinguish descriptor-slot encodings of the shared buffer.
-    u64 m_hwShadowMaterialContextHash = 0u;
-    u64 m_swShadowMaterialContextHash = 0u;
     usize m_bvhSortCapacity = 0u;
     usize m_bvhBuildCapacity = 0u;
     usize m_sceneBvhNodeCapacity = 0u;
@@ -82,18 +56,6 @@ struct RtSceneBvhState{
     Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;
     // Current CSG ray geometry is independent of retained light-space capture generations.
     Core::BufferHandle m_csgTraceContextBuffer;
-    // Software caustics are push-only and reuse the SW trace geometry.
-    Core::BindingLayoutHandle m_swCausticBindingLayout;
-    Core::ShaderHandle m_swCausticShader;
-    Core::ComputePipelineHandle m_swCausticPipeline;
-    Core::ShaderHandle m_swCausticCsgShader;
-    Core::ComputePipelineHandle m_swCausticCsgPipeline;
-    // Hardware caustics are push-only and use the TLAS plus global heap views.
-    Core::BindingLayoutHandle m_hwCausticBindingLayout;
-    Core::RayTracingPipelineHandle m_hwCausticPipeline;
-    Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
-    Core::RayTracingPipelineHandle m_hwCausticCsgPipeline;
-    Core::RayTracingShaderTableHandle m_hwCausticCsgShaderTable;
 
     // Replacement TLASs get fresh handles so recorded work retains the old generation.
     Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -109,24 +71,13 @@ struct RtSceneBvhState{
     Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // One context-slot descriptor shared by all ray-tracing effects.
     Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
-    Float44 m_prevWorldToClip = {};
 
     b8 m_tlasStaticSceneHashValid = false;
     b8 m_sceneSwBvhStaticSceneHashValid = false;
-    b8 m_hwShadowMaterialContextHashValid = false;
-    b8 m_swShadowMaterialContextHashValid = false;
     // A new backing generation stays Common until accepted Shadow Preparation publishes its final state.
     b8 m_tlasBackingFresh = false;
     // The selected tracing backend prepares transparency only when the scene requires it.
     b8 m_sceneHasTransparentOccluder = false;
-    b8 m_prevWorldToClipValid = false;
-    b8 m_swCausticDispatchLogged = false;
-    b8 m_swCausticPipelineFailed = false;
-    b8 m_swCausticCsgPipelineFailed = false;
-    b8 m_hwCausticPipelineFailed = false;
-    b8 m_hwCausticCsgPipelineFailed = false;
-    b8 m_hwCausticDispatchLogged = false;
     b8 m_capabilityLogged = false;
     b8 m_bvhSortPipelineFailed = false;
     b8 m_bvhBuildPipelineFailed = false;
@@ -136,314 +87,7 @@ struct RtSceneBvhState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RtShadowState{
-    usize m_shadowInstanceMaterialCapacity = 0u;
-    usize m_shadowInstanceCapacity = 0u;
-    usize m_shadowMaterialTypedCapacity = 0u;
-
-    Core::BindingLayoutHandle m_shadowBindingLayout;
-    Core::ShaderHandle m_shadowShader;
-    Core::ComputePipelineHandle m_shadowPipeline;
-    // Shared HW/SW per-instance material table; indices match trace instance IDs.
-    Core::BufferHandle m_shadowInstanceMaterialBuffer;
-    // All-occluder trace material context; draw buffers contain one transparency class.
-    Core::BufferHandle m_shadowInstanceBuffer;
-    Core::BufferHandle m_shadowMaterialTypedBuffer;
-    // Software shadow layout is push-only; resources use the global heap.
-    Core::BindingLayoutHandle m_swShadowBindingLayout;
-    Core::ShaderHandle m_swShadowOpaquePrepassShader;
-    Core::ComputePipelineHandle m_swShadowOpaquePrepassPipeline;
-    Core::ShaderHandle m_swShadowSoftOpaqueShader;
-    Core::ComputePipelineHandle m_swShadowSoftOpaquePipeline;
-    Core::ShaderHandle m_swShadowTransparentCoarseShader;
-    Core::ComputePipelineHandle m_swShadowTransparentCoarsePipeline;
-    Core::ShaderHandle m_swShadowTransparentResolveShader;
-    Core::ComputePipelineHandle m_swShadowTransparentResolvePipeline;
-    Core::ShaderHandle m_swShadowTransparentClassifyShader;
-    Core::ComputePipelineHandle m_swShadowTransparentClassifyPipeline;
-    Core::ShaderHandle m_swShadowTransparentBuildArgsShader;
-    Core::ComputePipelineHandle m_swShadowTransparentBuildArgsPipeline;
-    Core::ShaderHandle m_swShadowTransparentIndirectShader;
-    Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
-    SoftwareTransparentSamplingState m_softwareTransparentSampling;
-    // Scalar and RGB wavelet/upsample pipelines share one push-constant layout.
-    SoftShadowResolveState m_softShadowResolve;
-    // Compaction buffers get fresh heap views after target recreation.
-    Core::BufferHandle m_swShadowEdgeCounterBuffer;
-    Core::BufferHandle m_swShadowEdgeListBuffer;
-    Core::BufferHandle m_swShadowIndirectArgsBuffer;
-
-    // Shared selector and optical readers may occupy several physical transports in one queue class.
-    Vector<Core::QueueSubmissionToken, Core::Alloc::GlobalArena> m_rayTraceContextReadSubmissionTokens;
-    // HW distinct meshes and heap views shared with caustic/GI.
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_shadowMeshPositionBuffers;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshIndexHandles;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshAttributeHandles;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_shadowMeshPositionHandles;
-    // SW distinct-mesh tables; matching entries share an index.
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshNodeBuffers;
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshPositionBuffers;
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshIndexBuffers;
-    Vector<NotNull<Core::Buffer*>, Core::Alloc::GlobalArena> m_swShadowMeshAttributeBuffers; // Packed normal/uv0.
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshNodeHandles;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshPositionHandles;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshIndexHandles;
-    Vector<Core::GpuDescriptorHandle, Core::Alloc::GlobalArena> m_swShadowMeshAttributeHandles;
-    // Separate HW/SW caches avoid cross-gather eviction.
-    RtMeshHeapHandleCache m_hwMeshHeapHandleCache;
-    RtMeshHeapHandleCache m_swMeshHeapHandleCache;
-
-    // Fresh heap views preserve old buffers for in-flight work.
-    Core::GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 m_shadowMeshCount = 0u;
-    u32 m_shadowMeshHeapHighWater = 0u;
-    u32 m_swShadowMeshCount = 0u;
-    u32 m_swShadowMeshHeapHighWater = 0u;
-    u32 m_swShadowEdgeListCapacity = 0u;
-    Core::GpuDescriptorHandle m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-
-    b8 m_shadowPipelineFailed = false;
-    b8 m_swShadowPipelineFailed = false;
-    b8 m_swShadowDispatchLogged = false;
-
-
-public:
-    // Arena-backed tables and caches must be constructed with the renderer arena.
-    explicit RtShadowState(Core::Alloc::GlobalArena& arena)
-        : m_rayTraceContextReadSubmissionTokens(arena)
-        , m_shadowMeshIndexBuffers(arena)
-        , m_shadowMeshAttributeBuffers(arena)
-        , m_shadowMeshPositionBuffers(arena)
-        , m_shadowMeshIndexHandles(arena)
-        , m_shadowMeshAttributeHandles(arena)
-        , m_shadowMeshPositionHandles(arena)
-        , m_swShadowMeshNodeBuffers(arena)
-        , m_swShadowMeshPositionBuffers(arena)
-        , m_swShadowMeshIndexBuffers(arena)
-        , m_swShadowMeshAttributeBuffers(arena)
-        , m_swShadowMeshNodeHandles(arena)
-        , m_swShadowMeshPositionHandles(arena)
-        , m_swShadowMeshIndexHandles(arena)
-        , m_swShadowMeshAttributeHandles(arena)
-        , m_hwMeshHeapHandleCache(arena)
-        , m_swMeshHeapHandleCache(arena)
-    {}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RtSoftShadowState{
-    // HW half-resolution soft trace shares the temporal resolve chain.
-    Core::ShaderHandle m_shadowSoftShader;
-    Core::ComputePipelineHandle m_shadowSoftPipeline;
-    // Half-resolution geometry cache for edge-aware resolves.
-    Core::BindingLayoutHandle m_shadowGeometryDownsampleBindingLayout;
-    Core::ShaderHandle m_shadowGeometryDownsampleShader;
-    Core::ComputePipelineHandle m_shadowGeometryDownsamplePipeline;
-    Core::BindingLayoutHandle m_shadowReprojectMergeBindingLayout;
-    Core::ShaderHandle m_shadowReprojectMergeShader;
-    Core::ComputePipelineHandle m_shadowReprojectMergePipeline;
-
-    // Bits identify populated shadow slots; dispatches handle sparse assignments.
-    u32 m_softShadowSlotMask = 0u;
-    // Primary shadow producer's temporal sample index.
-    u32 m_softShadowFrameIndex = 0u;
-    // 1: A is history input; 0: B is history input.
-    u32 m_softShadowHistoryFrontIsA = 1u;
-    // Transparent temporal gates; coarse/adaptive fallback remains available.
-    TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
-
-    b8 m_shadowSoftPipelineFailed = false;
-    b8 m_shadowGeometryDownsamplePipelineFailed = false;
-    // Nonfatal soft-shadow resource gate.
-    b8 m_softShadowReady = false;
-    // Enables temporal soft-shadow merge; falls back to non-temporal mode.
-    b8 m_softShadowTemporalReady = false;
-    // Set after the first temporal merge; reset when targets are recreated.
-    b8 m_softShadowTemporalSeeded = false;
-    // Defer the history swap until the ordered submission succeeds.
-    b8 m_softShadowTemporalHistoryAdvancePending = false;
-    b8 m_shadowReprojectMergePipelineFailed = false;
-    b8 m_softTransparentTemporalReady = false;
-    b8 m_softTransparentReady = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RtCausticState{
-    Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-    usize m_causticEmissionTargetCapacity = 0u;
-
-    // Per-frame refractive-instance AABBs shared by caustic lights.
-    Core::BufferHandle m_causticEmissionTargetBuffer;
-    // Push-only a-trous caustic resolve.
-    CausticResolveState m_causticResolve;
-    // Half-resolution geometry cache for edge-aware caustic resolve.
-    Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
-    Core::ShaderHandle m_causticGeometryDownsampleShader;
-    Core::ComputePipelineHandle m_causticGeometryDownsamplePipeline;
-    // Decay persistent accumulator after seeding; clear it after target recreation.
-    Core::BindingLayoutHandle m_causticAccumulatorDecayBindingLayout;
-    Core::ShaderHandle m_causticAccumulatorDecayShader;
-    Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
-
-    // Fresh heap views preserve old buffers for recorded dispatches.
-    Core::GpuDescriptorHandle m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    u32 m_causticRefractiveInstanceCount = 0u;
-    // Producer runs only when refractive instances and caustic lights exist.
-    u32 m_causticLightCount = 0u;
-
-    b8 m_causticEmissionGateLogged = false;
-    b8 m_causticGeometryDownsamplePipelineFailed = false;
-    b8 m_causticAccumulatorInitialized = false;
-    b8 m_causticAccumulatorDecayPipelineFailed = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RtSurfelGiState{
-    // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
-    Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
-    Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
-    Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
-    Core::BindingLayoutHandle m_surfelTraceBindingLayout;
-    Core::ShaderHandle m_surfelSpawnShader;
-    Core::ComputePipelineHandle m_surfelSpawnPipeline;
-    Core::ShaderHandle m_surfelAgeFreeShader;
-    Core::ComputePipelineHandle m_surfelAgeFreePipeline;
-    Core::ShaderHandle m_surfelHashBuildShader;
-    Core::ComputePipelineHandle m_surfelHashBuildPipeline;
-    Core::ShaderHandle m_surfelTraceShader;
-    Core::ComputePipelineHandle m_surfelTracePipeline;
-    Core::ShaderHandle m_surfelTraceCsgShader;
-    Core::ComputePipelineHandle m_surfelTraceCsgPipeline;
-    // Compute gather avoids frames-in-flight pool races with deferred lighting.
-    Core::BindingLayoutHandle m_surfelResolveBindingLayout;
-    Core::ShaderHandle m_surfelResolveShader;
-    Core::ComputePipelineHandle m_surfelResolvePipeline;
-    // Surface-gated upsample from half-resolution irradiance.
-    Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
-    Core::ShaderHandle m_surfelUpsampleShader;
-    Core::ComputePipelineHandle m_surfelUpsamplePipeline;
-    Core::BindingLayoutHandle m_surfelTraceBuildArgsBindingLayout;
-    Core::ShaderHandle m_surfelTraceBuildArgsShader;
-    Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
-    // HW trace uses the TLAS instead of the SW BVH.
-    Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
-    Core::ShaderHandle m_surfelTraceHwShader;
-    Core::ComputePipelineHandle m_surfelTraceHwPipeline;
-    Core::ShaderHandle m_surfelTraceCsgHwShader;
-    Core::ComputePipelineHandle m_surfelTraceCsgHwPipeline;
-    // Device-lifetime pool, hash heads, and counters; initialized once.
-    Core::BufferHandle m_surfelPoolBuffer;
-    Core::BufferHandle m_surfelGuidePoolBuffer;
-    Core::BufferHandle m_surfelCellHeadBuffer;
-    Core::BufferHandle m_surfelCounterBuffer;
-    Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
-    Core::BufferHandle m_surfelFreeListBuffer;
-    // Previous-frame field prevents read/write feedback during tracing.
-    Core::BufferHandle m_surfelPoolSnapshotBuffer;
-    Core::BufferHandle m_surfelCellHeadSnapshotBuffer;
-    // Async-safe counter readback. The graph-owned copy task publishes this only after its packet accepts.
-    Core::BufferHandle m_surfelCounterReadback;
-    Core::BufferHandle m_surfelConstants;
-
-    // Descriptor generations retire before their backing buffers.
-    Core::GpuDescriptorHandle m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
-
-    Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
-    u32 m_surfelCountReadbackFrame = 0u;
-    u32 m_surfelTraceGeometryFailureFlags = 0u;
-    u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
-    u32 m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
-    // Ray-rotation and age counter.
-    u32 m_surfelFrameIndex = 0u;
-
-    b8 m_surfelTraceHwPipelineFailed = false;
-    b8 m_surfelUseHwTrace = false;
-    b8 m_surfelUseCsgTrace = false;
-    b8 m_surfelTraceCsgPipelineFailed = false;
-    b8 m_surfelTraceCsgHwPipelineFailed = false;
-    b8 m_surfelTraceBuildArgsPipelineFailed = false;
-    b8 m_surfelUpsamplePipelineFailed = false;
-    b8 m_surfelResolvePipelineFailed = false;
-    b8 m_surfelResolveDispatchLogged = false;
-    b8 m_surfelTracePipelineFailed = false;
-    b8 m_surfelHashBuildPipelineFailed = false;
-    b8 m_surfelAgeFreePipelineFailed = false;
-    b8 m_surfelSpawnPipelineFailed = false;
-    b8 m_surfelEnabled = false;
-    // First trace uses all surfels; later traces use the update divisor.
-    b8 m_surfelSeeded = false;
-    // Retries graph-owned resource clears after a rejected packet.
-    b8 m_surfelResourcesNeedClear = false;
-    b8 m_surfelResourcesClearPending = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct RtRefractionState{
-    static constexpr usize s_RefractionDiagnosticCsgVariantCount = 2u;
-    static constexpr usize s_RefractionDiagnosticDensityVariantCount = 2u;
-
-    Core::ShaderHandle m_refractionDiagnosticHwShaders[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount];
-    Core::ComputePipelineHandle m_refractionDiagnosticHwPipelines[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount];
-    b8 m_refractionDiagnosticHwPipelineFailed[s_RefractionDiagnosticCsgVariantCount][s_RefractionDiagnosticDensityVariantCount] = {};
-    Core::BindingLayoutHandle m_refractionBindingLayout;
-    Core::ShaderHandle m_refractionClassifyTilesShader;
-    Core::ComputePipelineHandle m_refractionClassifyTilesPipeline;
-    Core::ShaderHandle m_refractionFinalizeTilesShader;
-    Core::ComputePipelineHandle m_refractionFinalizeTilesPipeline;
-    Core::ShaderHandle m_refractionScreenShader;
-    Core::ShaderHandle m_refractionHwShader;
-    Core::ShaderHandle m_refractionCsgHwShader;
-    Core::ShaderHandle m_refractionDenseScreenShader;
-    Core::ShaderHandle m_refractionDenseHwShader;
-    Core::ShaderHandle m_refractionDenseCsgHwShader;
-    Core::ComputePipelineHandle m_refractionScreenPipeline;
-    Core::ComputePipelineHandle m_refractionHwPipeline;
-    Core::ComputePipelineHandle m_refractionCsgHwPipeline;
-    Core::ComputePipelineHandle m_refractionDenseScreenPipeline;
-    Core::ComputePipelineHandle m_refractionDenseHwPipeline;
-    Core::ComputePipelineHandle m_refractionDenseCsgHwPipeline;
-    b8 m_refractionScreenPipelineFailed = false;
-    b8 m_refractionHwPipelineFailed = false;
-    b8 m_refractionCsgHwPipelineFailed = false;
-    b8 m_refractionDenseScreenPipelineFailed = false;
-    b8 m_refractionDenseHwPipelineFailed = false;
-    b8 m_refractionDenseCsgHwPipelineFailed = false;
-    u32 m_refractionCertifiedInstanceIndex = Limit<u32>::s_Max;
-    b8 m_refractionUseHardwareTrace = false;
-    b8 m_refractionHardwareTracingEnabled = true;
-};
-
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState, public RtRefractionState{
-    friend class RendererRayTracingSystem;
-
-
 public:
     // RtShadowState needs the renderer arena for its persistent tables.
     explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
@@ -457,13 +101,10 @@ public:
     void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-
-
-private:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     HardwareTransparentShadowState m_hardwareTransparentShadow;
 };
 

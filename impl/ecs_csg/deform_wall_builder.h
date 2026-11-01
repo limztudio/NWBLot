@@ -5,11 +5,13 @@
 #pragma once
 
 
-#include "../global.h"
+#include <impl/global.h>
 
 #include <impl/ecs_csg/deform_types.adhd.h>
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
+
+#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,13 +42,12 @@ using CsgDeformEdgeSplitMap = HashMap<u64, u32, Core::Alloc::ScratchArena, CsgDe
 class CsgDeformWallBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
-    [[nodiscard]] static SIMDVectorSingle MixAttributeVec(SIMDVectorSingle firstVec, SIMDVectorSingle secondVec, SIMDVectorSingle blendVec, SIMDVectorSingle otherVec)noexcept;
-    [[nodiscard]] static SIMDVectorSingle KeepWVec(SIMDVectorSingle normalizedVec, SIMDVectorSingle sourceVec)noexcept;
+    [[nodiscard]] static SIMDVectorSingle MixAttributeVec(const SIMDVectorSingle firstVec, const SIMDVectorSingle secondVec, const SIMDVectorSingle blendVec, const SIMDVectorSingle otherVec)noexcept{
+        return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
+    }
     [[nodiscard]] static SIMDVectorSingle TangentHandednessVec(SIMDVectorSingle normalizedTangent, SIMDVectorSingle tangentVec)noexcept;
-    [[nodiscard]] static SIMDVectorSingle UpAxisVec()noexcept;
     static void NormalizeDeformVertex(SIMDVectorSingle& normal, SIMDVectorSingle& tangent)noexcept;
     [[nodiscard]] static Expected<u32> SplitEdgeVertex(const u32 first, const u32 second, const f32 firstDistance, const f32 secondDistance, CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices, CsgDeformEdgeSplitMap& edgeSplits);
-    static void EmitTriangle(CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles, const u32 first, const u32 second, const u32 third);
     // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
     [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
         Core::Alloc::ScratchArena& scratchArena,

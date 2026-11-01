@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "process_exit.h"
+#include "cpu_task_scheduler_test_support.h"
 
 #include <core/task/cpu/scheduler.h>
 
@@ -23,19 +23,12 @@ namespace __hidden_cpu_task_submission_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_PollIntervalMS = 1u;
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB::Core;
-using CpuTaskTestSupport::ExitTestProcess;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::ExitTestProcess;
 
 inline constexpr u32 s_ConstructionException = 0xE101u;
 inline constexpr u32 s_WorkerException = 0xE102u;
-inline constexpr u32 s_TestTimeoutMS = 15000u;
 
 
 struct ThrowingMoveTask{
@@ -63,28 +56,6 @@ struct NonCallableTask{};
 
 static_assert(!IsConstructible_V<InplaceFunction<128u>, ThrowingMoveTask>);
 static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
-
-
-class DeadlineGuard final{
-public:
-    DeadlineGuard()
-        : m_watchdog([](const StopToken& stop)noexcept{
-            const Timer begin = TimerNow();
-            while(!stop.stop_requested()){
-                // A watchdog timeout must fail the death test instead of passing as an unexpected worker failure.
-                if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS)
-                    ExitTestProcess(0u);
-                SleepMS(__hidden_cpu_task_submission_tests::s_PollIntervalMS);
-            }
-        }
-        )
-    {}
-    ~DeadlineGuard()noexcept = default;
-
-
-private:
-    JoiningThread m_watchdog;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +93,7 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
     }, handleError, []()noexcept{ return -2; }
     );
     EXPECT_EQ(scopeResult, static_cast<int>(s_ConstructionException));
-    EXPECT_EQ(handled, s_ExpectedDualCount);
+    EXPECT_EQ(handled, 2u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
     EXPECT_EQ(scheduler.statistics().canceledTasks, 0u);
@@ -167,7 +138,7 @@ TEST(CpuTaskSubmissionTests, ExpectedAdmissionErrorsPreservePublicationAndCancel
 TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCallerDelivery){
     EXPECT_DEATH({
         using namespace __hidden_cpu_task_submission_tests;
-        DeadlineGuard deadline;
+        DeadlineGuard deadline(true);
         const int result = InvokeTerminalEntry<u32>([]()->int{
             CpuTaskScheduler scheduler(1u);
             const auto cpuTaskAdmission = scheduler.submit([&](){
@@ -193,7 +164,7 @@ TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCalle
 TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferredCallerDelivery){
     EXPECT_DEATH({
         using namespace __hidden_cpu_task_submission_tests;
-        DeadlineGuard deadline;
+        DeadlineGuard deadline(true);
         const int result = InvokeTerminalEntry<u32>([]()->int{
             CpuTaskScheduler scheduler(1u);
             AtomicFlag workerEntered;

@@ -30,11 +30,6 @@ Expected<ReflectionFeedbackExtent> ComputeReflectionFeedbackExtent(const u32 wid
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererReflectionFeedback::RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-    : m_arena(arena)
-    , m_graphics(graphics)
-{}
-
 void RendererReflectionFeedback::invalidateResources(){
     if(m_control)
         m_control->reset(0u);
@@ -53,7 +48,7 @@ b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 heigh
     auto& device = m_graphics.getDevice();
     const u16 deviceGeneration = device.getDeviceGeneration();
     if(!m_control){
-        auto controlResult = CreateReflectionFeedbackControl(m_arena, deviceGeneration);
+        auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(m_arena, deviceGeneration);
         if(!controlResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to allocate acceptance control"));
             return false;
@@ -63,12 +58,12 @@ b8 RendererReflectionFeedback::prepareResources(const u32 width, const u32 heigh
     const b8 changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
     const b8 active = enabled && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
     if(active && (changed || !m_banks[0].valid() || !m_banks[1].valid())){
-        auto firstBank = prepareBank(extent.byteCount, Name("engine/reflection/screen_feedback_0"));
+        auto firstBank = prepareBank(extent.byteCount, s_ReflectionScreenFeedback0Name);
         if(!firstBank)
             return false;
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
         Core::GpuDescriptorRetirementGuard retireFirst(heap, firstBank->descriptor);
-        auto secondBank = prepareBank(extent.byteCount, Name("engine/reflection/screen_feedback_1"));
+        auto secondBank = prepareBank(extent.byteCount, s_ReflectionScreenFeedback1Name);
         if(!secondBank)
             return false;
         Core::GpuDescriptorRetirementGuard retireSecond(heap, secondBank->descriptor);

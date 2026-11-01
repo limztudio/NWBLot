@@ -2,21 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/floating_point_environment.h>
+#include "benchmark_support.h"
+
+#include <global/array.h>
+#include <global/assert.h>
 #include <global/error_code.h>
 #include <global/expected.h>
+#include <global/floating_point_environment.h>
 #include <global/not_null.h>
-#include <global/simd/collision_triangle.h>
-#include <global/string_view.h>
+#include <global/process.h>
 #include <global/scope_exit.h>
+#include <global/simd/collision_triangle.h>
+#include <global/span.h>
+#include <global/string_view.h>
 #include <global/timer.h>
 
-#include <iostream>
 #if defined(NWB_PLATFORM_LINUX)
-#include <fenv.h>
-#include <signal.h>
 #include <sys/wait.h>
-#include <unistd.h>
 #endif
 
 
@@ -29,6 +31,9 @@ namespace __hidden_simd_geometry_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using SimdOptimizationBenchmark::BaselineDot3;
+using SimdOptimizationBenchmark::NextSeed;
+
 constexpr AStringView s_ZeroAxisLabel = "zero_axis";
 constexpr AStringView s_ValidateMode = "validate";
 constexpr AStringView s_AbsoluteMode = "abs";
@@ -37,13 +42,13 @@ constexpr AStringView s_GuardMode = "guard";
 using Intersection = b8 (NWB_SIMD_CALL *)(SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble, SIMDVectorDouble)noexcept;
 
 struct TrianglePair{
-    Double4 first[3];
-    Double4 second[3];
+    Array<Double4, 3> first{};
+    Array<Double4, 3> second{};
 };
 
 struct TrianglePairVectors{
-    SIMDVectorDouble first[3];
-    SIMDVectorDouble second[3];
+    Array<SIMDVectorDouble, 3> first{};
+    Array<SIMDVectorDouble, 3> second{};
 };
 
 inline constexpr u32 s_FixtureCount = 64u;
@@ -54,14 +59,6 @@ static volatile u64 s_Checksum = 0u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL BaselineDot3(SIMDVectorDouble first, SIMDVectorDouble second)noexcept{
-    first = VectorDoubleAndInt(first, s_DoubleSIMDMask3);
-    second = VectorDoubleAndInt(second, s_DoubleSIMDMask3);
-    const SIMDVectorDouble product = VectorDoubleMultiply(first, second);
-    SIMDVectorDouble result = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-    return VectorDoubleAdd(result, VectorDoubleSplatZ(product));
-}
 
 NWB_NOINLINE b8 NWB_SIMD_CALL Baseline(const SIMDVectorDouble a0, const SIMDVectorDouble a1, const SIMDVectorDouble a2, const SIMDVectorDouble b0, const SIMDVectorDouble b1, const SIMDVectorDouble b2)noexcept{
     const SIMDVectorDouble first0 = VectorDoubleAndInt(a0, s_DoubleSIMDMask3), first1 = VectorDoubleAndInt(a1, s_DoubleSIMDMask3), first2 = VectorDoubleAndInt(a2, s_DoubleSIMDMask3);
@@ -343,7 +340,7 @@ NWB_NOINLINE b8 NWB_SIMD_CALL AbsHoisted(const SIMDVectorDouble a0, const SIMDVe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_NOINLINE u64 Run(const NotNull<Intersection> implementation, const TrianglePair (&pairs)[s_FixtureCount], const u32 passes)noexcept{
+NWB_NOINLINE u64 Run(const NotNull<Intersection> implementation, const Span<const TrianglePair> pairs, const u32 passes)noexcept{
     u64 result = 0u;
     for(u32 pass = 0u; pass < passes; ++pass){
         for(const TrianglePair& pair : pairs)
@@ -368,8 +365,8 @@ static void StoreTrianglePair(const TrianglePairVectors& vectors, TrianglePair& 
     }
 }
 
-static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
-    for(u32 index = 0u; index < s_FixtureCount; ++index){
+static void Fill(const u32 kind, const Span<TrianglePair> pairs)noexcept{
+    for(usize index = 0u; index < pairs.size(); ++index){
         // Multiply by -0.25 to match the negated product bits.
         const SIMDVectorDouble translation = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSet(0.25, -0.25, 0.25, 0.0));
         TrianglePairVectors pair;
@@ -403,7 +400,14 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
 }
 
 [[nodiscard]] static b8 CheckPair(const TrianglePairVectors& pair, const b8 expected)noexcept{
-    constexpr u32 s_Permutations[][3] = { { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u }, { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u } };
+    constexpr Array<Array<u32, 3>, 6> s_Permutations = {
+        Array<u32, 3>{ 0u, 1u, 2u },
+        Array<u32, 3>{ 0u, 2u, 1u },
+        Array<u32, 3>{ 1u, 0u, 2u },
+        Array<u32, 3>{ 1u, 2u, 0u },
+        Array<u32, 3>{ 2u, 0u, 1u },
+        Array<u32, 3>{ 2u, 1u, 0u },
+    };
     for(const auto& firstOrder : s_Permutations){
         for(const auto& secondOrder : s_Permutations){
             for(const b8 reverse : { false, true }){
@@ -423,22 +427,12 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
     return true;
 }
 
-[[nodiscard]] static u64 Next(u64& state)noexcept{
-    state ^= state << 13u;
-    state ^= state >> 7u;
-    state ^= state << 17u;
-    return state;
-}
-
 [[nodiscard]] static b8 CheckExceptionEquivalence(const TrianglePairVectors& pair)noexcept{
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
         return false;
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            __builtin_trap();
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
     const b8 original = Baseline(pair.first[0], pair.first[1], pair.first[2], pair.second[0], pair.second[1], pair.second[2]);
     const i32 originalFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
@@ -457,7 +451,7 @@ static void Fill(const u32 kind, TrianglePair (&pairs)[s_FixtureCount])noexcept{
 }
 
 #if defined(NWB_PLATFORM_LINUX)
-static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
+static void TrapHandler([[maybe_unused]] const i32 signalNumber, siginfo_t* information, [[maybe_unused]] void* context)noexcept{
     _exit(32 + information->si_code);
 }
 
@@ -508,7 +502,7 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
 
 [[nodiscard]] static b8 Validate()noexcept{
 #pragma STDC FENV_ACCESS ON
-    TrianglePair pairs[s_FixtureCount];
+    Array<TrianglePair, s_FixtureCount> pairs{};
     for(u32 kind = 0u; kind < 7u; ++kind){
         Fill(kind, pairs);
         if(!CheckPair(LoadTrianglePair(pairs[0]), kind != 4u && kind != 5u))
@@ -520,9 +514,9 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     for(u32 sample = 0u; sample < s_ContainedSampleCount; ++sample){
         TrianglePairVectors pair{};
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
-            f64 coordinates[3];
+            Array<f64, 3> coordinates{};
             for(f64& coordinate : coordinates)
-                coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000000001u) - 1000000000);
+                coordinate = static_cast<f64>(static_cast<i64>(NextSeed(state) % 2000000001u) - 1000000000);
             pair.first[vertex] = VectorDoubleScale(LoadPosition(coordinates[0], coordinates[1], coordinates[2]), 0.25);
         }
         const SIMDVectorDouble contained = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
@@ -536,9 +530,9 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         )
             return false;
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
-            f64 coordinates[3];
+            Array<f64, 3> coordinates{};
             for(f64& coordinate : coordinates)
-                coordinate = static_cast<f64>(static_cast<i64>(Next(state) % 2000001u) - 1000000);
+                coordinate = static_cast<f64>(static_cast<i64>(NextSeed(state) % 2000001u) - 1000000);
             pair.first[vertex] = LoadPosition(coordinates[0], coordinates[1], coordinates[2]);
         }
         const SIMDVectorDouble containedSingle = VectorDoubleScale(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleScale(pair.first[0], 2.0), pair.first[1]), pair.first[2]), 0.25);
@@ -583,9 +577,9 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     if(!(baseline && candidate && production && hoisted && baselineExceptions == candidateExceptions && candidateExceptions == productionExceptions && productionExceptions == hoistedExceptions && (candidateExceptions & FE_INVALID) == 0))
         return false;
 
-    volatile u64 activeBits[] = { 0x7ff0000000000000u, 0x7ff8000012345678u, 0x7ff0000000000001u };
-    const f64 scales[] = { 0.0, 0x1p-300, 0x1p-100, 0x1p+100, 0x1p+300, 0x1p+900 };
-    for(const f64 scale : scales){
+    const Array<u64, 3> activeBits = { 0x7ff0000000000000u, 0x7ff8000012345678u, 0x7ff0000000000001u };
+    constexpr Array<f64, 6> s_Scales = { 0.0, 0x1p-300, 0x1p-100, 0x1p+100, 0x1p+300, 0x1p+900 };
+    for(const f64 scale : s_Scales){
         Fill(3u, pairs);
         TrianglePairVectors scaled = LoadTrianglePair(pairs[0]);
         for(u32 vertex = 0u; vertex < 3u; ++vertex){
@@ -595,17 +589,18 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
         if(!CheckExceptionEquivalence(scaled))
             return false;
     }
-    for(u32 index = 0u; index < LengthOf(activeBits); ++index){
+    for(u32 index = 0u; index < activeBits.size(); ++index){
         Fill(3u, pairs);
         TrianglePairVectors active = LoadTrianglePair(pairs[0]);
-        active.first[0] = VectorDoubleSetIntX(active.first[0], activeBits[index]);
+        volatile u64 bits = activeBits[index];
+        active.first[0] = VectorDoubleSetIntX(active.first[0], bits);
         if(!CheckExceptionEquivalence(active))
             return false;
     }
     constexpr f64 s_Maximum = Limit<f64>::s_Max;
-    const TrianglePair extreme[] = {
-        { { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
-        { { Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0) }, { Double4(-s_Maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(s_Maximum, 0.0, 0.0) } }
+    const Array<TrianglePair, 2> extreme = {
+        TrianglePair{ { Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0), Double4(0.0, 1.0, 1.0) }, { Double4(Limit<f64>::s_Infinity, 1.0, 2.0), Double4(-1.0, -1.0, -1.0), Double4(1.0, 3.0, 4.0) } },
+        TrianglePair{ { Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0), Double4(s_Maximum, 0.0, 0.0) }, { Double4(-s_Maximum, -1.0, -1.0), Double4(0.0, 1.0, 1.0), Double4(s_Maximum, 0.0, 0.0) } },
     };
     for(const TrianglePair& pair : extreme){
         const TrianglePairVectors vectors = LoadTrianglePair(pair);
@@ -615,8 +610,8 @@ static void TrapHandler(i32, siginfo_t* information, void*)noexcept{
     return true;
 }
 
-static void PrintSummary(const StringView workload, const f64 (&values)[s_Rounds]){
-    f64 sorted[s_Rounds];
+static void PrintSummary(const StringView workload, const Span<const f64> values){
+    Array<f64, s_Rounds> sorted{};
     for(u32 index = 0u; index < s_Rounds; ++index)
         sorted[index] = values[index];
     for(u32 index = 1u; index < s_Rounds; ++index){
@@ -639,7 +634,7 @@ static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guar
     NWB_COUT << "validation,400000 exact containment probes, winding, finite/nonfinite FENV and trap-order equivalence,passed\n";
     if(validationOnly)
         return 0;
-    static constexpr StringView s_Names[] = { "coplanar", "point_hull", "segment_hull", "noncoplanar", "noncoplanar_miss", "aabb_miss", "point_point" };
+    static constexpr Array<StringView, 7> s_Names = { "coplanar", "point_hull", "segment_hull", "noncoplanar", "noncoplanar_miss", "aabb_miss", "point_point" };
     const auto reference = MakeNotNull<Intersection>(measureAbs ? ZeroAxis : (guardOnly ? CurrentDot3Baseline : Baseline));
     const auto production = MakeNotNull<Intersection>(TriangleDoubleTests::Intersects);
     const auto selected = measureAbs ? MakeNotNull<Intersection>(AbsHoisted) : (guardOnly ? MakeNotNull<Intersection>(ZeroAxis) : production);
@@ -647,13 +642,13 @@ static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guar
     const StringView selectedName = measureAbs ? "abs_hoisted" : (guardOnly ? s_ZeroAxisLabel : "production");
     NWB_COUT << "timer,TimerNow/DurationInNS\n";
     NWB_COUT << "mode," << (measureAbs ? "abs_hoisted_vs_zero_axis" : (guardOnly ? "zero_axis_vs_current_dot3" : "production_vs_original_baseline")) << '\n';
-    TrianglePair pairs[s_FixtureCount];
+    Array<TrianglePair, s_FixtureCount> pairs{};
     for(u32 kind = 0u; kind < 7u; ++kind){
         Fill(kind, pairs);
         const u64 expected = Run(reference, pairs, 1u) * s_Passes;
         if(Run(selected, pairs, 1u) * s_Passes != expected)
             return 2;
-        f64 baselineValues[s_Rounds], candidateValues[s_Rounds], ratios[s_Rounds];
+        Array<f64, s_Rounds> baselineValues{}, candidateValues{}, ratios{};
         for(u32 round = 0u; round < s_Rounds; ++round){
             for(u32 step = 0u; step < 2u; ++step){
                 const b8 candidate = ((round + step) & 1u) != 0u;
@@ -663,11 +658,11 @@ static i32 Benchmark(const b8 validationOnly, const b8 measureAbs, const b8 guar
                 const Timer end = TimerNow();
                 if(checksum != expected)
                     return 3;
-                const f64 nanoseconds = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, begin)), VectorDoubleReplicate(static_cast<f64>(s_Passes * s_FixtureCount))));
+                const f64 nanoseconds = DurationInNS<f64>(end, begin) / static_cast<f64>(s_Passes * s_FixtureCount);
                 (candidate ? candidateValues : baselineValues)[round] = nanoseconds;
                 NWB_COUT << "sample," << s_Names[kind] << ',' << (candidate ? selectedName : referenceName) << ',' << round << ',' << nanoseconds << ',' << checksum << '\n';
             }
-            ratios[round] = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateValues[round]), VectorDoubleReplicate(baselineValues[round])));
+            ratios[round] = candidateValues[round] / baselineValues[round];
         }
         NWB_COUT << referenceName << '_';
         PrintSummary(s_Names[kind], baselineValues);

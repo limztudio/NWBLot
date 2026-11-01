@@ -16,27 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_TriangleVertexCount = 3.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SIMDVectorSingle MeshletTriangleGeometry::MakeMeshletPositionVector(const SIMDVectorSingle position)noexcept{
-    return VectorSetW(position, 0.0f);
-}
-
-
-MeshletTriangleVectors MeshletTriangleGeometry::MakeMeshletTriangleVectors(const SIMDVectorSingle position0, const SIMDVectorSingle position1, const SIMDVectorSingle position2, const SIMDVectorSingle centroid, const SIMDVectorSingle areaNormal)noexcept{
-    return MeshletTriangleVectors{ { position0, position1, position2, }, centroid, areaNormal };
-}
-
-
-SIMDVectorSingle MeshletTriangleGeometry::NormalizeMeshletDirectionOrZero(const SIMDVectorSingle value)noexcept{
-    return Vector3NormalizeOr(value, VectorZero(), ::s_FrameDirectionEpsilon);
-}
-
-
 Expected<MeshletTrianglePrecompute> MeshletTriangleGeometry::PrecomputeMeshletTriangleData(const Path& nwbFilePath, const TStringView metaKind, const Span<const u32> indices, const MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena){
     MeshletTrianglePrecompute data(entry.positions.get_allocator().arena());
 
@@ -73,9 +52,9 @@ Expected<MeshletTrianglePrecompute> MeshletTriangleGeometry::PrecomputeMeshletTr
         triangle.positions[1] = entry.vertexRefs[triangle.vertexRefs[1]].position;
         triangle.positions[2] = entry.vertexRefs[triangle.vertexRefs[2]].position;
 
-        const SIMDVectorSingle p0 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[0u]]));
-        const SIMDVectorSingle p1 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[1u]]));
-        const SIMDVectorSingle p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
+        const SIMDVectorSingle p0 = VectorSetW(LoadFloat(entry.positions[triangle.positions[0u]]), 0.0f);
+        const SIMDVectorSingle p1 = VectorSetW(LoadFloat(entry.positions[triangle.positions[1u]]), 0.0f);
+        const SIMDVectorSingle p2 = VectorSetW(LoadFloat(entry.positions[triangle.positions[2u]]), 0.0f);
         const SIMDVectorSingle centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
         const SIMDVectorSingle areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
         StoreFloat(p0, calculation.positions[0u]);
@@ -92,18 +71,6 @@ Expected<MeshletTrianglePrecompute> MeshletTriangleGeometry::PrecomputeMeshletTr
     }
 
     return data;
-}
-
-
-Expected<u32> MeshletTriangleGeometry::FindNextUnvisitedMeshletTriangle(const MeshletTrianglePrecompute& trianglePrecompute, const usize searchOffset)noexcept{
-    for(usize triangleIndex = searchOffset; triangleIndex < trianglePrecompute.triangles.size(); ++triangleIndex){
-        if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
-            continue;
-
-        return static_cast<u32>(triangleIndex);
-    }
-
-    return MakeUnexpected(Failure{});
 }
 
 

@@ -116,7 +116,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("HashMap",            "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelHashMap",    "",                              TwoType,      32u, 8u, true,  true,  false, false, true,  false, false, true)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Queue",              "",                              SingleType,   32u, 8u, true,  true,  false, true,  true,  false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelQueue",      "",                              SingleType,   32u, 8u, true,  true,  false, false, true,  false, false, false)
-NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelBlockQueue", "",                              TypeAndCount, 32u, 8u, true,  true,  false, false, false, false, false, false)
+NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelBlockQueue", "",                              TypeAndCount, 32u, 8u, true,  true,  false, false, true,  false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Array",              "",                              TypeAndCount, 0u,  0u, false, true,  false, false, false, true,  true,  false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("FixedVector",        "",                              TypeAndCount, 0u,  0u, false, true,  false, true,  false, true,  true,  false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Span",               "",                              SingleType,   16u, 8u, false, true,  true,  false, false, true,  false, false)
@@ -124,7 +124,6 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("Optional",           "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("AssetRef",           "::NWB::Core::Assets::AssetRef", SingleType,   8u,  8u, false, true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Atomic",             "",                              SingleType,   0u,  0u, false, false, false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Expected",           "",                              TwoType,      0u,  0u, false, false, false, false, false, false, false, false)
-NWB_ADHD_EXPORT_GENERIC_TYPE("NotNull",            "",                              NotNullType,  8u,  8u, false, false, false, false, false, false, false, false)
 
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('x', 'r', 0u)
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('y', 'g', 1u)
@@ -133,6 +132,7 @@ NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('w', 'a', 3u)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #ifdef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_SWIZZLE_COMPONENT_AUTO_UNDEF

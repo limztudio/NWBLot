@@ -25,15 +25,36 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook_entry_registry{
+namespace CookEntryRegistryDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::AutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetArena>& QueryAutoRegistrationQueue(){
-    static ::AutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetArena> s_Queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
-    return s_Queue;
+b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    if(!virtualPath)
+        return true;
+
+    const NameHash pathHash = virtualPath.hash();
+    if(inOutSeenVirtualPathHashes.insert(pathHash).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), ConvertString(virtualPath.resolvedText()), assetKind);
+    return false;
+}
+
+b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
+        return false;
+    }
+
+    const NameHash virtualPathHash = virtualPath.hash();
+    if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
+    return false;
 }
 
 
@@ -46,13 +67,64 @@ namespace __hidden_cook_entry_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFunction function){
-    ::RegisterAutoFactory(__hidden_cook_entry_registry::QueryAutoRegistrationQueue(), function);
+ICookEntryBucket* CookEntryRegistry::find(const Name& assetType)const noexcept{
+    const auto found = m_lookup.find(assetType);
+    return found == m_lookup.end() ? nullptr : found.value().get();
 }
 
+b8 CookEntryRegistry::has(const Name& assetType)const noexcept{
+    return find(assetType) != nullptr;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+b8 CookEntryRegistry::parseDocument(const Name& assetType, const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context){
+    ICookEntryBucket* bucket = find(assetType);
+    if(bucket)
+        return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+    return false;
+}
+
+b8 CookEntryRegistry::parseValue(const Name& assetType, const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context){
+    ICookEntryBucket* bucket = find(assetType);
+    if(bucket)
+        return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
+    return false;
+}
+
+b8 CookEntryRegistry::appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, const Span<const u8> payloadBytes, CookEntryParseContext& context){
+    ICookEntryBucket* bucket = find(assetType);
+    if(bucket)
+        return bucket->appendCachedEntry(location, virtualPath, payloadBytes, context);
+
+    return false;
+}
+
+usize CookEntryRegistry::bucketCount()const noexcept{
+    return m_buckets.size();
+}
+
+b8 CookEntryRegistry::writeBucket(const usize bucketIndex, CookEntryWriteContext& context){
+    if(bucketIndex >= m_buckets.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
+        return false;
+    }
+
+    return m_buckets[bucketIndex]->writeCookedAssets(context);
+}
+
+u64 CookEntryRegistry::entryCount()const noexcept{
+    u64 count = 0;
+    for(const BucketPtr& bucket : m_buckets){
+        const u64 bucketSize = static_cast<u64>(bucket->size());
+        if(count > Limit<u64>::s_Max - bucketSize)
+            return Limit<u64>::s_Max;
+        count += bucketSize;
+    }
+    return count;
+}
 
 b8 CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
     if(!owner){
@@ -81,10 +153,14 @@ b8 CookEntryRegistry::registerBucket(const Name& assetType, BucketPtr owner){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFunction function){
+    ::RegisterAutoFactory(QueryAssetAutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetsArenaScope::s_AutoRegistrationQueueArena>(), function);
+}
+
 b8 RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena){
     Vector<NotNull<CookEntryRegistrationFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
     return RunAutoCollectedFunctions(
-        __hidden_cook_entry_registry::QueryAutoRegistrationQueue(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
+        QueryAssetAutoRegistrationQueue<NotNull<CookEntryRegistrationFunction>, AssetsArenaScope::s_AutoRegistrationQueueArena>(), registry, functions, [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
     );
 }

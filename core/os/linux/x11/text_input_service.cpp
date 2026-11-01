@@ -9,7 +9,6 @@
 #include <global/scope_exit.h>
 
 #include <X11/Xutil.h>
-#include <locale.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,7 +84,7 @@ X11TextInputService::~X11TextInputService()noexcept{
 
 b8 X11TextInputService::initialize(){
     // Xlib binds an input method to LC_CTYPE; select the user's native text locale during Frame startup.
-    if(!::setlocale(LC_CTYPE, "") || !XSupportsLocale() || !XSetLocaleModifiers("")){
+    if(!SetLocale(LC_CTYPE, "") || !XSupportsLocale() || !XSetLocaleModifiers("")){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: native locale initialization unavailable"));
         return true;
     }

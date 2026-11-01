@@ -104,9 +104,17 @@ public:
 
 
 public:
-    void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
-    [[nodiscard]] b8 flushTelemetryUpload(b8 clearAfterUpload = false);
-    void setPerfCapture(const Core::Perf::CaptureOptions& options);
+    void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options){
+        if(telemetryCapture)
+            telemetryCapture(options);
+    }
+    [[nodiscard]] b8 flushTelemetryUpload(const b8 clearAfterUpload = false){
+        return telemetryUploadFlush ? telemetryUploadFlush(clearAfterUpload) : true;
+    }
+    void setPerfCapture(const Core::Perf::CaptureOptions& options){
+        if(perfCapture)
+            perfCapture(options);
+    }
     [[nodiscard]] Core::Perf::TimingView gpuTimingView()const noexcept{ return perfSession.gpuTimingView(); }
 };
 
@@ -124,8 +132,7 @@ public:
     virtual void onShutdown(){
     }
 
-    virtual b8 onUpdate(f32 delta){
-        static_cast<void>(delta);
+    virtual b8 onUpdate([[maybe_unused]] f32 delta){
         return true;
     }
 };

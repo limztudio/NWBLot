@@ -16,16 +16,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueEmulationMergeValidator::OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadView& compiledPlan, const Span<const Core::GpuTaskId> timingTasks, b8 timingBindingsValid, b8 hasOpaqueCsgFrameWork, OpaqueEmulationMergeValidationResult& outResult)const noexcept{
-    RendererFramePipeline& pipeline = *m_pipeline;
+    const RendererFramePipeline& pipeline = m_pipeline;
     outResult = OpaqueEmulationMergeValidationResult{};
     const auto taskIsCompiled = [&](const Core::GpuTaskId task)noexcept{
         return compiledPlan.findTask(task).valid();
@@ -86,12 +78,12 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
             if(!task.valid() || !queue || queue->queueClass != Core::CommandQueue::Graphics || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixGbufferTask, task))
                 return false;
         }
-        for(usize phaseIndex = phaseCount; phaseIndex < LengthOf(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks); ++phaseIndex){
+        for(usize phaseIndex = phaseCount; phaseIndex < pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks.size(); ++phaseIndex){
             if(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
                 return false;
         }
         return
-            compiledPlan.tasksFormContiguousPacketSequence(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks, phaseCount)
+            compiledPlan.tasksFormContiguousPacketSequence(Span<const Core::GpuTaskId>(pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks.data(), phaseCount))
             && compiledPlan.taskPrecedesInSamePacket(pipeline.m_graphicsPrefixGbufferTask, pipeline.m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u])
         ;
     }();
@@ -119,8 +111,8 @@ void OpaqueEmulationMergeValidator::validate(const Core::GpuCompiledGraph::ReadV
             || !compiledPlan.tasksSharePacket(pipeline.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixCsgIntervalSampleTask)
         )
             return false;
-        const Core::GpuTaskId sequence[] = { pipeline.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixCsgIntervalSampleTask, };
-        return compiledPlan.tasksFormContiguousPacketSequence(sequence, LengthOf(sequence));
+        const Array<Core::GpuTaskId, 2> sequence = { pipeline.m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask, pipeline.m_graphicsPrefixCsgIntervalSampleTask, };
+        return compiledPlan.tasksFormContiguousPacketSequence(sequence);
     }();
     // Keep the clear with G-buffer's ticket; a split would rebind ownership.
     const Core::GpuPhysicalQueueInfo* const csgIntervalClearQueue = pipeline.m_graphicsPrefixCsgIntervalClearTask.valid() ? compiledPlan.queueInfoForTask(pipeline.m_graphicsPrefixCsgIntervalClearTask) : nullptr;

@@ -31,13 +31,7 @@ static constexpr f32 s_TargetUnitMeters = 1.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView UfbxStringView(const ufbx_string value)noexcept{
-    if(!value.data || value.length == 0u)
-        return {};
-    return AStringView(value.data, value.length);
-}
-
-void AppendMeshDisplayName(ScratchStringStream& out, const MeshInstance& instance){
+void AppendMeshDisplayName(const MeshInstance& instance, ScratchStringStream& inOutReport){
     AStringView nodeName = UfbxStringView(instance.node->name);
     AStringView meshName = UfbxStringView(instance.mesh->name);
     if(nodeName.empty())
@@ -45,15 +39,15 @@ void AppendMeshDisplayName(ScratchStringStream& out, const MeshInstance& instanc
     if(meshName.empty())
         meshName = "<unnamed mesh>";
 
-    out << "[" << instance.index << "] node=\"" << nodeName << "\" mesh=\"" << meshName << "\" triangles=" << instance.mesh->num_triangles;
+    inOutReport << "[" << instance.index << "] node=\"" << nodeName << "\" mesh=\"" << meshName << "\" triangles=" << instance.mesh->num_triangles;
     if(!instance.node->visible)
-        out << " hidden";
+        inOutReport << " hidden";
 }
 
 ScratchString FormatUfbxError(const ufbx_error& error, Core::Alloc::ScratchArena& scratchArena){
-    char buffer[s_UfbxErrorBufferSize] = {};
-    const usize written = ufbx_format_error(buffer, sizeof(buffer), &error);
-    return ScratchString(buffer, written, scratchArena);
+    Array<char, s_UfbxErrorBufferSize> buffer = {};
+    const usize written = ufbx_format_error(buffer.data(), buffer.size(), &error);
+    return ScratchString(buffer.data(), written, scratchArena);
 }
 
 Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
@@ -79,10 +73,6 @@ Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-SceneHandle::SceneHandle(SceneHandle&& other)noexcept
-    : scene(Exchange(other.scene, nullptr))
-{}
 
 SceneHandle::~SceneHandle()noexcept{
     if(scene){
@@ -126,14 +116,11 @@ Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::Scrat
     return outScene;
 }
 
-UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const b8 includeHidden){
+UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, const b8 includeHidden){
     UtilityVector<MeshInstance> instances;
-    if(!scene)
-        return instances;
-
-    instances.reserve(scene->nodes.count);
-    for(usize i = 0u; i < scene->nodes.count; ++i){
-        ufbx_node* node = scene->nodes.data[i];
+    instances.reserve(scene.nodes.count);
+    for(usize i = 0u; i < scene.nodes.count; ++i){
+        ufbx_node* node = scene.nodes.data[i];
         if(!node || !node->mesh)
             continue;
         if(!includeHidden && !node->visible)
@@ -160,7 +147,7 @@ void PrintMeshInstances(const Span<const MeshInstance> instances, Core::Alloc::S
     report << "Mesh instances:\n";
     for(const MeshInstance& instance : instances){
         report << "  ";
-        __hidden_fbx_scene::AppendMeshDisplayName(report, instance);
+        __hidden_fbx_scene::AppendMeshDisplayName(instance, report);
         report << s_ReportLineEndText;
     }
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
@@ -198,10 +185,10 @@ Expected<UtilityVector<usize>> SelectMeshInstances(const Span<const MeshInstance
     UtilityVector<usize> partialSelection;
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
-        if(EqualsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.mesh->name), normalized)){
+        if(EqualsAsciiIgnoreCase(UfbxStringView(instance.node->name), normalized) || EqualsAsciiIgnoreCase(UfbxStringView(instance.mesh->name), normalized)){
             outSelection.push_back(instance.index);
         }
-        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(__hidden_fbx_scene::UfbxStringView(instance.mesh->name), normalized))){
+        else if(outSelection.empty() && (ContainsAsciiIgnoreCase(UfbxStringView(instance.node->name), normalized) || ContainsAsciiIgnoreCase(UfbxStringView(instance.mesh->name), normalized))){
             if(partialSelection.empty())
                 partialSelection.reserve(instances.size());
             partialSelection.push_back(instance.index);

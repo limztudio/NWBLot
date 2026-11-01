@@ -4,6 +4,8 @@
 
 #include "ingest.h"
 
+#include <logger/common.h>
+
 #include <core/alloc/scratch.h>
 
 #include <global/binary.h>
@@ -30,8 +32,6 @@ using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr int s_LocalTimeYearBase = 1900;
-inline constexpr int s_LocalTimeMonthBase = 1;
 inline constexpr StringView s_StorageDirectoryName = "telemetry";
 inline constexpr StringView s_RawDirectoryName = "raw";
 inline constexpr StringView s_ReportDirectoryName = "reports";
@@ -141,16 +141,16 @@ TelemetryIngestResult ProcessTelemetryUpload(LogArena& arena, const void* const 
         return result;
     }
 
-    Telemetry::Recorder recorder(arena);
-    const auto decoded = Telemetry::DecodeEventStream(arena, bytes, byteCount, recorder);
-    result.decode = decoded ? Telemetry::DecodeResult{ *decoded, Telemetry::DecodeStatus::Ok } : decoded.error();
+    Core::Telemetry::Recorder recorder(arena);
+    const auto decoded = Core::Telemetry::DecodeEventStream(bytes, byteCount, arena, recorder);
+    result.decode = decoded ? Core::Telemetry::DecodeResult{ *decoded, Core::Telemetry::DecodeStatus::Ok } : decoded.error();
     if(!result.decode.ok()){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"), PathToString<tchar>(result.rawPath), result.decode.bytesRead, static_cast<u32>(result.decode.status));
         result.type = Core::Common::LogType::Error;
         return result;
     }
 
-    auto report = BuildTelemetryReport(arena, recorder.view(), scratchArena);
+    auto report = BuildTelemetryReport(recorder.view(), arena, scratchArena);
     if(!report){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Core::Common::LogType::Error;

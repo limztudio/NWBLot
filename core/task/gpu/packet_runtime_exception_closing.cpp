@@ -22,6 +22,23 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(
+    GpuGraphSubmissionTransaction& transaction,
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration,
+    const GpuGraphSubmissionBinding& submissionBinding
+)noexcept{
+    if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+        return true;
+    if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
+        if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+            return true;
+        TerminateInvariant();
+    }
+    return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
+}
+
 Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
     if(!SubmissionOperation::ActiveFor(*this))
         return MakeUnexpected(Failure{});
@@ -50,6 +67,29 @@ Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubm
         return MakeUnexpected(Failure{});
     }
     return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
+}
+
+void GpuGraphSubmissionTransaction::armSubmissionExceptionClosingWithinSubmissionOperation(
+    const GpuCompiledGraph& compiledGraph,
+    GpuTaskGraph& graph,
+    b8& inoutArmed,
+    u64& outRecordingAttemptGeneration,
+    GpuGraphSubmissionBinding& outSubmissionBinding
+)noexcept{
+    if(inoutArmed)
+        return;
+
+    const auto closing = beginSubmissionExceptionClosingWithinSubmissionOperation(graph, compiledGraph);
+    if(!closing){
+        if(hasUnresolvedSubmissionBinding(compiledGraph))
+            TerminateInvariant();
+        return;
+    }
+    if(closing->recordingAttemptGeneration == 0u || !closing->submissionBinding.valid())
+        TerminateInvariant();
+    outRecordingAttemptGeneration = closing->recordingAttemptGeneration;
+    outSubmissionBinding = closing->submissionBinding;
+    inoutArmed = true;
 }
 
 b8 GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{

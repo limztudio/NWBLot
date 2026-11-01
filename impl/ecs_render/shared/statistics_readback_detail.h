@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/statistics_readback_state.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection/backend.h>
@@ -30,10 +31,14 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<u32 SlotCount>
-[[nodiscard]] inline Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(Core::GraphicsRuntime& graphics, const usize counterByteSize, const Name (&names)[SlotCount]){
+template<usize SlotCount>
+[[nodiscard]] inline Expected<Array<Core::BufferHandle, SlotCount>> CreateStatisticsReadbackBuffers(
+    const usize counterByteSize,
+    const Array<Name, SlotCount>& names,
+    Core::GraphicsRuntime& graphics
+){
     Array<Core::BufferHandle, SlotCount> buffers;
-    for(u32 index = 0u; index < SlotCount; ++index){
+    for(usize index = 0u; index < SlotCount; ++index){
         Core::BufferDesc desc;
         desc.setByteSize(counterByteSize).setCpuAccess(Core::CpuAccessMode::Read).setDebugName(names[index]).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         auto bufferResult = graphics.createBuffer(desc);
@@ -44,8 +49,40 @@ template<u32 SlotCount>
     return buffers;
 }
 
-template<usize CounterByteSize, u32 SlotCount, typename ControlHandleT>
-inline void PollCompletedStatisticsReadback(ControlHandleT& control, Core::GraphicsRuntime& graphics, const Core::BufferHandle (&buffers)[SlotCount], const TStringView mapErrorMessage){
+template<usize CounterByteSize, usize SlotCount, typename ControlT>
+[[nodiscard]] inline b8 PrepareStatisticsReadbackControlAndBuffers(
+    const Array<Name, SlotCount>& names,
+    const TStringView controlErrorMessage,
+    Core::Alloc::GlobalArena& arena,
+    Core::GraphicsRuntime& graphics,
+    RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>& inOutControl,
+    Array<Core::BufferHandle, SlotCount>& outBuffers
+){
+    const u16 deviceGeneration = graphics.getDevice().getDeviceGeneration();
+    if(!inOutControl){
+        auto controlResult = CreateStatisticsControl<ControlT>(arena, deviceGeneration);
+        if(!controlResult){
+            NWB_LOGGER_ERROR(controlErrorMessage);
+            return false;
+        }
+        inOutControl = Move(*controlResult);
+    }
+    auto buffers = CreateStatisticsReadbackBuffers(CounterByteSize, names, graphics);
+    if(!buffers)
+        return false;
+    inOutControl->reset(deviceGeneration);
+    for(usize index = 0u; index < SlotCount; ++index)
+        outBuffers[index] = Move((*buffers)[index]);
+    return true;
+}
+
+template<usize CounterByteSize, usize SlotCount, typename ControlHandleT>
+inline void PollCompletedStatisticsReadback(
+    const Array<Core::BufferHandle, SlotCount>& buffers,
+    const TStringView mapErrorMessage,
+    ControlHandleT& control,
+    Core::GraphicsRuntime& graphics
+){
     if(!control)
         return;
     auto& device = graphics.getDevice();
@@ -64,11 +101,11 @@ inline void PollCompletedStatisticsReadback(ControlHandleT& control, Core::Graph
         const Expected<void*> counters = device.mapBuffer(*buffers[index], Core::CpuAccessMode::Read);
         if(!counters){
             NWB_LOGGER_ERROR(mapErrorMessage);
-            control->complete(key, token, nullptr);
+            control->complete(key, token, {});
             continue;
         }
-        u32 completedCounters[CounterByteSize / sizeof(u32)];
-        NWB_MEMCPY(completedCounters, sizeof(completedCounters), *counters, sizeof(completedCounters));
+        Array<u32, CounterByteSize / sizeof(u32)> completedCounters{};
+        NWB_MEMCPY(completedCounters.data(), sizeof(completedCounters), *counters, sizeof(completedCounters));
         device.unmapBuffer(*buffers[index]);
         control->complete(key, token, completedCounters);
     }

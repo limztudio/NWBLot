@@ -38,9 +38,9 @@ public:
 
 
 private:
+    UniquePtr<FramebufferCapture> m_capture;
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
-    UniquePtr<FramebufferCapture> m_capture;
     Timer m_liveWarmupStartTime = {};
     u64 m_requiredPresentations = 360u;
     u64 m_liveWarmupStartPresentations = 0u;

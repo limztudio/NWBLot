@@ -21,6 +21,16 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+f64 GpuTaskGraphRecordingStatistics::readyFrontierWorkerUtilization()const noexcept{
+    if(!(readyFrontierWorkerCapacitySeconds > 0.0))
+        return 0.0;
+    return Saturate(readyFrontierWorkerBusySeconds / readyFrontierWorkerCapacitySeconds);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuRecordedGraph::PacketRecordingScratch::ensureValid(GraphicsArena& arena){
     if(!stateFanInScratchArena){
         stateFanInScratchArena = MakeGlobalUnique<Alloc::ScratchArena>(arena, GpuPacketRuntimeDetail::s_PacketStateFanInScratchArena);
@@ -203,6 +213,38 @@ b8 GpuRecordedGraph::releaseCommandListCache()noexcept{
     return true;
 }
 
+b8 GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+    if(!planAccess.validFor(compiledGraph))
+        return false;
+    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
+    if(!artifactOperation.valid())
+        return false;
+    return validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation);
+}
+
+b8 GpuRecordedGraph::validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
+    if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess))
+        return false;
+    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
+    if(!artifactOperation.valid())
+        return false;
+    return validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation);
+}
+
+u64 GpuRecordedGraph::recordingAttemptGeneration()const noexcept{
+    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
+    return artifactOperation.valid() && m_activeStorage ? m_activeStorage->recordingAttemptGeneration : 0u;
+}
+
+Optional<GpuRecordedPacket> GpuRecordedGraph::packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept{
+    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
+    if(!artifactOperation.valid())
+        return {};
+    const GpuRecordedPacket* const recordedPacket = findWithinArtifactOperation(packet, artifactOperation);
+    static_assert(noexcept(GpuRecordedPacket(*recordedPacket)));
+    return recordedPacket ? Optional<GpuRecordedPacket>(*recordedPacket) : Optional<GpuRecordedPacket>();
+}
+
 void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept{
     const usize packetCount = Min(storage.packetCount, storage.packets.size());
     for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
@@ -370,40 +412,6 @@ b8 GpuRecordedGraph::validForWithinArtifactOperation(
         // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease.
         // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated.
     ;
-}
-
-b8 GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
-    if(!planAccess.validFor(compiledGraph))
-        return false;
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    if(!artifactOperation.valid())
-        return false;
-    return validForWithinArtifactOperation(compiledGraph, planAccess, artifactOperation);
-}
-
-b8 GpuRecordedGraph::validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept{
-    if(!declarationAccess.validFor(graph) || !planAccess.validFor(declarationAccess))
-        return false;
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    if(!artifactOperation.valid())
-        return false;
-    return validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation);
-}
-
-
-u64 GpuRecordedGraph::recordingAttemptGeneration()const noexcept{
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    return artifactOperation.valid() && m_activeStorage ? m_activeStorage->recordingAttemptGeneration : 0u;
-}
-
-
-Optional<GpuRecordedPacket> GpuRecordedGraph::packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept{
-    ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Read);
-    if(!artifactOperation.valid())
-        return {};
-    const GpuRecordedPacket* const recordedPacket = findWithinArtifactOperation(packet, artifactOperation);
-    static_assert(noexcept(GpuRecordedPacket(*recordedPacket)));
-    return recordedPacket ? Optional<GpuRecordedPacket>(*recordedPacket) : Optional<GpuRecordedPacket>();
 }
 
 

@@ -3,7 +3,6 @@
 
 
 #include "router.h"
-#include "../rect_math.h"
 
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
@@ -20,25 +19,21 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_input_router{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Contains(const Rect& rectangle, const Point& position)noexcept{
-    return
-        position.x >= rectangle.x && position.y >= rectangle.y
-        && position.x < VectorGetX(VectorAdd(VectorReplicate(rectangle.x), VectorReplicate(rectangle.width)))
-        && position.y < VectorGetX(VectorAdd(VectorReplicate(rectangle.y), VectorReplicate(rectangle.height)))
-    ;
+const HitTarget* InputRouter::FindTargetInTable(const Span<const HitTarget> targets, const Span<const TargetLookup> lookup, const WidgetId id, const u64 declarationGeneration)noexcept{
+    usize begin = 0u;
+    usize end = lookup.size();
+    while(begin < end){
+        const usize middle = begin + (end - begin) / 2u;
+        if(lookup[middle].value < id.value)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    if(begin == lookup.size() || lookup[begin].value != id.value)
+        return nullptr;
+    const HitTarget& target = targets[lookup[begin].index];
+    return declarationGeneration == 0u || target.declarationGeneration == declarationGeneration ? &target : nullptr;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,11 +58,10 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_stagedPopups(arena)
     , m_popupDismissals(arena)
 {
-    constexpr usize s_SourceReserve = 16u;
-    m_boundSources.reserve(s_SourceReserve);
-    m_commandSources.reserve(s_SourceReserve);
-    m_pointerBindings.reserve(s_SourceReserve);
-    m_pointerSources.reserve(s_SourceReserve);
+    m_boundSources.reserve(s_InputSourceReserve);
+    m_commandSources.reserve(s_InputSourceReserve);
+    m_pointerBindings.reserve(s_InputSourceReserve);
+    m_pointerSources.reserve(s_InputSourceReserve);
     m_targets.reserve(s_InputMaxTargets);
     m_stagedTargets.reserve(s_InputMaxTargets);
     m_lookup.reserve(s_InputMaxTargets);
@@ -98,7 +92,7 @@ Expected<InputEvent> InputRouter::queue(const InputEvent& event){
 InputRoutingResult InputRouter::process(){
     InputRoutingResult result;
     for(const InputEvent& event : m_events){
-        if(IsPointerEvent(event.type))
+        if(IsPointerInputEventType(event.type))
             routePointerSource(event, result);
         else if(event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp)
             routeCommand(event, result);
@@ -124,10 +118,11 @@ InputRoutingResult InputRouter::process(){
     return result;
 }
 
-b8 InputRouter::commitTargets(const HitTarget* targets, const usize count, const u64 layoutGeneration, const PopupScope* popups, const usize popupCount, const u64 expectedFocusLossGeneration){
-    if(count > s_InputMaxTargets || (count != 0u && targets == nullptr) || layoutGeneration <= m_layoutGeneration)
+b8 InputRouter::commitTargets(const Span<const HitTarget> targets, const u64 layoutGeneration, const Span<const PopupScope> popups, const u64 expectedFocusLossGeneration){
+    const usize count = targets.size();
+    if(count > s_InputMaxTargets || layoutGeneration <= m_layoutGeneration)
         return false;
-    if(!stagePopups(popups, popupCount))
+    if(!stagePopups(popups))
         return false;
     m_stagedTargets.clear();
     m_stagedLookup.clear();
@@ -186,22 +181,6 @@ b8 InputRouter::commitTargets(const HitTarget* targets, const usize count, const
         }
     }
     return true;
-}
-
-const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const noexcept{
-    usize begin = 0u;
-    usize end = m_lookup.size();
-    while(begin < end){
-        const usize middle = begin + (end - begin) / 2u;
-        if(m_lookup[middle].value < id.value)
-            begin = middle + 1u;
-        else
-            end = middle;
-    }
-    if(begin == m_lookup.size() || m_lookup[begin].value != id.value)
-        return nullptr;
-    const HitTarget& target = m_targets[m_lookup[begin].index];
-    return declarationGeneration == 0u || target.declarationGeneration == declarationGeneration ? &target : nullptr;
 }
 
 void InputRouter::invalidateTarget(const WidgetId id){
@@ -264,6 +243,53 @@ b8 InputRouter::wouldConsumePointer(const Point& position)const noexcept{
     return hasPopup() || m_capture.valid() || hitTest(position).valid();
 }
 
+b8 InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
+    const PointerSource* held = findPointerSource(source, intent);
+    return held != nullptr && held->consumed;
+}
+
+b8 InputRouter::ownsSource(const InputSource& source)const noexcept{
+    const CommandSource* held = findCommandSource(source);
+    return held && held->consumed;
+}
+
+PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
+    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
+        return current.source == source && current.intent == intent;
+    });
+    return found == m_pointerSources.end() ? nullptr : &*found;
+}
+
+const PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
+    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
+        return current.source == source && current.intent == intent;
+    });
+    return found == m_pointerSources.end() ? nullptr : &*found;
+}
+
+CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{
+    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
+        return current.source == source;
+    });
+    return found == m_commandSources.end() ? nullptr : &*found;
+}
+
+const CommandSource* InputRouter::findCommandSource(const InputSource& source)const noexcept{
+    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
+        return current.source == source;
+    });
+    return found == m_commandSources.end() ? nullptr : &*found;
+}
+
+b8 InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
+    const auto& owner = source.focusOwner;
+    const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
+    return
+        m_windowFocused && source.consumed && owner.target.valid() && m_focus == owner.target && m_focusDeclaration == owner.declarationGeneration
+        && focused != nullptr && focused->focusable && isInteractive(*focused) && focused->popup == owner.popup && focused->control == owner.control
+    ;
+}
+
 void InputRouter::cancelPointerPress()noexcept{
     m_pointerSubmitArmed = false;
     m_secondaryOwner = {};
@@ -285,7 +311,7 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept
         return nullptr;
     const HitTarget* found = nullptr;
     for(const HitTarget& target : m_targets){
-        if(!__hidden_ui_input_router::Contains(target.rectangle, position) || !__hidden_ui_input_router::Contains(target.clip, position) || !isInteractive(target))
+        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !isInteractive(target))
             continue;
         if(found == nullptr || target.layer > found->layer || (target.layer == found->layer && target.paintOrder >= found->paintOrder))
             found = &target;
@@ -293,13 +319,9 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const noexcept
     return found;
 }
 
-b8 InputRouter::isInteractive(const HitTarget& target)const noexcept{
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
-    const f32 left = VectorGetX(visibleBounds);
-    const f32 top = VectorGetY(visibleBounds);
-    const f32 right = VectorGetZ(visibleBounds);
-    const f32 bottom = VectorGetW(visibleBounds);
-    return target.enabled && right > left && bottom > top && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
+b8 InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
+    const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
+    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
 
 void InputRouter::rebuildLookup(){
@@ -346,10 +368,6 @@ void InputRouter::reconcileTargets()noexcept{
     reconcileContextMenus();
     reconcileCommandPresses();
     updateHover();
-}
-
-void InputRouter::updateHover()noexcept{
-    setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr);
 }
 
 void InputRouter::setHoverTarget(const HitTarget* hovered)noexcept{

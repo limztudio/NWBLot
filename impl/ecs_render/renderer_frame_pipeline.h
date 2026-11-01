@@ -5,13 +5,10 @@
 #pragma once
 
 
-#include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/avboit/renderer_avboit_state.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/deferred/deferred_system.h>
-#include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
@@ -24,10 +21,7 @@
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shared/task_graph_stage.h>
-#include <impl/assets_graphics/csg/subsystem.adhd.h>
-#include <impl/assets_graphics/renderer/subsystem.adhd.h>
-#include <impl/assets_graphics/transparent/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/ecs_csg/frame_state.h>
@@ -81,73 +75,21 @@ struct RayTracingSceneGraphReads;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// These semantic prefix stages may coalesce into one native submission or split at a compiler-derived cross-queue frontier.
-// Each stage points at a rebindable timing slot so the renderer can attach one ticket to every actual packet after compilation.
-namespace DeferredGraphicsPrefixTimingSlot{
-    enum Enum : u8{
-        MeshViewSetup,
-        SceneShadingSetup,
-        DeferredClear,
-        Gbuffer,
-        CsgReceiverSpanBuild,
-        CsgIntervalCombine,
-        CsgIntervalSample,
-        Normalize,
-        Count,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererFramePipeline final : NoCopy{
     friend class OpaqueEmulationMergeValidator;
-    friend class FrameExecuteCpuRestore;
-    friend class FrameExecuteHistoryCopy;
     friend class FrameExecuteLifecycle;
     friend class FrameExecutePresentTails;
     friend class FrameExecuteRecovery;
     friend struct FrameExecuteStateLifecycleSet;
     friend struct FrameExecuteTimingState;
-    friend class FrameExecuteSurfelReadback;
     friend class ShadowPreparePacketValidator;
     friend class SurfelCausticsMergeValidator;
     friend class GraphicsPrefixTimingResolver;
     friend class ShadowVisibilityMergeValidator;
 
 
-private:
-    // Transition reports observe accepted-history lifecycle decisions without owning them.
-    struct LaggedLightingReport{
-        enum Enum : u8{
-            Unreported,
-            NoDedicatedAsyncCompute,
-            BootstrapAccepted,
-            ActiveHistoryAccepted,
-            CurrentFrameAccepted,
-        };
-    };
-
-
 public:
-    using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
-
-
-public:
-    RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver);
+    RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver);
     ~RendererFramePipeline();
 
 
@@ -160,7 +102,7 @@ public:
     [[nodiscard]] b8 prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
     [[nodiscard]] b8 appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_shaderSystem.setActiveSceneSubsystems(subsystems); }
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
     [[nodiscard]] b8 isTransparentFeatureEnabled()const noexcept{
         return m_activeSceneSubsystems && m_activeSceneSubsystems->hasSubsystem<TransparentSubsystem>();
     }
@@ -171,7 +113,7 @@ public:
     void setRefractionEnabled(const b8 enabled)noexcept{ m_refractionEnabled = enabled; }
 
     void setRefractionDiagnosticsEnabled(const b8 enabled)noexcept{ m_raytracingSystem.setRefractionDiagnosticsEnabled(enabled); }
-    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept;
+    [[nodiscard]] Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const noexcept{ return m_raytracingSystem.tryGetLatestRefractionStatistics(); }
 
     void setRefractionHardwareTracingEnabled(const b8 enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
@@ -181,12 +123,7 @@ public:
         return m_raytracingSystem.setCausticQualitySettings(settings);
     }
 
-    [[nodiscard]] b8 setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
-        if(!ValidateSurfelGiQualitySettings(settings))
-            return false;
-        m_surfelGiQualitySettings = settings;
-        return true;
-    }
+    [[nodiscard]] b8 setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept;
 
     [[nodiscard]] b8 setSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
         return m_raytracingSystem.setSoftwareShadowSettings(settings);
@@ -196,22 +133,9 @@ public:
         return m_raytracingSystem.setShadowQualitySettings(settings);
     }
     [[nodiscard]] b8 setReflectionSettings(const ReflectionSettings& settings)noexcept;
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
-    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
-    void setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
-        if(m_frameLaggedAsyncLightingEnabled == enabled)
-            return;
-    // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
-        m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
-        if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
-            m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
-            m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
-        }
-        m_frameLaggedAsyncLightingEnabled = enabled;
-        m_laggedLightingReport = LaggedLightingReport::Unreported;
-        m_laggedLightingReportGeneration = 0u;
-        resetLaggedLightingHistoryReadTracking();
-    }
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept{ return m_reflectionSystem.tryGetLatestStatistics(); }
+    [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept{ return m_deferredSystem.setPresentationSettings(settings); }
+    void setFrameLaggedAsyncLightingEnabled(b8 enabled)noexcept;
 
     // Telemetry for current deferred graph artifacts. Valid until the next graph/recording/transaction reset.
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;
@@ -235,7 +159,7 @@ private:
     // Accepted cross-frame state survives ordinary recording attempts. Reset only when the target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
     void resetInvalidatedResourceStateHandoffs()noexcept;
-    void invalidateLaggedLightingHistorySubmission()noexcept;
+    void invalidateLaggedLightingHistorySubmission()noexcept{ m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{}; }
     void invalidateLaggedLightingHistoryWriterDrain()noexcept;
     void resetLaggedLightingHistoryReadTracking()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
@@ -258,7 +182,7 @@ private:
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         b8 hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
-        const ECSRenderDetail::MeshViewGpuData& meshViewState,
+        const MeshViewGpuData& meshViewState,
         b8 meshViewUploadRequired,
         const DeferredGraphResourceImportResult& resources,
         Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
@@ -273,7 +197,7 @@ private:
         GraphClearTimingRecordState& csgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
-        Core::GpuTimingSubmissionTicket** timingTickets
+        Span<Core::GpuTimingSubmissionTicket*> timingTickets
     );
     [[nodiscard]] b8 declareDeferredShadowVisibilityTask(
         const DeferredLightingGraphResources& deferredLightingResources,
@@ -373,7 +297,7 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
-        Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
+        Span<Core::GpuTimingSubmissionTicket*> graphicsPrefixTimingTickets,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         GraphClearTimingRecordState& avboitClearTimingState,
@@ -412,7 +336,7 @@ private:
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
-    ShaderPathResolveCallback m_shaderPathResolver;
+    RendererShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
     // A successful graphics tick can skip renderer execution while telemetry still captures.
     // Keep the exact source frame separate from graph generations so retained prior-frame runtime statistics never look current.
@@ -458,7 +382,7 @@ private:
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet.
     // Keep every phase ID so validation can prove the strict D(A) -> R(A) -> ... order, not just endpoint coalescing.
     // The active prefix holds four, six, eight, or ten phases for two through five draws.
-    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[s_SharedComputeEmulationMaximumPhaseCount] = {};
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_graphicsPrefixOpaqueSharedComputeEmulationTasks = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
@@ -493,11 +417,7 @@ private:
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
     Core::GpuTaskId m_deferredCausticResolvePrepareTask;
-    Core::GpuTaskId m_deferredCausticResolveWaveletTask;
-    Core::GpuTaskId m_deferredCausticResolveSecondWaveletTask;
-    Core::GpuTaskId m_deferredCausticResolveThirdWaveletTask;
-    Core::GpuTaskId m_deferredCausticResolveFourthWaveletTask;
-    Core::GpuTaskId m_deferredCausticResolveFifthWaveletTask;
+    Array<Core::GpuTaskId, s_CausticResolveWaveletPassCount> m_deferredCausticResolveWaveletTasks{};
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
     // Surfel lifecycle publishes after all four clears accept; stages share one effects packet.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;

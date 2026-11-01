@@ -4,8 +4,6 @@
 
 #include "manager.h"
 
-#include <core/common/log.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,13 +12,6 @@ NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AssetManager::AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
-    : m_registry(registry)
-    , m_binarySource(binarySource)
-    , m_arena(arena)
-{}
 
 
 Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const Name& virtualPath)const{

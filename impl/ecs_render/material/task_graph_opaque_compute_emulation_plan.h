@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/material/compute_emulation_output_index.h>
+#include <impl/ecs_render/material/generated_geometry_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,95 +23,25 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct OpaqueRegularComputeEmulationGraphPlan{
-    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-
-
-public:
+struct OpaqueRegularComputeEmulationGraphPlan : AliasFreeComputeEmulationGraphPlan{
     DrawItemVector meshDrawItems;
     DrawItemVector indexedDrawItems;
-    DrawItemVector drawItems;
-    BufferVector outputBuffers;
-    b8 captured = false;
 
 
 public:
     explicit OpaqueRegularComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
-        : meshDrawItems(arena)
+        : AliasFreeComputeEmulationGraphPlan(arena)
+        , meshDrawItems(arena)
         , indexedDrawItems(arena)
-        , drawItems(arena)
-        , outputBuffers(arena)
     {}
 
 
 public:
-    void reset()noexcept{
-        meshDrawItems.clear();
-        indexedDrawItems.clear();
-        drawItems.clear();
-        outputBuffers.clear();
-        captured = false;
-    }
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena);
 
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena){
-        reset();
-        if(sourceDrawItems.computeDrawItems.empty())
-            return false;
-
-        meshDrawItems.reserve(sourceDrawItems.meshDrawItems.size());
-        meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
-        indexedDrawItems.reserve(sourceDrawItems.indexedDrawItems.size());
-        indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
-        drawItems.reserve(sourceDrawItems.computeDrawItems.size());
-        outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
-        MaterialPassEmulationOutputIndex<NotNull<Core::Buffer*>> outputs(scratchArena);
-        for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
-            // First split is opaque-only; CSG stays on the combined callback.
-            if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None){
-                reset();
-                return false;
-            }
-            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid()){
-                reset();
-                return false;
-            }
-            // Decline aliasing producers rather than moving draws across them.
-            if(!outputs.insert(MakeNotNull(mesh.emulationVertexBuffer.get()))){
-                reset();
-                return false;
-            }
-            drawItems.push_back(drawItem);
-            outputBuffers.push_back(mesh.emulationVertexBuffer);
-        }
-        captured = drawItems.size() == outputBuffers.size() && !drawItems.empty();
-        return captured;
-    }
-
-    [[nodiscard]] b8 matches(const Span<const MaterialPassDrawItem> currentDrawItems)const noexcept{
-        if(!captured || currentDrawItems.size() != drawItems.size() || outputBuffers.size() != drawItems.size())
-            return false;
-
-        for(usize drawIndex = 0u; drawIndex < currentDrawItems.size(); ++drawIndex){
-            const MaterialPassDrawItem& expected = drawItems[drawIndex];
-            const MaterialPassDrawItem& current = currentDrawItems[drawIndex];
-            if(
-                current.meshKey != expected.meshKey
-                || current.instanceIndex != expected.instanceIndex
-                || current.materialConstantByteOffset != expected.materialConstantByteOffset
-                || current.shadingModelId != expected.shadingModelId
-                || current.meshletConeCullScaleSafe != expected.meshletConeCullScaleSafe
-                || current.meshResources.emulationIndexByteOffset != expected.meshResources.emulationIndexByteOffset
-                || current.pipelineResources.indexedGeometryOutput != expected.pipelineResources.indexedGeometryOutput
-            )
-                return false;
-
-            const MaterialPassMeshResourceSnapshot& mesh = current.meshResources;
-            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid() || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get())
-                return false;
-        }
-        return true;
+    [[nodiscard]] MaterialPassDrawItemsView drawItemsView()const noexcept{
+        return { meshDrawItems, indexedDrawItems, drawItems };
     }
 };
 

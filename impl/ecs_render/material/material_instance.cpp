@@ -4,11 +4,9 @@
 
 #include "material_instance.h"
 
-#include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/material/renderer_material_state.h>
-
 #include <core/common/log.h>
-#include <core/ecs/world.h>
+
+#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,216 +18,103 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_material_instance{
+Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
+    const usize dotIndex = parameterName.find('.');
+    if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form"), ConvertString(parameterName));
+        return MakeUnexpected(Failure{});
+    }
+    if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator"), ConvertString(parameterName));
+        return MakeUnexpected(Failure{});
+    }
 
+    const auto name = Name::FromText(parameterName);
+    const auto blockName = Name::FromText(parameterName.substr(0u, dotIndex));
+    const auto fieldName = Name::FromText(parameterName.substr(dotIndex + 1u));
+    if(!name || !blockName || !fieldName){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
+        return MakeUnexpected(Failure{});
+    }
+    MaterialInstanceParameterNames result;
+    result.parameterName = *name;
+    result.blockName = *blockName;
+    result.fieldName = *fieldName;
+    return result;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+UInt4U PackMaterialInstanceBytes(const Span<const u8> bytes)noexcept{
+    UInt4U packed = {};
+    NWB_ASSERT(bytes.size() <= sizeof(packed.raw));
+    if(!bytes.empty())
+        NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes.data(), bytes.size());
+    return packed;
+}
 
-
-[[nodiscard]] static b8 WriteMaterialInstanceOverrideBytes(
-    const Core::ECS::EntityID entity,
-    const Name& materialName,
-    const MaterialInstanceParameter& parameter,
-    const MaterialTypedLayoutField& field,
-    const u32 byteOffset,
-    const Span<u8> inOutMutableTypedBytes
-){
-    const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
-    NWB_ASSERT(fieldByteSize != 0u);
-    if(byteOffset > inOutMutableTypedBytes.size() || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'"), ConvertString(parameter.parameterName.resolvedText()), entity.id, ConvertString(materialName.resolvedText()));
+b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
+    if(!materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), ConvertString(parameterNameText));
         return false;
     }
-
-    const NotNull<const u8*> valueBytes = MakeNotNull(reinterpret_cast<const u8*>(parameter.value.raw));
-    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes.get(), fieldByteSize);
-    return true;
-}
-
-
-// Single source of truth for cache validity shared by prepare and find paths.
-[[nodiscard]] static b8 MaterialInstanceMutableCacheEntryMatches(const MaterialInstanceMutableCacheEntry& cacheEntry, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance)noexcept{
-    return
-        cacheEntry.materialName == materialInfo.materialName
-        && cacheEntry.materialInterface == materialInfo.materialInterface
-        && materialInstance.materialInterface == materialInfo.materialInterface
-        && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
-        && cacheEntry.revision == materialInstance.revision
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MaterialInstanceOverrideField> RendererMaterialSystem::FindMaterialInstanceOverrideField(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceParameter& parameter){
-    u32 constantBlockByteBegin = 0u;
-    u32 mutableBlockByteBegin = 0u;
-    for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
-        // MaterialSurfaceInfo copies the already-validated cooked layout; keep a debug-only invariant here.
-        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
-
-        const b8 mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
-        const u32 blockByteBegin = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
-        u32& blockByteEnd = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
-        // MaterialSurfaceInfo copies the already-validated cooked byte sizes; keep a debug-only invariant here.
-        NWB_ASSERT(block.byteSize <= Limit<u32>::s_Max - blockByteEnd);
-        blockByteEnd += block.byteSize;
-
-        if(block.blockName != parameter.blockName)
-            continue;
-
-        const usize fieldBegin = static_cast<usize>(block.fieldBegin);
-        const usize fieldCount = static_cast<usize>(block.fieldCount);
-        // MaterialSurfaceInfo copies the already-validated cooked field ranges; keep a debug-only invariant here.
-        NWB_ASSERT(fieldBegin <= materialInfo.typedLayoutFields.size() && fieldCount <= materialInfo.typedLayoutFields.size() - fieldBegin);
-
-        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
-            const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
-            if(field.fieldName != parameter.fieldName)
-                continue;
-
-            return MaterialInstanceOverrideField{ field, blockByteBegin, mutableBlock };
-        }
-        break;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'"), ConvertString(parameter.parameterName.resolvedText()), entity.id, ConvertString(materialInfo.materialName.resolvedText()));
-    return MakeUnexpected(Failure{});
-}
-
-b8 RendererMaterialSystem::ApplyMaterialInstanceOverrides(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent& materialInstance, const Span<u8> inOutMutableTypedBytes){
-    if(!materialInstance.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface"), entity.id);
+    if(!component.materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface"), ConvertString(parameterNameText));
         return false;
     }
-    if(materialInstance.materialInterface != materialInfo.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
-            , entity.id
-            , ConvertString(materialInstance.materialInterface.resolvedText())
-            , ConvertString(materialInfo.materialName.resolvedText())
-            , ConvertString(materialInfo.materialInterface.resolvedText())
-        );
+    if(component.materialInterface == materialInterface)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
+        , ConvertString(parameterNameText)
+        , ConvertString(materialInterface.resolvedText())
+        , ConvertString(component.materialInterface.resolvedText())
+    );
+    return false;
+}
+
+b8 StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, const AStringView parameterNameText){
+    if(TryStoreMaterialMutableParameter(component, parameter))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type"), ConvertString(parameterNameText));
+    return false;
+}
+
+MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
+    MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
+    if(component)
+        return component;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    return nullptr;
+}
+
+b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+    if(!IsMaterialLayoutNumericFieldType(fieldType)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), ConvertString(parameterNameText));
         return false;
     }
+    if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
+        return false;
 
-    for(const MaterialInstanceParameter& parameter : materialInstance.overrides){
-        if(!parameter.blockName || !parameter.fieldName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override for entity {} has an invalid parameter name"), entity.id);
-            return false;
-        }
+    const auto names = SplitMaterialInstanceParameterName(parameterNameText);
+    if(!names)
+        return false;
 
-        const auto resolvedField = FindMaterialInstanceOverrideField(entity, materialInfo, parameter);
-        if(!resolvedField)
-            return false;
-
-        const MaterialTypedLayoutField& field = resolvedField->field;
-        if(!resolvedField->mutableBlock){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage"), ConvertString(parameter.parameterName.resolvedText()), entity.id);
-            return false;
-        }
-        if(field.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
-                , ConvertString(parameter.parameterName.resolvedText())
-                , entity.id
-                , ConvertString(materialInfo.materialName.resolvedText())
-            );
-            return false;
-        }
-
-        NWB_ASSERT(field.offset <= Limit<u32>::s_Max - resolvedField->blockByteBegin);
-        const u32 fieldByteOffset = resolvedField->blockByteBegin + field.offset;
-        if(!__hidden_material_instance::WriteMaterialInstanceOverrideBytes(entity, materialInfo.materialName, parameter, field, fieldByteOffset, inOutMutableTypedBytes))
-            return false;
-    }
-
-    return true;
+    const MaterialInstanceParameter parameter = BuildMaterialInstanceParameter(*names, fieldType, value);
+    return StoreMaterialMutableParameter(component, parameter, parameterNameText);
 }
 
-Expected<Span<const u8>> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
-    const Core::ECS::EntityID entity,
-    const MaterialSurfaceInfo& materialInfo,
-    const MaterialInstanceComponent* materialInstance
-){
-    pruneMaterialInstanceMutableCache();
+b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
+    MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
+    if(!component)
+        return false;
 
-    if(!materialInstance || materialInstance->overrides.empty()){
-        return Span<const u8>(materialInfo.mutableDefaultTypedBytes);
-    }
-
-    auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
-    MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
-    if(__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
-        return Span<const u8>(cacheEntry.mutableTypedBytes);
-    }
-
-    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, materialInfo.mutableDefaultTypedBytes);
-    if(!ApplyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, cacheEntry.mutableTypedBytes)){
-        m_materialState.m_instanceMutableCache.erase(it);
-        return MakeUnexpected(Failure{});
-    }
-
-    cacheEntry.materialName = materialInfo.materialName;
-    cacheEntry.materialInterface = materialInfo.materialInterface;
-    cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
-    cacheEntry.revision = materialInstance->revision;
-
-    return Span<const u8>(cacheEntry.mutableTypedBytes);
+    return SetMaterialMutableParameter(*component, materialInterface, parameterName, fieldType, value);
 }
 
-Expected<Span<const u8>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(const Core::ECS::EntityID entity, const MaterialSurfaceInfo& materialInfo, const MaterialInstanceComponent* materialInstance)const noexcept{
-    if(!materialInstance || materialInstance->overrides.empty()){
-        return Span<const u8>(materialInfo.mutableDefaultTypedBytes);
-    }
-
-    const auto found = m_materialState.m_instanceMutableCache.find(entity);
-    if(found == m_materialState.m_instanceMutableCache.end())
-        return MakeUnexpected(Failure{});
-
-    const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
-    if(!__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
-        return MakeUnexpected(Failure{});
-
-    return Span<const u8>(cacheEntry.mutableTypedBytes);
-}
-
-Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccluderMaterialContext(
-    const Core::ECS::EntityID entity,
-    const MaterialSurfaceInfo& materialInfo,
-    const NWB::Impl::Scene::TransformComponent* transform,
-    MaterialTypedByteDataVector& inOutMaterialTypedBytes,
-    ECSRenderDetail::MaterialTypedConstantRangeMap& inOutConstantRanges,
-    ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
-){
-    const auto constantRange = ECSRenderDetail::FindOrAppendMaterialConstantTypedByteRange(materialInfo.materialName, materialInfo.typedLayoutHash, materialInfo.constantTypedBytes, inOutMaterialTypedBytes, inOutConstantRanges);
-    if(!constantRange)
-        return MakeUnexpected(Failure{});
-
-    const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
-    const auto mutableTypedBytes = prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance);
-    if(!mutableTypedBytes)
-        return MakeUnexpected(Failure{});
-    const auto mutableRange = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(*mutableTypedBytes, inOutMaterialTypedBytes, inOutMutableRanges);
-    if(!mutableRange)
-        return MakeUnexpected(Failure{});
-
-    const MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
-    return ShadowOccluderMaterialContext{ ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges), constantRange->byteOffset };
-}
-
-void RendererMaterialSystem::pruneMaterialInstanceMutableCache()noexcept{
-    const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
-    if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
-        return;
-
-    m_materialState.m_instanceMutableCache.clear();
-    m_materialState.m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
+b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
+    const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
+    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }
 
 

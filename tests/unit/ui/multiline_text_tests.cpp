@@ -35,7 +35,7 @@ constexpr AStringView s_BorrowedSourceText = "prefix a\r\nb\tz suffix";
 
 TEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes){
     Tests::TestArena arena;
-    const AStringView cases[]{ "", "\n", "\n\n", "\nfirst\n", "first\n\nlast\n" };
+    const Array<AStringView, 5> cases{ "", "\n", "\n\n", "\nfirst\n", "first\n\nlast\n" };
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_TRUE(ValidateMultilineText(text));
@@ -54,8 +54,8 @@ TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNo
         if(scalar > s_UnicodeSpace && scalar < s_AsciiTilde)
             continue;
         SCOPED_TRACE(scalar);
-        const char bytes[]{ 'a', static_cast<char>(scalar), 'b' };
-        const AStringView text(bytes, 3u);
+        const Array<char, 3> bytes{ 'a', static_cast<char>(scalar), 'b' };
+        const AStringView text(bytes.data(), 3u);
         const b8 canonical = scalar == s_UnicodeLineFeed || (scalar >= s_UnicodeSpace && scalar < s_UnicodeDelete);
         EXPECT_EQ(ValidateMultilineText(text), canonical);
         const b8 normalizable = canonical || scalar == s_UnicodeTab || scalar == s_UnicodeCarriageReturn;
@@ -65,8 +65,8 @@ TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNo
             ASSERT_TRUE(normalized);
             AString<Core::Alloc::GlobalArena> output(Move(*normalized));
             const char replacement = scalar == s_UnicodeTab ? ' ' : scalar == s_UnicodeCarriageReturn ? '\n' : static_cast<char>(scalar);
-            const char expected[]{ 'a', replacement, 'b' };
-            EXPECT_EQ(AStringView(output.data(), output.size()), AStringView(expected, 3u));
+            const Array<char, 3> expected{ 'a', replacement, 'b' };
+            EXPECT_EQ(AStringView(output.data(), output.size()), AStringView(expected.data(), 3u));
             EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
         }
         else{
@@ -81,8 +81,8 @@ TEST(UiMultilineText, RejectsEveryC1ControlExceptNelDuringNormalization){
     Tests::TestArena arena;
     for(u32 scalar = s_Utf8OneByteMaxExclusive; scalar <= s_UnicodeC1Last; ++scalar){
         SCOPED_TRACE(scalar);
-        const char bytes[]{ 'a', static_cast<char>(s_Utf8C1LeadByte), static_cast<char>(scalar), 'b' };
-        const AStringView text(bytes, 4u);
+        const Array<char, 4> bytes{ 'a', static_cast<char>(s_Utf8C1LeadByte), static_cast<char>(scalar), 'b' };
+        const AStringView text(bytes.data(), 4u);
         EXPECT_FALSE(ValidateMultilineText(text));
         auto normalized = NormalizeMultilineText(arena.arena, text, 4u);
         if(scalar == s_UnicodeNextLine){
@@ -99,9 +99,9 @@ TEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSepara
         AStringView source;
         AStringView expected;
     };
-    const SeparatorCase cases[]{
-        { "\t", " " }, { "\r", "\n" }, { "\r\n", "\n" }, { s_NextLine, "\n" },
-        { s_LineSeparator, "\n" }, { s_ParagraphSeparator, "\n" }
+    const Array<SeparatorCase, 6> cases{
+        SeparatorCase{ "\t", " " }, SeparatorCase{ "\r", "\n" }, SeparatorCase{ "\r\n", "\n" }, SeparatorCase{ s_NextLine, "\n" },
+        SeparatorCase{ s_LineSeparator, "\n" }, SeparatorCase{ s_ParagraphSeparator, "\n" }
     };
     Tests::TestArena arena;
     for(const SeparatorCase& test : cases){
@@ -120,10 +120,10 @@ TEST(UiMultilineText, PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizin
         AStringView source;
         AStringView expected;
     };
-    const LineCase cases[]{
-        { "\r\r\n", "\n\n" }, { "\r\n\r", "\n\n" }, { "\n\r\n", "\n\n" },
-        { "\r\n\r\n", "\n\n" }, { "\r\nfirst\r\n\r\nlast\r", "\nfirst\n\nlast\n" },
-        { "\xC2\x85\xE2\x80\xA8\xE2\x80\xA9", "\n\n\n" }, { "last\r\n", "last\n" },
+    const Array<LineCase, 7> cases{
+        LineCase{ "\r\r\n", "\n\n" }, LineCase{ "\r\n\r", "\n\n" }, LineCase{ "\n\r\n", "\n\n" },
+        LineCase{ "\r\n\r\n", "\n\n" }, LineCase{ "\r\nfirst\r\n\r\nlast\r", "\nfirst\n\nlast\n" },
+        LineCase{ "\xC2\x85\xE2\x80\xA8\xE2\x80\xA9", "\n\n\n" }, LineCase{ "last\r\n", "last\n" },
     };
     Tests::TestArena arena;
     AString<Core::Alloc::GlobalArena> output(arena.arena);
@@ -138,7 +138,7 @@ TEST(UiMultilineText, PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizin
 }
 
 TEST(UiMultilineText, UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBytes){
-    const AStringView cases[]{
+    const Array<AStringView, 12> cases{
         "\xC2\xA0", "\xDF\xBF", "\xE0\xA0\x80", "\xED\x9F\xBF", "\xEE\x80\x80",
         "\xEF\xBF\xBF", "\xF0\x90\x80\x80", "\xF4\x8F\xBF\xBF",
         "\xE2\x80\xA7", "\xE2\x80\xAA", "\xE2\x80\x8B", "\xE2\x80\x8D",
@@ -156,7 +156,7 @@ TEST(UiMultilineText, UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBy
 }
 
 TEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequences){
-    const AStringView cases[]{
+    const Array<AStringView, 26> cases{
         "\x80", "\xBF", "\xC0\x80", "\xC0\xAF", "\xC1\xBF", "\xE0\x80\x80", "\xF0\x80\x80\x80",
         "\xED\xA0\x80", "\xED\xBF\xBF", "\xF4\x90\x80\x80", "\xF5\x80\x80\x80", "\xFE", "\xFF",
         "\xC2", "\xE2", "\xE2\x82", "\xF0", "\xF0\x9F", "\xF0\x9F\x92",
@@ -172,7 +172,7 @@ TEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequences){
 }
 
 TEST(UiMultilineText, RejectedControlsAfterNormalizedPrefixesFailWithInvalidText){
-    const AStringView cases[]{ "prefix\r\n\t\x01", "prefix\r\n\v", "prefix\r\n\f", "prefix\xC2\x85\x7F", "prefix\xE2\x80\xA8\xC2\x80", "prefix\xE2\x80\xA9\xC2\x9F", AStringView("prefix\r\n\0tail", 13u) };
+    const Array<AStringView, 7> cases{ "prefix\r\n\t\x01", "prefix\r\n\v", "prefix\r\n\f", "prefix\xC2\x85\x7F", "prefix\xE2\x80\xA8\xC2\x80", "prefix\xE2\x80\xA9\xC2\x9F", AStringView("prefix\r\n\0tail", 13u) };
     Tests::TestArena arena;
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
@@ -185,11 +185,11 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
         AStringView source;
         AStringView expected;
     };
-    const BudgetCase cases[]{
-        { "a\r\nb", "a\nb" }, { "\r\n\r\n", "\n\n" }, { "\xE2\x80\xA8\xE2\x80\xA9", "\n\n" },
-        { "\xC2\x85\t", "\n " }, { s_ThreeByteScalar, s_ThreeByteScalar },
-        { s_FourByteScalar, s_FourByteScalar },
-        { "\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n " }
+    const Array<BudgetCase, 7> cases{
+        BudgetCase{ "a\r\nb", "a\nb" }, BudgetCase{ "\r\n\r\n", "\n\n" }, BudgetCase{ "\xE2\x80\xA8\xE2\x80\xA9", "\n\n" },
+        BudgetCase{ "\xC2\x85\t", "\n " }, BudgetCase{ s_ThreeByteScalar, s_ThreeByteScalar },
+        BudgetCase{ s_FourByteScalar, s_FourByteScalar },
+        BudgetCase{ "\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n " }
     };
     Tests::TestArena arena;
     for(const BudgetCase& test : cases){
@@ -205,7 +205,7 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
 
 TEST(UiMultilineText, ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormalizedOutput){
     Tests::TestArena arena;
-    const AStringView cases[]{ "a", "\n", "\r\n", "\t", s_NextLine, s_LineSeparator, s_ParagraphSeparator };
+    const Array<AStringView, 7> cases{ "a", "\n", "\r\n", "\t", s_NextLine, s_LineSeparator, s_ParagraphSeparator };
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 0u), MakeUnexpected(EditTextStatus::TooLarge));
@@ -267,7 +267,7 @@ TEST(UiMultilineText, RejectedBorrowedViewsPreserveSourceBytesAndStorage){
     EXPECT_EQ(output.data(), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
 
-    const AStringView invalidAlias[]{ "prefix a\r\nb\x01", "prefix a\r\nb\xE2\x82", AStringView("prefix a\r\nb\0tail", 16u) };
+    const Array<AStringView, 3> invalidAlias{ "prefix a\r\nb\x01", "prefix a\r\nb\xE2\x82", AStringView("prefix a\r\nb\0tail", 16u) };
     for(const AStringView text : invalidAlias){
         output.assign(text.data(), text.size());
         const AString<Core::Alloc::GlobalArena> savedInvalid(output, arena.arena);

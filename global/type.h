@@ -63,6 +63,10 @@ using TStringView = BasicStringView<tchar>;
 
 
 using MaxAlign = std::max_align_t;
+using Nullptr = std::nullptr_t;
+
+inline constexpr usize s_ByteTypeByteSize = 1u;
+inline constexpr usize s_AlignRemainderZero = 0u;
 
 
 using GeneralException = std::exception;

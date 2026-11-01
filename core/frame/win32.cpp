@@ -57,31 +57,6 @@ namespace Win32MessagePumpResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename OnDestroyFunc, typename SetActiveFunc>
-[[nodiscard]] static b8 HandleWin32FrameLifecycleMessage(HWND hwnd, UINT message, WPARAM wParam, OnDestroyFunc&& onDestroy, SetActiveFunc&& setActive, LRESULT& outResult){
-    switch(message){
-    case WM_DESTROY:
-        onDestroy();
-        PostQuitMessage(0);
-        outResult = 0;
-        return true;
-    case WM_CLOSE:
-        outResult = 0;
-        if(!DestroyWindow(hwnd)){
-            const DWORD nativeError = GetLastError();
-            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 close failed; native_domain=Win32 native_code={}"), nativeError);
-        }
-        return true;
-    case WM_ACTIVATE:
-        setActive(LOWORD(wParam) != WA_INACTIVE);
-        outResult = 0;
-        return true;
-    default:
-        return false;
-    }
-}
-
-
 [[nodiscard]] static Win32MessagePumpResult::Enum HandleWin32QuitMessage(const WPARAM exitCode){
     if(exitCode != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 quit signaled failure; exit_domain=application exit_code={}"), static_cast<i32>(exitCode));
@@ -119,32 +94,6 @@ template<typename IsActiveFunc>
     return Win32MessagePumpResult::SkipUpdate;
 }
 
-template<typename IsActiveFunc, typename BeforeUpdateFunc, typename UpdateFunc>
-[[nodiscard]] static b8 RunWin32TimedFrameLoop(IsActiveFunc&& isActive, BeforeUpdateFunc&& beforeUpdate, UpdateFunc&& update){
-    Timer lateTime(TimerNow());
-
-    for(;;){
-        switch(PumpWin32FrameMessages(isActive)){
-        case Win32MessagePumpResult::Quit:
-            return true;
-        case Win32MessagePumpResult::Failed:
-            return false;
-        case Win32MessagePumpResult::SkipUpdate:
-            continue;
-        case Win32MessagePumpResult::Continue:
-            break;
-        }
-
-        if(!beforeUpdate())
-            return false;
-
-        const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
-        if(!update(timeDifference))
-            break;
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -166,7 +115,6 @@ static Frame* s_Frame = nullptr;
 static constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
 static constexpr i32 s_PaintFailureExitCode = 1;
 
-static constexpr StringView s_WarningEventName = "warning";
 static constexpr StringView s_WindowLifecycleCategory = "frame_window_lifecycle";
 
 
@@ -231,19 +179,26 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             frame->input().windowFocusUpdate(focused);
             return 0;
         }
-        LRESULT lifecycleResult;
-        if(
-            __hidden_frame_win32::HandleWin32FrameLifecycleMessage(
-                hwnd, uMsg, wParam, []()noexcept{},
-                [&](const b8 isActive){
-                    frame->data<Common::WinFrame>().setActive(isActive);
-                    input.dispatchTextInputFocus(isActive && GetFocus() == hwnd);
-                    frame->input().windowFocusUpdate(isActive);
-                },
-                lifecycleResult
-            )
-        )
-            return lifecycleResult;
+        switch(uMsg){
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
+        case WM_CLOSE:
+            if(!DestroyWindow(hwnd)){
+                const DWORD nativeError = GetLastError();
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 close failed; native_domain=Win32 native_code={}"), nativeError);
+            }
+            return 0;
+        case WM_ACTIVATE: {
+            const b8 isActive = LOWORD(wParam) != WA_INACTIVE;
+            frame->data<Common::WinFrame>().setActive(isActive);
+            input.dispatchTextInputFocus(isActive && GetFocus() == hwnd);
+            frame->input().windowFocusUpdate(isActive);
+            return 0;
+        }
+        default:
+            break;
+        }
 
         if(const Optional<LRESULT> inputResult = input.handleMessage(uMsg, wParam, lParam))
             return *inputResult;
@@ -408,55 +363,58 @@ b8 Frame::mainLoop(){
     if(quitRequested())
         return true;
 
-    b8 gracefulQuit = false;
-    const b8 loopResult = __hidden_frame_win32::RunWin32TimedFrameLoop(
-        [&]()noexcept{ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); },
-        [&](){
-            const HWND hwnd = data<Common::WinFrame>().hwnd();
-            if(m_graphics.shouldRenderUnfocused() && IsIconic(hwnd)){
-                ShowWindow(hwnd, SW_RESTORE);
-                const auto& frameData = data<Common::WinFrame>();
-                FrameDetail::ResizeWindowForClientExtentOnPrimaryWorkArea(hwnd, frameData.width(), frameData.height(), GetDpiForWindow(hwnd));
-            }
-            RECT rect = {};
-            if(!GetClientRect(hwnd, &rect)){
-                const DWORD nativeError = GetLastError();
-                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
-                return false;
-            }
-            const b8 windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
-            const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
-            const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
-            if(windowVisible){
-                data<Common::WinFrame>().width() = static_cast<u16>(Min<u32>(width, s_MaxU16));
-                data<Common::WinFrame>().height() = static_cast<u16>(Min<u32>(height, s_MaxU16));
-            }
-            const b8 windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
-            if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
-#ifdef NWB_UNICODE
-                const b8 titleChanged = SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
-#else
-                const b8 titleChanged = SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
-#endif
-                if(!titleChanged){
-                    const DWORD nativeError = GetLastError();
-                    NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 window title update failed; native_domain=Win32 native_code={}"), nativeError);
-                    return false;
-                }
-            }
+    Timer lateTime(TimerNow());
+    for(;;){
+        switch(__hidden_frame_win32::PumpWin32FrameMessages([&]()noexcept{ return data<Common::WinFrame>().isActive() || m_graphics.shouldRenderUnfocused(); })){
+        case __hidden_frame_win32::Win32MessagePumpResult::Quit:
             return true;
-        },
-        [&](const f32 timeDifference){
-            if(!update(timeDifference))
-                return false;
-            if(quitRequested()){
-                gracefulQuit = true;
-                return false;
-            }
-            return true;
+        case __hidden_frame_win32::Win32MessagePumpResult::Failed:
+            return false;
+        case __hidden_frame_win32::Win32MessagePumpResult::SkipUpdate:
+            continue;
+        case __hidden_frame_win32::Win32MessagePumpResult::Continue:
+            break;
         }
-    );
-    return loopResult || gracefulQuit;
+
+        const HWND hwnd = data<Common::WinFrame>().hwnd();
+        if(m_graphics.shouldRenderUnfocused() && IsIconic(hwnd)){
+            ShowWindow(hwnd, SW_RESTORE);
+            const auto& frameData = data<Common::WinFrame>();
+            FrameDetail::ResizeWindowForClientExtentOnPrimaryWorkArea(hwnd, frameData.width(), frameData.height(), GetDpiForWindow(hwnd));
+        }
+        RECT rect = {};
+        if(!GetClientRect(hwnd, &rect)){
+            const DWORD nativeError = GetLastError();
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 client rectangle query failed; native_domain=Win32 native_code={}"), nativeError);
+            return false;
+        }
+        const b8 windowVisible = (rect.right > rect.left) && (rect.bottom > rect.top);
+        const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
+        const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
+        if(windowVisible){
+            data<Common::WinFrame>().width() = static_cast<u16>(Min<u32>(width, s_MaxU16));
+            data<Common::WinFrame>().height() = static_cast<u16>(Min<u32>(height, s_MaxU16));
+        }
+        const b8 windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
+        if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
+#ifdef NWB_UNICODE
+            const b8 titleChanged = SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
+#else
+            const b8 titleChanged = SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data()) != FALSE;
+#endif
+            if(!titleChanged){
+                const DWORD nativeError = GetLastError();
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 window title update failed; native_domain=Win32 native_code={}"), nativeError);
+                return false;
+            }
+        }
+
+        const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
+        if(!update(timeDifference))
+            return false;
+        if(quitRequested())
+            return true;
+    }
 }
 
 Expected<GlobalUniquePtr<IClipboardService>> Frame::createPlatformClipboardService(){
@@ -477,7 +435,7 @@ void Frame::setupPlatform(void* inst)noexcept{
     FrameDetail::s_Frame = this;
     auto& frameData = data<Common::WinFrame>();
     frameData.setActive(false);
-    frameData.setInstance(reinterpret_cast<HINSTANCE>(inst));
+    frameData.setInstance(static_cast<HINSTANCE>(inst));
     frameData.setHwnd(nullptr);
     frameData.setWindowClass(0u);
 }
@@ -499,11 +457,11 @@ void Frame::cleanupPlatform()noexcept{
 
     if(windowFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame window destruction failed; native_domain=Win32 native_code={}", windowError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = FrameDetail::s_WarningEventName, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
     if(classFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame window class release failed; native_domain=Win32 native_code={}", classError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = FrameDetail::s_WarningEventName, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = FrameDetail::s_WindowLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 

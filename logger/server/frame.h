@@ -7,11 +7,7 @@
 
 #include <logger/common.h>
 
-#include <global/frame_data.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#endif
+#include <core/common/frame_data.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,45 +19,11 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace FrameDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_FrameStoragePointerSlotCount = 2u;
-
-
-using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
-
-#if defined(NWB_PLATFORM_WINDOWS)
-class WinFrame : public FrameData{
-public:
-    inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
-
-    inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
-
-    inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[1]); }
-
-    inline void setHwnd(HWND value)noexcept{ m_data.ptr[1] = value; }
-};
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Frame{
 #if defined(NWB_PLATFORM_WINDOWS)
-    using NativeFrameData = FrameDetail::WinFrame;
+    using NativeFrameData = Core::Common::WinFrame;
 #else
-    using NativeFrameData = FrameDetail::FrameData;
+    using NativeFrameData = Core::Common::FrameData;
 #endif
 
 
@@ -70,14 +32,14 @@ public:
 
 
 public:
-    Frame(void* inst)noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
+    Frame(void* inst)noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
     ~Frame()noexcept;
 
 
 public:
-    b8 init()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
+    b8 init()noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
     void showFrame();
-    b8 mainLoop()noexcept(IsSame_V<NativeFrameData, FrameDetail::FrameData>);
+    b8 mainLoop()noexcept(IsSame_V<NativeFrameData, Core::Common::FrameData>);
 
 
 public:

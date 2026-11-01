@@ -43,22 +43,19 @@ class World;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ISystem{
+class ISystem : public NoCopy{
     friend class SystemScheduler;
 
 
 public:
-    explicit ISystem(Alloc::GlobalArena& arena)noexcept;
-    ISystem(const ISystem&) = delete;
+    explicit ISystem(Alloc::GlobalArena& arena)noexcept
+        : m_access(arena)
+    {}
     virtual ~ISystem()noexcept = default;
 
 
 public:
-    ISystem& operator=(const ISystem&) = delete;
-
-
-public:
-    virtual void prepare(World& world){ static_cast<void>(world); }
+    virtual void prepare([[maybe_unused]] World& world){}
 
     // The scheduler keeps this task incomplete until update and its submitted descendants finish.
     [[nodiscard]] virtual Expected<void, CpuTaskAdmissionError::Enum> update(World& world, f32 delta) = 0;
@@ -97,7 +94,15 @@ private:
 
 
 public:
-    explicit SystemScheduler(Alloc::GlobalArena& arena)noexcept;
+    explicit SystemScheduler(Alloc::GlobalArena& arena)noexcept
+        : m_arena(arena)
+        , m_dependencies(arena)
+        , m_allSystems(arena)
+        , m_executionHandles(arena)
+        , m_executionDependencies(arena)
+        , m_executionResults(arena)
+        , m_dirty(false)
+    {}
     ~SystemScheduler()noexcept = default;
 
 

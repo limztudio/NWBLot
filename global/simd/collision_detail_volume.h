@@ -122,7 +122,17 @@ NWB_INLINE void ObbAxes(const SIMDVectorSingle orientation, SIMDVectorSingle& ou
     return Vector4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
 }
 
-inline void FrustumPlanes(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle (&outPlanes)[CollisionDetail::s_FrustumPlaneCount])noexcept{
+inline void FrustumPlanes(
+    const SIMDVectorSingle origin,
+    const SIMDVectorSingle orientation,
+    const f32 rightSlope,
+    const f32 leftSlope,
+    const f32 topSlope,
+    const f32 bottomSlope,
+    const f32 nearPlane,
+    const f32 farPlane,
+    SIMDVectorSingle (&outPlanes)[CollisionDetail::s_FrustumPlaneCount]
+)noexcept{
     const SIMDVectorSingle localPlanes[CollisionDetail::s_FrustumPlaneCount] = {
         VectorXorInt(VectorSet(0.0f, 0.0f, 1.0f, nearPlane), s_SIMDFlipW),
         VectorSet(0.0f, 0.0f, -1.0f, farPlane),
@@ -454,7 +464,17 @@ NWB_INLINE void ObbAxes(const SIMDVectorDouble orientation, SIMDVectorDouble& ou
     return VectorDouble4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
 }
 
-inline void FrustumPlanes(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble (&outPlanes)[CollisionDetail::s_FrustumPlaneCount])noexcept{
+inline void FrustumPlanes(
+    const SIMDVectorDouble origin,
+    const SIMDVectorDouble orientation,
+    const f64 rightSlope,
+    const f64 leftSlope,
+    const f64 topSlope,
+    const f64 bottomSlope,
+    const f64 nearPlane,
+    const f64 farPlane,
+    SIMDVectorDouble (&outPlanes)[CollisionDetail::s_FrustumPlaneCount]
+)noexcept{
     const SIMDVectorDouble localPlanes[s_DoubleFrustumPlaneCount] = {
         VectorDoubleXorInt(VectorDoubleSet(0.0, 0.0, 1.0, nearPlane), VectorDoubleAndInt(s_DoubleSIMDNegativeZero, s_DoubleSIMDMaskW)),
         VectorDoubleSet(0.0, 0.0, -1.0, farPlane),

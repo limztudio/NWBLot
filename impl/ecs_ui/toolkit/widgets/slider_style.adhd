@@ -8,6 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The default key step is one hundredth of the range.
+const f64 s_SliderDefaultKeyStepDivisor = 100.0;
+// Halving each bound keeps the span finite when maximum - minimum overflows.
+const f64 s_SliderOverflowGuardScale = 0.5;
+const u32 s_SliderPageStepCount = 10u;
+
 class SliderStyle{
     public Name track = Name("slider.track");
     public Name normal = Name("slider.thumb.normal");
@@ -87,6 +93,62 @@ class SliderPlacement{
     public Rect centerTravel;
     public Rect thumb;
     public Point thumbExtent;
+}
+
+b8 SameSliderPlacementGeometry(in SliderPlacement lhs, in SliderPlacement rhs){
+    return EqualUiRect(lhs.bounds, rhs.bounds)
+        && EqualUiRect(lhs.clip, rhs.clip)
+        && EqualUiRect(lhs.travelBounds, rhs.travelBounds)
+        && EqualUiRect(lhs.track, rhs.track)
+        && EqualUiRect(lhs.centerTravel, rhs.centerTravel)
+        && bit_cast<u32>(lhs.thumbExtent.x) == bit_cast<u32>(rhs.thumbExtent.x)
+        && bit_cast<u32>(lhs.thumbExtent.y) == bit_cast<u32>(rhs.thumbExtent.y);
+}
+
+b8 IsValidSliderRange(in f64 minimum, in f64 maximum){
+    return isFinite(minimum) && isFinite(maximum) && minimum <= maximum;
+}
+
+b8 IsValidSliderPlacement(in SliderPlacement placement){
+    return IsPreciseUiRect(placement.bounds)
+        && IsPreciseUiRect(placement.clip)
+        && IsPreciseUiRect(placement.travelBounds)
+        && IsPreciseUiRect(placement.track)
+        && IsPreciseUiRect(placement.centerTravel)
+        && IsPreciseUiRect(placement.thumb)
+        && IsValidUiExtent(placement.thumbExtent)
+        && placement.thumbExtent.x == placement.thumb.width
+        && placement.thumbExtent.y == placement.thumb.height
+        && placement.thumbExtent.x <= placement.travelBounds.width
+        && placement.thumbExtent.y <= placement.travelBounds.height
+        && placement.centerTravel.width <= placement.travelBounds.width
+        && placement.centerTravel.height <= placement.travelBounds.height
+        && placement.track.width <= placement.travelBounds.width
+        && placement.track.height <= placement.travelBounds.height;
+}
+
+b8 IsValidSliderGesture(in PointerGesture gesture){
+    return gesture.id.valid()
+        && gesture.updateSequence != 0u
+        && gesture.state <= PointerGestureState::Completed
+        && isFinite(gesture.origin.x)
+        && isFinite(gesture.origin.y)
+        && isFinite(gesture.position.x)
+        && isFinite(gesture.position.y)
+        && IsPreciseUiRect(gesture.targetRectangle)
+        && IsPreciseUiRect(gesture.referenceRectangle);
+}
+
+b8 IsValidSliderOptions(in SliderOptions options){
+    return IsValidSliderRange(options.minimum, options.maximum)
+        && isFinite(options.keyStep)
+        && options.keyStep >= 0.0
+        && options.width.policy <= LayoutSizePolicy::Stretch
+        && isFinite(options.width.value)
+        && options.width.value >= 0.0f
+        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f)
+        && isFinite(options.height)
+        && options.height >= 0.0f;
 }
 
 

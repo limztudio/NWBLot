@@ -30,17 +30,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem)noexcept
-    : m_graph(graph)
-    , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem)
-    , m_avboitSystem(avboitSystem)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::declare(
     Core::Alloc::ScratchArena& scratchArena,
     const TransparentCsgIntervalProducerInputs& inputs,
@@ -99,7 +88,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 return MakeUnexpected(Failure{});
             }
 
-            const MaterialPassDrawItemsView transparentCsgMaterialGeometryDrawSets[] = { transparentCsgDrawItems.csgReceiverSurface, };
+            const Array<MaterialPassDrawItemsView, 1u> transparentCsgMaterialGeometryDrawSets = { transparentCsgDrawItems.csgReceiverSurface, };
             const auto geometrySetResult = GatherPreparedMaterialGeometryResourceSet(transparentCsgMaterialGeometryDrawSets, Name("render.avboit.intervals.transparent_csg_material_geometry"), "Transparent CSG Material Geometry", m_graph, scratchArena);
             avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = geometrySetResult.has_value();
             if(!geometrySetResult){
@@ -186,7 +175,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setIdentity(Name("render.avboit.transparent_csg.material_instances_upload"))
                 .setMarkerLabel("Transparent CSG Material Instances Upload")
                 .setScheduling(transparentCsgFirstUploadScheduling)
-                .setDependencies(&result.uploadTask, 1u)
+                .setDependencies({ &result.uploadTask, 1u })
             ;
             const auto instanceUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgInstanceUploadDesc,
@@ -204,7 +193,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setIdentity(Name("render.avboit.transparent_csg.material_typed_upload"))
                 .setMarkerLabel("Transparent CSG Material Typed Upload")
                 .setScheduling(transparentCsgUploadScheduling)
-                .setDependencies(&result.uploadTask, 1u)
+                .setDependencies({ &result.uploadTask, 1u })
             ;
             const auto materialTypedUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgMaterialTypedUploadDesc,
@@ -222,7 +211,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setIdentity(Name("render.avboit.transparent_csg.receiver_ranges_upload"))
                 .setMarkerLabel("Transparent CSG Receiver Ranges Upload")
                 .setScheduling(transparentCsgUploadScheduling)
-                .setDependencies(&result.uploadTask, 1u)
+                .setDependencies({ &result.uploadTask, 1u })
             ;
             const auto receiverRangesUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgReceiverRangesUploadDesc,
@@ -236,7 +225,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             result.uploadTask = *receiverRangesUploadTaskResult;
 
             Core::GpuTaskDesc transparentCsgCuttersUploadDesc;
-            transparentCsgCuttersUploadDesc.setIdentity(Name("render.avboit.transparent_csg.cutters_upload")).setMarkerLabel("Transparent CSG Cutters Upload").setScheduling(transparentCsgUploadScheduling).setDependencies(&result.uploadTask, 1u);
+            transparentCsgCuttersUploadDesc.setIdentity(Name("render.avboit.transparent_csg.cutters_upload")).setMarkerLabel("Transparent CSG Cutters Upload").setScheduling(transparentCsgUploadScheduling).setDependencies({ &result.uploadTask, 1u });
             const auto cuttersUploadTaskResult = m_graph.addUploadBufferTask(transparentCsgCuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = transparentCsgCuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
             if(!cuttersUploadTaskResult){
                 result.uploadTask = {};
@@ -250,7 +239,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setIdentity(Name("render.avboit.transparent_csg.clip_context_slots_upload"))
                 .setMarkerLabel("Transparent CSG Clip Context Slots Upload")
                 .setScheduling(transparentCsgUploadScheduling)
-                .setDependencies(&result.uploadTask, 1u)
+                .setDependencies({ &result.uploadTask, 1u })
             ;
             const auto clipContextSlotsUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgClipContextSlotsUploadDesc,
@@ -268,7 +257,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
                 .setIdentity(Name("render.avboit.transparent_csg.interval_sample_state_upload"))
                 .setMarkerLabel("Transparent CSG Interval State Upload")
                 .setScheduling(transparentCsgUploadScheduling)
-                .setDependencies(&result.uploadTask, 1u)
+                .setDependencies({ &result.uploadTask, 1u })
             ;
             const auto intervalSampleStateUploadTaskResult = m_graph.addUploadBufferTask(
                 transparentCsgIntervalSampleStateUploadDesc,
@@ -303,10 +292,10 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
         transparentCsgIntervalClearScheduling.mergeWithPrevious = true;
         const auto makeTransparentCsgIntervalClearTaskDesc = [&transparentCsgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
             Core::GpuTaskDesc clearDesc;
-            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(transparentCsgIntervalClearScheduling).setDependencies(&dependency, 1u);
+            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(transparentCsgIntervalClearScheduling).setDependencies({ &dependency, 1u });
             return clearDesc;
         };
-        const Core::Rect transparentCsgClearRect = avboitPrePayload.transparentCsgSnapshot.csgWorkRegion.resolveRect(inputs.targets.width, inputs.targets.height);
+        const Core::Rect transparentCsgClearRect = ToCoreRect(avboitPrePayload.transparentCsgSnapshot.csgWorkRegion.resolveRect(inputs.targets.width, inputs.targets.height));
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearBeginHooks{ .context = &intervalClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const Core::GpuClearTextureTaskRecordHooks transparentCsgIntervalClearEndHooks{ .context = &intervalClearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
         const auto transparentCsgIntervalClearFirstTaskResult = m_graph.addClearTextureRectUIntTask(
@@ -326,7 +315,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(Core::GpuTaskGraph&
             .setIdentity(Name("render.avboit.transparent_csg.receiver_event_count_clear"))
             .setMarkerLabel("Transparent CSG Receiver Event Count Clear")
             .setScheduling(transparentCsgIntervalClearTailScheduling)
-            .setDependencies(&m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask, 1u)
+            .setDependencies({ &m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask, 1u })
         ;
         const auto transparentCsgIntervalClearTaskResult = m_graph.addClearTextureRectUIntTask(
             transparentCsgIntervalClearTailDesc,

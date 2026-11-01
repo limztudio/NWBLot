@@ -4,8 +4,7 @@
 
 #include "commands.adhd"
 #include "pointer.adhd"
-#include "../id.adhd"
-#include "../paint_types.adhd"
+#include <impl/ecs_ui/toolkit/id.adhd>
 #include "popup.adhd"
 #include "control.adhd"
 
@@ -20,6 +19,7 @@ const usize s_InputMaxActions = 256u;
 const usize s_InputMaxPointerGestures = 256u;
 const usize s_InputMaxControlActions = 256u;
 const usize s_InputMaxContextMenuActions = 256u;
+const usize s_InputSourceReserve = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,6 +196,297 @@ class InputRoutingResult{
     public WidgetId hover;
     public WidgetId focus;
     public WidgetId capture;
+}
+
+class ContextOwnedTarget{
+    public ContextOwnedTarget(){}
+
+    public ContextOwnedTarget(in HitTarget inTarget, in WidgetRoot inRoot){
+        this.target = inTarget;
+        this.root = inRoot;
+    }
+
+    public HitTarget target;
+    public WidgetRoot root;
+}
+
+class PointerGestureRecord{
+    public PointerGestureRecord(){
+        this.pendingUpdate = true;
+    }
+
+    public PointerGestureRecord(in PointerGesture inGesture, in b8 inPendingUpdate){
+        this.gesture = inGesture;
+        this.pendingUpdate = inPendingUpdate;
+    }
+
+    public PointerGesture gesture;
+    public b8 pendingUpdate;
+}
+
+class TargetLookup{
+    public TargetLookup(){
+        this.value = 0u;
+        this.index = 0u;
+    }
+
+    public TargetLookup(in u64 inValue, in u32 inIndex){
+        this.value = inValue;
+        this.index = inIndex;
+    }
+
+    public u64 value;
+    public u32 index;
+}
+
+class ControlCommandOwner{
+    public ControlCommandOwner(){
+        this.declarationGeneration = 0u;
+        this.horizontal = false;
+    }
+
+    public ControlCommandOwner(in WidgetId inHost, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl, in b8 inHorizontal){
+        this.host = inHost;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+        this.horizontal = inHorizontal;
+    }
+
+    public WidgetId host;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+    public b8 horizontal;
+}
+
+class TargetOwner{
+    public TargetOwner(){
+        this.declarationGeneration = 0u;
+    }
+
+    public TargetOwner(in WidgetId inTarget, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl){
+        this.target = inTarget;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+    }
+
+    public WidgetId target;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+}
+
+class BoundSource{
+    public BoundSource(){}
+
+    public BoundSource(in InputSource inSource, in InputCommandIntent inIntent){
+        this.source = inSource;
+        this.intent = inIntent;
+    }
+
+    public InputSource source;
+    public InputCommandIntent intent;
+}
+
+class CommandSource{
+    public InputSource source;
+    public ControlCommandOwner controlOwner;
+    public TargetOwner focusOwner;
+    public Point contextPosition;
+    public b8 consumed = false;
+    public b8 delegated = false;
+    public b8 submitArmed = false;
+    public b8 contextArmed = false;
+}
+
+class HoverIdentity{
+    public HoverIdentity(){
+        this.declarationGeneration = 0u;
+    }
+
+    public HoverIdentity(in WidgetId inOwner, in u64 inDeclarationGeneration, in PopupToken inPopup, in ControlToken inControl){
+        this.owner = inOwner;
+        this.declarationGeneration = inDeclarationGeneration;
+        this.popup = inPopup;
+        this.control = inControl;
+    }
+
+    public WidgetId owner;
+    public u64 declarationGeneration;
+    public PopupToken popup;
+    public ControlToken control;
+}
+
+class PointerBinding{
+    public PointerBinding(){
+        this.intent = PointerIntent::Activate;
+        this.hoverCapable = false;
+    }
+
+    public PointerBinding(in InputSource inSource, in PointerIntent inIntent, in b8 inHoverCapable){
+        this.source = inSource;
+        this.intent = inIntent;
+        this.hoverCapable = inHoverCapable;
+    }
+
+    public InputSource source;
+    public PointerIntent intent;
+    public b8 hoverCapable;
+}
+
+class PointerSource{
+    public PointerSource(){
+        this.intent = PointerIntent::Activate;
+        this.consumed = false;
+        this.inert = false;
+    }
+
+    public PointerSource(in InputSource inSource, in PointerIntent inIntent, in b8 inConsumed, in b8 inInert){
+        this.source = inSource;
+        this.intent = inIntent;
+        this.consumed = inConsumed;
+        this.inert = inInert;
+    }
+
+    public InputSource source;
+    public PointerIntent intent;
+    public b8 consumed;
+    public b8 inert;
+}
+
+b8 IsPointerInputEventType(in InputEventType type){
+    switch(type){
+    case InputEventType::PointerMove:
+    case InputEventType::PrimaryDown:
+    case InputEventType::PrimaryUp:
+    case InputEventType::SecondaryDown:
+    case InputEventType::SecondaryUp:
+    case InputEventType::PointerWheel:
+    case InputEventType::PointerLeave:
+    case InputEventType::PointerCaptureLost:
+        return true;
+    default:
+        return false;
+    }
+}
+
+b8 TryMakePointerInputEvent(in PointerInput input, mut InputEvent outEvent){
+    outEvent = InputEvent();
+    if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
+        return false;
+    switch(input.phase){
+    case PointerPhase::Move:
+        outEvent.type = InputEventType::PointerMove;
+        break;
+    case PointerPhase::Press:
+        if(input.intent == PointerIntent::Activate)
+            outEvent.type = InputEventType::PrimaryDown;
+        else
+            outEvent.type = InputEventType::SecondaryDown;
+        break;
+    case PointerPhase::Release:
+        if(input.intent == PointerIntent::Activate)
+            outEvent.type = InputEventType::PrimaryUp;
+        else
+            outEvent.type = InputEventType::SecondaryUp;
+        break;
+    case PointerPhase::Cancel:
+        outEvent.type = InputEventType::PointerCaptureLost;
+        break;
+    case PointerPhase::Leave:
+        outEvent.type = InputEventType::PointerLeave;
+        break;
+    case PointerPhase::Scroll:
+        outEvent.type = InputEventType::PointerWheel;
+        break;
+    }
+    outEvent.source = input.source;
+    outEvent.position = input.position;
+    outEvent.scrollX = input.scrollX;
+    outEvent.scrollY = input.scrollY;
+    outEvent.timestampMs = input.timestampMs;
+    outEvent.extend = input.extend;
+    outEvent.hoverCapable = input.hoverCapable;
+    return true;
+}
+
+b8 HasValidHitTargetControlProperties(in HitTarget target){
+    if(
+        (!target.control.empty() && !target.control.valid())
+        || !isFinite(target.scrollStep) || target.scrollStep < 0.0
+        || !isFinite(target.scrollStepX) || target.scrollStepX < 0.0
+        || !isFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
+        || !isFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
+        || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
+        || (target.horizontalNavigation && !target.navigable)
+        || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
+    )
+        return false;
+    if(!target.owner.valid())
+        return target.ownerDeclarationGeneration == 0u;
+    return target.owner != target.id
+        && target.ownerDeclarationGeneration != 0u
+        && target.control.valid()
+        && !target.focusable
+        && !target.navigable
+        && !target.scrollable
+        && !target.focusOnCommit
+        && !target.horizontalNavigation;
+}
+
+b8 TryTranslateControlNavigationCommand(in InputCommand command, in b8 horizontalNavigation, mut ControlActionKind outKind){
+    switch(command){
+    case InputCommand::Left:
+    case InputCommand::WordLeft:
+        if(!horizontalNavigation)
+            return false;
+        outKind = ControlActionKind::Left;
+        return true;
+    case InputCommand::Right:
+    case InputCommand::WordRight:
+        if(!horizontalNavigation)
+            return false;
+        outKind = ControlActionKind::Right;
+        return true;
+    case InputCommand::Up:
+        outKind = ControlActionKind::Up;
+        return true;
+    case InputCommand::Down:
+        outKind = ControlActionKind::Down;
+        return true;
+    case InputCommand::PageUp:
+        outKind = ControlActionKind::PageUp;
+        return true;
+    case InputCommand::PageDown:
+        outKind = ControlActionKind::PageDown;
+        return true;
+    case InputCommand::DocumentHome:
+    case InputCommand::Home:
+        outKind = ControlActionKind::Home;
+        return true;
+    case InputCommand::DocumentEnd:
+    case InputCommand::End:
+        outKind = ControlActionKind::End;
+        return true;
+    default:
+        return false;
+    }
+}
+
+b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
+    if(!source.commandOwner.valid())
+        return source.commandOwnerDeclarationGeneration == 0u && source.commandControl.empty();
+    return source.enabled
+        && source.focusable
+        && source.textEditable
+        && !source.owner.valid()
+        && !source.navigable
+        && !source.scrollable
+        && source.commandOwner != source.id
+        && source.commandOwnerDeclarationGeneration != 0u
+        && source.commandControl.valid();
 }
 
 

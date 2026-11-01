@@ -99,11 +99,11 @@ protected:
         Core::Alloc::ScratchArena fontScratchArena(s_FontScratchArenaName);
         ASSERT_TRUE(Tests::LoadBundledFont(m_latin, m_arena, NWB_TEST_FONT_DIRECTORY, "latin.font"));
         ASSERT_TRUE(Tests::LoadBundledFont(m_korean, m_arena, NWB_TEST_FONT_DIRECTORY, "korean.font"));
-        const FontSource sources[]{
-            { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
-            { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+        const Array<FontSource, 2> sources{
+            FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
+            FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
         };
-        ASSERT_TRUE(m_service.setFonts(fontScratchArena, sources, 2u));
+        ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(sources.data(), 2u)));
         UiSkin::RegionVector regions(m_arena);
         m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
     }
@@ -187,7 +187,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     const f32 width = m_layout.measure().x;
     const u64 oldServiceGeneration = m_service.generation();
     const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
-    ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
+    ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
     Core::Assets::AssetBytes cleared(m_arena);
     m_latin.setFontBytes(Move(cleared));
@@ -198,7 +198,7 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
     EXPECT_EQ(snapshot.glyphPages()[0]->binding().fontGeneration, 1u);
     EXPECT_EQ(oldFace->generation(), 1u);
     EXPECT_FLOAT_EQ(m_layout.measure().x, width);
-    EXPECT_FALSE(m_service.setFonts(fontScratchArena, nullptr, 0u));
+    EXPECT_FALSE(m_service.setFonts(fontScratchArena, {}));
     EXPECT_EQ(m_service.generation(), oldServiceGeneration + 1u);
 }
 
@@ -379,7 +379,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     EXPECT_GT(glyph.coverage.ink.height, 0.0f);
     const Rect saved = glyph.coverage.ink;
     const FontSource replacement{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 2u };
-    ASSERT_TRUE(m_service.setFonts(fontScratchArena, &replacement, 1u));
+    ASSERT_TRUE(m_service.setFonts(fontScratchArena, Span(&replacement, 1u)));
     EXPECT_TRUE(glyph.coverage.known);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.x, saved.x);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.width, saved.width);
@@ -387,7 +387,7 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
 }
 
 TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
-    const f32 sizes[]{ 32.0078125f, 64.21875f, 320.0078125f };
+    const Array<f32, 3> sizes{ 32.0078125f, 64.21875f, 320.0078125f };
     for(const f32 fontSize : sizes){
         constexpr u32 s_HangulScriptTag = TextScriptTag('H', 'a', 'n', 'g');
         ShapeRequest request{ "\xed\x95\x9c" };
@@ -402,12 +402,13 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
         ASSERT_EQ(m_layout.glyphs().size(), 1u);
         const PlacedGlyph& glyph = m_layout.glyphs()[0];
         ASSERT_TRUE(glyph.coverage.known);
-        const SIMDVectorSingle pixelSizeVector = VectorCeiling(VectorMultiply(VectorReplicate(fontSize), VectorReplicate(1.375f)));
-        const u32 pixelSize = static_cast<u32>(VectorGetX(pixelSizeVector));
+        const f32 pixelSizeFloat = Ceil(fontSize * 1.375f);
+        const u32 pixelSize = static_cast<u32>(pixelSizeFloat);
         GlyphBitmap bitmap(m_arena);
         ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, bitmap));
-        const SIMDVectorSingle scale = VectorDivide(pixelSizeVector, VectorReplicate(fontSize));
-        const SIMDVectorSingle fringe = VectorDivide(VectorReplicate(2.0f), scale);
+        const f32 scaleValue = pixelSizeFloat / fontSize;
+        const SIMDVectorSingle scale = VectorReplicate(scaleValue);
+        const SIMDVectorSingle fringe = VectorReplicate(2.0f / scaleValue);
         const Rect& bounds = glyph.coverage.ink;
         const SIMDVectorSingle boundsStart = VectorSet(bounds.x, bounds.y, 0.0f, 0.0f);
         const SIMDVectorSingle bearing = VectorXorInt(VectorSet(static_cast<f32>(bitmap.bearingX), static_cast<f32>(bitmap.bearingY), 0.0f, 0.0f), s_SIMDFlipY);

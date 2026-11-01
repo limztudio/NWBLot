@@ -31,6 +31,30 @@ template<typename T>
 using AssetVector = Vector<T, AssetArena>;
 using AssetString = AString<AssetArena>;
 
+using ScratchArena = Alloc::ScratchArena;
+
+template<typename T>
+using ScratchVector = Vector<T, ScratchArena>;
+using ScratchString = AString<ScratchArena>;
+
+#if defined(NWB_COOK)
+using CookArena = Alloc::GlobalArena;
+
+template<typename T>
+using CookVector = Vector<T, CookArena>;
+using CookString = AString<CookArena>;
+template<typename T, typename V>
+using CookMap = HashMap<
+    T,
+    V,
+    CookArena,
+    Conditional_T<IsSame_V<T, CookString>, Hasher<AStringView>, Hasher<T>>,
+    Conditional_T<IsSame_V<T, CookString>, EqualTo<>, EqualTo<T>>
+>;
+template<typename T>
+using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "build_inputs.h"
+#include "build.h"
 
 #include <core/common/log.h>
 
@@ -22,65 +22,6 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_build_inputs{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct IndexedPath{
-    AStringView text;
-    usize fileIndex;
-};
-
-struct PathSelectionIndex{
-    Vector<IndexedPath, Assets::ScratchArena> m_entries;
-    Optional<Vector<Assets::ScratchString, Assets::ScratchArena>> m_ownedPaths;
-
-
-public:
-    PathSelectionIndex(const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const b8 preserveCase)
-        : m_entries(scratchArena)
-    {
-        m_entries.reserve(files.size());
-        if(preserveCase){
-            m_ownedPaths.emplace(scratchArena);
-            m_ownedPaths->reserve(files.size());
-        }
-        for(usize i = 0u; i < files.size(); ++i){
-            if(preserveCase){
-                m_ownedPaths->emplace_back(PathToString(scratchArena, files[i].filePath.lexicallyNormal()));
-                m_entries.push_back({ AStringView(m_ownedPaths->back()), i });
-            }
-            else
-                m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
-        }
-        Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs)noexcept{ return lhs.text < rhs.text; });
-    }
-};
-
-[[nodiscard]] static b8 SelectPathRange(const PathSelectionIndex& index, const AStringView path, const b8 prefix, const Span<u8> selected)noexcept{
-    auto entry = LowerBound(index.m_entries.begin(), index.m_entries.end(), path, [](const IndexedPath& candidate, const AStringView value)noexcept{ return candidate.text < value; });
-    b8 matched = false;
-    for(; entry != index.m_entries.end(); ++entry){
-        if(prefix ? !entry->text.starts_with(path) : entry->text != path)
-            break;
-        selected[entry->fileIndex] = 1u;
-        matched = true;
-    }
-    return matched;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCookPaths& paths, Assets::ScratchArena& scratchArena, Assets::DiscoveredNwbFileVector& files){
     if(options.inputs.empty()){
         files.clear();
@@ -89,85 +30,28 @@ b8 SelectBuildInputs(const AssetBuildOptions& options, const Assets::ResolvedCoo
 
     Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
     // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
-    const __hidden_build_inputs::PathSelectionIndex fileIndex(files, scratchArena, false);
-#if !defined(NWB_PLATFORM_WINDOWS)
-    Optional<__hidden_build_inputs::PathSelectionIndex> directoryIndex;
-#endif
-    for(const Assets::AssetString& input : options.inputs){
-        const auto pathResult = ResolveAbsolutePath(paths.repoRoot.arena(), paths.repoRoot, AStringView(input));
-        if(!pathResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), ConvertString(input));
-            return false;
+    const auto selectionResult = Assets::SelectDiscoveredNwbInputs(paths.repoRoot, paths.assetRoots, files, options.inputs, true, scratchArena, selected);
+    if(!selectionResult){
+        const auto& error = selectionResult.error();
+        switch(error.reason){
+            case Assets::CookInputSelectionFailure::ResolveInput:
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), ConvertString(error.rawInput));
+                break;
+            case Assets::CookInputSelectionFailure::NotFileOrDirectory:
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(error.resolvedPath));
+                break;
+            case Assets::CookInputSelectionFailure::DirectoryOutsideAssetRoots:
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input directory is outside the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
+                break;
+            case Assets::CookInputSelectionFailure::NoMatchingAsset:
+            case Assets::CookInputSelectionFailure::None:
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a .nwb asset within the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
+                break;
         }
-
-        const Path& path = *pathResult;
-        const auto directory = IsDirectory(path);
-        if(!directory){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
-            return false;
-        }
-        const auto regular = *directory ? Expected<b8, ErrorCode>(true) : IsRegularFile(path);
-        if(!*directory && (!regular || !*regular)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
-            return false;
-        }
-
-        const b8 isDirectory = *directory;
-        Assets::ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
-        CanonicalizeTextInPlace(normalized);
-#else
-        if(!isDirectory)
-            CanonicalizeTextInPlace(normalized);
-#endif
-        b8 matched = false;
-        if(isDirectory){
-            for(const Assets::ResolvedAssetRoot& root : paths.assetRoots){
-                Assets::ScratchString rootText = PathToString(scratchArena, root.path.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
-                CanonicalizeTextInPlace(rootText);
-#endif
-                if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size()))){
-                    matched = true;
-                    break;
-                }
-            }
-            if(!matched){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input directory is outside the asset roots '{}'"), PathToString<tchar>(path));
-                return false;
-            }
-        }
-
-        NotNull<const __hidden_build_inputs::PathSelectionIndex*> selectionIndex(&fileIndex);
-#if !defined(NWB_PLATFORM_WINDOWS)
-        // Directory containment follows host case rules; explicit asset identities retain their canonical spelling.
-        if(isDirectory){
-            if(!directoryIndex)
-                directoryIndex.emplace(files, scratchArena, true);
-            selectionIndex = &*directoryIndex;
-        }
-#endif
-        matched |= __hidden_build_inputs::SelectPathRange(*selectionIndex, normalized, false, selected);
-        if(isDirectory){
-            if(!normalized.empty() && normalized.back() != '/')
-                normalized += '/';
-            matched |= __hidden_build_inputs::SelectPathRange(*selectionIndex, normalized, true, selected);
-        }
-        if(!matched){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
-            return false;
-        }
+        return false;
     }
 
-    usize next = 0u;
-    for(usize i = 0u; i < files.size(); ++i){
-        if(!selected[i])
-            continue;
-        if(next != i)
-            files[next] = Move(files[i]);
-        ++next;
-    }
-    files.erase(files.begin() + next, files.end());
+    Assets::CompactSelectedDiscoveredNwbFiles(selected, files);
     return true;
 }
 

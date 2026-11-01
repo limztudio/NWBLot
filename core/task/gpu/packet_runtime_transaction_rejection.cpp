@@ -138,19 +138,13 @@ public:
 
 public:
     void beginClosingWithinSubmissionOperation()noexcept{
-        if(m_armed)
-            return;
-        const auto closing = m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(m_graph, m_compiledGraph);
-        if(!closing){
-            if(m_transaction.hasUnresolvedSubmissionBinding(m_compiledGraph))
-                TerminateInvariant();
-            return;
-        }
-        m_recordingAttemptGeneration = closing->recordingAttemptGeneration;
-        m_submissionBinding = closing->submissionBinding;
-        if(m_recordingAttemptGeneration == 0u || !m_submissionBinding.valid())
-            TerminateInvariant();
-        m_armed = true;
+        m_transaction.armSubmissionExceptionClosingWithinSubmissionOperation(
+            m_compiledGraph,
+            m_graph,
+            m_armed,
+            m_recordingAttemptGeneration,
+            m_submissionBinding
+        );
     }
 
 

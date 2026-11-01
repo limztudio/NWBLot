@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "dependencies.h"
 #include "provider_catalog.h"
 
 #include <core/assets/bunch/cook.h>
@@ -14,13 +13,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_DEPENDENCY_COMPUTER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_dependency_computer_dependencies{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB;
 namespace Assets = Core::Assets;
 
 using KnownVirtualPathTextMap = HashMap<Name, Assets::AssetString, Assets::ScratchArena, Hasher<Name>, EqualTo<Name>>;
@@ -86,9 +90,8 @@ static void CollectDocumentVirtualPathTexts(const Core::Metascript::Document& do
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, NWB::Core::Assets::AssetArena& arena, NWB::Core::Alloc::ScratchArena& scratchArena){
+Expected<Core::Assets::AssetVector<Core::Assets::AssetString>> ComputeAssetDependencies(const PipelineOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_computer_dependencies;
-    using namespace NWB;
     namespace Assets = Core::Assets;
 
     Assets::CookDependencyRegistry dependencyRegistry(arena);
@@ -189,23 +192,13 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             return MakeUnexpected(Failure{});
         CollectDocumentVirtualPathTexts(*document, arena, knownVirtualPathTexts);
 
-        const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
-        if(!hasBunch)
+        const auto expandedAssets = TryExpandBunchOrCompositeDocument(files[fileIndex], *document, scratchArena);
+        if(!expandedAssets)
             return MakeUnexpected(Failure{});
-        const auto hasComposite = *hasBunch ? Expected<b8, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
-        if(!hasComposite)
-            return MakeUnexpected(Failure{});
-        if(*hasBunch || *hasComposite){
-            const auto& file = files[fileIndex];
-            const auto expandedAssets = *hasBunch
-                ? Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena)
-                : Assets::AssetsBunchCook::ExpandCompositeAsset(file.assetRoot, file.virtualRoot, file.filePath, *document, scratchArena)
-            ;
-            if(!expandedAssets)
-                return MakeUnexpected(Failure{});
-            for(const Assets::ExpandedAssetMetadata& expanded : *expandedAssets)
+        if(*expandedAssets){
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets)
                 CollectValueVirtualPathTexts(expanded.value, arena, knownVirtualPathTexts);
-            for(const Assets::ExpandedAssetMetadata& expanded : *expandedAssets){
+            for(const Assets::ExpandedAssetMetadata& expanded : **expandedAssets){
                 if(!processAssetItem(fileIndex, expanded.assetType, expanded.virtualPath, expanded.value, nullptr))
                     return MakeUnexpected(Failure{});
             }
@@ -216,7 +209,7 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets without an asset_bunch"), PathToString<tchar>(files[fileIndex].filePath));
             return MakeUnexpected(Failure{});
         }
-        const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(*document);
+        const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
         if(!assetDeclaration){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: meta '{}' is missing asset declaration 'asset'"), PathToString<tchar>(files[fileIndex].filePath));
             return MakeUnexpected(Failure{});
@@ -233,6 +226,12 @@ Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> Compute
 
     return candidate;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,9 +5,10 @@
 #include "refraction_tile_probe.h"
 #include "assets/shaders/refraction_tile_probe_layout.h"
 
-#include <impl/assets_graphics/refractive/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
 #include <core/common/log.h>
@@ -45,11 +46,7 @@ inline constexpr Array<u32, 6u> s_SparseTiles{ 0u, s_TilesX - 1u, (s_TilesY - 1u
 inline constexpr Name s_ProbeName("RefractionTileProbe");
 inline constexpr Name s_VerifyShaderName("refraction_tile_probe_cs");
 
-struct ProbePushConstants{
-#define NWB_SMOKE_REFRACTION_CPU_FIELD(name, defaultValue) u32 name = defaultValue;
-    NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_SMOKE_REFRACTION_CPU_FIELD)
-#undef NWB_SMOKE_REFRACTION_CPU_FIELD
-};
+using ProbePushConstants = Impl::RefractionPushConstants;
 
 static_assert(sizeof(ProbePushConstants) == 11u * sizeof(u32));
 static_assert(s_TileCount == 66049u && s_TileCount > NWB_REFRACTION_MAX_GROUP_COUNT_X);
@@ -235,10 +232,11 @@ public:
             return MakeUnexpected(Failure{});
     }
     const auto initial = payload.phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
-    const auto depth = graph.importTexture(payload.depth, Core::GpuGraphResourceDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction probe capture depth").setType(Core::GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(Core::ResourceStates::CopyDest));
+    const auto depthDesc = Core::GpuGraphResourceDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction probe capture depth").setType(Core::GpuGraphResourceType::Texture).setInitialState(initial).setExternalFinalState(Core::ResourceStates::CopyDest);
+    const auto depth = graph.importTexture(payload.depth, depthDesc);
     if(!depth)
         return MakeUnexpected(Failure{});
-    const Core::GpuTaskResourceUse uses[]{
+    const Array<Core::GpuTaskResourceUse, 7> uses = {{
         { .resource = *buffers[0], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
         { .resource = *buffers[1], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
         { .resource = *buffers[2], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
@@ -246,15 +244,15 @@ public:
         { .resource = *buffers[4], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
         { .resource = *buffers[5], .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read },
         { .resource = *depth, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
-    };
+    }};
     payload.stage = NWB_TEXT("task declaration");
-    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses, LengthOf(uses)), ProbeTask::Payload(payload));
+    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Refraction tile queue boundary probe").setResourceUses(uses), ProbeTask::Payload(payload));
     if(task)
         payload.stage = NWB_TEXT("scheduling or initial-state recording admission");
     return task;
 }
 
-[[nodiscard]] static b8 CompareReadback(Core::Device& device, Core::Alloc::ScratchArena& scratch, const ProbeTask::Payload& payload){
+[[nodiscard]] static b8 CompareReadback(const ProbeTask::Payload& payload, Core::Device& device, Core::Alloc::ScratchArena& scratch){
     const auto mapping = device.mapBuffer(*payload.readback, Core::CpuAccessMode::Read);
     if(!mapping || !*mapping)
         return false;
@@ -336,7 +334,9 @@ public:
             return false;
         }
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: phase {} active_tiles={} compact={}x{} dense={}x{} pixels={} tail_groups={} edge_lanes={} argument_bytes={}"), payload.phase, count, compactX, compactY, denseX, denseY, pixelCount, expectedHeader[1], expectedHeader[3], NWB_REFRACTION_TILE_ARGUMENT_BYTES);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: phase {} active_tiles={} compact={}x{} dense={}x{} pixels={} tail_groups={} edge_lanes={} argument_bytes={}")
+        , payload.phase, count, compactX, compactY, denseX, denseY, pixelCount, expectedHeader[1], expectedHeader[3], NWB_REFRACTION_TILE_ARGUMENT_BYTES
+    );
     return true;
 }
 
@@ -350,7 +350,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 RunRefractionTileProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems, NWB::ProjectRuntimeContext& context){
     using namespace NWB;
     using namespace __hidden_refraction_tile_probe;
     auto& graphics = context.graphics;
@@ -368,10 +368,10 @@ b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::
     if(!classifyShaderRef.valid() || !finalizeShaderRef.valid() || !verifyShaderRef.valid())
         return false;
     if(
-        !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShader, classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShader, finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyCompactShader, verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyDenseShader, verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("RefractionTileProbe"))
+        !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(classifyShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, classifyShader)
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(finalizeShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, finalizeShader)
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=0"), s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, verifyCompactShader)
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(verifyShaderRef.name(), AStringView("NWB_REFRACTION_DENSE_GRID=1"), s_ProbeName, NWB_TEXT("RefractionTileProbe"), graphics, context.assetManager, context.shaderPathResolver, verifyDenseShader)
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);
@@ -393,7 +393,8 @@ b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::
     const auto verifyDense = device.createComputePipeline(verifyDenseDesc);
     const auto createBuffer = [&graphics](const Name name, const u32 words, const b8 indirect, const b8 readback){
         Core::BufferDesc desc;
-        desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
+        desc.setDebugName(name).setByteSize(static_cast<u64>(words) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCanHaveRawViews(!readback).setIsDrawIndirectArgs(indirect);
+        desc.setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
     };
     Vector<u32, Core::Alloc::ScratchArena> reversedTiles{ scratch };
@@ -401,7 +402,8 @@ b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::
     for(u32 tile = 0u; tile < s_TileCount; ++tile)
         reversedTiles[tile] = s_TileCount - 1u - tile;
     Core::GraphicsRuntime::BufferSetupDesc reversedSetup;
-    reversedSetup.bufferDesc.setDebugName(Name("RefractionTileProbeReversedQueue")).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
+    reversedSetup.bufferDesc.setDebugName(Name("RefractionTileProbeReversedQueue")).setByteSize(static_cast<u64>(s_QueueWords) * sizeof(u32)).setStructStride(sizeof(u32));
+    reversedSetup.bufferDesc.setCanHaveUAVs(true).setCanHaveRawViews(true).enableAutomaticStateTracking(Core::ResourceStates::ShaderResource);
     reversedSetup.data = reversedTiles.data();
     reversedSetup.dataSize = static_cast<u64>(s_QueueWords) * sizeof(u32);
     reversedSetup.queue = Core::CommandQueue::Graphics;
@@ -470,10 +472,13 @@ b8 RunRefractionTileProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::
             NWB_LOGGER_ERROR(NWB_TEXT("RefractionTileProbe: phase {} completion wait failed"), phase);
             return false;
         }
-        if(!CompareReadback(device, scratch, payload))
+        if(!CompareReadback(payload, device, scratch))
             return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards"));
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("RefractionTileProbe: passed 6 phases at 2049x2049 with 66049 tiles, production finalizer, specialized dense/compact mapping, "
+            "all 32 argument bytes, all-but-one sparse boundary, queue uniqueness, 65535/65536 boundary, indirect Y tail, 25190406 pixel checks and guards")
+    );
     return true;
 }
 

@@ -6,9 +6,9 @@
 
 
 #include "edit_box.h"
-#include "../edit/actions.h"
-#include "../edit/vertical_navigation.h"
-#include "../state/store.h"
+#include <impl/ecs_ui/toolkit/edit/actions.h>
+#include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
+#include <impl/ecs_ui/toolkit/state/store.h>
 #include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 
 
@@ -28,13 +28,13 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, EditModel& model, const EditBoxOptions& options) = 0;
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& model) = 0;
     // Deferred composite controls lend an explicit popup identity before its candidate geometry is emitted.
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup) = 0;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model) = 0;
     // Action-capable hosts invoke the borrowed sink in event order, before returning the draft for a paint snapshot.
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup, IEditActionSink& actions) = 0;
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model, IEditActionSink& actions) = 0;
     // Navigation resolves the current model between copied events; application objects are lent only for this call.
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup, EditNavigationState& navigation, IEditNavigationResolver& resolver, IEditActionSink& actions) = 0;
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model, EditNavigationState& navigation, IEditNavigationResolver& resolver, IEditActionSink& actions) = 0;
     [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };
 

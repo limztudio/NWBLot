@@ -5,7 +5,8 @@
 #pragma once
 
 
-#include <tests/common/crash_test_paths.h>
+#include "crash_test_paths.h"
+
 #include <tests/common/filesystem_helpers.h>
 #include <tests/common/test_context.h>
 
@@ -15,6 +16,8 @@
 
 #include <global/filesystem/operations.h>
 #include <global/filesystem/directory_iterator.h>
+#include <global/process.h>
+#include <global/process_execution.h>
 #include <global/thread.h>
 #include <global/diagnostics.h>
 #include <global/exception.h>
@@ -48,9 +51,6 @@ inline constexpr AStringView s_Test = "test";
 
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
-using NWB::Tests::TextFileContains;
-using NWB::Tests::WaitForDirectory;
-namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 inline constexpr Name s_OperationScratch("tests/integration/crash/operation_scratch");
 inline constexpr Name s_InstallArena("tests/integration/crash/install");
@@ -60,89 +60,45 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Tests::CrashTestPaths::CrashRootDirectory;
-using NWB::Tests::CrashTestPaths::RemoveTestArtifacts;
-using NWB::Tests::CrashTestPaths::SpoolDirectory;
-using NWB::Tests::CrashTestPaths::TestCaseDirectory;
-using NWB::Tests::CrashTestPaths::TestRootDirectory;
-
 [[nodiscard]] inline CrashTestPath BucketDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName){
-    return SpoolDirectory(arena, testGroup) / bucketName;
+    return NWB::Tests::CrashTestPaths::SpoolDirectory(arena, testGroup) / bucketName;
 }
 
 [[nodiscard]] inline CrashTestPath PackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
     return BucketDirectory(arena, testGroup, bucketName) / packageName;
 }
 
-[[nodiscard]] inline b8 CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView bucketName, const AStringView packageName){
-    const CrashTestPath packageDirectory = PackageDirectory(arena, testGroup, bucketName, packageName);
-    if(!EnsureDirectories(packageDirectory))
-        return false;
-
-    return WriteTextFile(packageDirectory / "marker.txt", AStringView("package"));
-}
+[[nodiscard]] b8 CreatePackageDirectory(NWB::Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView bucketName, AStringView packageName);
 
 template<usize N>
-inline void CopyPathText(const CrashTestPath& path, NWB::Core::Alloc::GlobalArena& arena, char (&outText)[N]){
+inline void CopyPathText(const CrashTestPath& path, NWB::Core::Alloc::GlobalArena& arena, Array<char, N>& outText){
     const AString<NWB::Core::Alloc::GlobalArena> text = PathToString<char>(arena, path);
     CopyFixedBuffer(outText, AStringView(text.data(), text.size()));
 }
 
 template<usize N>
-inline void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, const u64 sequence)noexcept{
-    CopyFixedBuffer(outCrashId, AStringView(CrashNames::s_CrashIdPrefix));
+inline void BuildCrashIdForProcess(const u32 processId, const u64 sequence, Array<char, N>& outCrashId)noexcept{
+    CopyFixedBuffer(outCrashId, AStringView(NWB::Core::Crash::PackageNames::s_CrashIdPrefix));
     AppendUnsignedToFixedBuffer(outCrashId, static_cast<u64>(processId));
     AppendFixedBuffer(outCrashId, "-");
     AppendUnsignedToFixedBuffer(outCrashId, sequence);
 }
 
-[[nodiscard]] inline NWB::Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
-    return NWB::Core::Crash::CrashDetail::PlatformKind::Windows;
-#elif defined(NWB_PLATFORM_ANDROID)
-    return NWB::Core::Crash::CrashDetail::PlatformKind::Android;
-#elif defined(NWB_PLATFORM_LINUX)
-    return NWB::Core::Crash::CrashDetail::PlatformKind::Linux;
-#else
-    return NWB::Core::Crash::CrashDetail::PlatformKind::Unknown;
-#endif
-}
+[[nodiscard]] NWB::Core::Crash::CrashDetail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept;
 
-inline void FillPackageRequest(const CrashTestPath& spoolDirectory, const AStringView crashId, NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request){
-    request = NWB::Core::Crash::CrashDetail::CrashRequest{};
-    request.platform = CurrentCrashPlatformKind();
-    request.reasonKind = NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump;
-    request.processId = CurrentProcessId();
-    request.threadId = CurrentThreadId();
-    CopyFixedBuffer(request.crashId, crashId);
-    CopyFixedBuffer(request.applicationName, AStringView(s_CrashTests));
-    CopyFixedBuffer(request.versionText, AStringView(s_ApplicationVersion));
-    CopyFixedBuffer(request.buildId, AStringView(s_Test));
-    CopyFixedBuffer(request.abi, CurrentAbiName());
-    CopyPathText(spoolDirectory, arena, request.spoolDirectory);
-}
+void FillPackageRequest(const CrashTestPath& spoolDirectory, AStringView crashId, NWB::Core::Alloc::GlobalArena& arena, NWB::Core::Crash::CrashDetail::CrashRequest& request);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
-inline u32 s_NativeLifecycleDiagnostics = 0u;
-inline u32 s_UnlockedLifecycleDiagnostics = 0u;
-inline char s_LastLifecycleDiagnostic[192u] = {};
-inline char s_LastLifecycleOperation[32u] = {};
+extern u32 s_NativeLifecycleDiagnostics;
+extern u32 s_UnlockedLifecycleDiagnostics;
+extern Array<char, 192u> s_LastLifecycleDiagnostic;
+extern Array<char, 32u> s_LastLifecycleOperation;
 
-inline void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept{
-    if(record.category != AStringView("crash_native_lifecycle"))
-        return;
-    ++s_NativeLifecycleDiagnostics;
-    CopyFixedBuffer(s_LastLifecycleDiagnostic, record.message);
-    CopyFixedBuffer(s_LastLifecycleOperation, record.expression);
-    if(NWB::Core::Crash::CrashDetail::g_State.mutex.try_lock()){
-        ++s_UnlockedLifecycleDiagnostics;
-        NWB::Core::Crash::CrashDetail::g_State.mutex.unlock();
-    }
-}
+void ObserveNativeLifecycle(const DiagnosticEventRecord& record)noexcept;
 #endif
 
 

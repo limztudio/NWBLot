@@ -41,7 +41,6 @@ struct VolumePublicationObserver{
 
 StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, AStringView volumeName, usize segmentCount, Alloc::ScratchArena& scratchArena, VolumePublicationObserver observer = {});
-b8 RemoveExistingVolumeSegments(const Path& outputDirectory, AStringView volumeName, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

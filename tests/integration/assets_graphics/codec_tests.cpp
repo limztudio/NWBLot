@@ -29,12 +29,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_assets_graphics_codec_tests{
 
 
@@ -62,8 +56,6 @@ static constexpr AStringView s_SamplerMetadata =
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -94,7 +86,7 @@ TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
             ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
             payload.reserve(4u);
             payload.push_back(1u);
-            payload.push_back(s_ExpectedDualCount);
+            payload.push_back(2u);
             payload.push_back(3u);
             payload.push_back(4u);
 
@@ -142,7 +134,7 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     directoryName.resize(199u - rootTextLength, 'b');
     const Path builtDirectory = root / directoryName;
     ASSERT_EQ(PathToString(testArena.arena, builtDirectory).size(), 200u);
-    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, { assetRoot }, s_ExpectedDualCount));
+    ASSERT_TRUE(AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(testArena, root, builtDirectory, { assetRoot }, 2u));
 
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
@@ -150,7 +142,7 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     options.configuration = s_TestsConfiguration.data();
     ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
     for(const Name& virtualPath : { Name(s_FirstSamplerPath), Name(s_SecondSamplerPath) }){
-        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, outputDirectory, virtualPath, s_ExpectedDualCount);
+        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(outputDirectory, virtualPath, 2u, testArena);
         ASSERT_TRUE(asset);
         EXPECT_EQ((*asset)->virtualPath(), virtualPath);
     }
@@ -181,15 +173,15 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     constexpr u64 s_SharedCookKeyHash = 0x123456789abcdef0ull;
 
     Pack::AssetVolumePackManifest initial(testArena.arena);
-    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(initial, s_ExpectedDualCount));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(initial, firstPath, samplerPayload, s_SharedCookKeyHash));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(initial, secondPath, samplerPayload, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u, initial));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(firstPath, samplerPayload, initial, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(secondPath, samplerPayload, initial, s_SharedCookKeyHash));
     ASSERT_TRUE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, initial, scratchArena));
     NWB::Core::Assets::AssetBytes originalList(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, originalList));
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> originalArtifactPaths(testArena.arena);
-    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(originalArtifactPaths, publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, scratchArena, true));
-    ASSERT_EQ(originalArtifactPaths.size(), s_ExpectedDualCount);
+    ASSERT_TRUE(NWB::Core::Assets::ReadAssetInputList(publishedDirectory / NWB::Core::Assets::BuiltAssetDetail::s_ManifestFilename, scratchArena, originalArtifactPaths, true));
+    ASSERT_EQ(originalArtifactPaths.size(), 2u);
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetBytes> originalArtifactBytes(testArena.arena);
     originalArtifactBytes.reserve(originalArtifactPaths.size());
     for(const auto& artifactPath : originalArtifactPaths){
@@ -198,11 +190,11 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     }
 
     Pack::AssetVolumePackManifest reordered(testArena.arena);
-    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(reordered, s_ExpectedDualCount + 1u));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(reordered, secondPath, samplerPayload, s_SharedCookKeyHash));
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(reordered, firstPath, samplerPayload, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(2u + 1u, reordered));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(secondPath, samplerPayload, reordered, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(firstPath, samplerPayload, reordered, s_SharedCookKeyHash));
     // Reorder both shared-payload entries before failing, so publication also has to create a new artifact slot.
-    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(reordered, Name("project/samplers/failing"), samplerPayload, s_SharedCookKeyHash));
+    ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(Name("project/samplers/failing"), samplerPayload, reordered, s_SharedCookKeyHash));
     reordered.entries.back().identity.payloadHash ^= 1u;
     EXPECT_FALSE(NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets(publishedDirectory, reordered, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("invalid payload identity")));
@@ -221,7 +213,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     options.configuration = s_TestsConfiguration.data();
     ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
     for(const Name& virtualPath : { firstPath, secondPath }){
-        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, cookCase->outputDirectory, virtualPath, s_ExpectedDualCount);
+        const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(cookCase->outputDirectory, virtualPath, 2u, testArena);
         ASSERT_TRUE(asset);
         EXPECT_EQ((*asset)->virtualPath(), virtualPath);
     }
@@ -253,7 +245,7 @@ TEST(AssetsGraphics, RendererComponentCookAndSerializePreservesOpticalFields){
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "entities" / "lens" / "renderer.nwb", s_RendererComponentMetadata));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 1u));
 
-    const auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ComponentAssetCodec>(testArena, outputDirectory, virtualPath, 1u);
+    const auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ComponentAssetCodec>(outputDirectory, virtualPath, 1u, testArena);
     ASSERT_TRUE(loadedAsset);
     ASSERT_NE(loadedAsset->get(), nullptr);
     EXPECT_EQ((*loadedAsset)->assetType(), NWB::Impl::RendererComponentAsset::AssetTypeName());
@@ -340,7 +332,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     // Build again into a separate outputDirectory; unchanged .nwb params reuse __asset_cache/<sha1>.
     ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_second", root / "out_second"));
 
-    const auto cachedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, root / "out_second", virtualPath, 1u);
+    const auto cachedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(root / "out_second", virtualPath, 1u, testArena);
     ASSERT_TRUE(cachedSampler);
     EXPECT_FLOAT_EQ(static_cast<const NWB::Impl::Sampler*>(cachedSampler->get())->description().mipBias, 0.0f);
 
@@ -348,7 +340,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     auto corruptedCacheBytes = initialCacheBytes;
     auto corruptedHeader = *initialHeader;
     corruptedHeader.payloadSectionHashFnv64 ^= 1u;
-    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(corruptedCacheBytes, 0u, corruptedHeader));
+    ASSERT_TRUE(AssetsGraphicsFixture::OverwritePOD(0u, corruptedHeader, corruptedCacheBytes));
     ASSERT_TRUE(WriteBinaryFile(expectedCacheFilePath, corruptedCacheBytes));
     ASSERT_TRUE(buildAndGatherWithRepoRoot(root / "built_repaired", root / "out_repaired"));
     NWB::Core::Assets::AssetBytes repairedCacheBytes(testArena.arena);
@@ -366,7 +358,7 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     ASSERT_TRUE(updatedHeader);
     EXPECT_NE(updatedHeader->paramSha256, initialHeader->paramSha256);
 
-    const auto updatedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(testArena, root / "out_third", virtualPath, 1u);
+    const auto updatedSampler = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(root / "out_third", virtualPath, 1u, testArena);
     ASSERT_TRUE(updatedSampler);
     EXPECT_FLOAT_EQ(static_cast<const NWB::Impl::Sampler*>(updatedSampler->get())->description().mipBias, 3.5f);
     EXPECT_EQ(logger.errorCount(), 0u);

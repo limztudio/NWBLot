@@ -19,11 +19,37 @@ class TooltipStyle{
 }
 
 class TooltipOptions{
+    public b8 operator==(in TooltipOptions rhs)const{
+        return this.enabled == rhs.enabled
+            && this.side == rhs.side
+            && this.delaySeconds == rhs.delaySeconds
+            && this.maximumWidth == rhs.maximumWidth
+            && this.gap == rhs.gap;
+    }
+
+    public b8 operator!=(in TooltipOptions rhs)const{
+        return this.enabled != rhs.enabled
+            || this.side != rhs.side
+            || this.delaySeconds != rhs.delaySeconds
+            || this.maximumWidth != rhs.maximumWidth
+            || this.gap != rhs.gap;
+    }
+
     public b8 enabled = true;
     public PopupPlacementSide side = PopupPlacementSide::Below;
     public f32 delaySeconds = s_TooltipDefaultDelaySeconds;
     public f32 maximumWidth = s_TooltipDefaultMaximumWidth;
     public f32 gap = s_StyleSpacingSmall;
+}
+
+b8 IsValidTooltipOptions(in TooltipOptions options){
+    return isFinite(options.delaySeconds)
+        && options.delaySeconds >= 0.0f
+        && isFinite(options.maximumWidth)
+        && options.maximumWidth > 0.0f
+        && isFinite(options.gap)
+        && options.gap >= 0.0f
+        && options.side <= PopupPlacementSide::Center;
 }
 
 

@@ -44,9 +44,9 @@ struct SelectionContext{
 
 TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations){
     SelectionContext context;
-    const u8 firstBytes[] = { 0u, 17u, 255u, 64u };
-    const u8 secondBytes[] = { 0u, 17u, 255u, 64u };
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(20u), MakeCandidate(10u), MakeCandidate(30u) };
+    const Array<u8, 4> firstBytes = { 0u, 17u, 255u, 64u };
+    const Array<u8, 4> secondBytes = { 0u, 17u, 255u, 64u };
+    Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(20u), MakeCandidate(10u), MakeCandidate(30u) };
     candidates[0].mutableTypedBytes = firstBytes;
     candidates[1].mutableTypedBytes = secondBytes;
     candidates[2].mutableTypedBytes = firstBytes;
@@ -61,12 +61,12 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAlloca
 
 TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLengths){
     SelectionContext context;
-    const u8 firstBytes[] = { 1u, 2u, 3u, 4u };
-    const u8 changedBytes[] = { 1u, 2u, 3u, 5u };
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
+    const Array<u8, 4> firstBytes = { 1u, 2u, 3u, 4u };
+    const Array<u8, 4> changedBytes = { 1u, 2u, 3u, 5u };
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     candidates[0].mutableTypedBytes = firstBytes;
     candidates[1].mutableTypedBytes = changedBytes;
-    candidates[2].mutableTypedBytes = Span<const u8>(firstBytes, sizeof(firstBytes) - 1u);
+    candidates[2].mutableTypedBytes = Span<const u8>(firstBytes.data(), firstBytes.size() - 1u);
     candidates[1].priority = 100;
 
     context.selection.select(candidates, context.scratch);
@@ -77,7 +77,7 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLeng
 
 TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     candidates[1].boundaryMode = 1u;
     candidates[2].boundaryMode = 2u;
     candidates[3].boundaryMode = 2u;
@@ -95,19 +95,19 @@ TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSeman
 
 TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermutation){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate source[] = { MakeCandidate(200u), MakeCandidate(1u), MakeCandidate(300u) };
+    Array<CoincidentOpticalVolumeCandidate, 3> source = { MakeCandidate(200u), MakeCandidate(1u), MakeCandidate(300u) };
     source[1].entity = Core::ECS::EntityID(1u, 1u);
     for(auto& candidate : source){
         candidate.group = Name("tests/coincident_optical_volumes/tie");
         candidate.priority = 3;
     }
-    const u32 permutations[][3u] = {
+    const Array<Array<u32, 3>, 6> permutations = {{
         { 0u, 1u, 2u }, { 0u, 2u, 1u }, { 1u, 0u, 2u },
         { 1u, 2u, 0u }, { 2u, 0u, 1u }, { 2u, 1u, 0u }
-    };
+    }};
 
     for(const auto& permutation : permutations){
-        const CoincidentOpticalVolumeCandidate candidates[] = { source[permutation[0]], source[permutation[1]], source[permutation[2]] };
+        const Array<CoincidentOpticalVolumeCandidate, 3> candidates = { source[permutation[0]], source[permutation[1]], source[permutation[2]] };
         context.selection.select(candidates, context.scratch);
         EXPECT_FALSE(context.selection.isSuppressed(source[0].entity));
         EXPECT_TRUE(context.selection.isSuppressed(source[1].entity));
@@ -117,7 +117,7 @@ TEST(CoincidentOpticalVolumes, PriorityTiesUseFullEntityIdRegardlessOfInputPermu
 
 TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u) };
+    Array<CoincidentOpticalVolumeCandidate, 9> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u), MakeCandidate(90u) };
     const Name firstGroup("tests/coincident_optical_volumes/first");
     const Name secondGroup("tests/coincident_optical_volumes/second");
     candidates[2].group = firstGroup;
@@ -140,7 +140,7 @@ TEST(CoincidentOpticalVolumes, GroupsMeshAndMaterialRemainIndependentBoundaries)
 
 TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInExplicitGroup){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
+    Array<CoincidentOpticalVolumeCandidate, 4> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u) };
     for(auto& candidate : candidates)
         candidate.group = Name("tests/coincident_optical_volumes/translation");
     candidates[1].position.x = 0.0000001f;
@@ -155,7 +155,7 @@ TEST(CoincidentOpticalVolumes, TinyTranslationDifferencesAreNotCoincidentEvenInE
 
 TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBoundaries){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
+    Array<CoincidentOpticalVolumeCandidate, 8> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u), MakeCandidate(50u), MakeCandidate(60u), MakeCandidate(70u), MakeCandidate(80u) };
     for(auto& candidate : candidates)
         candidate.group = Name("tests/coincident_optical_volumes/transforms");
     candidates[1].rotation = Float4U(0.6f, 0.f, 0.f, 0.8f);
@@ -174,7 +174,7 @@ TEST(CoincidentOpticalVolumes, RotationAndScaleDifferencesPreserveDistinctBounda
 
 TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(20u), MakeCandidate(10u) };
+    Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(20u), MakeCandidate(10u) };
     candidates[0].position = Float3U(-0.f, 0.f, -0.f);
     candidates[0].rotation = Float4U(-0.f, 0.f, -0.f, 1.f);
     candidates[1].position = Float3U(0.f, -0.f, 0.f);
@@ -188,7 +188,7 @@ TEST(CoincidentOpticalVolumes, SignedZeroTransformLanesHaveTheSameIdentity){
 
 TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGeometry){
     SelectionContext context;
-    CoincidentOpticalVolumeCandidate invalidCases[11u];
+    Array<CoincidentOpticalVolumeCandidate, 11> invalidCases{};
     for(usize index = 0u; index < LengthOf(invalidCases); ++index){
         invalidCases[index] = MakeCandidate(static_cast<u32>(index) + 100u);
         invalidCases[index].priority = 100;
@@ -206,7 +206,7 @@ TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGe
     invalidCases[10].rotation = Float4U(0.f, 0.f, 0.f, 0.f);
 
     for(const auto& invalidCase : invalidCases){
-        CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), invalidCase, invalidCase };
+        Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(10u), invalidCase, invalidCase };
         if(candidates[2].entity.valid())
             candidates[2].entity = Core::ECS::EntityID(candidates[1].entity.index() + 100u, 0u);
         else
@@ -224,9 +224,9 @@ TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChan
     const Core::ECS::EntityID retained(10u, 0u);
     const Core::ECS::EntityID suppressed(20u, 0u);
     {
-        u8 firstBytes[] = { 1u, 2u, 3u, 4u };
-        u8 secondBytes[] = { 1u, 2u, 3u, 4u };
-        CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u) };
+        Array<u8, 4> firstBytes = { 1u, 2u, 3u, 4u };
+        Array<u8, 4> secondBytes = { 1u, 2u, 3u, 4u };
+        Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(10u), MakeCandidate(20u) };
         candidates[0].mutableTypedBytes = firstBytes;
         candidates[1].mutableTypedBytes = secondBytes;
         context.selection.select(candidates, context.scratch);
@@ -242,7 +242,7 @@ TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChan
     EXPECT_FALSE(context.selection.isSuppressed(retained));
     EXPECT_TRUE(context.selection.isSuppressed(suppressed));
 
-    const CoincidentOpticalVolumeCandidate nextFrame[] = { MakeCandidate(30u), MakeCandidate(40u) };
+    const Array<CoincidentOpticalVolumeCandidate, 2> nextFrame = { MakeCandidate(30u), MakeCandidate(40u) };
     context.selection.select(nextFrame, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(suppressed));
     EXPECT_FALSE(context.selection.isSuppressed(nextFrame[0].entity));
@@ -251,9 +251,9 @@ TEST(CoincidentOpticalVolumes, SelectionOwnsOnlyItsResultAfterBorrowedInputsChan
 
 TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemovedRepresentatives){
     SelectionContext context;
-    u8 firstBytes[] = { 10u, 20u, 30u, 40u };
-    u8 secondBytes[] = { 10u, 20u, 30u, 40u };
-    CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u) };
+    Array<u8, 4> firstBytes = { 10u, 20u, 30u, 40u };
+    Array<u8, 4> secondBytes = { 10u, 20u, 30u, 40u };
+    Array<CoincidentOpticalVolumeCandidate, 3> candidates = { MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u) };
     for(auto& candidate : candidates){
         candidate.mutableTypedBytes = firstBytes;
     }
@@ -274,7 +274,7 @@ TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemove
     EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
 
-    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(candidates, 2u), context.scratch);
+    context.selection.select(Span<const CoincidentOpticalVolumeCandidate>(candidates.data(), 2u), context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
@@ -282,7 +282,7 @@ TEST(CoincidentOpticalVolumes, NextFrameReevaluatesSurfaceBytesPriorityAndRemove
 
 TEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression){
     SelectionContext context;
-    const CoincidentOpticalVolumeCandidate candidates[] = { MakeCandidate(10u), MakeCandidate(20u) };
+    const Array<CoincidentOpticalVolumeCandidate, 2> candidates = { MakeCandidate(10u), MakeCandidate(20u) };
     context.selection.select(candidates, context.scratch);
     ASSERT_TRUE(context.selection.isSuppressed(candidates[1].entity));
     context.selection.reset();

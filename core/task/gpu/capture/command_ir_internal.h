@@ -44,6 +44,45 @@ struct DecodedRecordContext{
     return decoded;
 }
 
+[[nodiscard]] inline GpuCommandIrRecordContext EncodeContext(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
+    return GpuCommandIrRecordContext{ .taskIndex = task.index, .packetIndex = packet.index, .queueIndex = queue.index, .queueDeviceGeneration = queue.deviceGeneration, };
+}
+
+[[nodiscard]] inline GpuCommandIrRecordContext EncodeContext(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
+    return EncodeContext(record.task, record.packet, record.queue);
+}
+
+[[nodiscard]] inline GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
+    return GpuCommandIrRect{ .minX = rect.minX, .maxX = rect.maxX, .minY = rect.minY, .maxY = rect.maxY, };
+}
+
+[[nodiscard]] inline GpuCommandIrFloatColor EncodeColor(const Color& color)noexcept{
+    return GpuCommandIrFloatColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
+}
+
+[[nodiscard]] inline GpuCommandIrUIntColor EncodeColor(const UIntColor& color)noexcept{
+    return GpuCommandIrUIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
+}
+
+[[nodiscard]] inline GpuCommandIrIntColor EncodeColor(const IntColor& color)noexcept{
+    return GpuCommandIrIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
+}
+
+template<typename RecordT>
+inline void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+    static_assert(IsStandardLayout_V<RecordT>, "Command IR records must be standard layout");
+    static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
+    NWB_MEMSET(&record, 0, sizeof(record));
+    record.header.opcode = opcode;
+    record.header.byteSize = static_cast<u16>(sizeof(record));
+}
+
+template<typename RecordT>
+inline void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode, const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
+    InitializeRecord(record, opcode);
+    record.context = EncodeContext(task, packet, queue);
+}
+
 
 [[nodiscard]] b8 ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadOperation(
@@ -53,7 +92,7 @@ struct DecodedRecordContext{
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept;
-[[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& queue)noexcept;
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept;
 [[nodiscard]] b8 LowerUploadOperation(const GpuCommandIrBuiltinTaskRecord& record, BinaryByteView blobBytes, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList);
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListParameters& commandListDescription, const GpuPhysicalQueueId& packetQueue, CommandQueue::Enum packetQueueClass)noexcept;
 
@@ -93,8 +132,8 @@ struct RasterReplayState{
     const GpuCommandIrOwnedStream& stream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuPhysicalQueueInfo& queue,
-    CommandList& commandList,
     u64 recordIndex,
+    CommandList& commandList,
     RasterReplayState& state
 )noexcept;
 [[nodiscard]] inline GpuCommandIrReplayResult ReplayFailure(const GpuCommandIrReplayError::Enum error, const GpuCommandIrStreamValidationResult& streamValidation = {}, const u64 recordIndex = Limit<u64>::s_Max)noexcept{

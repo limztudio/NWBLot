@@ -2,7 +2,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+native{
+#include <global/texture_payload.h>
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const Name s_TextureUploadScratchArena = "impl/assets_texture/upload";
+
+const StringView s_TextureDiagnosticPrefix = "Texture meta";
+const StringView s_TextureFormatField = "format";
+const StringView s_TextureDimensionField = "dimension";
+const StringView s_TextureResolutionField = "resolution";
+const StringView s_TextureAlphaModeField = "alpha_mode";
+const StringView s_TextureAlphaConstantField = "alpha_constant_unorm8";
+const usize s_PlanarResolutionComponentCount = 2u;
+const usize s_VolumeResolutionComponentCount = 3u;
+
+const u32 s_TextureRgbaBytesPerTexel = 4u;
+const u32 s_TextureRgba16FloatComponentCount = 4u;
+const u32 s_TextureRgba16FloatBytesPerTexel = 8u;
+const u32 s_TextureRgba16FloatAlphaByteOffset = 6u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [reflect]
 class TextureMipLevel{
@@ -14,6 +40,88 @@ class TextureMipLevel{
     public u32 blockCountY = 0u;
     // 2D payload planes per mip: one for 2D, six for cubemap, reduced Z extent for 3D.
     public u32 sliceCount = 1u;
+}
+
+class TextureResolution{
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 depth = 1u;
+}
+
+class UastcSliceLayout{
+    public u64 offsetBytes = 0u;
+    public u64 byteCount = 0u;
+    public u64 blockCount = 0u;
+}
+
+class PrimaryUastcSlice{
+    public Span<u8> bytes;
+    public u64 blockCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TextureMipLevel BuildTextureMipLevel(
+    in u32 width,
+    in u32 height,
+    in u32 blockCountX,
+    in u32 blockCountY,
+    in u64 offsetBytes,
+    in u64 sizeBytes,
+    in u32 sliceCount
+){
+    TextureMipLevel mip;
+    mip.width = width;
+    mip.height = height;
+    mip.blockCountX = blockCountX;
+    mip.blockCountY = blockCountY;
+    mip.offsetBytes = offsetBytes;
+    mip.sizeBytes = sizeBytes;
+    mip.sliceCount = sliceCount;
+    return mip;
+}
+
+b8 IsAllowedTextureMetadataField(in StringView fieldName, in b8 allowAlphaConstant){
+    return
+        fieldName == s_TextureFormatField
+        || fieldName == s_TextureDimensionField
+        || fieldName == s_TextureResolutionField
+        || fieldName == s_TextureAlphaModeField
+        || (allowAlphaConstant && fieldName == s_TextureAlphaConstantField)
+    ;
+}
+
+b8 TryComputeUastcSliceLayout(in TextureMipLevel mip, in u32 sliceIndex, mut UastcSliceLayout outLayout){
+    if(
+        mip.sliceCount == 0u
+        || sliceIndex >= mip.sliceCount
+        || (mip.sizeBytes % cast<u64>(mip.sliceCount)) != 0u
+        || mip.blockCountX == 0u
+        || mip.blockCountY == 0u
+    )
+        return false;
+
+    u64 bytesPerBlock = 0u;
+    native(mut bytesPerBlock){
+        bytesPerBlock = TextureFormat::s_UastcBytesPerBlock;
+    }
+
+    u64 blockCount = cast<u64>(mip.blockCountX) * cast<u64>(mip.blockCountY);
+    if(blockCount > 0xFFFFFFFFFFFFFFFFu / bytesPerBlock)
+        return false;
+
+    u64 sliceByteCount = mip.sizeBytes / cast<u64>(mip.sliceCount);
+    if(sliceByteCount != blockCount * bytesPerBlock)
+        return false;
+
+    UastcSliceLayout layout;
+    layout.offsetBytes = sliceByteCount * cast<u64>(sliceIndex);
+    layout.byteCount = sliceByteCount;
+    layout.blockCount = blockCount;
+    outLayout = layout;
+    return true;
 }
 
 

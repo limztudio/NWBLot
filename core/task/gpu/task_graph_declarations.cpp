@@ -17,16 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_task_graph_declarations{
-
-inline constexpr Name s_DeclarationScratchArena("core/task/gpu/declaration_scratch");
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 u64 GpuTaskGraph::AllocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
 
@@ -38,32 +28,6 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
             return nextGeneration;
     }
 }
-
-GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
-    : m_arena(arena)
-    , m_declarationScratch(__hidden_gpu_task_graph_declarations::s_DeclarationScratchArena)
-    , m_tasks(arena)
-    , m_dependencies(arena)
-    , m_externalDependencies(arena)
-    , m_externalStateSources(arena)
-    , m_externalStateSnapshots(arena)
-    , m_resourceUses(arena)
-    , m_resourceVersionUses(arena)
-    , m_resources(arena)
-    , m_resourceVersions(arena)
-    , m_initialOwnerHandoffSources(arena)
-    , m_initialOwnerHandoffStateSnapshots(arena)
-    , m_queueFamilyIndices(arena)
-    , m_resourceSets(arena)
-    , m_resourceSetMembers(arena)
-    , m_pipelines(arena)
-    , m_externalCompletions(arena)
-    , m_uploadBlobs(arena)
-    , m_markerText(arena)
-    , m_generation(AllocateGeneration())
-    , m_declarationRevision(AllocateGeneration())
-    , m_activeRecordingAttemptGeneration(AllocateGeneration())
-{}
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){
     ResetCompletionScope resetCompletion(*this);
@@ -130,10 +94,6 @@ b8 GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
     m_normalExecutionPrelude = task;
     m_declarationRevision = AllocateGeneration();
     return true;
-}
-
-Expected<GpuGraphResourceVersionId> GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
-    return appendResourceVersion(desc);
 }
 
 

@@ -55,7 +55,7 @@ public:
 
     [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
-    [[nodiscard]] const Entry* entries()const noexcept{ return m_storage ? static_cast<const Entry*>(m_storage) : m_inlineEntries; }
+    [[nodiscard]] const Entry* entries()const noexcept{ return m_storage ? static_cast<const Entry*>(m_storage) : m_inlineEntries.data(); }
 
     [[nodiscard]] usize size()const noexcept{ return m_size; }
 
@@ -66,25 +66,15 @@ public:
 
 private:
     [[nodiscard]] b8 addResource(void* resource, usize inputIndex, b8 texture)noexcept;
-    [[nodiscard]] b8 containsResource(void* resource, b8 texture)const noexcept{
-        if(m_storage)
-            return containsIndexedResource(resource, texture);
-        const usize begin = texture ? 0u : m_textureCount;
-        const usize end = texture ? m_textureCount : m_size;
-        for(usize index = begin; index < end; ++index){
-            if(m_inlineIdentities[index] == resource)
-                return true;
-        }
-        return false;
-    }
+    [[nodiscard]] b8 containsResource(void* resource, b8 texture)const noexcept;
     [[nodiscard]] b8 containsIndexedResource(void* resource, b8 texture)const noexcept;
     [[nodiscard]] b8 grow()noexcept;
 
 
 private:
     Alloc::ScratchArena& m_scratchArena;
-    Entry m_inlineEntries[s_InlineCapacity];
-    void* m_inlineIdentities[s_InlineCapacity];
+    Array<Entry, s_InlineCapacity> m_inlineEntries;
+    Array<void*, s_InlineCapacity> m_inlineIdentities;
     void* m_storage = nullptr;
     usize m_capacity = s_InlineCapacity;
     usize m_size = 0u;

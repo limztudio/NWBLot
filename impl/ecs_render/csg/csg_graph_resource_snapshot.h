@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -19,8 +20,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct CsgFrameGpuDataView;
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot{

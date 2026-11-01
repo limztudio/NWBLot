@@ -25,13 +25,13 @@ using namespace NWB::Core::Alloc;
 struct ConstructionFailure{};
 
 struct ConstructionState{
+    Array<usize, 8u> destructionOrder = {};
     usize failAt = Limit<usize>::s_Max;
     usize constructors = 0u;
     usize completed = 0u;
     usize destructors = 0u;
     usize liveMembers = 0u;
     usize memberDestructors = 0u;
-    usize destructionOrder[8u] = {};
     b8 aligned = true;
 };
 
@@ -128,16 +128,13 @@ struct RejectingArena{
 
 public:
     template<typename T>
-    T* allocate(const usize count)noexcept{
-        static_cast<void>(count);
+    T* allocate([[maybe_unused]] const usize count)noexcept{
         ++attempts;
         return nullptr;
     }
 
     template<typename T>
-    void deallocate(void* memory, const usize count){
-        static_cast<void>(memory);
-        static_cast<void>(count);
+    void deallocate([[maybe_unused]] void* memory, [[maybe_unused]] const usize count){
         ADD_FAILURE() << "A failed raw allocation must not be deallocated";
     }
 };
@@ -220,6 +217,8 @@ public:
         : member(arena, state)
         , destroyed(&wasDestroyed)
     {}
+
+
 private:
     ~PrivateDestructorProbe()noexcept{
         if(destroyed)
@@ -243,6 +242,8 @@ public:
     OperatorPrivateDestructorProbe(Arena& arena, ConstructionState& state)
         : member(arena, state)
     {}
+
+
 private:
     ~OperatorPrivateDestructorProbe()noexcept = default;
 };
@@ -260,26 +261,30 @@ private:
     explicit PrivateConstructorProbe(b8& wasConstructed)noexcept
         : alive(wasConstructed)
     { alive = true; }
+
+
 public:
     ~PrivateConstructorProbe()noexcept{ alive = false; }
 };
 
 template<typename Arena>
-struct RawPrivateDestructorProbe{
+class RawPrivateDestructorProbe{
     template<typename Concrete, typename OwnerArena>
     friend void ::DestroyArenaObject(OwnerArena& arena, Concrete* p)noexcept(noexcept(p->~Concrete()) && noexcept(arena.template deallocate<Concrete>(p, 1)));
-
-
-public:
-    b8& destroyed;
 
 
 public:
     explicit RawPrivateDestructorProbe(b8& wasDestroyed)noexcept
         : destroyed(wasDestroyed)
     {}
+
+
 private:
     ~RawPrivateDestructorProbe()noexcept{ destroyed = true; }
+
+
+public:
+    b8& destroyed;
 };
 
 
@@ -318,7 +323,7 @@ struct PolymorphicAllocationState{
 
 struct PolymorphicAllocationPadding{
     PolymorphicAllocationState& state;
-    usize padding[3u] = {};
+    Array<usize, 3u> padding = {};
 
 
 public:

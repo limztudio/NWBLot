@@ -3,7 +3,7 @@
 
 
 #include "text_area_navigation.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/vector.h>
 #include <global/simplemath.h>
@@ -24,46 +24,6 @@ namespace __hidden_ui_text_area_navigation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ModelStamp final{
-public:
-    explicit ModelStamp(const EditModel& model)noexcept
-        : m_instanceGeneration(model.instanceGeneration())
-        , m_revision(model.revision())
-        , m_externalRevision(model.externalRevision())
-        , m_selectionGeneration(model.selectionGeneration())
-        , m_compositionGeneration(model.compositionGeneration())
-        , m_anchor(model.anchor())
-        , m_caret(model.caret())
-        , m_textMode(model.textMode())
-    {}
-
-
-public:
-    [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
-        return
-            m_instanceGeneration == model.instanceGeneration() && m_revision == model.revision()
-            && m_externalRevision == model.externalRevision() && m_selectionGeneration == model.selectionGeneration()
-            && m_compositionGeneration == model.compositionGeneration() && m_anchor == model.anchor() && m_caret == model.caret()
-            && m_textMode == model.textMode() && !model.composition().active
-        ;
-    }
-
-
-private:
-    const u64 m_instanceGeneration;
-    const u64 m_revision;
-    const u64 m_externalRevision;
-    const u64 m_selectionGeneration;
-    const u64 m_compositionGeneration;
-    const usize m_anchor;
-    const usize m_caret;
-    const EditTextMode::Enum m_textMode;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static const EditBoxCaretStop* FindStop(const EditCaretGeometry& geometry, const usize committedByte)noexcept{
     for(const EditBoxCaretStop& stop : geometry.caretStops()){
         if(stop.committedByte == committedByte)
@@ -77,10 +37,9 @@ private:
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble center = VectorDoubleAdd(VectorDoubleReplicate(caret.y), VectorDoubleMultiply(VectorDoubleReplicate(caret.height), VectorDoubleReplicate(s_RectCenterFractionF64)));
-    const SIMDVectorDouble pageStep = VectorDoubleReplicate(static_cast<f64>(viewportHeight));
-    const SIMDVectorDouble targetValue = VectorDoubleAdd(center, down ? pageStep : VectorDoubleNegate(pageStep));
-    const f64 target = VectorDoubleGetX(targetValue);
+    const f64 center = static_cast<f64>(caret.y) + (static_cast<f64>(caret.height) * s_RectCenterFractionF64);
+    const f64 pageStep = static_cast<f64>(viewportHeight);
+    const f64 target = center + (down ? pageStep : -pageStep);
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
     const SIMDVectorDouble minimumMaximumValue = VectorDoubleMultiplyAddExpression(
@@ -92,8 +51,7 @@ private:
     const f64 maximum = VectorDoubleGetY(minimumMaximumValue);
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble minimumValue = VectorDoubleSplatX(minimumMaximumValue);
-    const Point point{ preferredX, static_cast<f32>(VectorDoubleGetX(VectorDoubleSelect(minimumValue, VectorDoubleMin(VectorDoubleSplatY(minimumMaximumValue), targetValue), VectorDoubleGreater(targetValue, minimumValue)))) };
+    const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };
     if(!IsFinite(point.y))
         return MakeUnexpected(Failure{});
     const auto result = geometry.hitTest(point);
@@ -116,18 +74,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context, const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language)
-    : m_arena(arena)
-    , m_text(text)
-    , m_context(context)
-    , m_state(state)
-    , m_instanceGeneration(state.instanceGeneration())
-    , m_revision(state.revision())
-    , m_fontSize(fontSize)
-    , m_scriptTag(scriptTag)
-    , m_language(language.data(), language.size(), arena)
-{}
-
 Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction, const EditNavigationSnapshot& preferred, const f32 viewportHeight){
     const b8 page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
     if(
@@ -137,12 +83,28 @@ Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditMod
         || !IsFinite(preferred.preferredX) || !m_state.navigation().matches(preferred)
     )
         return MakeUnexpected(Failure{});
-    const __hidden_ui_text_area_navigation::ModelStamp expected(model);
+    const TextAreaModelStamp expected(
+        model.instanceGeneration(),
+        model.revision(),
+        model.externalRevision(),
+        model.selectionGeneration(),
+        model.compositionGeneration(),
+        model.anchor(),
+        model.caret(),
+        model.textMode()
+    );
     EditBoxView view(m_arena);
     const ShapeRequest request{ {}, StringView(m_language.data(), m_language.size()), m_fontSize, m_scriptTag, TextDirection::LeftToRight };
     if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
         return MakeUnexpected(Failure{});
-    if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))
+    if(
+        !current()
+        || expected.instanceGeneration != model.instanceGeneration() || expected.revision != model.revision()
+        || expected.externalRevision != model.externalRevision() || expected.selectionGeneration != model.selectionGeneration()
+        || expected.compositionGeneration != model.compositionGeneration() || expected.anchor != model.anchor() || expected.caret != model.caret()
+        || expected.textMode != model.textMode() || model.composition().active
+        || !m_state.navigation().matches(preferred)
+    )
         return MakeUnexpected(Failure{});
     const EditCaretGeometry& geometry = view.caretGeometry();
     const auto caret = geometry.caretRect(view.displayCaret());
@@ -156,10 +118,6 @@ Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditMod
     if(!resolved)
         return MakeUnexpected(resolved.error());
     return EditNavigationResult{ *resolved, preferredX };
-}
-
-b8 TextAreaNavigationResolver::current()const noexcept{
-    return !m_context.failed() && m_state.instanceGeneration() == m_instanceGeneration && m_state.revision() == m_revision;
 }
 
 

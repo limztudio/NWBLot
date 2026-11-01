@@ -11,9 +11,10 @@
 #pragma once
 
 
-#include "asset.h"
+#include "../global.h"
 #include <impl/assets_csg/shape_id.adhd.h>
 
+#include <core/assets/global.h>
 #include <core/metascript/parser.h>
 
 
@@ -32,11 +33,10 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookArena = Core::Alloc::GlobalArena;
-using CookString = AString<CookArena>;
-template<typename T>
-using CookVector = Vector<T, CookArena>;
-using ScratchArena = Core::Alloc::ScratchArena;
+using Core::Assets::CookArena;
+using Core::Assets::CookString;
+using Core::Assets::CookVector;
+using Core::Assets::ScratchArena;
 
 struct CsgShapeCookEntry{
     Name shapeName = s_NameNone;
@@ -59,7 +59,7 @@ using CsgShapeCookEntryVector = CookVector<CsgShapeCookEntry>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(CookArena& cookArena, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
+[[nodiscard]] Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(const Path& nwbFilePath, const Core::Metascript::Document& doc, CookArena& cookArena, ScratchArena& scratchArena);
 
 [[nodiscard]] b8 AssignCsgShapeCookIds(Span<CsgShapeCookEntry> csgShapeEntries, ScratchArena& scratchArena);
 

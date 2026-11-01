@@ -20,6 +20,35 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
+    return task.scheduling.allowTimingFeedbackRouting && (task.scheduling.allowSameClassQueueRouting || task.scheduling.allowCrossClassTimingFeedbackRouting) && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing;
+}
+
+// Same-class routing retains its independent physical-queue opt-in.
+// Every route into another Vulkan family keeps the separate family opt-in.
+// Cross-class timing is a stronger explicit opt-in and only uses command-compatible classes.
+[[nodiscard]] b8 IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept{
+    if(!AllowsTimingFeedbackRouting(task) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
+        return false;
+    if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
+        return false;
+
+    if(candidate.queueClass == incumbent.queueClass)
+        return task.scheduling.allowSameClassQueueRouting;
+
+    return task.scheduling.allowCrossClassTimingFeedbackRouting;
+}
+
+[[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(const GpuTaskTimingAssignmentKey& assignmentKey, const CommandQueue::Enum queueClass)noexcept{
+    return GpuTaskTimingKey{ .task = assignmentKey.task, .variant = assignmentKey.variant, .resolutionClass = assignmentKey.resolutionClass, .queue = queueClass, };
+}
+
+[[nodiscard]] b8 HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
+    // assignQueues() rejects an enabled invalid policy before this query.
+    NWB_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
+    return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
+}
+
 // Same-family queues share work via timeline semaphore, no ownership transfer. Cross-family stays opt-in.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -90,29 +119,6 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-[[nodiscard]] b8 AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowTimingFeedbackRouting && (task.scheduling.allowSameClassQueueRouting || task.scheduling.allowCrossClassTimingFeedbackRouting) && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing;
-}
-
-// Same-class routing retains its independent physical-queue opt-in.
-// Every route into another Vulkan family keeps the separate family opt-in.
-// Cross-class timing is a stronger explicit opt-in and only uses command-compatible classes.
-[[nodiscard]] b8 IsLegalTimingFeedbackRoute(const GpuTaskGraph::DeclarationReadView& graph, const GpuPhysicalQueueTopology& topology, const GpuTaskGraphTaskView& task, const GpuPhysicalQueueInfo& incumbent, const GpuPhysicalQueueInfo& candidate)noexcept{
-    if(!AllowsTimingFeedbackRouting(task) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
-        return false;
-    if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
-        return false;
-
-    if(candidate.queueClass == incumbent.queueClass)
-        return task.scheduling.allowSameClassQueueRouting;
-
-    return task.scheduling.allowCrossClassTimingFeedbackRouting;
-}
-
-[[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(const GpuTaskTimingAssignmentKey& assignmentKey, const CommandQueue::Enum queueClass)noexcept{
-    return GpuTaskTimingKey{ .task = assignmentKey.task, .variant = assignmentKey.variant, .resolutionClass = assignmentKey.resolutionClass, .queue = queueClass, };
-}
-
 [[nodiscard]] const GpuPhysicalQueueInfo& FindTimingFeedbackIncumbent(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuPhysicalQueueTopology& topology,
@@ -129,12 +135,6 @@ namespace GpuTaskGraphCompilerDetail{
     if(!acceptedQueue || !IsLegalTimingFeedbackRoute(graph, topology, task, staticQueue, *acceptedQueue))
         return staticQueue;
     return *acceptedQueue;
-}
-
-[[nodiscard]] b8 HasUsableTimingFeedback(const GpuTaskGraphQueueAssignmentOptions& options, const u16 deviceGeneration)noexcept{
-    // assignQueues() rejects an enabled invalid policy before this query.
-    NWB_ASSERT(!options.timingFeedbackPolicy.enabled || options.timingFeedbackPolicy.valid());
-    return options.timingFeedbackPolicy.enabled && options.timingHistory && options.timingHistory->valid() && options.timingHistory->deviceGeneration() == deviceGeneration;
 }
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(

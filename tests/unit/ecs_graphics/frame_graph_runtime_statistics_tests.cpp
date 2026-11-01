@@ -21,12 +21,6 @@ namespace __hidden_frame_graph_runtime_statistics_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct PhysicalQueueRuntimeSnapshots{
     NWB::Core::GpuTaskGraphPhysicalQueueCompileStatistics compile;
     NWB::Core::GpuTaskGraphPhysicalQueueRecordingStatistics recording;
@@ -42,15 +36,15 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.compile.graphGeneration = 11u;
     snapshots.compile.planGeneration = 12u;
     snapshots.compile.deviceGeneration = 7u;
-    snapshots.compile.queue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u };
+    snapshots.compile.queue = { .index = 2u, .deviceGeneration = 7u };
     snapshots.compile.queueClass = NWB::Core::CommandQueue::Compute;
     snapshots.compile.taskCount = 3u;
-    snapshots.compile.packetCount = s_ExpectedDualCount;
+    snapshots.compile.packetCount = 2u;
     snapshots.compile.mergedTaskCount = 1u;
-    snapshots.compile.prologueBarrierCount = s_ExpectedDualCount;
+    snapshots.compile.prologueBarrierCount = 2u;
     snapshots.compile.epilogueBarrierCount = 1u;
     snapshots.compile.ownershipReleaseBarrierCount = 1u;
-    snapshots.compile.incomingLogicalOwnershipTransferCount = s_ExpectedDualCount;
+    snapshots.compile.incomingLogicalOwnershipTransferCount = 2u;
     snapshots.compile.incomingLogicalOwnershipTransferSignatureCount = 1u;
     snapshots.compile.incomingRepeatedOwnershipTransferSignatureCount = 1u;
     snapshots.compile.concurrentSharingAdviceResourceCount = 1u;
@@ -61,9 +55,9 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.recording.deviceGeneration = 7u;
     snapshots.recording.queue = snapshots.compile.queue;
     snapshots.recording.queueClass = NWB::Core::CommandQueue::Compute;
-    snapshots.recording.packetCount = s_ExpectedDualCount;
+    snapshots.recording.packetCount = 2u;
     snapshots.recording.taskCount = 3u;
-    snapshots.recording.commandListCount = s_ExpectedDualCount;
+    snapshots.recording.commandListCount = 2u;
     snapshots.recording.barrierCount = 3u;
     snapshots.recording.workerRoutedPacketCount = 1u;
     snapshots.recording.parallelPacketCount = 1u;
@@ -78,13 +72,13 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.submission.deviceGeneration = 7u;
     snapshots.submission.queue = snapshots.compile.queue;
     snapshots.submission.queueClass = NWB::Core::CommandQueue::Compute;
-    snapshots.submission.acceptedPacketCount = s_ExpectedDualCount;
+    snapshots.submission.acceptedPacketCount = 2u;
     snapshots.submission.acceptedTaskCount = 3u;
-    snapshots.submission.nativeSubmissionCount = s_ExpectedDualCount;
-    snapshots.submission.nativeCommandListCount = s_ExpectedDualCount;
+    snapshots.submission.nativeSubmissionCount = 2u;
+    snapshots.submission.nativeCommandListCount = 2u;
     snapshots.submission.plannedWaitTokenCount = 4u;
     snapshots.submission.sameQueueWaitElisionCount = 1u;
-    snapshots.submission.timelineWaitCount = s_ExpectedDualCount;
+    snapshots.submission.timelineWaitCount = 2u;
     snapshots.submission.mergedTimelineWaitCount = 1u;
     snapshots.submission.acceptedFrontierSubmissionCount = 1u;
     snapshots.submission.recoverySubmissionCount = 1u;
@@ -99,7 +93,7 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.compile.deviceGeneration = 7u;
     statistics.compile.taskCount = 1u;
     statistics.compile.resourceCount = 1u;
-    statistics.compile.resourceVersionCount = s_ExpectedDualCount;
+    statistics.compile.resourceVersionCount = 2u;
     statistics.compile.resourceVersionEdgeCount = 1u;
     statistics.compile.packetCount = 1u;
 
@@ -119,7 +113,7 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.submission.acceptedTaskCount = 1u;
     statistics.submission.nativeSubmissionCount = 1u;
     statistics.submission.nativeCommandListCount = 1u;
-    statistics.submission.plannedWaitTokenCount = s_ExpectedDualCount;
+    statistics.submission.plannedWaitTokenCount = 2u;
     statistics.submission.sameQueueWaitElisionCount = 1u;
     statistics.submission.timelineWaitCount = 1u;
     statistics.submission.acceptedFrontierSubmissionCount = 1u;
@@ -134,14 +128,14 @@ struct PhysicalQueueRuntimeSnapshots{
         .planGeneration = 12u,
         .recordingAttemptGeneration = 13u,
         .packet = { .generation = 12u, .index = 0u },
-        .queue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
+        .queue = { .index = 2u, .deviceGeneration = 7u },
         .queueClass = NWB::Core::CommandQueue::Compute,
         .deviceGeneration = 7u,
         .joinsAcceptedQueueFrontier = true,
         .isRecoverySubmission = true,
         .taskCount = 1u,
         .nativeCommandListCount = 1u,
-        .plannedWaitTokenCount = s_ExpectedDualCount,
+        .plannedWaitTokenCount = 2u,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 0u,
@@ -167,7 +161,7 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
-    snapshots.submission.recoverySubmissionCount = s_ExpectedDualCount;
+    snapshots.submission.recoverySubmissionCount = 2u;
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(snapshots.compile, snapshots.recording, snapshots.submission)));
 }
 
@@ -285,7 +279,7 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
     NWB::Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ecs_graphics/reset_runtime_statistics_scratch"));
     const NWB::Core::GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarationAccess, topology));
+    ASSERT_TRUE(compiler.compile(declarationAccess, topology, scratchArena, analysis, assignments, compiledGraph));
 
     const NWB::Core::GpuCompiledGraph::ReadView planAccess(compiledGraph);
     ASSERT_TRUE(planAccess.validFor(declarationAccess));

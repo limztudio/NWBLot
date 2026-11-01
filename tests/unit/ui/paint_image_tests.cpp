@@ -159,34 +159,34 @@ TEST_F(PaintImageFixture, InvalidRectangleUvTintAndNullSourcePreserveEarlierBind
     const Rect rectangle{ 1.0f, 2.0f, 10.0f, 8.0f };
     ASSERT_TRUE(m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(reference.drawImage(image, rectangle));
-    const Rect invalidRectangles[]{
-        { Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
-        { 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
-        { 0.0f, 0.0f, -1.0f, 1.0f },
-        { 0.0f, 0.0f, 1.0f, -1.0f },
-        { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
-        { 0.0f, 0.0f, 1.0f, Limit<f32>::s_QuietNaN },
+    const Array<Rect, 6> invalidRectangles{
+        Rect{ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
+        Rect{ 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, -1.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, -1.0f },
+        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, Limit<f32>::s_QuietNaN },
     };
     for(const Rect& invalid : invalidRectangles)
         EXPECT_FALSE(m_builder.drawImage(image, invalid));
-    const Rect invalidUvs[]{
-        { -0.1f, 0.0f, 1.0f, 1.0f },
-        { 0.0f, 0.0f, 0.0f, 1.0f },
-        { 0.0f, 0.0f, 1.0f, -0.1f },
-        { 0.75f, 0.0f, 0.5f, 1.0f },
-        { 0.0f, 0.75f, 1.0f, 0.5f },
-        { 0.0f, 0.0f, Limit<f32>::s_Infinity, 1.0f },
-        { 0.0f, Limit<f32>::s_QuietNaN, 1.0f, 1.0f },
+    const Array<Rect, 7> invalidUvs{
+        Rect{ -0.1f, 0.0f, 1.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, 0.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, -0.1f },
+        Rect{ 0.75f, 0.0f, 0.5f, 1.0f },
+        Rect{ 0.0f, 0.75f, 1.0f, 0.5f },
+        Rect{ 0.0f, 0.0f, Limit<f32>::s_Infinity, 1.0f },
+        Rect{ 0.0f, Limit<f32>::s_QuietNaN, 1.0f, 1.0f },
     };
     for(const Rect& invalid : invalidUvs)
         EXPECT_FALSE(m_builder.drawImage(image, rectangle, invalid));
-    const Color invalidTints[]{
-        { Limit<f32>::s_QuietNaN, 1.0f, 1.0f, 1.0f },
-        { 1.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
-        { 1.0f, 1.0f, Limit<f32>::s_Infinity, 1.0f },
-        { 1.0f, 1.0f, 1.0f, -0.1f },
-        { 1.0f, 1.0f, 1.0f, 1.1f },
-        { 1.0f, 1.0f, 1.0f, Limit<f32>::s_QuietNaN },
+    const Array<Color, 6> invalidTints{
+        Color{ Limit<f32>::s_QuietNaN, 1.0f, 1.0f, 1.0f },
+        Color{ 1.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
+        Color{ 1.0f, 1.0f, Limit<f32>::s_Infinity, 1.0f },
+        Color{ 1.0f, 1.0f, 1.0f, -0.1f },
+        Color{ 1.0f, 1.0f, 1.0f, 1.1f },
+        Color{ 1.0f, 1.0f, 1.0f, Limit<f32>::s_QuietNaN },
     };
     for(const Color& invalid : invalidTints)
         EXPECT_FALSE(m_builder.drawImage(image, rectangle, { 0.0f, 0.0f, 1.0f, 1.0f }, invalid));
@@ -211,8 +211,8 @@ TEST_F(PaintImageFixture, InvisibleAndTransparentDrawsRemainValidAtCapacityWitho
     }
     PaintBuilder reference(m_arena);
     beginPaint(reference);
-    ASSERT_TRUE(m_builder.prepareGlyphPages(pages.data(), pages.size()));
-    ASSERT_TRUE(reference.prepareGlyphPages(pages.data(), pages.size()));
+    ASSERT_TRUE(m_builder.prepareGlyphPages(pages));
+    ASSERT_TRUE(reference.prepareGlyphPages(pages));
     m_builder.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
     reference.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
     ASSERT_TRUE(m_builder.drawImage(image, { 200.0f, 0.0f, 1.0f, 1.0f }));

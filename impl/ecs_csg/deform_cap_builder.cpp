@@ -3,7 +3,6 @@
 
 
 #include "deform_cap_builder.h"
-#include "deform_validator.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,10 +20,6 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVectorSingle inAreaVec, SIMDVectorSingle originVec, SIMDVectorSingle firstVec, SIMDVectorSingle secondVec)noexcept{
-    return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
-}
-
 void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const Span<const CsgDeformTriangle> triangles, Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges){
     outEdges.clear();
     if(triangles.empty())
@@ -32,11 +27,11 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
     HashMap<u64, u32, ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>> edgeUses(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
     edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     for(const CsgDeformTriangle& triangle : triangles){
-        const u64 edges[s_TriangleCornerCount] = {
+        const Array<u64, s_TriangleCornerCount> edges = {{
             CsgDeformEdgeKey(triangle.indices[0u], triangle.indices[1u]),
             CsgDeformEdgeKey(triangle.indices[1u], triangle.indices[2u]),
             CsgDeformEdgeKey(triangle.indices[2u], triangle.indices[0u]),
-        };
+        }};
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto edgeUse = edgeUses.try_emplace(edges[corner], 0u);
             ++edgeUse.first.value();
@@ -44,11 +39,11 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(ScratchArena& scratchArena, const
     }
     outEdges.reserve(triangles.size());
     for(const CsgDeformTriangle& triangle : triangles){
-        const u32 corners[s_TriangleCornerCount][2u] = {
-            { triangle.indices[0u], triangle.indices[1u] },
-            { triangle.indices[1u], triangle.indices[2u] },
-            { triangle.indices[2u], triangle.indices[0u] },
-        };
+        const Array<Array<u32, 2u>, s_TriangleCornerCount> corners = {{
+            {{ triangle.indices[0u], triangle.indices[1u] }},
+            {{ triangle.indices[1u], triangle.indices[2u] }},
+            {{ triangle.indices[2u], triangle.indices[0u] }},
+        }};
         for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto found = edgeUses.find(CsgDeformEdgeKey(corners[corner][0u], corners[corner][1u]));
             if(found != edgeUses.end() && found.value() == 1u)
@@ -116,7 +111,7 @@ Expected<SIMDVectorSingleResult> CsgDeformCapBuilder::CapNormal(const SIMDVector
     if(!Vector4Greater(Vector3LengthSq(areaVec), VectorReplicate(s_LoopAreaEpsilonSq)))
         return MakeUnexpected(Failure{});
     const SIMDVectorSingle normalized = Vector3Normalize(areaVec);
-    return SIMDVectorSingleResult{ VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW) };
+    return SIMDVectorSingleResult{ VectorSelect(normalized, s_SIMDIdentityR1, s_SIMDMaskW) };
 }
 
 Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormalVec, const Span<const u32> loop, CsgDeformVertexVector<ScratchArena>& inOutVertices, CsgDeformTriangleVector<ScratchArena>& inOutTriangles){
@@ -142,14 +137,14 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
     const SIMDVectorSingle uv = VectorDivide(centerUvVec, loopSizeVec);
     const SIMDVectorSingle color = VectorDivide(centerColorVec, loopSizeVec);
     CsgDeformWallBuilder::NormalizeDeformVertex(normal, tangent);
-    if(!CsgDeformValidator::FiniteVertexVec(position, normal, tangent, uv, color))
-        return MakeUnexpected(Failure{});
     CsgDeformVertex center;
     StoreFloat(position, center.position);
     StoreFloat(normal, center.normal);
     StoreFloat(tangent, center.tangent);
     StoreFloat(uv, center.uv0);
     StoreFloat(color, center.color);
+    if(!IsFiniteCsgDeformVertex(center))
+        return MakeUnexpected(Failure{});
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());
     inOutVertices.push_back(center);
 
@@ -159,7 +154,7 @@ Expected<u32> CsgDeformCapBuilder::FillCapLoop(const SIMDVectorSingle loopNormal
             return MakeUnexpected(Failure{});
         const u32 first = loop[vertexIndex];
         const u32 second = loop[(vertexIndex + 1u) % loop.size()];
-        CsgDeformWallBuilder::EmitTriangle(inOutTriangles, centerIndex, second, first);
+        inOutTriangles.push_back(MakeCsgDeformTriangle(centerIndex, second, first));
         ++capTriangles;
     }
     return capTriangles;
@@ -212,7 +207,7 @@ Expected<u32> CsgDeformCapBuilder::FillCutCaps(ScratchArena& scratchArena, Vecto
         for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
             const SIMDVectorSingle first = LoadFloat(inOutVertices[loop[vertexIndex]].position);
             const SIMDVectorSingle second = LoadFloat(inOutVertices[loop[vertexIndex + 1u]].position);
-            area = AccumulateFanAreaVec(area, origin, first, second);
+            area = VectorAdd(area, Vector3Cross(VectorSubtract(first, origin), VectorSubtract(second, origin)));
         }
         const auto loopNormal = CapNormal(area);
         if(!loopNormal)

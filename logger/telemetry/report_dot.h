@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include <logger/global.h>
+#include "report.h"
 
-#include <core/alloc/scratch.h>
 #include <core/telemetry/frame_graph.h>
 
 
@@ -20,14 +19,13 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Telemetry = Core::Telemetry;
-using TelemetryArena = Telemetry::TelemetryArena;
+namespace TelemetryReportDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace TelemetryReportDetail{
+inline constexpr StringView s_UnknownReportField = "unknown";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,11 +33,11 @@ namespace TelemetryReportDetail{
 
 struct FrameGraphReportRecord{
     u32 streamId = 0u;
-    Telemetry::FrameGraphPayload payload;
+    Core::Telemetry::FrameGraphPayload payload;
 
 
 public:
-    explicit FrameGraphReportRecord(TelemetryArena& arena)noexcept
+    explicit FrameGraphReportRecord(Core::Telemetry::TelemetryArena& arena)noexcept
         : payload(arena)
     {}
 };
@@ -55,7 +53,7 @@ struct FrameGraphOwnerStatisticsRange{
 
 public:
     // Parsed report graphs have strictly owner-sorted tables. Visit their nodes in ascending order once per output.
-    void advance(const Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept;
+    void advance(const Core::Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept;
 };
 
 struct GraphTimingKey{
@@ -77,14 +75,16 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, Core::Alloc::ScratchArena, G
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]);
-[[nodiscard]] AStringView FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept;
-[[nodiscard]] AStringView FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept;
-[[nodiscard]] AStringView FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept;
-[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept;
-[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
-[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
-void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out);
+[[nodiscard]] AStringView EventKindText(Core::Telemetry::EventKind::Enum kind)noexcept;
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Core::Telemetry::FrameGraphNodePayload& node, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText);
+[[nodiscard]] AStringView FrameGraphNodeKindText(const Core::Telemetry::FrameGraphNodeKind::Enum kind)noexcept;
+[[nodiscard]] AStringView FrameGraphEdgeLabel(const Core::Telemetry::FrameGraphEdgeKind::Enum kind)noexcept;
+[[nodiscard]] AStringView FrameGraphQueueClassText(const Core::Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept;
+[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Core::Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept;
+[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept;
+[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Core::Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
+void BuildTimedGraphsDot(Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, Core::Alloc::ScratchArena& scratchArena, AString<Core::Telemetry::TelemetryArena>& out);
+void BuildJson(const TelemetryReportSummary& summary, Span<const FrameGraphReportRecord> graphs, const AStringView memoryRecords, AString<Core::Telemetry::TelemetryArena>& out);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

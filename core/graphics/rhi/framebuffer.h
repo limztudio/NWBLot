@@ -89,21 +89,7 @@ public:
 
     constexpr FramebufferInfo& setSampleQuality(u32 quality)noexcept{ sampleQuality = quality; return *this; }
 };
-inline b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{
-    if(lhs.sampleQuality != rhs.sampleQuality)
-        return false;
-    if(lhs.sampleCount != rhs.sampleCount)
-        return false;
-    if(lhs.depthFormat != rhs.depthFormat)
-        return false;
-    if(lhs.colorFormats.size() != rhs.colorFormats.size())
-        return false;
-    for(usize i = 0u; i < lhs.colorFormats.size(); ++i){
-        if(lhs.colorFormats[i] != rhs.colorFormats[i])
-            return false;
-    }
-    return true;
-}
+[[nodiscard]] b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept;
 
 inline b8 operator!=(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept{ return !(lhs == rhs); }
 

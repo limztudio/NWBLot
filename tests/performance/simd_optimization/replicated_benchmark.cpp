@@ -41,14 +41,14 @@ enum Enum : u32{
 };
 };
 
-inline constexpr StringView s_OperationNames[]{
+inline constexpr Array<StringView, Operation::Count> s_OperationNames = {
     "ln", "exp", "normals2", "normals3", "normals4", "vectors2", "vectors3", "vectors4", "slerp",
-    "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4"
+    "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4",
 };
-using SimdOptimizationBenchmark::s_DataCount;
 using SimdOptimizationBenchmark::Dataset;
-using SimdOptimizationBenchmark::InitializeDataset;
 using SimdOptimizationBenchmark::EqualBits;
+using SimdOptimizationBenchmark::InitializeDataset;
+using SimdOptimizationBenchmark::s_DataCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,7 +205,9 @@ NWB_INLINE SIMDVectorDouble ControlledLength(const SIMDVectorDouble value, const
 }
 
 // Switch only accepted candidates to production after their implementations are applied.
-inline constexpr b8 s_ProductionCandidate[Operation::Count]{ true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false };
+inline constexpr Array<b8, Operation::Count> s_ProductionCandidate = {
+    true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, false, false, false, false, false, false,
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -336,7 +338,7 @@ template<Operation::Enum Kind>
 u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
     return SimdOptimizationBenchmark::VerifyReductionCases(
-        seed, s_OperationNames[Kind],
+        s_OperationNames[Kind],
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs, const SimdOptimizationBenchmark::Observation& expected, const SimdOptimizationBenchmark::Observation& actual, const usize index, u32& failures){
@@ -356,7 +358,8 @@ u32 VerifyReduction(u64& seed){
                     ++failures;
             }
             return true;
-        }
+        },
+        seed
     );
 }
 
@@ -399,35 +402,21 @@ u32 Verify(){
 
 
 template<Operation::Enum Kind, b8 Candidate>
-NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const b8)noexcept{
-    SIMDVectorDouble accumulators[8];
-    for(usize lane = 0u; lane < 8u; ++lane)
-        accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
-    for(usize iteration = 0u; iteration < iterations; ++iteration){
-#pragma clang loop unroll(full)
-        for(usize lane = 0u; lane < 4u; ++lane){
-            const usize index = (iteration * 4u + lane) % s_DataCount;
-            accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
-        }
-    }
-    SIMDVectorDouble result = accumulators[0];
-    for(usize lane = 1u; lane < 8u; ++lane)
-        result = VectorDoubleAdd(result, accumulators[lane]);
-    return result;
-}
-
-template<Operation::Enum Kind, b8 Candidate>
-void Measure(const Dataset& data, const usize iterations, const b8 latency){
-    const usize operations = iterations * 4u;
-    SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations, [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
+NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations)noexcept{
+    return SimdOptimizationBenchmark::ThroughputWorkload<4u>(
+        data, iterations,
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); }
+    );
 }
 
 template<Operation::Enum Kind>
-void SelectVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
-    if(candidate)
-        Measure<Kind, true>(data, iterations, latency);
-    else
-        Measure<Kind, false>(data, iterations, latency);
+void RunVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
+    const usize operations = iterations * 4u;
+    SimdOptimizationBenchmark::SelectVariant(
+        s_OperationNames[Kind], candidate, latency, operations,
+        [&]()noexcept{ return Workload<Kind, true>(data, iterations); },
+        [&]()noexcept{ return Workload<Kind, false>(data, iterations); }
+    );
 }
 
 
@@ -455,7 +444,7 @@ int main(const int argc, const char* const* argv){
     const b8 candidate = options->candidate, latency = options->latency;
     const usize iterations = options->iterations;
     Dataset data{};
-    InitializeDataset(data, SimdOptimizationBenchmark::s_InitialSeed);
+    InitializeDataset(SimdOptimizationBenchmark::s_InitialSeed, data);
     for(usize index = 0u; index < s_DataCount; ++index){
         if(StringView(argv[2]) == "normals2"){
             StoreDouble(VectorDouble2Normalize(LoadDouble(data.left[index])), data.left[index]);
@@ -474,27 +463,27 @@ int main(const int argc, const char* const* argv){
         if(StringView(argv[2]) != s_OperationNames[index])
             continue;
         switch(index){
-        case Operation::Ln: SelectVariant<Operation::Ln>(data, candidate, iterations, latency); break;
-        case Operation::Exp: SelectVariant<Operation::Exp>(data, candidate, iterations, latency); break;
-        case Operation::Normals2: SelectVariant<Operation::Normals2>(data, candidate, iterations, latency); break;
-        case Operation::Normals3: SelectVariant<Operation::Normals3>(data, candidate, iterations, latency); break;
-        case Operation::Normals4: SelectVariant<Operation::Normals4>(data, candidate, iterations, latency); break;
-        case Operation::Vectors2: SelectVariant<Operation::Vectors2>(data, candidate, iterations, latency); break;
-        case Operation::Vectors3: SelectVariant<Operation::Vectors3>(data, candidate, iterations, latency); break;
-        case Operation::Vectors4: SelectVariant<Operation::Vectors4>(data, candidate, iterations, latency); break;
-        case Operation::Slerp: SelectVariant<Operation::Slerp>(data, candidate, iterations, latency); break;
-        case Operation::Length2: SelectVariant<Operation::Length2>(data, candidate, iterations, latency); break;
-        case Operation::Length3: SelectVariant<Operation::Length3>(data, candidate, iterations, latency); break;
-        case Operation::Length4: SelectVariant<Operation::Length4>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal2: SelectVariant<Operation::Reciprocal2>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal3: SelectVariant<Operation::Reciprocal3>(data, candidate, iterations, latency); break;
-        case Operation::Reciprocal4: SelectVariant<Operation::Reciprocal4>(data, candidate, iterations, latency); break;
-        case Operation::Normalize2: SelectVariant<Operation::Normalize2>(data, candidate, iterations, latency); break;
-        case Operation::Normalize3: SelectVariant<Operation::Normalize3>(data, candidate, iterations, latency); break;
-        case Operation::Normalize4: SelectVariant<Operation::Normalize4>(data, candidate, iterations, latency); break;
-        case Operation::Clamp2: SelectVariant<Operation::Clamp2>(data, candidate, iterations, latency); break;
-        case Operation::Clamp3: SelectVariant<Operation::Clamp3>(data, candidate, iterations, latency); break;
-        case Operation::Clamp4: SelectVariant<Operation::Clamp4>(data, candidate, iterations, latency); break;
+        case Operation::Ln: RunVariant<Operation::Ln>(data, candidate, iterations, latency); break;
+        case Operation::Exp: RunVariant<Operation::Exp>(data, candidate, iterations, latency); break;
+        case Operation::Normals2: RunVariant<Operation::Normals2>(data, candidate, iterations, latency); break;
+        case Operation::Normals3: RunVariant<Operation::Normals3>(data, candidate, iterations, latency); break;
+        case Operation::Normals4: RunVariant<Operation::Normals4>(data, candidate, iterations, latency); break;
+        case Operation::Vectors2: RunVariant<Operation::Vectors2>(data, candidate, iterations, latency); break;
+        case Operation::Vectors3: RunVariant<Operation::Vectors3>(data, candidate, iterations, latency); break;
+        case Operation::Vectors4: RunVariant<Operation::Vectors4>(data, candidate, iterations, latency); break;
+        case Operation::Slerp: RunVariant<Operation::Slerp>(data, candidate, iterations, latency); break;
+        case Operation::Length2: RunVariant<Operation::Length2>(data, candidate, iterations, latency); break;
+        case Operation::Length3: RunVariant<Operation::Length3>(data, candidate, iterations, latency); break;
+        case Operation::Length4: RunVariant<Operation::Length4>(data, candidate, iterations, latency); break;
+        case Operation::Reciprocal2: RunVariant<Operation::Reciprocal2>(data, candidate, iterations, latency); break;
+        case Operation::Reciprocal3: RunVariant<Operation::Reciprocal3>(data, candidate, iterations, latency); break;
+        case Operation::Reciprocal4: RunVariant<Operation::Reciprocal4>(data, candidate, iterations, latency); break;
+        case Operation::Normalize2: RunVariant<Operation::Normalize2>(data, candidate, iterations, latency); break;
+        case Operation::Normalize3: RunVariant<Operation::Normalize3>(data, candidate, iterations, latency); break;
+        case Operation::Normalize4: RunVariant<Operation::Normalize4>(data, candidate, iterations, latency); break;
+        case Operation::Clamp2: RunVariant<Operation::Clamp2>(data, candidate, iterations, latency); break;
+        case Operation::Clamp3: RunVariant<Operation::Clamp3>(data, candidate, iterations, latency); break;
+        case Operation::Clamp4: RunVariant<Operation::Clamp4>(data, candidate, iterations, latency); break;
         default: return 2;
         }
         return 0;

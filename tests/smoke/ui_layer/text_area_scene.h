@@ -67,8 +67,6 @@ private:
 
 using SharedUiTextAreaSmokeScene = RefCountPtr< RefCounter<UiTextAreaSmokeScene>, ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] b8 IsUiLayerTextAreaSmokeEnabled();
-[[nodiscard]] b8 IsUiLayerTextAreaSkinSmokeEnabled();
 [[nodiscard]] SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& arena, Core::IClipboardService& clipboard);
 
 

@@ -6,9 +6,10 @@
 
 
 #include "bindings.h"
-#include "../id.h"
-#include "../paint.h"
 
+#include <impl/ecs_ui/toolkit/rect_math.h>
+
+#include <impl/ecs_ui/toolkit/id.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
 
@@ -31,69 +32,10 @@ using InputVector = Vector<T, Core::Alloc::GlobalArena>;
 // A single CPU owner serializes input and layout publication; native capture, IME, and clipboard remain OS services.
 class InputRouter final : NoCopy{
 private:
-    struct PointerGestureRecord{
-        PointerGesture gesture;
-        b8 pendingUpdate = true;
-    };
-    struct TargetLookup{
-        u64 value = 0u;
-        u32 index = 0u;
-    };
-    struct PopupRecord{
-        PopupScope scope;
-        WidgetId restoreFocus;
-        u64 restoreDeclaration = 0u;
-        PopupToken restorePopup;
-        b8 closing = false;
-    };
-    struct ControlCommandOwner{
-        WidgetId host;
-        u64 declarationGeneration = 0u;
-        PopupToken popup;
-        ControlToken control;
-        b8 horizontal = false;
-    };
-    struct TargetOwner{
-        WidgetId target;
-        u64 declarationGeneration = 0u;
-        PopupToken popup;
-        ControlToken control;
-    };
-    struct BoundSource{
-        InputSource source;
-        InputCommandIntent intent;
-    };
-    struct CommandSource{
-        InputSource source;
-        ControlCommandOwner controlOwner{};
-        TargetOwner focusOwner{};
-        Point contextPosition;
-        b8 consumed = false;
-        b8 delegated = false;
-        b8 submitArmed = false;
-        b8 contextArmed = false;
-    };
-    struct HoverIdentity{
-        WidgetId owner;
-        u64 declarationGeneration = 0u;
-        PopupToken popup;
-        ControlToken control;
-    };
-    struct PointerBinding{
-        InputSource source;
-        PointerIntent::Enum intent = PointerIntent::Activate;
-        b8 hoverCapable = false;
-    };
-    struct PointerSource{
-        InputSource source;
-        PointerIntent::Enum intent = PointerIntent::Activate;
-        b8 consumed = false;
-        b8 inert = false;
-    };
-
-
-private:
-    [[nodiscard]] static b8 IsPointerEvent(InputEventType::Enum type)noexcept;
+    [[nodiscard]] static const HitTarget* FindTargetInTable(Span<const HitTarget> targets, Span<const TargetLookup> lookup, WidgetId id, u64 declarationGeneration = 0u)noexcept;
+    [[nodiscard]] static b8 HasVisibleBounds(const HitTarget& target)noexcept{
+        return HasVisibleRectIntersection(LoadRect(target.rectangle), LoadRect(target.clip));
+    }
 
 
 public:
@@ -103,8 +45,8 @@ public:
 public:
     [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
     [[nodiscard]] Expected<InputEvent> queuePointer(const PointerInput& input);
-    [[nodiscard]] b8 setBindings(const InputKeyBinding* bindings, usize count);
-    void restoreDefaultBindings();
+    [[nodiscard]] b8 setBindings(const Span<const InputKeyBinding> bindings){ return m_bindings.set(bindings); }
+    void restoreDefaultBindings(){ m_bindings.restoreDefaults(); }
 
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
 
@@ -112,7 +54,7 @@ public:
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
     // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
-    [[nodiscard]] b8 commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration, const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
+    [[nodiscard]] b8 commitTargets(Span<const HitTarget> targets, u64 layoutGeneration, Span<const PopupScope> popups = {}, u64 expectedFocusLossGeneration = Limit<u64>::s_Max);
     [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token)noexcept;
     [[nodiscard]] b8 dismissPopup(PopupDismissReason::Enum reason);
     void closePopup(const PopupToken& token)noexcept;
@@ -124,7 +66,9 @@ public:
 
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
     [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const noexcept;
-    [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const noexcept;
+    [[nodiscard]] const HitTarget* findTarget(const WidgetId id, const u64 declarationGeneration = 0u)const noexcept{
+        return FindTargetInTable(m_targets, m_lookup, id, declarationGeneration);
+    }
 
     [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
 
@@ -182,8 +126,12 @@ public:
     [[nodiscard]] b8 windowFocused()const noexcept{ return m_windowFocused; }
 
     [[nodiscard]] b8 wantsPointer()const noexcept;
-    [[nodiscard]] b8 wantsCommands()const noexcept;
-    [[nodiscard]] b8 ownsKey(i32 key)const noexcept;
+    [[nodiscard]] b8 wantsCommands()const noexcept{
+        return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{ return source.consumed; }) != m_commandSources.end();
+    }
+    [[nodiscard]] b8 ownsKey(const i32 key)const noexcept{
+        return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
+    }
     [[nodiscard]] b8 ownsSource(const InputSource& source)const noexcept;
     // Held commands cannot switch editors or begin editing after their delegated owner has retired.
     [[nodiscard]] b8 canEditCommand(const InputEvent& event)const noexcept;
@@ -211,7 +159,9 @@ private:
     void reconcileCommandPresses()noexcept;
     void cancelPointerPress()noexcept;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const noexcept;
-    [[nodiscard]] b8 isInteractive(const HitTarget& target)const noexcept;
+    [[nodiscard]] b8 isInteractive(const HitTarget& target)const noexcept{
+        return target.enabled && HasVisibleBounds(target) && allowedByPopup(target) && (!target.owner.valid() || controlHost(target) != nullptr);
+    }
     [[nodiscard]] b8 validControlTargets()const noexcept;
     [[nodiscard]] b8 validCommandOwners()const noexcept;
     [[nodiscard]] const HitTarget* commandHost(const HitTarget& source)const noexcept;
@@ -224,19 +174,22 @@ private:
     void appendContextMenu(const HitTarget& target, const Point& position, InputActionSource::Enum origin, const InputSource& inputSource, InputRoutingResult& result);
     [[nodiscard]] b8 routeContextMenuCommand(const InputEvent& event, const HitTarget* focused, b8 alreadyPressed, CommandSource& source)noexcept;
     void routeSecondary(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
-    void appendControlAction(InputRoutingResult& result, const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, f64 deltaX = 0.0);
+    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, f64 deltaX, InputRoutingResult& result);
+    void appendControlAction(const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result){
+        appendControlAction(host, source, kind, delta, 0.0, result);
+    }
     [[nodiscard]] b8 routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, b8 alreadyPressed, CommandSource& held, InputRoutingResult& result);
     void routeWheel(const InputEvent& event, const HitTarget* hit, InputRoutingResult& result);
     [[nodiscard]] b8 allowedByPopup(const HitTarget& target)const noexcept;
     [[nodiscard]] b8 popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept;
-    [[nodiscard]] b8 stagePopups(const PopupScope* scopes, usize count);
+    [[nodiscard]] b8 stagePopups(Span<const PopupScope> scopes);
     [[nodiscard]] b8 validPopupTarget(const HitTarget& target)const noexcept;
     void installPopups(u64 expectedFocusLossGeneration);
     void retirePopup(WidgetId id);
     void cancelPopupFocus();
     void rebuildLookup();
     void reconcileTargets()noexcept;
-    void updateHover()noexcept;
+    void updateHover()noexcept{ setHoverTarget(m_pointerKnown ? findHitTarget(m_pointer) : nullptr); }
     void setHoverTarget(const HitTarget* hovered)noexcept;
     void advanceHoverActivity()noexcept;
     void clearHover()noexcept;

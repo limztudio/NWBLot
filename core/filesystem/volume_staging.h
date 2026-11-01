@@ -21,13 +21,16 @@ inline constexpr AStringView s_StageDirectoryLabel = "stage directory";
 inline constexpr AStringView s_BackupDirectoryLabel = "backup directory";
 
 b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, AStringView operationName, AStringView label);
-void CleanupStagedDirectoryBestEffort(const Path& directoryPath, AStringView operationName, AStringView label);
 b8 EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operationName, AStringView label);
 
 class StagedDirectoryCleanupGuard : NoCopy{
 public:
     // The operation and label backing text must outlive this guard.
-    StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = s_StageDirectoryLabel);
+    StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label = s_StageDirectoryLabel)
+        : m_directoryPath(directoryPath)
+        , m_operationName(operationName)
+        , m_label(label)
+    {}
     ~StagedDirectoryCleanupGuard()noexcept;
 
 

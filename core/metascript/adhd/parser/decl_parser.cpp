@@ -332,6 +332,14 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
             m_cursor.error("'virtual' keyword is prohibited in adhd; interface methods are implicitly abstract contracts");
             return nullptr;
         }
+        if(m_cursor.checkIdentifier("static")){
+            m_cursor.error("'static' methods and members are prohibited inside 'interface' in adhd");
+            return nullptr;
+        }
+        if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
+            m_cursor.error("nested type declarations inside 'interface' are prohibited in adhd; declare types at file scope");
+            return nullptr;
+        }
 
         const SourceSpan methodSpan{m_cursor.current().line, m_cursor.current().column};
         TypeRef* retType = m_typeParser.parseType(true, false);

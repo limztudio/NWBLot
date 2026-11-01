@@ -58,6 +58,40 @@ class ContextMenuResult{
     public u64 key = 0u;
 }
 
+b8 IsValidPopupOptions(in PopupOptions options, in DisplayMetrics display){
+    return IsValidUiRect(options.anchor)
+        && isFinite(options.size.x)
+        && isFinite(options.size.y)
+        && options.size.x > 0.0f
+        && options.size.y > 0.0f
+        && options.side <= PopupPlacementSide::Center
+        && isFinite(options.gap)
+        && options.gap >= 0.0f
+        && isFinite(display.logicalWidth)
+        && display.logicalWidth > 0.0f
+        && isFinite(display.logicalHeight)
+        && display.logicalHeight > 0.0f
+        && isFinite(display.pixelScaleX)
+        && display.pixelScaleX > 0.0f
+        && isFinite(display.pixelScaleY)
+        && display.pixelScaleY > 0.0f;
+}
+
+PopupPlacementSide OppositePopupPlacementSide(in PopupPlacementSide side){
+    switch(side){
+    case PopupPlacementSide::Below:
+        return PopupPlacementSide::Above;
+    case PopupPlacementSide::Above:
+        return PopupPlacementSide::Below;
+    case PopupPlacementSide::Right:
+        return PopupPlacementSide::Left;
+    case PopupPlacementSide::Left:
+        return PopupPlacementSide::Right;
+    default:
+        return PopupPlacementSide::Center;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

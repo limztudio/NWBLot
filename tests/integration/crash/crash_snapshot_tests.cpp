@@ -31,7 +31,7 @@ TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
     {
         NothrowScopedLock lock(NWB::Core::Crash::CrashDetail::g_State.mutex);
         for(auto& metadata : NWB::Core::Crash::CrashDetail::g_State.metadata){
-            if(!metadata.used || AStringView(metadata.key) != s_Key)
+            if(!metadata.used || AStringView(metadata.key.data()) != s_Key)
                 continue;
             const auto original = metadata;
             ScopeExit restore([&metadata, &original]()noexcept{ metadata = original; });
@@ -44,9 +44,9 @@ TEST(Crash, SnapshotKeepsPublishedMetadataDuringInterruptedWriter){
     ASSERT_TRUE(exercisedWriter);
     b8 found = false;
     for(u32 i = 0u; i < request.metadataCount; ++i){
-        if(AStringView(request.metadata[i].key) != s_Key)
+        if(AStringView(request.metadata[i].key.data()) != s_Key)
             continue;
-        EXPECT_EQ(AStringView(request.metadata[i].value), s_Published);
+        EXPECT_EQ(AStringView(request.metadata[i].value.data()), s_Published);
         found = true;
     }
     EXPECT_TRUE(found);
@@ -56,14 +56,14 @@ TEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords){
     constexpr AStringView s_Key("snapshot_concurrent_writer");
     constexpr AStringView s_Category("snapshot_concurrent_breadcrumb");
     constexpr usize s_Iterations = 2000u;
-    char first[NWB::Core::Crash::CrashDetail::s_MaxMediumText] = {};
-    char second[NWB::Core::Crash::CrashDetail::s_MaxMediumText] = {};
-    for(usize i = 0u; i + 1u < sizeof(first); ++i){
+    Array<char, NWB::Core::Crash::CrashDetail::s_MaxMediumText> first = {};
+    Array<char, NWB::Core::Crash::CrashDetail::s_MaxMediumText> second = {};
+    for(usize i = 0u; i + 1u < first.size(); ++i){
         first[i] = 'a';
         second[i] = 'b';
     }
-    const AStringView firstText(first, sizeof(first) - 1u);
-    const AStringView secondText(second, sizeof(second) - 1u);
+    const AStringView firstText(first.data(), first.size() - 1u);
+    const AStringView secondText(second.data(), second.size() - 1u);
     ASSERT_TRUE(NWB::Core::Crash::SetCrashMetadata(s_Key, firstText));
     Atomic<u32> failures{ 0u };
     Latch start(2u);
@@ -82,9 +82,9 @@ TEST(Crash, ConcurrentPublicWritersPublishCompleteMetadataAndBreadcrumbRecords){
         b8 found = false;
         for(u32 i = 0u; i < request.metadataCount; ++i){
             const auto& metadata = request.metadata[i];
-            if(AStringView(metadata.key) != s_Key)
+            if(AStringView(metadata.key.data()) != s_Key)
                 continue;
-            const AStringView value(metadata.value);
+            const AStringView value(metadata.value.data());
             if(value != firstText && value != secondText)
                 failures.fetch_add(1u, MemoryOrder::relaxed);
             found = true;

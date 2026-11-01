@@ -8,8 +8,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,11 +33,6 @@ VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mo
     case SamplerAddressMode::MirrorOnce: return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
     default:                             return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     }
-}
-
-[[nodiscard]] SIMDVectorSingle ResolveSamplerMaxAnisotropy(const SIMDVectorSingle requestedAndLimit)noexcept{
-    const SIMDVectorSingle bounded = VectorMax(requestedAndLimit, VectorSplatOne());
-    return VectorMin(VectorSplatY(bounded), bounded);
 }
 
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
@@ -97,8 +90,7 @@ Expected<SamplerHandle> Device::createSampler(const SamplerDesc& d){
     }
 
     SamplerDesc normalizedDesc = d;
-    // x: requested anisotropy, y: device limit. Both are raised to at least 1 before the limit applies.
-    normalizedDesc.maxAnisotropy = VectorGetX(__hidden_vulkan_sampler::ResolveSamplerMaxAnisotropy(VectorSet(normalizedDesc.maxAnisotropy, m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 0.0f, 0.0f)));
+    normalizedDesc.maxAnisotropy = Clamp(normalizedDesc.maxAnisotropy, 1.0f, Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.0f));
 
     SamplerHandle sampler(NewArenaObject<Sampler>(m_context.objectArena, m_context), SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
     if(!sampler)

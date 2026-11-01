@@ -8,10 +8,7 @@
 #include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/material/pipeline_types.adhd.h>
 
-#include <core/common/log.h>
 #include <core/ecs/world.h>
-
-#include <global/simd/convert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,36 +20,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(const AStringView parameterName){
-    const usize dotIndex = parameterName.find('.');
-    if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form"), ConvertString(parameterName));
-        return MakeUnexpected(Failure{});
-    }
-    if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator"), ConvertString(parameterName));
-        return MakeUnexpected(Failure{});
-    }
+[[nodiscard]] Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(AStringView parameterName);
+[[nodiscard]] UInt4U PackMaterialInstanceBytes(Span<const u8> bytes)noexcept;
 
-    const auto name = Name::FromText(parameterName);
-    const auto blockName = Name::FromText(parameterName.substr(0u, dotIndex));
-    const auto fieldName = Name::FromText(parameterName.substr(dotIndex + 1u));
-    if(!name || !blockName || !fieldName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' contains an embedded null"), ConvertString(parameterName));
-        return MakeUnexpected(Failure{});
-    }
-    MaterialInstanceParameterNames result;
-    result.parameterName = *name;
-    result.blockName = *blockName;
-    result.fieldName = *fieldName;
-    return result;
+template<typename TElement>
+[[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const Span<const TElement> elements)noexcept{
+    return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(elements.data()), elements.size() * sizeof(TElement)));
 }
 
-[[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount)noexcept{
-    UInt4U packed = {};
-    NWB_ASSERT(byteCount <= sizeof(packed.raw));
-    NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes, byteCount);
-    return packed;
+template<typename TValue>
+[[nodiscard]] inline UInt4U PackMaterialInstanceValue(const TValue& value)noexcept{
+    return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(&value), sizeof(TValue)));
 }
 
 template<typename TValue>
@@ -65,7 +43,18 @@ struct MaterialInstanceValueTraits<f32>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const f32 value)noexcept{
-        return PackMaterialInstanceBytes(&value, sizeof(value));
+        return PackMaterialInstanceValue(value);
+    }
+};
+
+template<>
+struct MaterialInstanceValueTraits<Half>{
+    static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::f16;
+
+
+public:
+    [[nodiscard]] static UInt4U Pack(const Half value)noexcept{
+        return PackMaterialInstanceValue(value);
     }
 };
 
@@ -76,7 +65,7 @@ struct MaterialInstanceValueTraits<Float4>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Float4& value)noexcept{
-        return PackMaterialInstanceBytes(value.raw, sizeof(f32) * s_MaterialInstanceVectorComponentCount);
+        return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(value.raw), sizeof(f32) * s_MaterialInstanceVectorComponentCount));
     }
 };
 
@@ -87,97 +76,22 @@ struct MaterialInstanceValueTraits<Half4U>{
 
 public:
     [[nodiscard]] static UInt4U Pack(const Half4U& value)noexcept{
-        return PackMaterialInstanceBytes(value.raw, sizeof(Half) * s_MaterialInstanceVectorComponentCount);
+        return PackMaterialInstanceBytes(Span<const u8>(reinterpret_cast<const u8*>(value.raw), sizeof(Half) * s_MaterialInstanceVectorComponentCount));
     }
 };
 
-[[nodiscard]] inline b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText){
-    if(!materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface"), ConvertString(parameterNameText));
-        return false;
-    }
-    if(!component.materialInterface){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface"), ConvertString(parameterNameText));
-        return false;
-    }
-    if(component.materialInterface == materialInterface)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
-        , ConvertString(parameterNameText)
-        , ConvertString(materialInterface.resolvedText())
-        , ConvertString(component.materialInterface.resolvedText())
-    );
-    return false;
-}
-
-[[nodiscard]] inline b8 StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, const AStringView parameterNameText){
-    for(MaterialInstanceParameter& existingParameter : component.overrides){
-        if(existingParameter.parameterName != parameter.parameterName)
-            continue;
-
-        if(existingParameter.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type"), ConvertString(parameterNameText));
-            return false;
-        }
-
-        existingParameter = parameter;
-        ++component.revision;
-        return true;
-    }
-
-    component.overrides.push_back(parameter);
-    ++component.revision;
-    return true;
-}
-
-[[nodiscard]] inline MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, const Core::ECS::EntityID entity){
-    MaterialInstanceComponent* component = world.tryGetComponent<MaterialInstanceComponent>(entity);
-    if(component)
-        return component;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
-    return nullptr;
-}
-
-[[nodiscard]] inline b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, const AStringView parameterNameText, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
-    if(!IsMaterialLayoutNumericFieldType(fieldType)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type"), ConvertString(parameterNameText));
-        return false;
-    }
-    if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
-        return false;
-
-    const auto names = SplitMaterialInstanceParameterName(parameterNameText);
-    if(!names)
-        return false;
-    MaterialInstanceParameter parameter;
-    parameter.parameterName = names->parameterName;
-    parameter.blockName = names->blockName;
-    parameter.fieldName = names->fieldName;
-    parameter.fieldType = fieldType;
-    parameter.value = value;
-
-    return StoreMaterialMutableParameter(component, parameter, parameterNameText);
-}
-
-[[nodiscard]] inline b8 SetMaterialMutableParameter(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const MaterialLayoutFieldType::Enum fieldType, const UInt4U value){
-    MaterialInstanceComponent* component = ResolveMaterialInstanceComponentForSet(world, entity);
-    if(!component)
-        return false;
-
-    return SetMaterialMutableParameter(*component, materialInterface, parameterName, fieldType, value);
-}
+[[nodiscard]] b8 ValidateMaterialInstanceInterface(const MaterialInstanceComponent& component, const Name& materialInterface, AStringView parameterNameText);
+[[nodiscard]] b8 StoreMaterialMutableParameter(MaterialInstanceComponent& component, MaterialInstanceParameter parameter, AStringView parameterNameText);
+[[nodiscard]] MaterialInstanceComponent* ResolveMaterialInstanceComponentForSet(Core::ECS::World& world, Core::ECS::EntityID entity);
+[[nodiscard]] b8 SetMaterialMutableParameter(MaterialInstanceComponent& component, const Name& materialInterface, AStringView parameterNameText, MaterialLayoutFieldType::Enum fieldType, UInt4U value);
+[[nodiscard]] b8 SetMaterialMutableParameter(Core::ECS::World& world, Core::ECS::EntityID entity, const Name& materialInterface, AStringView parameterName, MaterialLayoutFieldType::Enum fieldType, UInt4U value);
 
 template<typename TValue>
 [[nodiscard]] inline b8 SetMaterialMutableValue(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const TValue& value){
     return SetMaterialMutableParameter(world, entity, materialInterface, parameterName, MaterialInstanceValueTraits<TValue>::s_FieldType, MaterialInstanceValueTraits<TValue>::Pack(value));
 }
 
-[[nodiscard]] inline b8 SetMaterialMutableHalf4(Core::ECS::World& world, const Core::ECS::EntityID entity, const Name& materialInterface, const AStringView parameterName, const Float4& value){
-    const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
-    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
-}
+[[nodiscard]] b8 SetMaterialMutableHalf4(Core::ECS::World& world, Core::ECS::EntityID entity, const Name& materialInterface, AStringView parameterName, const Float4& value);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

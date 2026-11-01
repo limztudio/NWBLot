@@ -20,29 +20,8 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_auto_registration{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-::AutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetArena>& QueryAutoCodecFactoryQueue(){
-    static ::AutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetArena> s_Queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
-    return s_Queue;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 AssetCodecAutoRegistrar::initialize(){
-    ::RegisterAutoFactory(__hidden_auto_registration::QueryAutoCodecFactoryQueue(), m_factory);
+    ::RegisterAutoFactory(QueryAssetAutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetsArenaScope::s_AutoCodecFactoryQueueArena>(), m_factory);
     return true;
 }
 
@@ -53,7 +32,7 @@ b8 AssetCodecAutoRegistrar::initialize(){
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
     Vector<NotNull<AssetCodecFactory>, Alloc::ScratchArena> codecFactories{scratchArena};
-    __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
+    QueryAssetAutoRegistrationQueue<NotNull<AssetCodecFactory>, AssetsArenaScope::s_AutoCodecFactoryQueueArena>().copyTo(codecFactories);
 
     ::RegisterAutoFactoryProducts(
         codecFactories, [](const NotNull<AssetCodecFactory> factory){ return (*factory)(); },

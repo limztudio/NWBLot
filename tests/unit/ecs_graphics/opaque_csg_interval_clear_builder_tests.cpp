@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/opaque_csg_interval_clear_builder.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.h>
 
 #include <core/task/gpu/task_graph.h>
 

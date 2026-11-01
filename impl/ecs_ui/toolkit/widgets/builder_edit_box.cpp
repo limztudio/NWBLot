@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../edit/caret_clock.h"
+#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/edit/caret_clock.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -19,12 +19,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxResult Builder::editBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
-    return declareEditBox(stableKey, options, model, state);
-}
-
 EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBoxOptions& options, EditModel& model, EditBoxState& state, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || model.textMode() != EditTextMode::SingleLine || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked() || model.textMode() != EditTextMode::SingleLine){
         m_context.fail();
         return {};
     }
@@ -48,7 +44,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
     if(m_editHost){
-        result = actions ? m_editHost->editActions(**widget, model, options, m_context.popupToken(), *actions) : m_editHost->edit(**widget, model, options);
+        result = actions ? m_editHost->editActions(**widget, options, m_context.popupToken(), model, *actions) : m_editHost->edit(**widget, options, model);
     }
     if(!result.valid || m_context.failed()){
         result.valid = false;
@@ -74,7 +70,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
     item.editStyle = m_editStyle;
     item.state = **widget;
     item.editOptions = options;
-    if(!prepareEditBox(item, model, state, result)){
+    if(!prepareEditBox(result, model, state, item)){
         result.valid = false;
         return result;
     }
@@ -87,27 +83,21 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, const EditBox
         item.integerEdit = static_cast<u32>(m_scope->m_integerEdits.size());
     if(floatFrame)
         item.floatEdit = static_cast<u32>(m_scope->m_floatEdits.size());
-    const SIMDVectorSingle minimum = loadEditMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSelect(VectorSelect(VectorZero(), minimum, s_SIMDMaskX), VectorReplicate(item.editView.visualBounds().height), s_SIMDMaskY), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle intrinsic = VectorMax(VectorSelect(VectorZero(), minimum, s_SIMDMaskXY), textSize);
-    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    resolveEditIntrinsicSize(item, description.intrinsicSize);
+    if(!addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));
     return result;
 }
 
 SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
     SIMDVectorSingle minimum = VectorSet(s_StyleMinimumFieldWidth, 0.0f, s_StyleMinimumFieldWidth, 0.0f);
-    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
+    const Array<Name, 4> names{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
@@ -118,7 +108,13 @@ SIMDVectorSingle Builder::loadEditMinimumSize()const noexcept{
     return minimum;
 }
 
-b8 Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){
+void Builder::resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept{
+    const SIMDVectorSingle minimum = loadEditMinimumSize();
+    const f32 paddedHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
+    outSize = { VectorGetX(minimum), Max(VectorGetY(minimum), paddedHeight) };
+}
+
+b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
     if(state.modelGeneration != model.instanceGeneration() || state.revision != model.revision() || state.selectionGeneration != model.selectionGeneration() || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused)
         state.caretElapsed = 0.0;
     else
@@ -140,26 +136,17 @@ b8 Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, co
     }
     item.editState = &state;
 
-    SIMDVectorSingle padding = VectorSet(item.editStyle.padding.left, item.editStyle.padding.top, item.editStyle.padding.right, item.editStyle.padding.bottom);
-    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_editStyle.normal);
-        if(!skinRegion)
-            skinRegion = region(m_editStyle.fallback, m_editStyle.fallback);
-        if(!skinRegion)
-            continue;
-        const SIMDVectorSingle candidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        padding = VectorSelect(candidate, padding, VectorGreater(padding, candidate));
-    }
-    item.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
+    const Array<Name, 4> names{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
+    const Name& fallback = m_skin && m_skin->findRegion(m_editStyle.normal) ? m_editStyle.normal : m_editStyle.fallback;
+    item.padding = resolveRegionsPadding(item.editStyle.padding, names, fallback);
     return true;
 }
 
 b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
     if(!numericEditMatches(item))
         return false;
-    const f32 caretWidth = VectorGetX(VectorDivide(VectorSplatOne(), VectorReplicate(m_paint.displayMetrics().pixelScaleX)));
-    const auto arranged = item.editView.arrange(box.rectangle, item.padding, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), { item.editState->scroll, 0.0f }, caretWidth);
+    const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
+    const auto arranged = item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), { item.editState->scroll, 0.0f }, caretWidth);
     if(!arranged)
         return false;
     const EditBoxPlacement& placement = *arranged;
@@ -169,7 +156,7 @@ b8 Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget
     item.editState->scroll = placement.scroll;
     HitTarget target = navigation ? *navigation : HitTarget{};
     target.rectangle = box.rectangle;
-    target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
+    target.clip = visibleClip(box.clip);
     target.enabled = item.editOptions.enabled;
     target.focusable = item.editOptions.enabled;
     target.textEditable = item.editOptions.enabled;

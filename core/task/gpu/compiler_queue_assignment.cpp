@@ -48,11 +48,11 @@ const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId
 
 
 b8 GpuTaskGraphCompiler::assignQueues(
-    GpuTaskGraphQueueAssignments& outAssignments,
-    Alloc::ScratchArena& scratchArena,
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
+    Alloc::ScratchArena& scratchArena,
+    GpuTaskGraphQueueAssignments& outAssignments,
     const GpuTaskGraphQueueAssignmentOptions& options
 )const{
     using namespace GpuTaskGraphCompilerDetail;
@@ -174,7 +174,7 @@ b8 GpuTaskGraphCompiler::assignQueues(
             const GpuPhysicalQueueInfo* queue = nullptr;
             GpuQueueAssignmentScore score;
         };
-        Candidate candidates[CommandQueue::kCount] = {};
+        Array<Candidate, CommandQueue::kCount> candidates{};
         usize candidateCount = 0u;
         for(u8 queueClassValue = 0u; queueClassValue < CommandQueue::kCount; ++queueClassValue){
             Candidate& candidate = candidates[queueClassValue];

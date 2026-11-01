@@ -17,6 +17,7 @@
 
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_paths.h>
+#include <core/assets/volume/pack_manifest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,18 +35,8 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = Core::Assets::CookString;
-template<typename T>
-using CookVector = Core::Assets::CookVector<T>;
-using ResolvedCookPaths = Core::Assets::ResolvedCookPaths;
-using ScratchArena = Core::Assets::ScratchArena;
-using ScratchString = Core::Assets::ScratchString;
-using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
-using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
-using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
-
-inline constexpr AStringView s_DependencyRepoRootAlias = "repo";
-inline constexpr AStringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
+using IncludeMetadataMap = ShaderCook::CookMap<Core::Assets::CookString, ShaderCook::IncludeEntry>;
+using ShaderEntryVector = Core::Assets::CookVector<ShaderCook::ShaderEntry>;
 
 struct PreparedShaderEntry{
     ShaderCook::ShaderEntry entry;
@@ -54,7 +45,7 @@ struct PreparedShaderEntry{
     ShaderCook::CookVector<Path> dependencies;
     u64 dependencyChecksum = 0;
     u64 variantCount = 0;
-    CookString materialTypedBindingInterfacePath;
+    Core::Assets::CookString materialTypedBindingInterfacePath;
     Name materialTypedBindingInterface = s_NameNone;
     b8 compilerInputsHaveBom = false;
     b8 usesMaterialTypedBinding = false;
@@ -90,7 +81,7 @@ public:
 
 
 [[nodiscard]] Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
-    const ResolvedCookPaths& resolvedPaths,
+    const Core::Assets::ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
     const Path& deferredBxdfIncludeRoot,
@@ -99,9 +90,20 @@ public:
     Span<const MaterialBindEntry> materialBindEntries,
     Span<const MaterialCookEntry> materialEntries,
     ShaderCook::CookArena& cookArena,
-    ScratchArena& scratchArena,
+    Core::Assets::ScratchArena& scratchArena,
     ShaderCook& shaderCook,
     Span<ShaderCook::ShaderEntry> inOutShaderEntries
+);
+[[nodiscard]] b8 ValidateMaterials(Span<const PreparedShaderEntry> preparedEntries, Span<const MaterialCookEntry> materialEntries, Core::Assets::ScratchArena& scratchArena);
+[[nodiscard]] b8 AppendPreparedShadersToManifest(
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    Span<const PreparedShaderEntry> preparedEntries,
+    ShaderCook::CookArena& cookArena,
+    Core::Assets::ScratchArena& scratchArena,
+    ShaderCook& shaderCook,
+    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
+    Core::Assets::CookEntryPathHashSet& inOutSeenVirtualPathHashes
 );
 
 

@@ -45,17 +45,6 @@ namespace Metascript = Core::Metascript;
     return *name && Core::Assets::IsCompositeRootAssetType(**name);
 }
 
-[[nodiscard]] static Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        const auto isBunch = IsAssetBunchType(declaration.type);
-        if(!isBunch)
-            return MakeUnexpected(isBunch.error());
-        if(*isBunch)
-            return true;
-    }
-    return false;
-}
-
 [[nodiscard]] static Expected<NotNull<const Metascript::Document::Declaration*>> FindBunchItemDeclaration(
     const Path& nwbFilePath,
     const DeclarationLookup& declarations,
@@ -75,34 +64,11 @@ namespace Metascript = Core::Metascript;
     return MakeUnexpected(Failure{});
 }
 
-static Expected<ExpandedAssetMetadataVector, Core::Assets::AssetBunchExpandFailure::Enum> ExpandAssetBunchForAssetCook(const Core::Assets::AssetBunchExpandContext& context){
-    const auto hasBunch = HasAssetBunchDeclaration(context.doc);
-    if(!hasBunch)
-        return MakeUnexpected(Core::Assets::AssetBunchExpandFailure::Error);
-    if(*hasBunch){
-        auto assets = ExpandAssetBunch(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.doc, context.scratchArena);
-        if(!assets)
-            return MakeUnexpected(Core::Assets::AssetBunchExpandFailure::Error);
-        return Move(*assets);
-    }
-
-    const auto hasComposite = HasCompositeAssetDeclarations(context.doc);
-    if(!hasComposite)
-        return MakeUnexpected(Core::Assets::AssetBunchExpandFailure::Error);
-    if(!*hasComposite)
-        return MakeUnexpected(Core::Assets::AssetBunchExpandFailure::Unsupported);
-
-    auto assets = ExpandCompositeAsset(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.doc, context.scratchArena);
-    if(!assets)
-        return MakeUnexpected(Core::Assets::AssetBunchExpandFailure::Error);
-    return Move(*assets);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Core::Assets::AssetBunchExpanderAutoRegistrar s_AssetBunchExpanderRegistrar(&ExpandAssetBunchForAssetCook);
+static Core::Assets::AssetBunchExpanderAutoRegistrar s_AssetBunchExpanderRegistrar(&AssetsBunchCook::ExpandAssetBunchForAssetCook);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -120,7 +86,36 @@ namespace AssetsBunchCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena){
+Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
+    using namespace __hidden_assets_bunch_cook;
+
+    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+        const auto isBunch = IsAssetBunchType(declaration.type);
+        if(!isBunch)
+            return MakeUnexpected(isBunch.error());
+        if(*isBunch)
+            return true;
+    }
+    return false;
+}
+
+Expected<b8, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc){
+    using namespace __hidden_assets_bunch_cook;
+
+    const auto hasBunch = HasAssetBunchDeclaration(doc);
+    if(!hasBunch)
+        return MakeUnexpected(hasBunch.error());
+    if(*hasBunch || doc.declarations().size() <= 1u)
+        return false;
+
+    const auto* const assetDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
+    if(!assetDeclaration)
+        return false;
+
+    return IsCompositeRootType(assetDeclaration->type);
+}
+
+Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena){
     using namespace __hidden_assets_bunch_cook;
 
     ExpandedAssetMetadataVector assets(scratchArena);
@@ -161,7 +156,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
 
     // Debug iterator proxies allocate during moves; release temporaries before transferring the result.
     {
-        auto baseVirtualPathText = Core::Assets::BuildDerivedAssetVirtualPath(scratchArena, assetRoot, virtualRoot, nwbFilePath, scratchArena);
+        auto baseVirtualPathText = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, nwbFilePath, scratchArena, scratchArena);
         if(!baseVirtualPathText)
             return MakeUnexpected(Failure{});
 
@@ -170,7 +165,7 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
         const auto declarations = DeclarationLookup::Create(doc, scratchArena);
         if(!declarations)
             return MakeUnexpected(Failure{});
-        Vector<NotNull<const Metascript::Document::Declaration*>, ScratchArena> itemDeclarations(scratchArena);
+        Vector<NotNull<const Metascript::Document::Declaration*>, Alloc::ScratchArena> itemDeclarations(scratchArena);
         itemDeclarations.reserve(list.size());
         for(usize itemIndex = 0u; itemIndex < list.size(); ++itemIndex){
             const auto itemDeclaration = FindBunchItemDeclaration(nwbFilePath, *declarations, list[itemIndex], itemIndex);
@@ -211,32 +206,12 @@ Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, co
     return assets;
 }
 
-Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
-    return __hidden_assets_bunch_cook::HasAssetBunchDeclaration(doc);
-}
-
-Expected<b8, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc){
-    using namespace __hidden_assets_bunch_cook;
-
-    const auto hasBunch = HasAssetBunchDeclaration(doc);
-    if(!hasBunch)
-        return MakeUnexpected(hasBunch.error());
-    if(*hasBunch || doc.declarations().size() <= 1u)
-        return false;
-
-    const auto* const assetDeclaration = Core::Assets::FindMetadataAssetDeclaration(doc);
-    if(!assetDeclaration)
-        return false;
-
-    return IsCompositeRootType(assetDeclaration->type);
-}
-
 Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_assets_bunch_cook;
 
@@ -252,7 +227,7 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
         return MakeUnexpected(Failure{});
     }
 
-    const Metascript::Document::Declaration* const rootDeclaration = Core::Assets::FindMetadataAssetDeclaration(doc);
+    const Metascript::Document::Declaration* const rootDeclaration = doc.findDeclaration(Core::Assets::s_MetadataAssetVariable);
     if(!rootDeclaration){
         NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': missing 'asset' declaration"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
@@ -264,7 +239,7 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
     }
 
     {
-        auto baseVirtualPathText = Core::Assets::BuildDerivedAssetVirtualPath(scratchArena, assetRoot, virtualRoot, nwbFilePath, scratchArena);
+        auto baseVirtualPathText = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, nwbFilePath, scratchArena, scratchArena);
         if(!baseVirtualPathText)
             return MakeUnexpected(Failure{});
         const auto baseVirtualPath = Name::FromText(AStringView(*baseVirtualPathText));
@@ -277,7 +252,7 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
 
         const usize declarationCapacity = AddSize(doc.declarations().size(), doc.declarations().size());
         ScratchNameHashSet assetVariableHashes(declarationCapacity, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
-        Vector<NotNull<const Metascript::Document::Declaration*>, ScratchArena> auxiliaryDeclarations(scratchArena);
+        Vector<NotNull<const Metascript::Document::Declaration*>, Alloc::ScratchArena> auxiliaryDeclarations(scratchArena);
         auxiliaryDeclarations.reserve(doc.declarations().size());
 
         for(const Metascript::Document::Declaration& declaration : doc.declarations()){
@@ -347,6 +322,29 @@ Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(
     }
 
     return assets;
+}
+
+Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> ExpandAssetBunchForAssetCook(const AssetBunchExpandContext& context){
+    const auto hasBunch = HasAssetBunchDeclaration(context.doc);
+    if(!hasBunch)
+        return MakeUnexpected(AssetBunchExpandFailure::Error);
+    if(*hasBunch){
+        auto assets = ExpandAssetBunch(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.doc, context.scratchArena);
+        if(!assets)
+            return MakeUnexpected(AssetBunchExpandFailure::Error);
+        return Move(*assets);
+    }
+
+    const auto hasComposite = HasCompositeAssetDeclarations(context.doc);
+    if(!hasComposite)
+        return MakeUnexpected(AssetBunchExpandFailure::Error);
+    if(!*hasComposite)
+        return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
+
+    auto assets = ExpandCompositeAsset(context.assetRoot, context.virtualRoot, context.nwbFilePath, context.doc, context.scratchArena);
+    if(!assets)
+        return MakeUnexpected(AssetBunchExpandFailure::Error);
+    return Move(*assets);
 }
 
 

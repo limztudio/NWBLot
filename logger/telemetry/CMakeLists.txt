@@ -13,3 +13,4 @@ target_sources(nwb_logtelemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_logtelemetry PUBLIC nwb_common nwb_alloc nwb_telemetry)
+

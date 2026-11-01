@@ -21,8 +21,8 @@ WidgetStateStore::WidgetStateStore(Core::Alloc::GlobalArena& arena)
     , m_index(arena)
 {
     // Keep both the prior frame and candidate declarations stable until frame retirement.
-    m_entries.reserve(s_RetainedCapacity);
-    m_index.reserve(s_RetainedCapacity);
+    m_entries.reserve(s_WidgetStateRetainedCapacity);
+    m_index.reserve(s_WidgetStateRetainedCapacity);
 }
 
 Expected<NotNull<WidgetState*>> WidgetStateStore::touch(const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
@@ -43,7 +43,7 @@ Expected<NotNull<WidgetState*>> WidgetStateStore::touch(const WidgetId id, const
         entry.lastSeenFrame = frameGeneration;
         return MakeNotNull(&entry);
     }
-    if(m_entries.size() >= s_RetainedCapacity)
+    if(m_entries.size() >= s_WidgetStateRetainedCapacity)
         return MakeUnexpected(Failure{});
     if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
         TerminateInvariant();

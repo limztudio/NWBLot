@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include "light_space_plan.h"
 #include "light_space_csg.h"
+#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
+#include <impl/assets/graphics/shadow/light_space_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 
 #include <core/alloc/global.h>
@@ -41,6 +42,13 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+static_assert(alignof(LightSpaceViewGpu) >= 16u);
+static_assert(sizeof(LightSpaceViewGpu) == NWB_LIGHT_SPACE_VIEW_BYTES);
+static_assert(offsetof(LightSpaceViewGpu, originOrDirection) == NWB_LIGHT_SPACE_VIEW_ORIGIN_OFFSET);
+static_assert(offsetof(LightSpaceViewGpu, depthRange) == NWB_LIGHT_SPACE_VIEW_DEPTH_RANGE_OFFSET);
+static_assert(offsetof(LightSpaceViewGpu, map) == NWB_LIGHT_SPACE_VIEW_MAP_OFFSET);
+static_assert(offsetof(LightSpaceViewGpu, light) == NWB_LIGHT_SPACE_VIEW_LIGHT_OFFSET);
 
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
 static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
@@ -126,10 +134,6 @@ struct LightSpaceShadowSnapshot{
 };
 
 struct LightSpaceShadowState{
-    static constexpr usize s_LightSpaceShaderCount = 14u;
-
-
-public:
     LightSpaceShadowSnapshot m_snapshot;
     SoftwareShadowSettings m_settings;
     LightSpaceCsgState m_csg;
@@ -141,7 +145,7 @@ public:
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_captureBuffers;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
-    Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
+    Array<Core::ShaderHandle, s_LightSpaceShaderCount> m_shaders{};
     b8 m_captureSceneTrusted = false;
     b8 m_captureReuseLogged = false;
     b8 m_sceneEligible = false;
@@ -164,14 +168,14 @@ public:
 };
 
 // Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
-[[nodiscard]] b8 RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] b8 RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
-[[nodiscard]] b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, b8 transparent);
-[[nodiscard]] b8 RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
+[[nodiscard]] b8 RecordLightSpaceViews(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
+[[nodiscard]] b8 RecordLightSpaceCull(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
+[[nodiscard]] b8 RecordLightSpaceCapture(const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, b8 transparent, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
+[[nodiscard]] b8 RecordLightSpaceShade(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap);
 [[nodiscard]] b8 RecordLightSpaceResolve(
-    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,
     const LightSpaceShadowSnapshot& snapshot,
-    Core::Texture& outputTexture, u32 frameIndex, u32 sampleCount, u32 outputSlot, b8 transparent
+    u32 frameIndex, u32 sampleCount, u32 outputSlot, b8 transparent,
+    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing, Core::Texture& outputTexture
 );
 
 

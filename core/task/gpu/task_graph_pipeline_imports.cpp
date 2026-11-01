@@ -42,16 +42,6 @@ namespace __hidden_gpu_task_graph_pipeline_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize GpuTaskGraph::PipelinePointerHasher::operator()(const PipelinePointerKey& key)const noexcept{
-    usize hash = Hasher<const void*>{}(key.pointer);
-    HashCombine(hash, static_cast<u8>(key.type));
-    return hash;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GpuTaskGraph::PipelinePointerKey GpuTaskGraph::MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept{
     switch(pipeline.type){
     case GpuGraphPipelineType::Graphics:

@@ -12,6 +12,8 @@
 #include <core/graphics/rhi/pipeline.h>
 #include <core/graphics/rhi/pipeline_state.h>
 
+#include <global/containers.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,16 +24,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererDeferredSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererDeferredState final : NoCopy{
-    friend class RendererDeferredSystem;
-
-
 public:
     RendererDeferredState()noexcept = default;
 
@@ -40,7 +33,7 @@ public:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     PresentationSettings m_presentationSettings;
     Core::BindingLayoutHandle m_lightingBindingLayout;
     Core::BufferHandle m_sceneShadingBuffer;
@@ -55,10 +48,10 @@ private:
     Core::ShaderHandle m_presentPixelShader;
     Core::GraphicsPipelineHandle m_presentPipeline;
     u32 m_lightGpuDataCount = 0u;
-    u8 m_sceneShadingGpuData[sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT] = {};
+    Array<u8, sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT> m_sceneShadingGpuData = {};
     b8 m_sceneShadingGpuDataValid = false;
     // Cached bytes avoid redundant light-buffer uploads.
-    u8 m_lightGpuData[sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS] = {};
+    Array<u8, sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS> m_lightGpuData = {};
     b8 m_lightGpuDataValid = false;
 };
 

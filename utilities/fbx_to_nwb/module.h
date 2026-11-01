@@ -7,7 +7,14 @@
 
 #include "global.h"
 
+#include <impl/assets_mesh/payload_types.adhd.h>
+#include <impl/assets_skeleton/joint_types.adhd.h>
+
+#include <core/assets/paths.h>
 #include <core/task/cpu/scheduler.h>
+
+#include <global/allocation_size.h>
+#include <global/command_line.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,46 +33,31 @@ using Vec4 = Float4U;
 static constexpr usize s_Vector2ComponentCount = 2u;
 static constexpr usize s_Vector3ComponentCount = 3u;
 static constexpr usize s_Vector4ComponentCount = 4u;
-static constexpr usize s_MeshSkinInfluenceCount = s_Vector4ComponentCount;
-static constexpr usize s_JointMatrixRowCount = 3u;
-static constexpr usize s_JointMatrixElementCount = s_JointMatrixRowCount * s_Vector4ComponentCount;
-static constexpr usize s_TriangleIndexCount = 3u;
-static constexpr usize s_AuthoredVertexRefComponentCount = 5u;
 static constexpr usize s_MaxSkeletonJointCount = static_cast<usize>(Limit<u16>::s_Max) + 1u;
 
-struct MeshSkinInfluence{
-    u16 joint[s_MeshSkinInfluenceCount] = {};
-    Float4U weight{};
-};
-static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * s_MeshSkinInfluenceCount + sizeof(Float4U));
-static_assert(alignof(MeshSkinInfluence) == alignof(f32));
+using MeshSkinInfluence = Impl::SkinInfluence4;
+static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * Impl::s_SkinInfluenceJointCount + sizeof(Float4U));
+static_assert(alignof(MeshSkinInfluence) <= alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
 struct MeshSkinInfluenceEqual{
-    b8 operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
-        for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || FloatingHashBits(lhs.weight.raw[i]) != FloatingHashBits(rhs.weight.raw[i]))
-                return false;
-        }
-        return true;
-    }
+public:
+    b8 operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept;
 };
 
 // Unaligned affine storage crosses the importer's persistent/SIMD boundary through LoadFloat()/StoreFloat().
 using JointMatrix = Float34U;
-static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixElementCount);
+static_assert(sizeof(JointMatrix) == sizeof(f32) * Impl::s_SkeletonJointMatrixFloatCount);
 static_assert(alignof(JointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<JointMatrix>);
 
-static constexpr u32 s_MissingSourceStreamIndex = Limit<u32>::s_Max;
-
 struct SourceVertexRef{
-    u32 position = s_MissingSourceStreamIndex;
-    u32 normal = s_MissingSourceStreamIndex;
-    u32 tangent = s_MissingSourceStreamIndex;
-    u32 uv0 = s_MissingSourceStreamIndex;
-    u32 color = s_MissingSourceStreamIndex;
-    u32 skin = s_MissingSourceStreamIndex;
+    u32 position = Impl::s_MeshMissingStreamIndex;
+    u32 normal = Impl::s_MeshMissingStreamIndex;
+    u32 tangent = Impl::s_MeshMissingStreamIndex;
+    u32 uv0 = Impl::s_MeshMissingStreamIndex;
+    u32 color = Impl::s_MeshMissingStreamIndex;
+    u32 skin = Impl::s_MeshMissingStreamIndex;
 };
 static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
 
@@ -162,15 +154,7 @@ inline constexpr AStringView s_RegenerateNormalModeText = "regenerate";
 inline constexpr AStringView s_DefaultColorText = "1,1,1,1";
 inline constexpr AStringView s_GeneratedUvTangentModeText = "generated_uv";
 inline constexpr AStringView s_GeneratedFallbackTangentModeText = "generated_fallback";
-inline constexpr AStringView s_NwbOutputExtension = ".nwb";
-inline constexpr AStringView s_PositionsStreamLabel = "positions";
-inline constexpr AStringView s_NormalsStreamLabel = "normals";
-inline constexpr AStringView s_TangentsStreamLabel = "tangents";
-inline constexpr AStringView s_Uv0StreamLabel = "uv0";
-inline constexpr AStringView s_ColorsStreamLabel = "colors";
 inline constexpr AStringView s_SkinStreamLabel = "skin";
-inline constexpr AStringView s_VertexRefsStreamLabel = "vertex_refs";
-inline constexpr AStringView s_IndicesStreamLabel = "indices";
 inline constexpr AStringView s_ImportedSourceLabel = "imported";
 inline constexpr AStringView s_DefaultSourceLabel = "default";
 inline constexpr AStringView s_SeparateAssetLayoutLabel = "separate";
@@ -213,12 +197,15 @@ struct MeshInstance{
 
 
 struct SceneHandle{
+public:
     ufbx_scene* scene = nullptr;
 
 
 public:
     SceneHandle()noexcept = default;
-    SceneHandle(SceneHandle&& other)noexcept;
+    SceneHandle(SceneHandle&& other)noexcept
+        : scene(Exchange(other.scene, nullptr))
+    {}
     SceneHandle(const SceneHandle&) = delete;
     ~SceneHandle()noexcept;
 
@@ -231,11 +218,15 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] constexpr AStringView UfbxStringView(const ufbx_string value)noexcept{
+    return (value.data && value.length != 0u) ? AStringView(value.data, value.length) : AStringView{};
+}
+
+[[nodiscard]] ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<OutputAssetType::Enum> ParseAssetTypeText(AStringView value)noexcept;
 b8 ValidateAssetTypeText(AString& inOutValue);
-ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena);
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NormalMode::Enum> ParseNormalModeText(AStringView value)noexcept;
 b8 ValidateNormalModeText(AString& inOutValue);
@@ -244,7 +235,7 @@ Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena&
 ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena);
 
 Expected<SceneHandle> LoadScene(const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena);
-UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, b8 includeHidden);
+UtilityVector<MeshInstance> CollectMeshInstances(const ufbx_scene& scene, b8 includeHidden);
 void PrintMeshInstances(Span<const MeshInstance> instances, Core::Alloc::ScratchArena& scratchArena);
 Expected<UtilityVector<usize>> SelectMeshInstances(Span<const MeshInstance> instances, AStringView selector);
 Expected<MeshBuildResult> BuildMesh(
@@ -258,7 +249,7 @@ Expected<MeshBuildResult> BuildMesh(
 );
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noexcept;
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
 [[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& inputPath, const ScratchPath& outputPath, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena);
 
 b8 WriteNwbAsset(
@@ -273,7 +264,7 @@ b8 WriteNwbAsset(
     Core::Alloc::ScratchArena& scratchArena
 );
 
-int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompted);
+i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, b8& prompted);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

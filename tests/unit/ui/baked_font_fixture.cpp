@@ -38,7 +38,7 @@ void PopulateBakedFontTables(const Span<const u8> bytes, Core::Alloc::GlobalAren
     ScopeExit releaseFace([face]()noexcept{ hb_face_destroy(face); });
     payload.unitsPerEm = hb_face_get_upem(face);
     payload.sourceGlyphCount = hb_face_get_glyph_count(face);
-    const u32 tags[]{ s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
+    const Array<u32, 3u> tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
     for(const u32 tag : tags){
         hb_blob_t* const tableBlob = hb_face_reference_table(face, tag);
         ScopeExit releaseTable([tableBlob]()noexcept{ hb_blob_destroy(tableBlob); });

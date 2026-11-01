@@ -35,7 +35,6 @@ inline constexpr TStringView s_ProjectAssetKindLabel = NWB_TEXT("project");
 inline constexpr TStringView s_ProjectLoadBinaryContext = NWB_TEXT("ProjectAsset::loadBinary");
 inline constexpr TStringView s_ProjectSerializeContext = NWB_TEXT("ProjectAssetCodec::serialize");
 
-inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
 inline constexpr TStringView s_ComponentLoadBinaryContext = NWB_TEXT("IComponent::loadBinary");
 inline constexpr TStringView s_ComponentSerializeContext = NWB_TEXT("ComponentAssetCodec::serialize");
 
@@ -52,6 +51,7 @@ inline constexpr TStringView s_SceneEntitiesPayloadLabel = NWB_TEXT("scene entit
 inline constexpr TStringView s_SceneAssetsPayloadLabel = NWB_TEXT("scene referenced assets");
 
 inline constexpr Core::Assets::AssetRef<ProjectAsset> s_DefaultProjectRef(s_DefaultProjectVirtualPathText);
+using SceneScratchNameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,6 +82,7 @@ public:
     b8 loadBinary(Span<const u8> binary);
 
     void setComponents(ComponentRefVector&& components)noexcept{ m_components = Move(components); }
+    [[nodiscard]] ComponentRefVector takeComponents()noexcept{ return Move(m_components); }
     [[nodiscard]] const ComponentRefVector& components()const noexcept{ return m_components; }
 
 
@@ -139,10 +140,10 @@ NWB_DEFINE_ASSET_CODEC(ProjectAssetCodec, ProjectAsset);
 
 class SceneAsset final : public Core::Assets::TypedAsset<SceneAsset>{
 public:
-    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
+    using SubsystemRef = ISubsystem::SubsystemRef;
     using EntityRef = Core::Assets::AssetRef<EntityAsset>;
     using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
-    using SubsystemRefVector = Core::Assets::AssetVector<SubsystemRef>;
+    using SubsystemRefVector = ISubsystem::SubsystemRefVector;
     using EntityRefVector = Core::Assets::AssetVector<EntityRef>;
     using AssetMap = HashMap<Name, AssetRef, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
 
@@ -170,6 +171,7 @@ public:
     b8 loadBinary(Span<const u8> binary);
 
     void setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept;
+    void takeContents(SubsystemRefVector& outSubsystems, AssetMap& outAssets, EntityRefVector& outEntities)noexcept;
 
     [[nodiscard]] const SubsystemRefVector& subsystems()const noexcept{ return m_subsystems; }
     [[nodiscard]] const EntityRefVector& entities()const noexcept{ return m_entities; }
@@ -195,15 +197,17 @@ NWB_DEFINE_ASSET_CODEC(SceneAssetCodec, SceneAsset);
 class ActiveSceneSubsystems final{
 public:
     using ProjectRef = Core::Assets::AssetRef<ProjectAsset>;
-    using SceneRef = Core::Assets::AssetRef<SceneAsset>;
-    using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
-    using EntityRef = Core::Assets::AssetRef<EntityAsset>;
-    using ComponentRef = Core::Assets::AssetRef<IComponent>;
-    using AssetRef = Core::Assets::AssetRef<Core::Assets::IAsset>;
-    using AssetMap = HashMap<Name, AssetRef, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
+    using SceneRef = ProjectAsset::SceneRef;
+    using SubsystemRef = SceneAsset::SubsystemRef;
+    using EntityRef = SceneAsset::EntityRef;
+    using ComponentRef = EntityAsset::ComponentRef;
+    using AssetRef = SceneAsset::AssetRef;
+    using AssetMap = SceneAsset::AssetMap;
     using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
     using LoadedComponentVector = Vector<UniquePtr<IComponent>, Core::Alloc::GlobalArena>;
 
+
+public:
     struct LoadedEntity{
         EntityRef entity;
         LoadedComponentVector components;
@@ -215,6 +219,7 @@ public:
             , components(Move(inComponents))
         {}
     };
+
     using LoadedEntityVector = Vector<LoadedEntity, Core::Alloc::GlobalArena>;
 
 
@@ -229,7 +234,7 @@ public:
 
 public:
     [[nodiscard]] b8 loadProjectStartScene(Core::Assets::AssetManager& assetManager, const ProjectRef& project = s_DefaultProjectRef);
-    [[nodiscard]] b8 loadScene(Core::Assets::AssetManager& assetManager, const SceneRef& scene);
+    [[nodiscard]] b8 loadScene(const SceneRef& scene, Core::Assets::AssetManager& assetManager);
     [[nodiscard]] b8 instantiateEntities(Core::ECS::World& world)const;
 
     [[nodiscard]] b8 valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }

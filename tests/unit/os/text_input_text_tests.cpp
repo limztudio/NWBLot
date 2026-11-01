@@ -54,10 +54,10 @@ TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins
 }
 
 TEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength){
-    char bytes[s_Utf8MaxSequenceBytes] = {};
+    Array<char, s_Utf8MaxSequenceBytes> bytes = {};
     const auto length = EncodeTextInputCodePoint(0x1f600u, bytes);
     ASSERT_TRUE(length);
-    EXPECT_EQ(AStringView(bytes, *length), "\xF0\x9F\x98\x80");
+    EXPECT_EQ(AStringView(bytes.data(), *length), "\xF0\x9F\x98\x80");
     const auto invalid0 = EncodeTextInputCodePoint(0u, bytes);
     ASSERT_FALSE(invalid0);
     EXPECT_EQ(invalid0.error(), TextInputAdmission::InvalidText);

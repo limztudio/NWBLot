@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../paint.h"
+#include <impl/ecs_ui/toolkit/paint.h>
 
 #include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>

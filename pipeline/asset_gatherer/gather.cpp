@@ -60,7 +60,7 @@ namespace __hidden_gather{
             return MakeUnexpected(Failure{});
         }
         if(*manifestExists){
-            if(!Assets::ReadAssetInputList(files, manifest, scratchArena, true))
+            if(!Assets::ReadAssetInputList(manifest, scratchArena, files, true))
                 return MakeUnexpected(Failure{});
             continue;
         }
@@ -94,9 +94,8 @@ namespace __hidden_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GatherAssets(const AssetGatherOptions& options){
+b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena){
     Assets::AssetArena& arena = options.inputs.get_allocator().arena();
-    Core::Alloc::ScratchArena scratchArena(Name("assets/gather"));
     if(options.outputDirectory.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: output directory is empty"));
         return false;
@@ -107,7 +106,7 @@ b8 GatherAssets(const AssetGatherOptions& options){
         return false;
     const auto& files = *filesResult;
     Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
-    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, files.size()))
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(files.size(), manifest))
         return false;
 
     HashMap<Name, usize, Core::Alloc::ScratchArena> entryIndices(scratchArena);
@@ -119,13 +118,13 @@ b8 GatherAssets(const AssetGatherOptions& options){
             return false;
         const Name& virtualPath = payload->virtualPath;
         const usize payloadOffset = payload->payloadOffset;
+        const Span<const u8> payloadBytes = Span<const u8>(bytes).subspan(payloadOffset);
         const auto inserted = entryIndices.try_emplace(virtualPath, manifest.entries.size());
         if(!inserted.second){
             auto& existing = manifest.entries[inserted.first.value()];
-            const usize payloadSize = bytes.size() - payloadOffset;
-            const b8 identical = existing.payloadBytes.size() == payloadSize && NWB_MEMCMP(existing.payloadBytes.data(), bytes.data() + payloadOffset, payloadSize) == 0;
+            const b8 identical = existing.payloadBytes.size() == payloadBytes.size() && NWB_MEMCMP(existing.payloadBytes.data(), payloadBytes.data(), payloadBytes.size()) == 0;
             if(!identical){
-                if(!options.mergePayloads || !options.mergePayloads(virtualPath, bytes.data() + payloadOffset, payloadSize, scratchArena, existing.payloadBytes)){
+                if(!options.mergePayloads || !options.mergePayloads(virtualPath, payloadBytes, scratchArena, existing.payloadBytes)){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), ConvertString(virtualPath.resolvedText()));
                     return false;
                 }
@@ -135,7 +134,7 @@ b8 GatherAssets(const AssetGatherOptions& options){
             --manifest.plannedFileCount;
             continue;
         }
-        if(!Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, static_cast<const void*>(bytes.data() + payloadOffset), bytes.size() - payloadOffset, 0u))
+        if(!Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, payloadBytes, manifest, 0u))
             return false;
     }
 
@@ -150,11 +149,16 @@ b8 GatherAssets(const AssetGatherOptions& options){
     if(configuration.empty())
         configuration = s_DefaultGatherConfig;
 
-    const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, scratchArena);
+    const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(paths, configuration, manifest, arena, scratchArena);
     if(!result)
         return false;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, ConvertString(options.outputDirectory));
     return true;
+}
+
+b8 GatherAssets(const AssetGatherOptions& options){
+    Core::Alloc::ScratchArena scratchArena(Name("assets/gather"));
+    return GatherAssets(options, scratchArena);
 }
 
 

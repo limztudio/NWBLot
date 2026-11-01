@@ -6,19 +6,19 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
-#include <impl/ecs_render/raytrace/task_graph_optical_scene_upload.h>
+#include <impl/ecs_render/optics/task_graph_optical_scene_upload.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/deferred/task_graph_suffix_builder.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
 #include <impl/ecs_render/deferred/frame_tail_builder.h>
-#include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
-#include <impl/ecs_render/graph/frame_graph_software_bvh_build_state.h>
-#include <impl/ecs_render/graph/frame_graph_trace_geometry.h>
-#include <impl/ecs_render/graph/frame_graph_avboit_stage.h>
-#include <impl/ecs_render/graph/frame_graph_reflection_resolve.h>
+#include <impl/ecs_render/caustic/hardware_caustics_stage_builder.h>
+#include <impl/ecs_render/raytrace/frame_graph_trace_geometry.h>
+#include <impl/ecs_render/avboit/frame_graph_avboit_stage.h>
+#include <impl/ecs_render/reflection/frame_graph_reflection_resolve.h>
+#include <impl/ecs_render/refraction/task_graph_refraction_resolve.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -58,7 +58,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
-    Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
+    const Span<Core::GpuTimingSubmissionTicket*> graphicsPrefixTimingTickets,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     GraphClearTimingRecordState& avboitClearTimingState,
@@ -138,9 +138,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )
         return;
 
-    Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
     FrameGraphTraceGeometryImporter traceGeometryImporter(m_deferredLightingTaskGraph, m_raytracingSystem, m_meshSystem);
-    const auto traceGeometryResult = traceGeometryImporter.declare(traceGeometryScratchArena, rayTracingShadowResources);
+    const auto traceGeometryResult = traceGeometryImporter.declare(scratchArena, rayTracingShadowResources);
     if(!traceGeometryResult)
         return;
     const FrameGraphTraceGeometryResult& traceGeometry = *traceGeometryResult;
@@ -216,8 +215,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareAccelStructFinalizeTask.valid() ? m_deferredShadowPrepareAccelStructFinalizeTask : m_deferredShadowPrepareTask;
 
-    const ECSRenderDetail::MeshViewBufferUpload meshViewUpload = m_meshSystem.prepareMeshViewBufferUpload(meshViewAspectRatio);
-    const ECSRenderDetail::MeshViewGpuData& meshViewState = meshViewUpload.viewState;
+    const MeshViewBufferUpload meshViewUpload = m_meshSystem.prepareMeshViewBufferUpload(meshViewAspectRatio);
+    const MeshViewGpuData& meshViewState = meshViewUpload.viewState;
     const b8 meshViewUploadRequired = meshViewUpload.uploadRequired;
 
     ReflectionSceneContentStamp reflectionContentStamp;
@@ -281,7 +280,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads(scratchArena);
     if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace || (declaresHardwareCaustics && causticOpticalReader)){
-        auto sceneReadsResult = ImportRayTracingSceneGraphReads(m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_rayTraceMaterialContextSlotsUploadTask, scratchArena);
+        auto sceneReadsResult = ImportRayTracingSceneGraphReads(sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
         if(!sceneReadsResult){
             sceneReads = RayTracingSceneGraphReads(scratchArena);
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared hardware optical scene reads"));
@@ -295,7 +294,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         if(declaresHardwareCaustics)
             causticOpticalScene = sceneReads.uses[LengthOf(sceneReads.uses) - 1u].resource;
         else{
-            const auto optical = ImportRayTracingOpticalSceneBuffer(m_deferredLightingTaskGraph, sceneResources.opticalScene, m_rayTraceMaterialContextSlotsUploadTask, scratchArena);
+            const auto optical = ImportRayTracingOpticalSceneBuffer(sceneResources.opticalScene, m_rayTraceMaterialContextSlotsUploadTask, m_deferredLightingTaskGraph, scratchArena);
             if(!optical){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software caustic optical scene reads"));
                 return;
@@ -430,11 +429,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         HardwareCausticsStageBuilder hardwareCausticsStageBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
         auto hardwareCausticsStageResult = hardwareCausticsStageBuilder.declare(
             HardwareCausticsStageInputs{
-                .targets = &deferredTargets,
-                .lightingResources = &deferredLightingResources,
-                .meshViewSnapshot = &meshViewBufferSnapshot,
-                .rayTracingResources = &rayTracingGraphResources,
-                .features = &features,
+                .targets = deferredTargets,
+                .lightingResources = deferredLightingResources,
+                .meshViewSnapshot = meshViewBufferSnapshot,
+                .rayTracingResources = rayTracingGraphResources,
+                .features = features,
                 .worldPosition = worldPosition,
                 .depth = depth,
                 .currentCausticIrradiance = currentCausticIrradiance,
@@ -447,14 +446,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 .hardwareTraceGeometryResources = causticTraceGeometryResources,
                 .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
                 .graphicsPrefixTask = m_graphicsPrefixTask,
-                .shadowPreparationReady = &m_shadowPreparationOutcome.ready,
-                .historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,
-                .accumulatorPersistentState = &m_hardwareCausticAccumulatorPersistentState,
+                .shadowPreparationReady = m_shadowPreparationOutcome.ready,
+                .historyWriterDrainCompletion = m_deferredLightingHistoryWriterDrainCompletion,
+                .accumulatorPersistentState = m_hardwareCausticAccumulatorPersistentState,
                 .declaresHardwareCaustics = declaresHardwareCaustics,
-                .producerDispatched = &m_deferredCausticProducerDispatched,
-                .timingTicket = &hardwareCausticsTimingTicket,
-                .photonTiming = &causticPhotonTiming,
-                .resolveTiming = &causticResolveTiming,
+                .producerDispatched = m_deferredCausticProducerDispatched,
+                .timingTicket = hardwareCausticsTimingTicket,
+                .photonTiming = causticPhotonTiming,
+                .resolveTiming = causticResolveTiming,
             },
             scratchArena
         );
@@ -468,11 +467,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredCausticPhotonTask = hardwareCausticsStageResult->causticPhotonTask;
         m_deferredCausticGeometryTask = hardwareCausticsStageResult->causticGeometryTask;
         m_deferredCausticResolvePrepareTask = hardwareCausticsStageResult->causticResolvePrepareTask;
-        m_deferredCausticResolveWaveletTask = hardwareCausticsStageResult->causticResolveWaveletTask;
-        m_deferredCausticResolveSecondWaveletTask = hardwareCausticsStageResult->causticResolveSecondWaveletTask;
-        m_deferredCausticResolveThirdWaveletTask = hardwareCausticsStageResult->causticResolveThirdWaveletTask;
-        m_deferredCausticResolveFourthWaveletTask = hardwareCausticsStageResult->causticResolveFourthWaveletTask;
-        m_deferredCausticResolveFifthWaveletTask = hardwareCausticsStageResult->causticResolveFifthWaveletTask;
+        m_deferredCausticResolveWaveletTasks = hardwareCausticsStageResult->causticResolveWaveletTasks;
         m_deferredCausticResolveUpsampleTask = hardwareCausticsStageResult->causticResolveUpsampleTask;
         m_deferredHardwareCausticsTask = hardwareCausticsStageResult->hardwareCausticsTask;
     }
@@ -482,7 +477,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     RayTracingRefractionGraphResources refractionResources = m_preparedRefractionResources;
     FrameGraphAvboitStage avboitStage(m_deferredLightingTaskGraph, m_arena, m_graphics, m_materialSystem, m_csgSystem, m_avboitSystem, m_deferredTaskTimingFeedback);
     const auto avboitStageResult = avboitStage.declare(
-        traceGeometryScratchArena,
+        scratchArena,
         FrameGraphAvboitStageInputs{
             .targets = deferredTargets,
             .resources = *deferredGraphResources,
@@ -559,10 +554,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .reflectionSettings = m_reflectionSettings,
             .contentStamp = reflectionContentStamp,
             .csgFrameState = csgFrameState,
-            .refractionResources = refractionResources,
             .reflectionFrameIndex = m_reflectionFrameIndex,
             .reflectionSceneAvailable = m_preparedReflectionSceneAvailable,
-            .refractionActive = refractionActive,
             .useLaggedLightingHistory = useLaggedLightingHistory,
             .specularRoughness = specularRoughness,
             .refractionSpecularRoughness = refractionSpecularRoughness,
@@ -571,10 +564,46 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .worldPosition = worldPosition,
             .refractionDepth = refractionDepth,
             .refractionNormalIor = refractionNormalIor,
+            .opaqueColor = opaqueColor,
+            .meshView = meshView,
+            .currentBindlessSlots = currentBindlessSlots,
+            .sceneShading = sceneShading,
+            .lights = lights,
+            .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
+            .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
+            .traceContextUploadTask = m_rayTraceMaterialContextSlotsUploadTask,
+            .lightingTask = m_deferredLightingTask,
+            .hardwarePreparationReady = m_shadowPreparationOutcome.ready,
+            .hardwareDispatchLogged = m_reflectionHardwareLogged,
+            .fallbackDispatchLogged = m_reflectionFallbackLogged,
+        },
+        scratchArena,
+        sceneReads
+    );
+    if(!reflectionResolveResult){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare reflection graph tasks"));
+        return;
+    }
+    const ReflectionGraphResult reflectionGraph = reflectionResolveResult->reflectionGraph;
+    const ReflectionCompositeInputs reflectionCompositeInputs = reflectionResolveResult->reflectionCompositeInputs;
+    refractionResources.opaqueReflectionSlot = reflectionCompositeInputs.opaqueRadianceSlot;
+
+    FrameGraphRefractionResolve refractionResolveBuilder(m_deferredLightingTaskGraph, m_graphics, m_raytracingSystem);
+    auto refractionResolveResult = refractionResolveBuilder.declare(
+        FrameGraphRefractionResolveInputs{
+            .targets = deferredTargets,
+            .sceneResources = sceneResources,
+            .refractionResources = refractionResources,
+            .refractionActive = refractionActive,
+            .depth = depth,
+            .worldPosition = worldPosition,
+            .refractionDepth = refractionDepth,
+            .refractionNormalIor = refractionNormalIor,
             .refractionTintCoverage = refractionTintCoverage,
             .refractionInstance = refractionInstance,
             .refractionResolve = refractionResolve,
             .opaqueColor = opaqueColor,
+            .opaqueReflectionRadiance = reflectionGraph.opaqueRadiance,
             .meshView = meshView,
             .currentBindlessSlots = currentBindlessSlots,
             .sceneShading = sceneShading,
@@ -586,26 +615,21 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .hardwareTraceGeometrySet = traceGeometry.hardwareTraceGeometrySet,
             .traceMaterialSampledTextureSet = traceGeometry.traceMaterialSampledTextureSet,
             .traceContextUploadTask = m_rayTraceMaterialContextSlotsUploadTask,
-            .lightingTask = m_deferredLightingTask,
+            .reflectionCompletionTask = reflectionGraph.completion,
             .avboitFinalTask = avboitFinalTask,
             .surfelGiTask = m_deferredSurfelGiTask,
-            .hardwarePreparationReady = &m_shadowPreparationOutcome.ready,
-            .hardwareDispatchLogged = &m_reflectionHardwareLogged,
-            .fallbackDispatchLogged = &m_reflectionFallbackLogged,
-            .refractionHardwareLogged = &m_refractionHardwareLogged,
-            .refractionScreenLogged = &m_refractionScreenLogged,
+            .hardwarePreparationReady = m_shadowPreparationOutcome.ready,
+            .refractionHardwareLogged = m_refractionHardwareLogged,
+            .refractionScreenLogged = m_refractionScreenLogged,
         },
         scratchArena,
         sceneReads
     );
-    if(!reflectionResolveResult){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare reflection graph tasks"));
+    if(!refractionResolveResult){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare refraction resolve graph tasks"));
         return;
     }
-    const ReflectionGraphResult reflectionGraph = reflectionResolveResult->reflectionGraph;
-    const ReflectionCompositeInputs reflectionCompositeInputs = reflectionResolveResult->reflectionCompositeInputs;
-    const Core::GpuTaskId refractionResolveTask = reflectionResolveResult->refractionResolveTask;
-    refractionResources.opaqueReflectionSlot = reflectionCompositeInputs.opaqueRadianceSlot;
+    const Core::GpuTaskId refractionResolveTask = *refractionResolveResult;
 
     DeferredGraphSuffixBuilder suffixBuilder(m_deferredLightingTaskGraph, m_deferredSystem, m_graphics, m_preparedTaskGraphPresentationContributor, m_preparedTaskGraphOutputLayerContributor);
     auto suffixResult = suffixBuilder.declare(

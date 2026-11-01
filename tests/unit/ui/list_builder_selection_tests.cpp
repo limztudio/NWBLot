@@ -52,7 +52,7 @@ TEST_F(UiListBuilderTests, UnseenTallCursorIsMeasuredBeforeRevealAndFailedRevisi
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 initialHeight = target(row(1u))->rectangle.height;
     press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
+    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     press(Core::Key::End);
     m_source.textCalls = 0u;
     ASSERT_TRUE(accept(2u, options));
@@ -127,7 +127,7 @@ TEST_F(UiListBuilderTests, ProgrammaticSameSelectionFencesQueuedActivationAndWhe
     EXPECT_TRUE(m_context.input().controlActions().empty());
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
 }
 
 TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAtAcceptance){
@@ -141,7 +141,7 @@ TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAt
     EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     ASSERT_TRUE(prepare(3u));
     EXPECT_FALSE(m_result.activated);
     EXPECT_EQ(m_state.selectedKey(), 0u);
@@ -161,7 +161,7 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
     EXPECT_FALSE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
     press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
+    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     EXPECT_TRUE(send({ .key = Core::Key::Enter , .type = InputEventType::KeyDown }).commandConsumed);
     ASSERT_TRUE(accept(4u));
     EXPECT_FALSE(m_result.activated);
@@ -171,7 +171,7 @@ TEST_F(UiListBuilderTests, EscapeBeforeReleaseCancelsRowSelectionAndHostSubmissi
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_result.activated);
     press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
+    ASSERT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     press(Core::Key::Enter);
     ASSERT_TRUE(accept(6u));
     EXPECT_EQ(m_state.selectedKey(), 1u);
@@ -241,7 +241,7 @@ TEST_F(UiListBuilderTests, ReplacementStateRejectsOldActivationEvenForTheSameSou
     EXPECT_EQ(replacement.selectedKey(), 0u);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(target(host())->control.instanceGeneration, replacement.inputGeneration());
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->control.instanceGeneration, replacement.inputGeneration());
 }
 
 TEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQueuedActions){
@@ -256,11 +256,11 @@ TEST_F(UiListBuilderTests, DisabledAndOmittedListsRetirePartsWithoutBorrowingQue
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().targets().size(), 2u);
-    EXPECT_FALSE(target(host())->enabled);
+    EXPECT_FALSE(target(id(s_ListKey, s_PanelKey))->enabled);
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     ASSERT_TRUE(finishPanel());
-    EXPECT_EQ(target(host()), nullptr);
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey)), nullptr);
     EXPECT_EQ(m_context.states().entries().size(), 1u);
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_EQ(m_context.input().targets().size(), 1u);

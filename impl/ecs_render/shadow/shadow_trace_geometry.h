@@ -1,0 +1,68 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
+
+#include <core/alloc/scratch.h>
+#include <core/graphics/rhi/resource.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+    struct MeshRayTracingResourceSnapshot;
+};
+
+
+struct PreparedShadowTraceGeometryBuffer{
+    Core::BufferHandle buffer;
+    Name identity;
+    Core::ResourceStates::Mask initialState = Core::ResourceStates::Common;
+    u8 roles = 0u;
+    b8 normalizationPending = false;
+};
+
+using PreparedShadowTraceGeometryBufferVector = Vector<PreparedShadowTraceGeometryBuffer, Core::Alloc::GlobalArena>;
+
+struct ShadowTraceGeometrySelection{
+    Span<const NotNull<Core::Buffer*>> hardwarePositions{};
+    Span<const NotNull<Core::Buffer*>> hardwareIndices{};
+    Span<const NotNull<Core::Buffer*>> hardwareAttributes{};
+    Span<const NotNull<Core::Buffer*>> softwareNodes{};
+    Span<const NotNull<Core::Buffer*>> softwarePositions{};
+    Span<const NotNull<Core::Buffer*>> softwareIndices{};
+    Span<const NotNull<Core::Buffer*>> softwareAttributes{};
+    b8 includeHardware = false;
+    b8 includeSoftware = false;
+};
+
+
+[[nodiscard]] b8 FreezePreparedShadowTraceGeometryBuffers(
+    Span<const ECSRenderDetail::MeshRayTracingResourceSnapshot> meshes,
+    const ShadowTraceGeometrySelection& selection,
+    Core::Alloc::ScratchArena& scratchArena,
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedBuffers,
+    PreparedShadowTraceGeometryBufferVector& outPrepared
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

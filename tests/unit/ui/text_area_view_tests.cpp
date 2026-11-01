@@ -56,7 +56,7 @@ TEST_F(UiTextAreaViewTests, SuppressedRevealStillClampsToBothContentExtents){
     ASSERT_TRUE(manualPlace({ 100.0f, 100.0f }));
     EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
-    ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
 }
 
 TEST_F(UiTextAreaViewTests, ShrinkingContentClampsExplicitScrollWithoutCaretFollowing){
@@ -70,7 +70,7 @@ TEST_F(UiTextAreaViewTests, ShrinkingContentClampsExplicitScrollWithoutCaretFoll
     EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.x, 10.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 20.0f);
-    ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
 }
 
 TEST_F(UiTextAreaViewTests, ZeroViewportDoesNotForceManualScrollToTheCaret){
@@ -89,7 +89,7 @@ TEST_F(UiTextAreaViewTests, FailedManualArrangementPreservesThePriorPlacement){
     ASSERT_TRUE(prepareDense());
     ASSERT_TRUE(manualPlace({ 5.0f, 6.0f }));
     const EditBoxPlacement previous = m_placement;
-    const Point invalid[]{ { -1.0f, 0.0f }, { 0.0f, Limit<f32>::s_QuietNaN }, { Limit<f32>::s_Infinity, 0.0f } };
+    const Array<Point, 3> invalid{ Point{ -1.0f, 0.0f }, Point{ 0.0f, Limit<f32>::s_QuietNaN }, Point{ Limit<f32>::s_Infinity, 0.0f } };
     for(const Point scroll : invalid){
         EXPECT_FALSE(manualPlace(scroll));
         ExpectPlacement(m_placement, previous);

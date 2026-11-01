@@ -53,12 +53,6 @@ struct MaterialPipelineKey{
     MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
 };
 
-[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(const MaterialPipelineKey& pipelineKey, const MaterialPipelinePass::Enum pass)noexcept{
-    MaterialPipelineCsgBindingUse result;
-    result.clip = pipelineKey.csgMode != MaterialPipelineCsgMode::None && MaterialPipelinePassUsesRendererCsgShaderVariant(pass);
-    result.avboitClip = result.clip && MaterialPipelinePassUsesRendererAvboit(pass);
-    return result;
-}
 struct MaterialPipelineKeyHasher{
     usize operator()(const MaterialPipelineKey& key)const noexcept;
 };

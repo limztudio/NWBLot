@@ -53,7 +53,6 @@ void ClearRuntimeSymbols();
 
 // Admits only the current document header before importing symbol records.
 [[nodiscard]] b8 LoadFromMemory(AStringView text, Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 LoadFromMemory(AStringView text);
 
 struct DefaultFileLoadFailure final{
     ErrorCode code;
@@ -74,12 +73,6 @@ template<typename ArenaT>
         return MakeUnexpected(read.error());
 
     return LoadFromMemory(AStringView(text.data(), text.size()), scratchArena);
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<b8, ErrorCode> LoadFile(const ::Path<ArenaT>& path){
-    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-    return LoadFile(path, scratchArena);
 }
 
 template<typename CharT, typename ArenaT>
@@ -105,14 +98,14 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
         const auto hashText = ::NameDetail::CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
         const auto hash = hashText ? ::NameDetail::DecodeDebugHashText(AStringView(hashText->data(), ::NameDetail::s_DebugHashTextLength)) : Expected<NameHash>(MakeUnexpected(Failure{}));
         if(hash){
-            char resolvedText[s_MaxResolvedTextLength];
-            if(Resolve(resolvedText, sizeof(resolvedText), *hash)){
+            Array<char, s_MaxResolvedTextLength> resolvedText;
+            if(Resolve(resolvedText.data(), resolvedText.size(), *hash)){
                 if(!decoded){
                     decoded.emplace(arena);
                     decoded->reserve(inOutText.size());
                 }
                 decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
-                AppendResolvedText(AStringView(resolvedText), arena, *decoded);
+                AppendResolvedText(AStringView(resolvedText.data()), arena, *decoded);
                 i += ::NameDetail::s_DebugHashTextLength;
                 copiedUntil = i;
                 continue;

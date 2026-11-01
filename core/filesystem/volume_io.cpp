@@ -6,14 +6,8 @@
 #include "volume_storage_detail.h"
 #include "arena_names.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-
-#include <global/limit.h>
 #include <global/simplemath.h>
 #include <global/span.h>
-
-#include <cerrno>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,13 +50,13 @@ ACompactString LastErrnoMessage()noexcept{
     if(errorNumber == 0)
         return ACompactString(s_NoMountLabel);
 
-    char errorText[s_ErrnoMessageBufferBytes];
-    if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
+    Array<char, s_ErrnoMessageBufferBytes> errorText{};
+    if(NWB_STRERROR(errorText.data(), errorText.size(), errorNumber) != 0)
         return ACompactString(s_UnknownMountLabel);
 
-    ACompactString output(errorText);
+    ACompactString output(errorText.data());
     output += " (";
-    char numberText[s_DecimalTextBufferBytes];
+    Array<char, s_DecimalTextBufferBytes> numberText{};
     output += FormatDecimal(errorNumber, numberText);
     output += ")";
     return output;

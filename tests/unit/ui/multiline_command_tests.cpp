@@ -63,7 +63,7 @@ TEST_F(MultilineCommandTests, ReadOnlyRejectsNewlineAndMutationsWhileAllowingCop
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(m_model.setSelection(1u, 4u));
     const MultilineSnapshot before(m_arena, m_model);
-    const EditCommand::Enum mutations[]{ EditCommand::Newline, EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
+    const Array<EditCommand::Enum, 9> mutations{ EditCommand::Newline, EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
     for(const EditCommand::Enum command : mutations){
         const EditCommandResult result = ApplyEditCommand(m_model, { command }, true);
         EXPECT_TRUE(result.handled);
@@ -81,7 +81,7 @@ TEST_F(MultilineCommandTests, PreeditOwnsNewlineDocumentMovementAndSubmitUntilFi
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("q\nr", 1u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
-    const EditCommand::Enum nativeOwned[]{ EditCommand::Newline, EditCommand::Home, EditCommand::End, EditCommand::DocumentHome, EditCommand::DocumentEnd, EditCommand::Submit, EditCommand::Backspace, EditCommand::Copy };
+    const Array<EditCommand::Enum, 8> nativeOwned{ EditCommand::Newline, EditCommand::Home, EditCommand::End, EditCommand::DocumentHome, EditCommand::DocumentEnd, EditCommand::Submit, EditCommand::Backspace, EditCommand::Copy };
     for(const EditCommand::Enum command : nativeOwned){
         const EditCommandResult result = ApplyEditCommand(m_model, { command });
         EXPECT_TRUE(result.handled);

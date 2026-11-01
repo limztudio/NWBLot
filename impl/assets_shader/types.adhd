@@ -8,6 +8,74 @@ const usize s_SpvWordByteMask = s_SpvWordBytes - 1u;
 const u32 s_AssetPayloadMagic = 0x53484431u; // SHD1
 const u32 s_AssetPayloadVersion = 1u;
 const usize s_AssetPayloadHeaderBytes = 8u;
+const usize s_MaxShaderEntryPointBytes = 0xFFFFFFFFu;
+
+const StringView s_Spirv15TargetProfileText = "spirv_1_5";
+const StringView s_Spirv15RayQueryTargetProfileText = "spirv_1_5+spvrayquerykhr";
+const StringView s_SpvRayQueryCapabilityText = "spvRayQueryKHR";
+
+const StringView s_ShaderNoneOptText = "none";
+const StringView s_ShaderDefaultVariantText = "default";
+const StringView s_ShaderHighOptText = "high";
+const StringView s_ShaderMaximalOptText = "maximal";
+
+const StringView s_ShaderAssetTypeInclude = "include";
+const StringView s_SlangSourceExtension = ".slang";
+const StringView s_SlangIncludeExtension = ".slangi";
+const StringView s_ShaderDiagnosticPrefix = "Shader";
+const StringView s_ShaderMetaDiagnosticPrefix = "Shader meta";
+const StringView s_IncludeDiagnosticPrefix = "Include";
+const StringView s_IncludeMetaDiagnosticPrefix = "Include meta";
+
+const StringView s_ShaderRayQueryField = "ray_query";
+const StringView s_ShaderOptimizationLevelField = "optimization_level";
+const StringView s_ShaderEntryPointField = "entry_point";
+const StringView s_ShaderIncludeRootsField = "include_roots";
+const StringView s_ShaderDefinesField = "defines";
+const StringView s_ShaderEmitMeshComputeShadowField = "emit_mesh_compute_shadow";
+
+const u32 s_ShaderDependencyChecksumVersion = 3u;
+const StringView s_ShaderSourceChecksumVersionTag = "shader-source-v6";
+
+const StringView s_SlangCapabilityArgument = "-capability";
+const StringView s_SlangEntryPointArgument = "-entry";
+const StringView s_SlangStageArgument = "-stage";
+const StringView s_SlangIncludeArgument = "-I";
+const StringView s_SlangDefineArgument = "-D";
+const StringView s_SlangOutputArgument = "-o";
+const usize s_SlangMaxTargetProfileCapabilityCount = 1u;
+const usize s_SlangMaxOptimizationArgumentCount = 1u;
+const usize s_SlangFixedOwnedArgumentCount = 2u;
+const usize s_SlangFingerprintReadBufferBytes = 8192u;
+const usize s_SlangQuotePairByteCount = 2u;
+
+const StringView s_SlangWorkspaceRootKeyPrefix = "root_";
+const StringView s_SlangWorkspaceDiagnosticWarningEventName = "warning";
+const StringView s_SlangWorkspaceHexDigits = "0123456789abcdef";
+const StringView s_ShaderChecksumAbsolutePrefix = "absolute:";
+const StringView s_ShaderChecksumAliasPrefix = "alias:";
+const u8 s_ShaderChecksumNewlineByte = 10u;
+const u8 s_ShaderChecksumZeroByte = 0u;
+const StringView s_SlangVersionFileName = "compiler.version";
+const StringView s_SlangVersionArgument = "-version";
+const StringView s_SlangStageVertex = "vertex";
+const StringView s_SlangStageHull = "hull";
+const StringView s_SlangStageDomain = "domain";
+const StringView s_SlangStageGeometry = "geometry";
+const StringView s_SlangStageFragment = "fragment";
+const StringView s_SlangStageCompute = "compute";
+const StringView s_SlangStageAmplification = "amplification";
+const StringView s_SlangStageMesh = "mesh";
+const StringView s_SlangStageRayGeneration = "raygeneration";
+const StringView s_SlangStageAnyHit = "anyhit";
+const StringView s_SlangStageClosestHit = "closesthit";
+const StringView s_SlangStageMiss = "miss";
+const StringView s_SlangStageIntersection = "intersection";
+const StringView s_SlangStageCallable = "callable";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [reflect]
 enum<u8> BytecodeValidationFailure{
@@ -67,8 +135,170 @@ class DependencyChecksum{
     public b8 compilerInputsHaveBom = false;
 }
 
+class AssetPayloadView{
+    public StringView entryPoint = "";
+    public Span<u8> bytecode;
+}
+
+class SlangStageMapping{
+    public StringView stage = "";
+    public StringView slangStage = "";
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 IsValidBytecodeSize(in usize byteSize){
     return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
+}
+
+BytecodeValidationFailure ValidateBytecode(in Span<u8> binary){
+    if(!IsValidBytecodeSize(binary.size()))
+        return BytecodeValidationFailure::InvalidSize;
+
+    const u32 magic =
+        cast<u32>(binary[0u])
+        | (cast<u32>(binary[1u]) << 8u)
+        | (cast<u32>(binary[2u]) << 16u)
+        | (cast<u32>(binary[3u]) << 24u)
+    ;
+    if(magic != s_SpvMagic)
+        return BytecodeValidationFailure::InvalidMagic;
+
+    return BytecodeValidationFailure::None;
+}
+
+b8 TryComputeShaderAssetPayloadByteCount(
+    in usize entryPointByteLength,
+    in usize bytecodeByteLength,
+    mut usize outPayloadBytes
+){
+    usize entryPointBytes = 4u + entryPointByteLength;
+    if(entryPointBytes < entryPointByteLength || entryPointBytes > 0xFFFFFFFFFFFFFFFFu - s_AssetPayloadHeaderBytes)
+        return false;
+    usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
+    if(bytecodeByteLength > 0xFFFFFFFFFFFFFFFFu - headerAndEntryPointBytes)
+        return false;
+    outPayloadBytes = headerAndEntryPointBytes + bytecodeByteLength;
+    return true;
+}
+
+StringView ShaderOptimizationLevelText(in ShaderOptimizationLevel optimizationLevel){
+    if(optimizationLevel == ShaderOptimizationLevel::None)
+        return s_ShaderNoneOptText;
+    if(optimizationLevel == ShaderOptimizationLevel::Default)
+        return s_ShaderDefaultVariantText;
+    if(optimizationLevel == ShaderOptimizationLevel::High)
+        return s_ShaderHighOptText;
+    if(optimizationLevel == ShaderOptimizationLevel::Maximal)
+        return s_ShaderMaximalOptText;
+    return "";
+}
+
+StringView SlangOptimizationArgument(in ShaderOptimizationLevel optimizationLevel){
+    if(optimizationLevel == ShaderOptimizationLevel::None)
+        return "-O0";
+    if(optimizationLevel == ShaderOptimizationLevel::High)
+        return "-O2";
+    if(optimizationLevel == ShaderOptimizationLevel::Maximal)
+        return "-O3";
+    return "";
+}
+
+b8 IsAllowedShaderMetadataField(in StringView field, in b8 isMesh){
+    return
+        field == s_ShaderRayQueryField
+        || field == s_ShaderOptimizationLevelField
+        || field == s_ShaderEntryPointField
+        || field == s_ShaderIncludeRootsField
+        || field == s_ShaderDefinesField
+        || (isMesh && field == s_ShaderEmitMeshComputeShadowField)
+    ;
+}
+
+b8 IsReservedShaderEngineDefineName(in StringView defineName){
+    return defineName == "NWB_BINDLESS_TLAS" || defineName == "NWB_CAUSTIC_PHOTON_TRANSPORT";
+}
+
+b8 IsShaderAsciiSpace(in i8 ch){
+    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '\v' || ch == '\f';
+}
+
+b8 IsShaderAsciiIdentifierChar(in i8 ch){
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
+}
+
+StringView TrimShaderSourceView(in StringView text){
+    usize begin = 0u;
+    while(begin < text.size() && IsShaderAsciiSpace(text[begin]))
+        ++begin;
+    usize end = text.size();
+    while(end > begin && IsShaderAsciiSpace(text[end - 1u]))
+        --end;
+    return text.substr(begin, end - begin);
+}
+
+b8 TryExtractIncludeDirective(in StringView line, mut IncludeDirective outInclude){
+    IncludeDirective include;
+
+    usize cursor = 0u;
+    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+        ++cursor;
+    if(cursor >= line.size() || line[cursor] != '#')
+        return false;
+    ++cursor;
+    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+        ++cursor;
+    usize directiveBegin = cursor;
+    while(cursor < line.size() && IsShaderAsciiIdentifierChar(line[cursor]))
+        ++cursor;
+    StringView directive = line.substr(directiveBegin, cursor - directiveBegin);
+    if(directive == "include_next" || directive == "import"){
+        include.kind = IncludeKind::Unsupported;
+        include.name = TrimShaderSourceView(line.substr(cursor));
+        outInclude = include;
+        return true;
+    }
+    if(directive != "include")
+        return false;
+    while(cursor < line.size() && IsShaderAsciiSpace(line[cursor]))
+        ++cursor;
+    if(cursor >= line.size()){
+        include.kind = IncludeKind::Unsupported;
+        outInclude = include;
+        return true;
+    }
+
+    i8 closingDelimiter = '"';
+    if(line[cursor] == '"')
+        include.kind = IncludeKind::Relative;
+    else if(line[cursor] == '<'){
+        include.kind = IncludeKind::Standard;
+        closingDelimiter = '>';
+    }
+    else{
+        include.kind = IncludeKind::Macro;
+        include.name = TrimShaderSourceView(line.substr(cursor));
+        outInclude = include;
+        return true;
+    }
+    ++cursor;
+    usize closingDelimiterPos = line.size();
+    for(usize i = cursor; i < line.size(); ++i){
+        if(line[i] == closingDelimiter){
+            closingDelimiterPos = i;
+            break;
+        }
+    }
+    if(closingDelimiterPos >= line.size() || closingDelimiterPos <= cursor){
+        include.kind = IncludeKind::Unsupported;
+        outInclude = include;
+        return true;
+    }
+    include.name = line.substr(cursor, closingDelimiterPos - cursor);
+    outInclude = include;
+    return true;
 }
 
 

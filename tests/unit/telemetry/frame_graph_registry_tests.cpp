@@ -26,12 +26,6 @@ static constexpr AStringView s_Target = "target";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace TelemetryTestDetail;
 
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
@@ -153,7 +147,7 @@ TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts)
 
     Telemetry::FrameGraphPhysicalQueueRuntimeStatistics derivedOutOfBounds = MakeFrameGraphPhysicalQueueRuntimeStatistics(3u);
     derivedOutOfBounds.compile.taskCount = 29u;
-    derivedOutOfBounds.compile.mergedTaskCount = s_ExpectedDualCount;
+    derivedOutOfBounds.compile.mergedTaskCount = 2u;
     derivedOutOfBounds.recording.taskCount = 13u;
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(derivedOutOfBounds));
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(derivedOutOfBounds, MakeFrameGraphRuntimeStatistics()));

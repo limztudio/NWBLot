@@ -54,3 +54,36 @@ template<typename RangeT, typename VisitT>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename RangeT>
+struct RangeTraits{
+    using Iterator = RemoveCVRef_T<decltype(DeclVal<RangeT&>().begin())>;
+    using Sentinel = RemoveCVRef_T<decltype(DeclVal<RangeT&>().end())>;
+    using Returned = decltype(*DeclVal<Iterator&>());
+    using Value = Decay_T<Returned>;
+    using Item = const RemoveReference_T<Returned>&;
+
+
+public:
+    [[nodiscard]] static consteval b8 IsNothrowTraversal(const b8 copyElement)noexcept{
+        return
+            noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<RangeT&>().begin()))
+            && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<RangeT&>().end()))
+            && IsNothrowDestructible_V<Iterator>
+            && IsNothrowDestructible_V<Sentinel>
+            && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
+            && noexcept(++DeclVal<Iterator&>())
+            && noexcept(*DeclVal<Iterator&>())
+            && (copyElement
+                ? ((!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>) && IsNothrowDestructible_V<Value>)
+                : noexcept(DeclVal<void(*)(Item)noexcept>()(*DeclVal<Iterator&>())))
+        ;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

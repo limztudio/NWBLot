@@ -103,7 +103,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     }
     case GpuCommandIrOpcode::UploadBuffer:
     case GpuCommandIrOpcode::UploadTexture:
-        return GpuCommandIrDetail::ValidateUploadBackendOperand(record, graph, commandList, commandQueue);
+        return GpuCommandIrDetail::ValidateUploadBackendOperand(record, graph, commandQueue, commandList);
     default:
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
     }
@@ -142,7 +142,10 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         if(recordPacket == packet){
             // Preflight rejected every raster record without the owned sidecar.
             NWB_ASSERT(!raster || ownedStream);
-            const GpuCommandIrReplayError::Enum operandError = raster ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, commandList, recordIndex, rasterState) : ValidateBackendOperands(decoded.builtin, graph, commandList, *commandQueue);
+            const GpuCommandIrReplayError::Enum operandError = raster
+                ? GpuCommandIrDetail::ValidateRasterBackendOperand(decoded.raster, *ownedStream, graph, *commandQueue, recordIndex, commandList, rasterState)
+                : ValidateBackendOperands(decoded.builtin, graph, commandList, *commandQueue)
+            ;
             if(operandError != GpuCommandIrReplayError::None)
                 return GpuCommandIrDetail::ReplayFailure(operandError, expectedStreamValidation, recordIndex);
         }

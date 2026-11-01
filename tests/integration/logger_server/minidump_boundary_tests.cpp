@@ -35,7 +35,7 @@ using namespace NWB;
 using DumpBytes = Vector<u8, Core::Alloc::GlobalArena>;
 
 template<typename T>
-void StoreDumpRecord(const Span<u8> bytes, const usize offset, const T& record)noexcept{
+void StoreDumpRecord(const usize offset, const T& record, const Span<u8> bytes)noexcept{
     NWB_ASSERT(offset <= bytes.size() && sizeof(T) <= bytes.size() - offset);
     NWB_MEMCPY(bytes.data() + offset, bytes.size() - offset, &record, sizeof(T));
 }
@@ -52,22 +52,22 @@ void StoreDumpRecord(const Span<u8> bytes, const usize offset, const T& record)n
     header.Version = MINIDUMP_VERSION;
     header.NumberOfStreams = s_DirectoryCount;
     header.StreamDirectoryRva = sizeof(MINIDUMP_HEADER);
-    StoreDumpRecord(bytes, 0u, header);
+    StoreDumpRecord(0u, header, bytes);
     MINIDUMP_DIRECTORY exceptionDirectory{};
     exceptionDirectory.StreamType = ExceptionStream;
     exceptionDirectory.Location.DataSize = sizeof(MINIDUMP_EXCEPTION_STREAM);
     exceptionDirectory.Location.Rva = s_ExceptionOffset;
-    StoreDumpRecord(bytes, sizeof(MINIDUMP_HEADER), exceptionDirectory);
+    StoreDumpRecord(sizeof(MINIDUMP_HEADER), exceptionDirectory, bytes);
     MINIDUMP_EXCEPTION_STREAM exception{};
     exception.ThreadId = 1u;
     exception.ThreadContext.DataSize = sizeof(CONTEXT);
     exception.ThreadContext.Rva = s_ContextOffset;
-    StoreDumpRecord(bytes, s_ExceptionOffset, exception);
+    StoreDumpRecord(s_ExceptionOffset, exception, bytes);
     MINIDUMP_DIRECTORY secondDirectory{};
     secondDirectory.StreamType = secondStream;
     secondDirectory.Location.DataSize = secondStreamBytes;
     secondDirectory.Location.Rva = s_SecondStreamOffset;
-    StoreDumpRecord(bytes, sizeof(MINIDUMP_HEADER) + sizeof(MINIDUMP_DIRECTORY), secondDirectory);
+    StoreDumpRecord(sizeof(MINIDUMP_HEADER) + sizeof(MINIDUMP_DIRECTORY), secondDirectory, bytes);
     return bytes;
 }
 
@@ -96,7 +96,7 @@ protected:
         summary.threadId = 1u;
         Log::CrashSymbolicationConfig config(m_testArena.arena);
         const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
-        return Log::BuildCrashSymbolicationReport(m_testArena.arena, scratchDirectory, summary, config, m_scratchArena);
+        return Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, m_testArena.arena, m_scratchArena);
     }
 
 
@@ -115,7 +115,7 @@ TEST_F(MinidumpBoundaryTests, MissingDumpRetainsNativeReadFailureInReturnedRepor
     summary.platform = s_WindowsPlatform;
     Log::CrashSymbolicationConfig config(m_testArena.arena);
     const Log::CrashScratchPath scratchDirectory(m_scratchArena, m_directory);
-    const auto actual = Log::BuildCrashSymbolicationReport(m_testArena.arena, scratchDirectory, summary, config, m_scratchArena);
+    const auto actual = Log::BuildCrashSymbolicationReport(scratchDirectory, summary, config, m_testArena.arena, m_scratchArena);
     EXPECT_NE(actual.find("status=not_decoded"), Log::CrashReportText::npos);
     const auto native = MakeDiagnosticEventText("native_category={}\nnative_code={}\n", missing.error().category().name(), missing.error().value());
     EXPECT_NE(actual.find(native.view()), Log::CrashReportText::npos);
@@ -137,14 +137,14 @@ TEST_F(MinidumpBoundaryTests, TruncatedHeadersAndOutOfFileStreamDirectoriesCanno
     header.StreamDirectoryRva = sizeof(MINIDUMP_HEADER);
     for(const ULONG count : Array<ULONG, 2u>{ 1u, Limit<ULONG>::s_Max }){
         header.NumberOfStreams = count;
-        StoreDumpRecord(bytes, 0u, header);
+        StoreDumpRecord(0u, header, bytes);
         const auto actual = report(bytes);
         ASSERT_TRUE(actual);
         EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
     }
     header.NumberOfStreams = 1u;
     header.StreamDirectoryRva = Limit<RVA>::s_Max;
-    StoreDumpRecord(bytes, 0u, header);
+    StoreDumpRecord(0u, header, bytes);
     const auto actual = report(bytes);
     ASSERT_TRUE(actual);
     EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
@@ -153,7 +153,7 @@ TEST_F(MinidumpBoundaryTests, TruncatedHeadersAndOutOfFileStreamDirectoriesCanno
 TEST_F(MinidumpBoundaryTests, TruncatedThreadListCountCannotReadBeyondItsAdmittedStream){
     auto bytes = ExceptionDump(m_testArena.arena, ThreadListStream, sizeof(ULONG));
     const ULONG count = Limit<ULONG>::s_Max;
-    StoreDumpRecord(bytes, bytes.size() - sizeof(ULONG), count);
+    StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
     const auto actual = report(bytes);
     ASSERT_TRUE(actual);
     EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
@@ -166,7 +166,7 @@ TEST_F(MinidumpBoundaryTests, ShortExceptionContextCannotBorrowSurroundingFileBy
     exception.ThreadId = 1u;
     exception.ThreadContext.DataSize = sizeof(CONTEXT) - 1u;
     exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM);
-    StoreDumpRecord(bytes, s_ExceptionOffset, exception);
+    StoreDumpRecord(s_ExceptionOffset, exception, bytes);
     const auto actual = report(bytes);
     ASSERT_TRUE(actual);
     EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
@@ -183,9 +183,9 @@ TEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallF
         MINIDUMP_MEMORY_DESCRIPTOR64 memory{};
         memory.StartOfMemoryRange = 0x1000u;
         memory.DataSize = oversizedOffset ? 1u : (u64(1u) << 32u) + 1u;
-        StoreDumpRecord(bytes, streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, NumberOfMemoryRanges), count);
-        StoreDumpRecord(bytes, streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, BaseRva), baseRva);
-        StoreDumpRecord(bytes, streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), memory);
+        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, NumberOfMemoryRanges), count, bytes);
+        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, BaseRva), baseRva, bytes);
+        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MEMORY64_LIST, MemoryRanges), memory, bytes);
         const auto actual = report(bytes);
         ASSERT_TRUE(actual);
         EXPECT_NE(actual->find("status=not_decoded"), Log::CrashReportText::npos);
@@ -196,7 +196,7 @@ TEST_F(MinidumpBoundaryTests, Memory64OffsetsAndLengthsCannotTruncateIntoASmallF
 TEST_F(MinidumpBoundaryTests, TruncatedModuleListCannotReadBeyondItsAdmittedStream){
     auto bytes = ExceptionDump(m_testArena.arena, ModuleListStream, sizeof(ULONG));
     const ULONG count = Limit<ULONG>::s_Max;
-    StoreDumpRecord(bytes, bytes.size() - sizeof(ULONG), count);
+    StoreDumpRecord(bytes.size() - sizeof(ULONG), count, bytes);
     const auto actual = report(bytes);
     ASSERT_TRUE(actual);
     EXPECT_NE(actual->find("module_load=invalid_module_list"), Log::CrashReportText::npos);
@@ -217,15 +217,15 @@ TEST_F(MinidumpBoundaryTests, InvalidModuleNameLengthsAndTerminatorsCannotBorrow
         const RVA nameOffset = static_cast<RVA>(bytes.size());
         MINIDUMP_MODULE module{};
         module.ModuleNameRva = nameOffset;
-        StoreDumpRecord(bytes, streamOffset, count);
-        StoreDumpRecord(bytes, streamOffset + offsetof(MINIDUMP_MODULE_LIST, Modules), module);
+        StoreDumpRecord(streamOffset, count, bytes);
+        StoreDumpRecord(streamOffset + offsetof(MINIDUMP_MODULE_LIST, Modules), module, bytes);
         bytes.resize(bytes.size() + sizeof(ULONG) + sizeof(wchar) * (invalid.includeTerminator ? 2u : 1u), 0u);
-        StoreDumpRecord(bytes, nameOffset, invalid.byteCount);
+        StoreDumpRecord(nameOffset, invalid.byteCount, bytes);
         const wchar character = L'a';
-        StoreDumpRecord(bytes, nameOffset + sizeof(ULONG), character);
+        StoreDumpRecord(nameOffset + sizeof(ULONG), character, bytes);
         if(invalid.includeTerminator){
             const wchar terminator = invalid.terminated ? L'\0' : L'x';
-            StoreDumpRecord(bytes, nameOffset + sizeof(ULONG) + sizeof(wchar), terminator);
+            StoreDumpRecord(nameOffset + sizeof(ULONG) + sizeof(wchar), terminator, bytes);
         }
         const auto actual = report(bytes);
         ASSERT_TRUE(actual);
@@ -244,12 +244,12 @@ TEST_F(MinidumpBoundaryTests, UnalignedExceptionAndContextRecordsKeepTheirBounde
     directory.StreamType = ExceptionStream;
     directory.Location.DataSize = sizeof(MINIDUMP_EXCEPTION_STREAM);
     directory.Location.Rva = s_ExceptionOffset + 1u;
-    StoreDumpRecord(bytes, sizeof(MINIDUMP_HEADER), directory);
+    StoreDumpRecord(sizeof(MINIDUMP_HEADER), directory, bytes);
     MINIDUMP_EXCEPTION_STREAM exception{};
     exception.ThreadId = 1u;
     exception.ThreadContext.DataSize = sizeof(CONTEXT);
     exception.ThreadContext.Rva = s_ExceptionOffset + sizeof(MINIDUMP_EXCEPTION_STREAM) + 1u;
-    StoreDumpRecord(bytes, s_ExceptionOffset + 1u, exception);
+    StoreDumpRecord(s_ExceptionOffset + 1u, exception, bytes);
     const auto actual = report(bytes);
     ASSERT_TRUE(actual);
     EXPECT_NE(actual->find("status=decoded"), Log::CrashReportText::npos);

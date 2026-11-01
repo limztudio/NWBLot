@@ -6,7 +6,7 @@
 
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
-#include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
+#include <impl/ecs_render/deferred/task_graph_frame_recovery_task.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -21,20 +21,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
-    Core::GpuTaskGraph& graph,
-    RendererDeferredSystem& deferredSystem,
-    Core::GraphicsRuntime& graphics,
-    Core::IGpuTaskGraphPresentationContributor* presentationContributor,
-    Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
-)noexcept
-    : m_graph(graph)
-    , m_deferredSystem(deferredSystem)
-    , m_graphics(graphics)
-    , m_presentationContributor(presentationContributor)
-    , m_outputLayerContributor(outputLayerContributor)
-{}
 
 [[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,
@@ -112,7 +98,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     }
     const Core::GpuGraphResourceId compositeColor = *compositeColorResult;
 
-    const Core::GpuTaskResourceUse compositeResourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 11u> compositeResourceUses = {
         ReadUse(inputs.opaqueColor),
         ReadUse(inputs.reflectionGraph.opaqueRadiance),
         ReadUse(inputs.reflectionGraph.glassRadiance),
@@ -131,14 +117,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     compositeScheduling.forceSubmissionBoundary = false;
     compositeScheduling.allowPacketMerge = true;
     compositeScheduling.mergeWithPrevious = true;
-    const Core::GpuTaskId compositeDependencies[] = { inputs.lightingTask, inputs.avboitFinalTask, inputs.refractionResolveTask, inputs.reflectionGraph.completion, };
+    const Array<Core::GpuTaskId, 4u> compositeDependencies = { inputs.lightingTask, inputs.avboitFinalTask, inputs.refractionResolveTask, inputs.reflectionGraph.completion, };
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name("render.deferred_composite"))
         .setMarkerLabel(RendererGpuPassText::s_DeferredCompositeLabel)
         .setScheduling(compositeScheduling)
-        .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
-        .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
+        .setDependencies(compositeDependencies)
+        .setResourceUses(compositeResourceUses)
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
     const auto compositeTaskResult = m_deferredSystem.declareDeferredCompositeTask(m_graph, compositeDesc, inputs.reflectionCompositeInputs, inputs.targets, compositeTimingTicket);
@@ -177,7 +163,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     constexpr usize s_PresentBaseResourceUseCount = 3u;
     constexpr usize s_PresentMaxResourceUseCount = 4u;
     constexpr usize s_PresentMaxDependencyCount = 4u;
-    Core::GpuTaskResourceUse presentResourceUses[s_PresentMaxResourceUseCount] = {
+    Array<Core::GpuTaskResourceUse, s_PresentMaxResourceUseCount> presentResourceUses = {
         ReadUse(compositeColor),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteTextureUse(backbuffer, presentationFramebufferDesc.colorAttachments[0].subresources, Core::ResourceStates::RenderTarget),
@@ -192,7 +178,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     presentScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
-    Core::GpuTaskId presentDependencies[s_PresentMaxDependencyCount] = { result.compositeTask };
+    Array<Core::GpuTaskId, s_PresentMaxDependencyCount> presentDependencies = { result.compositeTask };
     usize presentDependencyCount = 1u;
     if(inputs.useLaggedLightingHistory){
         presentDependencies[presentDependencyCount++] = inputs.surfelGiTask;
@@ -207,9 +193,9 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setIdentity(Name("render.deferred_present"))
         .setMarkerLabel(RendererGpuPassText::s_DeferredPresentLabel)
         .setScheduling(presentScheduling)
-        .setDependencies(presentDependencies, presentDependencyCount)
-        .setResourceUses(presentResourceUses, presentResourceUseCount)
-        .setResourceVersionUses(&outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u)
+        .setDependencies({ presentDependencies.data(), presentDependencyCount })
+        .setResourceUses({ presentResourceUses.data(), presentResourceUseCount })
+        .setResourceVersionUses({ &outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u })
     ;
     const auto presentTaskResult = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
@@ -251,7 +237,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     frameTimingEndScheduling.forceSubmissionBoundary = true;
     frameTimingEndScheduling.allowPacketMerge = false;
     Core::GpuTaskDesc frameTimingEndDesc;
-    frameTimingEndDesc.setIdentity(Name("render.frame_timing_end")).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies(&frameTimingEndDependency, 1u);
+    frameTimingEndDesc.setIdentity(Name("render.frame_timing_end")).setMarkerLabel("Frame Timing End").setScheduling(frameTimingEndScheduling).setDependencies({ &frameTimingEndDependency, 1u });
     const auto frameTimingEndTaskResult = m_graph.addTask<FrameTimingEndGraphTask>(frameTimingEndDesc, FrameTimingEndGraphTask::Payload{ .frameTimingTransaction = frameTimingTransaction, });
     if(!frameTimingEndTaskResult){
         result.frameTimingEndTask = {};

@@ -341,8 +341,8 @@ TEST(UiRadioGroupBehaviorTests, AllFourArrowsWrapAndSkipDisabledChoices){
     auto choices = RadioGroupBehavior::Reconcile(state, result, source);
     ASSERT_TRUE(choices);
     const u64 input = state.inputGeneration();
-    const ControlActionKind::Enum kinds[]{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left, ControlActionKind::Down };
-    const u64 expected[]{ 4u, 1u, 4u, 1u };
+    const Array<ControlActionKind::Enum, 4> kinds{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left, ControlActionKind::Down };
+    const Array<u64, 4> expected{ 4u, 1u, 4u, 1u };
     for(u32 index = 0u; index < 4u; ++index){
         result = {};
         ASSERT_TRUE(RadioGroupBehavior::Apply(state, result, *choices, {}, Action(state, kinds[index])));
@@ -449,7 +449,7 @@ TEST(UiRadioGroupBehaviorTests, FullBoundIsAcceptedAndOversizedSourcePreservesSt
 }
 
 TEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically){
-    const u32 modes[]{ 0u, 1u, 2u, 3u, 4u, 5u };
+    const Array<u32, 6> modes{ 0u, 1u, 2u, 3u, 4u, 5u };
     for(const u32 mode : modes){
         ChoiceSource source;
         RadioGroupState state;
@@ -472,7 +472,7 @@ TEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically){
 }
 
 TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBeforeUsingItsResult){
-    const CallbackPhase::Enum phases[]{ CallbackPhase::Generation, CallbackPhase::Revision, CallbackPhase::Count, CallbackPhase::Key, CallbackPhase::Lookup, CallbackPhase::Enabled };
+    const Array<CallbackPhase::Enum, 6> phases{ CallbackPhase::Generation, CallbackPhase::Revision, CallbackPhase::Count, CallbackPhase::Key, CallbackPhase::Lookup, CallbackPhase::Enabled };
     for(const CallbackPhase::Enum phase : phases){
         ChoiceSource source;
         RadioGroupState state;
@@ -495,7 +495,7 @@ TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBefor
 }
 
 TEST(UiRadioGroupBehaviorTests, CallbackIdenticalSelectionAndResetRemainAuthoritativeAfterRejection){
-    const CallbackMutation::Enum mutations[]{ CallbackMutation::SelectIdentical, CallbackMutation::Reset };
+    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::SelectIdentical, CallbackMutation::Reset };
     for(const CallbackMutation::Enum mutation : mutations){
         ChoiceSource source;
         RadioGroupState state;
@@ -515,7 +515,7 @@ TEST(UiRadioGroupBehaviorTests, CallbackIdenticalSelectionAndResetRemainAuthorit
 }
 
 TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAndLeavesStateUsable){
-    const CallbackMutation::Enum mutations[]{ CallbackMutation::Reconcile, CallbackMutation::Apply };
+    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::Reconcile, CallbackMutation::Apply };
     for(const CallbackMutation::Enum mutation : mutations){
         ChoiceSource source;
         RadioGroupState state;
@@ -539,7 +539,7 @@ TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAn
 }
 
 TEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithoutCommittingState){
-    const CallbackMutation::Enum mutations[]{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration, CallbackMutation::SourceCount };
+    const Array<CallbackMutation::Enum, 3> mutations{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration, CallbackMutation::SourceCount };
     for(const CallbackMutation::Enum mutation : mutations){
         ChoiceSource source;
         RadioGroupState state;
@@ -557,7 +557,7 @@ TEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithou
 }
 
 TEST(UiRadioGroupBehaviorTests, FinalOneShotMetadataMutationIsRejectedBeforeCommit){
-    const CallbackMutation::Enum mutations[]{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration };
+    const Array<CallbackMutation::Enum, 2> mutations{ CallbackMutation::SourceRevision, CallbackMutation::SourceGeneration };
     for(const CallbackMutation::Enum mutation : mutations){
         ChoiceSource source;
         RadioGroupState state;

@@ -30,3 +30,4 @@ target_link_libraries(nwb_dependency_computer PRIVATE
     nwb_logclient
 )
 target_compile_definitions(nwb_dependency_computer PRIVATE NWB_COOK=1 NWB_PIPELINE_TOOL_NAME="dependency_computer" __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
+

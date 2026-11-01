@@ -39,7 +39,7 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
         Buffer* buffer = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
     };
-    BufferStateEntry entries[s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount]{};
+    Array<BufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> entries{};
     u32 entryCount = 0u;
 
     const auto addRequiredState = [&entries, &entryCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept{

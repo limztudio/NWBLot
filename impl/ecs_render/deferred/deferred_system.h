@@ -5,13 +5,12 @@
 #pragma once
 
 
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-#include <impl/ecs_render/reflection/composite_inputs.adhd.h>
-#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
-#include <impl/ecs_render/deferred/scene_shading_uploads.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/deferred/renderer_deferred_state.h>
 
 #include <core/alloc/global.h>
 #include <core/ecs/global.h>
+#include <core/graphics/api.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -81,7 +80,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererDeferredState;
 class RendererShaderSystem;
 
 
@@ -90,13 +88,19 @@ class RendererShaderSystem;
 
 class RendererDeferredSystem final : NoCopy{
 public:
-    RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)noexcept;
+    RendererDeferredSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, RendererDeferredState& deferredState, RendererShaderSystem& shaderSystem)noexcept
+        : m_arena(arena)
+        , m_world(world)
+        , m_graphics(graphics)
+        , m_deferredState(deferredState)
+        , m_shaderSystem(shaderSystem)
+    {}
 
 
 public:
-    [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
+    [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept{ return { m_deferredState.m_sceneShadingBuffer, m_deferredState.m_lightBuffer, }; }
     void invalidateSceneLightingUploadMirrors()noexcept;
-    void invalidateResources()noexcept;
+    void invalidateResources()noexcept{ m_deferredState.invalidateResources(); }
     [[nodiscard]] b8 setPresentationSettings(const PresentationSettings& settings)noexcept;
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.

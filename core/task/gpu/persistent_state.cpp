@@ -22,19 +22,19 @@ namespace __hidden_gpu_persistent_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 BuildSelection(CommandListResourceSelection& selection, const TextureHandle* const textures, const usize textureCount, const BufferHandle* const buffers, const usize bufferCount)noexcept{
-    for(usize index = 0u; index < textureCount; ++index){
+[[nodiscard]] b8 BuildSelection(CommandListResourceSelection& selection, const Span<const TextureHandle> textures, const Span<const BufferHandle> buffers)noexcept{
+    for(usize index = 0u; index < textures.size(); ++index){
         if(!selection.addTexture(textures[index].get(), index))
             return false;
     }
-    for(usize index = 0u; index < bufferCount; ++index){
+    for(usize index = 0u; index < buffers.size(); ++index){
         if(!selection.addBuffer(buffers[index].get(), index))
             return false;
     }
     return true;
 }
 
-void RetainSelectedHandles(const CommandListResourceSelection& selection, const TextureHandle* const textures, const BufferHandle* const buffers, GraphicsVector<TextureHandle>& outTextures, GraphicsVector<BufferHandle>& outBuffers){
+void RetainSelectedHandles(const CommandListResourceSelection& selection, const Span<const TextureHandle> textures, const Span<const BufferHandle> buffers, GraphicsVector<TextureHandle>& outTextures, GraphicsVector<BufferHandle>& outBuffers){
     outTextures.reserve(selection.textureCount());
     outBuffers.reserve(selection.bufferCount());
     for(usize index = 0u; index < selection.size(); ++index){
@@ -56,6 +56,17 @@ void RetainSelectedHandles(const CommandListResourceSelection& selection, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
+    m_states.reset();
+    m_textures.clear();
+    m_buffers.clear();
+    m_consumed = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuPersistentResourceStateCache::reset()noexcept{
     m_states.reset();
     m_textures.clear();
@@ -68,34 +79,21 @@ void GpuPersistentResourceStateCache::reset()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
-    m_states.reset();
-    m_textures.clear();
-    m_buffers.clear();
-    m_consumed = false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 GpuPersistentResourceStateCache::replaceResourceSubset(
     const CommandListResourceStateHandoff& source,
-    const TextureHandle* const textures,
-    const usize textureCount,
-    const BufferHandle* const buffers,
-    const usize bufferCount,
+    const Span<const TextureHandle> textures,
+    const Span<const BufferHandle> buffers,
     Alloc::ScratchArena& scratchArena
 ){
     if(&source == &m_states){
-        if(!source.valid() || source.deviceGeneration() == 0u || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers)){
+        if(!source.valid() || source.deviceGeneration() == 0u || (!textures.empty() && !textures.data()) || (!buffers.empty() && !buffers.data())){
             reset();
             return false;
         }
 
         CommandListResourceSelection selection(scratchArena);
         using namespace __hidden_gpu_persistent_state;
-        if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount)){
+        if(!BuildSelection(selection, textures, buffers)){
             reset();
             return false;
         }
@@ -119,7 +117,7 @@ b8 GpuPersistentResourceStateCache::replaceResourceSubset(
     }
 
     Candidate candidate(*this);
-    if(!buildFilteredResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount, scratchArena)){
+    if(!buildFilteredResourceSubset(source, textures, buffers, scratchArena, candidate)){
         reset();
         return false;
     }
@@ -131,13 +129,11 @@ b8 GpuPersistentResourceStateCache::replaceResourceSubset(
 }
 
 b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
-    Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,
-    const TextureHandle* const textures,
-    const usize textureCount,
-    const BufferHandle* const buffers,
-    const usize bufferCount,
-    Alloc::ScratchArena& scratchArena
+    const Span<const TextureHandle> textures,
+    const Span<const BufferHandle> buffers,
+    Alloc::ScratchArena& scratchArena,
+    Candidate& outCandidate
 )const{
     if(&outCandidate.m_owner != this)
         return false;
@@ -145,11 +141,11 @@ b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
     Candidate sourceCandidate(*this);
     Optional<CommandListResourceStateHandoff> retainedStates;
     {
-        if(!source.valid() || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers))
+        if(!source.valid() || (!textures.empty() && !textures.data()) || (!buffers.empty() && !buffers.data()))
             return false;
         CommandListResourceSelection selection(scratchArena);
         using namespace __hidden_gpu_persistent_state;
-        if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount))
+        if(!BuildSelection(selection, textures, buffers))
             return false;
         RetainSelectedHandles(selection, textures, buffers, sourceCandidate.m_textures, sourceCandidate.m_buffers);
         if(!sourceCandidate.m_states.buildResourceSubset(source, selection))
@@ -166,8 +162,8 @@ b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
     // The selected typed handles stay in sourceCandidate through fan-in.
     // Release the temporary selection before fan-in reuses the scratch arena, so repeats reclaim in LIFO order.
     if(retainedStates){
-        const CommandListResourceStateHandoff* const branches[] = { &sourceCandidate.m_states };
-        if(!outCandidate.m_states.buildFanIn(*retainedStates, branches, LengthOf(branches), scratchArena))
+        const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &sourceCandidate.m_states }};
+        if(!outCandidate.m_states.buildFanIn(*retainedStates, branches.data(), branches.size(), scratchArena))
             return false;
     }
     else if(!outCandidate.m_states.copyFrom(sourceCandidate.m_states))
@@ -179,23 +175,21 @@ b8 GpuPersistentResourceStateCache::buildMergedResourceSubset(
 }
 
 b8 GpuPersistentResourceStateCache::buildFilteredResourceSubset(
-    Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,
-    const TextureHandle* const textures,
-    const usize textureCount,
-    const BufferHandle* const buffers,
-    const usize bufferCount,
-    Alloc::ScratchArena& scratchArena
+    const Span<const TextureHandle> textures,
+    const Span<const BufferHandle> buffers,
+    Alloc::ScratchArena& scratchArena,
+    Candidate& outCandidate
 )const{
     if(&outCandidate.m_owner != this)
         return false;
     outCandidate.reset();
-    if(!source.valid() || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers))
+    if(!source.valid() || (!textures.empty() && !textures.data()) || (!buffers.empty() && !buffers.data()))
         return false;
 
     CommandListResourceSelection selection(scratchArena);
     using namespace __hidden_gpu_persistent_state;
-    if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount))
+    if(!BuildSelection(selection, textures, buffers))
         return false;
     RetainSelectedHandles(selection, textures, buffers, outCandidate.m_textures, outCandidate.m_buffers);
     return outCandidate.m_states.buildResourceSubset(source, selection);

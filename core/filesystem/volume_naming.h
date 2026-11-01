@@ -38,7 +38,7 @@ inline constexpr AStringView s_VolumeSegmentExtension = ".vol";
 }
 
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex)noexcept{
-    char segmentIndexBuffer[s_DecimalTextBufferBytes];
+    Array<char, s_DecimalTextBufferBytes> segmentIndexBuffer{};
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
     NWB_ASSERT(!segmentIndexText.empty());
 

@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_TextBytesPerKilobyte = 1024u;
 const usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
 const usize s_TextMaxFontSources = 8u;
@@ -13,9 +19,6 @@ const f64 s_TextFixedPointScaleF64 = 64.0;
 const f32 s_TextMaxFontSize = 2048.0f;
 const u32 s_TextMaxRasterPpem = 4096u;
 const f32 s_TextMaxRasterPpemF32 = 4096.0f;
-const u32 s_ScriptTagByte0Shift = 24u;
-const u32 s_ScriptTagByte1Shift = 16u;
-const u32 s_ScriptTagByte2Shift = 8u;
 const u32 s_TextDefaultScriptTag = 0x4c61746eu;
 const u32 s_ScriptTagLetterCount = 4u;
 const u32 s_ScriptTagLetterMask = 0xffu;
@@ -25,6 +28,23 @@ const u32 s_TextUnicodeDelete = 0x7fu;
 const u32 s_TextUnicodeC1Last = 0x9fu;
 const u32 s_TextUnicodeLineSeparator = 0x2028u;
 const u32 s_TextUnicodeParagraphSeparator = 0x2029u;
+const usize s_GlyphAtlasMaxGlyphs = 4096u;
+const u32 s_GlyphAtlasNoPage = 0xffffffffu;
+const f32 s_BakedFontAtlasMinScale = 0.75f;
+const f32 s_BakedFontAtlasMaxScale = 1.5f;
+const usize s_TextCarriageReturnLineFeedBytes = 2u;
+const f64 s_TextRasterMarginPixels = 2.0;
+const f32 s_TextFixedPointRoundBiasF32 = 0.5f;
+const f64 s_TextHalfPixel = 0.5;
+const u32 s_TextSmallestPositiveSubnormalBits = 1u;
+const u32 s_TextSmallestNegativeSubnormalBits = 0x80000001u;
+const f64 s_TextSdfMinimumFilterWidth = 0.001;
+const f64 s_TextSdfEncodedHalfRange = 128.0;
+const StringView s_TextFontLifecycleCategory = "ui_font_lifecycle";
+const f64 s_TextOutlineBoundsMargin = 1.0;
+const f64 s_TextOutlineBoundsMarginBothSides = 2.0;
+const f32 s_TextMaxCoordinateF32 = 3.40282346638528859812e+38f;
+const f64 s_TextMaxCoordinateF64 = cast<f64>(s_TextMaxCoordinateF32);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,6 +152,187 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         }
     }
     return utf8Status;
+}
+
+native{
+namespace NWB::Impl::Ui{
+[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
+    return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
+}
+};
+}
+
+enum<u8> TextGlyphIntersection{
+    Invalid,
+    Invisible,
+    Visible,
+}
+
+class GlyphCoverageBounds{
+    public GlyphCoverageBounds(){
+        this.known = false;
+    }
+
+    public GlyphCoverageBounds(in Rect inInk, in b8 inKnown){
+        this.ink = inInk;
+        this.known = inKnown;
+    }
+
+    public Rect ink;
+    public b8 known;
+}
+
+class RawShapedGlyph{
+    public RawShapedGlyph(){
+        this.glyphId = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public RawShapedGlyph(in u32 inGlyphId, in u32 inByteBegin, in u32 inByteEnd, in Point inOffset, in Point inAdvance, in Rect inInk, in GlyphCoverageBounds inCoverage){
+        this.glyphId = inGlyphId;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+        this.offset = inOffset;
+        this.advance = inAdvance;
+        this.ink = inInk;
+        this.coverage = inCoverage;
+    }
+
+    public u32 glyphId;
+    public u32 byteBegin;
+    public u32 byteEnd;
+    public Point offset;
+    public Point advance;
+    public Rect ink;
+    public GlyphCoverageBounds coverage;
+}
+
+class GlyphAtlasPlacement{
+    public GlyphAtlasPlacement(){
+        this.x = 0u;
+        this.y = 0u;
+        this.rowHeight = 0u;
+    }
+
+    public GlyphAtlasPlacement(in u32 inX, in u32 inY, in u32 inRowHeight){
+        this.x = inX;
+        this.y = inY;
+        this.rowHeight = inRowHeight;
+    }
+
+    public u32 x;
+    public u32 y;
+    public u32 rowHeight;
+}
+
+class TextFontSpan{
+    public TextFontSpan(){
+        this.fontIndex = 0u;
+        this.glyphBegin = 0u;
+        this.glyphEnd = 0u;
+        this.byteBegin = 0u;
+        this.byteEnd = 0u;
+    }
+
+    public TextFontSpan(in usize inFontIndex, in usize inGlyphBegin, in usize inGlyphEnd, in u32 inByteBegin, in u32 inByteEnd){
+        this.fontIndex = inFontIndex;
+        this.glyphBegin = inGlyphBegin;
+        this.glyphEnd = inGlyphEnd;
+        this.byteBegin = inByteBegin;
+        this.byteEnd = inByteEnd;
+    }
+
+    public usize fontIndex;
+    public usize glyphBegin;
+    public usize glyphEnd;
+    public u32 byteBegin;
+    public u32 byteEnd;
+}
+
+class TextCluster{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 lineIndex = 0u;
+    public f32 leadingX = 0.0f;
+    public f32 trailingX = 0.0f;
+}
+
+class TextLine{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 breakEnd = 0u;
+    public u32 firstGlyph = 0u;
+    public u32 glyphCount = 0u;
+    public u32 firstCluster = 0u;
+    public u32 clusterCount = 0u;
+    public f32 top = 0.0f;
+    public f32 baseline = 0.0f;
+    public f32 height = 0.0f;
+    public f32 advance = 0.0f;
+}
+
+class TextHit{
+    public u32 byteOffset = 0u;
+}
+
+b8 TryPlaceGlyphInAtlasPage(in u32 cursorX, in u32 cursorY, in u32 rowHeight, in u32 width, in u32 height, mut GlyphAtlasPlacement outPlacement){
+    outPlacement = GlyphAtlasPlacement(cursorX, cursorY, rowHeight);
+    if(outPlacement.x + width > s_GlyphAtlasPageExtent){
+        outPlacement.x = 0u;
+        outPlacement.y += outPlacement.rowHeight;
+        outPlacement.rowHeight = 0u;
+    }
+    if(outPlacement.y + height > s_GlyphAtlasPageExtent)
+        return false;
+    outPlacement.rowHeight = max(outPlacement.rowHeight, height);
+    return true;
+}
+
+usize FindClusterEnd(in Span<RawShapedGlyph> glyphs, in usize begin){
+    usize end = begin + 1u;
+    while(end < glyphs.size() && glyphs[end].byteBegin == glyphs[begin].byteBegin)
+        ++end;
+    return end;
+}
+
+b8 ClusterHasMissingGlyph(in Span<RawShapedGlyph> glyphs, in usize begin, in usize end){
+    for(usize index = begin; index < end; ++index){
+        if(glyphs[index].glyphId == 0u)
+            return true;
+    }
+    return false;
+}
+
+b8 FitsTextCoordinate(in f64 value){
+    return isFinite(value) && value >= -s_TextMaxCoordinateF64 && value <= s_TextMaxCoordinateF64;
+}
+
+b8 IsValidTextFontSize(in f32 fontSize){
+    return isFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
+}
+
+f32 RoundMeasuredTextBound(in f64 value, in b8 upper){
+    const f32 rounded = cast<f32>(value);
+    if(upper){
+        if(cast<f64>(rounded) >= value)
+            return rounded;
+    }
+    else{
+        if(cast<f64>(rounded) <= value)
+            return rounded;
+    }
+    if(rounded == 0.0f){
+        if(upper)
+            return bit_cast<f32>(s_TextSmallestPositiveSubnormalBits);
+        return bit_cast<f32>(s_TextSmallestNegativeSubnormalBits);
+    }
+    const u32 bits = bit_cast<u32>(rounded);
+    if(upper == (rounded > 0.0f))
+        return bit_cast<f32>(bits + 1u);
+    return bit_cast<f32>(bits - 1u);
 }
 
 

@@ -60,9 +60,13 @@ NWB_INLINE b8 operator!=(const Object& lhs, const Object& rhs)noexcept{ return l
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GraphicsResource{
+class GraphicsResource : public NoCopy{
     template<typename, typename> friend struct ::ArenaRefDeleter;
     template<typename ArenaT, typename ValueT> friend void ::ArenaObjectDetail::DestroyArenaReference(ArenaT& arena, ValueT& value)noexcept;
+
+
+public:
+    GraphicsResource(GraphicsResource&&) = delete;
 
 
 protected:
@@ -70,14 +74,9 @@ protected:
         : m_cpuScheduler(scheduler)
     {}
     virtual ~GraphicsResource()noexcept = default;
-public:
-    GraphicsResource(const GraphicsResource&) = delete;
-    GraphicsResource(GraphicsResource&&) = delete;
 
 
 public:
-    GraphicsResource& operator=(const GraphicsResource&) = delete;
-
     GraphicsResource& operator=(GraphicsResource&&) = delete;
 
 
@@ -85,7 +84,7 @@ public:
     virtual u32 addReference()noexcept = 0;
     virtual u32 release()noexcept = 0;
 
-    virtual Object getNativeHandle(ObjectType type){ static_cast<void>(type); return nullptr; }
+    virtual Object getNativeHandle([[maybe_unused]] ObjectType type){ return nullptr; }
 
 
 protected:

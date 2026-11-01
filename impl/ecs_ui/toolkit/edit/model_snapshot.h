@@ -18,7 +18,21 @@ NWB_IMPL_UI_BEGIN
 
 
 // Copies the exact model fence for asynchronous clipboard and native text-input work without retaining a model pointer.
-struct EditModelSnapshot{
+class EditModelSnapshot final{
+public:
+    explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept
+        : m_expectedText(arena)
+        , m_expectedPreedit(arena)
+    {}
+
+
+public:
+    [[nodiscard]] b8 matches(const EditModel& model)const noexcept;
+    void capture(const EditModel& model);
+    void clear()noexcept;
+
+
+public:
     AString<Core::Alloc::GlobalArena> m_expectedText;
     AString<Core::Alloc::GlobalArena> m_expectedPreedit;
     EditCompositionView m_expectedComposition;
@@ -28,16 +42,6 @@ struct EditModelSnapshot{
     u64 m_expectedExternalRevision = 0u;
     u64 m_expectedSelectionGeneration = 0u;
     u64 m_expectedCompositionGeneration = 0u;
-
-
-public:
-    explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
-
-
-public:
-    [[nodiscard]] b8 matches(const EditModel& model)const noexcept;
-    void capture(const EditModel& model);
-    void clear()noexcept;
 };
 
 

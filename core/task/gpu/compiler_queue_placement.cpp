@@ -70,7 +70,7 @@ using namespace GpuTaskGraphCompilerDetail;
 
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> states(scratchArena);
     states.reserve(ownedResourceUseCount);
-    TrackedResourceStateHistory history(states, graph.resourceCount(), graph.generation(), scratchArena);
+    TrackedResourceStateHistory history(graph.resourceCount(), graph.generation(), states, scratchArena);
     TaskResourceUseIndex taskUses(graph.resourceCount(), graph.generation(), taskUseCapacity, scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> firstUseRanges(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> fragments(scratchArena);
@@ -291,7 +291,7 @@ namespace GpuTaskGraphCompilerDetail{
         overlap = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
-        overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, NotNull<const GpuTaskQueueAssignment*>(assignments.data() + group.assignmentOffset), group.assignmentCount);
+        overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, assignments.subspan(group.assignmentOffset, group.assignmentCount));
     }
     score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max) ? Limit<i32>::s_Max : static_cast<i32>(overlap);
     return score;

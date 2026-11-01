@@ -20,15 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
-    : m_graph(graph)
-    , m_avboitSystem(avboitSystem)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(const AvboitClearChainInputs& inputs, GraphClearTimingRecordState& clearTimingState){
     AvboitClearChainResult result{};
     if(!inputs.uploadTask.valid())
@@ -61,7 +52,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, Rend
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
             Core::GpuTaskDesc clearDesc;
-            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(avboitClearScheduling).setDependencies(&dependency, 1u);
+            clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(avboitClearScheduling).setDependencies({ &dependency, 1u });
             return clearDesc;
         };
         const auto makeAvboitFloatClearDesc = [](const Core::GpuGraphResourceId destination, const Core::Color& value, const Core::GpuClearTextureTaskRecordHooks& recordHooks = {})noexcept{
@@ -101,7 +92,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(Core::GpuTaskGraph& graph, Rend
             return MakeUnexpected(Failure{});
         }
         avboitClearTask = *avboitClearTaskResult3;
-        const Core::GpuGraphResourceId foregroundClearTargets[] = { inputs.foregroundColor, inputs.foregroundExtinction };
+        const Array<Core::GpuGraphResourceId, 2u> foregroundClearTargets = { inputs.foregroundColor, inputs.foregroundExtinction };
         for(const auto target : foregroundClearTargets){
             const auto avboitClearTaskResult4 = m_graph.addClearTextureTask(
                 makeAvboitClearTaskDesc(target == inputs.foregroundColor ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"), "AVBOIT Clear Foreground", avboitClearTask),

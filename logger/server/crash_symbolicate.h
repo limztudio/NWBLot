@@ -23,6 +23,8 @@ NWB_LOG_BEGIN
 
 using CrashReportText = AString<LogArena>;
 
+inline constexpr AStringView s_ReportLineEnd = "\n";
+
 struct CrashSymbolicationConfig{
     Path symbolStoreDirectory;
 
@@ -61,7 +63,7 @@ public:
 };
 
 
-[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, LogArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

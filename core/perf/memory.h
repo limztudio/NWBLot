@@ -75,65 +75,14 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return hasSamples; }
 };
 
-[[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source = MemorySource::ExplicitScope)noexcept{
-    MemorySnapshot snapshot;
-    snapshot.scopeName = scopeName;
-    snapshot.source = source;
-    snapshot.frameIndex = frameIndex;
-    snapshot.reservedBytes = stats.reservedBytes;
-    snapshot.usedBytes = stats.usedBytes;
-    snapshot.peakUsedBytes = stats.peakUsedBytes;
-    snapshot.allocationCount = stats.allocationCount;
-    snapshot.reallocationCount = stats.reallocationCount;
-    snapshot.deallocationCount = stats.deallocationCount;
-    return snapshot;
-}
+[[nodiscard]] MemorySnapshot MakeMemorySnapshot(const Name& scopeName, u64 frameIndex, const ::ArenaMemoryStats& stats, MemorySource::Enum source = MemorySource::ExplicitScope)noexcept;
 
 template<typename Arena>
 [[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const Arena& arena)noexcept(noexcept(MakeMemorySnapshot(scopeName, frameIndex, arena.memoryStats()))){
     return MakeMemorySnapshot(scopeName, frameIndex, arena.memoryStats());
 }
 
-[[nodiscard]] inline MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous)noexcept{
-    if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
-        return {};
-
-    const auto signedDifference = [](const u64 value, const u64 prior)noexcept -> Expected<i64>{
-        constexpr u64 s_MaxPositive = static_cast<u64>(Limit<i64>::s_Max);
-        if(value >= prior){
-            const u64 magnitude = value - prior;
-            if(magnitude > s_MaxPositive)
-                return MakeUnexpected(Failure{});
-            return static_cast<i64>(magnitude);
-        }
-
-        const u64 magnitude = prior - value;
-        constexpr u64 s_MaxNegative = s_MaxPositive + 1u;
-        if(magnitude > s_MaxNegative)
-            return MakeUnexpected(Failure{});
-        return magnitude == s_MaxNegative ? Limit<i64>::s_Min : -static_cast<i64>(magnitude);
-    };
-    const auto reservedBytes = signedDifference(current.reservedBytes, previous.reservedBytes);
-    const auto usedBytes = signedDifference(current.usedBytes, previous.usedBytes);
-    const auto peakUsedBytes = signedDifference(current.peakUsedBytes, previous.peakUsedBytes);
-    const auto allocationCount = signedDifference(current.allocationCount, previous.allocationCount);
-    const auto reallocationCount = signedDifference(current.reallocationCount, previous.reallocationCount);
-    const auto deallocationCount = signedDifference(current.deallocationCount, previous.deallocationCount);
-    if(!reservedBytes || !usedBytes || !peakUsedBytes || !allocationCount || !reallocationCount || !deallocationCount)
-        return {};
-
-    MemoryDelta delta;
-    delta.previousFrameIndex = previous.frameIndex;
-    delta.currentFrameIndex = current.frameIndex;
-    delta.reservedBytes = *reservedBytes;
-    delta.usedBytes = *usedBytes;
-    delta.peakUsedBytes = *peakUsedBytes;
-    delta.allocationCount = *allocationCount;
-    delta.reallocationCount = *reallocationCount;
-    delta.deallocationCount = *deallocationCount;
-    delta.hasSamples = true;
-    return delta;
-}
+[[nodiscard]] MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,9 +186,9 @@ public:
     [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;
     [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
     [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const noexcept;
-    [[nodiscard]] usize scopeCount()const noexcept;
-    [[nodiscard]] MemoryScopeId scopeAt(usize index)const noexcept;
-    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept{ return m_recorder ? m_recorder->scopeCount() : 0u; }
+    [[nodiscard]] MemoryScopeId scopeAt(const usize index)const noexcept{ return m_recorder ? m_recorder->scopeAt(index) : MemoryScopeId{}; }
+    [[nodiscard]] Name scopeNameAt(const usize index)const noexcept{ return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone; }
     [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const noexcept;
     [[nodiscard]] const MemoryDelta& deltaAt(usize index)const noexcept;
 

@@ -4,8 +4,6 @@
 
 #include "list_builder_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/selectable_paint.h>
-
 #include <global/simdmath.h>
 
 
@@ -30,17 +28,17 @@ using namespace NWB::UiListTests;
 
 TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightChanges){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
-    const Point destination{ origin.x, VectorGetX(VectorAdd(VectorReplicate(origin.y), VectorReplicate(10.0f))) };
+    const Point destination{ origin.x, origin.y + 10.0f };
     drag(origin, destination);
     ListOptions resized = Options();
     resized.height.value = 200.0f;
     ASSERT_TRUE(prepare(2u, resized));
-    const SIMDVectorDouble travel = VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(accepted.gestureReference.height)), VectorDoubleReplicate(static_cast<f64>(accepted.rectangle.height)));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleDivide(VectorDoubleReplicate(10.0), travel), VectorDoubleReplicate(accepted.gestureMaximum))));
+    const f64 travel = static_cast<f64>(accepted.gestureReference.height) - static_cast<f64>(accepted.rectangle.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), (10.0 / travel) * accepted.gestureMaximum);
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FLOAT_EQ(target(thumb)->gestureReference.height, 190.0f);
@@ -48,10 +46,10 @@ TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightCh
 
 TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder){
     ASSERT_TRUE(accept(1u));
-    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey)));
+    const HitTarget accepted = *target(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey));
     const Point origin = Center(accepted.rectangle);
-    const SIMDVectorSingle trackEnd = VectorAdd(VectorReplicate(accepted.gestureReference.y), VectorReplicate(accepted.gestureReference.height));
-    const Point destination{ origin.x, VectorGetX(VectorNegativeMultiplySubtractExpression(VectorReplicate(accepted.rectangle.height), VectorReplicate(0.5f), trackEnd)) };
+    const f32 trackEnd = accepted.gestureReference.y + accepted.gestureReference.height;
+    const Point destination{ origin.x, trackEnd - accepted.rectangle.height * 0.5f };
     EXPECT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
     InputEvent event;
     event.type = InputEventType::PointerWheel;
@@ -69,8 +67,8 @@ TEST_F(UiListBuilderTests, EmptyDatasetKeepsABoundedPageCountWithoutReadingText)
     m_source.count = 0u;
     ListOptions options = Options();
     ASSERT_TRUE(accept(1u, options));
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_EQ(target(host())->pageRows, 1u);
+    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->pageRows, 1u);
     EXPECT_EQ(m_source.textCalls, 0u);
 }
 
@@ -78,8 +76,8 @@ TEST_F(UiListBuilderTests, SmallDatasetBoundsPageSizeByRows){
     m_source.count = 2u;
     ListOptions options = Options();
     ASSERT_TRUE(accept(1u, options));
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_EQ(target(host())->pageRows, 2u);
+    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_ListKey, s_PanelKey))->pageRows, 2u);
     EXPECT_EQ(m_source.textCalls, 2u);
     EXPECT_EQ(m_state.placement().endRow, 2u);
 }
@@ -88,7 +86,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     PopupState lowerPopup;
     PopupState upperPopup;
     ListState lowerState;
@@ -121,7 +119,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     lowerPopup.close();
     ASSERT_TRUE(preparePopups(7u, lowerPopup, lowerState));
     ASSERT_TRUE(m_context.commitFrame(7u));
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     press(Core::Key::Down);
     ASSERT_TRUE(prepare(8u));
     EXPECT_EQ(m_state.selectedKey(), 2u);
@@ -129,32 +127,31 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
 
 TEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline){
     ASSERT_TRUE(accept(1u));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     const Point origin = Center(accepted.rectangle);
-    const SIMDVectorSingle destinationY = VectorAdd(VectorReplicate(origin.y), VectorSet(10.0f, 20.0f, 0.0f, 0.0f));
-    drag(origin, { origin.x, VectorGetX(destinationY) });
-    drag(origin, { origin.x, VectorGetY(destinationY) });
+    drag(origin, { origin.x, origin.y + 10.0f });
+    drag(origin, { origin.x, origin.y + 20.0f });
     ASSERT_TRUE(prepare(2u));
-    const SIMDVectorDouble travel = VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(accepted.gestureReference.height)), VectorDoubleReplicate(static_cast<f64>(accepted.rectangle.height)));
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleDivide(VectorDoubleReplicate(20.0), travel), VectorDoubleReplicate(accepted.gestureMaximum))));
+    const f64 travel = static_cast<f64>(accepted.gestureReference.height) - static_cast<f64>(accepted.rectangle.height);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), (20.0 / travel) * accepted.gestureMaximum);
     EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
     ASSERT_TRUE(m_context.commitFrame(2u));
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
 }
 
 TEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAnUnusableGesture){
     ListOptions options = Options();
     options.height.value = 20.0f;
     ASSERT_TRUE(accept(1u, options));
-    const WidgetId thumb = UiTestSupport::RequireWidgetId(MakeWidgetId(host(), s_ScrollbarKey));
+    const WidgetId thumb = UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), s_ScrollbarKey);
     ASSERT_NE(target(thumb), nullptr);
     const HitTarget accepted = *target(thumb);
     EXPECT_FLOAT_EQ(m_state.placement().track.height, m_state.placement().thumb.height);
     EXPECT_FALSE(accepted.pointerGesture);
     click(Center(accepted.rectangle));
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ListKey, s_PanelKey));
     EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
     ASSERT_TRUE(prepare(2u, options));
     EXPECT_TRUE(m_result.valid);

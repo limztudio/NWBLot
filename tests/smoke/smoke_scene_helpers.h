@@ -5,13 +5,9 @@
 #pragma once
 
 
+#include "render_quality_settings.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
-#include "software_shadow_settings.h"
-#include "caustic_quality_settings.h"
-#include "surfel_gi_quality_settings.h"
-#include "shadow_quality_settings.h"
-#include "render_quality_settings.h"
 
 #include <loader/project_entry.h>
 
@@ -39,13 +35,7 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace Smoke{
+namespace Tests::Smoke{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,106 +45,57 @@ using SmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
 using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
 
 struct SmokeTintedEntitySetup{
-    Core::ECS::EntityID entity;
     Name materialInterface;
+    Core::ECS::EntityID entity;
 };
-
-[[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(Core::ECS::World& world, const SmokeMaterialRef& material, const NameText<char> materialInterfacePath, const Float4& position, const Float4& scale){
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& renderer = entity.addComponent<Impl::RendererComponent>();
-    renderer.material = material;
-
-    const Name materialInterface(materialInterfacePath);
-    entity.addComponent<Impl::MaterialInstanceComponent>(materialInterface);
-    return { entity.id(), materialInterface };
-}
-
-[[nodiscard]] inline b8 ApplySmokeMaterialTint(Core::ECS::World& world, const SmokeTintedEntitySetup& setup, const Float4& colorTint, const AStringView tintParameterPath = "runtime.color_tint"){
-    return Impl::SetMaterialMutableHalf4(world, setup.entity, setup.materialInterface, tintParameterPath, colorTint);
-}
-
-[[nodiscard]] inline Core::ECS::EntityID CreateTintedStaticMeshEntity(
-    Core::ECS::World& world,
-    const SmokeMeshRef& mesh,
-    const SmokeMaterialRef& material,
-    const NameText<char> materialInterfacePath,
-    const Float4& colorTint,
-    const Float4& position,
-    const Float4& scale,
-    const AStringView tintParameterPath = "runtime.color_tint"
-){
-    const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(world, material, materialInterfacePath, position, scale);
-
-    auto& meshComponent = world.entity(setup.entity).addComponent<Impl::MeshComponent>();
-    meshComponent.mesh = mesh;
-
-    if(!ApplySmokeMaterialTint(world, setup, colorTint, tintParameterPath))
-        return Core::ECS::s_InvalidEntityId;
-
-    return setup.entity;
-}
 
 struct SmokeRenderSystems{
     Impl::MeshSystem& mesh;
     Impl::RendererSystem& renderer;
 };
 
-[[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {}){
-    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-    auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
-    auto& rendererSystem = world.addSystem<Impl::RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
-    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.caustic), NWB_TEXT("Invalid caustic quality smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplySurfelGiQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.surfelGi), NWB_TEXT("Invalid surfel GI quality smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, scratchArena, baseSettings.softwareShadow), NWB_TEXT("Invalid software shadow smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, scratchArena, baseSettings.shadow), NWB_TEXT("Invalid shadow quality smoke settings"));
-    return { meshSystem, rendererSystem };
-}
-
-inline Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context){
-    const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context);
-
-    context.graphics.addRenderPassToBack(systems.renderer);
-    context.frameGraphRegistry.registerContributor(systems.renderer);
-    return systems.renderer;
-}
-
-[[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(ProjectRuntimeContext& context, const TStringView projectName){
-    auto world = CreateSmokeWorldOrDie(context, projectName);
-    AddSmokeRenderSystems(*world, context);
-    return world;
-}
-
-inline void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
-    const b8 deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss"));
-
-    world->clear();
-    world.owner().reset();
-}
-
-inline void RemoveSmokeRendererSystem(ProjectRuntimeContext& context, Core::ECS::World& world){
-    Impl::RendererSystem& rendererSystem = *MakeNotNull(world.getSystem<Impl::RendererSystem>());
-    context.frameGraphRegistry.unregisterContributor(rendererSystem);
-    context.graphics.removeRenderPass(rendererSystem);
-}
-
-inline void DestroySmokeRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world){
-    if(!world.owner())
-        return;
-
-    RemoveSmokeRendererSystem(context, *world);
-    FinishDestroyingSmokeWorld(context, world);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+[[nodiscard]] SmokeTintedEntitySetup CreateSmokeTintedEntity(
+    const SmokeMaterialRef& material,
+    NameText<char> materialInterfacePath,
+    const Float4& position,
+    const Float4& scale,
+    Core::ECS::World& world
+);
+[[nodiscard]] b8 ApplySmokeMaterialTint(
+    const SmokeTintedEntitySetup& setup,
+    const Float4& colorTint,
+    AStringView tintParameterPath,
+    Core::ECS::World& world
+);
+[[nodiscard]] Core::ECS::EntityID CreateTintedStaticMeshEntity(
+    const SmokeMeshRef& mesh,
+    const SmokeMaterialRef& material,
+    NameText<char> materialInterfacePath,
+    const Float4& colorTint,
+    const Float4& position,
+    const Float4& scale,
+    AStringView tintParameterPath,
+    Core::ECS::World& world
+);
+[[nodiscard]] Core::ECS::EntityID CreateTintedStaticMeshEntity(
+    const SmokeMeshRef& mesh,
+    const SmokeMaterialRef& material,
+    NameText<char> materialInterfacePath,
+    const Float4& colorTint,
+    const Float4& position,
+    const Float4& scale,
+    Core::ECS::World& world
+);
+[[nodiscard]] SmokeRenderSystems CreateSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context, const SmokeRenderQualitySettings& baseSettings = {});
+Impl::RendererSystem& AddSmokeRenderSystems(Core::ECS::World& world, ProjectRuntimeContext& context);
+[[nodiscard]] NotNullUniquePtr<Core::ECS::World> CreateSmokeRenderWorldOrDie(TStringView projectName, ProjectRuntimeContext& context);
+void FinishDestroyingSmokeWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world);
+void RemoveSmokeRendererSystem(ProjectRuntimeContext& context, Core::ECS::World& world);
+void DestroySmokeRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

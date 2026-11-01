@@ -60,7 +60,9 @@ public:
 
 
 public:
-    explicit Value(MetaArena& arena)noexcept;
+    explicit Value(MetaArena& arena)noexcept
+        : m_arena(arena)
+    {}
     Value(i64 val, MetaArena& arena)noexcept;
     Value(f64 val, MetaArena& arena)noexcept;
     Value(MStringView val, MetaArena& arena);
@@ -204,7 +206,7 @@ private:
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;
     void appendListCopy(const Value& val);
-    void appendListCopies(Span<const Value> values, usize count);
+    void appendListCopies(Span<const Value> values);
 
     [[nodiscard]] NotNull<ListType*> allocList()const;
     [[nodiscard]] NotNull<MapType*> allocMap()const;

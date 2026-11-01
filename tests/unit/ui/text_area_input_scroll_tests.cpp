@@ -108,9 +108,7 @@ protected:
 
     [[nodiscard]] b8 wheel(const f64 x, const f64 y){ return wheel(x, y, Center(m_state.placement().content)); }
 
-    [[nodiscard]] WidgetId area()const{ return id(s_TextAreaKey, s_TextAreaPanelKey); }
-
-    [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(area(), key)); }
+    [[nodiscard]] WidgetId part(const AStringView key)const{ return UiTestSupport::RequireWidgetId(id(s_TextAreaKey, s_TextAreaPanelKey), key); }
 
     [[nodiscard]] b8 framePopup(const u64 generation, PopupState& popup){
         PopupOptions options;
@@ -135,7 +133,7 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
     useHost();
     m_host.focused = false;
     ASSERT_TRUE(prepareDocument({ 20.0f, 30.0f }));
-    const f32 invalid[]{ 0.0f, -1.0f, Limit<f32>::s_QuietNaN };
+    const Array<f32, 3> invalid{ 0.0f, -1.0f, Limit<f32>::s_QuietNaN };
     u64 generation = 1u;
     for(const f32 wheelLines : invalid){
         ASSERT_TRUE(frameArea(generation++, ScrollOptions()));
@@ -147,7 +145,7 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
         const usize loans = m_host.loans;
         const usize publishes = m_host.publishes;
         const usize targets = m_context.input().targets().size();
-        const HitTarget* displayed = target(area());
+        const HitTarget* displayed = target(id(s_TextAreaKey, s_TextAreaPanelKey));
         ASSERT_TRUE(displayed);
         const HitTarget accepted = *displayed;
         TextAreaOptions options = ScrollOptions();
@@ -161,11 +159,11 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
         EXPECT_FALSE(m_context.commitFrame(generation));
         EXPECT_EQ(m_context.input().layoutGeneration(), generation - 1u);
         EXPECT_EQ(m_context.input().targets().size(), targets);
-        ASSERT_TRUE(target(area()));
-        EXPECT_EQ(target(area())->control, accepted.control);
-        ExpectRect(target(area())->rectangle, accepted.rectangle);
-        ExpectRect(m_state.placement().bounds, placement.bounds);
-        ExpectRect(m_state.placement().content, placement.content);
+        ASSERT_TRUE(target(id(s_TextAreaKey, s_TextAreaPanelKey)));
+        EXPECT_EQ(target(id(s_TextAreaKey, s_TextAreaPanelKey))->control, accepted.control);
+        UiPaintAssertions::ExpectRect(target(id(s_TextAreaKey, s_TextAreaPanelKey))->rectangle, accepted.rectangle);
+        UiPaintAssertions::ExpectRect(m_state.placement().bounds, placement.bounds);
+        UiPaintAssertions::ExpectRect(m_state.placement().content, placement.content);
         EXPECT_FLOAT_EQ(m_state.scroll().x, scroll.x);
         EXPECT_FLOAT_EQ(m_state.scroll().y, scroll.y);
         EXPECT_EQ(m_state.revision(), revision);
@@ -184,7 +182,7 @@ TEST_F(UiTextAreaInputScrollTests, CopiedVerticalWheelAppliesOnlyAtFinalPaintAnd
     const ScrollModelRecord model(m_arena, m_model);
     const u64 revision = m_state.revision();
     const EditNavigationSnapshot navigation = m_state.navigation().snapshot();
-    const HitTarget* host = target(area());
+    const HitTarget* host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
     ASSERT_TRUE(host);
     const f64 step = host->scrollStep;
     ASSERT_GT(step, 0.0);
@@ -236,7 +234,7 @@ TEST_F(UiTextAreaInputScrollTests, ReadOnlyWheelAndThumbScrollingLeaveUndoAndRed
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
-    const Point destination{ origin.x, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(thumb.gestureReference.y), VectorReplicate(thumb.gestureReference.height)), VectorReplicate(50.0f))) };
+    const Point destination{ origin.x, thumb.gestureReference.y + thumb.gestureReference.height + 50.0f };
     drag(origin, destination);
     ASSERT_TRUE(frameArea(3u, options));
     EXPECT_NEAR(m_state.scroll().y, m_state.scrollbars().vertical.maximum, 0.001);
@@ -252,11 +250,11 @@ TEST_F(UiTextAreaInputScrollTests, DisabledEditorUsesTheContainingPanelBarrierAn
     options.enabled = false;
     ASSERT_TRUE(prepareScroll(options));
     const ScrollModelRecord model(m_arena, m_model);
-    const HitTarget* host = target(area());
+    const HitTarget* host = target(id(s_TextAreaKey, s_TextAreaPanelKey));
     ASSERT_TRUE(host);
     EXPECT_FALSE(host->enabled || host->focusable || host->textEditable || host->scrollable);
     const Point point = Center(m_state.placement().content);
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_TextAreaPanelKey)));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_TextAreaPanelKey));
     ASSERT_TRUE(wheel(1.0, -1.0, point));
     EXPECT_TRUE(m_context.input().controlActions().empty());
     click(point);
@@ -297,14 +295,15 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     const HitTarget* found = target(part(s_VerticalThumbPart));
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
-    const SIMDVectorSingle travel = VectorSubtract(VectorReplicate(thumb.gestureReference.height), VectorReplicate(thumb.rectangle.height));
-    ASSERT_GT(VectorGetX(travel), 0.0f);
+    const f32 travelValue = thumb.gestureReference.height - thumb.rectangle.height;
+    ASSERT_GT(travelValue, 0.0f);
+    const SIMDVectorSingle travel = VectorReplicate(travelValue);
     const SIMDVectorSingle originValue = VectorMultiplyAddExpression(VectorSet(thumb.rectangle.width, thumb.rectangle.height, 0.0f, 0.0f), VectorSet(0.5f, 0.25f, 0.0f, 0.0f), VectorSet(thumb.rectangle.x, thumb.rectangle.y, 0.0f, 0.0f));
     const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     EXPECT_FALSE(m_context.input().focus().valid());
     ASSERT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), thumb.id);
-    EXPECT_EQ(m_context.input().focus(), area());
+    EXPECT_EQ(m_context.input().focus(), id(s_TextAreaKey, s_TextAreaPanelKey));
     ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 50.0, 0.001);
     EXPECT_NEAR(m_state.scroll().x, 30.0, 0.001);
@@ -367,7 +366,7 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
     ASSERT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     ASSERT_TRUE(frameArea(3u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(100.0), VectorDoubleReplicate(page))), 0.001);
+    EXPECT_NEAR(m_state.scroll().y, 100.0 + page, 0.001);
     model.expect(m_model);
 }
 
@@ -378,16 +377,16 @@ TEST_F(UiTextAreaInputScrollTests, LaterCoalescedThumbUpdateRunsAfterAnInterveni
     ASSERT_TRUE(found);
     const HitTarget thumb = *found;
     const Point origin = Center(thumb.rectangle);
-    const SIMDVectorSingle travel = VectorSubtract(VectorReplicate(thumb.gestureReference.height), VectorReplicate(thumb.rectangle.height));
-    ASSERT_GT(VectorGetX(travel), 0.0f);
+    const f32 travel = thumb.gestureReference.height - thumb.rectangle.height;
+    ASSERT_GT(travel, 0.0f);
     ASSERT_TRUE(send({ .position = origin , .type = InputEventType::PrimaryDown }).pointerConsumed);
     ASSERT_TRUE(wheel(0.0, -1.0, origin));
     ASSERT_EQ(m_context.input().controlActions().size(), 1u);
-    const Point quarter{ origin.x, VectorGetX(VectorMultiplyAddExpression(travel, VectorReplicate(0.25f), VectorReplicate(origin.y))) };
+    const Point quarter{ origin.x, travel * 0.25f + origin.y };
     ASSERT_TRUE(send({ .position = quarter , .type = InputEventType::PointerMove }).pointerConsumed);
     ASSERT_TRUE(send({ .position = quarter , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(frameArea(2u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(thumb.gestureMaximum), VectorDoubleReplicate(0.25))), 0.001);
+    EXPECT_NEAR(m_state.scroll().y, thumb.gestureMaximum * 0.25, 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     model.expect(m_model);

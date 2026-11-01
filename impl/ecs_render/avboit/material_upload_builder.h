@@ -55,7 +55,10 @@ struct AvboitMaterialUploadInputs{
 
 class AvboitMaterialUploadBuilder final : NoCopy{
 public:
-    AvboitMaterialUploadBuilder(Core::GpuTaskGraph& graph, RendererCsgSystem& csgSystem)noexcept;
+    AvboitMaterialUploadBuilder(Core::GpuTaskGraph& graph, RendererCsgSystem& csgSystem)noexcept
+        : m_graph(graph)
+        , m_csgSystem(csgSystem)
+    {}
 
 
 public:

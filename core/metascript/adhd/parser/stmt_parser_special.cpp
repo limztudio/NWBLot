@@ -222,8 +222,15 @@ Stmt* StmtParser::parseVarDeclWithType(TypeRef* varType, const SourceSpan span, 
 }
 
 b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attributes, ParallelCoreKind::Enum& outCore, ParallelPriorityKind::Enum& outPriority){
+    b8 seenCore = false;
+    b8 seenPriority = false;
     for(const ParsedAttribute& attr : attributes){
         if(attr.name == "core"){
+            if(seenCore){
+                m_cursor.error(attr.line, attr.column, "duplicate 'core' attribute on parallel statement");
+                return false;
+            }
+            seenCore = true;
             if(attr.arguments.size() != 1u){
                 m_cursor.error(attr.line, attr.column, "'core' attribute requires exactly one argument (Heavy, Light, MainThread, or Any)");
                 return false;
@@ -234,6 +241,11 @@ b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attri
             }
         }
         else if(attr.name == "priority"){
+            if(seenPriority){
+                m_cursor.error(attr.line, attr.column, "duplicate 'priority' attribute on parallel statement");
+                return false;
+            }
+            seenPriority = true;
             if(attr.arguments.size() != 1u){
                 m_cursor.error(attr.line, attr.column, "'priority' attribute requires exactly one argument (Critical, Normal, or Background)");
                 return false;

@@ -41,7 +41,7 @@ public:
     {}
 };
 
-class RayTracingPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
+class RayTracingPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState{
     friend class Device;
     friend class CommandList;
     friend class ShaderTable;
@@ -78,7 +78,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderTable final : public RefCounter<GraphicsResource>, NoCopy{
+class ShaderTable final : public RefCounter<GraphicsResource>{
     friend class CommandList;
     friend class RayTracingPipeline;
 

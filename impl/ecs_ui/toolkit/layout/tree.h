@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../paint.h"
+#include <impl/ecs_ui/toolkit/paint.h>
 
 #include <impl/ecs_ui/toolkit/layout/types.adhd.h>
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
@@ -25,21 +25,6 @@ NWB_IMPL_UI_BEGIN
 // Build and arrange on one owning UI thread. The supplied arena outlives the tree and its published boxes.
 class LayoutTree final : NoCopy{
 private:
-    struct Node{
-        LayoutNodeDesc description;
-        u32 firstChild = s_LayoutNoParent;
-        u32 lastChild = s_LayoutNoParent;
-        u32 nextSibling = s_LayoutNoParent;
-    };
-
-    struct Work{
-        LayoutBox box;
-        Rect inheritedClip;
-    };
-
-
-private:
-    [[nodiscard]] static b8 IsValidDescription(const LayoutNodeDesc& description)noexcept;
     [[nodiscard]] static SIMDVectorSingle Inset(SIMDVectorSingle rectangle, SIMDVectorSingle padding)noexcept;
 
 
@@ -68,8 +53,8 @@ private:
 
 
 private:
-    PaintVector<Node> m_nodes;
-    PaintVector<Work> m_work;
+    PaintVector<LayoutTreeNode> m_nodes;
+    PaintVector<LayoutTreeWork> m_work;
     PaintVector<LayoutBox> m_boxes;
     PaintVector<LayoutBox> m_stagedBoxes;
     u32 m_maxNodes = 0u;

@@ -16,8 +16,6 @@
 #include <global/thread.h>
 #include <global/timer.h>
 
-#include <logger/server/crash_paths.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,19 +38,11 @@ namespace LoggerServerCrash{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CrashNames = Core::Crash::PackageNames;
+using namespace Core::Crash::PackageNames;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-CrashTestPath StorageDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "storage";
-}
-
-CrashTestPath ArchiveInputDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    return TestCaseDirectory(arena, testGroup) / "input";
-}
 
 CrashTestPath ArchiveFileName(Core::Alloc::GlobalArena& arena, const AStringView stem){
     CrashTestPath fileName(arena, stem);
@@ -60,65 +50,49 @@ CrashTestPath ArchiveFileName(Core::Alloc::GlobalArena& arena, const AStringView
     return fileName;
 }
 
-CrashTestPath ArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return ArchiveInputDirectory(arena, testGroup) / ArchiveFileName(arena, stem);
-}
-
-CrashTestPath ExtractedPackageDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / Log::s_CrashExtractedDirectoryName / stem;
-}
-
-CrashTestPath RawArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / Log::s_CrashRawDirectoryName / ArchiveFileName(arena, stem);
-}
-
-CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
-    return StorageDirectory(arena, testGroup) / Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
-}
-
-void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){
-    char sizeBuffer[32] = {};
-    archive += CrashNames::s_ArchiveFileHeaderPrefix;
+void AppendArchiveFile(const AStringView relativePath, const AStringView content, CrashTestText& archive){
+    Array<char, 32u> sizeBuffer = {};
+    archive += s_ArchiveFileHeaderPrefix;
     archive += relativePath;
     archive += " ";
     archive += FormatDecimal(content.size(), sizeBuffer);
     archive += "\n";
     archive += content;
-    archive += CrashNames::s_ArchiveEntryEndText;
+    archive += s_ArchiveEntryEndText;
 }
 
 void BeginArchiveWithManifest(
-    CrashTestText& archive,
-    Core::Alloc::GlobalArena& arena,
     const AStringView crashId,
     const AStringView platform,
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
     const ManifestEventField::Enum eventField,
-    const ManifestTriggerFields& trigger
+    const ManifestTriggerFields& trigger,
+    Core::Alloc::GlobalArena& arena,
+    CrashTestText& archive
 ){
-    archive += CrashNames::s_ArchiveHeaderText;
-    const CrashTestText manifest = BuildManifest(arena, crashId, platform, event, reasonKind, reasonCode, eventField, trigger);
-    AppendArchiveFile(archive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    archive += s_ArchiveHeaderText;
+    const CrashTestText manifest = BuildManifest(crashId, platform, event, reasonKind, reasonCode, eventField, trigger, arena);
+    AppendArchiveFile(s_ManifestFileName, AStringView(manifest.data(), manifest.size()), archive);
 }
 
 CrashTestText BuildManifest(
-    Core::Alloc::GlobalArena& arena,
     const AStringView crashId,
     const AStringView platform,
     const AStringView event,
     const AStringView reasonKind,
     const u64 reasonCode,
     const ManifestEventField::Enum eventField,
-    const ManifestTriggerFields& trigger
+    const ManifestTriggerFields& trigger,
+    Core::Alloc::GlobalArena& arena
 ){
     CrashTestText manifest(arena);
-    char reasonCodeBuffer[32] = {};
-    char triggerLineBuffer[32] = {};
+    Array<char, 32u> reasonCodeBuffer = {};
+    Array<char, 32u> triggerLineBuffer = {};
     manifest += "{\n";
     manifest += "  \"format\": \"";
-    manifest += CrashNames::s_ManifestFormatValue;
+    manifest += s_ManifestFormatValue;
     manifest += "\",\n";
     manifest += "  \"crash_id\": \"";
     manifest += crashId;
@@ -209,14 +183,14 @@ static b8 ManifestContainsStringValue(Core::Alloc::GlobalArena& arena, const ASt
 
 static b8 TriggerPackageContains(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, const AStringView category, const AStringView expression, const AStringView message, const AStringView file){
     CrashTestText manifest(arena);
-    if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest))
+    if(!ReadTextFile(packageDirectory / s_ManifestFileName, manifest))
         return false;
 
-    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerCategoryKey, category))
+    if(!ManifestContainsStringValue(arena, manifest, s_ManifestTriggerCategoryKey, category))
         return false;
-    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerExpressionKey, expression))
+    if(!ManifestContainsStringValue(arena, manifest, s_ManifestTriggerExpressionKey, expression))
         return false;
-    if(!ManifestContainsStringValue(arena, manifest, CrashNames::s_ManifestTriggerMessageKey, message))
+    if(!ManifestContainsStringValue(arena, manifest, s_ManifestTriggerMessageKey, message))
         return false;
     if(!file.empty() && !Contains(manifest, file))
         return false;
@@ -262,19 +236,11 @@ Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalAren
     }
 }
 
-void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& arena, const AStringView crashId){
-    BeginArchiveWithManifest(archive, arena, crashId, "linux", "crash", "signal", 11u);
-    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n");
-    AppendArchiveFile(archive, CrashNames::s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n");
-    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
-}
-
-b8 Contains(const AStringView text, const AStringView needle)noexcept{
-    return text.find(needle) != AStringView::npos;
-}
-
-b8 ContainsMessage(const TStringView text, const TStringView needle)noexcept{
-    return text.find(needle) != TStringView::npos;
+void BuildLinuxCrashArchive(const AStringView crashId, Core::Alloc::GlobalArena& arena, CrashTestText& archive){
+    BeginArchiveWithManifest(crashId, "linux", "crash", "signal", 11u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
+    AppendArchiveFile(s_CpuContextFileName, "fault_address=0\ninstruction_pointer=4198964\nstack_pointer=0\nframe_pointer=0\n", archive);
+    AppendArchiveFile(s_CallstackFileName, "#0 0x0000000000401234\n#1 0x0000000000401240\n", archive);
+    AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 }
 
 static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const CrashTestPath& basePath, const AStringView suffix){

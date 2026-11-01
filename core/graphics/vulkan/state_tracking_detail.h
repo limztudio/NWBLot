@@ -27,6 +27,8 @@ inline constexpr TStringView s_InitialStateUnknownReason = NWB_TEXT("initial sta
 inline constexpr TStringView s_SubresourceRangeOutsideTextureReason = NWB_TEXT("subresource range is empty or outside the texture");
 inline constexpr TStringView s_DestinationQueueUnavailableReason = NWB_TEXT("destination queue is unavailable");
 
+void NormalizeBarrierScopeForQueueCapabilities(GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept;
+
 [[nodiscard]] VkImageMemoryBarrier2 BuildTextureStateBarrier(VkImage image, VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources, ResourceStates::Mask oldState, ResourceStates::Mask stateBits, b8 rayTracingStageAvailable)noexcept;
 
 [[nodiscard]] ResourceStates::Mask NormalizeOwnershipState(ResourceStates::Mask state)noexcept;
@@ -62,8 +64,6 @@ inline constexpr TStringView s_DestinationQueueUnavailableReason = NWB_TEXT("des
 [[nodiscard]] b8 NeedsResourceStateBarrier(ResourceStates::Mask oldState, ResourceStates::Mask stateBits, b8 uavBarrierEnabled, b8 forceMemoryDependency)noexcept;
 
 [[nodiscard]] b8 ImageBarrierOverlapsTextureSubresources(const VkImageMemoryBarrier2& barrier, VkImage image, VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources)noexcept;
-
-void NormalizeBarrierScopeForQueueCapabilities(GpuQueueCapability::Mask capabilities, VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask)noexcept;
 
 void AppendTextureStateBarrier(
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& barriers,

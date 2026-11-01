@@ -6,6 +6,8 @@
 
 
 #include <impl/ecs_ui/toolkit/global.h>
+#include <impl/ecs_ui/toolkit/paint_types.adhd.h>
+#include <impl/ecs_ui/toolkit/text/types.adhd.h>
 #include <impl/assets_font_atlas/asset.h>
 
 #include <global/expected.h>
@@ -22,37 +24,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SdfMaxChannelCount = 4u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SdfAtlasPageBinding{
-    Core::Assets::AssetRef<Font> font;
-    Sha256Digest fontSha256;
-    Sha256Digest pixelsSha256;
-    u64 fontGeneration = 0u;
-    u64 atlasIdentity = 0u;
-    u64 generation = 0u;
-    u32 index = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 channelCount = s_SdfMaxChannelCount;
-    u32 spreadPixels = 0u;
-    u32 distanceEncoding = s_FontAtlasDistanceEncoding;
-};
-
-[[nodiscard]] inline b8 SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second)noexcept{
-    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index;
-}
-
-[[nodiscard]] b8 operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // One to four channels store independent linear SDF pages.
 // Published pixels and their binding never change.
 // A replacement/repack uses a fresh atlas identity; the caller's arena outlives snapshots and GPU consumers.
@@ -62,7 +33,10 @@ public:
 
 
 public:
-    SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels)noexcept;
+    SdfAtlasPage(const SdfAtlasPageBinding& binding, Pixels&& pixels)noexcept
+        : m_binding(binding)
+        , m_pixels(Move(pixels))
+    {}
 
 
 public:

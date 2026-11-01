@@ -125,7 +125,7 @@ b8 UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
     for(u32 i = 0u; i < 3u; ++i){
         const SIMDVectorSingle factors = VectorMultiplyAddExpression(VectorSet(static_cast<f32>(i), 0.0f, 0.0f, 0.0f), VectorSet(0.08f, 0.0f, 0.0f, 0.0f), VectorSet(0.64f, 0.84f, 0.05f, 0.06f));
         const Impl::Ui::Rect rectangle = StoreSmokeRect(VectorMultiply(extent, factors));
-        const Impl::Ui::Rect uv{ VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(i)), VectorReplicate(3.0f))), 0.0f, 1.0f / 3.0f, 1.0f };
+        const Impl::Ui::Rect uv{ static_cast<f32>(i) / 3.0f, 0.0f, 1.0f / 3.0f, 1.0f };
         if(!paint.drawGlyph(m_coverage, rectangle, uv, tint))
             return false;
     }

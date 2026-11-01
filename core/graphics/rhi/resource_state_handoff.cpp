@@ -43,6 +43,15 @@ namespace __hidden_resource_state_handoff{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void CommandListResourceStateHandoff::reset()noexcept{
+    m_textureStates.clear();
+    m_bufferStates.clear();
+    m_permanentTextureStates.clear();
+    m_permanentBufferStates.clear();
+    m_deviceGeneration = 0u;
+    m_valid = false;
+}
+
 b8 CommandListResourceStateHandoff::buildResourceSubset(const CommandListResourceStateHandoff& source, Texture* const* textures, const usize textureCount, Buffer* const* buffers, const usize bufferCount, Alloc::ScratchArena& scratchArena){
     if(!source.valid() || source.m_deviceGeneration == 0u || (textureCount != 0u && !textures) || (bufferCount != 0u && !buffers))
         return false;
@@ -403,10 +412,6 @@ b8 CommandListResourceStateHandoff::hasPendingBufferReleases()const noexcept{
             return true;
     }
     return false;
-}
-
-b8 CommandListResourceStateHandoff::empty()const noexcept{
-    return m_textureStates.empty() && m_bufferStates.empty() && m_permanentTextureStates.empty() && m_permanentBufferStates.empty();
 }
 
 

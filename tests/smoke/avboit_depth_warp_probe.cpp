@@ -7,7 +7,7 @@
 
 #include <loader/project_entry.h>
 
-#include <impl/assets_graphics/transparent/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
 
@@ -63,7 +63,7 @@ struct ProbeOracle{
     return (probe.coverage[slice / 32u] & (1u << (slice % 32u))) != 0u;
 }
 
-static void SetOccupied(ProbeCase& probe, const u32 slice)noexcept{
+static void SetOccupied(const u32 slice, ProbeCase& probe)noexcept{
     if(slice < probe.virtualCount)
         probe.coverage[slice / 32u] |= 1u << (slice % 32u);
 }
@@ -147,7 +147,7 @@ static void BuildCases(Vector<ProbeCase, Core::Alloc::GlobalArena>& cases){
                         || (pattern == 8u && slice + 64u >= virtualCount)
                         || (pattern == 9u && slice == 0u);
                     if(occupied)
-                        SetOccupied(probe, slice);
+                        SetOccupied(slice, probe);
                 }
                 PoisonUnusedCoverage(probe);
                 cases.push_back(probe);
@@ -184,7 +184,7 @@ static void BuildCases(Vector<ProbeCase, Core::Alloc::GlobalArena>& cases){
             random ^= random >> s_XorShift2;
             random ^= random << s_XorShift3;
             if(random % 8u < 1u + index % 7u)
-                SetOccupied(probe, slice);
+                SetOccupied(slice, probe);
         }
         PoisonUnusedCoverage(probe);
         cases.push_back(probe);
@@ -217,8 +217,7 @@ public:
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        static_cast<void>(context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         for(u32 index = 0u; index < payload.caseCount; ++index){
             const ProbeCase& probe = payload.cases[index];
             commandList.setBufferState(payload.coverage.get(), Core::ResourceStates::CopyDest);
@@ -298,7 +297,7 @@ public:
         }
     }
     Core::GpuTaskDesc desc;
-    desc.setIdentity(s_ProbeName).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses.data(), uses.size());
+    desc.setIdentity(s_ProbeName).setMarkerLabel("AVBOIT depth warp boundary probe").setResourceUses(uses);
     const auto taskResult = graph.addTask<ProbeBatchTask>(desc, ProbeBatchTask::Payload(payload));
     if(!taskResult){
         NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: graph task declaration failed at case {}"), payload.firstCase);
@@ -318,7 +317,7 @@ public:
 
 class DepthWarpProbeProject final : public IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static Expected<Core::BufferHandle> CreateBuffer(Core::GraphicsRuntime& graphics, const Name& name, const u32 words, const b8 readback){
+    [[nodiscard]] static Expected<Core::BufferHandle> CreateBuffer(const Name& name, const u32 words, const b8 readback, Core::GraphicsRuntime& graphics){
         Core::BufferDesc desc;
         desc.setDebugName(name).setByteSize(words * sizeof(u32)).setStructStride(sizeof(u32)).setCanHaveUAVs(!readback).setCpuAccess(readback ? Core::CpuAccessMode::Read : Core::CpuAccessMode::None).enableAutomaticStateTracking(Core::ResourceStates::CopyDest);
         return graphics.createBuffer(desc);
@@ -327,9 +326,9 @@ private:
 
 public:
     explicit DepthWarpProbeProject(ProjectRuntimeContext& context)noexcept
-        : m_context(context)
+        : m_sceneSubsystems(context.objectArena)
         , m_cases(context.objectArena)
-        , m_sceneSubsystems(context.objectArena)
+        , m_context(context)
     {}
 
 
@@ -354,14 +353,14 @@ public:
         if(!depthWarpShaderRef.valid())
             return false;
         if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(
-            m_shader,
             depthWarpShaderRef.name(),
             Core::ShaderArchive::s_DefaultVariant,
             s_ProbeName,
+            NWB_TEXT("AvboitDepthWarpProbe"),
             graphics,
             m_context.assetManager,
             m_context.shaderPathResolver,
-            NWB_TEXT("AvboitDepthWarpProbe")
+            m_shader
         ))
             return false;
         Core::BindingLayoutDesc layoutDesc(m_context.objectArena);
@@ -382,22 +381,22 @@ public:
             m_pipeline = Move(*pipelineResult);
         else
             m_pipeline.reset();
-        auto coverageResult = CreateBuffer(graphics, Name("DepthWarpProbeCoverage"), s_CoverageWords, false);
+        auto coverageResult = CreateBuffer(Name("DepthWarpProbeCoverage"), s_CoverageWords, false, graphics);
         if(coverageResult)
             m_coverage = Move(*coverageResult);
         else
             m_coverage.reset();
-        auto warpResult = CreateBuffer(graphics, Name("DepthWarpProbeWarp"), s_WarpWords, false);
+        auto warpResult = CreateBuffer(Name("DepthWarpProbeWarp"), s_WarpWords, false, graphics);
         if(warpResult)
             m_warp = Move(*warpResult);
         else
             m_warp.reset();
-        auto controlResult = CreateBuffer(graphics, Name("DepthWarpProbeControl"), s_ControlWords, false);
+        auto controlResult = CreateBuffer(Name("DepthWarpProbeControl"), s_ControlWords, false, graphics);
         if(controlResult)
             m_control = Move(*controlResult);
         else
             m_control.reset();
-        auto readbackResult = CreateBuffer(graphics, Name("DepthWarpProbeReadback"), s_BatchSize * s_ResultWords, true);
+        auto readbackResult = CreateBuffer(Name("DepthWarpProbeReadback"), s_BatchSize * s_ResultWords, true, graphics);
         if(readbackResult)
             m_readback = Move(*readbackResult);
         else
@@ -441,8 +440,7 @@ public:
         return true;
     }
 
-    virtual b8 onUpdate(const f32 delta)override{
-        static_cast<void>(delta);
+    virtual b8 onUpdate(const f32)override{
         if(m_completed)
             return true;
         ProbeBatchTask::Payload payload{ m_coverage, m_warp, m_control, m_slots, m_readback, m_pipeline, m_context.graphics.getDevice().getDescriptorHeap(), nullptr, 0u, 0u, m_descriptors[3].slot() };
@@ -462,9 +460,9 @@ public:
             if(!compareBatch(payload))
                 return false;
         }
-        if(!RunAvboitIntegrationProbe(m_context, m_sceneSubsystems))
+        if(!RunAvboitIntegrationProbe(m_sceneSubsystems, m_context))
             return false;
-        if(!RunRefractionTileProbe(m_context, m_sceneSubsystems))
+        if(!RunRefractionTileProbe(m_sceneSubsystems, m_context))
             return false;
         m_completed = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitDepthWarpProbe: passed {} cases with full LUT/control comparison and sentinel tails"), s_TotalCaseCount);
@@ -516,9 +514,9 @@ private:
 
 
 private:
-    ProjectRuntimeContext& m_context;
-    Vector<ProbeCase, Core::Alloc::GlobalArena> m_cases;
     Impl::ActiveSceneSubsystems m_sceneSubsystems;
+    Array<Core::GpuDescriptorHandle, 4u> m_descriptors{};
+    Vector<ProbeCase, Core::Alloc::GlobalArena> m_cases;
     Core::ShaderHandle m_shader;
     Core::BindingLayoutHandle m_pushLayout;
     Core::ComputePipelineHandle m_pipeline;
@@ -527,7 +525,7 @@ private:
     Core::BufferHandle m_control;
     Core::BufferHandle m_slots;
     Core::BufferHandle m_readback;
-    Array<Core::GpuDescriptorHandle, 4u> m_descriptors{};
+    ProjectRuntimeContext& m_context;
     b8 m_completed = false;
 };
 

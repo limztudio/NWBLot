@@ -42,13 +42,13 @@ int Run(const int argc, char** argv){
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = coreCount > s_MinParallelCoreCount ? coreCount - s_MinParallelCoreCount : s_NoWorkerThreads;
     NWB::Core::CpuTaskScheduler cpuScheduler(workerCount);
+    NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::UtilityDetail::s_UtilityScratch);
 
     b8 prompted = false;
-    const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, prompted);
+    const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, scratchArena, prompted);
     cpuScheduler.wait();
     if(prompted && result >= s_PromptSuccessThreshold){
         NWB_COUT << "Press Enter to exit...";
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::FbxToNwb::UtilityDetail::s_UtilityScratch);
         NWB::FbxToNwb::ScratchString line(scratchArena);
         if(!ReadTextLine(NWB_CIN, line))
             NWB_COUT << "\n";

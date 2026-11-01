@@ -25,12 +25,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMaterialSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Material asset caches retain descriptor owners for patched heap slots.
 struct RendererMaterialResourceState{
     HashMap<Name, UniquePtr<TextureGpuResource>, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> textureAssetCache;
@@ -49,18 +43,21 @@ public:
 
 
 class RendererMaterialState final : NoCopy{
-    friend class RendererMaterialSystem;
+public:
+    explicit RendererMaterialState(Core::Alloc::GlobalArena& arena)
+        : m_surfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_resourceState(arena)
+        , m_pipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
+        , m_instanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
+        , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    {}
 
 
 public:
-    explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);
-
-
-private:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     Core::BindingLayoutHandle m_materialPassBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BufferHandle m_instanceBuffer;

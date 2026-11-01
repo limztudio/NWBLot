@@ -38,16 +38,9 @@ struct PayloadDestroyTask{
         explicit Payload(u32* const value)noexcept
             : destructionCount(value)
         {}
-        Payload(Payload&& other)noexcept
-            : destructionCount(other.destructionCount)
-        {
-            other.destructionCount = nullptr;
-        }
+        Payload(Payload&& other)noexcept;
         Payload(const Payload&) = delete;
-        ~Payload()noexcept{
-            if(destructionCount)
-                ++*destructionCount;
-        }
+        ~Payload()noexcept;
     };
 };
 
@@ -55,28 +48,22 @@ struct PacketLifecycleTask{
     struct Payload{
         u32* acceptedCount = nullptr;
         u32* discardedCount = nullptr;
-        Graphics::GpuQueueCapability::Mask requiredCapabilities = Graphics::GpuQueueCapability::None;
+        Core::GpuQueueCapability::Mask requiredCapabilities = Core::GpuQueueCapability::None;
     };
 
 
 public:
-    static Graphics::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{ return Graphics::GpuTaskCommandRequirements{ payload.requiredCapabilities }; }
+    static Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{ return Core::GpuTaskCommandRequirements{ payload.requiredCapabilities }; }
 
-    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
-        if(payload.acceptedCount)
-            ++*payload.acceptedCount;
-    }
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
 
-    static void Discarded(Payload& payload)noexcept{
-        if(payload.discardedCount)
-            ++*payload.discardedCount;
-    }
+    static void Discarded(Payload& payload)noexcept;
 };
 
 struct ReentrantCompileDuringDeclarationTask{
     struct Payload{
-        const Graphics::GpuTaskGraph* graph = nullptr;
-        Graphics::GpuTaskGraphAnalysis* analysis = nullptr;
+        const Core::GpuTaskGraph* graph = nullptr;
+        Core::GpuTaskGraphAnalysis* analysis = nullptr;
         Core::Alloc::ScratchArena* scratchArena = nullptr;
         b8* compileAttempted = nullptr;
         b8* compileSucceeded = nullptr;
@@ -85,41 +72,17 @@ struct ReentrantCompileDuringDeclarationTask{
     public:
         Payload()noexcept = default;
         Payload(const Payload&) = delete;
-        Payload(Payload&& other)
-            : graph(other.graph)
-            , analysis(other.analysis)
-            , scratchArena(other.scratchArena)
-            , compileAttempted(other.compileAttempted)
-            , compileSucceeded(other.compileSucceeded)
-        {
-            other.graph = nullptr;
-            other.analysis = nullptr;
-            other.scratchArena = nullptr;
-            other.compileAttempted = nullptr;
-            other.compileSucceeded = nullptr;
-            if(!graph || !analysis || !scratchArena)
-                return;
-
-            if(compileAttempted)
-                *compileAttempted = true;
-            const Graphics::GpuTaskGraphCompiler compiler;
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
-            b8 succeeded = false;
-            if(declarations.valid())
-                succeeded = compiler.analyze(declarations, *scratchArena, *analysis);
-            if(compileSucceeded)
-                *compileSucceeded = succeeded;
-        }
+        Payload(Payload&& other);
     };
 };
 
 struct ReentrantTelemetryDuringDeclarationState{
-    const Graphics::GpuTaskGraph* graph = nullptr;
-    const Graphics::GpuTaskGraphAnalysis* analysis = nullptr;
-    const Graphics::GpuTaskGraphQueueAssignments* assignments = nullptr;
-    const Graphics::GpuCompiledGraph* compiledGraph = nullptr;
-    const Graphics::GpuGraphSubmissionTransaction* transaction = nullptr;
-    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker* tracker = nullptr;
+    const Core::GpuTaskGraph* graph = nullptr;
+    const Core::GpuTaskGraphAnalysis* analysis = nullptr;
+    const Core::GpuTaskGraphQueueAssignments* assignments = nullptr;
+    const Core::GpuCompiledGraph* compiledGraph = nullptr;
+    const Core::GpuGraphSubmissionTransaction* transaction = nullptr;
+    Core::GpuTaskGraphQueueAssignmentTelemetryTracker* tracker = nullptr;
     Telemetry::FrameGraphBuilder* builder = nullptr;
     Core::Alloc::ScratchArena* scratchArena = nullptr;
     b8 trackerValidationAttempted = false;
@@ -140,28 +103,12 @@ struct ReentrantTelemetryDuringDeclarationTask{
             : state(&value)
         {}
         Payload(const Payload&) = delete;
-        Payload(Payload&& other)
-            : state(other.state)
-        {
-            other.state = nullptr;
-            if(!state || !state->graph || !state->analysis || !state->assignments || !state->compiledGraph || !state->transaction || !state->tracker || !state->builder || !state->scratchArena)
-                return;
-
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations = Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
-            const Graphics::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
-            state->trackerValidationAttempted = true;
-            state->trackerValidationSucceeded = state->tracker->validFor(declarations, *state->assignments, compiledPlan);
-            state->trackerUpdateAttempted = true;
-            state->trackerUpdateSucceeded = state->tracker->update(declarations, *state->assignments, compiledPlan, *state->transaction, *state->scratchArena);
-            const Graphics::GpuTaskGraphTelemetryOptions options{ .queueAssignments = state->assignments, .compiledPlan = &compiledPlan, .queueAssignmentTelemetry = state->tracker, };
-            state->appendAttempted = true;
-            state->appendSucceeded = declarations.appendFrameGraphTelemetry(*state->builder, *state->analysis, *state->scratchArena, options);
-        }
+        Payload(Payload&& other);
     };
 };
 
 struct NativeRecordProbeTask{
-    static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Graphics };
 
 
 public:
@@ -171,11 +118,7 @@ public:
 
 
 public:
-    static b8 Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
-        if(payload.recordCount)
-            ++*payload.recordCount;
-        return true;
-    }
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept;
 };
 
 struct MalformedLifecycleTask{
@@ -187,23 +130,11 @@ struct MalformedLifecycleTask{
 
 
 public:
-    static b8 Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept{
-        static_cast<void>(lookalike);
-        if(payload.recordCount)
-            ++*payload.recordCount;
-        return true;
-    }
+    static b8 Record(const Payload& payload, Core::CommandList&, const Core::GpuTaskRecordContext&, const u32 lookalike = 0u)noexcept;
 
-    static b8 Accepted(Payload& payload, const Graphics::QueueSubmissionToken&)noexcept{
-        if(payload.acceptedCount)
-            ++*payload.acceptedCount;
-        return true;
-    }
+    static b8 Accepted(Payload& payload, const Core::QueueSubmissionToken&)noexcept;
 
-    static void Discarded(const Payload& payload)noexcept{
-        if(payload.discardedCount)
-            ++*payload.discardedCount;
-    }
+    static void Discarded(const Payload& payload)noexcept;
 };
 
 

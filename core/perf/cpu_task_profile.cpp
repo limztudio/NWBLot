@@ -68,9 +68,9 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
     if(remaining == 0u)
         return;
     const b8 enabled = timing.enabled();
-    CpuTaskProfileEvent events[__hidden_cpu_task_profile::s_ReadBatchSize];
+    Array<CpuTaskProfileEvent, __hidden_cpu_task_profile::s_ReadBatchSize> events;
     while(remaining != 0u){
-        const usize count = scheduler.readProfileEvents(events, Min(remaining, __hidden_cpu_task_profile::s_ReadBatchSize));
+        const usize count = scheduler.readProfileEvents(events.data(), Min(remaining, __hidden_cpu_task_profile::s_ReadBatchSize));
         if(count == 0u)
             break;
         remaining -= count;
@@ -78,8 +78,8 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
             continue;
         for(usize index = 0u; index < count; index += __hidden_cpu_task_profile::s_SecondsBatchLanes){
             const usize batchCount = Min(count - index, __hidden_cpu_task_profile::s_SecondsBatchLanes);
-            const Name* scopeNames[__hidden_cpu_task_profile::s_SecondsBatchLanes] = {};
-            f64 nanoseconds[__hidden_cpu_task_profile::s_SecondsBatchLanes] = {};
+            Array<const Name*, __hidden_cpu_task_profile::s_SecondsBatchLanes> scopeNames{};
+            Array<f64, __hidden_cpu_task_profile::s_SecondsBatchLanes> nanoseconds{};
             for(usize lane = 0u; lane < batchCount; ++lane){
                 const CpuTaskProfileEvent& event = events[index + lane];
                 scopeNames[lane] = __hidden_cpu_task_profile::TimingScope(event);

@@ -7,7 +7,9 @@
 
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_csg/shape_types.adhd.h>
-#include <impl/assets_csg/shape_id.h>
+#include <impl/assets_csg/shape_id.adhd.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,6 +21,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
+[[nodiscard]] Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept;
+
+
 // Call-scoped scratch; retained scene/GPU values use Float storage.
 struct alignas(SIMDVectorSingle) CsgShapeBounds{
     SIMDVectorSingle minBounds = VectorZero();
@@ -27,7 +33,7 @@ struct alignas(SIMDVectorSingle) CsgShapeBounds{
 };
 static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
-using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize);
+using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
 
 struct CsgShapeTypeDesc{
     using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
@@ -88,7 +94,11 @@ private:
 
 
 public:
-    explicit CsgShapeRegistry(Core::Alloc::GlobalArena& arena);
+    explicit CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
+        : m_shapeTypes(arena)
+        , m_shapeTypeIds(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_shapeTypeIndices(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), arena)
+    {}
 
 
 public:
@@ -105,8 +115,10 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(const Name& name, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize)const;
-    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize)const;
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(const Name& name, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)const{
+        return buildShapeBounds(findShapeTypeId(name), shapeToWorld, parameterBytes);
+    }
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)const;
 
 
 private:

@@ -48,10 +48,10 @@ static u64 BuildDefaultCookKeyHash(const Name& virtualPath, const u64 payloadSiz
     return hash;
 }
 
-static AssetVolumePayloadIdentity BuildPayloadIdentity(const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
+static AssetVolumePayloadIdentity BuildPayloadIdentity(const Name& virtualPath, const Span<const u8> payloadBytes, const u64 cookKeyHash){
     AssetVolumePayloadIdentity identity;
-    identity.payloadSize = static_cast<u64>(payloadByteCount);
-    identity.payloadHash = ComputeFnv64Bytes(payloadBytes, payloadByteCount);
+    identity.payloadSize = static_cast<u64>(payloadBytes.size());
+    identity.payloadHash = ComputeFnv64Bytes(payloadBytes.data(), payloadBytes.size());
     identity.cookKeyHash = cookKeyHash != 0u ? cookKeyHash : BuildDefaultCookKeyHash(virtualPath, identity.payloadSize, identity.payloadHash);
     return identity;
 }
@@ -64,7 +64,7 @@ static b8 ValidatePayloadIdentity(const Name& virtualPath, const AssetVolumePayl
     return false;
 }
 
-b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 plannedFileCount){
+b8 ReserveAssetVolumePackManifest(const u64 plannedFileCount, AssetVolumePackManifest& manifest){
     manifest.plannedFileCount = plannedFileCount;
     if(plannedFileCount > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: planned manifest entry count exceeds container capacity"));
@@ -75,15 +75,15 @@ b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 p
     return true;
 }
 
-b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, const usize payloadByteCount, const u64 cookKeyHash){
+b8 AppendPayloadBytesToManifest(const Name& virtualPath, const Span<const u8> payloadBytes, AssetVolumePackManifest& manifest, const u64 cookKeyHash){
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
-    if(payloadByteCount > 0u && payloadBytes == nullptr){
+    if(!payloadBytes.empty() && payloadBytes.data() == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: payload manifest entry '{}' has null bytes"), ConvertString(virtualPath.resolvedText()));
         return false;
     }
 
-    const AssetVolumePayloadIdentity identity = BuildPayloadIdentity(virtualPath, payloadBytes, payloadByteCount, cookKeyHash);
+    const AssetVolumePayloadIdentity identity = BuildPayloadIdentity(virtualPath, payloadBytes, cookKeyHash);
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
 
@@ -92,8 +92,8 @@ b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& v
     AssetVolumePackEntry& entry = manifest.entries.back();
     entry.virtualPath = virtualPath;
     entry.identity = identity;
-    entry.payloadBytes.reserve(payloadByteCount);
-    AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes, payloadByteCount);
+    entry.payloadBytes.reserve(payloadBytes.size());
+    AppendBytesNoReserveUnchecked(entry.payloadBytes, payloadBytes.data(), payloadBytes.size());
     return true;
 }
 

@@ -23,37 +23,8 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE b8 HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
-    return pose && HasSkeletonPoseData(*pose);
-}
-
-[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, const b8 hasInverseBind, const SIMDMatrix& inverseBind, const f32 inverseBindDeterminantEpsilon)noexcept{
-    SIMDMatrix matrix = poseJoint;
-    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return MakeUnexpected(Failure{});
-    if(!hasInverseBind)
-        return matrix;
-    if(!MatrixIsInvertibleAffine(inverseBind, s_SkeletonAffineEpsilon, inverseBindDeterminantEpsilon))
-        return MakeUnexpected(Failure{});
-
-    matrix = MatrixMultiply(matrix, inverseBind);
-    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return MakeUnexpected(Failure{});
-    return matrix;
-}
-
-[[nodiscard]] NWB_INLINE Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept{
-    SIMDMatrix matrix = localJoint;
-    if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-        return MakeUnexpected(Failure{});
-
-    if(parentJoint){
-        matrix = MatrixMultiply(*parentJoint, matrix);
-        if(!MatrixIsInvertibleAffine(matrix, s_SkeletonAffineEpsilon, s_SkeletonJointDeterminantEpsilon))
-            return MakeUnexpected(Failure{});
-    }
-    return matrix;
-}
+[[nodiscard]] Expected<SIMDMatrix> ResolveSkinningJointMatrix(const SIMDMatrix& poseJoint, b8 hasInverseBind, const SIMDMatrix& inverseBind, f32 inverseBindDeterminantEpsilon)noexcept;
+[[nodiscard]] Expected<SIMDMatrix> ResolveSkeletonPoseJointMatrix(const SIMDMatrix& localJoint, const SIMDMatrix* parentJoint)noexcept;
 
 template<typename JointMatrixVector>
 [[nodiscard]] inline Expected<u32> BuildStoredJointPaletteFromSkeletonPose(const SkeletonPoseComponent& pose, JointMatrixVector& outJointPalette)noexcept(
@@ -64,14 +35,12 @@ template<typename JointMatrixVector>
 ){
     outJointPalette.clear();
 
-    if(!HasSkeletonPose(&pose))
+    if(!HasSkeletonPoseData(pose))
         return static_cast<u32>(SkeletonSkinningMode::LinearBlend);
-    if(!ValidSkeletonSkinningMode(pose.skinningMode))
+    if(!ValidSkeletonPoseTopology(pose))
         return MakeUnexpected(Failure{});
 
     const usize jointCount = pose.localJoints.size();
-    if(jointCount == 0u || pose.parentJoints.size() != jointCount || jointCount > static_cast<usize>(Limit<u32>::s_Max))
-        return MakeUnexpected(Failure{});
 
     outJointPalette.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
@@ -79,9 +48,6 @@ template<typename JointMatrixVector>
         SIMDMatrix parentJointMatrix{};
         const SIMDMatrix* parentJointMatrixPtr = nullptr;
         if(parentJoint != s_SkeletonRootParent){
-            if(parentJoint >= jointIndex)
-                return MakeUnexpected(Failure{});
-
             parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
             parentJointMatrixPtr = &parentJointMatrix;
         }

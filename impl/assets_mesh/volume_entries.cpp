@@ -10,8 +10,8 @@
 
 #include "cook.h"
 #include "skin_cook.h"
-#include "binary_payload.h"
-#include <impl/assets_mesh/subsystem.adhd.h>
+#include "binary_payload_io.h"
+#include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <impl/assets_subsystem/cook.h>
 
@@ -35,26 +35,6 @@ namespace __hidden_assets_mesh_volume_entries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<MeshCookEntry> ParseMeshDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseMeshCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.cpuScheduler, context.scratchArena);
-}
-
-static Expected<MeshCookEntry> ParseMeshValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<SkinCookEntry> ParseSkinDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<SkinCookEntry> ParseSkinValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
-}
-
 static b8 ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto meshRef = Core::Assets::ReadMetadataAssetRefField<Mesh>(context.nwbFilePath, context.asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
     if(!meshRef)
@@ -69,13 +49,27 @@ static b8 ExtractSkinDependencies(const Core::Assets::CookDependencyItemContext&
 
 static b8 RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return
-        Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(registry, MeshBinaryPayload::s_MeshAssetKindLabel, &ParseMeshDocument, &ParseMeshValue, &BuildMeshAsset)
+        Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
+            MeshBinaryPayload::s_MeshAssetKindLabel,
+            [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+                return ParseMeshCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.cpuScheduler, context.scratchArena);
+            },
+            [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+                return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.cpuScheduler, context.scratchArena);
+            },
+            &BuildMeshAsset,
+            registry
+        )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
-            registry,
             s_SkinAssetKindLabel,
-            &ParseSkinDocument,
-            &ParseSkinValue,
-            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); }
+            [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+                return ParseSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+            },
+            [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+                return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena);
+            },
+            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSkinAsset(entry, arena); },
+            registry
         )
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<SkinningSubsystem>(registry)
     ;

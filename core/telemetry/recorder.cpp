@@ -23,16 +23,12 @@ namespace __hidden_telemetry_recorder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 TimestampNanoseconds()noexcept{
-    return DurationInNS<u64>(TimerNow());
-}
-
 [[nodiscard]] static EventHeader MakeEventHeader(const EventKind::Enum kind, const u64 frameIndex, const usize payloadBytes, const u32 streamId)noexcept{
     EventHeader header;
     header.kind = kind;
     header.streamId = streamId;
     header.frameIndex = frameIndex;
-    header.timestampNanoseconds = TimestampNanoseconds();
+    header.timestampNanoseconds = DurationInNS<u64>(TimerNow());
     header.payloadBytes = payloadBytes;
     return header;
 }
@@ -59,11 +55,6 @@ const EventRecord* EventView::eventAt(const usize index)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Recorder::EventSlotLease::EventSlotLease(Recorder& recorder)noexcept
-    : m_recorder(recorder)
-    , m_lock(recorder.m_mutex)
-{}
-
 Recorder::EventSlotLease::~EventSlotLease()noexcept{
     if(!m_slot)
         return;
@@ -75,10 +66,6 @@ Recorder::EventSlotLease::~EventSlotLease()noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Recorder::~Recorder()noexcept{
-    releaseAvailableSlotsUnlocked();
-}
 
 void Recorder::setCaptureOptions(const CaptureOptions& options){
     NothrowScopedLock lock(m_mutex);
@@ -216,7 +203,7 @@ void Recorder::prepareDiagnosticSlotsUnlocked(){
     m_diagnosticPrepared = true;
 }
 
-void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const NotNull<const u8*> payload, const usize payloadBytes, const u32 streamId)noexcept{
+void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const Span<const u8> payload, const u32 streamId)noexcept{
     if(!m_diagnosticCaptureEnabled.load(MemoryOrder::acquire))
         return;
     if(!m_mutex.try_lock()){
@@ -226,7 +213,8 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const NotNull<cons
     ScopeExit unlock([this]()noexcept{ m_mutex.unlock(); });
     if(!m_capture.diagnosticEnabled())
         return;
-    if(payloadBytes > s_DiagnosticCapturePayloadCapacity || !m_diagnosticAvailableSlots || m_events.size() == m_events.capacity()){
+    const usize payloadBytes = payload.size();
+    if((payloadBytes != 0u && !payload.data()) || payloadBytes > s_DiagnosticCapturePayloadCapacity || !m_diagnosticAvailableSlots || m_events.size() == m_events.capacity()){
         dropDiagnosticCapture();
         return;
     }
@@ -239,15 +227,11 @@ void Recorder::recordCapturedDiagnostic(const u64 frameIndex, const NotNull<cons
     }
     // Both capacities were admitted before publication. Byte initialization and owning-pointer movement cannot throw.
     destination.resize(payloadBytes);
-    NWB_MEMCPY(destination.data(), destination.size(), payload.get(), payloadBytes);
+    NWB_MEMCPY(destination.data(), destination.size(), payload.data(), payloadBytes);
     available.record.header = __hidden_telemetry_recorder::MakeEventHeader(EventKind::Diagnostic, frameIndex, payloadBytes, streamId);
     m_diagnosticAvailableSlots = available.nextAvailable;
     available.nextAvailable = nullptr;
     m_events.push_back(EventSlotPtr(&available, EventSlotPtr::deleter_type(m_arena)));
-}
-
-void Recorder::dropDiagnosticCapture()noexcept{
-    m_droppedDiagnosticCount.fetch_add(1u, MemoryOrder::relaxed);
 }
 
 void Recorder::recycleSlotUnlocked(EventSlotPtr&& slot)noexcept{

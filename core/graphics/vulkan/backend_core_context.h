@@ -13,9 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 #include <core/common/log.h>
@@ -167,44 +166,9 @@ public:
     [[nodiscard]] const u32* data()const noexcept{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
 };
 
-inline QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
-    QueueFamilySharingInfo result;
-    const u8 sharingBits = static_cast<u8>(sharing);
-    const auto appendFamily = [&result](const i32 familyIndex)noexcept{
-        if(familyIndex == s_InvalidQueueFamilyIndex)
-            return;
-        for(u32 index = 0u; index < result.familyIndexCount; ++index){
-            if(result.familyIndices[index] == static_cast<u32>(familyIndex))
-                return;
-        }
-        NWB_ASSERT(result.familyIndexCount < result.familyIndices.size());
-        result.familyIndices[result.familyIndexCount] = static_cast<u32>(familyIndex);
-        ++result.familyIndexCount;
-    };
+[[nodiscard]] QueueFamilySharingInfo ResolveQueueFamilySharing(ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept;
 
-    if(sharingBits & static_cast<u8>(ResourceQueueSharing::Graphics)){
-        appendFamily(context.graphicsQueueFamilyIndex);
-        appendFamily(context.auxiliaryGraphicsQueueFamilyIndex);
-    }
-    if((sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute)) && context.asyncComputeLaneEnabled){
-        appendFamily(context.asyncComputeQueueFamilyIndex);
-        appendFamily(context.auxiliaryAsyncComputeQueueFamilyIndex);
-    }
-    if((sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer)) && context.transferQueueEnabled){
-        appendFamily(context.transferQueueFamilyIndex);
-        appendFamily(context.auxiliaryTransferQueueFamilyIndex);
-    }
-
-    if(result.familyIndexCount < s_MinConcurrentSharingQueueFamilyCount){
-        result.familyIndexCount = 0u;
-        return result;
-    }
-
-    result.mode = VK_SHARING_MODE_CONCURRENT;
-    return result;
-}
-
-inline b8 UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
+[[nodiscard]] inline b8 UsesConcurrentQueueSharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
     return ResolveQueueFamilySharing(sharing, context).mode == VK_SHARING_MODE_CONCURRENT;
 }
 

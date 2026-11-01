@@ -18,31 +18,10 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_clipboard_service{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static u64 AllocateServiceIdentity()noexcept{
-    static Atomic<u64> s_NextIdentity{ 1u };
-    return NextNonWrappingIdentity(s_NextIdentity);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_requests(arena)
-    , m_serviceIdentity(__hidden_clipboard_service::AllocateServiceIdentity())
+    , m_serviceIdentity(AllocateServiceIdentity())
     , m_ownerThread(QueryCurrentThreadId())
 {
     m_requests.reserve(s_ClipboardMaxOutstandingRequests);
@@ -175,11 +154,9 @@ Expected<ClipboardRequestToken, ClipboardAdmission::Enum> QueuedClipboardService
             return MakeUnexpected(ClipboardAdmission::QueueFull);
         available = &m_requests.emplace_back(m_arena);
     }
-    if(m_nextGeneration == Limit<u64>::s_Max)
-        TerminateInvariant();
-
-    available->token = { .service = m_serviceIdentity, .generation = m_nextGeneration };
-    ++m_nextGeneration;
+    const u64 generation = m_nextGeneration;
+    AdvanceNonWrappingRevision(m_nextGeneration);
+    available->token = { .service = m_serviceIdentity, .generation = generation };
     available->operation = operation;
     available->channel = channel;
     available->completed = false;

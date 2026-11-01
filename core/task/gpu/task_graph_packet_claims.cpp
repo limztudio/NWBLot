@@ -73,6 +73,13 @@ GpuPacketRecordingAbort::~GpuPacketRecordingAbort()noexcept{
         NWB_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
 }
 
+void GpuPacketRecordingAbort::reset()noexcept{
+    m_packet = {};
+    m_planGeneration = 0u;
+    m_recordingAttemptGeneration = 0u;
+    m_claimGeneration = 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -99,6 +106,13 @@ b8 GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompile
             return false;
     }
     return true;
+}
+
+void GpuPacketRecordingLease::reset()noexcept{
+    m_packet = {};
+    m_planGeneration = 0u;
+    m_recordingAttemptGeneration = 0u;
+    m_claimGeneration = 0u;
 }
 
 
@@ -137,6 +151,18 @@ b8 GpuPacketRecordingAccess::validForTask(const GpuTaskGraph& graph, const GpuCo
         return false;
     const GpuCompiledTaskView compiledTask = planAccess.findTask(task);
     return compiledTask.valid() && compiledTask.plan->packet == m_packet;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void GpuPacketSubmissionLease::reset()noexcept{
+    m_packet = {};
+    m_planGeneration = 0u;
+    m_recordingAttemptGeneration = 0u;
+    m_claimGeneration = 0u;
+    m_submissionBinding = {};
 }
 
 

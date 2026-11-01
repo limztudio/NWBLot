@@ -21,9 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_GlyphAtlasMaxGlyphs = 4096u;
-inline constexpr u32 s_GlyphAtlasNoPage = 0xffffffffu;
-
 struct AtlasGlyph{
     SharedFontFace face;
     u32 glyphId = 0u;
@@ -46,12 +43,7 @@ struct AtlasPage{
 
 
 public:
-    AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font)
-        : face(font)
-        , pixels(arena)
-    {
-        pixels.resize(static_cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
-    }
+    AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font);
 };
 
 
@@ -68,13 +60,7 @@ private:
     };
 
     struct GlyphKeyHasher{
-        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept{
-            usize seed = 0u;
-            ::HashCombine(seed, key.face);
-            ::HashCombine(seed, key.glyphId);
-            ::HashCombine(seed, key.pixelSize);
-            return seed;
-        }
+        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept;
     };
 
     struct GlyphKeyEqualTo{

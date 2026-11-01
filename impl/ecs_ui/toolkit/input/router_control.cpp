@@ -3,9 +3,6 @@
 
 
 #include "router.h"
-#include "../rect_math.h"
-
-#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,37 +53,12 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
 
 b8 InputRouter::validControlTargets()const noexcept{
     for(const auto& target : m_stagedTargets){
-        if(
-            (!target.control.empty() && !target.control.valid())
-            || !IsFinite(target.scrollStep) || target.scrollStep < 0.0
-            || !IsFinite(target.scrollStepX) || target.scrollStepX < 0.0
-            || !IsFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
-            || !IsFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
-            || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
-            || (target.horizontalNavigation && !target.navigable)
-            || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
-        )
+        if(!HasValidHitTargetControlProperties(target))
             return false;
-        if(!target.owner.valid()){
-            if(target.ownerDeclarationGeneration != 0u)
-                return false;
+        if(!target.owner.valid())
             continue;
-        }
-        if(target.owner == target.id || target.ownerDeclarationGeneration == 0u || !target.control.valid() || target.focusable || target.navigable || target.scrollable || target.focusOnCommit || target.horizontalNavigation)
-            return false;
-        usize begin = 0u;
-        usize end = m_stagedLookup.size();
-        while(begin < end){
-            const usize middle = begin + (end - begin) / 2u;
-            if(m_stagedLookup[middle].value < target.owner.value)
-                begin = middle + 1u;
-            else
-                end = middle;
-        }
-        if(begin == m_stagedLookup.size() || m_stagedLookup[begin].value != target.owner.value)
-            return false;
-        const auto& host = m_stagedTargets[m_stagedLookup[begin].index];
-        if(!host.enabled || !host.focusable || host.owner.valid() || host.declarationGeneration != target.ownerDeclarationGeneration || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
+        const HitTarget* host = FindTargetInTable(m_stagedTargets, m_stagedLookup, target.owner, target.ownerDeclarationGeneration);
+        if(!host || !host->enabled || !host->focusable || host->owner.valid() || host->control != target.control || host->popup != target.popup || host->layer != target.layer)
             return false;
     }
     return true;
@@ -94,10 +66,7 @@ b8 InputRouter::validControlTargets()const noexcept{
 
 const HitTarget* InputRouter::controlHost(const HitTarget& target)const noexcept{
     const HitTarget* host = target.owner.valid() ? findTarget(target.owner, target.ownerDeclarationGeneration) : &target;
-    if(host == nullptr || !host->enabled || !host->focusable || host->owner.valid() || !host->control.valid() || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host))
-        return nullptr;
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(host->rectangle.x, host->rectangle.y, host->rectangle.width, host->rectangle.height), VectorSet(host->clip.x, host->clip.y, host->clip.width, host->clip.height));
-    if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)
+    if(host == nullptr || !host->enabled || !host->focusable || host->owner.valid() || !host->control.valid() || host->control != target.control || host->popup != target.popup || !allowedByPopup(*host) || !HasVisibleBounds(*host))
         return nullptr;
     return host;
 }
@@ -144,7 +113,7 @@ void InputRouter::reconcileControlActions()noexcept{
     }
 }
 
-void InputRouter::appendControlAction(InputRoutingResult& result, const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX){
+void InputRouter::appendControlAction(const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta, const f64 deltaX, InputRoutingResult& result){
     if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -170,30 +139,9 @@ void InputRouter::appendControlAction(InputRoutingResult& result, const HitTarge
 }
 
 b8 InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget& host, const HitTarget& source, const b8 alreadyPressed, CommandSource& held, InputRoutingResult& result){
-    ControlActionKind::Enum kind;
-    switch(event.command){
-    case InputCommand::Left:
-    case InputCommand::WordLeft:
-        if(!host.horizontalNavigation)
-            return false;
-        kind = ControlActionKind::Left;
-        break;
-    case InputCommand::Right:
-    case InputCommand::WordRight:
-        if(!host.horizontalNavigation)
-            return false;
-        kind = ControlActionKind::Right;
-        break;
-    case InputCommand::Up: kind = ControlActionKind::Up; break;
-    case InputCommand::Down: kind = ControlActionKind::Down; break;
-    case InputCommand::PageUp: kind = ControlActionKind::PageUp; break;
-    case InputCommand::PageDown: kind = ControlActionKind::PageDown; break;
-    case InputCommand::DocumentHome:
-    case InputCommand::Home: kind = ControlActionKind::Home; break;
-    case InputCommand::DocumentEnd:
-    case InputCommand::End: kind = ControlActionKind::End; break;
-    default: return false;
-    }
+    ControlActionKind::Enum kind = ControlActionKind::Wheel;
+    if(!TryTranslateControlNavigationCommand(event.command, host.horizontalNavigation, kind))
+        return false;
     ControlCommandOwner& owner = held.controlOwner;
     if(!alreadyPressed && !event.repeat)
         owner = { host.id, host.declarationGeneration, host.popup, host.control, kind == ControlActionKind::Left || kind == ControlActionKind::Right };
@@ -203,7 +151,7 @@ b8 InputRouter::routeControlNavigation(const InputEvent& event, const HitTarget&
         && held.focusOwner.target == source.id && held.focusOwner.declarationGeneration == source.declarationGeneration
         && held.focusOwner.popup == source.popup && held.focusOwner.control == source.control
     )
-        appendControlAction(result, host, source, kind, 0.0);
+        appendControlAction(host, source, kind, 0.0, result);
     return true;
 }
 
@@ -213,7 +161,7 @@ void InputRouter::routeWheel(const InputEvent& event, const HitTarget* hit, Inpu
         return;
     const HitTarget* host = controlHost(*hit);
     if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
-        appendControlAction(result, *host, *hit, ControlActionKind::Wheel, event.scrollY, event.scrollX);
+        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, event.scrollX, result);
 }
 
 

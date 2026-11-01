@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
+class Sampler final : public RefCounter<GraphicsResource>{
     friend class CommandList;
     friend class Device;
     friend class DescriptorBufferManager;

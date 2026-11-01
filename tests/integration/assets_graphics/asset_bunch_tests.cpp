@@ -41,12 +41,6 @@ static constexpr TStringView s_DoesNotTargetADeclaredAsset = NWB_TEXT("does not 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Core;
 using namespace NWB::Core::Assets;
@@ -78,13 +72,13 @@ asset_bunch bunch = [second, first];
 
 
 static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, const Metascript::Document& document){
-    ASSERT_EQ(output.size(), s_ExpectedDualCount);
+    ASSERT_EQ(output.size(), 2u);
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
     EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
     const Value* const items = output[0u].value.findField(s_ItemsField);
     ASSERT_NE(items, nullptr);
     ASSERT_TRUE(items->isList());
-    ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
+    ASSERT_EQ(items->asList().size(), 2u);
     const Value* const label = items->asList()[0u].findField(s_Label);
     ASSERT_NE(label, nullptr);
     EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
@@ -103,7 +97,7 @@ static void VerifyOwnedOutput(const Span<const ExpandedAssetMetadata> output, co
     EXPECT_EQ(sourceLocal->asReference(), s_Local);
 }
 
-[[nodiscard]] static b8 ParseLookupFixture(BunchFixture& fixture, const AStringView metadata, const usize unusedDeclarations){
+[[nodiscard]] static b8 ParseLookupFixture(const AStringView metadata, const usize unusedDeclarations, BunchFixture& fixture){
     AString<Alloc::ScratchArena> source(fixture.scratchArena);
     source.reserve(unusedDeclarations * 32u + metadata.size());
     for(usize index = 0u; index < unusedDeclarations; ++index)
@@ -216,7 +210,7 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReclaimScopedResultsAndReus
                 const auto expandedResult = AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, AStringView(virtualRoot), filePath, fixture.document, scratch);
                 ASSERT_TRUE(expandedResult);
                 const ExpandedAssetMetadataVector& output = *expandedResult;
-                ASSERT_EQ(output.size(), s_ExpectedDualCount);
+                ASSERT_EQ(output.size(), 2u);
                 EXPECT_EQ(output[0u].virtualPath, secondIdentity);
                 EXPECT_EQ(output[1u].virtualPath, firstIdentity);
                 const Value* const nested = output[0u].value.findField("nested");
@@ -263,11 +257,11 @@ TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAl
             }
             VerifyOwnedOutput(output, sourceDocument);
         }
-        ASSERT_EQ(output.size(), s_ExpectedDualCount);
+        ASSERT_EQ(output.size(), 2u);
         const Value* const items = output[0u].value.findField(s_ItemsField);
         ASSERT_NE(items, nullptr);
         ASSERT_TRUE(items->isList());
-        ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
+        ASSERT_EQ(items->asList().size(), 2u);
         const Value* const label = items->asList()[0u].findField(s_Label);
         ASSERT_NE(label, nullptr);
         EXPECT_EQ(label->asString(), s_ASeparatelyOwnedMetadataString);
@@ -418,13 +412,13 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
 TEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder){
     for(const usize unusedDeclarations : { 0u, 11u, 12u, 32u }){
         BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+        ASSERT_TRUE(ParseLookupFixture(R"(
 metadata Local = { "id": 11 };
 metadata local = { "id": 22 };
 probe first = { "values": [Local, local, Local] };
 probe second = { "values": [local] };
 ASSET_BUNCH bunch = [second, first];
-)", unusedDeclarations
+)", unusedDeclarations, fixture
         )
         );
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
@@ -434,15 +428,15 @@ ASSET_BUNCH bunch = [second, first];
             ASSERT_TRUE(expandedResult);
             output = Move(*expandedResult);
         }
-        ASSERT_EQ(output.size(), s_ExpectedDualCount);
+        ASSERT_EQ(output.size(), 2u);
         EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
         EXPECT_EQ(output[1u].virtualPath, Name(s_ProjectFixturesBundleFirst));
         const Value* const firstValues = output[1u].value.findField(s_ValuesField);
         ASSERT_NE(firstValues, nullptr);
         ASSERT_TRUE(firstValues->isList());
         ASSERT_EQ(firstValues->asList().size(), 3u);
-        const i64 expectedIds[] = { 11, 22, 11 };
-        for(usize index = 0u; index < LengthOf(expectedIds); ++index){
+        const Array<i64, 3u> expectedIds = { 11, 22, 11 };
+        for(usize index = 0u; index < expectedIds.size(); ++index){
             const Value* const id = firstValues->asList()[index].findField(s_IdField);
             ASSERT_NE(id, nullptr);
             EXPECT_EQ(id->asInteger(), expectedIds[index]);
@@ -464,12 +458,12 @@ TEST(AssetBunchLookup, CanonicalDuplicateExportsAreRejectedBeforeNestedResolutio
         Tests::CapturingLogger logger;
         Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
         BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+        ASSERT_TRUE(ParseLookupFixture(R"(
 metadata known;
 probe Asset = { "missing": known.missing };
 probe asset;
 asset_bunch bunch = [Asset, asset];
-)", unusedDeclarations
+)", unusedDeclarations, fixture
         )
         );
         EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
@@ -484,13 +478,13 @@ TEST(AssetBunchLookup, LocalCycleDetectionKeepsCanonicalVariableIdentity){
         Tests::CapturingLogger logger;
         Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
         BunchFixture fixture;
-        ASSERT_TRUE(ParseLookupFixture(fixture, R"(
+        ASSERT_TRUE(ParseLookupFixture(R"(
 metadata Local;
 metadata local = { "id": 5 };
 Local.next = local;
 probe asset = { "nested": Local };
 asset_bunch bunch = [asset];
-)", unusedDeclarations
+)", unusedDeclarations, fixture
         )
         );
         const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
@@ -502,13 +496,13 @@ asset_bunch bunch = [asset];
 }
 
 TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceLookup){
-    const AStringView metadataCases[] = { "asset_bunch bunch; bunch = [bunch];", "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];", };
+    const Array<AStringView, 2u> metadataCases = { "asset_bunch bunch; bunch = [bunch];", "probe asset; ASSET_BUNCH bunch; asset.items = [bunch]; bunch = [asset];", };
     for(const usize unusedDeclarations : { 0u, 32u }){
-        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
             Tests::CapturingLogger logger;
             Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
             BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
@@ -519,13 +513,13 @@ TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceL
 }
 
 TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems){
-    const AStringView metadataCases[] = { "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];", "probe asset; asset_bunch bunch = [\"asset\", asset];", };
+    const Array<AStringView, 2u> metadataCases = { "metadata known; probe asset; asset_bunch bunch = [known.missing, asset];", "probe asset; asset_bunch bunch = [\"asset\", asset];", };
     for(const usize unusedDeclarations : { 0u, 32u }){
-        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
             Tests::CapturingLogger logger;
             Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
             BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'")) : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))));
@@ -534,18 +528,18 @@ TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
 }
 
 TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
-    const AStringView metadataCases[] = {
+    const Array<AStringView, 2u> metadataCases = {
         "metadata known; metadata cycle; cycle.next = cycle; "
         "probe asset = [known.missing, cycle]; asset_bunch bunch = [asset];",
         "metadata known; metadata cycle; cycle.next = cycle; "
         "probe asset = [cycle, known.missing]; asset_bunch bunch = [asset];",
     };
     for(const usize unusedDeclarations : { 0u, 32u }){
-        for(usize caseIndex = 0u; caseIndex < LengthOf(metadataCases); ++caseIndex){
+        for(usize caseIndex = 0u; caseIndex < metadataCases.size(); ++caseIndex){
             Tests::CapturingLogger logger;
             Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
             BunchFixture fixture;
-            ASSERT_TRUE(ParseLookupFixture(fixture, metadataCases[caseIndex], unusedDeclarations));
+            ASSERT_TRUE(ParseLookupFixture(metadataCases[caseIndex], unusedDeclarations, fixture));
             const ArenaMemoryStats baselineMetadata = fixture.metadataArena.memoryStats();
             EXPECT_FALSE(AssetsBunchCook::ExpandAssetBunch(fixture.assetRoot, s_Project, fixture.filePath, fixture.document, fixture.scratchArena));
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);

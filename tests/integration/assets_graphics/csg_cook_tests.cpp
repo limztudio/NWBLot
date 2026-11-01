@@ -38,15 +38,13 @@ constexpr AStringView s_PixelStage = "ps";
 constexpr AStringView s_ModulePath = "project/csg/module";
 constexpr AStringView s_GeneratedModulePath = "project/csg/generated/module.slangi";
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendCsgShapeCookEntry(NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries, NWB::Impl::AssetsCsgCook::CookArena& arena, const Name shapeName, const Name shaderModule, const AStringView moduleInclude){
+static void AppendCsgShapeCookEntry(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, NWB::Impl::AssetsCsgCook::CookArena& arena, NWB::Impl::AssetsCsgCook::CsgShapeCookEntryVector& outEntries){
     NWB::Impl::AssetsCsgCook::CsgShapeCookEntry entry(arena);
     entry.shapeName = shapeName;
     entry.shaderModule = shaderModule;
@@ -63,11 +61,11 @@ static void AppendCsgShapeCookEntry(NWB::Impl::AssetsCsgCook::CsgShapeCookEntryV
     return NWB::Impl::s_InvalidCsgShapeTypeId;
 }
 
-Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const u8*, const usize)noexcept{
+Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(const SIMDMatrix&, const Span<const u8>)noexcept{
     return NWB::Impl::CsgShapeBounds{ VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), true };
 }
 
-[[nodiscard]] static NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(Core::Alloc::GlobalArena& arena, const Name shapeName, const Name shaderModule, const AStringView moduleInclude){
+[[nodiscard]] static NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(const Name shapeName, const Name shaderModule, const AStringView moduleInclude, Core::Alloc::GlobalArena& arena){
     NWB::Impl::CsgShapeTypeDesc desc(arena);
     desc.name = shapeName;
     desc.shaderModule = shaderModule;
@@ -95,7 +93,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
 
     namespace Plan = Impl::AssetsGraphicsCookDetail;
     using ShaderCook = Impl::ShaderCook;
-    Plan::ResolvedCookPaths paths(testArena.arena);
+    Core::Assets::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
     paths.cacheDirectory = root / s_CacheDirectory;
     ShaderCook shaderCook(testArena.arena);
@@ -130,9 +128,9 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         entry.archiveStage = s_PixelStage;
         addDefine(entry.defineValues, s_AuthoredDefine, { "authored" });
         if(mode == 1u)
-            addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"../common.slangi\"" });
+            addDefine(entry.defineValues, Impl::s_CsgProjectEvaluatorModuleDefineName, { "\"../common.slangi\"" });
         else if(mode == 2u)
-            addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
+            addDefine(entry.defineValues, Impl::s_CsgProjectEvaluatorModuleDefineName, { "\"first.slangi\"", "\"second.slangi\"" });
         entries.push_back(Move(entry));
         const Path emptyPath(testArena.arena);
         return Plan::PrepareShaderEntriesForCook(paths, bindRoot, csgRoot, emptyPath, emptyPath, includeMetadata, materialBinds, materials, testArena.arena, scratchArena, shaderCook, entries);
@@ -188,8 +186,8 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
 
     CsgShapeCookEntryVector cookedEntries(testArena.arena);
     // The cooker normalizes its input by name, while the runtime deliberately receives the inverse order.
-    AppendCsgShapeCookEntry(cookedEntries, testArena.arena, zebraShape, zebraModule, zebraInclude);
-    AppendCsgShapeCookEntry(cookedEntries, testArena.arena, alphaShape, alphaModule, alphaInclude);
+    AppendCsgShapeCookEntry(zebraShape, zebraModule, zebraInclude, testArena.arena, cookedEntries);
+    AppendCsgShapeCookEntry(alphaShape, alphaModule, alphaInclude, testArena.arena, cookedEntries);
     ASSERT_TRUE(AssignCsgShapeCookIds(cookedEntries, scratchArena));
 
     const NWB::Impl::CsgShapeTypeId cookedAlphaId = FindCookedCsgShapeTypeId(cookedEntries, alphaShape);
@@ -199,9 +197,9 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
     EXPECT_NE(cookedAlphaId, cookedZebraId);
 
     NWB::Impl::CsgShapeRegistry registry(testArena.arena);
-    const auto runtimeZebraId = registry.registerShapeType(CsgCookTestShapeDesc(testArena.arena, zebraShape, zebraModule, zebraInclude));
+    const auto runtimeZebraId = registry.registerShapeType(CsgCookTestShapeDesc(zebraShape, zebraModule, zebraInclude, testArena.arena));
     ASSERT_TRUE(runtimeZebraId);
-    const auto runtimeAlphaId = registry.registerShapeType(CsgCookTestShapeDesc(testArena.arena, alphaShape, alphaModule, alphaInclude));
+    const auto runtimeAlphaId = registry.registerShapeType(CsgCookTestShapeDesc(alphaShape, alphaModule, alphaInclude, testArena.arena));
     ASSERT_TRUE(runtimeAlphaId);
     EXPECT_EQ(*runtimeAlphaId, cookedAlphaId);
     EXPECT_EQ(*runtimeZebraId, cookedZebraId);
@@ -215,8 +213,8 @@ TEST(AssetsGraphics, CsgShapeIdsRejectDuplicateCanonicalNamesBeforePublishingThe
     using namespace NWB::Impl::AssetsCsgCook;
 
     CsgShapeCookEntryVector entries(testArena.arena);
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/duplicate"), Name(s_ModulePath), s_GeneratedModulePath);
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("PROJECT/CSG/DUPLICATE"), Name(s_ModulePath), s_GeneratedModulePath);
+    AppendCsgShapeCookEntry(Name("project/csg/duplicate"), Name(s_ModulePath), s_GeneratedModulePath, testArena.arena, entries);
+    AppendCsgShapeCookEntry(Name("PROJECT/CSG/DUPLICATE"), Name(s_ModulePath), s_GeneratedModulePath, testArena.arena, entries);
 
     EXPECT_FALSE(AssignCsgShapeCookIds(entries, scratchArena));
     ASSERT_EQ(entries.size(), 2u);
@@ -243,7 +241,7 @@ asset.eval = "project/csg/MixedCaseEval.slangi";
 )"
     )
     );
-    auto cooked = Impl::AssetsCsgCook::ParseCsgShapeCookMetadata(testArena.arena, root / "shape.nwb", document, scratchArena);
+    auto cooked = Impl::AssetsCsgCook::ParseCsgShapeCookMetadata(root / "shape.nwb", document, testArena.arena, scratchArena);
     ASSERT_TRUE(cooked);
     const AStringView moduleInclude = "project/csg/Generated/MixedCaseEvaluator.slangi";
     EXPECT_EQ(cooked->moduleInclude, moduleInclude);
@@ -256,7 +254,7 @@ asset.eval = "project/csg/MixedCaseEval.slangi";
     ASSERT_TRUE(generatedExists);
     EXPECT_TRUE(*generatedExists);
     Impl::CsgShapeRegistry registry(testArena.arena);
-    const auto registered = registry.registerShapeType(CsgCookTestShapeDesc(testArena.arena, entries.front().shapeName, entries.front().shaderModule, entries.front().moduleInclude));
+    const auto registered = registry.registerShapeType(CsgCookTestShapeDesc(entries.front().shapeName, entries.front().shaderModule, entries.front().moduleInclude, testArena.arena));
     ASSERT_TRUE(registered);
     const auto selectedInclude = registry.findShaderModuleInclude(entries.front().shaderModule, testArena.arena);
     ASSERT_TRUE(selectedInclude);
@@ -274,18 +272,18 @@ TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndRepla
     const AStringView originalInclude = "project/csg/Generated/LongMixedCaseEvaluatorOwnedByTheRegistry.slangi";
     {
         TestArena sourceArena;
-        auto source = CsgCookTestShapeDesc(sourceArena.arena, shapeName, moduleName, originalInclude);
+        auto source = CsgCookTestShapeDesc(shapeName, moduleName, originalInclude, sourceArena.arena);
         ASSERT_TRUE(registry.registerShapeType(source));
     }
     auto selected = registry.findShaderModuleInclude(moduleName, registryArena.arena);
     ASSERT_TRUE(selected);
     EXPECT_EQ(*selected, originalInclude);
     for(u32 index = 0u; index < 32u; ++index){
-        char indexText[32u] = {};
+        Array<char, 32u> indexText = {};
         const auto extraNameResult = DeriveName(Name("project/csg/exact_text_extra/"), FormatDecimal(index, indexText));
         ASSERT_TRUE(extraNameResult);
         const Name extraName = *extraNameResult;
-        auto extra = CsgCookTestShapeDesc(registryArena.arena, extraName, s_NameNone, AStringView{});
+        auto extra = CsgCookTestShapeDesc(extraName, s_NameNone, AStringView{}, registryArena.arena);
         ASSERT_TRUE(registry.registerShapeType(extra));
     }
     const auto stored = registry.findShapeType(shapeName);
@@ -293,7 +291,7 @@ TEST(AssetsGraphics, CsgRegistryOwnsExactModuleTextAfterSourceRetirementAndRepla
     EXPECT_EQ(stored->desc.shaderModuleInclude, originalInclude);
     EXPECT_EQ(stored->desc.shaderModuleInclude.get_allocator().arenaPtr(), &registryArena.arena);
     const AStringView replacementInclude = "project/csg/Generated/ReplacementMixedCaseEvaluatorOwnedByTheRegistry.slangi";
-    auto replacement = CsgCookTestShapeDesc(registryArena.arena, shapeName, moduleName, replacementInclude);
+    auto replacement = CsgCookTestShapeDesc(shapeName, moduleName, replacementInclude, registryArena.arena);
     ASSERT_TRUE(registry.registerShapeType(replacement, true));
     const auto current = registry.findShaderModuleInclude(moduleName, registryArena.arena);
     ASSERT_TRUE(current);
@@ -310,12 +308,12 @@ TEST(AssetsGraphics, CsgRegistryRejectsQuotedIncludeControlBytesWithoutReplacing
     const Name shapeName("project/csg/control_byte_shape");
     const Name moduleName("project/csg/control_byte_module");
     const AStringView originalInclude = "project/csg/Generated/OriginalEvaluator.slangi";
-    const auto original = registry.registerShapeType(CsgCookTestShapeDesc(testArena.arena, shapeName, moduleName, originalInclude));
+    const auto original = registry.registerShapeType(CsgCookTestShapeDesc(shapeName, moduleName, originalInclude, testArena.arena));
     ASSERT_TRUE(original);
     const u64 revision = registry.revision();
     const usize count = registry.shapeTypeCount();
     for(const char forbidden : Array<char, 6u>{ '\0', '\r', '\n', '"', ';', '=' }){
-        auto replacement = CsgCookTestShapeDesc(testArena.arena, shapeName, moduleName, originalInclude);
+        auto replacement = CsgCookTestShapeDesc(shapeName, moduleName, originalInclude, testArena.arena);
         replacement.shaderModuleInclude.push_back(forbidden);
         replacement.shaderModuleInclude += "InjectedEvaluator.slangi";
         EXPECT_FALSE(registry.registerShapeType(replacement, true));
@@ -341,8 +339,8 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
     using namespace NWB::Impl::AssetsCsgCook;
 
     CsgShapeCookEntryVector entries(testArena.arena);
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/first_shape"), Name("project/csg/first_module"), "project/csg/generated/shared.slangi");
-    AppendCsgShapeCookEntry(entries, testArena.arena, Name("project/csg/second_shape"), Name("project/csg/second_module"), "project/csg/generated/SHARED.slangi");
+    AppendCsgShapeCookEntry(Name("project/csg/first_shape"), Name("project/csg/first_module"), "project/csg/generated/shared.slangi", testArena.arena, entries);
+    AppendCsgShapeCookEntry(Name("project/csg/second_shape"), Name("project/csg/second_module"), "project/csg/generated/SHARED.slangi", testArena.arena, entries);
 
     auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
     ASSERT_TRUE(rootResult);

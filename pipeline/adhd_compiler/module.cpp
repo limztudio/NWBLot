@@ -2,18 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../command_line.h"
 #include "compile.h"
+
+#include <pipeline/command_line.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_adhd_compiler_module{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_AdhdCompilerArena("pipeline/adhd_compiler");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(Name("pipeline/adhd_compiler"));
+    Core::Assets::AssetArena arena(__hidden_adhd_compiler_module::s_AdhdCompilerArena);
+    Core::Alloc::ScratchArena scratchArena(__hidden_adhd_compiler_module::s_AdhdCompilerArena);
     PipelineCommandLine commandLine(PipelineTool::AdhdCompiler);
-    return commandLine.run(argc, argv, arena, [&](PipelineOptions& options){
-        NWB::Pipeline::AdhdCompiler::AdhdCompileOptions compileOptions(arena);
+    return commandLine.run(argc, argv, [&](PipelineOptions& options){
+        AdhdCompiler::AdhdCompileOptions compileOptions(arena);
         compileOptions.inputs = Move(options.inputs);
         compileOptions.includeDirectories = Move(options.includeDirectories);
         compileOptions.macroDefinitions = Move(options.macroDefinitions);
@@ -21,9 +47,15 @@ int RunPipelineTool(const int argc, char** argv){
         compileOptions.customNamespace = Move(options.customNamespace);
         compileOptions.depfilePath = Move(options.depfilePath);
         compileOptions.validateOnly = options.validateOnly;
-        return NWB::Pipeline::AdhdCompiler::CompileAdhd(compileOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
-    });
+        return AdhdCompiler::CompileAdhd(compileOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
+    }, arena, scratchArena);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -16,3 +16,4 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_bunch_cook PUBLIC nwb_assets nwb_assets_cook nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_bunch_cook PRIVATE NWB_COOK=1)
 endif()
+

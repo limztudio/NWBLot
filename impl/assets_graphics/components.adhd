@@ -5,10 +5,55 @@
 #include <impl/ecs_mesh/components.adhd>
 #include <impl/ecs_model/components.adhd>
 #include <impl/ecs_render/components.adhd>
+#include <impl/ecs_render/material/pipeline_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+const StringView s_CsgClipImplicitDefineName = "NWB_CSG_ENABLED";
+const StringView s_CsgIntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
+const StringView s_EnabledImplicitDefineValue = "1";
+const StringView s_IntervalSampleEnabledImplicitDefineValue = "1";
+const usize s_CsgClipAddedDefineCount = 2u;
+
+const StringView s_DependencyRepoRootAlias = "repo";
+const StringView s_DependencyGeneratedCacheRootAlias = "generated_cache";
+const usize s_MaxPreparedEntriesPerShaderEntry = 2u;
+
+const StringView s_ShaderVariantBytecodeExtension = ".spv";
+const u32 s_ShaderVariantCookKeyVersion = 2u;
+
+const Name s_GraphicsVolumeMetadataExtensionName = "assets_graphics/volume_metadata";
+const Name s_IncludeAssetTypeName = "include";
+const StringView s_MaterialBxdfSourceLabel = "bxdf";
+const StringView s_MaterialSurfaceSourceLabel = "surface";
+const StringView s_EngineGraphicsIncludeRoot = "engine/graphics";
+
+const StringView s_GraphicsComponentAssetField = "asset";
+const StringView s_RendererComponentMaterialField = "material";
+const StringView s_RendererComponentVisibleField = "visible";
+const StringView s_RendererComponentOpticalVolumeCoincidenceField = "optical_volume_coincidence";
+const StringView s_RendererComponentOpticalVolumeGroupField = "optical_volume_group";
+const StringView s_RendererComponentOpticalVolumePriorityField = "optical_volume_priority";
+const StringView s_RendererComponentOpticalBoundaryModeField = "optical_boundary_mode";
+const StringView s_RendererComponentOpticalMediumPriorityField = "optical_medium_priority";
+const StringView s_ModelComponentDiagnosticPrefix = "Model component meta";
+const StringView s_MeshComponentDiagnosticPrefix = "Mesh component meta";
+const StringView s_RendererComponentDiagnosticPrefix = "Renderer component meta";
+const StringView s_OpticalVolumeCoincidenceIndependentText = "independent";
+const StringView s_OpticalVolumeCoincidenceIdenticalMaterialText = "identical_material";
+const StringView s_OpticalVolumeCoincidenceSharedGroupText = "shared_group";
+const StringView s_OpticalBoundaryModeUnspecifiedText = "unspecified";
+const StringView s_OpticalBoundaryModeClosedNestedText = "closed_nested";
+const StringView s_OpticalBoundaryModeClosedPriorityText = "closed_priority";
+
+[reflect]
+enum<u8> ShaderVariantCacheReadStatus{
+    Hit = 0u,
+    Miss = 1u,
+    Error = 2u
+}
 
 [component_asset("model_component")]
 class ModelComponentAsset{
@@ -43,7 +88,58 @@ class RendererComponentPayloadBinary{
     public u32 reserved1 = 0u;
 }
 
+RendererComponentPayloadBinary PackRendererComponentPayloadBinary(in RendererComponent component){
+    RendererComponentPayloadBinary binaryPayload;
+    native(in component, mut binaryPayload){
+        binaryPayload.materialHash = component.material.name().hash();
+        binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
+    }
+    binaryPayload.opticalVolumePriority = component.opticalVolumePriority;
+    binaryPayload.opticalMediumPriority = component.opticalMediumPriority;
+    if(component.visible)
+        binaryPayload.visible = 1u;
+    else
+        binaryPayload.visible = 0u;
+    binaryPayload.opticalVolumeCoincidence = cast<u8>(component.opticalVolumeCoincidence);
+    binaryPayload.opticalBoundaryMode = cast<u8>(component.opticalBoundaryMode);
+    binaryPayload.reserved0 = 0u;
+    binaryPayload.reserved1 = 0u;
+    return binaryPayload;
+}
+
+b8 UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binaryPayload, mut RendererComponent outComponent){
+    if(
+        binaryPayload.visible > 1u
+        || binaryPayload.opticalVolumeCoincidence > cast<u8>(OpticalVolumeCoincidence::SharedGroup)
+        || binaryPayload.opticalBoundaryMode > cast<u8>(OpticalBoundaryMode::ClosedPriority)
+        || binaryPayload.reserved0 != 0u
+        || binaryPayload.reserved1 != 0u
+    )
+        return false;
+    outComponent = RendererComponent();
+    native(in binaryPayload, mut outComponent){
+        outComponent.material.virtualPath = Name(binaryPayload.materialHash);
+        outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);
+    }
+    outComponent.visible = binaryPayload.visible != 0u;
+    outComponent.opticalVolumeCoincidence = cast<OpticalVolumeCoincidence>(binaryPayload.opticalVolumeCoincidence);
+    outComponent.opticalVolumePriority = binaryPayload.opticalVolumePriority;
+    outComponent.opticalBoundaryMode = cast<OpticalBoundaryMode>(binaryPayload.opticalBoundaryMode);
+    outComponent.opticalMediumPriority = binaryPayload.opticalMediumPriority;
+    return true;
+}
+
+b8 IsValidRendererComponentOpticalConfig(in RendererComponent component){
+    return
+        cast<u8>(component.opticalVolumeCoincidence) <= cast<u8>(OpticalVolumeCoincidence::SharedGroup)
+        && cast<u8>(component.opticalBoundaryMode) <= cast<u8>(OpticalBoundaryMode::ClosedPriority)
+    ;
+}
+
 class ShaderStageKey{
+    public Name shaderName;
+    public Name stageName;
+
     public ShaderStageKey(){
         this.shaderName = s_NameNone;
         this.stageName = s_NameNone;
@@ -62,9 +158,123 @@ class ShaderStageKey{
         usize seed = hashValue(this.shaderName);
         return hashCombineValue(seed, this.stageName);
     }
+}
 
-    public Name shaderName;
-    public Name stageName;
+[subsystem("bvh_subsystem")]
+class BvhSubsystem{
+    public AssetRef<ComputeShader> bitonicSortCs;
+    public AssetRef<ComputeShader> fitCs;
+    public AssetRef<ComputeShader> mortonCs;
+    public AssetRef<ComputeShader> topologyCs;
+    public AssetRef<ComputeShader> sceneRefitCs;
+}
+
+[subsystem("csg_subsystem")]
+class CsgSubsystem{
+    public Vector<AssetRef<CsgShape>> basicShapes;
+    public AssetRef<PixelShader> intervalCapFillPs;
+    public AssetRef<ComputeShader> intervalCombineCs;
+    public AssetRef<ComputeShader> intervalPeelCs;
+    public AssetRef<ComputeShader> receiverSpanBuildCs;
+    public AssetRef<PixelShader> receiverSurfacePs;
+    public AssetRef<PixelShader> refractionCapFillPs;
+}
+
+[subsystem("deferred_subsystem")]
+class DeferredSubsystem{
+    public AssetRef<ComputeShader> compositeCs;
+    public AssetRef<PixelShader> compositePs;
+    public AssetRef<VertexShader> compositeVs;
+    public AssetRef<ComputeShader> lightingCs;
+}
+
+[subsystem("gi_subsystem")]
+class GiSubsystem{
+    public AssetRef<ComputeShader> surfelAgeFreeCs;
+    public AssetRef<ComputeShader> surfelHashBuildCs;
+    public AssetRef<ComputeShader> surfelResolveCs;
+    public AssetRef<ComputeShader> surfelSpawnCs;
+    public AssetRef<ComputeShader> surfelTraceBuildArgsCs;
+    public AssetRef<ComputeShader> surfelTraceCs;
+    public AssetRef<ComputeShader> surfelTraceHwCs;
+    public AssetRef<ComputeShader> surfelUpsampleCs;
+}
+
+[subsystem("mesh_subsystem")]
+class MeshSubsystem{
+    public AssetRef<VertexShader> emulationVs;
+    public AssetRef<ComputeShader> objectDecodeCs;
+    public AssetRef<VertexShader> objectVs;
+    public AssetRef<MeshShader> sharedMs;
+}
+
+[subsystem("reflection_subsystem")]
+class ReflectionSubsystem{
+    public AssetRef<ComputeShader> buildArgsCs;
+    public AssetRef<ComputeShader> classifyCs;
+    public AssetRef<ComputeShader> depthReduceCs;
+    public AssetRef<ComputeShader> resolveHwCs;
+    public AssetRef<ComputeShader> spatialCs;
+    public AssetRef<ComputeShader> temporalCs;
+}
+
+[subsystem("refractive_subsystem")]
+class RefractiveSubsystem{
+    public AssetRef<ComputeShader> causticAccumulatorDecayCs;
+    public AssetRef<ComputeShader> causticGeometryDownsampleCs;
+    public AssetRef<ClosestHitShader> causticPhotonHwChit;
+    public AssetRef<MissShader> causticPhotonHwMiss;
+    public AssetRef<RayGenerationShader> causticPhotonHwRaygen;
+    public AssetRef<ComputeShader> causticPhotonSwCs;
+    public AssetRef<ComputeShader> causticResolveCs;
+    public AssetRef<ComputeShader> refractionClassifyTilesCs;
+    public AssetRef<ComputeShader> refractionFinalizeTilesCs;
+    public AssetRef<ComputeShader> refractionResolveHwCs;
+    public AssetRef<ComputeShader> refractionResolveScreenCs;
+}
+
+[subsystem("renderer_subsystem")]
+class RendererSubsystem{
+    public Vector<AssetRef<Sampler>> basicSamplers;
+}
+
+[subsystem("shadow_subsystem")]
+class ShadowSubsystem{
+    public AssetRef<ComputeShader> hardwareTransparentEvaluateCs;
+    public AssetRef<ComputeShader> hardwareTransparentGatherCs;
+    public AssetRef<ComputeShader> hardwareTransparentOverflowCs;
+    public AssetRef<PixelShader> lightSpaceCapturePs;
+    public AssetRef<VertexShader> lightSpaceCaptureVs;
+    public AssetRef<ComputeShader> lightSpaceCullCs;
+    public AssetRef<ComputeShader> lightSpaceFallbackCs;
+    public AssetRef<ComputeShader> lightSpaceResolveCs;
+    public AssetRef<ComputeShader> lightSpaceResolveHwCs;
+    public AssetRef<ComputeShader> lightSpaceShadeCs;
+    public AssetRef<ComputeShader> lightSpaceViewCs;
+    public AssetRef<ComputeShader> shadowGeometryDownsampleCs;
+    public AssetRef<ComputeShader> shadowRayqueryCs;
+    public AssetRef<ComputeShader> shadowRayquerySoftCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCombinedCs;
+    public AssetRef<ComputeShader> shadowReprojectMergeCs;
+    public AssetRef<ComputeShader> shadowResolveCombinedCs;
+    public AssetRef<ComputeShader> shadowResolveCs;
+    public AssetRef<ComputeShader> shadowResolveRgbCs;
+    public AssetRef<ComputeShader> shadowResolveWaveletCombinedCs;
+    public AssetRef<ComputeShader> swShadowOpaquePrepassCs;
+    public AssetRef<ComputeShader> swShadowSoftOpaqueCs;
+    public AssetRef<ComputeShader> swShadowTransparentBuildargsCs;
+    public AssetRef<ComputeShader> swShadowTransparentClassifyCs;
+    public AssetRef<ComputeShader> swShadowTransparentCoarseCs;
+    public AssetRef<ComputeShader> swShadowTransparentIndirectCs;
+    public AssetRef<ComputeShader> swShadowTransparentResolveCs;
+    public AssetRef<ComputeShader> swShadowTransparentSoftCs;
+}
+
+[subsystem("transparent_subsystem")]
+class TransparentSubsystem{
+    public AssetRef<ComputeShader> avboitDepthWarpCs;
+    public AssetRef<ComputeShader> avboitIntegrateCs;
+    public AssetRef<ComputeShader> opticalBoundsFinalizeCs;
 }
 
 

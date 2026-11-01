@@ -16,8 +16,6 @@ namespace __hidden_cpu_task_scheduler_rejection_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
 using namespace CpuTaskSchedulerTestSupport;
 
 
@@ -106,7 +104,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         if(!rejected)
             ExitTestProcess(1u);
         scheduler.wait(parent);
-        ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : s_ExpectedDualCount);
+        ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
     }, testing::ExitedWithCode(0), ""
     );
 }
@@ -138,7 +136,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         if(!rejected)
             ExitTestProcess(1u);
         scheduler.wait(dependent);
-        ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : s_ExpectedDualCount);
+        ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
     }, testing::ExitedWithCode(0), ""
     );
 }
@@ -149,13 +147,13 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
         using namespace __hidden_cpu_task_scheduler_rejection_tests;
         DeadlineGuard deadline(true);
         TaskGate parentGate;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
+        CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
         CpuTaskScope scope(scheduler);
         Atomic<usize> parentWorker{ 0u };
         const auto cpuTaskAdmission = scope.submit([&](){
             parentWorker.store(scheduler.currentWorkerIndex(), MemoryOrder::release);
             const auto secondCpuTaskAdmission = scheduler.submit([&](){
-                if(!CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
+                if(!WaitUntil(parentGate.entered, s_GateTimeoutMS) || scheduler.currentWorkerIndex() == parentWorker.load(MemoryOrder::acquire))
                     ExitTestProcess(0u);
                 scope.wait();
             });

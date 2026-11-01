@@ -24,12 +24,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_assets_graphics_texture_tests{
 
 
@@ -40,8 +34,6 @@ constexpr AStringView s_AssetsDirectory = "assets";
 constexpr AStringView s_TexturesDirectory = "textures";
 constexpr AStringView s_CheckerMetadataFilename = "checker.nwb";
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -71,8 +63,8 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(TestArena& test
 static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 0u, .sizeBytes = 64u, .width = 7u, .height = 5u, .blockCountX = s_ExpectedDualCount, .blockCountY = s_ExpectedDualCount });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 64u, .sizeBytes = 16u, .width = 3u, .height = s_ExpectedDualCount, .blockCountX = 1u, .blockCountY = 1u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 0u, .sizeBytes = 64u, .width = 7u, .height = 5u, .blockCountX = 2u, .blockCountY = 2u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 64u, .sizeBytes = 16u, .width = 3u, .height = 2u, .blockCountX = 1u, .blockCountY = 1u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ .offsetBytes = 80u, .sizeBytes = 16u, .width = 1u, .height = 1u, .blockCountX = 1u, .blockCountY = 1u });
     return mipLevels;
 }
@@ -94,11 +86,11 @@ TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
 
     const auto ldrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u);
     ASSERT_TRUE(ldrPlane);
-    EXPECT_EQ(ldrPlane->blocksX, s_ExpectedDualCount);
-    EXPECT_EQ(ldrPlane->blocksY, s_ExpectedDualCount);
+    EXPECT_EQ(ldrPlane->blocksX, 2u);
+    EXPECT_EQ(ldrPlane->blocksY, 2u);
     EXPECT_EQ(ldrPlane->planeByteCount, 64u);
 
-    const auto hdrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, s_ExpectedDualCount);
+    const auto hdrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, 2u);
     ASSERT_TRUE(hdrPlane);
     EXPECT_EQ(hdrPlane->blocksX, 1u);
     EXPECT_EQ(hdrPlane->blocksY, 1u);
@@ -117,14 +109,14 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     ASSERT_TRUE(codec.serialize(texture, binary));
     for(const u32 version : { 0u, 1u, 2u, 3u, ::TextureBinaryPayload::s_TextureVersion + 1u }){
         NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
-        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary)) << version;
+        EXPECT_FALSE(codec.deserialize(texture.virtualPath(), binary, testArena.arena)) << version;
     }
     EXPECT_EQ(logger.errorCount(), 5u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
 
     const u32 currentVersion = ::TextureBinaryPayload::s_TextureVersion;
     NWB_MEMCPY(binary.data() + offsetof(::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
-    const auto loadedAssetResult = codec.deserialize(testArena.arena, texture.virtualPath(), binary);
+    const auto loadedAssetResult = codec.deserialize(texture.virtualPath(), binary, testArena.arena);
     ASSERT_TRUE(loadedAssetResult);
 }
 
@@ -207,12 +199,12 @@ TEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAll
         u32 depth;
         TStringView diagnostic;
     };
-    const OverflowLayout layouts[] = {
+    const Array<OverflowLayout, 4u> layouts = {{
         { TextureDimension::Texture2D, Limit<u32>::s_Max, Limit<u32>::s_Max, 1u, NWB_TEXT("block layout exceeds supported limits") },
         { TextureDimension::TextureCube, 2147483648u, 2147483648u, 1u, NWB_TEXT("block layout exceeds supported limits") },
         { TextureDimension::Texture3D, 65536u, 65536u, Limit<u32>::s_Max, NWB_TEXT("mip byte offsets overflow") },
         { TextureDimension::Texture3D, 131072u, 131072u, Limit<u32>::s_Max, NWB_TEXT("block layout exceeds supported limits") },
-    };
+    }};
     for(const OverflowLayout& layout : layouts){
         CapturingLogger logger;
         Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

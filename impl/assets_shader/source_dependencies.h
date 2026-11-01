@@ -32,24 +32,16 @@ namespace ShaderSourceDependencies{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace IncludeKind = ::NWB::Impl::ShaderBinaryPayload::IncludeKind;
-using IncludeDirective = ::NWB::Impl::ShaderBinaryPayload::IncludeDirective;
+void SpliceSourceLines(Core::Assets::ScratchString& inOutSource)noexcept;
+void MaskSourceComments(Core::Assets::ScratchString& inOutSource)noexcept;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void SpliceSourceLines(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
-void MaskSourceComments(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
-
-[[nodiscard]] Expected<IncludeDirective> ExtractIncludeDirective(AStringView line)noexcept;
-[[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(AStringView includeName, IncludeKind::Enum kind, TStringView sourceDirectory, Span<const Path> includeDirectories, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<::Path<Core::Alloc::ScratchArena>> ResolveIncludeFile(AStringView includeName, ShaderBinaryPayload::IncludeKind::Enum kind, TStringView sourceDirectory, Span<const Path> includeDirectories, Core::Alloc::ScratchArena& scratchArena);
 
 template<typename SourceArenaT, typename DependencyVectorT>
 [[nodiscard]] b8 Gather(const ::Path<SourceArenaT>& sourcePath, Span<const Path> includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, Core::Alloc::ScratchArena& scratchArena, DependencyVectorT& outDependencies){
-    using ScratchArena = Core::Alloc::ScratchArena;
+    using ScratchArena = Core::Assets::ScratchArena;
     using ScratchPath = ::Path<ScratchArena>;
-    using ScratchString = AString<ScratchArena>;
+    using ScratchString = Core::Assets::ScratchString;
 
     outDependencies.clear();
     HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>> visited{ 0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena };
@@ -98,11 +90,12 @@ template<typename SourceArenaT, typename DependencyVectorT>
             if(!line.empty() && line.back() == '\r')
                 line.remove_suffix(1);
 
-            if(const auto include = ShaderSourceDependencies::ExtractIncludeDirective(line)){
-                const AStringView includeName = include->name;
-                const auto includeKind = include->kind;
-                if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
-                    const b8 plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
+            ShaderBinaryPayload::IncludeDirective include;
+            if(ShaderBinaryPayload::TryExtractIncludeDirective(line, include)){
+                const AStringView includeName = include.name;
+                const auto includeKind = include.kind;
+                if(includeKind == ShaderBinaryPayload::IncludeKind::Macro || includeKind == ShaderBinaryPayload::IncludeKind::Unsupported){
+                    const b8 plannedMacro = includeKind == ShaderBinaryPayload::IncludeKind::Macro && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
                         return name == includeName;
                     }
                     ) != externallyPlannedMacroIncludes.end();

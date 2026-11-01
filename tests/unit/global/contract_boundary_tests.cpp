@@ -142,7 +142,7 @@ public:
             ::_exit(10);
     }
 
-    constexpr AStringView s_Arguments[]{ "/bin/sh", "-c", "printf 'stdout\\n'; printf 'stderr\\n' >&2; exit 23" };
+    constexpr Array<AStringView, 3u> s_Arguments = { "/bin/sh", "-c", "printf 'stdout\\n'; printf 'stderr\\n' >&2; exit 23" };
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, s_Arguments, outputPath);
     if(!exitCode || *exitCode != 23)
         ::_exit(11);
@@ -163,10 +163,10 @@ public:
 
     AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
     constexpr u32 s_CaptureTimeoutMS = 2000u;
-    constexpr AStringView s_SuccessArguments[]{ "/bin/sh", "-c", "printf 'captured\\n'; printf 'discarded\\n' >&2; exit 0" };
+    constexpr Array<AStringView, 3u> s_SuccessArguments = { "/bin/sh", "-c", "printf 'captured\\n'; printf 'discarded\\n' >&2; exit 0" };
     if(!CaptureProcessOutput(output, testArena.arena, s_SuccessArguments, 256u, 64u, s_CaptureTimeoutMS) || AStringView(output) != "captured\n")
         ::_exit(21);
-    constexpr AStringView s_FailureArguments[]{ "/bin/sh", "-c", "printf 'retained\\n'; printf 'discarded\\n' >&2; exit 23" };
+    constexpr Array<AStringView, 3u> s_FailureArguments = { "/bin/sh", "-c", "printf 'retained\\n'; printf 'discarded\\n' >&2; exit 23" };
     if(CaptureProcessOutput(output, testArena.arena, s_FailureArguments, 256u, 64u, s_CaptureTimeoutMS) || AStringView(output) != "retained\n")
         ::_exit(22);
     ::_exit(0);
@@ -234,14 +234,14 @@ TEST(GlobalContractBoundaries, WideHashCombinationRetainsHighBitsAndWraparound){
 }
 
 TEST(GlobalContractBoundaries, Utf8OffsetRejectsMalformedPrefixesWithoutReadingTheSuffix){
-    const char bytes[]{ 'a', static_cast<char>(0xc3u), static_cast<char>(0xa9u), '\0', static_cast<char>(0xffu) };
-    const AStringView text(bytes, sizeof(bytes));
+    const Array<char, 5u> bytes = { 'a', static_cast<char>(0xc3u), static_cast<char>(0xa9u), '\0', static_cast<char>(0xffu) };
+    const AStringView text(bytes.data(), bytes.size());
     const auto boundary = Utf8ByteOffset(text, 2u);
     ASSERT_TRUE(boundary);
     EXPECT_EQ(*boundary, 3u);
     EXPECT_FALSE(IsValidUtf8TextWithoutNul(text));
     EXPECT_FALSE(Utf8ByteOffset(text, 3u));
-    EXPECT_FALSE(Utf8ByteOffset(AStringView(bytes + 1u, 1u), 1u));
+    EXPECT_FALSE(Utf8ByteOffset(AStringView(bytes.data() + 1u, 1u), 1u));
     EXPECT_FALSE(Utf8ByteOffset(AStringView{}, 1u));
     const auto emptyBoundary = Utf8ByteOffset(AStringView{}, 0u);
     ASSERT_TRUE(emptyBoundary);

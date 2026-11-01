@@ -54,6 +54,62 @@ class SearchComboResult{
     public b8 queryChanged = false;
 }
 
+class SearchComboSourceSnapshot{
+    public SearchComboSourceSnapshot(){
+        this.generation = 0u;
+        this.revision = 0u;
+        this.count = 0u;
+    }
+
+    public SearchComboSourceSnapshot(in u64 inGeneration, in u64 inRevision, in u64 inCount){
+        this.generation = inGeneration;
+        this.revision = inRevision;
+        this.count = inCount;
+    }
+
+    public u64 generation;
+    public u64 revision;
+    public u64 count;
+}
+
+class SearchComboQuerySnapshot{
+    public SearchComboQuerySnapshot(){
+        this.generation = 0u;
+        this.externalRevision = 0u;
+        this.revision = 0u;
+        this.compositionGeneration = 0u;
+        this.selectionGeneration = 0u;
+        this.anchor = 0u;
+        this.caret = 0u;
+    }
+
+    public SearchComboQuerySnapshot(
+        in u64 inGeneration,
+        in u64 inExternalRevision,
+        in u64 inRevision,
+        in u64 inCompositionGeneration,
+        in u64 inSelectionGeneration,
+        in usize inAnchor,
+        in usize inCaret
+    ){
+        this.generation = inGeneration;
+        this.externalRevision = inExternalRevision;
+        this.revision = inRevision;
+        this.compositionGeneration = inCompositionGeneration;
+        this.selectionGeneration = inSelectionGeneration;
+        this.anchor = inAnchor;
+        this.caret = inCaret;
+    }
+
+    public u64 generation;
+    public u64 externalRevision;
+    public u64 revision;
+    public u64 compositionGeneration;
+    public u64 selectionGeneration;
+    public usize anchor;
+    public usize caret;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

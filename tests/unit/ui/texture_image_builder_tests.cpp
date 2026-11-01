@@ -34,11 +34,11 @@ constexpr AStringView s_VersionedImagePath = "tests/ui/versioned_builder_image";
 constexpr AStringView s_CapacityImagePath = "tests/ui/capacity_image";
 
 struct TextureImagePaintSample{
+    usize quads = 0u;
     Rect bounds;
     Rect uv;
     Color color;
     u32 layer = 0u;
-    usize quads = 0u;
 };
 
 
@@ -46,7 +46,7 @@ struct TextureImagePaintSample{
 
 
 [[nodiscard]] static Expected<SharedImageSource> MakeImage(Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image", const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
-    return UiFixtureSupport::MakeSeededImage(arena, path, seed, width, height);
+    return UiFixtureSupport::MakeSeededImage(path, seed, width, height, arena);
 }
 
 [[nodiscard]] static Expected<TextureImagePaintSample> SampleImage(const DrawSnapshot& snapshot, const u64 generation)noexcept{
@@ -241,7 +241,7 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
     EXPECT_FLOAT_EQ(sample->bounds.x, 20.0f);
     EXPECT_FLOAT_EQ(sample->bounds.width, 20.0f);
     EXPECT_NEAR(sample->uv.x, 7.0f / 96.0f, 0.000001f);
-    EXPECT_NEAR(VectorGetX(VectorAdd(VectorReplicate(sample->uv.x), VectorReplicate(sample->uv.width))), 27.0f / 96.0f, 0.000001f);
+    EXPECT_NEAR(sample->uv.x + sample->uv.width, 27.0f / 96.0f, 0.000001f);
     b8 sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
@@ -388,8 +388,8 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_TRUE(snapshot.textureImages().empty());
     EXPECT_EQ(m_context.input().popupCount(), 0u);
-    const WidgetId parentId = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), "parent"));
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId, "child")), "image"))), nullptr);
+    const WidgetId parentId = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), "parent");
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(parentId, "child"), "image")), nullptr);
 }
 
 TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDeferredPaint){
@@ -406,7 +406,7 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));
+    ASSERT_TRUE(m_paint.prepareTextureImages(images));
     ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());
@@ -430,7 +430,7 @@ TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsume
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));
+    ASSERT_TRUE(m_paint.prepareTextureImages(images));
     ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
     m_paint.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
     ASSERT_TRUE(finishPanel());

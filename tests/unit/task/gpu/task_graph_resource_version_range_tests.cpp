@@ -27,43 +27,43 @@ namespace TaskGraphResourceVersionTestUtils{
 
 
 TEST(GpuTaskGraphResourceVersion, RequiresWholeResourceRangesForAccelStructAndHazardDomain){
-    const auto analyzeVersion = [](const Graphics::GpuGraphResourceType::Enum type, const Name& identity, const Graphics::GpuTaskResourceRange& range)->Expected<void, Graphics::GpuTaskGraphAnalysisStatus::Enum>{
+    const auto analyzeVersion = [](const Core::GpuGraphResourceType::Enum type, const Name& identity, const Core::GpuTaskResourceRange& range)->Expected<void, Core::GpuTaskGraphAnalysisStatus::Enum>{
         Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
         TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::GpuGraphResourceDesc resourceDesc;
+        Core::GpuTaskGraph graph(testArena.arena);
+        Core::GpuGraphResourceDesc resourceDesc;
         resourceDesc.setIdentity(identity).setMarkerLabel("Whole Resource Version").setType(type);
-        if(type == Graphics::GpuGraphResourceType::AccelStruct)
-            resourceDesc.setInitialState(Graphics::ResourceStates::Common);
+        if(type == Core::GpuGraphResourceType::AccelStruct)
+            resourceDesc.setInitialState(Core::ResourceStates::Common);
         const auto resourceResult = graph.importResource(resourceDesc);
         if(!resourceResult)
-            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
-        const Graphics::GpuGraphResourceId resource = *resourceResult;
+            return MakeUnexpected(Core::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        const Core::GpuGraphResourceId resource = *resourceResult;
         if(!resource.valid())
-            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
-        const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot, range);
+            return MakeUnexpected(Core::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::ImportedRoot, range);
         if(!versionResult)
-            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
-        const Graphics::GpuGraphResourceVersionId version = *versionResult;
+            return MakeUnexpected(Core::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        const Core::GpuGraphResourceVersionId version = *versionResult;
         if(!version.valid())
-            return MakeUnexpected(Graphics::GpuTaskGraphAnalysisStatus::NotAnalyzed);
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        if(!TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis))
+            return MakeUnexpected(Core::GpuTaskGraphAnalysisStatus::NotAnalyzed);
+        Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+        if(!TaskGraphTestUtils::Analyze(graph, operationScratchArena, analysis))
             return MakeUnexpected(analysis.diagnostic().status);
         return {};
     };
 
-    Graphics::GpuTaskResourceRange partialRange;
-    partialRange.bufferRange = Graphics::BufferRange(16u, 32u);
-    const auto partialAccelStruct = analyzeVersion(Graphics::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/partial_accel_struct"), partialRange);
+    Core::GpuTaskResourceRange partialRange;
+    partialRange.bufferRange = Core::BufferRange(16u, 32u);
+    const auto partialAccelStruct = analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/partial_accel_struct"), partialRange);
     ASSERT_FALSE(partialAccelStruct);
-    EXPECT_EQ(partialAccelStruct.error(), Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
-    const auto partialHazardDomain = analyzeVersion(Graphics::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/partial_hazard_domain"), partialRange);
+    EXPECT_EQ(partialAccelStruct.error(), Core::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
+    const auto partialHazardDomain = analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/partial_hazard_domain"), partialRange);
     ASSERT_FALSE(partialHazardDomain);
-    EXPECT_EQ(partialHazardDomain.error(), Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
-    EXPECT_TRUE(analyzeVersion(Graphics::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/whole_accel_struct"), Graphics::GpuTaskResourceRange{}));
-    EXPECT_TRUE(analyzeVersion(Graphics::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/whole_hazard_domain"), Graphics::GpuTaskResourceRange{}));
+    EXPECT_EQ(partialHazardDomain.error(), Core::GpuTaskGraphAnalysisStatus::InvalidResourceVersion);
+    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::AccelStruct, Name("tests/task_graph_resource_version/whole_accel_struct"), Core::GpuTaskResourceRange{}));
+    EXPECT_TRUE(analyzeVersion(Core::GpuGraphResourceType::HazardDomain, Name("tests/task_graph_resource_version/whole_hazard_domain"), Core::GpuTaskResourceRange{}));
 }
 
 

@@ -32,15 +32,6 @@ using namespace TaskGraphTestUtils;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Name> IndexedIdentity(const Name& prefix, const usize index){
-    char text[32u] = {};
-    return DeriveName(prefix, FormatDecimal(index, text));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -52,29 +43,29 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
     for(const usize prefixCount : { 0u, 32u, 33u }){
         SCOPED_TRACE(prefixCount);
         TaskGraphTestUtils::TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
+        Core::GpuTaskGraph graph(testArena.arena);
         for(usize index = 0u; index < prefixCount; ++index){
             {
-                const auto prefixNameResult = IndexedIdentity(Name("tests/import_scaling/completion_prefix/"), index);
+                const auto prefixNameResult = IndexedName(Name("tests/import_scaling/completion_prefix/"), index);
                 ASSERT_TRUE(prefixNameResult);
-                const auto gpuTaskAdmission = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(*prefixNameResult).setMarkerLabel("Completion Prefix"));
+                const auto gpuTaskAdmission = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(*prefixNameResult).setMarkerLabel("Completion Prefix"));
                 ASSERT_TRUE(gpuTaskAdmission);
                 ASSERT_TRUE(gpuTaskAdmission->valid());
             }
         }
-        const Graphics::GpuExternalCompletionDesc metadata = Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/import_scaling/upgraded_completion")).setMarkerLabel("Original Completion");
+        const Core::GpuExternalCompletionDesc metadata = Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/import_scaling/upgraded_completion")).setMarkerLabel("Original Completion");
         const auto idResult = graph.importExternalCompletion(metadata);
         ASSERT_TRUE(idResult);
-        const Graphics::GpuExternalCompletionId id = *idResult;
+        const Core::GpuExternalCompletionId id = *idResult;
         ASSERT_TRUE(id.valid());
         u64 metadataRevision = 0u;
         {
-            const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+            const Core::GpuTaskGraph::DeclarationReadView view(graph);
             metadataRevision = view.declarationRevision();
         }
-        Graphics::GpuExternalCompletionDesc upgraded = metadata;
+        Core::GpuExternalCompletionDesc upgraded = metadata;
         upgraded.markerLabel = "Token Upgrade Label";
-        upgraded.token = { .value = 31u, .physicalQueueIndex = 0u, .deviceGeneration = 17u, .queue = Graphics::CommandQueue::Graphics, };
+        upgraded.token = { .value = 31u, .physicalQueueIndex = 0u, .deviceGeneration = 17u, .queue = Core::CommandQueue::Graphics, };
         {
             const auto secondGpuTaskAdmission = graph.importExternalCompletion(upgraded);
             EXPECT_TRUE(secondGpuTaskAdmission);
@@ -83,11 +74,11 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         }
         u64 upgradedRevision = 0u;
         {
-            const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+            const Core::GpuTaskGraph::DeclarationReadView view(graph);
             upgradedRevision = view.declarationRevision();
             EXPECT_NE(upgradedRevision, metadataRevision);
             EXPECT_EQ(view.externalCompletionAt(id.index).markerLabel, metadata.markerLabel);
-            const Graphics::QueueSubmissionToken* const token = view.externalCompletionToken(id);
+            const Core::QueueSubmissionToken* const token = view.externalCompletionToken(id);
             ASSERT_NE(token, nullptr);
             EXPECT_EQ(token->value, upgraded.token.value);
         }
@@ -103,15 +94,15 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
             if(fourthGpuTaskAdmission)
                 EXPECT_EQ(*fourthGpuTaskAdmission, id);
         }
-        Graphics::GpuExternalCompletionDesc conflict = upgraded;
+        Core::GpuExternalCompletionDesc conflict = upgraded;
         ++conflict.token.value;
         EXPECT_FALSE(graph.importExternalCompletion(conflict).has_value());
-        Graphics::GpuExternalCompletionDesc differentGeneration = upgraded;
+        Core::GpuExternalCompletionDesc differentGeneration = upgraded;
         differentGeneration.identity = Name("tests/import_scaling/different_generation_completion");
         ++differentGeneration.token.deviceGeneration;
         EXPECT_FALSE(graph.importExternalCompletion(differentGeneration).has_value());
         {
-            const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+            const Core::GpuTaskGraph::DeclarationReadView view(graph);
             EXPECT_EQ(view.declarationRevision(), upgradedRevision);
             EXPECT_EQ(view.externalCompletionCount(), prefixCount + 1u);
             EXPECT_EQ(view.externalCompletionToken(id)->value, upgraded.token.value);
@@ -120,11 +111,11 @@ TEST(GpuTaskGraphImportScaling, PreservesCompletionUpgradeConflictsAndResetAcros
         ++upgraded.token.deviceGeneration;
         const auto reboundResult = graph.importExternalCompletion(upgraded);
         ASSERT_TRUE(reboundResult);
-        const Graphics::GpuExternalCompletionId rebound = *reboundResult;
+        const Core::GpuExternalCompletionId rebound = *reboundResult;
         ASSERT_TRUE(rebound.valid());
         EXPECT_EQ(rebound.index, 0u);
         EXPECT_NE(rebound.generation, id.generation);
-        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        const Core::GpuTaskGraph::DeclarationReadView view(graph);
         EXPECT_FALSE(view.validExternalCompletion(id));
         EXPECT_EQ(view.externalCompletionToken(rebound)->value, upgraded.token.value);
         EXPECT_EQ(view.externalCompletionToken(rebound)->deviceGeneration, upgraded.token.deviceGeneration);

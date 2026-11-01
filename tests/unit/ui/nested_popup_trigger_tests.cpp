@@ -47,16 +47,16 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ComboKey)); }
+    [[nodiscard]] WidgetId fieldId()const{ return UiTestSupport::RequireWidgetId(childId(), s_ComboKey); }
 
-    [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(fieldId(), s_ComboRowsKey)); }
+    [[nodiscard]] WidgetId rowsId()const{ return UiTestSupport::RequireWidgetId(fieldId(), s_ComboRowsKey); }
 
-    [[nodiscard]] WidgetId anchorId()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_AnchorKey)); }
+    [[nodiscard]] WidgetId anchorId()const{ return UiTestSupport::RequireWidgetId(childId(), s_AnchorKey); }
 
-    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_MenuKey)), s_MenuRowsKey)); }
+    [[nodiscard]] WidgetId menuRows()const{ return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(childId(), s_MenuKey), s_MenuRowsKey); }
 
     [[nodiscard]] WidgetId comboRow(const u64 key)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(rowsId(), s_ListRowsKey)), key));
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(rowsId(), s_ListRowsKey), key);
     }
 
     [[nodiscard]] b8 beginChild(const u64 generation){
@@ -97,8 +97,8 @@ protected:
         ASSERT_NE(target(childId()), nullptr);
         EXPECT_EQ(target(parentId())->layer, 1u);
         EXPECT_EQ(target(childId())->layer, 2u);
-        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey))), nullptr);
-        EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_AfterKey))), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey)), nullptr);
+        EXPECT_NE(target(UiTestSupport::RequireWidgetId(childId(), s_AfterKey)), nullptr);
     }
 
 

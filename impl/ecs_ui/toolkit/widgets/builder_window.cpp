@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -63,9 +63,9 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
         return false;
     }
     // Keys beginning with @window. belong to the window's internal chrome.
-    const auto titleState = m_context.declare("@window.title", WidgetKind::Window);
-    const auto collapseState = m_context.declare("@window.collapse", WidgetKind::Button);
-    const auto resizeState = m_context.declare("@window.resize", WidgetKind::Window);
+    const auto titleState = m_context.declare(s_WindowChromeTitleKey, WidgetKind::Window);
+    const auto collapseState = m_context.declare(s_WindowChromeCollapseKey, WidgetKind::Button);
+    const auto resizeState = m_context.declare(s_WindowChromeResizeKey, WidgetKind::Window);
     if(!titleState || !collapseState || !resizeState){
         m_context.fail();
         return false;

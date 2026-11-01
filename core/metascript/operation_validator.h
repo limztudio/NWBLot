@@ -21,6 +21,11 @@ NWB_METASCRIPT_BEGIN
 class OperationValidator final{
 public:
     static constexpr AStringView s_IntegerOverflowText = "integer overflow";
+    static constexpr AStringView s_DivisionByZeroText = "division by zero";
+    static constexpr AStringView s_ListAppendSizeOverflowText = "list append size overflow";
+    static constexpr AStringView s_StringConcatenationSizeOverflowText = "string concatenation size overflow";
+    static constexpr AStringView s_ListConcatenationSizeOverflowText = "list concatenation size overflow";
+    static constexpr AStringView s_StringAppendSizeOverflowText = "string append size overflow";
 
 
 public:

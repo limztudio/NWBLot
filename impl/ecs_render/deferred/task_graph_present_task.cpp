@@ -55,13 +55,11 @@ namespace RendererTaskGraphDetail{
     return presentRecorded;
 }
 
-
 void DeferredPresentGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     AcceptOutputLayer(payload.outputLayerContributor, payload.outputLayer.frameGeneration, token);
 }
 
-
-void DeferredPresentGraphTask::AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token){
+void DeferredPresentGraphTask::AcceptOutputLayer(Core::IGpuTaskGraphOutputLayerContributor* const contributor, const u64 frameGeneration, const Core::QueueSubmissionToken& token){
     if(contributor && frameGeneration != 0u && token.valid())
         contributor->acceptTaskGraphOutputLayer(frameGeneration, token);
 }

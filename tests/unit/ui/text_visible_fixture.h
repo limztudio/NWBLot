@@ -35,7 +35,6 @@ inline constexpr AStringView s_KoreanFontPath = "tests/ui/fonts/korean";
 inline constexpr AStringView s_SkinPath = "tests/ui/skin";
 
 
-using UiPaintAssertions::ExpectRect;
 void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
 
 
@@ -43,13 +42,18 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected);
 
 
 class TextVisibleFixture : public testing::Test{
+protected:
+    [[nodiscard]] static SIMDVectorSingle LoadOutlinePosition(const PlacedGlyph& glyph, Point origin)noexcept;
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, Point origin)noexcept;
+
+
 public:
     TextVisibleFixture();
 
 
 protected:
     virtual void SetUp()override;
-    [[nodiscard]] b8 loadFont(Font& font, StringView filename);
+    [[nodiscard]] b8 loadFont(StringView filename, Font& font);
     [[nodiscard]] b8 installCoverageFonts();
     void beginPaint(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
     [[nodiscard]] Expected<SharedGlyphPage> makePage(u64 atlasIdentity);

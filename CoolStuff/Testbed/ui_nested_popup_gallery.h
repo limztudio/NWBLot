@@ -6,7 +6,7 @@
 
 
 #include "namespace.h"
-#include "ui_nested_popup_source.h"
+#include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/context_menu.h>
@@ -19,6 +19,23 @@ TESTBED_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_NestedPopupLabelCount = 5u;
+inline constexpr u64 s_NestedPopupDisabledKey = 3u;
+
+class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>{
+    friend class UiImmutableListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey, NWB::Impl::Ui::ISearchableListDataSource>;
+    friend class UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>;
+
+
+public:
+    using UiFilteredListSource<UiNestedPopupSource, s_NestedPopupLabelCount, s_NestedPopupDisabledKey>::UiFilteredListSource;
+
+
+private:
+    static constexpr Array<StringView, s_NestedPopupLabelCount> s_Labels{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Echo" };
+};
 
 
 class UiNestedPopupGallery final : NoCopy{
@@ -51,6 +68,9 @@ private:
     NWB::Impl::Ui::EditBoxState m_afterEdit;
     NWB::Impl::Ui::EditBoxState m_childEdit;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

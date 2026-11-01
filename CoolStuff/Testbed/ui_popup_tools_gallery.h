@@ -6,7 +6,7 @@
 
 
 #include "namespace.h"
-#include "ui_popup_tools_source.h"
+#include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/context_menu.h>
@@ -24,6 +24,22 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_PopupToolsLabelCount = 5u;
+inline constexpr u64 s_PopupToolsDisabledKey = 3u;
+
+class UiPopupToolsSource final : public UiImmutableListSource<UiPopupToolsSource, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>{
+    friend class UiImmutableListSource<UiPopupToolsSource, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>;
+
+
+public:
+    using UiImmutableListSource<UiPopupToolsSource, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>::UiImmutableListSource;
+
+
+private:
+    static constexpr Array<StringView, s_PopupToolsLabelCount> s_Labels{ "Inspect selection", "Duplicate", "Delete (disabled)", "Rename", "Reset view" };
+};
+
+
 class UiPopupToolsGallery final : NoCopy{
 public:
     void paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::ScratchArena& scratchArena, f32 x, f32 y);
@@ -36,6 +52,9 @@ private:
     u64 m_command = 0u;
     u32 m_anchorClicks = 0u;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

@@ -26,6 +26,11 @@ Expected<u64> UiComboSmokeSource::findEnabled(const u64 start, const b8 reverse)
     return m_rows.findEnabled(start, reverse);
 }
 
+void UiComboSmokeSource::toggleEmpty()noexcept{
+    m_empty = !m_empty;
+    ++m_revision;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

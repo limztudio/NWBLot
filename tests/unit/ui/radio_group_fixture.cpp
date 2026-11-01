@@ -194,7 +194,7 @@ void RadioGroupFixture::configureRadioSkin(const b8 fallbackOnly){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    constexpr StringView s_Names[]{ "radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark" };
+    constexpr Array<StringView, 6> s_Names{ "radio.normal", "radio.checked", "radio.mark", "checkbox.normal", "checkbox.checked", "checkbox.mark" };
     for(u32 index = 0u; index < 6u; ++index){
         if(fallbackOnly && index < 3u)
             continue;

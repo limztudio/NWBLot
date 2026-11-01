@@ -7,6 +7,8 @@
 
 #include "renderer_material_state.h"
 
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
 #include <global/scope_exit.h>
 
 
@@ -22,16 +24,8 @@ NWB_IMPL_BEGIN
 // One collector owns mutation of its borrowed output during its lifetime.
 template<typename OutputArena>
 class MaterialSampledTextureCollector final : NoCopy{
-    friend class ShadowMaterialSampledTextureCollector;
-
-
 private:
     using TextureIndex = HashSet<Core::Texture*, Core::Alloc::ScratchArena>;
-
-
-private:
-    static constexpr usize s_InlineTextureCount = 32u;
-    static constexpr usize s_PromotedIndexCapacity = s_InlineTextureCount * 4u;
 
 
 public:
@@ -44,7 +38,7 @@ public:
             if(!m_index){
                 if(containsInline(identity))
                     continue;
-                if(m_inlineCount < s_InlineTextureCount){
+                if(m_inlineCount < s_SmallInlineIndexCapacity){
                     m_inlineTextures[m_inlineCount] = identity;
                     ++m_inlineCount;
                     continue;
@@ -63,7 +57,7 @@ public:
         if(!m_index){
             if(containsInline(identity))
                 return;
-            if(m_inlineCount < s_InlineTextureCount){
+            if(m_inlineCount < s_SmallInlineIndexCapacity){
                 m_textures.push_back(texture);
                 m_inlineTextures[m_inlineCount] = identity;
                 ++m_inlineCount;
@@ -71,6 +65,13 @@ public:
             }
         }
         appendIndexed(texture);
+    }
+
+    void clear()noexcept{
+        if(m_index)
+            m_index->clear();
+        m_inlineCount = 0u;
+        m_textures.clear();
     }
 
 
@@ -96,8 +97,8 @@ private:
     }
 
     void promoteIndex(){
-        NWB_ASSERT(!m_index && m_inlineCount == s_InlineTextureCount);
-        TextureIndex index(s_PromotedIndexCapacity, m_scratchArena);
+        NWB_ASSERT(!m_index && m_inlineCount == s_SmallInlineIndexCapacity);
+        TextureIndex index(s_PromotedInlineIndexCapacity, m_scratchArena);
         for(Core::Texture* const identity : m_inlineTextures){
             if(!index.insert(identity).second)
                 TerminateInvariant();
@@ -106,18 +107,11 @@ private:
         m_index.emplace(Move(index));
     }
 
-    void clear()noexcept{
-        if(m_index)
-            m_index->clear();
-        m_inlineCount = 0u;
-        m_textures.clear();
-    }
-
 
 private:
     Vector<Core::TextureHandle, OutputArena>& m_textures;
     Core::Alloc::ScratchArena& m_scratchArena;
-    Core::Texture* m_inlineTextures[s_InlineTextureCount];
+    Array<Core::Texture*, s_SmallInlineIndexCapacity> m_inlineTextures{};
     usize m_inlineCount = 0u;
     Optional<TextureIndex> m_index;
 };
@@ -155,7 +149,10 @@ private:
 
 
 public:
-    ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena);
+    ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena)
+        : m_output(textures, scratchArena)
+        , m_scratchArena(scratchArena)
+    {}
     ShadowMaterialSampledTextureCollector(ShadowMaterialSampledTextureCollector&&) = delete;
 
 

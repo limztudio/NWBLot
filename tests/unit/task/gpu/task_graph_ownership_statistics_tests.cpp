@@ -35,29 +35,29 @@ using TaskGraphTestUtils::TestArena;
 
 static void CheckOwnershipStatistics(const usize resourceCount){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
-    Vector<Graphics::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ declarationScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ declarationScratch };
     uses.reserve(resourceCount * 2u);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
-        char identityText[32u] = {};
+        Array<char, 32u> identityText = {};
         const auto identityNameResult = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
-        const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Graphics::ResourceStates::Common, Graphics::ResourceQueueSharing::Exclusive);
+        const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Core::ResourceStates::Common, Core::ResourceQueueSharing::Exclusive);
         ASSERT_TRUE(resourceResult);
-        const Graphics::GpuGraphResourceId resource = *resourceResult;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         for(u32 rangeIndex = 0u; rangeIndex < 2u; ++rangeIndex){
-            uses.push_back({ .resource = resource, .range = { .textureSubresources = Graphics::TextureSubresourceSet(rangeIndex * 2u, 1u, 0u, 1u) }, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Write, });
+            uses.push_back({ .resource = resource, .range = { .textureSubresources = Core::TextureSubresourceSet(rangeIndex * 2u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Write, });
         }
     }
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
-        char identityText[32u] = {};
-        Graphics::GpuTaskDesc desc;
+        Array<char, 32u> identityText = {};
+        Core::GpuTaskDesc desc;
         const auto resourceNameResult = DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(resourceNameResult);
-        desc.setIdentity(*resourceNameResult).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses.data(), uses.size());
+        desc.setIdentity(*resourceNameResult).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses);
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();
         {
             const auto gpuTaskAdmission = graph.addTask(desc, commands);
@@ -75,9 +75,9 @@ static void CheckOwnershipStatistics(const usize resourceCount){
             EXPECT_EQ(edge.producer.index, edgeIndex / resourceCount);
             EXPECT_EQ(edge.consumer.index, edgeIndex / resourceCount + 1u);
             EXPECT_EQ(edge.resource.index, edgeIndex % resourceCount);
-            EXPECT_EQ(edge.hazard, Graphics::GpuTaskHazardType::WriteAfterWrite);
+            EXPECT_EQ(edge.hazard, Core::GpuTaskHazardType::WriteAfterWrite);
         }
-        const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
+        const Core::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
         const auto& statistics = plan.compileStatistics();
         EXPECT_EQ(statistics.logicalOwnershipTransferCount, resourceCount * 4u);
         EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, resourceCount * 2u);
@@ -113,13 +113,13 @@ static void CheckOwnershipStatistics(const usize resourceCount){
 
     compilation.compiledGraph.reset();
     {
-        const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
+        const Core::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
         EXPECT_FALSE(plan.physicalQueueCompileStatistics(compilation.graphicsQueue.id).valid());
     }
     ASSERT_TRUE(compilation.compile(graph));
-    const Graphics::GpuPhysicalQueueTopology invalidTopology{};
+    const Core::GpuPhysicalQueueTopology invalidTopology{};
     EXPECT_FALSE(Compile(compilation.analysis, compilation.assignments, compilation.compiledGraph, declarationScratch, graph, invalidTopology));
-    const Graphics::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
+    const Core::GpuCompiledGraph::ReadView plan(compilation.compiledGraph);
     EXPECT_FALSE(plan.physicalQueueCompileStatistics(compilation.graphicsQueue.id).valid());
 }
 

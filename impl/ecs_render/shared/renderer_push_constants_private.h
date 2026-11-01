@@ -62,88 +62,31 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
+void SetShaderDrivenPushConstants(
+    Core::CommandList& commandList,
+    u32 meshletCount,
+    u32 instanceIndex,
+    u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags
-)noexcept{
-    ShaderDrivenPushConstants pushConstants;
-    pushConstants.meshletCount = meshletCount;
-    pushConstants.instanceIndex = instanceIndex;
-    pushConstants.materialConstantByteOffset = materialConstantByteOffset;
-    pushConstants.dispatchFlags = dispatchFlags;
-    pushConstants.frameHeapSlots = frameHeapSlots;
+    u32 dispatchFlags
+);
 
-    if(viewportState.viewports.empty())
-        return pushConstants;
-
-    const Core::Viewport& viewport = viewportState.viewports[0];
-    pushConstants.dispatchFlags |= s_MeshDispatchFlagScissorCull;
-    pushConstants.viewportRect = Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
-
-    Core::Rect scissorRect = Core::Rect::FromViewport(viewport);
-    if(!viewportState.scissorRects.empty())
-        scissorRect = viewportState.scissorRects[0];
-
-    pushConstants.scissorRect = Float4(static_cast<f32>(scissorRect.minX), static_cast<f32>(scissorRect.minY), static_cast<f32>(scissorRect.maxX), static_cast<f32>(scissorRect.maxY));
-    return pushConstants;
-}
-
-NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
+void SetTransparentDrawPushConstants(
+    Core::CommandList& commandList,
+    u32 meshletCount,
+    u32 instanceIndex,
+    u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags,
-    const b8 hdr10OutputActive,
-    const u32 csgContextHeapSlot = 0u,
-    const b8 refractionCapture = false
-)noexcept{
-    TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
-    pushConstants.avboit = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
-    pushConstants.avboit.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT] = csgContextHeapSlot;
-    if(refractionCapture)
-        pushConstants.avboit.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] = NWB_AVBOIT_REFRACTION_CAPTURE;
-    return pushConstants;
-}
+    u32 dispatchFlags,
+    b8 hdr10OutputActive,
+    u32 csgContextHeapSlot = 0u,
+    b8 refractionCapture = false
+);
 
-NWB_INLINE void SetShaderDrivenPushConstants(
-    Core::CommandList& commandList,
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
-    const Core::ViewportState& viewportState,
-    const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags
-){
-    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, frameHeapSlots, dispatchFlags);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-}
-
-NWB_INLINE void SetTransparentDrawPushConstants(
-    Core::CommandList& commandList,
-    const u32 meshletCount,
-    const u32 instanceIndex,
-    const u32 materialConstantByteOffset,
-    const Core::ViewportState& viewportState,
-    const AvboitFrameTargets& targets,
-    const MeshFrameHeapSlots& frameHeapSlots,
-    const u32 dispatchFlags,
-    const b8 hdr10OutputActive,
-    const u32 csgContextHeapSlot = 0u,
-    const b8 refractionCapture = false
-){
-    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, frameHeapSlots, dispatchFlags, hdr10OutputActive, csgContextHeapSlot, refractionCapture);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-}
-
-NWB_INLINE void SetEmulatedVertexAttribute(Core::VertexAttributeDesc& attribute, const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name){
+NWB_INLINE void SetEmulatedVertexAttribute(const Core::Format::Enum format, const u32 offsetByteCount, const NameText<char> name, Core::VertexAttributeDesc& attribute){
     attribute.setFormat(format).setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX).setOffset(offsetByteCount).setElementStride(s_EmulatedVertexStride).setName(Name(name));
 }
 

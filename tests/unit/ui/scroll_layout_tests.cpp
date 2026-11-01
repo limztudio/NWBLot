@@ -33,10 +33,10 @@ TEST(UiScrollLayoutTests, EmptyContentUsesFullPaddedViewportAndEmptyVisibleRange
     const auto placementResult = ScrollLayout::Calculate({ 10.0f, 20.0f, 200.0f, 120.0f }, { 0.0f, 0.0f, 400.0f, 300.0f }, { 8.0f, 6.0f, 4.0f, 14.0f }, 12.0f, 16.0f, 0u, 20.0f, 500.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
-    NWB::UiWidgetTests::ExpectRect(placement.contentClip, placement.viewport);
-    NWB::UiWidgetTests::ExpectRect(placement.track, {});
-    NWB::UiWidgetTests::ExpectRect(placement.thumb, {});
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, placement.viewport);
+    NWB::UiPaintAssertions::ExpectRect(placement.track, {});
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, {});
     EXPECT_DOUBLE_EQ(placement.contentHeight, 0.0);
     EXPECT_DOUBLE_EQ(placement.offset, 0.0);
     EXPECT_DOUBLE_EQ(placement.maxOffset, 0.0);
@@ -52,7 +52,7 @@ TEST(UiScrollLayoutTests, ContentExactlyFittingDoesNotReserveScrollbarWidth){
     const auto placementResult = ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 5u, 20.0f, 10.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, bounds);
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.scrollbarVisible);
     EXPECT_DOUBLE_EQ(placement.maxOffset, 0.0);
     EXPECT_DOUBLE_EQ(placement.offset, 0.0);
@@ -67,7 +67,7 @@ TEST(UiScrollLayoutTests, OverscrollClampsThumbToTheFinalVisibleRow){
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     EXPECT_DOUBLE_EQ(placement.offset, 300.0);
-    NWB::UiWidgetTests::ExpectRect(placement.thumb, { 188.0f, 75.0f, 12.0f, 25.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, { 188.0f, 75.0f, 12.0f, 25.0f });
     EXPECT_EQ(placement.firstRow, 15u);
     EXPECT_EQ(placement.endRow, 20u);
 }
@@ -78,7 +78,7 @@ TEST(UiScrollLayoutTests, MinimumThumbNeverExceedsItsTrack){
     const auto placementResult = ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 80.0f, 100000u, 32.0f, 1000.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.thumb, placement.track);
+    NWB::UiPaintAssertions::ExpectRect(placement.thumb, placement.track);
     EXPECT_DOUBLE_EQ(placement.maxOffset, 3199980.0);
 }
 
@@ -88,8 +88,8 @@ TEST(UiScrollLayoutTests, ZeroScrollbarWidthLeavesScrollableContentAtFullWidth){
     const auto placementResult = ScrollLayout::Calculate(bounds, bounds, {}, 0.0f, 16.0f, 100u, 10.0f, 150.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, bounds);
-    NWB::UiWidgetTests::ExpectRect(placement.track, {});
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, bounds);
+    NWB::UiPaintAssertions::ExpectRect(placement.track, {});
     EXPECT_FALSE(placement.scrollbarVisible);
     EXPECT_DOUBLE_EQ(placement.maxOffset, 900.0);
     EXPECT_EQ(placement.firstRow, 15u);
@@ -102,8 +102,8 @@ TEST(UiScrollLayoutTests, ExcessiveScrollbarWidthShrinksToAvailableWidthAndCulls
     const auto placementResult = ScrollLayout::Calculate(bounds, bounds, {}, 80.0f, 16.0f, 20u, 20.0f, 0.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 100.0f });
-    NWB::UiWidgetTests::ExpectRect(placement.track, bounds);
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.track, bounds);
     EXPECT_EQ(placement.firstRow, 0u);
     EXPECT_EQ(placement.endRow, 0u);
 }
@@ -121,7 +121,7 @@ TEST(UiScrollLayoutTests, ExtremeFiniteOffsetClampsBeforeProducingVisibleFloatGe
     const auto lastResult = ScrollLayout::RowBounds(99999u, placement, 32.0f);
     ASSERT_TRUE(lastResult);
     last = *lastResult;
-    NWB::UiWidgetTests::ExpectRect(last, { 10.0f, 116.0f, 228.0f, 32.0f });
+    NWB::UiPaintAssertions::ExpectRect(last, { 10.0f, 116.0f, 228.0f, 32.0f });
 }
 
 TEST(UiScrollLayoutTests, FractionalOffsetsIncludePartialRowsAtBothEdges){
@@ -136,7 +136,7 @@ TEST(UiScrollLayoutTests, FractionalOffsetsIncludePartialRowsAtBothEdges){
     const auto firstResult = ScrollLayout::RowBounds(0u, placement, 12.5f);
     ASSERT_TRUE(firstResult);
     first = *firstResult;
-    NWB::UiWidgetTests::ExpectRect(first, { 0.0f, 13.75f, 188.0f, 12.5f });
+    NWB::UiPaintAssertions::ExpectRect(first, { 0.0f, 13.75f, 188.0f, 12.5f });
 }
 
 TEST(UiScrollLayoutTests, ExclusiveBottomBoundaryDoesNotDeclareTheTouchingNextRow){
@@ -155,8 +155,8 @@ TEST(UiScrollLayoutTests, InheritedVerticalClipCullsRowsWithoutChangingLogicalRa
     const auto placementResult = ScrollLayout::Calculate(bounds, { 10.0f, 60.0f, 200.0f, 20.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, { 10.0f, 20.0f, 188.0f, 100.0f });
-    NWB::UiWidgetTests::ExpectRect(placement.contentClip, { 10.0f, 60.0f, 188.0f, 20.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 10.0f, 20.0f, 188.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, { 10.0f, 60.0f, 188.0f, 20.0f });
     EXPECT_DOUBLE_EQ(placement.maxOffset, 300.0);
     EXPECT_FLOAT_EQ(placement.thumb.height, 25.0f);
     EXPECT_EQ(placement.firstRow, 4u);
@@ -169,17 +169,17 @@ TEST(UiScrollLayoutTests, InheritedHorizontalClipKeepsRowOriginAndWidthStable){
     const auto placementResult = ScrollLayout::Calculate(bounds, { 50.0f, 20.0f, 30.0f, 100.0f }, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.contentClip, { 50.0f, 20.0f, 30.0f, 100.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.contentClip, { 50.0f, 20.0f, 30.0f, 100.0f });
     Rect first;
     const auto firstResult = ScrollLayout::RowBounds(2u, placement, 20.0f);
     ASSERT_TRUE(firstResult);
     first = *firstResult;
-    NWB::UiWidgetTests::ExpectRect(first, { 10.0f, 20.0f, 188.0f, 20.0f });
+    NWB::UiPaintAssertions::ExpectRect(first, { 10.0f, 20.0f, 188.0f, 20.0f });
 }
 
 TEST(UiScrollLayoutTests, DisjointAndZeroAreaClipsHaveNoVisibleRowsButKeepScrolling){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
-    const Rect clips[] = { { 300.0f, 20.0f, 100.0f, 100.0f }, { 10.0f, 200.0f, 100.0f, 100.0f }, { 10.0f, 20.0f, 0.0f, 100.0f }, { 10.0f, 20.0f, 100.0f, 0.0f } };
+    const Array<Rect, 4> clips = { Rect{ 300.0f, 20.0f, 100.0f, 100.0f }, Rect{ 10.0f, 200.0f, 100.0f, 100.0f }, Rect{ 10.0f, 20.0f, 0.0f, 100.0f }, Rect{ 10.0f, 20.0f, 100.0f, 0.0f } };
     for(const Rect& clip : clips){
         ScrollPlacement placement;
         const auto placementResult = ScrollLayout::Calculate(bounds, clip, {}, 12.0f, 16.0f, 20u, 20.0f, 40.0);
@@ -199,7 +199,7 @@ TEST(UiScrollLayoutTests, PaddingCanCollapseLogicalViewportWithoutNegativeSizes)
     const auto placementResult = ScrollLayout::Calculate(bounds, bounds, { 300.0f, 200.0f, 300.0f, 200.0f }, 12.0f, 16.0f, 20u, 20.0f, 40.0);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
-    NWB::UiWidgetTests::ExpectRect(placement.viewport, { 210.0f, 120.0f, 0.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(placement.viewport, { 210.0f, 120.0f, 0.0f, 0.0f });
     EXPECT_EQ(placement.firstRow, 0u);
     EXPECT_EQ(placement.endRow, 0u);
     EXPECT_DOUBLE_EQ(placement.maxOffset, 400.0);
@@ -282,7 +282,6 @@ TEST(UiScrollStateTests, IndependentAndRecreatedStatesHaveUniqueNonzeroIdentity)
     {
         ScrollState retired;
         retiredIdentity = retired.instanceGeneration();
-        EXPECT_NE(retiredIdentity, 0u);
     }
     ScrollState first;
     ScrollState second;

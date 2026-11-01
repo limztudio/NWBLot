@@ -176,7 +176,7 @@ public:
         objectArgument += s_LlvmSymbolizerObjectPrefix;
         objectArgument.append(modulePathText.data(), modulePathText.size());
 
-        const AStringView arguments[] = { s_LlvmSymbolizerTool, s_LlvmSymbolizerDemangleFlag, s_LlvmSymbolizerFunctionsFlag, s_LlvmSymbolizerInliningFlag, AStringView(objectArgument), AStringView(addressArgument), };
+        const Array<AStringView, 6> arguments = {{ s_LlvmSymbolizerTool, s_LlvmSymbolizerDemangleFlag, s_LlvmSymbolizerFunctionsFlag, s_LlvmSymbolizerInliningFlag, AStringView(objectArgument), AStringView(addressArgument) }};
 
         return RunLinuxSymbolizerCommand(arena, arguments);
     }
@@ -185,7 +185,7 @@ public:
     modulePathArgument.reserve(modulePathText.size());
     modulePathArgument.append(modulePathText.data(), modulePathText.size());
 
-    const AStringView arguments[] = { s_Addr2LineTool, s_Addr2LineFunctionsFlag, s_Addr2LineDemangleFlag, s_Addr2LineInlineFlag, s_Addr2LineExeFlag, AStringView(modulePathArgument), AStringView(addressArgument), };
+    const Array<AStringView, 7> arguments = {{ s_Addr2LineTool, s_Addr2LineFunctionsFlag, s_Addr2LineDemangleFlag, s_Addr2LineInlineFlag, s_Addr2LineExeFlag, AStringView(modulePathArgument), AStringView(addressArgument) }};
 
     return RunLinuxSymbolizerCommand(arena, arguments);
 }
@@ -259,10 +259,7 @@ public:
 }
 #endif
 
-static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    static_cast<void>(config);
-    static_cast<void>(arena);
-
+static void AppendLinuxClientCallstack([[maybe_unused]] Core::Alloc::ScratchArena& arena, const AStringView callstackText, const LinuxProcessMemoryMapTable* const procMaps, [[maybe_unused]] const CrashSymbolicationConfig& config, CrashReportText& outReport){
     outReport += s_CallstackSectionHeader;
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -310,17 +307,16 @@ static void AppendLinuxClientCallstack(Core::Alloc::ScratchArena& arena, const A
     }
 }
 
-void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
-    const CrashScratchPath& scratchDirectory = packageDirectory;
+void AppendLinuxArtifactSummary(const CrashScratchPath& packageDirectory, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     AString<Core::Alloc::ScratchArena> clientCallstack(scratchArena);
-    const auto clientCallstackRead = ReadTextFile(scratchDirectory / CrashNames::s_CallstackFileName, clientCallstack);
+    const auto clientCallstackRead = ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, clientCallstack);
     const b8 clientCallstackPresent = clientCallstackRead && !clientCallstack.empty();
 
     outReport += clientCallstackPresent ? "status=callstack_captured\nresolver=linux_client_callstack\n" : "status=not_decoded\nresolver=elf_dwarf_core\n";
     if(!clientCallstackRead && clientCallstackRead.error() != ErrorCondition::no_such_file_or_directory)
         AppendNativeFailure(outReport, CrashSymbolicationFailure{ .operation = "read_linux_client_callstack", .code = clientCallstackRead.error(), });
 
-    const auto corePath = scratchDirectory / CrashNames::s_LinuxCoreFileName;
+    const auto corePath = packageDirectory / CrashNames::s_LinuxCoreFileName;
     const auto corePresent = IsRegularFile(corePath);
     if(!corePresent){
         NWB_LOGGER_WARNING(NWB_TEXT("Log server: failed to inspect Linux core artifact '{}': {}"), PathToString<tchar>(corePath), ConvertString(corePresent.error().message()));
@@ -331,8 +327,8 @@ void AppendLinuxArtifactSummary(Core::Alloc::ScratchArena& scratchArena, const C
 
     AString<Core::Alloc::ScratchArena> cpuContext(scratchArena);
     AString<Core::Alloc::ScratchArena> procMaps(scratchArena);
-    const auto cpuContextRead = ReadTextFile(scratchDirectory / CrashNames::s_CpuContextFileName, cpuContext);
-    const auto procMapsRead = ReadTextFile(scratchDirectory / CrashNames::s_ProcMapsFileName, procMaps);
+    const auto cpuContextRead = ReadTextFile(packageDirectory / CrashNames::s_CpuContextFileName, cpuContext);
+    const auto procMapsRead = ReadTextFile(packageDirectory / CrashNames::s_ProcMapsFileName, procMaps);
     const b8 cpuContextPresent = cpuContextRead && !cpuContext.empty();
     const b8 procMapsPresent = procMapsRead && !procMaps.empty();
     outReport += procMapsPresent ? "proc_maps=present\n" : "proc_maps=missing\n";

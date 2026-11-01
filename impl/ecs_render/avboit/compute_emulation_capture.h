@@ -9,7 +9,6 @@
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/shared/task_graph_stage.h>
 
 #include <core/task/gpu/task_graph.h>
 

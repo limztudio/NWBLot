@@ -27,8 +27,6 @@ namespace GpuRendererTimingScope{
 
 // Closes the standalone presentation scope after output and any presentation contributor.
 struct GpuFrameTimingEndTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::None, true };
-
     // The transaction owns the timing reservation opened by the standalone prelude.
     struct Payload{
         Core::GpuTimingFrameTransaction& frameTimingTransaction;
@@ -36,7 +34,13 @@ struct GpuFrameTimingEndTask{
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::None, true };
+
+
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+        return payload.frameTimingTransaction.recordEnd(commandList);
+    }
 };
 
 

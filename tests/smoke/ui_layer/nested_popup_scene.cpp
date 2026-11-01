@@ -100,9 +100,7 @@ b8 UiNestedPopupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiNestedPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key != Core::Key::F8)
         return false;
     if(action == Core::InputAction::Press)
@@ -291,7 +289,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(context, values(), m_sequence);
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(values(), m_sequence, context);
 }
 
 Array<u64, 29u> UiNestedPopupSmokeScene::values()const noexcept{

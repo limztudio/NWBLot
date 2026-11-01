@@ -3,8 +3,6 @@
 
 
 #include "world.h"
-#include "entity.h"
-#include "profile_names.h"
 
 #include <global/exception.h>
 
@@ -18,9 +16,27 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_world{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_WorldTaskProfileName("cpu.task.ecs.world");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     : m_arena(arena)
-    , m_tasks(taskScheduler, taskScheduler.registerProfileLabel(EcsProfileScope::s_WorldTaskProfileName))
+    , m_tasks(taskScheduler, taskScheduler.registerProfileLabel(__hidden_world::s_WorldTaskProfileName))
     , m_entityManager(m_arena)
     , m_entityComponentHeads(m_arena)
     , m_entityComponentNodes(m_arena)
@@ -49,32 +65,12 @@ World::~World()noexcept(false){
 }
 
 
-Entity World::createEntity(){
-    return Entity(*this, m_entityManager.create());
-}
-
-
-Entity World::entity(const EntityID entityId)noexcept{
-    return Entity(*this, entityId);
-}
-
-
 void World::destroyEntity(EntityID entityId){
     if(!m_entityManager.alive(entityId))
         return;
 
     destroyEntityComponents(entityId);
     m_entityManager.destroyAlive(entityId);
-}
-
-
-void World::removeSystem(ISystem& system){
-    m_tasks.wait();
-    m_scheduler.removeSystem(system);
-
-    auto itr = FindIf(m_systems.begin(), m_systems.end(), [&system](const SystemEntry& entry)noexcept{ return entry.system.get() == &system; });
-    if(itr != m_systems.end())
-        m_systems.erase(itr);
 }
 
 
@@ -117,7 +113,6 @@ void World::destroyEntityComponents(EntityID entityId){
     }
 }
 
-
 void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool){
     ensureEntityComponentHead(entityId);
 
@@ -130,7 +125,6 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IC
 
     headNode = acquireEntityComponentNode(typeId, headNode, pool);
 }
-
 
 void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)noexcept{
     const usize index = static_cast<usize>(entityId.index());
@@ -150,13 +144,11 @@ void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)
     }
 }
 
-
 void World::ensureEntityComponentHead(EntityID entityId){
     const usize index = static_cast<usize>(entityId.index());
     if(index >= m_entityComponentHeads.size())
         m_entityComponentHeads.resize(index + 1u, s_InvalidEntityComponentNode);
 }
-
 
 u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, IComponentPool& pool){
     if(m_freeEntityComponentNode != s_InvalidEntityComponentNode){
@@ -172,7 +164,6 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode, ICom
     m_entityComponentNodes.push_back(EntityComponentNode{ typeId, MakeNotNull(&pool), nextNode });
     return nodeIndex;
 }
-
 
 void World::releaseEntityComponentNode(u32 nodeIndex)noexcept{
     NWB_ASSERT(nodeIndex < m_entityComponentNodes.size());

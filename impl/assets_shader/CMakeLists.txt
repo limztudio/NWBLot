@@ -39,6 +39,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
         "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
     )
-    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_assets_shader_types nwb_metascript PRIVATE nwb_shader_bytecode)
+    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_assets_cook nwb_assets_shader_types nwb_metascript PRIVATE nwb_shader_bytecode)
     target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1 NWB_SLANGC_EXECUTABLE="${NWB_SLANGC_EXECUTABLE}")
 endif()
+

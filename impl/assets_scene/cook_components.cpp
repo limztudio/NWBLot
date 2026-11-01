@@ -36,27 +36,6 @@ namespace __hidden_scene_cook_components{
 using namespace Core::Metascript;
 using namespace SceneAssetCook;
 
-static constexpr AStringView s_PositionField = "position";
-static constexpr AStringView s_RotationField = "rotation";
-static constexpr AStringView s_RotationEulerField = "rotation_euler";
-static constexpr AStringView s_RotationEulerDegreesField = "rotation_euler_degrees";
-static constexpr AStringView s_ScaleField = "scale";
-static constexpr AStringView s_VerticalFovDegreesField = "vertical_fov_degrees";
-static constexpr AStringView s_VerticalFovRadiansField = "vertical_fov_radians";
-static constexpr AStringView s_NearPlaneField = "near_plane";
-static constexpr AStringView s_FarPlaneField = "far_plane";
-static constexpr AStringView s_AspectRatioField = "aspect_ratio";
-static constexpr AStringView s_LightTypeField = "type";
-static constexpr AStringView s_ColorField = "color";
-static constexpr AStringView s_IntensityField = "intensity";
-static constexpr AStringView s_RangeField = "range";
-static constexpr AStringView s_InnerConeCosField = "inner_cone_cos";
-static constexpr AStringView s_OuterConeCosField = "outer_cone_cos";
-static constexpr AStringView s_AngularRadiusField = "angular_radius";
-static constexpr AStringView s_SourceRadiusField = "source_radius";
-static constexpr AStringView s_EnableCausticsField = "enable_caustics";
-static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
-
 [[nodiscard]] static b8 CheckOptionalMetadataAssetMap(const Path& nwbFilePath, const Value& asset, const AStringView diagnosticPrefix){
     if(asset.isNull() || asset.isMap())
         return true;
@@ -94,8 +73,7 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
 
     const SIMDVectorSingle rawQuaternion = VectorSet(*x, *y, *z, *w);
     const SIMDVectorSingle lengthSq = QuaternionLengthSq(rawQuaternion);
-    constexpr f32 s_MinQuaternionLengthSq = 0.000001f;
-    if(!VectorIsFinite(lengthSq, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthSq, VectorReplicate(s_MinQuaternionLengthSq))){
+    if(!VectorIsFinite(lengthSq, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthSq, VectorReplicate(s_SceneMinQuaternionLengthSq))){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-zero quaternion"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
         return MakeUnexpected(Failure{});
     }
@@ -103,43 +81,6 @@ static constexpr f32 s_DegreesToRadians = s_PI / 180.0f;
     Float4 normalized;
     StoreFloat(QuaternionNormalize(rawQuaternion), normalized);
     return normalized;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ComponentAssetSerialization{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
-    if(!component.validatePayload())
-        return false;
-
-    auto& assetArena = outBinary.get_allocator().arena();
-    Core::Assets::AssetBytes payload(assetArena);
-    if(!component.serializeComponentPayload(payload))
-        return false;
-
-    ComponentHeaderBinary header;
-    header.componentTypeHash = component.assetType().hash();
-    header.payloadByteCount = static_cast<u64>(payload.size());
-
-    outBinary.clear();
-    outBinary.reserve(sizeof(header) + payload.size());
-    AppendPOD(outBinary, header);
-    if(!payload.empty())
-        outBinary.insert(outBinary.end(), payload.begin(), payload.end());
-    return true;
 }
 
 
@@ -161,82 +102,35 @@ b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     return ComponentAssetSerialization::Serialize(*component, outBinary);
 }
 
-b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    TransformComponentPayloadBinary binaryPayload;
-    binaryPayload.position = component.position;
-    binaryPayload.rotation = component.rotation;
-    binaryPayload.scale = component.scale;
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
-}
 
-b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    CameraComponentPayloadBinary binaryPayload;
-    binaryPayload.projection = component.projection;
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
-    LightComponentPayloadBinary binaryPayload;
-    binaryPayload.colorIntensity = component.colorIntensity;
-    binaryPayload.range = component.range;
-    binaryPayload.innerConeCos = component.innerConeCos;
-    binaryPayload.outerConeCos = component.outerConeCos;
-    binaryPayload.angularRadius = component.angularRadius;
-    binaryPayload.sourceRadius = component.sourceRadius;
-    binaryPayload.type = static_cast<u8>(component.type);
-    binaryPayload.enableCaustics = component.enableCaustics ? 1u : 0u;
-    binaryPayload.reserved = 0u;
-    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
-}
+
+namespace ComponentAssetSerialization{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace SceneAssetCook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<b8> ParseMetadataBoolField(const Path& nwbFilePath, const AStringView diagnosticPrefix, const Core::Metascript::Value& value, const AStringView fieldLabel){
-    if(!value.isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer boolean (0 or 1)"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-        return MakeUnexpected(Failure{});
-    }
-    const i64 integerValue = value.asInteger();
-    if(integerValue != 0 && integerValue != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be 0 or 1"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-        return MakeUnexpected(Failure{});
-    }
-    return integerValue != 0;
-}
-
-b8 ReadOptionalFiniteF32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView diagnosticPrefix, const AStringView fieldLabel, f32& outValue){
-    const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
-    if(!fieldValue)
-        return true;
-    const auto parsed = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldLabel);
-    if(!parsed)
+b8 Serialize(const IComponent& component, Core::Assets::AssetBytes& outBinary){
+    if(!component.validatePayload())
         return false;
-    outValue = *parsed;
-    return true;
-}
 
-b8 ReadOptionalI32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, const AStringView diagnosticPrefix, const AStringView fieldLabel, i32& outValue){
-    const Core::Metascript::Value* const fieldValue = asset.findField(fieldLabel);
-    if(!fieldValue)
-        return true;
-    if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+    auto& assetArena = outBinary.get_allocator().arena();
+    Core::Assets::AssetBytes payload(assetArena);
+    if(!component.serializeComponentPayload(payload))
         return false;
-    }
-    const i64 integerValue = fieldValue->asInteger();
-    if(integerValue < static_cast<i64>(Limit<i32>::s_Min) || integerValue > static_cast<i64>(Limit<i32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-        return false;
-    }
-    outValue = static_cast<i32>(integerValue);
+
+    const ComponentHeaderBinary header = BuildComponentHeaderBinary(
+        component.assetType().hash(),
+        static_cast<u64>(payload.size())
+    );
+
+    outBinary.clear();
+    outBinary.reserve(sizeof(header) + payload.size());
+    AppendPOD(outBinary, header);
+    if(!payload.empty())
+        outBinary.insert(outBinary.end(), payload.begin(), payload.end());
     return true;
 }
 
@@ -250,55 +144,74 @@ b8 ReadOptionalI32Field(const Path& nwbFilePath, const Core::Metascript::Value& 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 TransformComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    const TransformComponentPayloadBinary binaryPayload = PackTransformComponentPayloadBinary(component);
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+b8 CameraComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    const CameraComponentPayloadBinary binaryPayload = PackCameraComponentPayloadBinary(component);
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+b8 LightComponentAsset::serializeComponentPayload(Core::Assets::AssetBytes& outPayload)const{
+    const LightComponentPayloadBinary binaryPayload = PackLightComponentPayloadBinary(component);
+    return ComponentAssetSerialization::WriteSinglePodPayload(binaryPayload, outPayload);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
     using namespace __hidden_scene_cook_components;
 
     TransformComponentCookEntry entry(arena);
     if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_TransformDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_TransformDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_TransformDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, { s_PositionField, s_RotationField, s_RotationEulerField, s_RotationEulerDegreesField, s_ScaleField }))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_TransformDiagnosticPrefix, { s_TransformPositionField, s_TransformRotationField, s_TransformRotationEulerField, s_TransformRotationEulerDegreesField, s_TransformScaleField }))
             return MakeUnexpected(Failure{});
 
-        if(const Core::Metascript::Value* positionValue = asset.findField(s_PositionField)){
-            const auto position = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *positionValue, s_PositionField);
+        if(const Core::Metascript::Value* positionValue = asset.findField(s_TransformPositionField)){
+            const auto position = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *positionValue, s_TransformPositionField);
             if(!position)
                 return MakeUnexpected(Failure{});
             entry.component.position = *position;
         }
 
-        const Core::Metascript::Value* const rotationValue = asset.findField(s_RotationField);
-        const Core::Metascript::Value* const eulerValue = asset.findField(s_RotationEulerField);
-        const Core::Metascript::Value* const eulerDegreesValue = asset.findField(s_RotationEulerDegreesField);
+        const Core::Metascript::Value* const rotationValue = asset.findField(s_TransformRotationField);
+        const Core::Metascript::Value* const eulerValue = asset.findField(s_TransformRotationEulerField);
+        const Core::Metascript::Value* const eulerDegreesValue = asset.findField(s_TransformRotationEulerDegreesField);
         const usize rotationFieldCount = static_cast<usize>(rotationValue != nullptr) + static_cast<usize>(eulerValue != nullptr) + static_cast<usize>(eulerDegreesValue != nullptr);
         if(rotationFieldCount > 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'rotation', 'rotation_euler', or 'rotation_euler_degrees' may be specified"), ConvertString(s_TransformDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         if(rotationValue){
-            const auto rotation = ParseQuaternionField(nwbFilePath, s_TransformDiagnosticPrefix, *rotationValue, s_RotationField);
+            const auto rotation = ParseQuaternionField(nwbFilePath, s_TransformDiagnosticPrefix, *rotationValue, s_TransformRotationField);
             if(!rotation)
                 return MakeUnexpected(Failure{});
             entry.component.rotation = *rotation;
         }
         else if(eulerValue){
-            const auto eulerRadians = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerValue, s_RotationEulerField);
+            const auto eulerRadians = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerValue, s_TransformRotationEulerField);
             if(!eulerRadians)
                 return MakeUnexpected(Failure{});
             StoreFloat(QuaternionRotationRollPitchYaw(eulerRadians->x, eulerRadians->y, eulerRadians->z), entry.component.rotation);
         }
         else if(eulerDegreesValue){
-            const auto eulerDegrees = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerDegreesValue, s_RotationEulerDegreesField);
+            const auto eulerDegrees = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *eulerDegreesValue, s_TransformRotationEulerDegreesField);
             if(!eulerDegrees)
                 return MakeUnexpected(Failure{});
-            StoreFloat(QuaternionRotationRollPitchYaw(eulerDegrees->x * s_DegreesToRadians, eulerDegrees->y * s_DegreesToRadians, eulerDegrees->z * s_DegreesToRadians), entry.component.rotation);
+            StoreFloat(QuaternionRotationRollPitchYaw(eulerDegrees->x * s_SceneDegreesToRadians, eulerDegrees->y * s_SceneDegreesToRadians, eulerDegrees->z * s_SceneDegreesToRadians), entry.component.rotation);
         }
 
-        if(const Core::Metascript::Value* scaleValue = asset.findField(s_ScaleField)){
-            const auto scale = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *scaleValue, s_ScaleField);
+        if(const Core::Metascript::Value* scaleValue = asset.findField(s_TransformScaleField)){
+            const auto scale = ParseFloat3Field(nwbFilePath, s_TransformDiagnosticPrefix, *scaleValue, s_TransformScaleField);
             if(!scale)
                 return MakeUnexpected(Failure{});
             entry.component.scale = *scale;
@@ -321,27 +234,27 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(const Name v
     CameraComponentCookEntry entry(arena);
     if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_CameraDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_CameraDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_CameraDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
-        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, { s_VerticalFovDegreesField, s_VerticalFovRadiansField, s_NearPlaneField, s_FarPlaneField, s_AspectRatioField }))
+        if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_CameraDiagnosticPrefix, { s_CameraVerticalFovDegreesField, s_CameraVerticalFovRadiansField, s_CameraNearPlaneField, s_CameraFarPlaneField, s_CameraAspectRatioField }))
             return MakeUnexpected(Failure{});
 
-        const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_VerticalFovDegreesField);
-        const Core::Metascript::Value* const fovRadiansValue = asset.findField(s_VerticalFovRadiansField);
+        const Core::Metascript::Value* const fovDegreesValue = asset.findField(s_CameraVerticalFovDegreesField);
+        const Core::Metascript::Value* const fovRadiansValue = asset.findField(s_CameraVerticalFovRadiansField);
         if(fovDegreesValue && fovRadiansValue){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': only one of 'vertical_fov_degrees' or 'vertical_fov_radians' may be specified"), ConvertString(s_CameraDiagnosticPrefix), PathToString<tchar>(nwbFilePath));
             return MakeUnexpected(Failure{});
         }
         if(fovDegreesValue){
-            const auto fovDegrees = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovDegreesValue, s_CameraDiagnosticPrefix, s_VerticalFovDegreesField);
+            const auto fovDegrees = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovDegreesValue, s_CameraDiagnosticPrefix, s_CameraVerticalFovDegreesField);
             if(!fovDegrees)
                 return MakeUnexpected(Failure{});
-            entry.component.setVerticalFovRadians(*fovDegrees * s_DegreesToRadians);
+            entry.component.setVerticalFovRadians(*fovDegrees * s_SceneDegreesToRadians);
         }
         else if(fovRadiansValue){
-            const auto fovRadians = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovRadiansValue, s_CameraDiagnosticPrefix, s_VerticalFovRadiansField);
+            const auto fovRadians = Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, *fovRadiansValue, s_CameraDiagnosticPrefix, s_CameraVerticalFovRadiansField);
             if(!fovRadians)
                 return MakeUnexpected(Failure{});
             entry.component.setVerticalFovRadians(*fovRadians);
@@ -351,9 +264,9 @@ Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(const Name v
         f32 farPlane = entry.component.farPlane();
         f32 aspectRatio = entry.component.aspectRatio();
         if(
-            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_NearPlaneField, nearPlane)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_FarPlaneField, farPlane)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_AspectRatioField, aspectRatio)
+            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraNearPlaneField, nearPlane)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraFarPlaneField, farPlane)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_CameraDiagnosticPrefix, s_CameraAspectRatioField, aspectRatio)
         )
             return MakeUnexpected(Failure{});
         entry.component.setNearPlane(nearPlane);
@@ -377,7 +290,7 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
     LightComponentCookEntry entry(arena);
     if(!CheckOptionalMetadataAssetMap(nwbFilePath, asset, s_LightDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_LightDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_LightDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
 
     if(asset.isMap()){
@@ -387,39 +300,39 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
             s_LightDiagnosticPrefix,
             {
                 s_LightTypeField,
-                s_ColorField,
-                s_IntensityField,
-                s_RangeField,
-                s_InnerConeCosField,
-                s_OuterConeCosField,
-                s_AngularRadiusField,
-                s_SourceRadiusField,
-                s_EnableCausticsField
+                s_LightColorField,
+                s_LightIntensityField,
+                s_LightRangeField,
+                s_LightInnerConeCosField,
+                s_LightOuterConeCosField,
+                s_LightAngularRadiusField,
+                s_LightSourceRadiusField,
+                s_LightEnableCausticsField
             }
         ))
             return MakeUnexpected(Failure{});
 
         if(asset.findField(s_LightTypeField)){
-            static constexpr ::NamedEnumCase<Scene::LightType::Enum> s_LightTypeCases[] = {
-                { "directional", Scene::LightType::Directional },
-                { "point", Scene::LightType::Point },
-                { "spot", Scene::LightType::Spot },
-            };
+            static constexpr Array<::NamedEnumCase<Scene::LightType::Enum>, 3u> s_LightTypeCases = {{
+                { s_LightTypeDirectional, Scene::LightType::Directional },
+                { s_LightTypePoint, Scene::LightType::Point },
+                { s_LightTypeSpot, Scene::LightType::Spot },
+            }};
             const auto parsedType = Core::Assets::ParseNamedMetadataEnumField<Scene::LightType::Enum>(
                 nwbFilePath,
                 asset,
                 s_LightDiagnosticPrefix,
                 s_LightTypeField,
-                Span<const ::NamedEnumCase<Scene::LightType::Enum>>(s_LightTypeCases, LengthOf(s_LightTypeCases)),
-                "must be 'directional', 'point', or 'spot'"
+                Span<const ::NamedEnumCase<Scene::LightType::Enum>>(s_LightTypeCases.data(), s_LightTypeCases.size()),
+                s_LightTypeHint
             );
             if(!parsedType)
                 return MakeUnexpected(Failure{});
             entry.component.type = *parsedType;
         }
 
-        if(const Core::Metascript::Value* colorValue = asset.findField(s_ColorField)){
-            const auto color = ParseFloat3Field(nwbFilePath, s_LightDiagnosticPrefix, *colorValue, s_ColorField);
+        if(const Core::Metascript::Value* colorValue = asset.findField(s_LightColorField)){
+            const auto color = ParseFloat3Field(nwbFilePath, s_LightDiagnosticPrefix, *colorValue, s_LightColorField);
             if(!color)
                 return MakeUnexpected(Failure{});
             entry.component.setColor(*color);
@@ -427,18 +340,18 @@ Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(const Name vir
 
         f32 intensity = entry.component.intensity();
         if(
-            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_IntensityField, intensity)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_RangeField, entry.component.range)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_InnerConeCosField, entry.component.innerConeCos)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_OuterConeCosField, entry.component.outerConeCos)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_AngularRadiusField, entry.component.angularRadius)
-            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_SourceRadiusField, entry.component.sourceRadius)
+            !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightIntensityField, intensity)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightRangeField, entry.component.range)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightInnerConeCosField, entry.component.innerConeCos)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightOuterConeCosField, entry.component.outerConeCos)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightAngularRadiusField, entry.component.angularRadius)
+            || !ReadOptionalFiniteF32Field(nwbFilePath, asset, s_LightDiagnosticPrefix, s_LightSourceRadiusField, entry.component.sourceRadius)
         )
             return MakeUnexpected(Failure{});
         entry.component.setIntensity(intensity);
 
-        if(const Core::Metascript::Value* enableCausticsValue = asset.findField(s_EnableCausticsField)){
-            const auto enableCaustics = ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, *enableCausticsValue, s_EnableCausticsField);
+        if(const Core::Metascript::Value* enableCausticsValue = asset.findField(s_LightEnableCausticsField)){
+            const auto enableCaustics = ParseMetadataBoolField(nwbFilePath, s_LightDiagnosticPrefix, *enableCausticsValue, s_LightEnableCausticsField);
             if(!enableCaustics)
                 return MakeUnexpected(Failure{});
             entry.component.enableCaustics = *enableCaustics;

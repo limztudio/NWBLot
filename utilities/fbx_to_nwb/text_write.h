@@ -26,61 +26,59 @@ namespace TextWrite{
 
 
 inline constexpr f32 s_CleanFloatEpsilon = 0.00000001f;
-inline constexpr int s_OutputFloatPrecision = 9;
+inline constexpr i32 s_OutputFloatPrecision = 9;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline f32 CleanFloat(const f32 value)noexcept{
-    if(VectorGetX(VectorAbs(VectorReplicate(value))) < s_CleanFloatEpsilon)
-        return 0.0f;
-    return value;
+[[nodiscard]] constexpr f32 CleanFloat(const f32 value)noexcept{
+    return (value < 0.0f ? -value : value) < s_CleanFloatEpsilon ? 0.0f : value;
 }
 
 template<typename Stream>
-void WriteFloat(Stream& out, const f32 value)noexcept(noexcept(out << CleanFloat(value))){
+void WriteFloat(const f32 value, Stream& out)noexcept(noexcept(out << CleanFloat(value))){
     out << CleanFloat(value);
 }
 
 template<typename Stream>
-void WriteVec2(Stream& out, const Float2U& value)noexcept(noexcept(out << "[") && noexcept(WriteFloat(out, value.x)) && noexcept(out << ", ") && noexcept(WriteFloat(out, value.y)) && noexcept(out << "]")){
+void WriteVec2(const Float2U& value, Stream& out)noexcept(noexcept(out << "[") && noexcept(WriteFloat(value.x, out)) && noexcept(out << ", ") && noexcept(WriteFloat(value.y, out)) && noexcept(out << "]")){
     out << "[";
-    WriteFloat(out, value.x);
+    WriteFloat(value.x, out);
     out << ", ";
-    WriteFloat(out, value.y);
+    WriteFloat(value.y, out);
     out << "]";
 }
 
 template<typename Stream>
-void WriteVec3(Stream& out, const Float3U& value)noexcept(noexcept(out << "[") && noexcept(WriteFloat(out, value.x)) && noexcept(out << ", ") && noexcept(WriteFloat(out, value.y)) && noexcept(WriteFloat(out, value.z)) && noexcept(out << "]")){
+void WriteVec3(const Float3U& value, Stream& out)noexcept(noexcept(out << "[") && noexcept(WriteFloat(value.x, out)) && noexcept(out << ", ") && noexcept(WriteFloat(value.y, out)) && noexcept(WriteFloat(value.z, out)) && noexcept(out << "]")){
     out << "[";
-    WriteFloat(out, value.x);
+    WriteFloat(value.x, out);
     out << ", ";
-    WriteFloat(out, value.y);
+    WriteFloat(value.y, out);
     out << ", ";
-    WriteFloat(out, value.z);
+    WriteFloat(value.z, out);
     out << "]";
 }
 
 template<typename Stream>
-void WriteVec4(Stream& out, const Float4U& value)noexcept(
+void WriteVec4(const Float4U& value, Stream& out)noexcept(
     noexcept(out << "[")
-    && noexcept(WriteFloat(out, value.x))
+    && noexcept(WriteFloat(value.x, out))
     && noexcept(out << ", ")
-    && noexcept(WriteFloat(out, value.y))
-    && noexcept(WriteFloat(out, value.z))
-    && noexcept(WriteFloat(out, value.w))
+    && noexcept(WriteFloat(value.y, out))
+    && noexcept(WriteFloat(value.z, out))
+    && noexcept(WriteFloat(value.w, out))
     && noexcept(out << "]")
 ){
     out << "[";
-    WriteFloat(out, value.x);
+    WriteFloat(value.x, out);
     out << ", ";
-    WriteFloat(out, value.y);
+    WriteFloat(value.y, out);
     out << ", ";
-    WriteFloat(out, value.z);
+    WriteFloat(value.z, out);
     out << ", ";
-    WriteFloat(out, value.w);
+    WriteFloat(value.w, out);
     out << "]";
 }
 

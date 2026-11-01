@@ -66,13 +66,22 @@ struct InitialOwnershipCompletionRequirement{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u32 GpuTaskGraphSchedulingTaskIndexView::operator[](const usize index)const noexcept{
+    NWB_ASSERT(index < taskCount);
+    return taskIndices[index];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuTaskGraphCompiler::compile(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuPhysicalQueueTopology& topology,
+    Alloc::ScratchArena& scratchArena,
     GpuTaskGraphAnalysis& outAnalysis,
     GpuTaskGraphQueueAssignments& outAssignments,
     GpuCompiledGraph& outCompiledGraph,
-    Alloc::ScratchArena& scratchArena,
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphCompileOptions& options
 )const{
     using namespace GpuTaskGraphCompilerDetail;
@@ -148,7 +157,7 @@ b8 GpuTaskGraphCompiler::compile(
     }
 
     const Timer queueAssignmentBegin = TimerNow();
-    if(!assignQueues(outAssignments, scratchArena, graph, outAnalysis, topology, options.queueAssignmentOptions))
+    if(!assignQueues(graph, outAnalysis, topology, scratchArena, outAssignments, options.queueAssignmentOptions))
         return false;
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();
@@ -313,7 +322,7 @@ b8 GpuTaskGraphCompiler::compile(
         trackedStateCapacity += useCount;
     }
     trackedResourceStates.reserve(trackedStateCapacity);
-    TrackedResourceStateHistory resourceHistory(trackedResourceStates, graph.resourceCount(), graph.generation(), scratchArena);
+    TrackedResourceStateHistory resourceHistory(graph.resourceCount(), graph.generation(), trackedResourceStates, scratchArena);
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
     initialAvailabilityDependencies.reserve(graph.taskCount());
@@ -433,8 +442,7 @@ b8 GpuTaskGraphCompiler::compile(
     outCompiledGraph.buildPlanStatistics(graph, scratchArena);
     if(IsFinite(options.declarationSeconds)){
         // Keep values >= 0, including -0.0; negative values become +0.0.
-        const SIMDVectorDouble declarationSeconds = VectorDoubleReplicate(options.declarationSeconds);
-        statistics.declarationSeconds = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), declarationSeconds, VectorDoubleGreaterOrEqual(declarationSeconds, VectorDoubleZero())));
+        statistics.declarationSeconds = options.declarationSeconds >= 0.0 ? options.declarationSeconds : 0.0;
     }
     else
         statistics.declarationSeconds = 0.0;

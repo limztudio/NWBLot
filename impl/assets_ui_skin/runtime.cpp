@@ -4,7 +4,6 @@
 
 #include "asset.h"
 
-#include <impl/assets_ui_skin/subsystem.adhd.h>
 #include <impl/assets_texture/asset.h>
 
 #include <core/assets/auto_registration.h>
@@ -41,20 +40,7 @@ static_assert(UiSkinColorRole::kCount == s_UiSkinPaletteColorCount, "UI skin pal
 [[nodiscard]] static b8 IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight)noexcept{
     if(!region.name || region.name == Name(""))
         return false;
-    const UiSkinRect& rectangle = region.rectangle;
-    if(rectangle.width == 0u || rectangle.height == 0u || rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
-        return false;
-
-    const UiSkinSliceInsets& slice = region.sliceInsets;
-    if(region.drawMode == UiSkinDrawMode::Sprite){
-        if(slice.left != 0u || slice.top != 0u || slice.right != 0u || slice.bottom != 0u)
-            return false;
-    }
-    else if(region.drawMode == UiSkinDrawMode::NineSlice){
-        if(static_cast<u64>(slice.left) + slice.right > rectangle.width || static_cast<u64>(slice.top) + slice.bottom > rectangle.height)
-            return false;
-    }
-    else
+    if(!IsValidUiSkinRegionRectAndSlices(region.rectangle, region.sliceInsets, region.drawMode, atlasWidth, atlasHeight))
         return false;
 
     const UiSkinInsets& padding = region.padding;
@@ -109,48 +95,35 @@ b8 UiSkin::loadBinary(const Span<const u8> binary){
     candidate.m_referenceDensity = header.referenceDensity;
     candidate.m_regions.reserve(header.regionCount);
     for(u32 index = 0u; index < header.regionCount; ++index){
-        UiSkinRegionBinary packed;
         const auto packedResult = ReadPOD<UiSkinRegionBinary>(binary, cursor);
         if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
             return false;
         }
-        packed = *packedResult;
+        const UiSkinRegionBinary& packed = *packedResult;
         if(packed.reserved != 0u || packed.drawMode > static_cast<u32>(UiSkinDrawMode::NineSlice)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
             return false;
         }
 
-        UiSkinRegion region;
-        region.name = Name(packed.nameHash);
-        region.rectangle = { packed.x, packed.y, packed.width, packed.height };
-        region.sliceInsets = { packed.sliceLeft, packed.sliceTop, packed.sliceRight, packed.sliceBottom };
-        region.padding = { packed.paddingLeft, packed.paddingTop, packed.paddingRight, packed.paddingBottom };
-        region.minimumWidth = packed.minimumWidth;
-        region.minimumHeight = packed.minimumHeight;
-        region.drawMode = static_cast<UiSkinDrawMode::Enum>(packed.drawMode);
-        candidate.m_regions.push_back(region);
+        candidate.m_regions.push_back(UnpackUiSkinRegionBinary(packed));
     }
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
-        UiSkinColorBinary packed;
         const auto packedResult = ReadPOD<UiSkinColorBinary>(binary, cursor);
         if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
         }
-        packed = *packedResult;
-        palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
+        palette.colors[index] = UnpackUiSkinColorBinary(*packedResult);
     }
     candidate.setPalette(palette);
-    UiSkinTypographyBinary typography;
     const auto typographyResult = ReadPOD<UiSkinTypographyBinary>(binary, cursor);
     if(!typographyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
         return false;
     }
-    typography = *typographyResult;
-    candidate.setTypography({ typography.defaultFontSize });
+    candidate.setTypography(UnpackUiSkinTypographyBinary(*typographyResult));
     if(!Core::Assets::ReadCompletePayload(binary, cursor, s_UiSkinLoadBinaryContext))
         return false;
     candidate.rebuildRegionIndex();
@@ -194,12 +167,17 @@ b8 UiSkin::validatePayload()const{
     }
     for(usize index = 0u; index < m_palette.colors.size(); ++index){
         const UiSkinColor& color = m_palette.colors[index];
-        if(!IsFinite(color.r) || color.r < 0.0f || color.r > s_UiSkinPaletteRgbMax || !IsFinite(color.g) || color.g < 0.0f || color.g > s_UiSkinPaletteRgbMax || !IsFinite(color.b) || color.b < 0.0f || color.b > s_UiSkinPaletteRgbMax || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f){
+        if(
+            !IsFinite(color.r) || !IsValidUiSkinPaletteChannelValue(color.r, 0u)
+            || !IsFinite(color.g) || !IsValidUiSkinPaletteChannelValue(color.g, 1u)
+            || !IsFinite(color.b) || !IsValidUiSkinPaletteChannelValue(color.b, 2u)
+            || !IsFinite(color.a) || !IsValidUiSkinPaletteChannelValue(color.a, s_UiSkinAlphaComponentIndex)
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
             return false;
         }
     }
-    if(!IsFinite(m_typography.defaultFontSize) || m_typography.defaultFontSize < s_UiSkinMinDefaultFontSize || m_typography.defaultFontSize > s_UiSkinMaxDefaultFontSize){
+    if(!IsFinite(m_typography.defaultFontSize) || !IsValidUiSkinDefaultFontSize(m_typography.defaultFontSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
         return false;
     }
@@ -214,6 +192,11 @@ b8 UiSkin::validateTexture(const Texture& texture)const{
         return false;
     }
     return true;
+}
+
+UiSkin::RegionVector UiSkin::takeRegions()noexcept{
+    m_regionIndex.clear();
+    return Move(m_regions);
 }
 
 

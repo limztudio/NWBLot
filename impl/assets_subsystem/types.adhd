@@ -6,6 +6,7 @@ const Name s_SubsystemLoadBinaryArena = "impl/assets_subsystem/load_binary";
 const Name s_SubsystemSerializeArena = "impl/assets_subsystem/serialize";
 
 const StringView s_SubsystemDiagnosticPrefix = "Subsystem meta";
+const StringView s_SubsystemSubsystemsFieldName = "subsystems";
 
 const u32 s_SubsystemMagic = 0x53554231u; // SUB1
 const u32 s_SubsystemVersion = 1u;
@@ -13,6 +14,12 @@ const u32 s_SubsystemVersion = 1u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class SubsystemFieldValueDescriptor{
+    public StringView fieldName = "";
+    public Name expectedAssetType = s_NameNone;
+    public b8 isArray = false;
+}
 
 [serialize]
 class SubsystemHeaderBinary{
@@ -22,6 +29,36 @@ class SubsystemHeaderBinary{
     public u64 subsystemCount = 0u;
     public u64 fieldCount = 0u;
     public u64 assetCount = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SubsystemHeaderBinary BuildSubsystemHeaderBinary(
+    in NameHash subsystemTypeHash,
+    in u64 subsystemCount,
+    in u64 fieldCount,
+    in u64 assetCount
+){
+    SubsystemHeaderBinary header;
+    header.subsystemTypeHash = subsystemTypeHash;
+    header.subsystemCount = subsystemCount;
+    header.fieldCount = fieldCount;
+    header.assetCount = assetCount;
+    return header;
+}
+
+b8 TrySumSubsystemFieldElementCounts(in Span<u64> fieldCounts, mut u64 outTotalCount){
+    u64 totalCount = 0u;
+    for(usize i = 0u; i < fieldCounts.size(); ++i){
+        u64 count = fieldCounts[i];
+        if(count == 0u || count > 0xFFFFFFFFFFFFFFFFu - totalCount)
+            return false;
+        totalCount += count;
+    }
+    outTotalCount = totalCount;
+    return true;
 }
 
 

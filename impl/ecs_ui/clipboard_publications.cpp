@@ -44,14 +44,6 @@ namespace __hidden_ui_clipboard_publications{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiClipboardPublications::UiClipboardPublications(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)
-    : m_service(service)
-    , m_completion(arena)
-    , m_requests(arena)
-{
-    m_requests.reserve(s_UiClipboardMaxPublications);
-}
-
 UiClipboardPublications::~UiClipboardPublications()noexcept{
     if(!cancel())
         TerminateInvariant();

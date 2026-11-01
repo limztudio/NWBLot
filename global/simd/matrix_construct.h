@@ -60,14 +60,6 @@ static const SIMDVectorDoubleConstU s_DoubleSIMDMatrixSelect0001 = { { { s_Doubl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL PlaneDoubleNormalize(SIMDVectorDouble plane)noexcept{
-    return VectorDoubleDivide(plane, VectorDouble3Length(plane));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -708,7 +700,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleReflect(SIMDVectorDouble r
     NWB_ASSERT(!VectorDouble3Equal(reflectionPlane, VectorDoubleZero()));
     NWB_ASSERT(!VectorDouble4IsInfinite(reflectionPlane));
 
-    const SIMDVectorDouble plane = SIMDMatrixDoubleDetail::PlaneDoubleNormalize(reflectionPlane);
+    const SIMDVectorDouble plane = VectorDoubleDivide(reflectionPlane, VectorDouble3Length(reflectionPlane));
     const SIMDVectorDouble s = VectorDoubleMultiply(plane, SIMDMatrixDoubleDetail::s_DoubleSIMDMatrixNegativeTwo);
     const SIMDVectorDouble a = VectorDoubleSplatX(plane);
     const SIMDVectorDouble b = VectorDoubleSplatY(plane);
@@ -752,7 +744,7 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleShadow(SIMDVectorDouble sh
     NWB_ASSERT(!VectorDouble3Equal(shadowPlane, VectorDoubleZero()));
     NWB_ASSERT(!VectorDouble4IsInfinite(shadowPlane));
 
-    SIMDVectorDouble plane = SIMDMatrixDoubleDetail::PlaneDoubleNormalize(shadowPlane);
+    SIMDVectorDouble plane = VectorDoubleDivide(shadowPlane, VectorDouble3Length(shadowPlane));
     SIMDVectorDouble dot = VectorDouble4Dot(plane, lightPosition);
     plane = VectorDoubleNegate(plane);
 

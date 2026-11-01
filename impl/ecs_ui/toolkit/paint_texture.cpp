@@ -19,23 +19,16 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PaintBuilder::prepareTextureImages(const SharedImageSource* const images, const usize count){
-    return prepareImages(nullptr, 0u, nullptr, 0u, images, count);
-}
-
 b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
     if(
-        !source || !IsValidUiRect(rectangle)
-        || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
-        || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
-        || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f
+        !source || !IsValidUiRect(rectangle) || !IsValidUvRect(uv)
         || !IsFinite(tint.r) || !IsFinite(tint.g) || !IsFinite(tint.b) || !IsFinite(tint.a)
         || tint.a < 0.0f || tint.a > 1.0f
     )
         return false;
     const Rect clip = m_clips.back();
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
+    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(LoadRect(rectangle), LoadRect(clip));
     const f32 visibleLeft = VectorGetX(visibleBounds);
     const f32 visibleTop = VectorGetY(visibleBounds);
     const f32 visibleRight = VectorGetZ(visibleBounds);
@@ -48,11 +41,10 @@ b8 PaintBuilder::drawImage(const SharedImageSource& source, const Rect& rectangl
             break;
     }
     if(index == m_snapshot.m_textureImages.size()){
-        if(!prepareTextureImages(&source, 1u))
+        if(!prepareTextureImages(Span<const SharedImageSource>(&source, 1u)))
             return false;
         for(index = 0u; index < m_snapshot.m_textureImages.size(); ++index){
-            const ImageSource& bound = *m_snapshot.m_textureImages[index];
-            if(bound.identity() == source->identity() && bound.generation() == source->generation())
+            if(SameTextureImageKey(*m_snapshot.m_textureImages[index], *source))
                 break;
         }
     }

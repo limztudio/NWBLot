@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_sampler/types.adhd.h>
 
 #include <core/assets/module.h>
 #include <core/graphics/rhi/pipeline_state.h>
@@ -22,44 +23,31 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
-    switch(addressMode){
-    case Core::SamplerAddressMode::Clamp:
-    case Core::SamplerAddressMode::Wrap:
-    case Core::SamplerAddressMode::Border:
-    case Core::SamplerAddressMode::Mirror:
-    case Core::SamplerAddressMode::MirrorOnce:
-        return true;
-    default:
-        return false;
-    }
-}
+namespace SamplerBinaryPayload{
 
-[[nodiscard]] inline b8 IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
-    switch(reductionType){
-    case Core::SamplerReductionType::Standard:
-    case Core::SamplerReductionType::Comparison:
-        return true;
-    default:
-        return false;
-    }
-}
 
-[[nodiscard]] inline b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
-    return
-        description.borderColor.r == 0.0f
-        && description.borderColor.g == 0.0f
-        && description.borderColor.b == 0.0f
-        && description.borderColor.a == 0.0f
-        && IsFinite(description.maxAnisotropy)
-        && description.maxAnisotropy >= 1.0f
-        && IsFinite(description.mipBias)
-        && IsValidSamplerAddressMode(description.addressU)
-        && IsValidSamplerAddressMode(description.addressV)
-        && IsValidSamplerAddressMode(description.addressW)
-        && IsValidSamplerReductionType(description.reductionType)
-    ;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_SamplerAssetKindLabel = NWB_TEXT("sampler");
+inline constexpr TStringView s_SamplerLoadBinaryContext = NWB_TEXT("Sampler::loadBinary");
+
+static_assert(sizeof(SamplerBinaryHeader) == s_SamplerHeaderBinaryByteSize, "Sampler header layout drifted");
+static_assert(alignof(SamplerBinaryHeader) == s_SamplerPackedAlignBytes, "Sampler header must stay packed");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 IsValidSamplerAddressMode(Core::SamplerAddressMode::Enum addressMode)noexcept;
+[[nodiscard]] b8 IsValidSamplerReductionType(Core::SamplerReductionType::Enum reductionType)noexcept;
+[[nodiscard]] b8 IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

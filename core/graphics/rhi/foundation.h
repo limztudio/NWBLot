@@ -10,7 +10,7 @@
 #include <core/alloc/module.h>
 
 #include "../resource_base.h"
-#include "../shader_param.h"
+#include "shader_param.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,7 +159,9 @@ using GraphicsDeque = Deque<T, GraphicsArena>;
 
 class GraphicsAllocator : NoCopy{
 public:
-    explicit GraphicsAllocator(Alloc::GlobalArena& objectArena)noexcept;
+    explicit GraphicsAllocator(Alloc::GlobalArena& objectArena)noexcept
+        : m_objectArena(objectArena)
+    {}
 
 
 public:

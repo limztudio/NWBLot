@@ -428,19 +428,19 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         MVector<ScopedVarInfo> emptyScope(m_arena);
         if(unwrappedFieldType && unwrappedFieldType->name == "Path"){
             if(field->defaultExpr)
-                markStringToPathAdaptation(&classDecl, &fieldInitDummy, *field->defaultExpr, emptyScope);
+                markStringToPathAdaptation(&classDecl, &fieldInitDummy, emptyScope, *field->defaultExpr);
             for(Expr* arg : field->ctorArgs){
                 if(arg)
-                    markStringToPathAdaptation(&classDecl, &fieldInitDummy, *arg, emptyScope);
+                    markStringToPathAdaptation(&classDecl, &fieldInitDummy, emptyScope, *arg);
             }
         }
         if(field->defaultExpr || field->hasCtorInit){
             const b8 savedClassArenaCtx = m_inClassArenaContext;
             m_inClassArenaContext = true;
-            if(field->defaultExpr && !checkExpr(&classDecl, fieldInitDummy, *field->defaultExpr, emptyScope, false, errors))
+            if(field->defaultExpr && !checkExpr(&classDecl, emptyScope, false, fieldInitDummy, *field->defaultExpr, errors))
                 ok = false;
             if(field->hasCtorInit){
-                if(!checkConstructorInitArguments(&classDecl, fieldInitDummy, unwrappedFieldType, field->ctorArgs, emptyScope, field->span, errors))
+                if(!checkConstructorInitArguments(&classDecl, unwrappedFieldType, emptyScope, field->span, fieldInitDummy, field->ctorArgs, errors))
                     ok = false;
             }
             m_inClassArenaContext = savedClassArenaCtx;

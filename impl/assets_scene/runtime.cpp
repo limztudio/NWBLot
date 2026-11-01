@@ -28,8 +28,6 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_EntityAssetCodecAutoRegistrar, EntityAssetCod
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ProjectAssetCodecAutoRegistrar, ProjectAssetCodec);
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SceneAssetCodecAutoRegistrar, SceneAssetCodec);
 
-using NameHashSet = HashSet<NameHash, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
-
 template<typename TAsset>
 static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>& outRefs){
     outRefs.clear();
@@ -40,7 +38,7 @@ static void AssignAssetRefsFromHashes(const Span<const NameHash> hashes, Core::A
 
 template<typename TAsset>
 [[nodiscard]] static b8 ValidateUniqueAssetRefs(const Span<const Core::Assets::AssetRef<TAsset>> references, const TStringView contextPrefix, const TStringView contextLabel, Core::Alloc::ScratchArena& scratchArena){
-    NameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
+    SceneScratchNameHashSet seen(0, Hasher<NameHash>(), EqualTo<NameHash>(), scratchArena);
     seen.reserve(references.size());
     for(usize i = 0u; i < references.size(); ++i){
         const Core::Assets::AssetRef<TAsset>& entry = references[i];
@@ -171,13 +169,6 @@ b8 SceneAsset::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return true;
 }
 
-void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
-    m_subsystems = Move(subsystems);
-    SubsystemAssetRuntime::DeduplicateSubsystemRefs(m_subsystems);
-    m_entities = Move(entities);
-    m_assets = Move(assets);
-}
-
 b8 SceneAsset::loadBinary(const Span<const u8> binary){
     Core::Alloc::ScratchArena scratchArena(s_SceneLoadBinaryArena);
     usize cursor = 0u;
@@ -231,6 +222,19 @@ b8 SceneAsset::loadBinary(const Span<const u8> binary){
         return false;
     *this = Move(candidate);
     return true;
+}
+
+void SceneAsset::setContents(SubsystemRefVector&& subsystems, AssetMap&& assets, EntityRefVector&& entities)noexcept{
+    m_subsystems = Move(subsystems);
+    SubsystemAssetRuntime::DeduplicateSubsystemRefs(m_subsystems);
+    m_entities = Move(entities);
+    m_assets = Move(assets);
+}
+
+void SceneAsset::takeContents(SubsystemRefVector& outSubsystems, AssetMap& outAssets, EntityRefVector& outEntities)noexcept{
+    outSubsystems = Move(m_subsystems);
+    outAssets = Move(m_assets);
+    outEntities = Move(m_entities);
 }
 
 

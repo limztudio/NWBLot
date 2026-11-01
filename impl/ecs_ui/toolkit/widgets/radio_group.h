@@ -45,8 +45,10 @@ public:
     [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
 
     [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
-    [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept;
-    [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept;
+
+    [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept{ return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision }; }
+
+    [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept{ return snapshot() == value; }
     void select(u64 key)noexcept;
     void reset()noexcept;
 

@@ -28,34 +28,6 @@ struct PlacedGlyph{
     GlyphCoverageBounds coverage{};
 };
 
-struct TextCluster{
-    u32 byteBegin = 0u;
-    u32 byteEnd = 0u;
-    u32 firstGlyph = 0u;
-    u32 glyphCount = 0u;
-    u32 lineIndex = 0u;
-    f32 leadingX = 0.0f;
-    f32 trailingX = 0.0f;
-};
-
-struct TextLine{
-    u32 byteBegin = 0u;
-    u32 byteEnd = 0u;
-    u32 breakEnd = 0u;
-    u32 firstGlyph = 0u;
-    u32 glyphCount = 0u;
-    u32 firstCluster = 0u;
-    u32 clusterCount = 0u;
-    f32 top = 0.0f;
-    f32 baseline = 0.0f;
-    f32 height = 0.0f;
-    f32 advance = 0.0f;
-};
-
-struct TextHit{
-    u32 byteOffset = 0u;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,7 +38,12 @@ class TextLayout final{
 
 
 public:
-    explicit TextLayout(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit TextLayout(Core::Alloc::GlobalArena& arena)noexcept
+        : m_text(arena)
+        , m_glyphs(arena)
+        , m_clusters(arena)
+        , m_lines(arena)
+    {}
     TextLayout(TextLayout&&)noexcept = default;
     TextLayout(const TextLayout&) = delete;
 
@@ -109,7 +86,10 @@ private:
 
 class TextLayoutBuilder final : NoCopy{
 public:
-    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept;
+    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept
+        : m_arena(arena)
+        , m_shaper(shaper)
+    {}
 
 
 public:

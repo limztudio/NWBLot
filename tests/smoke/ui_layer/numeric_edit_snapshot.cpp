@@ -34,7 +34,7 @@ namespace __hidden_ui_numeric_edit_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT("integer_content"),
+static constexpr Array<TStringView, 12> s_RectNames = { NWB_TEXT("integer_bounds"), NWB_TEXT("integer_content"),
     NWB_TEXT("integer_caret"), NWB_TEXT("integer_selection"), NWB_TEXT("float_bounds"), NWB_TEXT("float_content"),
     NWB_TEXT("float_caret"), NWB_TEXT("float_selection"), NWB_TEXT("clipboard_bounds"), NWB_TEXT("clipboard_content"),
     NWB_TEXT("clipboard_caret"), NWB_TEXT("clipboard_selection") };
@@ -78,7 +78,7 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
     UiNumericEditSnapshot current;
     current.values = values();
     current.display = display;
-    const NotNull<const EditModel*> models[]{ MakeNotNull(&m_integer.draft()), MakeNotNull(&m_float.draft()), MakeNotNull(&m_clipboard) };
+    const Array<NotNull<const EditModel*>, 3> models = { MakeNotNull(&m_integer.draft()), MakeNotNull(&m_float.draft()), MakeNotNull(&m_clipboard) };
     for(usize index = 0u; index < m_states.size(); ++index){
         const auto& placement = m_states[index].placement;
         current.rectangles[index * 4u] = placement.bounds;
@@ -110,7 +110,7 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
 }
 
 void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
+    const f32 y = context.display.logicalHeight - 18.0f;
     constexpr usize s_ValueCount = TupleSize_V<decltype(m_snapshot.values)>;
     constexpr usize s_MarkerCount = []()noexcept{
         usize count = 0u;

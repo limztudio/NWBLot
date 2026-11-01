@@ -21,36 +21,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_layer_input{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u8 s_Scene = 0u;
-inline constexpr u8 s_Custom = 1u;
-inline constexpr Ui::InputSource s_NativePointerSource{ 0u, 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    static_cast<void>(scancode);
+b8 UiLayerSystem::keyboardUpdate(const i32 key, [[maybe_unused]] const i32 scancode, const i32 action, const i32 mods){
     if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
     const usize slot = static_cast<usize>(key + 1);
     const u8 storedOwner = m_nativeKeyOwners[slot];
     const b8 held = storedOwner != 0u;
-    const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : __hidden_layer_input::s_Scene;
-    const b8 customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(key);
+    const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : UiInputOwner::Scene;
+    const b8 customOwned = held ? previousOwner == UiInputOwner::Custom : m_context.input().ownsKey(key);
     if(action != Core::InputAction::Release)
         m_blockCommandChars = false;
     if(action == Core::InputAction::Release || customOwned || !held){
@@ -64,11 +43,11 @@ b8 UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 ac
         event.repeat = action != Core::InputAction::Release && (action == Core::InputAction::Repeat || held);
         routeInput(event, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
     }
-    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
+    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key) ? UiInputOwner::Custom : UiInputOwner::Scene;
     m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
     if(action != Core::InputAction::Release)
-        m_blockNativeChars = owner == __hidden_layer_input::s_Custom;
-    return owner == __hidden_layer_input::s_Custom;
+        m_blockNativeChars = owner == UiInputOwner::Custom;
+    return owner == UiInputOwner::Custom;
 }
 
 b8 UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
@@ -93,10 +72,10 @@ b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     synchronizeNativeInput();
     m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
     Ui::PointerInput event;
-    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.source = Ui::s_NativePointerSource;
     event.position = m_pointer;
     event.hoverCapable = true;
-    if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene){
+    if(m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Scene){
         event.phase = Ui::PointerPhase::Leave;
         routePointerInput(event);
         return false;
@@ -104,7 +83,7 @@ b8 UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
     event.phase = Ui::PointerPhase::Move;
     b8 consumed = false;
     routePointerInput(event, &consumed);
-    return consumed || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
+    return consumed || (m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Custom);
 }
 
 b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
@@ -114,58 +93,58 @@ b8 UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i3
     const u32 bit = 1u << static_cast<u32>(button);
     const b8 firstPress = action == Core::InputAction::Press && (m_pressedButtons & bit) == 0u;
     if(action == Core::InputAction::Press && m_pressedButtons == 0u){
-        const b8 acceptsSource = m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource);
-        const b8 nativeActive = m_context.input().activePointerSource() == __hidden_layer_input::s_NativePointerSource;
+        const b8 acceptsSource = m_context.input().acceptsPointerSource(Ui::s_NativePointerSource);
+        const b8 nativeActive = m_context.input().activePointerSource() == Ui::s_NativePointerSource;
         const b8 consumed = nativeActive ? m_context.input().wouldConsumePointer(m_pointer) : m_context.input().hasPopup() || m_context.input().hitTest(m_pointer).valid();
-        m_pointerOwner = consumed ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
-        if(acceptsSource && m_pointerOwner != __hidden_layer_input::s_Custom)
+        m_pointerOwner = consumed ? UiInputOwner::Custom : UiInputOwner::Scene;
+        if(acceptsSource && m_pointerOwner != UiInputOwner::Custom)
             m_context.input().clearFocus();
     }
     if(action == Core::InputAction::Press)
         m_pressedButtons |= bit;
     const u8 owner = m_pointerOwner;
     Ui::PointerInput event;
-    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.source = Ui::s_NativePointerSource;
     event.position = m_pointer;
     event.extend = (mods & Core::InputModifier::Shift) != 0;
     event.hoverCapable = true;
-    if(owner == __hidden_layer_input::s_Custom && (button == Core::MouseButton::Left || button == Core::MouseButton::Right)){
+    if(owner == UiInputOwner::Custom && (button == Core::MouseButton::Left || button == Core::MouseButton::Right)){
         event.phase = action == Core::InputAction::Release ? Ui::PointerPhase::Release : Ui::PointerPhase::Press;
         event.intent = button == Core::MouseButton::Left ? Ui::PointerIntent::Activate : Ui::PointerIntent::ContextMenu;
         if(event.phase == Ui::PointerPhase::Press && event.intent == Ui::PointerIntent::Activate)
             event.timestampMs = Max<u64>(1u, DurationInMS<u64>(TimerNow()));
         routePointerInput(event);
     }
-    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(__hidden_layer_input::s_NativePointerSource)){
+    if(owner == UiInputOwner::Custom && button == Core::MouseButton::Middle && action == Core::InputAction::Press && m_context.input().acceptsPointerSource(Ui::s_NativePointerSource)){
         m_editHost.collectNative();
         const b8 pasted = m_editHost.pastePrimary(m_pointer);
         if(!pasted)
             m_editHost.synchronizeFocus();
     }
-    if(firstPress && (owner == __hidden_layer_input::s_Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
+    if(firstPress && (owner == UiInputOwner::Scene || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))){
         event.phase = Ui::PointerPhase::Leave;
         routePointerInput(event);
     }
     if(action == Core::InputAction::Release){
         m_pressedButtons &= ~bit;
         if(m_pressedButtons == 0u){
-            m_pointerOwner = __hidden_layer_input::s_Scene;
+            m_pointerOwner = UiInputOwner::Scene;
             event.phase = Ui::PointerPhase::Move;
             event.timestampMs = 0u;
             routePointerInput(event);
         }
     }
-    return owner != __hidden_layer_input::s_Scene;
+    return owner != UiInputOwner::Scene;
 }
 
 b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     if(!IsFinite(xoffset) || !IsFinite(yoffset))
         return false;
     synchronizeNativeInput();
-    if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene)
+    if(m_pressedButtons != 0u && m_pointerOwner == UiInputOwner::Scene)
         return false;
     Ui::PointerInput event;
-    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.source = Ui::s_NativePointerSource;
     event.phase = Ui::PointerPhase::Scroll;
     event.position = m_pointer;
     event.scrollX = xoffset;
@@ -173,26 +152,20 @@ b8 UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     event.hoverCapable = true;
     b8 consumed = false;
     routePointerInput(event, &consumed);
-    return consumed || m_pointerOwner == __hidden_layer_input::s_Custom;
+    return consumed || m_pointerOwner == UiInputOwner::Custom;
 }
 
 void UiLayerSystem::windowFocusUpdate(const b8 focused){
     Ui::InputEvent event;
     event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
     routeInput(event);
-    if(!focused){
-        m_context.input().cancelDeviceInput(0u);
-        m_pressedButtons = 0u;
-        m_pointerOwner = __hidden_layer_input::s_Scene;
-        m_blockNativeChars = false;
-        m_blockCommandChars = false;
-        m_nativeKeyOwners.fill(0u);
-    }
+    if(!focused)
+        resetNativeInputState();
 }
 
 void UiLayerSystem::pointerLeave(){
     Ui::PointerInput event;
-    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.source = Ui::s_NativePointerSource;
     event.phase = Ui::PointerPhase::Leave;
     event.position = m_pointer;
     event.hoverCapable = true;
@@ -203,22 +176,18 @@ void UiLayerSystem::pointerCaptureLost(){
     if(m_pressedButtons == 0u)
         return;
     Ui::PointerInput event;
-    event.source = __hidden_layer_input::s_NativePointerSource;
+    event.source = Ui::s_NativePointerSource;
     event.phase = Ui::PointerPhase::Cancel;
     event.position = m_pointer;
     event.hoverCapable = true;
     routePointerInput(event);
     m_pressedButtons = 0u;
-    m_pointerOwner = __hidden_layer_input::s_Scene;
-}
-
-b8 UiLayerSystem::wantsKeyboard()const noexcept{
-    return m_resourcesReady && m_context.input().wantsCommands();
+    m_pointerOwner = UiInputOwner::Scene;
 }
 
 b8 UiLayerSystem::wantsPointer()const noexcept{
     if(m_pressedButtons != 0u)
-        return m_pointerOwner != __hidden_layer_input::s_Scene;
+        return m_pointerOwner != UiInputOwner::Scene;
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
@@ -230,9 +199,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
     const auto normalized = m_context.input().queue(event);
     if(!normalized){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
-        m_context.resetInput();
-        m_editHost.reset();
-        m_blockCommandChars = false;
+        resetNormalizedInput();
         return;
     }
     const b8 submit = m_editHost.prepareSubmit(*normalized);
@@ -242,16 +209,20 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, b8* blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
         *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None && !normalized->allowText;
     }
-    if(result.activationOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
-    if(result.gestureOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
+    logInputRoutingOverflows(result);
 }
 
 void UiLayerSystem::synchronizeNativeInput(){
     // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
     m_world.taskScope().wait();
     synchronizeInput();
+}
+
+void UiLayerSystem::logInputRoutingOverflows(const Ui::InputRoutingResult& result)const{
+    if(result.activationOverflow)
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
+    if(result.gestureOverflow)
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
 }
 
 

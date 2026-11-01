@@ -24,10 +24,6 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ValidShapeTypeId(const CsgShapeTypeId id)noexcept{
-    return id != s_InvalidCsgShapeTypeId;
-}
-
 [[nodiscard]] b8 ValidShaderModuleInclude(const CsgShapeTypeDesc& desc){
     if(!desc.shaderModule)
         return true;
@@ -37,10 +33,7 @@ namespace __hidden_shape_registry{
     }
 
     const AStringView include = AStringView(desc.shaderModuleInclude);
-    for(const char ch : include){
-        if(ch != '"' && ch != ';' && ch != '=' && ch != '\0' && ch != '\r' && ch != '\n')
-            continue;
-
+    if(!ValidCsgShaderModuleIncludeText(include)){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'"), ConvertString(desc.name.resolvedText()), ConvertString(include));
         return false;
     }
@@ -56,24 +49,23 @@ namespace __hidden_shape_registry{
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), ConvertString(desc.name.resolvedText()));
         return false;
     }
-    if(static_cast<usize>(desc.parameterByteSize) > s_CsgShapeInlineParameterMaxBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), ConvertString(desc.name.resolvedText()));
-        return false;
-    }
-    if(!desc.defaultParameterBytes.empty() && desc.defaultParameterBytes.size() != static_cast<usize>(desc.parameterByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch"), ConvertString(desc.name.resolvedText()));
+    if(!ValidCsgShapeParameterByteCounts(desc.parameterByteSize, desc.defaultParameterBytes.size())){
+        if(static_cast<usize>(desc.parameterByteSize) > s_CsgShapeInlineParameterMaxBytes)
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), ConvertString(desc.name.resolvedText()));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch"), ConvertString(desc.name.resolvedText()));
         return false;
     }
     return ValidShaderModuleInclude(desc);
 }
 
 template<typename ParameterT>
-[[nodiscard]] Expected<ParameterT> LoadShapeParameters(const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    if(parameterByteSize != sizeof(ParameterT) || !parameterBytes)
+[[nodiscard]] Expected<ParameterT> LoadShapeParameters(const Span<const u8> parameterBytes)noexcept{
+    if(parameterBytes.size() != sizeof(ParameterT) || !parameterBytes.data())
         return MakeUnexpected(Failure{});
 
     ParameterT parameters;
-    NWB_MEMCPY(&parameters, sizeof(ParameterT), parameterBytes, sizeof(ParameterT));
+    NWB_MEMCPY(&parameters, sizeof(ParameterT), parameterBytes.data(), sizeof(ParameterT));
     return parameters;
 }
 
@@ -115,31 +107,28 @@ template<typename ParameterT>
     return AabbTests::Transform(shapeToWorld, VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW), localMax);
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> BuildShapeBoundsForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize){
-    if(parameterByteSize == 0u && !parameterBytes && !shapeType.desc.defaultParameterBytes.empty()){
-        parameterBytes = shapeType.desc.defaultParameterBytes.data();
-        parameterByteSize = shapeType.desc.defaultParameterBytes.size();
-    }
+[[nodiscard]] Expected<CsgShapeBounds> BuildShapeBoundsForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes){
+    if(parameterBytes.empty() && !parameterBytes.data() && !shapeType.desc.defaultParameterBytes.empty())
+        parameterBytes = Span<const u8>(shapeType.desc.defaultParameterBytes.data(), shapeType.desc.defaultParameterBytes.size());
 
-    if(shapeType.desc.parameterByteSize != parameterByteSize)
+    if(shapeType.desc.parameterByteSize != parameterBytes.size())
         return MakeUnexpected(Failure{});
 
-    auto bounds = shapeType.desc.boundsCallback(shapeToWorld, parameterBytes, parameterByteSize);
+    auto bounds = shapeType.desc.boundsCallback(shapeToWorld, parameterBytes);
     if(!bounds || !ValidBoundsVectors(bounds->minBounds, bounds->maxBounds, bounds->finiteBounds))
         return MakeUnexpected(Failure{});
     return bounds;
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> PlaneBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    static_cast<void>(shapeToWorld);
-    const auto parameters = LoadShapeParameters<CsgPlaneShapeParameters>(parameterBytes, parameterByteSize);
+[[nodiscard]] Expected<CsgShapeBounds> PlaneBounds([[maybe_unused]] const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
+    const auto parameters = LoadShapeParameters<CsgPlaneShapeParameters>(parameterBytes);
     if(!parameters || !ValidPlaneParameters(LoadFloat(parameters->normalDistance)))
         return MakeUnexpected(Failure{});
     return CsgShapeBounds{};
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> BoxBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    const auto parameters = LoadShapeParameters<CsgBoxShapeParameters>(parameterBytes, parameterByteSize);
+[[nodiscard]] Expected<CsgShapeBounds> BoxBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
+    const auto parameters = LoadShapeParameters<CsgBoxShapeParameters>(parameterBytes);
     if(!parameters)
         return MakeUnexpected(Failure{});
     const auto bounds = BuildBoxBounds(shapeToWorld, VectorSetW(LoadFloat(parameters->halfExtents), s_CsgShapeBoundsW));
@@ -148,8 +137,8 @@ template<typename ParameterT>
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> SphereBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    const auto parameters = LoadShapeParameters<CsgSphereShapeParameters>(parameterBytes, parameterByteSize);
+[[nodiscard]] Expected<CsgShapeBounds> SphereBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
+    const auto parameters = LoadShapeParameters<CsgSphereShapeParameters>(parameterBytes);
     if(!parameters)
         return MakeUnexpected(Failure{});
     const auto bounds = BuildSphereBounds(shapeToWorld, VectorSplatX(LoadFloat(parameters->radius)));
@@ -158,8 +147,8 @@ template<typename ParameterT>
     return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> CapsuleBounds(const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)noexcept{
-    const auto parameters = LoadShapeParameters<CsgCapsuleShapeParameters>(parameterBytes, parameterByteSize);
+[[nodiscard]] Expected<CsgShapeBounds> CapsuleBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
+    const auto parameters = LoadShapeParameters<CsgCapsuleShapeParameters>(parameterBytes);
     if(!parameters)
         return MakeUnexpected(Failure{});
     const auto bounds = BuildCapsuleBounds(shapeToWorld, LoadFloat(parameters->radiusHalfHeight));
@@ -189,11 +178,15 @@ template<typename ParameterT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgShapeRegistry::CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
-    : m_shapeTypes(arena)
-    , m_shapeTypeIds(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    , m_shapeTypeIndices(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), arena)
-{}
+Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept{
+    CsgShapeTypeId typeId = s_InvalidCsgShapeTypeId;
+    if(!TryResolveCsgShapeTypeIdFromName(shapeName, typeId))
+        return MakeUnexpected(Failure{});
+    return typeId;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, const b8 replaceExisting){
@@ -218,7 +211,7 @@ Expected<CsgShapeTypeId> CsgShapeRegistry::registerShapeType(const CsgShapeTypeD
 
         const CsgShapeTypeId existingId = found.value();
         const auto foundIndex = m_shapeTypeIndices.find(existingId);
-        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
+        NWB_ASSERT(ValidCsgShapeTypeId(existingId) && existingId == canonicalId && foundIndex != m_shapeTypeIndices.end());
 
         CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
         shapeType.desc = desc;
@@ -325,20 +318,16 @@ Expected<AString<Core::Alloc::GlobalArena>> CsgShapeRegistry::findShaderModuleIn
 }
 
 
-Expected<CsgShapeBounds> CsgShapeRegistry::buildShapeBounds(const Name& name, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)const{
-    return buildShapeBounds(findShapeTypeId(name), shapeToWorld, parameterBytes, parameterByteSize);
-}
-
-Expected<CsgShapeBounds> CsgShapeRegistry::buildShapeBounds(const CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize)const{
+Expected<CsgShapeBounds> CsgShapeRegistry::buildShapeBounds(const CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)const{
     const auto shapeType = findShapeType(typeId);
     if(!shapeType)
         return MakeUnexpected(Failure{});
-    return __hidden_shape_registry::BuildShapeBoundsForShapeType(*shapeType, shapeToWorld, parameterBytes, parameterByteSize);
+    return __hidden_shape_registry::BuildShapeBoundsForShapeType(*shapeType, shapeToWorld, parameterBytes);
 }
 
 
 Expected<CsgShapeTypeInfo> CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId typeId)const{
-    if(!__hidden_shape_registry::ValidShapeTypeId(typeId))
+    if(!ValidCsgShapeTypeId(typeId))
         return MakeUnexpected(Failure{});
 
     const auto foundIndex = m_shapeTypeIndices.find(typeId);

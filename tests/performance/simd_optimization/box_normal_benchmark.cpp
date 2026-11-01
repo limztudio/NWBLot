@@ -2,14 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/floating_point_environment.h>
-#include <global/simdmath.h>
-#include <global/scope_exit.h>
-#include <global/timer.h>
-#include <global/text_utils.h>
-
-#include <cerrno>
-#include <cstdlib>
+#include "benchmark_support.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,15 +14,18 @@ namespace __hidden_box_normal_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using SimdOptimizationBenchmark::NextSeed;
+
 template<typename Scalar>
 struct Case{
     using Storage = Conditional_T<IsSame_V<Scalar, f64>, Double4, Float4>;
 
 
+public:
     Storage position;
     Storage extents;
     Storage fallback;
-    Scalar threshold;
+    Scalar threshold = Scalar(0);
 };
 
 inline constexpr usize s_CaseCount = 32768u;
@@ -88,27 +84,24 @@ static volatile u64 s_Checksum = 0u;
     return SdfDoubleTests::BoxNormal(position, halfExtents, fallback, minLengthSquared);
 }
 
-[[nodiscard]] u64 Next(u64& seed)noexcept{
-    seed ^= seed << 13u;
-    seed ^= seed >> 7u;
-    seed ^= seed << 17u;
-    return seed;
-}
-
 template<typename Scalar>
 [[nodiscard]] Case<Scalar> Fill(const usize index, u64& seed)noexcept{
     using Storage = typename Case<Scalar>::Storage;
     using Bits = Conditional_T<IsSame_V<Scalar, f64>, u64, u32>;
-    constexpr u64 s_Exceptional64[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
-        0x7fefffffffffffffull, 0xffefffffffffffffull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000142ull, 0xfff8000000000284ull, 0x7ff0000000000011ull, 0xfff0000000000022ull };
-    constexpr u32 s_Exceptional32[]{ 0u, 0x80000000u, 1u, 0x80000001u, 0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00142u, 0xffc00284u, 0x7f800011u, 0xff800022u };
-    Bits words[13];
-    for(usize word = 0u; word < LengthOf(words); ++word){
-        const u64 random = Next(seed);
+    constexpr Array<u64, 15> s_Exceptional64 = {
+        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull,
+        0x7fefffffffffffffull, 0xffefffffffffffffull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000142ull, 0xfff8000000000284ull, 0x7ff0000000000011ull, 0xfff0000000000022ull,
+    };
+    constexpr Array<u32, 15> s_Exceptional32 = {
+        0u, 0x80000000u, 1u, 0x80000001u, 0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu, 0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00142u, 0xffc00284u, 0x7f800011u, 0xff800022u,
+    };
+    Array<Bits, 13> words = {};
+    for(usize word = 0u; word < words.size(); ++word){
+        const u64 random = NextSeed(seed);
         if constexpr(IsSame_V<Scalar, f64>)
-            words[word] = index < 8192u ? s_Exceptional64[random % LengthOf(s_Exceptional64)] : random;
+            words[word] = index < 8192u ? s_Exceptional64[random % s_Exceptional64.size()] : random;
         else
-            words[word] = index < 8192u ? s_Exceptional32[random % LengthOf(s_Exceptional32)] : static_cast<u32>(random);
+            words[word] = index < 8192u ? s_Exceptional32[random % s_Exceptional32.size()] : static_cast<u32>(random);
     }
     Storage position;
     Storage extents;
@@ -180,7 +173,7 @@ template<typename Scalar>
 template<typename Scalar, b8 Candidate, b8 Latency>
 [[nodiscard]] NWB_NOINLINE u64 Workload(const usize iterations)noexcept{
     using Vector = Conditional_T<IsSame_V<Scalar, f64>, SIMDVectorDouble, SIMDVectorSingle>;
-    Case<Scalar> data[s_DataCount];
+    Array<Case<Scalar>, s_DataCount> data = {};
     for(usize index = 0u; index < s_DataCount; ++index){
         if constexpr(IsSame_V<Scalar, f64>){
             const SIMDVectorDouble position = VectorDoubleMultiply(VectorDoubleSet(static_cast<f64>((index % 7u) + 1u), static_cast<f64>((index % 5u) + 1u), static_cast<f64>((index % 3u) + 1u), 0.0), VectorDoubleSet(0.375, -0.625, 0.875, 0.0));
@@ -197,7 +190,7 @@ template<typename Scalar, b8 Candidate, b8 Latency>
             data[index].threshold = 1e-12f;
         }
     }
-    Vector accumulators[8];
+    Array<Vector, 8> accumulators = {};
     for(auto& accumulator : accumulators){
         if constexpr(IsSame_V<Scalar, f64>)
             accumulator = LoadDouble(data[0].position);
@@ -238,7 +231,7 @@ template<typename Scalar>
     const Timer begin = TimerNow();
     const u64 checksum = latency ? (candidate ? Workload<Scalar, true, true>(iterations) : Workload<Scalar, false, true>(iterations)) : (candidate ? Workload<Scalar, true, false>(iterations) : Workload<Scalar, false, false>(iterations));
     constexpr f64 s_NanosecondsPerSecond = 1.0e9;
-    const f64 seconds = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(TimerNow(), begin)), VectorDoubleReplicate(s_NanosecondsPerSecond)));
+    const f64 seconds = DurationInNS<f64>(TimerNow(), begin) / s_NanosecondsPerSecond;
     NWB_COUT.precision(17);
     NWB_COUT << "{\"precision\":" << sizeof(Scalar) << ",\"candidate\":" << candidate << ",\"latency\":" << latency << ",\"iterations\":" << iterations << ",\"seconds\":" << seconds << ",\"checksum\":" << checksum << "}\n";
     return 0;

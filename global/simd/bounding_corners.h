@@ -45,7 +45,17 @@ inline void ObbCorners(const SIMDVectorSingle center, const SIMDVectorSingle ext
     }
 }
 
-inline void FrustumCorners(const SIMDVectorSingle origin, const SIMDVectorSingle orientation, const f32 rightSlope, const f32 leftSlope, const f32 topSlope, const f32 bottomSlope, const f32 nearPlane, const f32 farPlane, SIMDVectorSingle (&outCorners)[BoundingFrustum::s_CornerCount])noexcept{
+inline void FrustumCorners(
+    const SIMDVectorSingle origin,
+    const SIMDVectorSingle orientation,
+    const f32 rightSlope,
+    const f32 leftSlope,
+    const f32 topSlope,
+    const f32 bottomSlope,
+    const f32 nearPlane,
+    const f32 farPlane,
+    SIMDVectorSingle (&outCorners)[BoundingFrustum::s_CornerCount]
+)noexcept{
     const SIMDVectorSingle slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
     const SIMDVectorSingle depths[2] = { VectorReplicate(nearPlane), VectorReplicate(farPlane), };
     const SIMDVectorSingle zero = VectorZero();
@@ -107,7 +117,17 @@ inline void ObbCorners(const SIMDVectorDouble center, const SIMDVectorDouble ext
     }
 }
 
-inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble orientation, const f64 rightSlope, const f64 leftSlope, const f64 topSlope, const f64 bottomSlope, const f64 nearPlane, const f64 farPlane, SIMDVectorDouble (&outCorners)[BoundingDoubleFrustum::s_DoubleCornerCount])noexcept{
+inline void FrustumCorners(
+    const SIMDVectorDouble origin,
+    const SIMDVectorDouble orientation,
+    const f64 rightSlope,
+    const f64 leftSlope,
+    const f64 topSlope,
+    const f64 bottomSlope,
+    const f64 nearPlane,
+    const f64 farPlane,
+    SIMDVectorDouble (&outCorners)[BoundingDoubleFrustum::s_DoubleCornerCount]
+)noexcept{
     const SIMDVectorDouble slopes = VectorDoubleSet(rightSlope, leftSlope, bottomSlope, topSlope);
     const SIMDVectorDouble depths[2] = { VectorDoubleReplicate(nearPlane), VectorDoubleReplicate(farPlane), };
     const SIMDVectorDouble zero = VectorDoubleZero();
@@ -151,7 +171,7 @@ inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble
     const SIMDVectorSingle dot02 = VectorAbs(Vector3Dot(transposed.v[0], transposed.v[2]));
     const SIMDVectorSingle dot12 = VectorAbs(Vector3Dot(transposed.v[1], transposed.v[2]));
     const SIMDVectorSingle offDiagonal = VectorMergeX(VectorAdd(dot01, dot02), VectorAdd(dot01, dot12), VectorAdd(dot02, dot12), VectorZero());
-    const SIMDVectorSingle radiusScale = VectorSqrt(CollisionDetail::Vector3MaxComponent(VectorAdd(diagonal, offDiagonal)));
+    const SIMDVectorSingle radiusScale = VectorSqrt(Vector3MaxComponent(VectorAdd(diagonal, offDiagonal)));
     return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, radiusScale));
 }
 
@@ -165,7 +185,7 @@ inline void FrustumCorners(const SIMDVectorDouble origin, const SIMDVectorDouble
     const SIMDVectorDouble dot02 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[0], transposed.v[2]));
     const SIMDVectorDouble dot12 = VectorDoubleAbs(VectorDouble3Dot(transposed.v[1], transposed.v[2]));
     const SIMDVectorDouble offDiagonal = VectorDoubleMergeX(VectorDoubleAdd(dot01, dot02), VectorDoubleAdd(dot01, dot12), VectorDoubleAdd(dot02, dot12), VectorDoubleZero());
-    const SIMDVectorDouble radiusScale = VectorDoubleSqrt(CollisionDoubleDetail::VectorDouble3MaxComponent(VectorDoubleAdd(diagonal, offDiagonal)));
+    const SIMDVectorDouble radiusScale = VectorDoubleSqrt(VectorDouble3MaxComponent(VectorDoubleAdd(diagonal, offDiagonal)));
     return CollisionDoubleDetail::SphereCenterRadius(VectorDouble3Transform(centerVector, matrix), VectorDoubleMultiply(sphereRadius, radiusScale));
 }
 

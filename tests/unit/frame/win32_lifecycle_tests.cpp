@@ -118,8 +118,7 @@ static void DrainQuitMessages()noexcept{
     while(PeekMessage(&message, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE)){}
 }
 
-static b8 RequestQuitOnUpdate(void* userData, f32 delta){
-    static_cast<void>(delta);
+static b8 RequestQuitOnUpdate(void* userData, [[maybe_unused]] f32 delta){
     auto& state = *MakeNotNull(static_cast<LoopCallbackState*>(userData));
     ++state.callbacks;
     state.frame.requestQuit();

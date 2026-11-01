@@ -37,6 +37,7 @@ public:
     [[nodiscard]] b8 mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
     [[nodiscard]] b8 applyMutation()noexcept;
 
+
 private:
     [[nodiscard]] Core::ECS::EntityID createPanel(const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, b8 horizontal = false);
 

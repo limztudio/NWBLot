@@ -186,8 +186,8 @@ GpuCommandIrReplayError::Enum ValidateRasterBackendOperand(
     const GpuCommandIrOwnedStream& stream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuPhysicalQueueInfo& queue,
-    CommandList& commandList,
     const u64 recordIndex,
+    CommandList& commandList,
     RasterReplayState& state
 )noexcept{
     switch(record.opcode){

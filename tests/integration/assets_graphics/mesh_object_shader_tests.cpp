@@ -27,7 +27,6 @@ namespace __hidden_mesh_object_shader_tests{
 
 
 using TestArena = AssetsGraphicsFixture::TestArena;
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +48,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         AStringView fields;
         b8 accepted;
     };
-    constexpr MetadataCase s_Cases[] = {
+    constexpr Array<MetadataCase, 8u> s_Cases = {{
         { "mesh_shader", "", true },
         { "pixel_shader", "", true },
         { "mesh_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
@@ -58,7 +57,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         { "vertex_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
         { "pixel_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
         { "mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
-    };
+    }};
     Impl::ShaderCook shaderCook(testArena.arena);
     for(const MetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.shaderAssetType);

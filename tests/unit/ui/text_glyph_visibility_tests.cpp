@@ -48,8 +48,8 @@ public:
 protected:
     virtual void SetUp()override{
         Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-        ASSERT_TRUE(loadFont(m_latin, "latin.font"));
-        ASSERT_TRUE(loadFont(m_korean, "korean.font"));
+        ASSERT_TRUE(loadFont("latin.font", m_latin));
+        ASSERT_TRUE(loadFont("korean.font", m_korean));
         auto faceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestLatinFontPath), m_latin, 1u });
         auto koreanFaceResult = MakeFontFace(fontScratchArena, m_arena, { Core::Assets::AssetRef<Font>(UiWidgetTests::s_TestKoreanFontPath), m_korean, 1u });
         ASSERT_TRUE(faceResult);
@@ -60,7 +60,7 @@ protected:
         ASSERT_FALSE(m_koreanFace->coverageInkReliable());
     }
 
-    [[nodiscard]] b8 loadFont(Font& font, const StringView filename){
+    [[nodiscard]] b8 loadFont(const StringView filename, Font& font){
         const ::Path<Core::Alloc::GlobalArena> directory(m_arena, NWB_TEST_FONT_DIRECTORY);
         const ::Path<Core::Alloc::GlobalArena> path = directory / filename;
         Core::Assets::AssetBytes bytes(m_arena);
@@ -97,8 +97,8 @@ protected:
     virtual void SetUp()override{
         FontAtlasPayload payload(m_arena);
         payload.font = Core::Assets::AssetRef<Font>("tests/ui/glyph_visibility/font");
-        const u8 source[]{ 1u };
-        payload.fontSha256 = ComputeSha256({ source, 1u });
+        const Array<u8, 1> source{ 1u };
+        payload.fontSha256 = ComputeSha256({ source.data(), 1u });
         payload.unitsPerEm = 1000u;
         payload.sourceGlyphCount = 2u;
         payload.bakePpem = 32u;
@@ -135,10 +135,10 @@ protected:
 
 TEST(TextGlyphVisibilityTests, TouchingEdgesAndEmptyAreasAreInvisible){
     const Rect clip{ 10.0f, 20.0f, 30.0f, 40.0f };
-    const Rect rectangles[]{
-        { 0.0f, 20.0f, 10.0f, 1.0f }, { 40.0f, 20.0f, 1.0f, 1.0f },
-        { 10.0f, 10.0f, 1.0f, 10.0f }, { 10.0f, 60.0f, 1.0f, 1.0f },
-        { 10.0f, 20.0f, 0.0f, 1.0f }, { 10.0f, 20.0f, 1.0f, 0.0f },
+    const Array<Rect, 6> rectangles{
+        Rect{ 0.0f, 20.0f, 10.0f, 1.0f }, Rect{ 40.0f, 20.0f, 1.0f, 1.0f },
+        Rect{ 10.0f, 10.0f, 1.0f, 10.0f }, Rect{ 10.0f, 60.0f, 1.0f, 1.0f },
+        Rect{ 10.0f, 20.0f, 0.0f, 1.0f }, Rect{ 10.0f, 20.0f, 1.0f, 0.0f },
     };
     for(const Rect& rectangle : rectangles)
         EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Invisible);
@@ -147,11 +147,11 @@ TEST(TextGlyphVisibilityTests, TouchingEdgesAndEmptyAreasAreInvisible){
 
 TEST(TextGlyphVisibilityTests, InvalidRectanglesAndOverflowingEndpointsAreRejected){
     const Rect clip{ 0.0f, 0.0f, 100.0f, 100.0f };
-    const Rect invalid[]{
-        { Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
-        { 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
-        { 0.0f, 0.0f, -1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f, -1.0f },
-        { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
+    const Array<Rect, 5> invalid{
+        Rect{ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f },
+        Rect{ 0.0f, Limit<f32>::s_Infinity, 1.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, -1.0f, 1.0f }, Rect{ 0.0f, 0.0f, 1.0f, -1.0f },
+        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
     };
     for(const Rect& rectangle : invalid){
         EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Invalid);
@@ -169,9 +169,9 @@ TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtO
     record.bearingY = 3;
     Expected<Rect> rectangle;
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.0f, 20.0f }, { 1.0f, 1.0f }));
-    UiWidgetTests::ExpectRect(*rectangle, { 8.0f, 17.0f, 5.0f, 7.0f });
+    UiPaintAssertions::ExpectRect(*rectangle, { 8.0f, 17.0f, 5.0f, 7.0f });
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.5f, 20.5f }, { 1.0f, 1.0f }));
-    UiWidgetTests::ExpectRect(*rectangle, { 9.0f, 18.0f, 5.0f, 7.0f });
+    UiPaintAssertions::ExpectRect(*rectangle, { 9.0f, 18.0f, 5.0f, 7.0f });
 }
 
 TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelScale){
@@ -184,9 +184,9 @@ TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelSc
     record.bearingY = 6;
     Expected<Rect> rectangle;
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, { 1.5f, 1.5f }));
-    UiWidgetTests::ExpectRect(*rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
+    UiPaintAssertions::ExpectRect(*rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, { 1.0f, 1.5f }));
-    UiWidgetTests::ExpectRect(*rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
+    UiPaintAssertions::ExpectRect(*rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
 }
 
 TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryRejectsTheResult){
@@ -194,7 +194,7 @@ TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryRejectsTheResult){
     AtlasGlyph record;
     record.pageIndex = 0u;
     record.pixels = { 0.0f, 0.0f, 1.0f, 1.0f };
-    const f32 invalidScales[]{ 0.0f, -1.0f, Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
+    const Array<f32, 4> invalidScales{ 0.0f, -1.0f, Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
     for(const f32 scale : invalidScales){
         EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, scale, {}));
     }
@@ -211,9 +211,9 @@ TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverage){
     AtlasGlyph record;
     record.pageIndex = 0u;
     record.pixels = { 0.0f, 0.0f, 3.0f, 4.0f };
-    const Point invalidScales[]{
-        { 0.0f, 1.0f }, { -1.0f, 1.0f }, { Limit<f32>::s_Infinity, 1.0f },
-        { 1.0f, 0.0f }, { 1.0f, -1.0f }, { 1.0f, Limit<f32>::s_QuietNaN },
+    const Array<Point, 6> invalidScales{
+        Point{ 0.0f, 1.0f }, Point{ -1.0f, 1.0f }, Point{ Limit<f32>::s_Infinity, 1.0f },
+        Point{ 1.0f, 0.0f }, Point{ 1.0f, -1.0f }, Point{ 1.0f, Limit<f32>::s_QuietNaN },
     };
     for(const Point& pixelScale : invalidScales){
         EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, pixelScale));
@@ -285,7 +285,7 @@ TEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFring
     const Rect clip{ 8.6f, 20.0f, 0.1f, 1.0f };
     Expected<Rect> rectangle;
     ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, {}, pixelScale));
-    UiWidgetTests::ExpectRect(*rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
+    UiPaintAssertions::ExpectRect(*rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
     EXPECT_EQ(TextGlyphVisibility::Intersect(*rectangle, clip), TextGlyphIntersection::Visible);
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale), TextGlyphIntersection::Visible);
 }
@@ -366,7 +366,7 @@ TEST_F(TextGlyphVisibilityAtlasTests, NondrawableAtlasGlyphHasNoCandidateImage){
     glyph.glyphId = 1u;
     const auto rectangle = TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {});
     ASSERT_TRUE(rectangle);
-    UiWidgetTests::ExpectRect(*rectangle, {});
+    UiPaintAssertions::ExpectRect(*rectangle, {});
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 

@@ -13,14 +13,11 @@
 
 #include "bind.h"
 
-#include <core/alloc/scratch.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
-#include <core/metascript/parser.h>
 #include <core/common/log.h>
 
-#include <global/binary.h>
 #include <global/hash_utils.h>
-#include <global/simd/convert.h>
 #include <global/text_utils.h>
 
 
@@ -33,12 +30,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Metascript = Core::Metascript;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace MaterialBindDetail{
 
 
@@ -46,53 +37,21 @@ namespace MaterialBindDetail{
 
 
 using CookString = MaterialCookString;
-using ScratchArena = Core::Alloc::ScratchArena;
-using ScratchString = AString<ScratchArena>;
-
-template<typename T>
-using ScratchVector = Vector<T, ScratchArena>;
+using Core::Assets::ScratchArena;
+using Core::Assets::ScratchString;
+using Core::Assets::ScratchVector;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static constexpr AStringView s_MaterialConstantAttribute = "material_constant";
-static constexpr AStringView s_MaterialMutableAttribute = "material_mutable";
-static constexpr AStringView s_DefaultAttribute = "default";
-static constexpr AStringView s_MaterialBindDiagnosticPrefix = "Material bind";
-
-static constexpr AStringView s_BindNameKey = "name";
-static constexpr AStringView s_BindTypeKey = "type";
-static constexpr AStringView s_BindAttributesKey = "attributes";
-static constexpr AStringView s_BindFieldsKey = "fields";
-
-static constexpr AStringView s_BindFieldTypeTexture2D = "texture2d";
-static constexpr AStringView s_BindFieldTypeSampler = "sampler";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, ScratchArena& scratchArena);
-
-struct MaterialParameterType{
-    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
-    u32 componentCount = 0u;
-};
-
-[[nodiscard]] Expected<MaterialParameterType> ParseMaterialParameterTypeText(AStringView typeText)noexcept;
-
-[[nodiscard]] Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(AStringView typeText)noexcept;
-
-Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, ScratchArena& scratchArena);
 
 b8 ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const ACompactString& parameterName,
     AStringView parameterValue,
-    Material::TypedBlockByteVector& inOutBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
+    Material::ResourceReferenceVector& outResourceReferences,
+    Material::TypedBlockByteVector& inOutBlockBytes
 );
 
 

@@ -261,9 +261,7 @@ template<typename T>
     return reader;
 }
 
-static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD bytesRead)noexcept{
-    static_cast<void>(process);
-
+static BOOL CALLBACK ReadProcessMemoryFromDump([[maybe_unused]] HANDLE process, DWORD64 baseAddress, PVOID buffer, DWORD size, LPDWORD bytesRead)noexcept{
     if(bytesRead)
         *bytesRead = 0u;
     if(!s_CurrentDumpMemoryReader || !buffer)
@@ -334,8 +332,7 @@ struct CrashContext{
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static DWORD MachineTypeFromContext(const CONTEXT& context)noexcept{
-    static_cast<void>(context);
+[[nodiscard]] static DWORD MachineTypeFromContext([[maybe_unused]] const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return IMAGE_FILE_MACHINE_AMD64;
 #elif defined(_M_IX86) || defined(__i386__)
@@ -414,21 +411,21 @@ static void LoadDumpModules(Core::Alloc::ScratchArena& scratchArena, const HANDL
     }
 
     outReport += "modules_loaded=";
-    char countBuffer[s_DecimalTextBufferCapacity];
+    Array<char, s_DecimalTextBufferCapacity> countBuffer{};
     outReport += FormatDecimal(static_cast<usize>(loadedCount), countBuffer);
     outReport += s_ReportLineEnd;
 }
 
 static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIndex, const DWORD64 address, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     outReport += "#";
-    char frameBuffer[s_DecimalTextBufferCapacity];
+    Array<char, s_DecimalTextBufferCapacity> frameBuffer{};
     outReport += FormatDecimal(static_cast<usize>(frameIndex), frameBuffer);
     outReport += " ";
     outReport += s_HexAddressPrefix;
     outReport += FormatHex64A(scratchArena, address);
 
-    alignas(SYMBOL_INFOW) u8 symbolBuffer[sizeof(SYMBOL_INFOW) + (MAX_SYM_NAME * sizeof(wchar))] = {};
-    const auto symbol = MakeNotNull(reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer));
+    alignas(SYMBOL_INFOW) Array<u8, sizeof(SYMBOL_INFOW) + (MAX_SYM_NAME * sizeof(wchar))> symbolBuffer = {};
+    const auto symbol = MakeNotNull(reinterpret_cast<SYMBOL_INFOW*>(symbolBuffer.data()));
     symbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
     symbol->MaxNameLen = MAX_SYM_NAME;
 
@@ -453,7 +450,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
         outReport += " at ";
         outReport += file;
         outReport += ":";
-        char lineBuffer[s_DecimalTextBufferCapacity];
+        Array<char, s_DecimalTextBufferCapacity> lineBuffer{};
         outReport += FormatDecimal(static_cast<usize>(line.LineNumber), lineBuffer);
     }
 
@@ -504,7 +501,7 @@ static void AppendResolvedSymbol(const HANDLE symbolProcess, const DWORD frameIn
     return decodedAnyFrame;
 }
 
-Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
+Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{scratchArena};
     const auto read = ReadBinaryFile(dumpPath, dumpBytes);
@@ -551,7 +548,7 @@ Expected<b8, CrashSymbolicationFailure> AppendWindowsMinidumpStack(Core::Alloc::
     outReport += "status=decoded\nresolver=windows_pdb_minidump\nsymbol_path=";
     outReport += WideToUtf8(scratchArena, WStringView(symbolPath));
     outReport += "\nthread_id=";
-    char threadBuffer[s_DecimalTextBufferCapacity];
+    Array<char, s_DecimalTextBufferCapacity> threadBuffer{};
     outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);
     outReport += s_ReportLineEnd;
     LoadDumpModules(scratchArena, symbolProcess, dumpImage, outReport);

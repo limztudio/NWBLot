@@ -3,26 +3,21 @@
 
 
 #include "callback_shutdown.h"
-#include "project_entry.h"
-#include "profile_names.h"
 
 #include <logger/client/module.h>
 
 #include <core/alloc/module.h>
 #include <core/common/application_entry.h>
 #include <core/crash/module.h>
+#include <core/crash/package_names.h>
 #include <core/frame/module.h>
 #include <core/assets/registry.h>
 #include <core/assets/manager.h>
 #include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/factory.h>
 #include <core/filesystem/volume_naming.h>
 
-#include <global/global.h>
 #include <global/command_line.h>
-#include <global/exception.h>
-#include <global/scope_exit.h>
 #include <global/terminal_entry.h>
 #include <global/filesystem.h>
 
@@ -48,12 +43,12 @@ using CrashArena = NWB::Core::Alloc::PersistentArena;
 inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
 inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
+inline constexpr Name s_ProjectTaskProfileName("cpu.task.project");
 inline constexpr AStringView s_ResourceDirectoryName = "res";
 inline constexpr AStringView s_GraphicsVolumeName = "graphics";
 inline constexpr AStringView s_FallbackExecutableDirectory = ".";
 inline constexpr AStringView s_FallbackExecutableName = "nwb";
 inline constexpr AStringView s_UnknownBuildLabel = "unknown";
-inline constexpr AStringView s_CrashSpoolDirectoryName = "crashes";
 inline constexpr AStringView s_RuntimeCrashMetadataKey = "runtime";
 inline constexpr AStringView s_LoaderCrashMetadataValue = "loader";
 inline constexpr AStringView s_GpuDebugCrashMetadataKey = "gpu_debug";
@@ -64,7 +59,6 @@ inline constexpr int s_LoaderExitFailure = -1;
 inline constexpr u16 s_EmptyFrameClientExtent = 0u;
 inline constexpr u16 s_StandaloneLoggerPort = 0u;
 inline constexpr AStringView s_LoaderAppName = "loader";
-inline constexpr AStringView s_CrashUploadTokenOption = "--crash-upload-token";
 inline constexpr AStringView s_ForceSdrOutputFlag = "--sdr";
 inline constexpr AStringView s_DisableHardwareRayTracingFlag = "--disable-hardware-ray-tracing";
 inline constexpr i32 s_UninitializedFrameExtent = 0;
@@ -152,12 +146,6 @@ Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShader
     return NWB::Core::ShaderArchive::DeserializeIndex(arena, { indexBinary.data(), indexBinary.size() });
 }
 
-#if !defined(NWB_FINAL)
-void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
-    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer (dbg/opt builds only)");
-}
-#endif
-
 b8 ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
     if(options.disableHardwareRayTracing){
         if(!graphics.setHardwareRayTracingPolicy(NWB::Core::HardwareRayTracingPolicy::Disabled)){
@@ -201,7 +189,7 @@ b8 InstallCrashCapture(CrashArena& crashArena){
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
     crashConfig.buildId = s_UnknownBuildLabel;
     crashConfig.version = s_UnknownBuildLabel;
-    crashConfig.spoolDirectory = *executableDirectory / s_CrashSpoolDirectoryName;
+    crashConfig.spoolDirectory = *executableDirectory / NWB::Core::Crash::PackageNames::s_DefaultRootDirectoryName;
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
 
     if(!NWB::Core::Crash::InstallCrashHandler(crashConfig))
@@ -219,7 +207,12 @@ b8 InstallCrashCapture(CrashArena& crashArena){
     return true;
 }
 
-void ConfigureCrashReporting(const LoaderOptions& options)noexcept(!NWB_OCCUR_WARNING){
+void ConfigureCrashReporting(const LoaderOptions& options, const b8 crashReportingInstalled)noexcept(!NWB_OCCUR_WARNING){
+    if(!crashReportingInstalled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+        return;
+    }
+
     const AStringView logServerUrl = options.useStandaloneLogger ? AStringView() : AStringView(options.logAddress.data(), options.logAddress.size());
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
@@ -306,7 +299,7 @@ static int RunProjectRuntime(NWB::Core::Alloc::ScratchArena& scratchArena, const
             }
 
             const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& shaderArchiveRecords = *archiveRecords;
-            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks(), frame.cpuTasks().registerProfileLabel(NWB::LoaderProfileScope::s_ProjectTaskProfileName));
+            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks(), frame.cpuTasks().registerProfileLabel(__hidden_loader::s_ProjectTaskProfileName));
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),
@@ -384,10 +377,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
             return __hidden_loader::s_LoaderExitFailure;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
-        if(crashReportingInstalled)
-            __hidden_loader::ConfigureCrashReporting(options);
-        else
-            NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+        __hidden_loader::ConfigureCrashReporting(options, crashReportingInstalled);
 
         return RunProjectRuntime(scratchArena, options, inst, nullptr);
     }
@@ -397,10 +387,7 @@ static int MainLogic(NWB::Core::Alloc::ScratchArena& scratchArena, const __hidde
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), ConvertString(options.logAddress));
-    if(crashReportingInstalled)
-        __hidden_loader::ConfigureCrashReporting(options);
-    else
-        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+    __hidden_loader::ConfigureCrashReporting(options, crashReportingInstalled);
 
     return RunProjectRuntime(scratchArena, options, inst, &logger);
 }
@@ -430,11 +417,11 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     u16 port = Get<static_cast<usize>(NWB::Log::ArgCommand::LogPort)>(NWB::Log::s_ArgDefault);
     NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogAddress>(app, address);
     NWB::Log::ArgAddOption<NWB::Log::ArgCommand::LogPort>(app, port);
-    app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
+    app.add_option(NWB::Log::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
     app.add_flag(__hidden_loader::s_ForceSdrOutputFlag.data(), options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
     app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
 #if !defined(NWB_FINAL)
-    __hidden_loader::AddDebugCommandLineOptions(app, options);
+    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer (dbg/opt builds only)");
 #endif
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){

@@ -49,8 +49,8 @@ void SetGraphicsDynamicState(const VolkDeviceTable& deviceDispatch, VkCommandBuf
     deviceDispatch.vkCmdSetLineWidth(commandBuffer, s_DefaultRasterLineWidth);
     deviceDispatch.vkCmdSetDepthBias(commandBuffer, static_cast<f32>(rasterState.depthBias), rasterState.depthBiasClamp, rasterState.slopeScaledDepthBias);
 
-    const f32 blendConstants[] = { state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a, };
-    deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants);
+    const Array<f32, 4> blendConstants = {{ state.blendConstantColor.r, state.blendConstantColor.g, state.blendConstantColor.b, state.blendConstantColor.a }};
+    deviceDispatch.vkCmdSetBlendConstants(commandBuffer, blendConstants.data());
     deviceDispatch.vkCmdSetDepthBounds(commandBuffer, 0.f, 1.f);
     deviceDispatch.vkCmdSetStencilCompareMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilReadMask);
     deviceDispatch.vkCmdSetStencilWriteMask(commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, depthStencilState.stencilWriteMask);
@@ -258,10 +258,9 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
 
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
-    constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
-    VkRenderingAttachmentInfo colorAttachments[s_MaxColorAttachments] = {};
+    Array<VkRenderingAttachmentInfo, VulkanDetail::s_MaxColorAttachments> colorAttachments = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
-    NWB_ASSERT(numColorAttachments <= s_MaxColorAttachments);
+    NWB_ASSERT(numColorAttachments <= VulkanDetail::s_MaxColorAttachments);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
         auto& tex = *fbDesc.colorAttachments[i].texture;
@@ -329,7 +328,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
     renderingInfo.renderArea.extent = { framebuffer.m_framebufferInfo.width, framebuffer.m_framebufferInfo.height };
     renderingInfo.layerCount = framebuffer.m_framebufferInfo.arraySize;
     renderingInfo.colorAttachmentCount = numColorAttachments;
-    renderingInfo.pColorAttachments = colorAttachments;
+    renderingInfo.pColorAttachments = colorAttachments.data();
     if(hasDepth)
         renderingInfo.pDepthAttachment = &depthAttachment;
     if(hasStencil)

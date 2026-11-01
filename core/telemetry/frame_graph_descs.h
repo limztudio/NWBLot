@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "frame_graph_encoded.h"
 #include "recorder.h"
 
 #include <core/alloc/scratch.h>
@@ -96,36 +97,44 @@ using FrameGraphPacketSubmissionStatisticsRecords = Vector<FrameGraphPacketSubmi
 [[nodiscard]] b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept;
 [[nodiscard]] b8 IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept;
-[[nodiscard]] b8 BuildFrameGraphPayload(Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, TelemetryBytes& outPayload);
+[[nodiscard]] b8 BuildFrameGraphPayload(u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, Alloc::ScratchArena& scratchArena, TelemetryBytes& outPayload);
 [[nodiscard]] b8 BuildFrameGraphPayload(
-    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     Span<const FrameGraphNodeDesc> nodes,
     Span<const FrameGraphEdgeDesc> edges,
     Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    Alloc::ScratchArena& scratchArena,
     TelemetryBytes& outPayload
 );
 [[nodiscard]] b8 BuildFrameGraphPayload(
-    Alloc::ScratchArena& scratchArena,
     u64 frameIndex,
     Span<const FrameGraphNodeDesc> nodes,
     Span<const FrameGraphEdgeDesc> edges,
     Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
     Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
+    Alloc::ScratchArena& scratchArena,
     TelemetryBytes& outPayload
 );
 [[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, Alloc::ScratchArena& scratchArena, const void* payload, usize payloadBytes);
-[[nodiscard]] b8 RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, u64 frameIndex, Span<const FrameGraphNodeDesc> nodes, Span<const FrameGraphEdgeDesc> edges, u32 streamId = 0u);
-[[nodiscard]] b8 RecordFrameGraph(
+[[nodiscard]] inline b8 RecordFrameGraph(Recorder& recorder, Alloc::ScratchArena& scratchArena, const u64 frameIndex, const Span<const FrameGraphNodeDesc> nodes, const Span<const FrameGraphEdgeDesc> edges, const u32 streamId = 0u){
+    return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, nodes, edges](TelemetryArena&, TelemetryBytes& payload){
+        return BuildFrameGraphPayload(frameIndex, nodes, edges, scratchArena, payload);
+    });
+}
+[[nodiscard]] inline b8 RecordFrameGraph(
     Recorder& recorder,
     Alloc::ScratchArena& scratchArena,
-    u64 frameIndex,
-    Span<const FrameGraphNodeDesc> nodes,
-    Span<const FrameGraphEdgeDesc> edges,
-    Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
-    Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
-    u32 streamId = 0u
-);
+    const u64 frameIndex,
+    const Span<const FrameGraphNodeDesc> nodes,
+    const Span<const FrameGraphEdgeDesc> edges,
+    const Span<const FrameGraphPhysicalQueueRuntimeStatisticsRecord> physicalQueueRuntimeStatistics,
+    const Span<const FrameGraphPacketSubmissionStatisticsRecord> packetSubmissionStatistics,
+    const u32 streamId = 0u
+){
+    return recorder.recordBuiltPayload(EventKind::FrameGraphFrame, frameIndex, streamId, [frameIndex, &scratchArena, &nodes, &edges, &physicalQueueRuntimeStatistics, &packetSubmissionStatistics](TelemetryArena&, TelemetryBytes& payload){
+        return BuildFrameGraphPayload(frameIndex, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, scratchArena, payload);
+    });
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

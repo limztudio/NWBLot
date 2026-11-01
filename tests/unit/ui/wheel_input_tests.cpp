@@ -91,7 +91,7 @@ protected:
 
 
 TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 5u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 5u));
     EXPECT_TRUE(wheel(0.25, -0.5, { 95.0f, 25.0f }).pointerConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     EXPECT_FALSE(m_router.focus().valid());
@@ -116,7 +116,7 @@ TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
 TEST_F(UiWheelInputTests, VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction){
     m_targets[0u].scrollStepX = 0.0;
     m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(wheel(2.0, 0.0).pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_FALSE(wheel(2.0, 0.0, { 250.0f, 180.0f }).pointerConsumed);
@@ -126,7 +126,7 @@ TEST_F(UiWheelInputTests, VerticalOnlyListConsumesPureXWithoutDeliveringAControl
 TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep){
     m_targets[0u].scrollStepX = 0.0;
     m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(wheel(2.0, 0.5).pointerConsumed);
     ControlAction action;
     const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
@@ -142,7 +142,7 @@ TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalS
 }
 
 TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 95.0f, 25.0f } , .type = InputEventType::PrimaryDown})));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     PointerGesture first;
@@ -167,17 +167,17 @@ TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates)
 }
 
 TEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(wheel(1.0, -1.0).pointerConsumed);
     const HitTarget accepted = m_targets[0u];
-    const f64 invalid[]{ -1.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity };
+    const Array<f64, 3> invalid{ -1.0, Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity };
     for(const f64 value : invalid){
         m_targets[0u] = accepted;
         m_targets[0u].scrollStepX = value;
-        EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+        EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
         m_targets[0u] = accepted;
         m_targets[0u].gestureMaximumX = value;
-        EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+        EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     }
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
@@ -190,7 +190,7 @@ TEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreserve
 }
 
 TEST_F(UiWheelInputTests, SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput({ .position = { 250.0f, 180.0f } , .type = InputEventType::PrimaryDown})));
     EXPECT_FALSE(m_router.process().pointerConsumed);
     EXPECT_FALSE(wheel(1.0, -1.0).pointerConsumed);

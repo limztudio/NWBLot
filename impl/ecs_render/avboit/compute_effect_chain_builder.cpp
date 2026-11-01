@@ -5,15 +5,13 @@
 #include "compute_effect_chain_builder.h"
 
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/avboit/compute_effect_record_inputs.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
-#include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-
-#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +23,38 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
+    if(payload.timingFeedback)
+        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
+    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+}
+
+void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
+    if(payload.timingFeedback)
+        payload.timingFeedback->discardRecording(payload.timingAttribution);
+    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_avboit_compute_effect_chain_builder{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static Core::GpuTaskSchedulingHint ComputeEffectScheduling()noexcept{
@@ -44,17 +73,15 @@ namespace __hidden_avboit_compute_effect_chain_builder{
     return scheduling;
 }
 
-
-};
+[[nodiscard]] static Core::GpuTaskTimingMetadata AvboitComputeStageTimingMetadata(const AvboitFrameTargets& targets)noexcept{
+    return Core::GpuTaskTimingMetadata{ .resolutionClass = ResolveAvboitTimingResolutionClass(targets.lowWidth, targets.lowHeight) };
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
-    : m_graph(graph)
-    , m_avboitSystem(avboitSystem)
-{}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,28 +95,28 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         return MakeUnexpected(Failure{});
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = __hidden_avboit_compute_effect_chain_builder::AvboitComputeStageTimingMetadata(inputs.targets);
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
         if(!inputs.coverage.valid() || !inputs.depthWarp.valid() || !inputs.control.valid())
             return MakeUnexpected(Failure{});
         if(!inputs.currentBindlessSlots.valid())
             return MakeUnexpected(Failure{});
-        const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
+        const Array<Core::GpuTaskResourceUse, 4> depthWarpResourceUses = {
             ReadUse(inputs.coverage, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(inputs.depthWarp, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(inputs.control, Core::ResourceStates::UnorderedAccess),
             ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        const Core::GpuTaskId preDependency[] = { inputs.occupancyTask };
+        const Array<Core::GpuTaskId, 1> preDependency = { inputs.occupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
             .setIdentity(Name(RendererGpuPassText::s_AvboitDepthWarpName))
             .setMarkerLabel(RendererGpuPassText::s_AvboitDepthWarpLabel)
             .setScheduling(avboitComputeScheduling)
             .setTiming(avboitComputeStageTiming)
-            .setDependencies(preDependency, LengthOf(preDependency))
-            .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
+            .setDependencies(preDependency)
+            .setResourceUses(depthWarpResourceUses)
         ;
         const auto depthWarpTaskResult = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
@@ -123,24 +150,24 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(Core::GpuTaskGr
         return false;
 
     const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain_builder::ComputeEffectScheduling();
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = AvboitComputeStageTimingMetadata(inputs.targets);
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming = __hidden_avboit_compute_effect_chain_builder::AvboitComputeStageTimingMetadata(inputs.targets);
     // Integration retains packet affinity; the compiler lowers its queue and resource states.
-    const Core::GpuTaskResourceUse integrationResourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 5> integrationResourceUses = {
         ReadUse(inputs.extinction),
         ReadUse(inputs.control),
         ReadUse(inputs.extinctionOverflow),
         ReadWriteUse(inputs.transmittance, Core::ResourceStates::UnorderedAccess),
         ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
-    const Core::GpuTaskId integrationDependency[] = { inputs.extinctionTask };
+    const Array<Core::GpuTaskId, 1> integrationDependency = { inputs.extinctionTask };
     Core::GpuTaskDesc integrationDesc;
     integrationDesc
         .setIdentity(Name("render.avboit.integration"))
         .setMarkerLabel(RendererGpuPassText::s_AvboitIntegrationLabel)
         .setScheduling(avboitComputeScheduling)
         .setTiming(avboitComputeStageTiming)
-        .setDependencies(integrationDependency, LengthOf(integrationDependency))
-        .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
+        .setDependencies(integrationDependency)
+        .setResourceUses(integrationResourceUses)
     ;
     const auto integrationTaskResult = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,

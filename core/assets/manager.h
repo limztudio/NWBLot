@@ -43,7 +43,11 @@ public:
 
 
 public:
-    explicit AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
+    explicit AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
+        : m_registry(registry)
+        , m_binarySource(binarySource)
+        , m_arena(arena)
+    {}
 
 
 public:

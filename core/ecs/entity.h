@@ -21,6 +21,13 @@ class Entity{
     friend class World;
 
 
+private:
+    Entity(World& world, EntityID entityId)noexcept
+        : m_world(world)
+        , m_entity(entityId)
+    {}
+
+
 public:
     [[nodiscard]] EntityID id()const noexcept{ return m_entity; }
 
@@ -57,16 +64,14 @@ public:
 
 
 private:
-    Entity(World& world, EntityID entityId)noexcept
-        : m_world(world)
-        , m_entity(entityId)
-    {}
-
-
-private:
     World& m_world;
     EntityID m_entity;
 };
+
+
+inline Entity World::createEntity(){ return Entity(*this, m_entityManager.create()); }
+
+inline Entity World::entity(const EntityID entityId)noexcept{ return Entity(*this, entityId); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -25,17 +25,20 @@ NWB_IMPL_UI_BEGIN
 namespace NumericEditDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Both numeric models share draft and bounds handling; parsing and equality stay type-specific.
 template<typename Value, typename Bounds, typename Canonicalize, typename Changed>
 [[nodiscard]] NumericEditResult CommitDraft(
-    Value& value,
-    AString<Core::Alloc::GlobalArena>& acceptedDraft,
     const Expected<Value, NumericParseStatus::Enum>& parsed,
     const Bounds& bounds,
     const b8 canonical,
     const AStringView draft,
     Canonicalize canonicalize,
-    Changed changed
+    Changed changed,
+    AString<Core::Alloc::GlobalArena>& acceptedDraft,
+    Value& value
 ){
     const b8 outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
     const b8 clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
@@ -69,7 +72,6 @@ template<typename Value, typename Bounds, typename Canonicalize, typename Change
     return result;
 }
 
-
 template<typename Canonicalize>
 [[nodiscard]] NumericEditResult RestoreDraft(Canonicalize canonicalize, const b8 cancelled)noexcept(
     []()constexpr noexcept{
@@ -95,20 +97,13 @@ template<typename Canonicalize>
     return result;
 }
 
-inline void AdvanceRevision(u64& inOutRevision)noexcept{
-    if(inOutRevision == Limit<u64>::s_Max)
-        TerminateInvariant();
-    ++inOutRevision;
-}
+void AdvanceRevision(u64& inOutRevision)noexcept;
+[[nodiscard]] Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft);
 
-[[nodiscard]] inline Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
-    if(!formatted)
-        return MakeUnexpected(formatted.error());
-    const b8 changed = *formatted != inOutDraft.text();
-    if(!inOutDraft.setText(*formatted))
-        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    outAcceptedDraft.assign(formatted->data(), formatted->size());
-    return changed;
+template<typename Value, typename Formatter>
+[[nodiscard]] inline Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+    Array<char, s_NumericEditMaxBytes> buffer{};
+    return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
 
 template<typename Value, typename Bounds>
@@ -118,16 +113,7 @@ template<typename Value, typename Bounds>
     return parsed ? NumericParseStatus::Complete : parsed.error();
 }
 
-[[nodiscard]] inline b8 DraftDirty(const EditModel& draft, const AStringView acceptedDraft)noexcept{
-    return draft.text() != acceptedDraft;
-}
-
-[[nodiscard]] inline b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
-    if(!inOutDraft.setText(text))
-        return false;
-    AdvanceRevision(inOutRevision);
-    return true;
-}
+[[nodiscard]] b8 SetDraftText(AStringView text, EditModel& inOutDraft, u64& inOutRevision);
 
 template<typename Canonicalize>
 [[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
@@ -136,6 +122,9 @@ template<typename Canonicalize>
         AdvanceRevision(inOutRevision);
     return result;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

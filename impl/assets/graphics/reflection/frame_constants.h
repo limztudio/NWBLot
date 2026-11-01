@@ -9,8 +9,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../raytrace/optical_transport_constants.h"
-#include "feedback_constants.h"
+#define NWB_REFLECTION_FEEDBACK_GROUP_SIZE 8u
+#define NWB_REFLECTION_FEEDBACK_SURFACE_COUNT 2u
+#define NWB_REFLECTION_FEEDBACK_HEADER_BYTES 16u
+#define NWB_REFLECTION_FEEDBACK_ENTRY_BYTES 4u
+#define NWB_REFLECTION_FEEDBACK_HEADER_VALID 1u
+#define NWB_REFLECTION_FEEDBACK_WRITE_ENABLED 1u
+#define NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID 2u
+#define NWB_REFLECTION_FEEDBACK_ACTIVE 0u
+#define NWB_REFLECTION_FEEDBACK_DORMANT 2u
+#define NWB_REFLECTION_FEEDBACK_PROBE_PERIOD 16u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,62 +85,50 @@
 // Adding this wrapped value subtracts one from a counter.
 #define NWB_REFLECTION_COUNTER_SUBTRACT_ONE 0xffffffffu
 
-#define NWB_REFLECTION_DEFAULT_SCREEN_MAX_STEPS 96u
-#define NWB_REFLECTION_DEFAULT_MAX_RAY_DISTANCE 100.f
-#define NWB_REFLECTION_DEFAULT_DISTANCE_FADE_START 80.f
-#define NWB_REFLECTION_DEFAULT_ROUGHNESS_CUTOFF 0.8f
-#define NWB_REFLECTION_DEFAULT_ENV_TOP_R 0.15f
-#define NWB_REFLECTION_DEFAULT_ENV_TOP_G 0.2f
-#define NWB_REFLECTION_DEFAULT_ENV_TOP_B 0.3f
-#define NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB 0.04f
-#define NWB_REFLECTION_DEFAULT_SCREEN_THICKNESS 0.03f
-#define NWB_REFLECTION_DEFAULT_SCREEN_CONFIDENCE_THRESHOLD 0.8f
-#define NWB_REFLECTION_DEFAULT_SCREEN_EDGE_FADE 0.05f
-
 // Eleven std140 lanes: targets own descriptors; this frame payload only borrows selectors.
 #define NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD) \
-    FIELD(opaqueSpecularSlot, 0u) \
-    FIELD(glassSpecularSlot, 0u) \
-    FIELD(opaqueOutputSlot, 0u) \
-    FIELD(glassOutputSlot, 0u) \
-    FIELD(opaqueRadianceSlot, 0u) \
-    FIELD(glassRadianceSlot, 0u) \
-    FIELD(queueSlot, 0u) \
-    FIELD(counterSlot, 0u) \
-    FIELD(argsSlot, 0u) \
-    FIELD(queueCapacity, 0u) \
-    FIELD(maxHardwareRays, 0u) \
-    FIELD(sampleIndex, 0u) \
-    FIELD(deferredResourcesSlot, 0u) \
-    FIELD(viewSlot, 0u) \
-    FIELD(materialContextSlot, 0u) \
-    FIELD(debugView, 0u) \
-    FIELD(depthPyramidSlot, 0u) \
-    FIELD(depthMipCount, 0u) \
-    FIELD(screenMaxSteps, NWB_REFLECTION_DEFAULT_SCREEN_MAX_STEPS) \
-    FIELD(diagnosticsEnabled, 0u) \
-    FIELD(samplingSeed, 0u) \
-    FIELD(sampleBaseX, 0u) \
-    FIELD(sampleBaseY, 0u) \
-    FIELD(maxOpticalQueries, NWB_OPTICAL_DEFAULT_QUERIES) \
-    FIELD(feedbackReadSlot, 0u) \
-    FIELD(feedbackWriteSlot, 0u) \
-    FIELD(feedbackFlags, 0u) \
-    FIELD(feedbackProbeIndex, 0u)
+    FIELD(opaqueSpecularSlot) \
+    FIELD(glassSpecularSlot) \
+    FIELD(opaqueOutputSlot) \
+    FIELD(glassOutputSlot) \
+    FIELD(opaqueRadianceSlot) \
+    FIELD(glassRadianceSlot) \
+    FIELD(queueSlot) \
+    FIELD(counterSlot) \
+    FIELD(argsSlot) \
+    FIELD(queueCapacity) \
+    FIELD(maxHardwareRays) \
+    FIELD(sampleIndex) \
+    FIELD(deferredResourcesSlot) \
+    FIELD(viewSlot) \
+    FIELD(materialContextSlot) \
+    FIELD(debugView) \
+    FIELD(depthPyramidSlot) \
+    FIELD(depthMipCount) \
+    FIELD(screenMaxSteps) \
+    FIELD(diagnosticsEnabled) \
+    FIELD(samplingSeed) \
+    FIELD(sampleBaseX) \
+    FIELD(sampleBaseY) \
+    FIELD(maxOpticalQueries) \
+    FIELD(feedbackReadSlot) \
+    FIELD(feedbackWriteSlot) \
+    FIELD(feedbackFlags) \
+    FIELD(feedbackProbeIndex)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
-    FIELD(maxRayDistance, NWB_REFLECTION_DEFAULT_MAX_RAY_DISTANCE) \
-    FIELD(distanceFadeStart, NWB_REFLECTION_DEFAULT_DISTANCE_FADE_START) \
-    FIELD(roughnessCutoff, NWB_REFLECTION_DEFAULT_ROUGHNESS_CUTOFF) \
-    FIELD(environmentTopR, NWB_REFLECTION_DEFAULT_ENV_TOP_R) \
-    FIELD(environmentTopG, NWB_REFLECTION_DEFAULT_ENV_TOP_G) \
-    FIELD(environmentTopB, NWB_REFLECTION_DEFAULT_ENV_TOP_B) \
-    FIELD(environmentBottomR, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
-    FIELD(environmentBottomG, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
-    FIELD(environmentBottomB, NWB_REFLECTION_DEFAULT_ENV_BOTTOM_RGB) \
-    FIELD(screenThickness, NWB_REFLECTION_DEFAULT_SCREEN_THICKNESS) \
-    FIELD(screenConfidenceThreshold, NWB_REFLECTION_DEFAULT_SCREEN_CONFIDENCE_THRESHOLD) \
-    FIELD(screenEdgeFade, NWB_REFLECTION_DEFAULT_SCREEN_EDGE_FADE)
+    FIELD(maxRayDistance) \
+    FIELD(distanceFadeStart) \
+    FIELD(roughnessCutoff) \
+    FIELD(environmentTopR) \
+    FIELD(environmentTopG) \
+    FIELD(environmentTopB) \
+    FIELD(environmentBottomR) \
+    FIELD(environmentBottomG) \
+    FIELD(environmentBottomB) \
+    FIELD(screenThickness) \
+    FIELD(screenConfidenceThreshold) \
+    FIELD(screenEdgeFade)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

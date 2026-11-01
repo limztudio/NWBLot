@@ -24,23 +24,7 @@ namespace __hidden_ui_edit_model{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_MaxBytes = 1048576u;
-static constexpr usize s_MaxHistoryRecords = 256u;
-static constexpr usize s_MaxHistoryBytes = 16777216u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static EditLimits BoundedLimits(const EditLimits& limits)noexcept{
-    return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords), Min(limits.maxHistoryBytes, s_MaxHistoryBytes) };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,7 +39,7 @@ static EditLimits BoundedLimits(const EditLimits& limits)noexcept{
 EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, const EditTextMode::Enum mode)
     : m_arena(arena)
     , m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_edit_model::s_NextIdentity))
-    , m_limits(__hidden_ui_edit_model::BoundedLimits(limits))
+    , m_limits(ClampEditLimits(limits))
     , m_text(arena)
     , m_boundaries(arena)
     , m_history(arena)
@@ -100,26 +84,6 @@ b8 EditModel::setSelection(const usize anchor, const usize caret)noexcept{
     m_caret = caret;
     advanceSelectionGeneration();
     return true;
-}
-
-b8 EditModel::selectAll()noexcept{
-    return setSelection(0u, m_text.size());
-}
-
-b8 EditModel::replaceSelection(const AStringView value){
-    return replaceRange(selectionStart(), selectionEnd(), value);
-}
-
-b8 EditModel::backspace(){
-    const usize start = hasSelection() ? selectionStart() : previousBoundary(m_caret);
-    const usize end = hasSelection() ? selectionEnd() : m_caret;
-    return replaceRange(start, end, {});
-}
-
-b8 EditModel::eraseForward(){
-    const usize start = hasSelection() ? selectionStart() : m_caret;
-    const usize end = hasSelection() ? selectionEnd() : nextBoundary(m_caret);
-    return replaceRange(start, end, {});
 }
 
 b8 EditModel::eraseSurrounding(const usize beforeBytes, const usize afterBytes){
@@ -176,6 +140,12 @@ Expected<Vector<usize, Core::Alloc::GlobalArena>> EditModel::buildBoundaries(con
     if(m_textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
         return MakeUnexpected(Failure{});
     return GraphemeSegmentation::Build(m_arena, value, m_textMode == EditTextMode::SingleLine);
+}
+
+void EditModel::clearHistory()noexcept{
+    m_history.clear();
+    m_historyCursor = 0u;
+    m_historyBytes = 0u;
 }
 
 void EditModel::advanceRevision()noexcept{

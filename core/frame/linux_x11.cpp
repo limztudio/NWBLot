@@ -70,16 +70,12 @@ static constexpr i32 s_InactivePollSleepMs = 10;
 static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
 static b8 s_DetectableAutoRepeat = false;
-static b8 s_KeyStates[s_KeyStateCount] = {};
+static Array<b8, s_KeyStateCount> s_KeyStates = {};
 static X11FilteredKeyHistory s_FilteredKeyHistory;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static ::Display* GetX11Display(const Common::LinuxFrame& frameData)noexcept{
-    return reinterpret_cast<::Display*>(frameData.nativeDisplay());
-}
 
 static void SetX11Display(Common::LinuxFrame& frameData, ::Display* display)noexcept{
     frameData.nativeDisplay() = display;
@@ -101,14 +97,10 @@ static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom)noex
     frameData.nativeAuxValue() = static_cast<u64>(atom);
 }
 
-static void ResetKeyStates()noexcept{
-    NWB_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
-}
-
 static void SynchronizeKeyStates(const Common::LinuxFrame& frameData){
-    char keymap[s_KeyStateCount / s_BitsPerByte];
-    if(XQueryKeymap(GetX11Display(frameData), keymap) == 0){
-        ResetKeyStates();
+    Array<char, s_KeyStateCount / s_BitsPerByte> keymap;
+    if(XQueryKeymap(static_cast<::Display*>(frameData.nativeDisplay()), keymap.data()) == 0){
+        NWB_MEMSET(s_KeyStates.data(), 0, sizeof(s_KeyStates));
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 physical key-state query failed"));
         return;
     }
@@ -169,19 +161,15 @@ struct ScrollOffset{
 
 NWB_DECLARE_LINUX_KEY_SYMBOLS(X11KeySymbols, KeySym, XK);
 
-static i32 TranslateKey(KeySym keySym)noexcept{
-    return TranslateLinuxKeySymbol<X11KeySymbols>(keySym);
-}
-
 static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mods){
-    char buffer[s_TextInputBufferSize];
+    Array<char, s_TextInputBufferSize> buffer;
     KeySym ignored = NoSymbol;
-    const i32 byteCount = XLookupString(&keyEvent, buffer, static_cast<i32>(sizeof(buffer)), &ignored, nullptr);
+    const i32 byteCount = XLookupString(&keyEvent, buffer.data(), static_cast<i32>(buffer.size()), &ignored, nullptr);
     if(byteCount <= 0)
         return;
 
     for(i32 i = 0; i < byteCount;){
-        const auto decoded = DecodeUtf8CodePoint(AStringView(buffer + i, static_cast<usize>(byteCount - i)));
+        const auto decoded = DecodeUtf8CodePoint(AStringView(buffer.data() + i, static_cast<usize>(byteCount - i)));
         const u32 unicode = decoded ? decoded->codePoint : static_cast<u8>(buffer[i]);
         const i32 consumed = decoded ? decoded->byteCount : 1;
 
@@ -197,7 +185,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
 static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const b8 dispatchText, const b8 dispatchPhysical = true){
     XKeyEvent translatedEvent = keyEvent;
     const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
-    const i32 key = TranslateKey(keySym);
+    const i32 key = TranslateLinuxKeySymbol<X11KeySymbols>(keySym);
     const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
 
     if(dispatchPhysical && keyEvent.keycode)
@@ -239,9 +227,10 @@ static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const b8 dispa
     if(!dispatchText)
         s_FilteredKeyHistory.recordFiltered(keycode, true, timestamp, serial, receivedAtMs);
     const auto& frameData = frame.data<Common::LinuxFrame>();
-    if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
+    ::Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
+    if(!s_DetectableAutoRepeat && XEventsQueued(display, QueuedAfterReading) > 0){
         XEvent nextEvent{};
-        XPeekEvent(GetX11Display(frameData), &nextEvent);
+        XPeekEvent(display, &nextEvent);
         if(nextEvent.type == KeyPress && nextEvent.xkey.keycode == event.keycode && nextEvent.xkey.time == event.time)
             return;
     }
@@ -298,7 +287,7 @@ static b8 ProcessEvent(Frame& frame, const XEvent& event){
                 NWB_FATAL_ASSERT(false);
         }
         frameData.setActive(false);
-        ResetKeyStates();
+        s_KeyStates.fill(false);
         frame.input().windowFocusUpdate(false);
         break;
 
@@ -367,7 +356,7 @@ static Expected<X11WindowState> QueryWindowState(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     XWindowAttributes attributes = {};
-    if(XGetWindowAttributes(GetX11Display(frameData), GetX11Window(frameData), &attributes) == 0){
+    if(XGetWindowAttributes(static_cast<::Display*>(frameData.nativeDisplay()), GetX11Window(frameData), &attributes) == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame window attribute query failed"));
         return MakeUnexpected(Failure{});
     }
@@ -382,7 +371,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
     SetX11Window(frameData, 0);
     SetDeleteWindowMessage(frameData, None);
     s_DetectableAutoRepeat = false;
-    ResetKeyStates();
+    s_KeyStates.fill(false);
     s_FilteredKeyHistory.reset();
 }
 
@@ -398,17 +387,18 @@ b8 InitX11Frame(Frame& frame){
     ResetFrameData(frameData);
     ScopeExit cleanupOnFailure([&frame]()noexcept{ CleanupX11Frame(frame); });
 
-    SetX11Display(frameData, XOpenDisplay(nullptr));
-    if(!GetX11Display(frameData)){
+    ::Display* const display = XOpenDisplay(nullptr);
+    SetX11Display(frameData, display);
+    if(!display){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display connection failed"));
         return false;
     }
 
-    const i32 screen = DefaultScreen(GetX11Display(frameData));
-    const i32 displayWidth = DisplayWidth(GetX11Display(frameData), screen);
-    const i32 displayHeight = DisplayHeight(GetX11Display(frameData), screen);
+    const i32 screen = DefaultScreen(display);
+    const i32 displayWidth = DisplayWidth(display, screen);
+    const i32 displayHeight = DisplayHeight(display, screen);
     const u16 requestedWidth = frameData.width();
     const u16 requestedHeight = frameData.height();
     const u16 windowWidth = ClampInitialWindowDimension(requestedWidth, displayWidth);
@@ -430,7 +420,7 @@ b8 InitX11Frame(Frame& frame){
     const i32 x = centeredX > 0 ? centeredX : 0;
     const i32 y = centeredY > 0 ? centeredY : 0;
 
-    SetX11Window(frameData, XCreateSimpleWindow(GetX11Display(frameData), RootWindow(GetX11Display(frameData), screen), x, y, windowWidth, windowHeight, 0, BlackPixel(GetX11Display(frameData), screen), WhitePixel(GetX11Display(frameData), screen)));
+    SetX11Window(frameData, XCreateSimpleWindow(display, RootWindow(display, screen), x, y, windowWidth, windowHeight, 0, BlackPixel(display, screen), WhitePixel(display, screen)));
     if(GetX11Window(frameData) == 0){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
@@ -439,21 +429,21 @@ b8 InitX11Frame(Frame& frame){
     }
 
     Bool detectableAutoRepeat = False;
-    s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(GetX11Display(frameData), True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
+    s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(display, True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
 
-    XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
-    XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle.data());
+    XSelectInput(display, GetX11Window(frameData), s_WindowEventMask);
+    XStoreName(display, GetX11Window(frameData), windowTitle.data());
 
     // Publish _NET_WM_PID so process managers can find the window and close it, even headless on XWayland where PID lookup is key.
     {
-        const Atom pidAtom = XInternAtom(GetX11Display(frameData), "_NET_WM_PID", False);
+        const Atom pidAtom = XInternAtom(display, "_NET_WM_PID", False);
         if(pidAtom != None){
             const long pidValue = static_cast<long>(::getpid());
-            XChangeProperty(GetX11Display(frameData), GetX11Window(frameData), pidAtom, XA_CARDINAL, s_X11CardinalPropertyFormatBits, PropModeReplace, reinterpret_cast<const unsigned char*>(&pidValue), 1);
+            XChangeProperty(display, GetX11Window(frameData), pidAtom, XA_CARDINAL, s_X11CardinalPropertyFormatBits, PropModeReplace, reinterpret_cast<const unsigned char*>(&pidValue), 1);
         }
     }
 
-    SetDeleteWindowMessage(frameData, XInternAtom(GetX11Display(frameData), "WM_DELETE_WINDOW", False));
+    SetDeleteWindowMessage(frameData, XInternAtom(display, "WM_DELETE_WINDOW", False));
     if(GetDeleteWindowMessage(frameData) == None){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
@@ -461,7 +451,7 @@ b8 InitX11Frame(Frame& frame){
         return false;
     }
     Atom deleteWindowMessage = GetDeleteWindowMessage(frameData);
-    if(XSetWMProtocols(GetX11Display(frameData), GetX11Window(frameData), &deleteWindowMessage, 1) == 0){
+    if(XSetWMProtocols(display, GetX11Window(frameData), &deleteWindowMessage, 1) == 0){
         CleanupX11Frame(frame);
         cleanupOnFailure.release();
         NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 window close protocol installation failed"));
@@ -472,11 +462,28 @@ b8 InitX11Frame(Frame& frame){
     return true;
 }
 
+Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame){
+    Display* const display = static_cast<::Display*>(frame.data<Common::LinuxFrame>().nativeDisplay());
+    NWB_FATAL_ASSERT(display);
+    return CreateX11ClipboardService(frame.projectObjectArena(), *display);
+}
+
+Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame){
+    const auto& frameData = frame.data<Common::LinuxFrame>();
+    Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
+    NWB_FATAL_ASSERT(display && GetX11Window(frameData));
+    auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
+    if(service && !(*service)->setFocused(frameData.isActive()))
+        NWB_FATAL_ASSERT(false);
+    return service;
+}
+
 void ShowX11Frame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
+    ::Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
 
-    XMapRaised(GetX11Display(frameData), GetX11Window(frameData));
-    XFlush(GetX11Display(frameData));
+    XMapRaised(display, GetX11Window(frameData));
+    XFlush(display);
 }
 
 b8 RunX11Frame(Frame& frame){
@@ -488,9 +495,9 @@ b8 RunX11Frame(Frame& frame){
         if(frame.quitRequested())
             return true;
 
-        while(XPending(GetX11Display(frameData)) > 0){
+        while(XPending(static_cast<::Display*>(frameData.nativeDisplay())) > 0){
             XEvent event = {};
-            XNextEvent(GetX11Display(frameData), &event);
+            XNextEvent(static_cast<::Display*>(frameData.nativeDisplay()), &event);
             if(IClipboardService* const clipboard = frame.tryClipboard()){
                 if(DispatchX11ClipboardEvent(*clipboard, event))
                     continue;
@@ -528,8 +535,9 @@ b8 RunX11Frame(Frame& frame){
             return false;
 
         if(const Optional<TStringView> title = frame.syncGraphicsWindowState(windowState->width, windowState->height, windowState->windowVisible, windowState->windowIsInFocus)){
-            XStoreName(GetX11Display(frameData), GetX11Window(frameData), title->data());
-            XFlush(GetX11Display(frameData));
+            ::Display* const display = static_cast<::Display*>(frameData.nativeDisplay());
+            XStoreName(display, GetX11Window(frameData), title->data());
+            XFlush(display);
         }
 
         Timer currentTime(TimerNow());
@@ -548,38 +556,22 @@ b8 RunX11Frame(Frame& frame){
     return false;
 }
 
-Expected<GlobalUniquePtr<IClipboardService>> CreateX11FrameClipboard(Frame& frame){
-    Display* const display = GetX11Display(frame.data<Common::LinuxFrame>());
-    NWB_FATAL_ASSERT(display);
-    return CreateX11ClipboardService(frame.projectObjectArena(), *display);
-}
-
-Expected<GlobalUniquePtr<ITextInputService>> CreateX11FrameTextInput(Frame& frame){
-    const auto& frameData = frame.data<Common::LinuxFrame>();
-    Display* const display = GetX11Display(frameData);
-    NWB_FATAL_ASSERT(display && GetX11Window(frameData));
-    auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
-    if(service && !(*service)->setFocused(frameData.isActive()))
-        NWB_FATAL_ASSERT(false);
-    return service;
-}
-
 void CleanupX11Frame(Frame& frame)noexcept{
     auto& frameData = frame.data<Common::LinuxFrame>();
 
-    if(GetX11Display(frameData)){
+    if(::Display* const display = static_cast<::Display*>(frameData.nativeDisplay())){
         if(GetX11Window(frameData)){
-            XDestroyWindow(GetX11Display(frameData), GetX11Window(frameData));
+            XDestroyWindow(display, GetX11Window(frameData));
             SetX11Window(frameData, 0);
         }
 
-        XCloseDisplay(GetX11Display(frameData));
+        XCloseDisplay(display);
         SetX11Display(frameData, nullptr);
     }
 
     SetDeleteWindowMessage(frameData, None);
     s_DetectableAutoRepeat = false;
-    ResetKeyStates();
+    s_KeyStates.fill(false);
     s_FilteredKeyHistory.reset();
 }
 

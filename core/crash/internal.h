@@ -12,16 +12,10 @@
 
 #include <global/exception.h>
 #include <global/generic.h>
+#include <global/process.h>
 #include <global/sync.h>
 #include <global/thread.h>
 #include <global/type_borrow.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-#include <signal.h>
-#include <sys/types.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,6 +46,7 @@ inline constexpr usize s_MaxPathText = 1024u;
 inline constexpr usize s_MaxUrlText = 1024u;
 inline constexpr u32 s_ManualDumpExceptionCode = 0xE0425742u;
 inline constexpr u32 s_PlatformCrashHandlerWaitMilliseconds = 3000u;
+inline constexpr u32 s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr u32 s_ManualCrashDumpWaitMilliseconds = 10000u;
 inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 
@@ -76,7 +71,6 @@ inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
 inline constexpr StringView s_ManualDumpCategory = "manual_dump";
 inline constexpr StringView s_GpuCrashCategory = "gpu_crash";
-inline constexpr StringView s_WarningEventName = "warning";
 inline constexpr usize s_SnapshotImageCount = 2u;
 inline constexpr usize s_MaxCrashSignals = 6u;
 
@@ -189,15 +183,15 @@ private:
 
 
 struct FixedMetadata{
-    char key[s_MaxShortText] = {};
-    char value[s_MaxMediumText] = {};
+    Array<char, s_MaxShortText> key = {};
+    Array<char, s_MaxMediumText> value = {};
     u8 used = 0u;
 };
 
 struct FixedBreadcrumb{
     u64 order = 0u;
-    char category[s_MaxShortText] = {};
-    char message[s_MaxMediumText] = {};
+    Array<char, s_MaxShortText> category = {};
+    Array<char, s_MaxMediumText> message = {};
     u8 used = 0u;
 };
 
@@ -225,24 +219,24 @@ struct CrashRequest{
     u32 callstackFrameCount = 0u;
     u32 callstackFramesToSkip = 0u;
     CrashSpoolRetentionConfig spoolRetention;
-    char crashId[s_MaxShortText] = {};
-    char applicationName[s_MaxShortText] = {};
-    char versionText[s_MaxShortText] = {};
-    char buildId[s_MaxMediumText] = {};
-    char abi[s_MaxShortText] = {};
-    char spoolDirectory[s_MaxPathText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
-    char event[s_MaxShortText] = {};
-    char triggerCategory[s_MaxShortText] = {};
-    char triggerExpression[s_MaxMediumText] = {};
-    char triggerMessage[s_MaxMediumText] = {};
-    char triggerFile[s_MaxPathText] = {};
+    Array<char, s_MaxShortText> crashId = {};
+    Array<char, s_MaxShortText> applicationName = {};
+    Array<char, s_MaxShortText> versionText = {};
+    Array<char, s_MaxMediumText> buildId = {};
+    Array<char, s_MaxShortText> abi = {};
+    Array<char, s_MaxPathText> spoolDirectory = {};
+    Array<char, s_MaxUrlText> logServerUrl = {};
+    Array<char, s_MaxMediumText> crashUploadToken = {};
+    Array<char, s_MaxShortText> event = {};
+    Array<char, s_MaxShortText> triggerCategory = {};
+    Array<char, s_MaxMediumText> triggerExpression = {};
+    Array<char, s_MaxMediumText> triggerMessage = {};
+    Array<char, s_MaxPathText> triggerFile = {};
     u32 metadataCount = 0u;
     u32 breadcrumbCount = 0u;
-    FixedMetadata metadata[s_MaxMetadata] = {};
-    FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
-    u64 callstackFrames[s_MaxCallstackFrames] = {};
+    Array<FixedMetadata, s_MaxMetadata> metadata = {};
+    Array<FixedBreadcrumb, s_MaxBreadcrumbs> breadcrumbs = {};
+    Array<u64, s_MaxCallstackFrames> callstackFrames = {};
 #if defined(NWB_PLATFORM_WINDOWS)
     u32 manualContextSize = 0u;
     u32 manualExceptionRecordSize = 0u;
@@ -261,7 +255,7 @@ struct CrashAck{
     u32 magic = s_AckMagic;
     u32 version = s_RequestVersion;
     u8 packageWritten = 0u;
-    char crashId[s_MaxShortText] = {};
+    Array<char, s_MaxShortText> crashId = {};
 };
 
 // This fixed-size native protocol is shared only by the application and its same-build handler.
@@ -287,7 +281,7 @@ struct CrashAck{
 }
 
 [[nodiscard]] inline b8 CrashAckMatchesRequest(const CrashAck& ack, const CrashRequest& request)noexcept{
-    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId) == AStringView(request.crashId);
+    return ack.magic == s_AckMagic && ack.version == s_RequestVersion && AStringView(ack.crashId.data()) == AStringView(request.crashId.data());
 }
 
 struct ManualDumpContextStorage;
@@ -300,7 +294,7 @@ struct CrashDumpRequestOptions{
     u64 instructionPointer = 0u;
     u64 stackPointer = 0u;
     u64 framePointer = 0u;
-    u64 callstackFrames[s_MaxCallstackFrames] = {};
+    Array<u64, s_MaxCallstackFrames> callstackFrames = {};
     AStringView event;
     AStringView triggerCategory;
     AStringView triggerExpression;
@@ -345,15 +339,15 @@ static_assert(Atomic<u64>::is_always_lock_free && Atomic<u32>::is_always_lock_fr
 
 struct CrashStateSnapshot{
     CrashSpoolRetentionConfig spoolRetention;
-    FixedMetadata metadata[s_MaxMetadata] = {};
-    FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
+    Array<FixedMetadata, s_MaxMetadata> metadata = {};
+    Array<FixedBreadcrumb, s_MaxBreadcrumbs> breadcrumbs = {};
     usize nextBreadcrumb = 0u;
-    char applicationName[s_MaxShortText] = {};
-    char versionText[s_MaxShortText] = {};
-    char buildId[s_MaxMediumText] = {};
-    char spoolDirectoryText[s_MaxPathText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
+    Array<char, s_MaxShortText> applicationName = {};
+    Array<char, s_MaxShortText> versionText = {};
+    Array<char, s_MaxMediumText> buildId = {};
+    Array<char, s_MaxPathText> spoolDirectoryText = {};
+    Array<char, s_MaxUrlText> logServerUrl = {};
+    Array<char, s_MaxMediumText> crashUploadToken = {};
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
 };
 
@@ -364,12 +358,12 @@ struct CrashSnapshotImage{
 
 struct CrashState{
     CrashSpoolRetentionConfig spoolRetention;
-    FixedBreadcrumb breadcrumbs[s_MaxBreadcrumbs] = {};
-    FixedDiagnosticSite diagnosticSites[s_MaxDiagnosticSites] = {};
+    Array<FixedBreadcrumb, s_MaxBreadcrumbs> breadcrumbs = {};
+    Array<FixedDiagnosticSite, s_MaxDiagnosticSites> diagnosticSites = {};
     usize nextBreadcrumb = 0u;
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
-    CrashSnapshotImage snapshotImages[s_SnapshotImageCount];
+    Array<CrashSnapshotImage, s_SnapshotImageCount> snapshotImages;
 
 #if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
@@ -379,16 +373,16 @@ struct CrashState{
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
-    struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
-    int installedSignals[s_MaxCrashSignals] = {};
-    b8 signalActionInstalled[s_MaxCrashSignals] = {};
+    Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
+    Array<int, s_MaxCrashSignals> installedSignals = {};
+    Array<b8, s_MaxCrashSignals> signalActionInstalled = {};
     b8 signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #elif defined(NWB_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
-    struct sigaction previousSignalActions[s_MaxCrashSignals] = {};
-    int installedSignals[s_MaxCrashSignals] = {};
-    b8 signalActionInstalled[s_MaxCrashSignals] = {};
+    Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
+    Array<int, s_MaxCrashSignals> installedSignals = {};
+    Array<b8, s_MaxCrashSignals> signalActionInstalled = {};
     b8 signalStackInstalled = false;
     ThreadId signalStackOwner{};
 #endif
@@ -412,14 +406,14 @@ struct CrashState{
     int emergencyWriteFd = -1;
 #endif
 
-    FixedMetadata metadata[s_MaxMetadata] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char spoolDirectoryText[s_MaxPathText] = {};
-    char handlerExecutablePathText[s_MaxPathText] = {};
-    char buildId[s_MaxMediumText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
-    char applicationName[s_MaxShortText] = {};
-    char versionText[s_MaxShortText] = {};
+    Array<FixedMetadata, s_MaxMetadata> metadata = {};
+    Array<char, s_MaxUrlText> logServerUrl = {};
+    Array<char, s_MaxPathText> spoolDirectoryText = {};
+    Array<char, s_MaxPathText> handlerExecutablePathText = {};
+    Array<char, s_MaxMediumText> buildId = {};
+    Array<char, s_MaxMediumText> crashUploadToken = {};
+    Array<char, s_MaxShortText> applicationName = {};
+    Array<char, s_MaxShortText> versionText = {};
     DumpDetailMode::Enum dumpDetailMode = DumpDetailMode::Small;
     b8 installed = false;
     b8 handlerStarted = false;
@@ -460,7 +454,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline ::Path<ArenaT> RequestPendingDirectory(ArenaT& arena, const CrashRequest& request){
-    return ::Path<ArenaT>(arena, request.spoolDirectory) / PackageNames::s_PendingDirectoryName / request.crashId;
+    return ::Path<ArenaT>(arena, request.spoolDirectory.data()) / PackageNames::s_PendingDirectoryName / request.crashId.data();
 }
 
 

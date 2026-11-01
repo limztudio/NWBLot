@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 
-#include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 
 #include <tests/common/test_context.h>
@@ -31,7 +30,7 @@ TEST(EcsGraphics, RaySceneGraphReadsMissingResourcesRetainScratchArena){
     NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/ray_scene_graph_reads/scratch"));
     NWB::Impl::RayTracingSceneGraphResources resources;
     const auto scratchBefore = scratchArena.memoryStats();
-    const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(graph, resources, NWB::Core::ResourceStates::Common, {}, scratchArena);
+    const auto reads = NWB::Impl::ImportRayTracingSceneGraphReads(resources, NWB::Core::ResourceStates::Common, {}, graph, scratchArena);
     const auto scratchAfter = scratchArena.memoryStats();
 
     EXPECT_FALSE(reads.has_value());

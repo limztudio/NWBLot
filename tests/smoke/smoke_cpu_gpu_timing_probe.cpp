@@ -25,9 +25,9 @@ namespace Tests::Smoke{
 
 
 SmokeCpuGpuTimingProbe::SmokeCpuGpuTimingProbe(const TStringView owner, Core::Alloc::GlobalArena& arena)noexcept
-    : m_owner(owner)
+    : m_records(arena)
     , m_outputPath(arena)
-    , m_records(arena)
+    , m_owner(owner)
 {}
 
 b8 SmokeCpuGpuTimingProbe::initialize(const b8 requested, const b8 presentationTimingEnabled, const AStringView outputPath){

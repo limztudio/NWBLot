@@ -4,8 +4,6 @@
 
 #include "list.h"
 
-#include <global/simd/result.h>
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 
 
@@ -24,41 +22,13 @@ namespace __hidden_ui_list_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct KeyResolution{
-    u64 index = 0u;
-    b8 present = false;
-};
-
-[[nodiscard]] static Expected<KeyResolution> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
-    if(key == 0u || count == 0u)
-        return KeyResolution{};
-    const auto index = source.indexOf(key);
-    if(!index)
-        return KeyResolution{};
-    if(*index >= count || source.key(*index) != key)
-        return MakeUnexpected(Failure{});
-    return KeyResolution{ *index, source.enabled(*index) };
-}
-
-[[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
-    return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision;
-}
-
-[[nodiscard]] static b8 ValidOptions(const ListOptions& options)noexcept{
-    return options.enabled && IsFinite(options.wheelRows) && options.wheelRows > 0.0f;
-}
-
-[[nodiscard]] static b8 IsReverse(const ControlActionKind::Enum kind)noexcept{
-    return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
-}
-
 [[nodiscard]] static Expected<u64> FindCursor(const IListDataSource& source, const u64 count, const u64 cursor, const ControlAction& action){
     if(count == 0u)
         return 0u;
-    const auto current = ResolveKey(source, count, cursor);
+    const auto current = ListBehavior::ResolveKey(source, count, cursor);
     if(!current)
         return MakeUnexpected(current.error());
-    const b8 reverse = IsReverse(action.kind);
+    const b8 reverse = IsReverseListControlAction(action.kind);
     u64 start = reverse ? count - 1u : 0u;
     if(action.kind == ControlActionKind::Home)
         start = 0u;
@@ -76,29 +46,29 @@ struct KeyResolution{
     const u64 key = source.key(*index);
     if(key == 0u)
         return MakeUnexpected(Failure{});
-    const auto resolved = ResolveKey(source, count, key);
+    const auto resolved = ListBehavior::ResolveKey(source, count, key);
     if(!resolved || !resolved->present || resolved->index != *index)
         return MakeUnexpected(Failure{});
     return key;
 }
 
-[[nodiscard]] static Expected<SIMDVectorDoubleResult> WheelOffset(const SIMDVectorDouble current, const SIMDVectorDouble delta, const SIMDVectorDouble step, const SIMDVectorDouble maximum)noexcept{
-    if(!IsFinite(VectorDoubleGetX(delta)) || !IsFinite(VectorDoubleGetX(step)) || VectorDoubleGetX(step) <= 0.0 || !IsFinite(VectorDoubleGetX(maximum)) || VectorDoubleGetX(maximum) < 0.0)
+[[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const f64 delta, const f64 step, const f64 maximum)noexcept{
+    if(!IsFinite(delta) || !IsFinite(step) || step <= 0.0 || !IsFinite(maximum) || maximum < 0.0)
         return MakeUnexpected(Failure{});
-    SIMDVectorDouble candidateValue = VectorDoubleMin(current, maximum);
-    if(VectorDoubleGetX(delta) > 0.0){
-        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(candidateValue, step));
-        candidateValue = VectorDoubleGetX(delta) >= distanceInSteps ? VectorDoubleZero() : VectorDoubleSubtract(candidateValue, VectorDoubleMultiply(delta, step));
+    f64 candidateValue = Min(current, maximum);
+    if(delta > 0.0){
+        const f64 distanceInSteps = candidateValue / step;
+        candidateValue = delta >= distanceInSteps ? 0.0 : candidateValue - delta * step;
     }
-    else if(VectorDoubleGetX(delta) < 0.0){
-        const SIMDVectorDouble reverseDelta = VectorDoubleNegate(delta);
-        const f64 distanceInSteps = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSubtract(maximum, candidateValue), step));
-        candidateValue = VectorDoubleGetX(reverseDelta) >= distanceInSteps ? maximum : VectorDoubleAdd(candidateValue, VectorDoubleMultiply(reverseDelta, step));
+    else if(delta < 0.0){
+        const f64 reverseDelta = -delta;
+        const f64 distanceInSteps = (maximum - candidateValue) / step;
+        candidateValue = reverseDelta >= distanceInSteps ? maximum : candidateValue + reverseDelta * step;
     }
-    const f64 candidate = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())));
+    const f64 candidate = candidateValue > 0.0 ? Min(maximum, candidateValue) : 0.0;
     if(!IsFinite(candidate))
         return MakeUnexpected(Failure{});
-    return SIMDVectorDoubleResult{ VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(maximum, candidateValue), VectorDoubleGreater(candidateValue, VectorDoubleZero())) };
+    return candidate;
 }
 
 
@@ -111,8 +81,18 @@ struct KeyResolution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<ListKeyResolution> ListBehavior::ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
+    if(key == 0u || count == 0u)
+        return ListKeyResolution{};
+    const auto index = source.indexOf(key);
+    if(!index)
+        return ListKeyResolution{};
+    if(*index >= count || source.key(*index) != key)
+        return MakeUnexpected(Failure{});
+    return ListKeyResolution(*index, source.enabled(*index));
+}
+
 b8 ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
-    using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
     const u64 revision = source.revision();
@@ -152,15 +132,15 @@ b8 ListBehavior::Apply(ListState& state, ListResult& result, const IListDataSour
     const u64 inputGeneration = state.m_inputGeneration;
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
     if(
-        !ValidOptions(options) || !token.valid() || action.control != token
+        !IsValidListOptions(options) || !token.valid() || action.control != token
         || !SourceMatches(source, token.contentGeneration, token.contentRevision) || action.kind > ControlActionKind::Activate
         || ((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u)
         || state.m_inputGeneration != inputGeneration
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        const auto offset = WheelOffset(VectorDoubleReplicate(state.m_scroll.offset()), VectorDoubleReplicate(action.delta), VectorDoubleReplicate(action.step), VectorDoubleReplicate(action.maximum));
-        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(VectorDoubleGetX(offset->value)))
+        const auto offset = WheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
+        if(!offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset))
             return false;
         state.m_ensureCursor = false;
         result.valid = true;

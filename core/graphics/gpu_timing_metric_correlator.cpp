@@ -89,15 +89,15 @@ b8 GpuTimingMetricCorrelator::prepareOverlapMetric(const Name& firstScope, const
 
 b8 GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     const u64 sourceFrameIndex,
-    const NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
-    const usize scopeCount,
+    const Span<const GpuPacketEnvelopeMetricScope> scopeInputs,
     const Name& queueOverlapScope,
-    const NotNull<const GpuPacketEnvelopeMetricQueueOutput*> queueOutputInputs,
-    const usize queueOutputCount
+    const Span<const GpuPacketEnvelopeMetricQueueOutput> queueOutputInputs
 ){
-    const GpuPacketEnvelopeMetricScope* const scopes = scopeInputs.get();
-    const GpuPacketEnvelopeMetricQueueOutput* const queueOutputs = queueOutputInputs.get();
-    if(scopeCount == 0u || !queueOverlapScope || queueOutputCount == 0u || queueOutputCount > scopeCount)
+    const GpuPacketEnvelopeMetricScope* const scopes = scopeInputs.data();
+    const usize scopeCount = scopeInputs.size();
+    const GpuPacketEnvelopeMetricQueueOutput* const queueOutputs = queueOutputInputs.data();
+    const usize queueOutputCount = queueOutputInputs.size();
+    if(scopeCount == 0u || !scopes || !queueOverlapScope || queueOutputCount == 0u || !queueOutputs || queueOutputCount > scopeCount)
         return false;
 
     for(auto it = m_pendingPacketEnvelopeMetrics.begin(); it != m_pendingPacketEnvelopeMetrics.end(); ){
@@ -284,7 +284,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
             continue;
 
         if(const auto overlapTicks = TryComputeGpuTimestampOverlap(frame->first, frame->second)){
-            const f64 overlapSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(*overlapTicks)), VectorDoubleReplicate(frame->first.secondsPerTick)));
+            const f64 overlapSeconds = static_cast<f64>(*overlapTicks) * frame->first.secondsPerTick;
             performanceSamples.reserve(performanceSamples.size() + 1u);
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = record.outputScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = frameIndex, });
         }
@@ -331,7 +331,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
             packetRanges.push_back(scope.range);
 
         GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges.data(), packetRanges.size(), scratchArena, queueMetrics);
+        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(packetRanges, scratchArena, queueMetrics);
         b8 aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
         for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
             b8 hasOutput = false;
@@ -341,14 +341,14 @@ void GpuTimingMetricCorrelator::recordTimestampRange(const Name& scopeName, cons
         }
 
         if(aggregated){
-            const SIMDVectorDouble secondsPerTick = VectorDoubleReplicate(envelopeMetrics->secondsPerTick);
-            const f64 overlapSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(envelopeMetrics->queueOverlapTicks)), secondsPerTick));
+            const f64 secondsPerTick = envelopeMetrics->secondsPerTick;
+            const f64 overlapSeconds = static_cast<f64>(envelopeMetrics->queueOverlapTicks) * secondsPerTick;
             performanceSamples.push_back(GpuTimingSinkSample{ .scope = it->queueOverlapScope, .durationSeconds = overlapSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
             for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
                 for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs){
                     if(output.physicalQueue != queueMetric.physicalQueue)
                         continue;
-                    const f64 idleSeconds = VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(queueMetric.internalIdleTicks)), secondsPerTick));
+                    const f64 idleSeconds = static_cast<f64>(queueMetric.internalIdleTicks) * secondsPerTick;
                     performanceSamples.push_back(GpuTimingSinkSample{ .scope = output.internalIdleScope, .durationSeconds = idleSeconds, .sourceFrameIndex = it->sourceFrameIndex, });
                     break;
                 }

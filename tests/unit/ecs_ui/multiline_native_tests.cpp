@@ -25,10 +25,10 @@ class UiMultilineNativeTests : public UiEditBoxHostTests{};
 TEST_F(UiMultilineNativeTests, NoncanonicalPreeditRejectsRatherThanChangingNativeOffsets){
     Ui::EditModel model(m_arena, {}, Ui::EditTextMode::Multiline);
     UiTextEditSession session(m_arena, m_textInput);
-    const Ui::UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
+    const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
     ASSERT_TRUE(model.setText("a\nb"));
     const u64 selection = model.selectionGeneration();
-    ASSERT_EQ(session.begin(owner, model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.preedit("x\r\ny", 1u, 4u), TextInputAdmission::Accepted);
     EXPECT_EQ(session.drain(owner, model).status, UiTextEditStatus::ModelRejected);
     EXPECT_EQ(model.text(), "a\nb");
@@ -40,9 +40,9 @@ TEST_F(UiMultilineNativeTests, NoncanonicalPreeditRejectsRatherThanChangingNativ
 TEST_F(UiMultilineNativeTests, LaterOversizedCommitPreservesEarlierAcceptedNativeEdit){
     Ui::EditModel model(m_arena, { 6u }, Ui::EditTextMode::Multiline);
     UiTextEditSession session(m_arena, m_textInput);
-    const Ui::UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
+    const UiTextEditOwner owner{ { 81u }, 1u, model.instanceGeneration() };
     ASSERT_TRUE(model.setText("a\nb"));
-    ASSERT_EQ(session.begin(owner, model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(owner, { 30, 40, 1, 18 }, model), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("x"), TextInputAdmission::Accepted);
     ASSERT_EQ(m_textInput.commit("y\r\nzz"), TextInputAdmission::Accepted);
     const auto result = session.drain(owner, model);

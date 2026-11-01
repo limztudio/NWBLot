@@ -3,7 +3,6 @@
 
 
 #include "ui_skin_preview.h"
-#include "project.h"
 #include "ui_gallery_constants.h"
 
 #include <core/common/log.h>
@@ -30,14 +29,11 @@ using PaintBuilder = NWB::Impl::Ui::PaintBuilder;
 using Label = NWB::Impl::Ui::Label;
 using ShapeRequest = NWB::Impl::Ui::ShapeRequest;
 
-static constexpr f32 s_PanelWidth = 280.0f;
-static constexpr f32 s_Margin = 18.0f;
 static constexpr f32 s_PanelBaseHeight = 170.0f;
 static constexpr f32 s_PanelBottomGap = 12.0f;
 static constexpr f32 s_CaptionPadding = 8.0f;
 static constexpr f32 s_MinimumGalleryX = 390.0f;
 static constexpr f32 s_LabelFontSize = 13.0f;
-static constexpr f32 s_LargeLabelFontSize = 14.0f;
 static constexpr f32 s_LeftColumnX = 12.0f;
 static constexpr f32 s_RightColumnX = 146.0f;
 static constexpr f32 s_ButtonTopY = 12.0f;
@@ -74,24 +70,24 @@ static constexpr f32 s_ButtonTextWidth = 106.0f;
 static constexpr f32 s_EditTextWidth = 178.0f;
 static constexpr NWB::Impl::Ui::Color s_LabelTextColor{ 0.92f, 0.96f, 1.0f, 1.0f };
 static constexpr NWB::Impl::Ui::Color s_DisabledLabelTextColor{ 0.38f, 0.42f, 0.48f, 1.0f };
-static const Name s_Panel("panel.normal");
-static const Name s_ButtonHover("button.hover");
-static const Name s_ButtonPressed("button.pressed");
-static const Name s_ButtonDisabled("button.disabled");
-static const Name s_EditNormal("edit.normal");
-static const Name s_EditFocused("edit.focused");
-static const Name s_Checkbox("checkbox.checked");
-static const Name s_CheckboxMark("checkbox.mark");
-static const Name s_ProgressTrack("progress.track");
-static const Name s_ProgressFill("progress.fill");
+static constexpr Name s_Panel("panel.normal");
+static constexpr Name s_ButtonHover("button.hover");
+static constexpr Name s_ButtonPressed("button.pressed");
+static constexpr Name s_ButtonDisabled("button.disabled");
+static constexpr Name s_EditNormal("edit.normal");
+static constexpr Name s_EditFocused("edit.focused");
+static constexpr Name s_Checkbox("checkbox.checked");
+static constexpr Name s_CheckboxMark("checkbox.mark");
+static constexpr Name s_ProgressTrack("progress.track");
+static constexpr Name s_ProgressFill("progress.fill");
 static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Origin lanes are x, y; caption height is splat across lanes.
-[[nodiscard]] static b8 DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const SIMDVectorSingle captionHeight){
+// Origin lanes are x, y.
+[[nodiscard]] static b8 DrawSkinGallery(PaintBuilder& paint, const SIMDVectorSingle origin, const f32 captionHeight){
     const SIMDVectorSingle buttonNormal = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonTopY, 0.0f, 0.0f));
     const SIMDVectorSingle buttonHover = VectorAdd(origin, VectorSet(s_RightColumnX, s_ButtonTopY, 0.0f, 0.0f));
     const SIMDVectorSingle buttonPressed = VectorAdd(origin, VectorSet(s_LeftColumnX, s_ButtonBottomY, 0.0f, 0.0f));
@@ -104,7 +100,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
     const SIMDVectorSingle progressFill = VectorAdd(origin, VectorSet(s_ProgressFillX, s_ProgressFillY, 0.0f, 0.0f));
     const SIMDVectorSingle editNormal = VectorAdd(origin, VectorSet(s_LeftColumnX, s_EditNormalY, 0.0f, 0.0f));
     return
-        paint.drawRegion(s_Panel, { VectorGetX(origin), VectorGetY(origin), s_PanelWidth, VectorGetX(VectorAdd(VectorReplicate(s_PanelBaseHeight), captionHeight)) })
+        paint.drawRegion(s_Panel, { VectorGetX(origin), VectorGetY(origin), s_OrdinaryGalleryWidth, s_PanelBaseHeight + captionHeight })
         && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), s_ButtonWidth, s_ButtonHeight })
         && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), s_ButtonWidth, s_ButtonHeight })
         && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), s_ButtonWidth, s_ButtonHeight })
@@ -115,12 +111,17 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
         && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), s_CheckboxMarkSize, s_CheckboxMarkSize })
         && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), s_ProgressTrackWidth, s_ProgressTrackHeight })
         && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), s_ProgressFillWidth, s_ProgressFillHeight })
-        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), s_EditNormalWidth, VectorGetX(captionHeight) })
+        && paint.drawRegion(s_EditNormal, { VectorGetX(editNormal), VectorGetY(editNormal), s_EditNormalWidth, captionHeight })
     ;
 }
 
-[[nodiscard]] static b8 ConfigureLabel(Label& label, const StringView text, const f32 size = s_LabelFontSize){
-    return label.setText(ShapeRequest{ .text = text, .fontSize = size }) == NWB::Impl::Ui::TextLayoutStatus::Success;
+[[nodiscard]] static b8 ConfigureLabel(const StringView text, Label& outLabel, const f32 size = s_LabelFontSize){
+    return outLabel.setText(ShapeRequest{ .text = text, .fontSize = size }) == NWB::Impl::Ui::TextLayoutStatus::Success;
+}
+
+[[nodiscard]] static NWB::Impl::Ui::Rect ResolveGalleryRect(const NWB::Impl::Ui::DisplayMetrics& display, const f32 preferredTop)noexcept{
+    const SIMDVectorSingle bounds = UiWidgetGallery::LayoutBounds(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), preferredTop);
+    return { VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
 }
 
 
@@ -144,15 +145,11 @@ UiSkinPreview::UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     , m_widgets(arena)
 {
     using namespace __hidden_ui_skin_preview;
-    const b8 configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")
-        && ConfigureLabel(m_pressed, "Pressed") && ConfigureLabel(m_disabled, "Disabled")
-        && ConfigureLabel(m_edit, "UTF-8 labels", s_LargeLabelFontSize) && ConfigureLabel(m_caption, "FreeType + HarfBuzz", s_LargeLabelFontSize)
+    const b8 configured = ConfigureLabel("Normal", m_normal) && ConfigureLabel("Hover", m_hover)
+        && ConfigureLabel("Pressed", m_pressed) && ConfigureLabel("Disabled", m_disabled)
+        && ConfigureLabel("UTF-8 labels", m_edit, s_GalleryFontSize) && ConfigureLabel("FreeType + HarfBuzz", m_caption, s_GalleryFontSize)
         && m_korean.setText(ShapeRequest{ .text = s_KoreanText, .language = "ko", .fontSize = s_LabelFontSize, .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g') }) == NWB::Impl::Ui::TextLayoutStatus::Success;
     NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
-}
-
-b8 UiSkinPreview::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
-    return m_widgets.loadAssets(arena, assets, sceneSubsystems);
 }
 
 Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintContext& context){
@@ -161,18 +158,14 @@ Expected<NWB::Impl::Ui::Rect> UiSkinPreview::galleryBounds(NWB::Impl::UiPaintCon
     const auto korean = m_korean.measure(context.text, context.display);
     if(!caption || !korean)
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
-    const SIMDVectorSingle preferredTop = VectorAdd(VectorAdd(VectorAdd(VectorReplicate(s_Margin), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap));
-    const SIMDVectorSingle bounds = UiWidgetGallery::LayoutBounds(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 0.0f, 0.0f), preferredTop);
-    return NWB::Impl::Ui::Rect{ VectorGetX(bounds), VectorGetY(bounds), VectorGetZ(bounds), VectorGetW(bounds) };
+    const f32 captionHeight = caption->height + korean->height + s_CaptionPadding;
+    return ResolveGalleryRect(context.display, s_GalleryMargin + s_PanelBaseHeight + captionHeight + s_PanelBottomGap);
 }
 
 void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     using namespace __hidden_ui_skin_preview;
-    const SIMDVectorSingle margin = VectorReplicate(s_Margin);
-    const SIMDVectorSingle origin = VectorAndInt(VectorSelect(VectorMax(margin, VectorSubtract(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(s_PanelWidth)), margin)), margin, s_SIMDMaskY), s_SIMDMaskXY);
-    const f32 x = VectorGetX(origin);
-    const f32 y = s_Margin;
+    const f32 x = Max(s_GalleryMargin, (context.display.logicalWidth - s_OrdinaryGalleryWidth) - s_GalleryMargin);
+    const SIMDVectorSingle origin = VectorSet(x, s_GalleryMargin, 0.0f, 0.0f);
     const auto caption = m_caption.measure(context.text, context.display);
     const auto korean = m_korean.measure(context.text, context.display);
     const auto normal = m_normal.measure(context.text, context.display);
@@ -184,11 +177,11 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label measurement failed"));
         return;
     }
-    const SIMDVectorSingle captionHeight = VectorAdd(VectorAdd(VectorReplicate(caption->height), VectorReplicate(korean->height)), VectorReplicate(s_CaptionPadding));
-    const SIMDVectorSingle preferredTop = VectorAdd(VectorAdd(VectorAdd(VectorReplicate(y), VectorReplicate(s_PanelBaseHeight)), captionHeight), VectorReplicate(s_PanelBottomGap));
-    const SIMDVectorSingle gallery = UiWidgetGallery::LayoutBounds(VectorSet(context.display.logicalWidth, context.display.logicalHeight, 0.0f, 0.0f), preferredTop);
-    m_widgets.paint(context, { VectorGetX(gallery), VectorGetY(gallery), VectorGetZ(gallery), VectorGetW(gallery) });
-    if(VectorGetY(gallery) < VectorGetX(preferredTop) || x < s_MinimumGalleryX)
+    const f32 captionHeight = caption->height + korean->height + s_CaptionPadding;
+    const f32 preferredTop = s_GalleryMargin + s_PanelBaseHeight + captionHeight + s_PanelBottomGap;
+    const NWB::Impl::Ui::Rect gallery = ResolveGalleryRect(context.display, preferredTop);
+    m_widgets.paint(context, gallery);
+    if(gallery.y < preferredTop || x < s_MinimumGalleryX)
         return;
     if(!DrawSkinGallery(context.paint, origin, captionHeight)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
@@ -205,7 +198,7 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const SIMDVectorSingle hoverOrigin = VectorAdd(origin, VectorPermute<1, 5, 2, 3>(buttonTextX, buttonTextY));
     const SIMDVectorSingle pressedOrigin = VectorAdd(origin, VectorPermute<0, 6, 2, 3>(buttonTextX, buttonTextY));
     const SIMDVectorSingle disabledOrigin = VectorAdd(origin, VectorPermute<1, 7, 2, 3>(buttonTextX, buttonTextY));
-    const SIMDVectorSingle editOffset = VectorAdd(VectorSet(s_LeftTextX, s_EditFocusedY, 0.0f, 0.0f), VectorScale(VectorSubtract(VectorSet(0.0f, s_EditFocusedHeight, 0.0f, 0.0f), VectorSet(0.0f, edit->height, 0.0f, 0.0f)), 0.5f));
+    const SIMDVectorSingle editOffset = VectorSet(s_LeftTextX, s_EditFocusedY + (s_EditFocusedHeight - edit->height) * 0.5f, 0.0f, 0.0f);
     const SIMDVectorSingle editOrigin = VectorAdd(origin, editOffset);
     const b8 captionPainted = m_caption.paint(context.text, context.paint, { VectorGetX(captionOrigin), VectorGetY(captionOrigin), s_CaptionWidth, caption->height })
         && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin), s_CaptionWidth, korean->height });
@@ -225,11 +218,6 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void Project::drawCustomUiControls(NWB::Impl::UiPaintContext& context){
-    m_uiPreview.paint(context);
-}
 
 
 TESTBED_END

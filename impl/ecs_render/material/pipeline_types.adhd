@@ -2,7 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_material/types.adhd>
+#include <impl/ecs_render/components.adhd>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,6 +54,39 @@ b8 MaterialPipelinePassUsesRendererCsgClip(in MaterialPipelinePass pass, in b8 t
     return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
+MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(in MaterialPipelineCsgMode csgMode, in MaterialPipelinePass pass){
+    MaterialPipelineCsgBindingUse result;
+    result.clip = csgMode != MaterialPipelineCsgMode::None && MaterialPipelinePassUsesRendererCsgShaderVariant(pass);
+    result.avboitClip = result.clip && MaterialPipelinePassUsesRendererAvboit(pass);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
+const StringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
+const StringView s_CsgIntervalSampleEnabledDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
+const StringView s_CsgIntervalSampleEnabledDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_ENABLED=1";
+const StringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
+const usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
+
+class ShaderVariantDefineAssignment{
+    public ShaderVariantDefineAssignment(){
+        this.name = "";
+        this.assignment = "";
+    }
+
+    public ShaderVariantDefineAssignment(in StringView nameIn, in StringView assignmentIn){
+        this.name = nameIn;
+        this.assignment = assignmentIn;
+    }
+
+    public StringView name;
+    public StringView assignment;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,12 +101,162 @@ class GeneratedGeometryOutputLayout{
     public b8 indexed = false;
 }
 
+// Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
+class GeneratedGeometryEquivalenceKey{
+    public b8 matches(
+        in Name drawMeshKey,
+        in Name drawMaterial,
+        in MaterialPipelinePass drawPass,
+        in MaterialPipelineCsgMode drawCsgMode,
+        in u32 drawInstanceIndex,
+        in u32 drawMaterialConstantByteOffset,
+        in u32 drawShadingModelId,
+        in b8 outputHeapValid,
+        in u32 drawOutputHeapSlot,
+        in u32 drawEmulationIndexByteOffset,
+        in b8 drawIndexedGeometryOutput
+    )const{
+        return
+            drawMeshKey == this.meshKey
+            && drawMaterial == this.material
+            && drawPass == this.pass
+            && drawCsgMode == MaterialPipelineCsgMode::None
+            && drawInstanceIndex == this.instanceIndex
+            && drawMaterialConstantByteOffset == this.materialConstantByteOffset
+            && drawShadingModelId == this.shadingModelId
+            && outputHeapValid
+            && drawOutputHeapSlot == this.outputHeapSlot
+            && drawEmulationIndexByteOffset == this.emulationIndexByteOffset
+            && drawIndexedGeometryOutput == this.indexedGeometryOutput
+        ;
+    }
+
+    public Name meshKey = s_NameNone;
+    public Name material = s_NameNone;
+    public u32 instanceIndex = 0u;
+    public u32 materialConstantByteOffset = 0u;
+    public u32 shadingModelId = 0u;
+    public u32 outputHeapSlot = 0u;
+    public u32 emulationIndexByteOffset = 0u;
+    public MaterialPipelinePass pass = MaterialPipelinePass::Opaque;
+    public b8 indexedGeometryOutput = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_MaterialInstanceVectorComponentCount = 4u;
 
 class MaterialInstanceParameterNames{
     public Name parameterName;
     public Name blockName;
     public Name fieldName;
+}
+
+class MaterialInstanceOverrideField{
+    public MaterialTypedLayoutField field;
+    public u32 blockByteBegin = 0u;
+    public b8 mutableBlock = false;
+}
+
+MaterialInstanceParameter BuildMaterialInstanceParameter(
+    in MaterialInstanceParameterNames names,
+    in MaterialLayoutFieldType fieldType,
+    in u32x4u value
+){
+    MaterialInstanceParameter parameter;
+    parameter.parameterName = names.parameterName;
+    parameter.blockName = names.blockName;
+    parameter.fieldName = names.fieldName;
+    parameter.fieldType = fieldType;
+    parameter.value = value;
+    return parameter;
+}
+
+b8 TryStoreMaterialMutableParameter(mut MaterialInstanceComponent component, in MaterialInstanceParameter parameter){
+    for(usize index = 0u; index < component.overrides.size(); ++index){
+        if(component.overrides[index].parameterName != parameter.parameterName)
+            continue;
+
+        if(component.overrides[index].fieldType != parameter.fieldType)
+            return false;
+
+        component.overrides[index] = parameter;
+        ++component.revision;
+        return true;
+    }
+
+    component.overrides.push_back(parameter);
+    ++component.revision;
+    return true;
+}
+
+b8 TryFindMaterialInstanceOverrideField(
+    in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
+    in Span<MaterialTypedLayoutField> typedLayoutFields,
+    in MaterialInstanceParameter parameter,
+    mut MaterialInstanceOverrideField outField
+){
+    outField = MaterialInstanceOverrideField();
+    u32 constantBlockByteBegin = 0u;
+    u32 mutableBlockByteBegin = 0u;
+    for(usize blockIndex = 0u; blockIndex < typedLayoutBlocks.size(); ++blockIndex){
+        MaterialTypedLayoutBlock block = typedLayoutBlocks[blockIndex];
+        assert(IsValidMaterialBlockClass(block.blockClass));
+
+        b8 mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
+        u32 blockByteBegin = constantBlockByteBegin;
+        if(mutableBlock){
+            blockByteBegin = mutableBlockByteBegin;
+            assert(block.byteSize <= 0xFFFFFFFFu - mutableBlockByteBegin);
+            mutableBlockByteBegin += block.byteSize;
+        }
+        else{
+            assert(block.byteSize <= 0xFFFFFFFFu - constantBlockByteBegin);
+            constantBlockByteBegin += block.byteSize;
+        }
+
+        if(block.blockName != parameter.blockName)
+            continue;
+
+        usize fieldBegin = cast<usize>(block.fieldBegin);
+        usize fieldCount = cast<usize>(block.fieldCount);
+        assert(fieldBegin <= typedLayoutFields.size() && fieldCount <= typedLayoutFields.size() - fieldBegin);
+
+        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
+            MaterialTypedLayoutField field = typedLayoutFields[fieldIndex];
+            if(field.fieldName != parameter.fieldName)
+                continue;
+
+            outField.field = field;
+            outField.blockByteBegin = blockByteBegin;
+            outField.mutableBlock = mutableBlock;
+            return true;
+        }
+        break;
+    }
+
+    return false;
+}
+
+b8 MaterialInstanceMutableCacheEntryMatches(
+    in Name cacheMaterialName,
+    in Name cacheMaterialInterface,
+    in u64 cacheTypedLayoutHash,
+    in u32 cacheRevision,
+    in Name materialName,
+    in Name materialInterface,
+    in u64 typedLayoutHash,
+    in MaterialInstanceComponent materialInstance
+){
+    return
+        cacheMaterialName == materialName
+        && cacheMaterialInterface == materialInterface
+        && materialInstance.materialInterface == materialInterface
+        && cacheTypedLayoutHash == typedLayoutHash
+        && cacheRevision == materialInstance.revision
+    ;
 }
 
 enum<u8> RendererResourceLookupMode{
@@ -93,8 +279,6 @@ enum<u8> SampledTextureImportFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_MaterialTypedWordBytes = 16u;
-
 class MaterialTypedByteRange{
     public u32 byteOffset = 0u;
     public u32 byteCount = 0u;
@@ -103,6 +287,27 @@ class MaterialTypedByteRange{
 class MaterialTypedInstanceRanges{
     public MaterialTypedByteRange constantRange;
     public MaterialTypedByteRange mutableRange;
+}
+
+class MaterialInstanceAppend{
+    public MaterialInstanceAppend(){
+        this.instanceIndex = 0u;
+    }
+
+    public MaterialInstanceAppend(in u32 instanceIndexIn, in MaterialTypedInstanceRanges typedRangesIn){
+        this.instanceIndex = instanceIndexIn;
+        this.typedRanges = typedRangesIn;
+    }
+
+    public u32 instanceIndex;
+    public MaterialTypedInstanceRanges typedRanges;
+}
+
+class MaterialTypedByteRangeCache{
+    public MaterialTypedByteRange constantRange;
+    public MaterialTypedByteRange defaultMutableRange;
+    public b8 constantRangeCached = false;
+    public b8 defaultMutableRangeCached = false;
 }
 
 class MaterialTypedByteRangeKey{
@@ -127,6 +332,105 @@ class MaterialTypedByteAppendRange{
 
 b8 MaterialTypedByteRangeEmptyOffsetValid(in MaterialTypedByteRange range){
     return range.byteCount != 0u || range.byteOffset == 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
+const u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
+const u32 s_MeshDispatchFlagMeshletFrustumCull = 1u << 1u;
+const u32 s_MeshDispatchFlagMeshletConeCull = 1u << 2u;
+const u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = 1u << 3u;
+const u32 s_MeshDispatchFlagMask = 0x0000FFFFu;
+const u32 s_MeshDispatchShadingModelShift = 16u;
+const u32 s_MeshDispatchShadingModelMask = 0x0000FFFFu;
+
+b8 MeshletConeCullScaleSafe(in f32x4 scale){
+    if(!isFinite(scale.x) || !isFinite(scale.y) || !isFinite(scale.z))
+        return false;
+    if(scale.x <= 0.0f || scale.y <= 0.0f || scale.z <= 0.0f)
+        return false;
+
+    f32 minScale = min(scale.x, min(scale.y, scale.z));
+    f32 maxScale = max(scale.x, max(scale.y, scale.z));
+    f32 tolerance = max(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
+    return (maxScale - minScale) <= tolerance;
+}
+
+u32 ResolveMeshDispatchFlags(
+    in b8 runtimeMesh,
+    in b8 dynamicMeshletBoundsFresh,
+    in b8 dynamicMeshletConesFresh,
+    in MaterialPipelinePass pass,
+    in b8 twoSided,
+    in b8 meshletConeCullScaleSafe
+){
+    u32 flags = 0u;
+    b8 meshletBoundsFresh = !runtimeMesh || dynamicMeshletBoundsFresh;
+    b8 meshletConesFresh = !runtimeMesh || dynamicMeshletConesFresh;
+    if(meshletBoundsFresh)
+        flags |= s_MeshDispatchFlagMeshletFrustumCull;
+    if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
+        flags |= s_MeshDispatchFlagMeshletConeCull;
+    if(!runtimeMesh)
+        flags |= s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
+    return flags;
+}
+
+u32 ResolveMaterialPassDrawDispatchFlags(
+    in b8 runtimeMesh,
+    in b8 dynamicMeshletBoundsFresh,
+    in b8 dynamicMeshletConesFresh,
+    in MaterialPipelinePass pass,
+    in b8 twoSided,
+    in b8 meshletConeCullScaleSafe,
+    in MaterialPipelineCsgMode csgMode,
+    in u32 shadingModelId
+){
+    u32 flags = ResolveMeshDispatchFlags(runtimeMesh, dynamicMeshletBoundsFresh, dynamicMeshletConesFresh, pass, twoSided, meshletConeCullScaleSafe);
+    if(csgMode != MaterialPipelineCsgMode::None)
+        flags &= ~s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
+    flags = (flags & s_MeshDispatchFlagMask) | ((shadingModelId & s_MeshDispatchShadingModelMask) << s_MeshDispatchShadingModelShift);
+    return flags;
+}
+
+const usize s_ModuleAssignmentPunctuationSize = 3u;
+const usize s_ObjectGeometryVertexAttributeCount = 5u;
+
+const Name s_InvalidAvboitPixelShaderDebugName = "ECSRender_InvalidAvboitPixelShader";
+const Name s_AvboitOccupancyPsDebugName = "ECSRender_AvboitOccupancyPS";
+const Name s_AvboitExtinctionPsDebugName = "ECSRender_AvboitExtinctionPS";
+const Name s_AvboitAccumulatePsDebugName = "ECSRender_AvboitAccumulatePS";
+const Name s_AvboitRefractionCapturePsDebugName = "ECSRender_AvboitRefractionCapturePS";
+const Name s_InvalidPassPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
+const Name s_RendererPsDebugName = "ECSRender_RendererPS";
+const Name s_CsgReceiverSurfacePsDebugName = "ECSRender_CsgReceiverSurfacePS";
+const Name s_RendererMeshDebugName = "ECSRender_RendererMesh";
+const Name s_RendererCsDebugName = "ECSRender_RendererCS";
+const Name s_ObjectGeometryDecodeDebugName = "ECSRender_ObjectGeometryDecode";
+const Name s_ObjectGeometryVsDebugName = "ECSRender_ObjectGeometryVS";
+
+const Name s_VertexAttributePositionName = "POSITION";
+const Name s_VertexAttributeNormalName = "NORMAL";
+const Name s_VertexAttributeTangentName = "TANGENT";
+const Name s_VertexAttributeTexCoordName = "TEXCOORD";
+const Name s_VertexAttributeColorName = "COLOR";
+
+Name ResolveAvboitPixelShaderDebugName(in MaterialPipelinePass pass){
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+        return s_AvboitOccupancyPsDebugName;
+    case MaterialPipelinePass::AvboitExtinction:
+        return s_AvboitExtinctionPsDebugName;
+    case MaterialPipelinePass::AvboitAccumulate:
+        return s_AvboitAccumulatePsDebugName;
+    case MaterialPipelinePass::AvboitRefractionCapture:
+        return s_AvboitRefractionCapturePsDebugName;
+    default:
+        return s_InvalidAvboitPixelShaderDebugName;
+    }
 }
 
 

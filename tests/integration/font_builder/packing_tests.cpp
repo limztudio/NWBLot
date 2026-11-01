@@ -24,33 +24,33 @@ using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::FontBuilderUtility;
 
-void Append16(Core::Assets::AssetBytes& bytes, const u16 value){
+void Append16(const u16 value, Core::Assets::AssetBytes& bytes){
     bytes.push_back(static_cast<u8>(value >> 8u));
     bytes.push_back(static_cast<u8>(value));
 }
 
-void Append32(Core::Assets::AssetBytes& bytes, const u32 value){
-    Append16(bytes, static_cast<u16>(value >> 16u));
-    Append16(bytes, static_cast<u16>(value));
+void Append32(const u32 value, Core::Assets::AssetBytes& bytes){
+    Append16(static_cast<u16>(value >> 16u), bytes);
+    Append16(static_cast<u16>(value), bytes);
 }
 
 FontAtlasPositioningTable ClassPairFixture(Core::Assets::AssetArena& arena){
     FontAtlasPositioningTable table(arena);
     table.tag = s_FontAtlasGposTag;
     auto& bytes = table.bytes;
-    Append32(bytes, 0x00010000u);
-    Append16(bytes, 10u); Append16(bytes, 12u); Append16(bytes, 26u);
-    Append16(bytes, 0u);
-    Append16(bytes, 1u); Append32(bytes, 0x6b65726eu); Append16(bytes, 8u);
-    Append16(bytes, 0u); Append16(bytes, 1u); Append16(bytes, 0u);
-    Append16(bytes, 1u); Append16(bytes, 4u);
-    Append16(bytes, 2u); Append16(bytes, 0u); Append16(bytes, 1u); Append16(bytes, 8u);
-    Append16(bytes, 2u); Append16(bytes, 24u); Append16(bytes, 4u); Append16(bytes, 0u);
-    Append16(bytes, 30u); Append16(bytes, 38u); Append16(bytes, 2u); Append16(bytes, 2u);
-    Append16(bytes, 0u); Append16(bytes, 0u); Append16(bytes, static_cast<u16>(-20)); Append16(bytes, static_cast<u16>(-40));
-    Append16(bytes, 1u); Append16(bytes, 1u); Append16(bytes, 1u);
-    Append16(bytes, 1u); Append16(bytes, 1u); Append16(bytes, 1u); Append16(bytes, 1u);
-    Append16(bytes, 1u); Append16(bytes, 2u); Append16(bytes, 1u); Append16(bytes, 1u);
+    Append32(0x00010000u, bytes);
+    Append16(10u, bytes); Append16(12u, bytes); Append16(26u, bytes);
+    Append16(0u, bytes);
+    Append16(1u, bytes); Append32(0x6b65726eu, bytes); Append16(8u, bytes);
+    Append16(0u, bytes); Append16(1u, bytes); Append16(0u, bytes);
+    Append16(1u, bytes); Append16(4u, bytes);
+    Append16(2u, bytes); Append16(0u, bytes); Append16(1u, bytes); Append16(8u, bytes);
+    Append16(2u, bytes); Append16(24u, bytes); Append16(4u, bytes); Append16(0u, bytes);
+    Append16(30u, bytes); Append16(38u, bytes); Append16(2u, bytes); Append16(2u, bytes);
+    Append16(0u, bytes); Append16(0u, bytes); Append16(static_cast<u16>(-20), bytes); Append16(static_cast<u16>(-40), bytes);
+    Append16(1u, bytes); Append16(1u, bytes); Append16(1u, bytes);
+    Append16(1u, bytes); Append16(1u, bytes); Append16(1u, bytes); Append16(1u, bytes);
+    Append16(1u, bytes); Append16(2u, bytes); Append16(1u, bytes); Append16(1u, bytes);
     return table;
 }
 
@@ -143,14 +143,14 @@ TEST(FontAtlasPositioning, LegacyPairsStayBoundedAndSorted){
     FontAtlasPositioningTable table(arena);
     table.tag = s_FontAtlasKernTag;
     auto& bytes = table.bytes;
-    Append16(bytes, 0u); Append16(bytes, 1u);
-    Append16(bytes, 0u); Append16(bytes, 20u); Append16(bytes, 1u);
-    Append16(bytes, 1u); Append16(bytes, 6u); Append16(bytes, 0u); Append16(bytes, 0u);
-    Append16(bytes, 1u); Append16(bytes, 2u); Append16(bytes, static_cast<u16>(-40));
-    EXPECT_TRUE(ValidateFontAtlasPositioningTable(table, 3u));
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 2u));
+    Append16(0u, bytes); Append16(1u, bytes);
+    Append16(0u, bytes); Append16(20u, bytes); Append16(1u, bytes);
+    Append16(1u, bytes); Append16(6u, bytes); Append16(0u, bytes); Append16(0u, bytes);
+    Append16(1u, bytes); Append16(2u, bytes); Append16(static_cast<u16>(-40), bytes);
+    EXPECT_TRUE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 2u));
     bytes.pop_back();
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
 TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
@@ -160,12 +160,12 @@ TEST(FontAtlasPositioning, GposClassZeroAndExplicitClassMatrixPreserved){
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos"));
     auto table = ClassPairFixture(arena);
     ASSERT_EQ(table.bytes.size(), 84u);
-    EXPECT_TRUE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_TRUE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
     table.bytes[75u] = 2u;
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
     table.bytes[75u] = 1u;
     table.bytes[53u] = 255u;
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
 TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
@@ -175,10 +175,10 @@ TEST(FontAtlasPositioning, MalformedTopOffsetsAndExtensionTypeRejected){
     Core::Alloc::GlobalArena arena(Name("tests/font_atlas/gpos_malformed"));
     auto table = ClassPairFixture(arena);
     table.bytes[8u] = 255u;
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
     table = ClassPairFixture(arena);
     table.bytes[31u] = 9u;
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
 
@@ -190,15 +190,15 @@ TEST(FontAtlasPositioning, PairSetDeviceOffsetsUseImmediateParent){
     auto table = ClassPairFixture(arena);
     auto& bytes = table.bytes;
     bytes.resize(38u);
-    Append16(bytes, 1u); Append16(bytes, 28u); Append16(bytes, 0x0044u); Append16(bytes, 0u);
-    Append16(bytes, 1u); Append16(bytes, 12u);
-    Append16(bytes, 1u); Append16(bytes, 2u); Append16(bytes, static_cast<u16>(-40)); Append16(bytes, 8u);
-    Append16(bytes, 8u); Append16(bytes, 10u); Append16(bytes, 1u); Append16(bytes, 0u);
-    Append16(bytes, 1u); Append16(bytes, 1u); Append16(bytes, 1u);
+    Append16(1u, bytes); Append16(28u, bytes); Append16(0x0044u, bytes); Append16(0u, bytes);
+    Append16(1u, bytes); Append16(12u, bytes);
+    Append16(1u, bytes); Append16(2u, bytes); Append16(static_cast<u16>(-40), bytes); Append16(8u, bytes);
+    Append16(8u, bytes); Append16(10u, bytes); Append16(1u, bytes); Append16(0u, bytes);
+    Append16(1u, bytes); Append16(1u, bytes); Append16(1u, bytes);
     ASSERT_EQ(bytes.size(), 72u);
-    EXPECT_TRUE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_TRUE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
     bytes[57u] = 24u;
-    EXPECT_FALSE(ValidateFontAtlasPositioningTable(table, 3u));
+    EXPECT_FALSE(ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, 3u));
 }
 
 

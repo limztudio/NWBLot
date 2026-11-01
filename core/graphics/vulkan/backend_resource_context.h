@@ -13,9 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 #include <core/common/log.h>
@@ -71,6 +70,12 @@ using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachment
 
 
 namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,14 +172,7 @@ public:
     {}
 };
 
-inline void AttachGraphicsPipelineFixedState(VkGraphicsPipelineCreateInfo& pipelineInfo, const VkPipelineRasterizationStateCreateInfo& rasterizer, const GraphicsPipelineFixedState& fixedState)noexcept{
-    pipelineInfo.pViewportState = &fixedState.viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &fixedState.multisampling;
-    pipelineInfo.pDepthStencilState = &fixedState.depthStencil;
-    pipelineInfo.pColorBlendState = &fixedState.colorBlending;
-    pipelineInfo.pDynamicState = &fixedState.dynamicState;
-}
+void AttachGraphicsPipelineFixedState(VkGraphicsPipelineCreateInfo& pipelineInfo, const VkPipelineRasterizationStateCreateInfo& rasterizer, const GraphicsPipelineFixedState& fixedState)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,14 +235,14 @@ template<typename... Pointers>
     return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
 }
 
-[[nodiscard]] constexpr b8 AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3u])noexcept{
+[[nodiscard]] constexpr b8 AreDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const Array<u32, 3u>& maximumGroupCounts)noexcept{
     return groupsX <= maximumGroupCounts[0u] && groupsY <= maximumGroupCounts[1u] && groupsZ <= maximumGroupCounts[2u];
 }
 
 b8 BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
 b8 ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
-Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, TStringView operationName);
+Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, Span<const VkDescriptorSetLayout> setLayouts, u32 pushConstantByteSize, TStringView operationName);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, b8& ownsPipelineLayout);
 [[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, TStringView operationName);
 Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
@@ -263,21 +261,7 @@ struct ClusterOperationInput{
 
 
 public:
-    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept{
-        auto native = info;
-        switch(info.opType){
-        case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV:
-            native.opInput.pMoveObjects = &move;
-            break;
-        case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV:
-            native.opInput.pClustersBottomLevel = &blas;
-            break;
-        default:
-            native.opInput.pTriangleClusters = &cluster;
-            break;
-        }
-        return native;
-    }
+    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept;
 };
 
 Expected<ClusterOperationInput> BuildClusterOperationInputInfo(const RayTracingClusterOperationParams& params, TStringView operationName);
@@ -314,20 +298,7 @@ constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode)noexcept{
     }
 }
 
-inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(const RasterState& rasterState, const VkPolygonMode polygonMode, const VkBool32 depthClampEnable)noexcept{
-    auto rasterizer = MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
-    rasterizer.depthClampEnable = depthClampEnable;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = polygonMode;
-    rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
-    rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
-    rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
-    rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
-    rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
-    rasterizer.lineWidth = s_DefaultRasterLineWidth;
-    return rasterizer;
-}
+[[nodiscard]] VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(const RasterState& rasterState, VkPolygonMode polygonMode, VkBool32 depthClampEnable)noexcept;
 
 constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc)noexcept{
     switch(compareFunc){
@@ -424,44 +395,12 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
     return state;
 }
 
-inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments){
-    const usize colorFormatCount = fbinfo.colorFormats.size();
-    outBlendAttachments.clear();
-    outBlendAttachments.reserve(colorFormatCount);
-    for(usize i = 0u; i < colorFormatCount; ++i)
-        outBlendAttachments.push_back(ConvertBlendState(blendState.targets[i]));
-
-    auto colorBlending = MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.attachmentCount = static_cast<u32>(outBlendAttachments.size());
-    colorBlending.pAttachments = outBlendAttachments.data();
-    return colorBlending;
-}
+[[nodiscard]] VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments);
 
 Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, b8 alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 
-[[nodiscard]] inline Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(void* dst, CpuTaskScheduler& cpuScheduler, const void* src, usize size, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize){
-    if(!dst || !src || size == 0)
-        return {};
-
-    const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
-    const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
-
-    if(cpuScheduler.isParallelEnabled() && size >= effectiveParallelThreshold){
-        const auto dstBytes = MakeNotNull(static_cast<u8*>(dst));
-        const auto srcBytes = MakeNotNull(static_cast<const u8*>(src));
-        const usize chunkCount = DivideUp(size, effectiveChunkSize);
-        return cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
-            const usize chunkOffset = chunkIndex * effectiveChunkSize;
-            const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
-            NWB_MEMCPY(dstBytes.get() + chunkOffset, chunkBytes, srcBytes.get() + chunkOffset, chunkBytes);
-        });
-    }
-
-    NWB_MEMCPY(dst, size, src, size);
-    return {};
-}
+[[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(const void* src, usize size, CpuTaskScheduler& cpuScheduler, void* outDst, usize parallelThreshold = s_CopyHostMemoryParallelThreshold, usize chunkSize = s_CopyHostMemoryChunkSize);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -196,6 +196,12 @@ public:
         : m_arena(arena)
         , m_owner(Move(owner))
     {}
+    template<typename FactoryFn>
+        requires (!IsSame_V<RemoveCVRef_T<FactoryFn>, T> && requires(FactoryFn&& factory){ requires IsSame_V<decltype(Forward<FactoryFn>(factory)()), T>; })
+    GpuCommandIrRetainedOwnerBox(GraphicsArena& arena, FactoryFn&& factory)noexcept(noexcept(Forward<FactoryFn>(factory)()) && IsNothrowDestructible_V<T>)
+        : m_arena(arena)
+        , m_owner(Forward<FactoryFn>(factory)())
+    {}
     virtual ~GpuCommandIrRetainedOwnerBox()noexcept override = default;
 
 
@@ -208,6 +214,8 @@ public:
             DestroyArenaObjectNoexcept(m_arena, this);
         }
     }
+
+    [[nodiscard]] const T& value()const noexcept{ return m_owner; }
 
 
 private:

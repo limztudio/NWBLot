@@ -2,6 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/types.adhd>
+#include <impl/ecs_render/reflection/settings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 enum<u32> PresentationToneMap{
     LinearClamp = 0u,
@@ -10,6 +17,50 @@ enum<u32> PresentationToneMap{
 
 // Stages exchange linear radiance; exposure applies at presentation.
 const f32 s_PresentationDefaultShoulder = 0.65f;
+const u32 s_DeferredInvalidHeapSlot = 0xffffffffu;
+const u32 s_DeferredPresentationSdr = 0u;
+const u32 s_DeferredPresentationHdr10 = 1u;
+const Name s_SceneShadingBufferName = "ecs_render/scene_shading_data";
+const Name s_SceneLightBufferName = "ecs_render/scene_light_data";
+
+[reflect]
+enum<u8> DeferredGraphicsPrefixTimingSlot{
+    MeshViewSetup,
+    SceneShadingSetup,
+    DeferredClear,
+    Gbuffer,
+    CsgReceiverSpanBuild,
+    CsgIntervalCombine,
+    CsgIntervalSample,
+    Normalize,
+    kCount
+}
+
+[reflect]
+enum<u8> LaggedLightingReport{
+    Unreported,
+    NoDedicatedAsyncCompute,
+    BootstrapAccepted,
+    ActiveHistoryAccepted,
+    CurrentFrameAccepted
+}
+
+const usize s_GraphicsPrefixTimingTaskCount = 8u;
+const usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
+
+class GraphicsPrefixTimingResolutionResult{
+    public usize uniquePacketCount = 0u;
+    public b8 bindingsValid = true;
+}
+
+class OpaqueEmulationMergeValidationResult{
+    public b8 packetsAreGraphics = false;
+    public b8 opaqueComputeEmulationMerged = false;
+    public b8 opaqueSharedComputeEmulationMerged = false;
+    public b8 opaqueCsgReceiverComputeEmulationMerged = false;
+    public b8 opaqueCsgIntervalSampleComputeEmulationMerged = false;
+    public b8 csgIntervalClearBundleMerged = false;
+}
 
 [reflect]
 class PresentationSettings{
@@ -20,6 +71,78 @@ class PresentationSettings{
 
 b8 ValidatePresentationSettings(in PresentationSettings settings){
     return cast<u32>(settings.toneMap) <= cast<u32>(PresentationToneMap::Reinhard) && isFinite(settings.exposure) && settings.exposure >= 0.0f && isFinite(settings.shoulder) && settings.shoulder > 0.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class DeferredCompositePushConstants{
+    public u32 resourceSlots = 0u;
+    public u32 refractionResources = 0u;
+    public u32 opaqueReflectionSlot = s_DeferredInvalidHeapSlot;
+    public u32 glassReflectionSlot = s_DeferredInvalidHeapSlot;
+    public u32 reflectionDebugView = 0u;
+}
+
+[serialize]
+class DeferredPresentPushConstants{
+    public u32 resourceSlots = 0u;
+    public u32 presentationMode = s_DeferredPresentationSdr;
+    public u32 toneMap = cast<u32>(PresentationToneMap::Reinhard);
+    public f32 exposure = 1.0f;
+    public f32 shoulder = s_PresentationDefaultShoulder;
+    public u32 outputLayerSlot = s_DeferredInvalidHeapSlot;
+}
+
+[serialize]
+class DeferredLightingPushConstants{
+    public u32 resourceSlots = 0u;
+    public u32 presentationMode = s_DeferredPresentationSdr;
+}
+
+DeferredCompositePushConstants ResolveDeferredCompositePushConstants(
+    in u32 resourceSlots,
+    in b8 hasRefractionFramebuffer,
+    in ReflectionCompositeInputs reflectionInputs
+){
+    DeferredCompositePushConstants pushConstants;
+    pushConstants.resourceSlots = resourceSlots;
+    if(hasRefractionFramebuffer)
+        pushConstants.refractionResources = 1u;
+    pushConstants.opaqueReflectionSlot = reflectionInputs.opaqueRadianceSlot;
+    pushConstants.glassReflectionSlot = reflectionInputs.glassRadianceSlot;
+    pushConstants.reflectionDebugView = cast<u32>(reflectionInputs.debugView);
+    return pushConstants;
+}
+
+DeferredPresentPushConstants ResolveDeferredPresentPushConstants(
+    in u32 resourceSlots,
+    in b8 hdr10OutputActive,
+    in PresentationSettings settings,
+    in u32 outputLayerSlot
+){
+    DeferredPresentPushConstants pushConstants;
+    pushConstants.resourceSlots = resourceSlots;
+    if(hdr10OutputActive)
+        pushConstants.presentationMode = s_DeferredPresentationHdr10;
+    pushConstants.toneMap = cast<u32>(settings.toneMap);
+    pushConstants.exposure = settings.exposure;
+    pushConstants.shoulder = settings.shoulder;
+    pushConstants.outputLayerSlot = outputLayerSlot;
+    return pushConstants;
+}
+
+DeferredLightingPushConstants ResolveDeferredLightingPushConstants(
+    in u32 resourceSlots,
+    in b8 hdr10OutputActive
+){
+    DeferredLightingPushConstants pushConstants;
+    pushConstants.resourceSlots = resourceSlots;
+    if(hdr10OutputActive)
+        pushConstants.presentationMode = s_DeferredPresentationHdr10;
+    return pushConstants;
 }
 
 

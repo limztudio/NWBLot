@@ -17,8 +17,8 @@
 #define NWB_DEFERRED_INVALID_HEAP_SLOT 0xffffffffu
 
 // Shared by deferred lighting and final presentation.
-#define NWB_DEFERRED_PRESENTATION_SDR 0u
 #define NWB_DEFERRED_PRESENTATION_HDR10 1u
+#define NWB_DEFERRED_TONE_MAP_REINHARD 1u
 
 // Shared by the present blit and CSG cap-fill path.
 #define NWB_DEFERRED_FULLSCREEN_UV_LOCATION 0

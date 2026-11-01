@@ -1,0 +1,72 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/kernel/task_graph_clear_timing.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct DeferredFrameTargets;
+
+
+// Opaque CSG interval clears own the interval-id plus receiver-event-count clears.
+struct OpaqueCsgIntervalClearInputs{
+    DeferredFrameTargets& targets;
+    CsgFrameGpuDataView csgFrameData{};
+    Core::GpuGraphResourceId csgIntervalId;
+    Core::GpuGraphResourceId csgReceiverEventCount;
+    Core::TextureSubresourceSet csgPeelSubresources{};
+    Core::TextureSubresourceSet csgReceiverEventCountSubresources{};
+    Core::GpuTaskId dependencyTask;
+    b8 hasOpaqueCsgFrameWork = false;
+};
+
+struct OpaqueCsgIntervalClearResult{
+    Core::GpuTaskId clearTask;
+    Core::GpuTaskId clearFirstTask;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OpaqueCsgIntervalClearBuilder final : NoCopy{
+public:
+    OpaqueCsgIntervalClearBuilder(Core::GpuTaskGraph& graph)noexcept
+        : m_graph(graph)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

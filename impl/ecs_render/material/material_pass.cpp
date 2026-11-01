@@ -4,7 +4,7 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
@@ -34,27 +34,10 @@ namespace __hidden_material_pass{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 MeshletConeCullScaleSafe(const SIMDVectorSingle scale)noexcept{
-    if(!VectorIsFinite(scale, VectorComponentMask::s_XYZ) || !Vector3Greater(scale, VectorZero()))
-        return false;
-
-    const SIMDVectorSingle minScale = Vector3MinComponent(scale);
-    const SIMDVectorSingle maxScale = Vector3MaxComponent(scale);
-    const SIMDVectorSingle tolerance = VectorScale(VectorMax(maxScale, s_SIMDOne), s_MeshletConeCullUniformScaleEpsilon);
-    return Vector3LessOrEqual(VectorSubtract(maxScale, minScale), tolerance);
-}
-
 [[nodiscard]] static MaterialPassMeshResourceSnapshot CaptureMeshResourceSnapshot(const MeshResources& mesh)noexcept{
     MaterialPassMeshResourceSnapshot snapshot;
     snapshot.sourceBuffers = mesh;
-    for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
-        snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
+    snapshot.geometryHeapHandles = mesh.geometryHeapHandles;
     snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
     snapshot.objectGeometryCache = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
     snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
@@ -77,26 +60,6 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
         .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
         .indexedGeometryOutput = pipelineResources.indexedGeometryOutput,
     };
-}
-
-struct MaterialInstanceAppend{
-    u32 instanceIndex = 0u;
-    MaterialTypedInstanceRanges typedRanges;
-};
-
-struct MaterialTypedByteRangeCache{
-    MaterialTypedByteRange constantRange;
-    MaterialTypedByteRange defaultMutableRange;
-    b8 constantRangeCached = false;
-    b8 defaultMutableRangeCached = false;
-};
-
-[[nodiscard]] static b8 CsgFrameHasReceiverPassWork(const CsgFrameState& csgFrameState, const CsgReceiverPass::Enum receiverPass)noexcept{
-    switch(receiverPass){
-    case CsgReceiverPass::Opaque: return csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
-    case CsgReceiverPass::Transparent: return csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
-    default: return false;
-    }
 }
 
 inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
@@ -264,7 +227,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     const b8 transparent,
     const CsgFrameState& csgFrameState,
     const RendererResourceLookupMode::Enum lookupMode,
-    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState,
+    const MeshViewGpuData* const csgWorkRegionMeshViewState,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
     CsgFrameGpuData& csgFrameData,
@@ -293,7 +256,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     materialTypedBytes.reserve(materialTypedByteReserve);
 
     using MaterialTypedByteRangeMap =
-        HashMap<MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
+        HashMap<MaterialTypedByteRangeKey, MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, ECSRenderDetail::MaterialTypedByteRangeKeyHasher, EqualTo<MaterialTypedByteRangeKey>>;
     MaterialTypedByteRangeMap materialTypedRangeCache(0, ECSRenderDetail::MaterialTypedByteRangeKeyHasher(), EqualTo<MaterialTypedByteRangeKey>(), materialTypedBytes.get_allocator().arena());
     materialTypedRangeCache.reserve(rendererCapacity);
 
@@ -302,7 +265,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
     const Core::FramebufferInfoEx& framebufferInfo = framebuffer->getFramebufferInfo();
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
-    const b8 csgPassActive = MaterialPipelinePassUsesRendererCsgClip(pass, transparent) && __hidden_material_pass::CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass);
+    const b8 csgPassActive = MaterialPipelinePassUsesRendererCsgClip(pass, transparent) && CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass);
     Optional<CsgFrameReceiverLookup> csgReceiverLookup;
     const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
     if(csgPassActive){
@@ -316,7 +279,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     auto appendConstantMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<MaterialTypedByteRange>{
         const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
-        __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
+        MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.constantRangeCached)
             return cache.constantRange;
 
@@ -332,7 +295,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     auto appendDefaultMutableMaterialTypedBytes = [&](const MaterialSurfaceInfo& materialInfo) -> Expected<MaterialTypedByteRange>{
         const MaterialTypedByteRangeKey rangeKey{ materialInfo.materialName, materialInfo.typedLayoutHash };
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
-        __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
+        MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.defaultMutableRangeCached)
             return cache.defaultMutableRange;
 
@@ -393,7 +356,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             pipelineKey.twoSided = true;
         }
 
-        auto appendInstance = [&]() -> Expected<__hidden_material_pass::MaterialInstanceAppend>{
+        auto appendInstance = [&]() -> Expected<MaterialInstanceAppend>{
             NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
 
             const auto constantRange = appendConstantMaterialTypedBytes(*materialInfo);
@@ -404,16 +367,27 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 return MakeUnexpected(Failure{});
             const MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
 
+            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.constantRange));
+            NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(typedRanges.mutableRange));
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges);
-            m_meshSystem.populateMeshGeometryHeapSlots(instance, mesh);
+            const NWB::Impl::Scene::TransformComponent defaultTransform;
+            const NWB::Impl::Scene::TransformComponent& resolvedTransform = transform ? *transform : defaultTransform;
+            InstanceGpuData instance = ::NWB::Impl::BuildInstanceGpuData(
+                entity,
+                transform != nullptr,
+                resolvedTransform.position,
+                resolvedTransform.rotation,
+                resolvedTransform.scale,
+                typedRanges.mutableRange.byteOffset
+            );
+            m_meshSystem.populateMeshGeometryHeapSlots(mesh, instance);
             instanceData.push_back(Move(instance));
             if(csgReceiverLookupPtr)
                 csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
 #if defined(NWB_DEBUG)
             materialTypedRanges.push_back(typedRanges);
 #endif
-            return __hidden_material_pass::MaterialInstanceAppend{ instanceIndex, typedRanges };
+            return MaterialInstanceAppend(instanceIndex, typedRanges);
         };
 
         if(pass == MaterialPipelinePass::CsgReceiverSurface && !csgClipActive){
@@ -523,7 +497,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
         drawItem.shadingModelId = materialInfo->shadingModelId;
-        drawItem.meshletConeCullScaleSafe = transform ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale)) : true;
+        drawItem.meshletConeCullScaleSafe = transform ? MeshletConeCullScaleSafe(transform->scale) : true;
 
         if(passDrawItemActive){
             MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
@@ -562,7 +536,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         const auto meshResult = resolvedMesh.runtime
             ? (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh) : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh))
-            : (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createMeshResources(resolvedMesh.mesh, materialTypedBytes.get_allocator().arena()) : m_meshSystem.findMeshResources(resolvedMesh.mesh))
+            : (lookupMode == RendererResourceLookupMode::CreateMissing ? m_meshSystem.createMeshResources(resolvedMesh.mesh, materialTypedBytes.get_allocator().arena()) : m_meshSystem.findMeshResources(resolvedMesh.mesh.name()))
         ;
         if(!meshResult)
             continue;

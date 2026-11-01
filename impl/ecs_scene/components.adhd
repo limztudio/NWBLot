@@ -34,7 +34,7 @@ const f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
 
 b8 IsValidLightCone(in f32 innerConeCos, in f32 outerConeCos){
-    return IsFinite(innerConeCos) && IsFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
+    return isFinite(innerConeCos) && isFinite(outerConeCos) && outerConeCos >= s_ConeCosineMin && outerConeCos <= innerConeCos && innerConeCos <= s_ConeCosineMax;
 }
 
 

@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "asset.h"
 #include "cook.h"
 
 #include <core/assets/cook_dependency_registry.h>
@@ -31,7 +32,7 @@ namespace __hidden_assets_csg_volume_entry{
 static b8 ExtractCsgShapeDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     if(!context.document)
         return false;
-    const auto csgEntry = AssetsCsgCook::ParseCsgShapeCookMetadata(context.arena, context.nwbFilePath, *context.document, context.scratchArena);
+    const auto csgEntry = AssetsCsgCook::ParseCsgShapeCookMetadata(context.nwbFilePath, *context.document, context.arena, context.scratchArena);
     return static_cast<b8>(csgEntry);
 }
 

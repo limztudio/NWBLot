@@ -13,6 +13,8 @@
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#include <signal.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 

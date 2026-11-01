@@ -6,10 +6,8 @@
 
 #include <global/termination.h>
 
-#include <cerrno>
 #include <fcntl.h>
 #include <pthread.h>
-#include <signal.h>
 #include <unistd.h>
 
 
@@ -72,8 +70,8 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
 
 
 Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
-    int descriptors[2];
-    if(pipe(descriptors) != 0)
+    Array<int, 2> descriptors{};
+    if(pipe(descriptors.data()) != 0)
         return MakeUnexpected(Failure{});
     int readFd = descriptors[0];
     int writeFd = descriptors[1];

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cpu_task_scheduler_test_support.h"
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/termination.h>
@@ -19,36 +21,15 @@ namespace __hidden_cpu_task_progress_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
 inline constexpr u32 s_Rounds = 16u;
 inline constexpr u32 s_Workers = 2u;
 inline constexpr u32 s_RootCount = 32u;
 inline constexpr u32 s_TimeoutMS = 30000u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Deadline final{
-public:
-    Deadline()
-        : m_watchdog([](const StopToken& stop)noexcept{
-            const Timer begin = TimerNow();
-            while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= s_TimeoutMS)
-                    TerminateInvariant();
-                SleepMS(__hidden_cpu_task_progress_tests::s_PollIntervalMS);
-            }
-        }
-        )
-    {}
-
-
-private:
-    JoiningThread m_watchdog;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,11 +43,8 @@ private:
 
 TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequisite){
     using namespace __hidden_cpu_task_progress_tests;
-    Deadline deadline;
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 1u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
+    DeadlineGuard deadline(false, s_TimeoutMS);
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     constexpr CpuTaskOptions s_MainThread{ .target = CpuTaskTarget::MainThread };
     constexpr u32 s_CallbackCount = 2u;
     constexpr u32 s_ReleaseSchedules = 2u;
@@ -106,7 +84,7 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
         releaser = JoiningThread([&]()noexcept{
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
-                SleepMS(__hidden_cpu_task_progress_tests::s_PollIntervalMS);
+                SleepMS(s_PollIntervalMS);
             release.store(true, MemoryOrder::release);
             release.notify_one();
         });
@@ -124,18 +102,15 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
 
 TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendantsAcrossScopeReuse){
     using namespace __hidden_cpu_task_progress_tests;
-    Deadline deadline;
-    CpuTaskSchedulerConfig config;
-    config.workerCount = s_Workers;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
+    DeadlineGuard deadline(false, s_TimeoutMS);
+    CpuTaskScheduler scheduler(HomogeneousWorkers(s_Workers));
     for(u32 round = 0u; round < s_Rounds; ++round){
         Atomic<b8> start{ false };
         Atomic<u32> entered{ 0u };
         Atomic<u32> visits{ 0u };
         Atomic<u32> joined{ 0u };
         CpuTaskScope scope(scheduler);
-        CpuTaskHandle roots[s_RootCount];
+        Array<CpuTaskHandle, s_RootCount> roots{};
         ScopeExit finish([&]()noexcept{
             start.store(true, MemoryOrder::release);
             start.notify_all();
@@ -171,7 +146,7 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
             EXPECT_TRUE(thirdCpuTaskAdmission);
             if(thirdCpuTaskAdmission)
                 EXPECT_TRUE(thirdCpuTaskAdmission->valid());
-        }, {}, roots, s_RootCount
+        }, {}, roots.data(), s_RootCount
         );
         ASSERT_TRUE(secondCpuTaskAdmission);
         if(secondCpuTaskAdmission)

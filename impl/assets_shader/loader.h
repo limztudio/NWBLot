@@ -7,7 +7,6 @@
 
 #include <impl/global.h>
 #include <impl/assets_shader/asset.h>
-#include <impl/assets_shader/binary_payload.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>
@@ -34,14 +33,14 @@ namespace ShaderAssetLoader{
 template<typename ShaderT, typename ShaderPathResolver>
     requires(IsBaseOf_V<IShader, ShaderT> && !IsAbstract_V<ShaderT>)
 [[nodiscard]] b8 Load(
-    Core::ShaderHandle& outShader,
     const Name& shaderName,
     const AStringView variantName,
     const Name& debugName,
+    const TStringView ownerName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolver& shaderPathResolver,
-    const TStringView ownerName,
+    Core::ShaderHandle& outShader,
     const Name* archiveStageName = nullptr
 ){
     static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));

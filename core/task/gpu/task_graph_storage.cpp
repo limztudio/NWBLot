@@ -512,7 +512,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
 
     {
         constexpr usize s_InlineMemberCount = 32u;
-        u32 inlineMembers[s_InlineMemberCount];
+        Array<u32, s_InlineMemberCount> inlineMembers;
         Optional<HashSet<u32, Alloc::ScratchArena>> indexedMembers;
         for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
             const GpuGraphResourceId member = desc.members[memberIndex];
@@ -531,7 +531,7 @@ Expected<GpuGraphResourceSetId> GpuTaskGraph::appendResourceSet(const GpuGraphRe
                 if(!indexedMembers){
                     // Direct capacity construction avoids an empty-table proxy allocation and later rehash.
                     indexedMembers.emplace(AddSize(desc.memberCount, desc.memberCount), m_declarationScratch);
-                    indexedMembers->insert(inlineMembers, inlineMembers + s_InlineMemberCount);
+                    indexedMembers->insert(inlineMembers.begin(), inlineMembers.end());
                 }
                 if(!indexedMembers->insert(member.index).second)
                     return MakeUnexpected(Failure{});

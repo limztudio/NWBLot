@@ -26,16 +26,6 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 FitsCoordinate(f64 value)noexcept{
-    return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
-}
-
 [[nodiscard]] static b8 FitsCoordinateXY(const SIMDVectorDouble value)noexcept{
     const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
     return VectorDoubleIsFinite(value, VectorDoubleComponentMask::s_DoubleXY) && (VectorDoubleMoveMask(VectorDoubleInBounds(value, limit)) & VectorDoubleComponentMask::s_DoubleXY) == VectorDoubleComponentMask::s_DoubleXY;
@@ -57,8 +47,8 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     if(
         !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
         || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
-        || VectorGetX(VectorAdd(VectorReplicate(run.metrics.ascender), VectorReplicate(run.metrics.descender))) <= 0.0f || run.glyphs.size() > s_TextMaxBytes
-        || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(run.metrics.ascender)), VectorDoubleReplicate(static_cast<f64>(run.metrics.descender))), VectorDoubleReplicate(static_cast<f64>(run.metrics.lineGap)))))
+        || run.metrics.ascender + run.metrics.descender <= 0.0f || run.glyphs.size() > s_TextMaxBytes
+        || !FitsTextCoordinate(static_cast<f64>(run.metrics.ascender) + static_cast<f64>(run.metrics.descender) + static_cast<f64>(run.metrics.lineGap))
     )
         return false;
     u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
@@ -67,16 +57,16 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
             glyph.byteBegin >= glyph.byteEnd || !IsUtf8ScalarBoundary(text, glyph.byteBegin) || !IsUtf8ScalarBoundary(text, glyph.byteEnd)
             || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
             || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !HasValidUiRectDimensions(glyph.ink)
-            || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.x)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.width)))))
-            || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(glyph.ink.y)), VectorDoubleReplicate(static_cast<f64>(glyph.ink.height)))))
+            || !FitsTextCoordinate(static_cast<f64>(glyph.ink.x) + static_cast<f64>(glyph.ink.width))
+            || !FitsTextCoordinate(static_cast<f64>(glyph.ink.y) + static_cast<f64>(glyph.ink.height))
         )
             return false;
         if(glyph.coverage.known){
             const Rect& coverage = glyph.coverage.ink;
             if(
                 !HasValidUiRectDimensions(coverage)
-                || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.x)), VectorDoubleReplicate(static_cast<f64>(coverage.width)))))
-                || !FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(coverage.y)), VectorDoubleReplicate(static_cast<f64>(coverage.height)))))
+                || !FitsTextCoordinate(static_cast<f64>(coverage.x) + static_cast<f64>(coverage.width))
+                || !FitsTextCoordinate(static_cast<f64>(coverage.y) + static_cast<f64>(coverage.height))
             )
                 return false;
         }
@@ -87,7 +77,7 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
     return true;
 }
 
-[[nodiscard]] static b8 IncludeInk(SIMDVectorDouble& bounds, b8& hasInk, const SIMDVectorDouble ink)noexcept{
+[[nodiscard]] static b8 IncludeInk(const SIMDVectorDouble ink, SIMDVectorDouble& bounds, b8& hasInk)noexcept{
     if((VectorDoubleMoveMask(VectorDoubleLessOrEqual(VectorDoubleSwizzle<2, 3, 2, 3>(ink), VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXY) != 0u)
         return true;
     if(!hasInk){
@@ -121,20 +111,13 @@ inline constexpr usize s_CarriageReturnLineFeedBytes = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayout::TextLayout(Core::Alloc::GlobalArena& arena)noexcept
-    : m_text(arena)
-    , m_glyphs(arena)
-    , m_clusters(arena)
-    , m_lines(arena)
-{}
-
 TextHit TextLayout::hitTest(Point point)const noexcept{
     TextHit hit;
     if(m_lines.empty() || !IsFinite(point.x) || !IsFinite(point.y))
         return hit;
     usize lineIndex = m_lines.size() - 1u;
     for(usize index = 0u; index < m_lines.size(); ++index){
-        if(point.y < VectorGetX(VectorAdd(VectorReplicate(m_lines[index].top), VectorReplicate(m_lines[index].height)))){
+        if(point.y < m_lines[index].top + m_lines[index].height){
             lineIndex = index;
             break;
         }
@@ -193,11 +176,6 @@ Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayoutBuilder::TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept
-    : m_arena(arena)
-    , m_shaper(shaper)
-{}
-
 Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const ShapeRequest& request){
     const TextLayoutStatus::Enum validation = ValidateTextRequest(request, true);
     if(validation != TextLayoutStatus::Success)
@@ -219,7 +197,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             ++byteEnd;
         usize breakEnd = byteEnd;
         if(breakEnd < request.text.size())
-            breakEnd += request.text[breakEnd] == '\r' ? __hidden_ui_text_layout::s_CarriageReturnLineFeedBytes : 1u;
+            breakEnd += request.text[breakEnd] == '\r' ? s_TextCarriageReturnLineFeedBytes : 1u;
         ShapeRequest lineRequest = request;
         lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
         const auto shapedRun = m_shaper.shape(lineRequest);
@@ -240,7 +218,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         const SIMDVectorDouble baselineHeightValue = VectorDoubleSelect(baselineAndAscent, VectorDoubleAdd(baselineAndAscent, VectorDoubleSet(0.0, run.metrics.lineGap, 0.0, 0.0)), s_DoubleSIMDMaskY);
         const f64 baseline = VectorDoubleGetX(baselineHeightValue);
         const f64 height = VectorDoubleGetY(baselineHeightValue);
-        if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(line.top)), VectorDoubleSplatY(baselineHeightValue)))))
+        if(!FitsTextCoordinate(baseline) || !FitsTextCoordinate(static_cast<f64>(line.top) + height))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
         line.height = static_cast<f32>(height);
@@ -258,12 +236,12 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
                 const f64 x = VectorDoubleGetX(placement);
                 const f64 y = VectorDoubleGetY(placement);
                 const f64 nextPen = VectorDoubleGetZ(placement);
-                if(!__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y) || !__hidden_ui_text_layout::FitsCoordinate(nextPen))
+                if(!FitsTextCoordinate(x) || !FitsTextCoordinate(y) || !FitsTextCoordinate(nextPen))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
                 const SIMDVectorDouble positionValue = VectorDoubleSet(position.x, position.y, 0.0, 0.0);
                 const auto ink = __hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.ink.x, glyph.ink.y, glyph.ink.width, glyph.ink.height));
-                if(!ink || !__hidden_ui_text_layout::IncludeInk(inkBounds, hasInk, ink->value))
+                if(!ink || !__hidden_ui_text_layout::IncludeInk(ink->value, inkBounds, hasInk))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(positionValue, VectorDoubleSet(glyph.coverage.ink.x, glyph.coverage.ink.y, glyph.coverage.ink.width, glyph.coverage.ink.height)))
                     return MakeUnexpected(TextLayoutStatus::InvalidParameters);
@@ -281,7 +259,7 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             result.m_clusters.push_back(cluster);
             first = end;
         }
-        if(!IsFinite(pen) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(line.top), VectorReplicate(line.height)))))
+        if(!IsFinite(pen) || !IsFinite(line.top + line.height))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.advance = pen;
         line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;

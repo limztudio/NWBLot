@@ -64,20 +64,10 @@ private:
 // Caret changes must preserve the reason attached to a deferred surrounding-text update.
 class WaylandTextInputDeferredState final{
 public:
-    void clear()noexcept{
-        m_pending = false;
-        m_cause = TextInputChangeCause::InputMethod;
-    }
-
+    void clear()noexcept;
     void caretChanged()noexcept{ m_pending = true; }
-
-    void surroundingChanged(TextInputChangeCause::Enum cause)noexcept{
-        m_pending = true;
-        m_cause = cause;
-    }
-
+    void surroundingChanged(TextInputChangeCause::Enum cause)noexcept;
     [[nodiscard]] b8 pending()const noexcept{ return m_pending; }
-
     [[nodiscard]] TextInputChangeCause::Enum cause()const noexcept{ return m_cause; }
 
 

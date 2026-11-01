@@ -4,8 +4,6 @@
 
 #include "model.h"
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,23 +20,16 @@ namespace __hidden_font_atlas_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_OccupiedWordLastBit = s_BitsPerU64 - 1u;
-static constexpr f32 s_GlyphPlaneSizeRelativeTolerance = 0.0001f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static b8 CheckGuardedOverlap(const FontAtlasPayload& payload, Core::Alloc::ScratchArena& scratchArena){
     Vector<u64, Core::Alloc::ScratchArena> occupied(scratchArena);
     usize maxWords = 0u;
     for(const FontAtlasGroup& group : payload.groups)
-        maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * group.channelCount + s_OccupiedWordLastBit) / s_BitsPerU64);
+        maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * group.channelCount + s_FontAtlasOccupiedWordLastBit) / s_BitsPerU64);
     occupied.reserve(maxWords);
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         const FontAtlasGroup& group = payload.groups[groupIndex];
         const usize planePixels = static_cast<usize>(group.width) * group.height;
-        occupied.assign((planePixels * group.channelCount + s_OccupiedWordLastBit) / s_BitsPerU64, 0u);
+        occupied.assign((planePixels * group.channelCount + s_FontAtlasOccupiedWordLastBit) / s_BitsPerU64, 0u);
         for(const FontAtlasGlyph& glyph : payload.glyphs){
             if(glyph.drawable == 0u || glyph.group != groupIndex)
                 continue;
@@ -54,7 +45,7 @@ static constexpr f32 s_GlyphPlaneSizeRelativeTolerance = 0.0001f;
                     if(word == begin / s_BitsPerU64)
                         mask &= Limit<u64>::s_Max << (begin % s_BitsPerU64);
                     if(word == last / s_BitsPerU64)
-                        mask &= Limit<u64>::s_Max >> (s_OccupiedWordLastBit - last % s_BitsPerU64);
+                        mask &= Limit<u64>::s_Max >> (s_FontAtlasOccupiedWordLastBit - last % s_BitsPerU64);
                     if((occupied[word] & mask) != 0u){
                         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} overlaps another guarded region"), glyph.glyphId);
                         return false;
@@ -94,7 +85,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
         return false;
     }
-    if(!IsFinite(payload.ascenderUnits) || !IsFinite(payload.descenderUnits) || !IsFinite(payload.lineGapUnits) || payload.ascenderUnits <= payload.descenderUnits || payload.lineGapUnits < 0.f){
+    if(!IsValidFontAtlasMetrics(payload.ascenderUnits, payload.descenderUnits, payload.lineGapUnits)){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nonfinite or invalid vertical metrics"));
         return false;
     }
@@ -119,7 +110,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
         }
         pixelBytes += byteCount;
     }
-    const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem)));
+    const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
     for(usize index = 0u; index < payload.glyphs.size(); ++index){
         const FontAtlasGlyph& glyph = payload.glyphs[index];
         if(glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits) || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)){
@@ -127,7 +118,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
             return false;
         }
         if(glyph.drawable == 0u){
-            if(glyph.group != 0u || glyph.channel != 0u || glyph.x != 0u || glyph.y != 0u || glyph.width != 0u || glyph.height != 0u || glyph.planeLeft != 0.f || glyph.planeTop != 0.f || glyph.planeRight != 0.f || glyph.planeBottom != 0.f){
+            if(!IsValidNondrawableFontAtlasGlyph(glyph)){
                 NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: nondrawable glyph {} carries a bitmap"), index);
                 return false;
             }
@@ -137,17 +128,12 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
             return false;
         }
-        const SIMDVectorSingle expectedSize = VectorMultiply(VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), 0.0f, 0.0f), unitsPerPixel);
-        const SIMDVectorSingle planeSize = VectorSubtract(VectorSet(glyph.planeRight, glyph.planeBottom, 0.0f, 0.0f), VectorSet(glyph.planeLeft, glyph.planeTop, 0.0f, 0.0f));
-        const SIMDVectorSingle difference = VectorSubtract(planeSize, expectedSize);
-        const SIMDVectorSingle magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
-        const SIMDVectorSingle tolerance = VectorScale(expectedSize, __hidden_font_atlas_validation::s_GlyphPlaneSizeRelativeTolerance);
-        if((VectorMoveMask(VectorGreater(magnitude, tolerance)) & VectorComponentMask::s_XY) != 0u){
+        if(!IsValidFontAtlasGlyphPlaneBounds(glyph, unitsPerPixel)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size"), index);
             return false;
         }
         const FontAtlasGroup& group = payload.groups[glyph.group];
-        if(glyph.channel >= group.channelCount || glyph.x < payload.guardTexels || glyph.y < payload.guardTexels || glyph.x >= group.width || glyph.y >= group.height || glyph.width >= group.width - glyph.x || glyph.height >= group.height - glyph.y){
+        if(!IsValidFontAtlasGlyphGroupRect(glyph, group.width, group.height, group.channelCount, payload.guardTexels)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);
             return false;
         }
@@ -162,7 +148,7 @@ b8 ValidateFontAtlasPayload(const FontAtlasPayload& payload, Core::Alloc::Scratc
     u32 previousTag = 0u;
     for(const FontAtlasPositioningTable& table : payload.positioningTables){
         positioningBytes += table.bytes.size();
-        if(table.tag <= previousTag || positioningBytes > s_FontAtlasMaxPositioningBytes || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256 || !ValidateFontAtlasPositioningTable(table, payload.sourceGlyphCount)){
+        if(table.tag <= previousTag || positioningBytes > s_FontAtlasMaxPositioningBytes || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256 || !ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, payload.sourceGlyphCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: positioning order, bounds, hash, or structure"));
             return false;
         }

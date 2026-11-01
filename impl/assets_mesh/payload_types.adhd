@@ -27,7 +27,11 @@ const u32 s_MeshletConeAxisYShift = 8u;
 const u32 s_MeshletConeCutoffShift = 16u;
 const u32 s_MeshletConeFlagShift = 24u;
 const u32 s_MeshletPackedByteBits = 8u;
+const u32 s_MeshletPackedByte2Shift = s_MeshletPackedByteBits * 2u;
+const u32 s_MeshletPackedByte3Shift = s_MeshletPackedByteBits * 3u;
 const u32 s_MeshletPackedByteMask = 0xffu;
+const usize s_StaticMeshletPositionChannelCount = 1u;
+const usize s_SkinnedMeshletPositionChannelCount = 2u;
 const u32 s_MeshletConeAxisFallback = 0x8080u;
 const f32 s_MeshletOctEncodeBias = 0.5f;
 const f32 s_MeshletOctDecodeScale = 2.0f;
@@ -45,11 +49,62 @@ const u32 s_MeshletRefEncodingUv0Shift = 8u;
 const u32 s_MeshletRefEncodingColorShift = 10u;
 const usize s_AttribGpuByteSize = 16u;
 
+const f32 s_MeshletBoundsRadiusInflation = 1.25f;
+const f32 s_MeshletScoreSharedVertexWeight = 20.0f;
+const f32 s_MeshletScoreNewVertexWeight = 8.0f;
+const f32 s_MeshletScoreRadiusWeight = 4.0f;
+const f32 s_MeshletScoreCentroidWeight = 1.0f;
+const f32 s_MeshletScoreNormalWeight = 10.0f;
+const f32 s_MeshletScoreConePenaltyWeight = 12.0f;
+const f32 s_MeshletScoreDisconnectedPenalty = 24.0f;
+const usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
+const usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
+const f32 s_TriangleVertexCount = 3.0f;
+const f64 s_MeshletPercentScale = 100.0;
+
+const StringView s_MeshMetaText = "Mesh meta";
+const usize s_IndexedLabelBracketReserve = 2u;
+const StringView s_MeshIndicesFieldNameView = "indices";
+const StringView s_MeshVertexRefsFieldNameView = "vertex_refs";
+const StringView s_MeshPositionsFieldNameView = "positions";
+const StringView s_MeshNormalsFieldNameView = "normals";
+const StringView s_MeshTangentsFieldNameView = "tangents";
+const StringView s_MeshUv0FieldNameView = "uv0";
+const StringView s_MeshColorsFieldNameView = "colors";
+
+const u32 s_EdgeKeyVertexShift = 32u;
+const usize s_ManifoldEdgeTriangleCount = 2u;
+
+const usize s_VertexRefComponentCount = 5u;
+const usize s_ComponentLabelExtraCharCount = 2u;
+const StringView s_VertexRefPositionName = "position";
+const StringView s_VertexRefNormalName = "normal";
+const StringView s_VertexRefTangentName = "tangent";
+const StringView s_VertexRefUvName = "uv0";
+const StringView s_VertexRefColorName = "color";
+
+const f32 s_DirectionLengthTolerance = 0.01f;
+const f32 s_TangentHandednessTolerance = 0.001f;
+
 [reflect]
 enum<u32> MeshletRefDeltaWidth{
     U8 = 0u,
     U16 = 1u,
     U32 = 2u
+}
+
+[reflect]
+enum<u8> MetadataF32ValueFailure{
+    NotNumeric,
+    NonFinite,
+    OutOfRange
+}
+
+[reflect]
+enum<u8> MetadataU32ValueFailure{
+    NotNumeric,
+    NonIntegerOrNegative,
+    OutOfRange
 }
 
 class MeshletDesc{
@@ -144,6 +199,68 @@ class MeshletAttributeRefEncodingLayout{
     public MeshletRefDeltaWidth colorWidth = MeshletRefDeltaWidth::U8;
 }
 
+class MeshletRefEncodeRange{
+    public u32 minimum = 0xffffffffu;
+    public u32 maximum = 0u;
+}
+
+class MeshletAttributeRefEncodeRanges{
+    public MeshletRefEncodeRange normal;
+    public MeshletRefEncodeRange tangent;
+    public MeshletRefEncodeRange uv0;
+    public MeshletRefEncodeRange color;
+}
+
+class MeshletFrontierCandidate{
+    public usize frontierOffset = 0u;
+    public u32 triangleIndex = 0u;
+    public f32 score = 0.0f;
+}
+
+class MeshletCandidateSearchResult{
+    public MeshletFrontierCandidate candidate;
+    public b8 found = false;
+}
+
+class MeshletVertexCounts{
+    public u32 shared = 0u;
+    public u32 missing = 0u;
+}
+
+class MeshletTriangleData{
+    public Array<u32, s_MeshletTriangleIndexCount> vertexRefs;
+    public Array<u32, s_MeshletTriangleIndexCount> positions;
+}
+
+class MeshletTriangleCalculation{
+    public Array<f32x4, s_MeshletTriangleIndexCount> positions;
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 areaNormal(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class TriangleEdge{
+    public u64 positions = 0u;
+    public u32 triangle = 0u;
+    public b8 forward = false;
+}
+
+b8 MeshBaseHeaderComplete(in MeshBinaryHeader header){
+    return
+        header.positionCount != 0u
+        && header.normalCount != 0u
+        && header.tangentCount != 0u
+        && header.uv0Count != 0u
+        && header.colorCount != 0u
+        && header.meshletCount != 0u
+        && header.meshletCount <= cast<u64>(0xffffffffu / s_MeshletBoundsStride)
+        && header.meshletBoundCount == header.meshletCount
+        && header.meshletPositionRefDeltaByteCount != 0u
+        && header.meshletAttributeRefDeltaByteCount != 0u
+        && header.meshletLocalVertexRefCount != 0u
+        && header.meshletPrimitiveIndexCount != 0u
+    ;
+}
+
 u32 PackMeshletCounts(in u32 vertexCount, in u32 primitiveCount, in u32 positionCount, in u32 attributeCount){
     return (vertexCount & s_MeshletCountMask)
         | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
@@ -232,6 +349,351 @@ b8 MeshletPositionRefInRange(in MeshletPositionStreamRef streamRef, in usize pos
 
 b8 MeshletAttributeRefInRange(in MeshletAttributeStreamRef streamRef, in usize normalCount, in usize tangentCount, in usize uv0Count, in usize colorCount){
     return cast<usize>(streamRef.normal) < normalCount && cast<usize>(streamRef.tangent) < tangentCount && cast<usize>(streamRef.uv0) < uv0Count && cast<usize>(streamRef.color) < colorCount;
+}
+
+b8 TryComputeMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width, mut usize outByteCount){
+    if(!MeshletRefDeltaWidthValid(width))
+        return false;
+
+    const usize byteWidth = cast<usize>(MeshletRefDeltaByteWidth(width));
+    if(cast<usize>(refCount) > 0xffffffffffffffffu / byteWidth)
+        return false;
+
+    outByteCount = cast<usize>(refCount) * byteWidth;
+    return true;
+}
+
+b8 AddMeshletRefDeltaByteCount(in u32 refCount, in MeshletRefDeltaWidth width, mut usize inOutByteCount){
+    usize channelBytes = 0u;
+    if(!TryComputeMeshletRefDeltaByteCount(refCount, width, channelBytes))
+        return false;
+    if(channelBytes > 0xffffffffffffffffu - inOutByteCount)
+        return false;
+
+    inOutByteCount += channelBytes;
+    return true;
+}
+
+b8 TryAddMeshletRefLayoutChannel(in usize baseOffset, in u32 refCount, in MeshletRefDeltaWidth width, mut usize inOutRelativeOffset, mut usize outChannelByteOffset){
+    if(baseOffset > 0xffffffffffffffffu - inOutRelativeOffset)
+        return false;
+
+    outChannelByteOffset = baseOffset + inOutRelativeOffset;
+    return AddMeshletRefDeltaByteCount(refCount, width, inOutRelativeOffset);
+}
+
+b8 TryBuildMeshletPositionRefEncodingLayout(in MeshletDesc meshlet, in b8 skinRequired, mut MeshletPositionRefEncodingLayout outLayout){
+    MeshletPositionRefEncodingLayout layout;
+    const u32 positionCount = MeshletPositionCount(meshlet);
+    layout.positionWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingPositionShift);
+    layout.skinWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingSkinShift);
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.positionRefOffset), positionCount, layout.positionWidth, layout.byteCount, layout.positionByteOffset))
+        return false;
+    if(!skinRequired){
+        outLayout = layout;
+        return true;
+    }
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.positionRefOffset), positionCount, layout.skinWidth, layout.byteCount, layout.skinByteOffset))
+        return false;
+    outLayout = layout;
+    return true;
+}
+
+b8 TryBuildMeshletAttributeRefEncodingLayout(in MeshletDesc meshlet, mut MeshletAttributeRefEncodingLayout outLayout){
+    MeshletAttributeRefEncodingLayout layout;
+    const u32 attributeCount = MeshletAttributeCount(meshlet);
+    layout.normalWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingNormalShift);
+    layout.tangentWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingTangentShift);
+    layout.uv0Width = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingUv0Shift);
+    layout.colorWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingColorShift);
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.normalWidth, layout.byteCount, layout.normalByteOffset))
+        return false;
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.tangentWidth, layout.byteCount, layout.tangentByteOffset))
+        return false;
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.uv0Width, layout.byteCount, layout.uv0ByteOffset))
+        return false;
+    if(!TryAddMeshletRefLayoutChannel(cast<usize>(meshlet.attributeRefOffset), attributeCount, layout.colorWidth, layout.byteCount, layout.colorByteOffset))
+        return false;
+    outLayout = layout;
+    return true;
+}
+
+b8 TryComputeMeshletEncodedPositionRefByteCount(in MeshletDesc meshlet, in b8 skinRequired, mut usize outByteCount){
+    MeshletPositionRefEncodingLayout layout;
+    if(!TryBuildMeshletPositionRefEncodingLayout(meshlet, skinRequired, layout))
+        return false;
+
+    outByteCount = layout.byteCount;
+    return true;
+}
+
+b8 TryComputeMeshletEncodedAttributeRefByteCount(in MeshletDesc meshlet, mut usize outByteCount){
+    MeshletAttributeRefEncodingLayout layout;
+    if(!TryBuildMeshletAttributeRefEncodingLayout(meshlet, layout))
+        return false;
+
+    outByteCount = layout.byteCount;
+    return true;
+}
+
+b8 TryDecodeMeshletRefDelta(in Span<u8> bytes, in usize byteOffset, in MeshletRefDeltaWidth width, mut u32 outDelta){
+    if(!MeshletRefDeltaWidthValid(width))
+        return false;
+
+    const usize byteCount = bytes.size();
+    const usize byteWidth = cast<usize>(MeshletRefDeltaByteWidth(width));
+    if(byteOffset > byteCount || byteWidth > byteCount - byteOffset)
+        return false;
+
+    u32 delta = cast<u32>(bytes[byteOffset]);
+    if(width == MeshletRefDeltaWidth::U8){
+        outDelta = delta;
+        return true;
+    }
+
+    delta |= cast<u32>(bytes[byteOffset + 1u]) << s_MeshletPackedByteBits;
+    if(width == MeshletRefDeltaWidth::U16){
+        outDelta = delta;
+        return true;
+    }
+
+    delta |= cast<u32>(bytes[byteOffset + 2u]) << s_MeshletPackedByte2Shift;
+    delta |= cast<u32>(bytes[byteOffset + 3u]) << s_MeshletPackedByte3Shift;
+    outDelta = delta;
+    return true;
+}
+
+b8 TryDecodeMeshletRefDeltaAtIndex(in Span<u8> bytes, in usize channelByteOffset, in u32 localIndex, in MeshletRefDeltaWidth width, mut u32 outDelta){
+    return TryDecodeMeshletRefDelta(bytes, channelByteOffset + cast<usize>(localIndex) * cast<usize>(MeshletRefDeltaByteWidth(width)), width, outDelta);
+}
+
+b8 TryDecodeMeshletRefChannelValue(in Span<u8> bytes, in usize channelByteOffset, in MeshletRefDeltaWidth width, in u32 base, in u32 localIndex, mut u32 outIndex){
+    u32 delta = 0u;
+    if(!TryDecodeMeshletRefDeltaAtIndex(bytes, channelByteOffset, localIndex, width, delta) || delta > 0xffffffffu - base)
+        return false;
+
+    outIndex = base + delta;
+    return true;
+}
+
+b8 TryDecodeMeshletPositionRef(in Span<u8> bytes, in MeshletDesc meshlet, in u32 localPositionIndex, in b8 skinRequired, mut MeshletPositionStreamRef outRef){
+    MeshletPositionStreamRef refValue;
+    const u32 positionCount = MeshletPositionCount(meshlet);
+    if(localPositionIndex >= positionCount)
+        return false;
+
+    MeshletPositionRefEncodingLayout layout;
+    if(!TryBuildMeshletPositionRefEncodingLayout(meshlet, skinRequired, layout))
+        return false;
+
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.positionByteOffset, layout.positionWidth, meshlet.positionBase, localPositionIndex, refValue.position))
+        return false;
+
+    if(!skinRequired){
+        if(meshlet.skinBase != s_MeshMissingStreamIndex)
+            return false;
+        outRef = refValue;
+        return true;
+    }
+
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.skinByteOffset, layout.skinWidth, meshlet.skinBase, localPositionIndex, refValue.skin))
+        return false;
+    outRef = refValue;
+    return true;
+}
+
+b8 TryDecodeMeshletAttributeRef(in Span<u8> bytes, in MeshletDesc meshlet, in u32 localAttributeIndex, mut MeshletAttributeStreamRef outRef){
+    MeshletAttributeStreamRef refValue;
+    const u32 attributeCount = MeshletAttributeCount(meshlet);
+    if(localAttributeIndex >= attributeCount)
+        return false;
+
+    MeshletAttributeRefEncodingLayout layout;
+    if(!TryBuildMeshletAttributeRefEncodingLayout(meshlet, layout))
+        return false;
+
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.normalByteOffset, layout.normalWidth, meshlet.normalBase, localAttributeIndex, refValue.normal))
+        return false;
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.tangentByteOffset, layout.tangentWidth, meshlet.tangentBase, localAttributeIndex, refValue.tangent))
+        return false;
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.uv0ByteOffset, layout.uv0Width, meshlet.uv0Base, localAttributeIndex, refValue.uv0))
+        return false;
+    if(!TryDecodeMeshletRefChannelValue(bytes, layout.colorByteOffset, layout.colorWidth, meshlet.colorBase, localAttributeIndex, refValue.color))
+        return false;
+
+    outRef = refValue;
+    return true;
+}
+
+void AddMeshletRefEncodeIndex(in u32 index, mut MeshletRefEncodeRange range){
+    range.minimum = min(range.minimum, index);
+    range.maximum = max(range.maximum, index);
+}
+
+void AddMeshletAttributeRefEncodeRanges(in MeshletAttributeStreamRef streamRef, mut MeshletAttributeRefEncodeRanges ranges){
+    AddMeshletRefEncodeIndex(streamRef.normal, ranges.normal);
+    AddMeshletRefEncodeIndex(streamRef.tangent, ranges.tangent);
+    AddMeshletRefEncodeIndex(streamRef.uv0, ranges.uv0);
+    AddMeshletRefEncodeIndex(streamRef.color, ranges.color);
+}
+
+void StoreMeshletAttributeRefEncodeBases(in MeshletAttributeRefEncodeRanges ranges, mut MeshletDesc meshlet){
+    meshlet.normalBase = ranges.normal.minimum;
+    meshlet.tangentBase = ranges.tangent.minimum;
+    meshlet.uv0Base = ranges.uv0.minimum;
+    meshlet.colorBase = ranges.color.minimum;
+}
+
+MeshletRefDeltaWidth MeshletRefEncodeRangeWidth(in MeshletRefEncodeRange range){
+    return MeshletRefDeltaWidthForMaxDelta(range.maximum - range.minimum);
+}
+
+b8 MeshletDecodedPositionRefMatches(in MeshletPositionStreamRef decoded, in MeshletPositionStreamRef source, in b8 skinRequired){
+    if(decoded.position != source.position)
+        return false;
+    if(skinRequired)
+        return decoded.skin == source.skin;
+    return decoded.skin == s_MeshMissingStreamIndex;
+}
+
+b8 MeshletDecodedAttributeRefMatches(in MeshletAttributeStreamRef decoded, in MeshletAttributeStreamRef source){
+    return decoded.normal == source.normal && decoded.tangent == source.tangent && decoded.uv0 == source.uv0 && decoded.color == source.color;
+}
+
+b8 TryFindMeshletLocalVertex(in Span<u32> localVertexRefs, in u32 vertexRefIndex, mut u8 outLocalVertex){
+    for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
+        if(localVertexRefs[localIndex] != vertexRefIndex)
+            continue;
+
+        outLocalVertex = cast<u8>(localIndex);
+        return true;
+    }
+
+    return false;
+}
+
+MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in MeshletTriangleData triangle){
+    MeshletVertexCounts counts;
+    for(usize cornerIndex = 0u; cornerIndex < cast<usize>(s_MeshletTriangleIndexCount); ++cornerIndex){
+        const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
+        b8 repeatedInTriangle = false;
+        for(usize previousCornerIndex = 0u; previousCornerIndex < cornerIndex; ++previousCornerIndex){
+            if(triangle.vertexRefs[previousCornerIndex] == vertexRefIndex){
+                repeatedInTriangle = true;
+                break;
+            }
+        }
+        if(repeatedInTriangle)
+            continue;
+
+        u8 localVertex = 0u;
+        if(TryFindMeshletLocalVertex(localVertexRefs, vertexRefIndex, localVertex))
+            ++counts.shared;
+        else
+            ++counts.missing;
+    }
+
+    return counts;
+}
+
+b8 TryMeshletCanFitTriangle(in MeshletDesc meshlet, in Span<u32> localVertexRefs, in MeshletTriangleData triangle, mut MeshletVertexCounts outCounts){
+    if(MeshletPrimitiveCount(meshlet) + 1u > s_MeshMaxMeshletTriangles)
+        return false;
+
+    const MeshletVertexCounts counts = CountMeshletMissingVertices(localVertexRefs, triangle);
+    if(localVertexRefs.size() + cast<usize>(counts.missing) > cast<usize>(s_MeshMaxMeshletVertices))
+        return false;
+    outCounts = counts;
+    return true;
+}
+
+void UpdateBestMeshletCandidateFromResult(in MeshletCandidateSearchResult candidate, mut b8 found, mut MeshletFrontierCandidate outCandidate){
+    if(!candidate.found)
+        return;
+
+    if(found && (candidate.candidate.score < outCandidate.score || (candidate.candidate.score == outCandidate.score && candidate.candidate.triangleIndex > outCandidate.triangleIndex)))
+        return;
+
+    found = true;
+    outCandidate = candidate.candidate;
+}
+
+b8 TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, in usize triangleCount, in usize searchOffset, mut u32 outTriangleIndex){
+    for(usize triangleIndex = searchOffset; triangleIndex < triangleCount; ++triangleIndex){
+        if(visitedTriangles[triangleIndex] != 0u)
+            continue;
+
+        outTriangleIndex = cast<u32>(triangleIndex);
+        return true;
+    }
+
+    return false;
+}
+
+b8 TryFindMeshletPositionRef(in Span<MeshletPositionStreamRef> refs, in MeshletPositionStreamRef targetRef, mut u16 outLocalIndex){
+    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
+        if(refs[localIndex].position != targetRef.position || refs[localIndex].skin != targetRef.skin)
+            continue;
+
+        outLocalIndex = cast<u16>(localIndex);
+        return true;
+    }
+
+    return false;
+}
+
+b8 TryFindMeshletAttributeRef(in Span<MeshletAttributeStreamRef> refs, in MeshletAttributeStreamRef targetRef, mut u16 outLocalIndex){
+    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
+        const MeshletAttributeStreamRef existing = refs[localIndex];
+        if(existing.normal != targetRef.normal || existing.tangent != targetRef.tangent || existing.uv0 != targetRef.uv0 || existing.color != targetRef.color)
+            continue;
+
+        outLocalIndex = cast<u16>(localIndex);
+        return true;
+    }
+
+    return false;
+}
+
+MeshletCookMetrics BuildMeshletCookMetricsFromStreams(in Span<MeshletDesc> meshlets, in Span<MeshletBounds> meshletBounds){
+    MeshletCookMetrics metrics;
+    metrics.meshletCount = cast<u32>(meshlets.size());
+    f64x4 radiusAndCutoffSums = f64x4(0.0, 0.0, 0.0, 0.0);
+    f32x4 worstConeCutoff = f32x4(metrics.worstConeCutoff);
+    for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
+        const MeshletDesc meshlet = meshlets[meshletIndex];
+        const MeshletBounds bounds = meshletBounds[meshletIndex];
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+        const u32 vertexCount = MeshletVertexCount(meshlet);
+        metrics.minPrimitiveCount = min(metrics.minPrimitiveCount, primitiveCount);
+        metrics.maxPrimitiveCount = max(metrics.maxPrimitiveCount, primitiveCount);
+        metrics.minVertexCount = min(metrics.minVertexCount, vertexCount);
+        metrics.maxVertexCount = max(metrics.maxVertexCount, vertexCount);
+        metrics.primitiveCountSum += cast<u64>(primitiveCount);
+        metrics.vertexCountSum += cast<u64>(vertexCount);
+        metrics.positionCountSum += cast<u64>(MeshletPositionCount(meshlet));
+        metrics.attributeCountSum += cast<u64>(MeshletAttributeCount(meshlet));
+        if(!MeshletConeEnabled(bounds)){
+            radiusAndCutoffSums = radiusAndCutoffSums + f64x4(cast<f64>(bounds.sphere.w), 0.0, 0.0, 0.0);
+            ++metrics.coneDisabledCount;
+            continue;
+        }
+
+        const f32x4 coneCutoff = f32x4(cast<f32>(MeshletConePackedCutoff(bounds))) * (1.0f / s_MeshletUnorm8Max);
+        ++metrics.coneEnabledCount;
+        radiusAndCutoffSums = radiusAndCutoffSums + f64x4(cast<f64>(bounds.sphere.w), cast<f64>(coneCutoff.x), 0.0, 0.0);
+        worstConeCutoff = min(worstConeCutoff, coneCutoff);
+    }
+    metrics.worstConeCutoff = worstConeCutoff.x;
+    metrics.radiusSum = radiusAndCutoffSums.x;
+    metrics.coneCutoffSum = radiusAndCutoffSums.y;
+
+    if(metrics.meshletCount == 0u){
+        metrics.minPrimitiveCount = 0u;
+        metrics.minVertexCount = 0u;
+    }
+
+    return metrics;
 }
 
 

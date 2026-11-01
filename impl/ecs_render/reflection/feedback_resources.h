@@ -65,8 +65,15 @@ public:
 
 // Creation belongs to preflight; frozen snapshots retain buffers.
 class RendererReflectionFeedback final : NoCopy{
+private:
+    static constexpr usize s_FeedbackBankCount = 2u;
+
+
 public:
-    RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
+    RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+    {}
 
 
 public:
@@ -83,10 +90,8 @@ private:
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
-    static constexpr usize s_FeedbackBankCount = 2u;
-
     ReflectionFeedbackControlHandle m_control;
-    ReflectionFeedbackBinding m_banks[s_FeedbackBankCount];
+    Array<ReflectionFeedbackBinding, s_FeedbackBankCount> m_banks{};
     ReflectionFeedbackExtent m_extent;
     u16 m_deviceGeneration = 0u;
 };

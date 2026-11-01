@@ -4,6 +4,7 @@
 
 #include "multiline_text.h"
 #include "grapheme.h"
+#include "single_line_text.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,36 +22,22 @@ namespace __hidden_ui_multiline_text{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TextStep{
-    usize sourceBytes = 0u;
-    usize outputBytes = 0u;
-    char replacement = 0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 IsCanonicalScalar(const u32 scalar)noexcept{
-    return scalar == '\n' || (scalar >= s_UnicodeSpace && (scalar < s_UnicodeDelete || scalar > s_UnicodeC1Last) && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator);
-}
-
-[[nodiscard]] static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
+[[nodiscard]] static Expected<MultilineTextStep> ReadStep(const AStringView source, const usize offset)noexcept{
     // Callers admit the whole source with GraphemeSegmentation::Validate first.
     const auto decoded = DecodeUtf8Scalar(source.substr(offset, s_Utf8MaxSequenceBytes));
     NWB_ASSERT(decoded);
     const u32 scalar = decoded->codePoint;
-    TextStep step;
+    MultilineTextStep step;
     step.sourceBytes = static_cast<usize>(decoded->byteCount);
-    const b8 lineBreak = scalar == '\r' || scalar == s_UnicodeNextLine || scalar == s_UnicodeLineSeparator || scalar == s_UnicodeParagraphSeparator;
+    const b8 lineBreak = IsMultilineLineBreakScalar(scalar);
     if(lineBreak || scalar == '\t'){
-        step.replacement = lineBreak ? '\n' : ' ';
+        step.replacement = lineBreak ? static_cast<u8>('\n') : static_cast<u8>(' ');
         step.outputBytes = 1u;
         if(scalar == '\r' && offset + step.sourceBytes < source.size() && source[offset + step.sourceBytes] == '\n')
             ++step.sourceBytes;
     }
     else{
-        if(!IsCanonicalScalar(scalar))
+        if(!IsCanonicalMultilineScalar(scalar))
             return MakeUnexpected(Failure{});
         step.outputBytes = step.sourceBytes;
     }
@@ -74,7 +61,7 @@ b8 ValidateMultilineText(const AStringView text)noexcept{
     while(offset < text.size()){
         const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
         NWB_ASSERT(decoded);
-        if(!__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
+        if(!IsCanonicalMultilineScalar(decoded->codePoint))
             return false;
         offset += static_cast<usize>(decoded->byteCount);
     }
@@ -84,30 +71,12 @@ b8 ValidateMultilineText(const AStringView text)noexcept{
 Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes){
     if(!GraphemeSegmentation::Validate(source))
         return MakeUnexpected(EditTextStatus::InvalidText);
-    usize normalizedBytes = 0u;
-    usize offset = 0u;
-    while(offset < source.size()){
-        const auto step = __hidden_ui_multiline_text::ReadStep(source, offset);
-        if(!step)
-            return MakeUnexpected(EditTextStatus::InvalidText);
-        if(step->outputBytes > maxBytes - normalizedBytes)
-            return MakeUnexpected(EditTextStatus::TooLarge);
-        normalizedBytes += step->outputBytes;
-        offset += step->sourceBytes;
-    }
-    AString<Core::Alloc::GlobalArena> candidate(arena);
-    candidate.reserve(normalizedBytes);
-    offset = 0u;
-    while(offset < source.size()){
-        const auto step = __hidden_ui_multiline_text::ReadStep(source, offset);
-        NWB_ASSERT(step);
-        if(step->replacement != 0)
-            candidate.push_back(step->replacement);
+    return NormalizeEditTextSteps(arena, source, maxBytes, __hidden_ui_multiline_text::ReadStep, [source](const MultilineTextStep& step, const usize offset, AString<Core::Alloc::GlobalArena>& candidate){
+        if(step.replacement != 0u)
+            candidate.push_back(static_cast<char>(step.replacement));
         else
-            candidate.append(source.data() + offset, step->sourceBytes);
-        offset += step->sourceBytes;
-    }
-    return candidate;
+            candidate.append(source.data() + offset, step.sourceBytes);
+    });
 }
 
 

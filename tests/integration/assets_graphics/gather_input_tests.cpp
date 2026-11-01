@@ -36,21 +36,19 @@ static usize s_MergeCalls = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 MergeBytes(const Name&, const void* incoming, const usize size, NWB::Core::Alloc::ScratchArena&, Assets::AssetBytes& existing){
+[[nodiscard]] static b8 MergeBytes(const Name&, const Span<const u8> incoming, NWB::Core::Alloc::ScratchArena&, Assets::AssetBytes& existing){
     ++s_MergeCalls;
-    const NotNull<const u8*> bytes = MakeNotNull(static_cast<const u8*>(incoming));
-    existing.insert(existing.end(), bytes.get(), bytes.get() + size);
+    existing.insert(existing.end(), incoming.begin(), incoming.end());
     return true;
 }
 
 [[nodiscard]] static Expected<Name> AssetName(const usize index){
-    char text[32u] = {};
+    Array<char, 32u> text = {};
     return DeriveName(Name("project/gather/"), FormatDecimal(index, text));
 }
 
 class GatherInputs : public testing::Test{
 protected:
-
     virtual void SetUp()override{
         Assets::AssetString caseKey(m_testArena.arena);
         AppendHexU32(static_cast<u32>(ComputeFnv64Text(AStringView(testing::UnitTest::GetInstance()->current_test_info()->name()))), caseKey);
@@ -63,14 +61,14 @@ protected:
     void writeInputs(AStringView directory, const usize count, const usize payloadSize, const u8 seed){
         NWB::Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/built_inputs"));
         Pack::AssetVolumePackManifest manifest(m_testArena.arena);
-        ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(manifest, count));
+        ASSERT_TRUE(Pack::ReserveAssetVolumePackManifest(count, manifest));
         Assets::AssetBytes bytes(payloadSize, seed, m_testArena.arena);
         for(usize i = 0u; i < count; ++i){
             if(!bytes.empty())
                 bytes.front() = static_cast<u8>(seed + i);
             const auto derivedNameResult = AssetName(i);
             ASSERT_TRUE(derivedNameResult);
-            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(manifest, *derivedNameResult, bytes));
+            ASSERT_TRUE(Pack::AppendPayloadBytesToManifest(*derivedNameResult, bytes, manifest));
         }
         ASSERT_TRUE(Assets::BuiltAssetDetail::WriteBuiltAssets(m_root / directory, manifest, scratchArena));
         m_options.inputs.emplace_back(PathToString(m_testArena.arena, m_root / directory));
@@ -123,7 +121,7 @@ TEST(AssetsGraphics, DecodedShaderIndexOwnsVariantTextAfterEncodedBytesAreOverwr
     ASSERT_TRUE(virtualPath);
     record.virtualPathHash = virtualPath->hash();
 
-    auto encoded = ShaderArchive::SerializeIndex(testArena.arena, records, scratchArena);
+    auto encoded = ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
     ASSERT_TRUE(encoded);
     const auto decoded = ShaderArchive::DeserializeIndex(testArena.arena, BinaryByteView{ encoded->data(), encoded->size() });
     ASSERT_TRUE(decoded);

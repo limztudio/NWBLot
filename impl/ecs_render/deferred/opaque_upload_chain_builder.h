@@ -11,7 +11,7 @@
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -62,7 +62,11 @@ struct OpaqueUploadChainResult{
 
 class OpaqueUploadChainBuilder final : NoCopy{
 public:
-    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept;
+    OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+        , m_csgSystem(csgSystem)
+    {}
 
 
 public:

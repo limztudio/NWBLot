@@ -44,11 +44,40 @@ const Name s_SliderThumbNormalRegionName = "slider.thumb.normal";
 const Name s_ProgressTrackRegionName = "progress.track";
 const Name s_ProgressFillRegionName = "progress.fill";
 const Name s_FocusOverlayRegionName = "focus.overlay";
+const StringView s_UiSkinDrawModeSprite = "sprite";
+const StringView s_UiSkinDrawModeNineSlice = "nine_slice";
 
 [reflect]
 enum<u8> UiSkinDrawMode{
     Sprite = 0u,
     NineSlice
+}
+
+UiSkinRect MakeUiSkinRect(in u32 x, in u32 y, in u32 width, in u32 height){
+    UiSkinRect rect;
+    rect.x = x;
+    rect.y = y;
+    rect.width = width;
+    rect.height = height;
+    return rect;
+}
+
+UiSkinSliceInsets MakeUiSkinSliceInsets(in u32 left, in u32 top, in u32 right, in u32 bottom){
+    UiSkinSliceInsets insets;
+    insets.left = left;
+    insets.top = top;
+    insets.right = right;
+    insets.bottom = bottom;
+    return insets;
+}
+
+UiSkinInsets MakeUiSkinInsets(in f32 left, in f32 top, in f32 right, in f32 bottom){
+    UiSkinInsets insets;
+    insets.left = left;
+    insets.top = top;
+    insets.right = right;
+    insets.bottom = bottom;
+    return insets;
 }
 
 // Atlas rectangles and slice borders use top-left-origin pixels; padding and minimum sizes use logical units.
@@ -210,6 +239,231 @@ class UiSkinPalette{
     }
 
     public Array<UiSkinColor, s_UiSkinPaletteColorCount> colors;
+}
+
+const u64 s_UiSkinLinearLookupRegionLimit = 128u;
+
+const StringView s_UiSkinDiagnosticPrefix = "UI skin meta";
+const StringView s_UiSkinNameField = "name";
+const StringView s_UiSkinRectField = "rect";
+const StringView s_UiSkinDrawModeField = "draw_mode";
+const StringView s_UiSkinSliceField = "slice";
+const StringView s_UiSkinPaddingField = "padding";
+const StringView s_UiSkinMinimumSizeField = "minimum_size";
+const StringView s_UiSkinColorsField = "colors";
+const StringView s_UiSkinRgbaField = "rgba";
+const StringView s_UiSkinTypographyField = "typography";
+const StringView s_UiSkinDefaultFontSizeField = "default_font_size";
+const StringView s_UiSkinTextureField = "texture";
+const StringView s_UiSkinAtlasExtentField = "atlas_extent";
+const StringView s_UiSkinReferenceDensityField = "reference_density";
+const StringView s_UiSkinToolkitContractField = "toolkit_contract";
+const StringView s_UiSkinRegionsField = "regions";
+const StringView s_UiSkinWidgetsContract = "widgets";
+const StringView s_UiSkinDrawModeHint = "must be 'sprite' or 'nine_slice'";
+
+const u64 s_UiSkinRectComponentCount = 4u;
+const u64 s_UiSkinSliceComponentCount = 4u;
+const u64 s_UiSkinPaddingComponentCount = 4u;
+const u64 s_UiSkinMinimumSizeComponentCount = 2u;
+const u64 s_UiSkinAtlasExtentComponentCount = 2u;
+const u64 s_UiSkinRgbaComponentCount = 4u;
+const u64 s_UiSkinAlphaComponentIndex = 3u;
+const f32 s_UiSkinPaletteChannelMin = 0.0f;
+const f32 s_UiSkinPaletteAlphaMax = 1.0f;
+
+class UiSkinRequiredRegion{
+    public UiSkinRequiredRegion(){
+        this.name = s_NameNone;
+        this.text = "";
+    }
+
+    public UiSkinRequiredRegion(in Name _name, in StringView _text){
+        this.name = _name;
+        this.text = _text;
+    }
+
+    public Name name;
+    public StringView text;
+}
+
+b8 IsAllowedUiSkinMetadataField(in StringView field){
+    return
+        field == s_UiSkinTextureField
+        || field == s_UiSkinAtlasExtentField
+        || field == s_UiSkinReferenceDensityField
+        || field == s_UiSkinToolkitContractField
+        || field == s_UiSkinRegionsField
+        || field == s_UiSkinColorsField
+        || field == s_UiSkinTypographyField
+    ;
+}
+
+b8 IsAllowedUiSkinRegionField(in StringView field, in b8 hasSlice){
+    return
+        field == s_UiSkinNameField
+        || field == s_UiSkinRectField
+        || field == s_UiSkinDrawModeField
+        || field == s_UiSkinPaddingField
+        || field == s_UiSkinMinimumSizeField
+        || (hasSlice && field == s_UiSkinSliceField)
+    ;
+}
+
+u64 ResolveUiSkinColorRole(in StringView name){
+    if(name == "text.normal")
+        return cast<u64>(UiSkinColorRole::TextNormal);
+    if(name == "text.disabled")
+        return cast<u64>(UiSkinColorRole::TextDisabled);
+    if(name == "text.tooltip")
+        return cast<u64>(UiSkinColorRole::TextTooltip);
+    if(name == "edit.background")
+        return cast<u64>(UiSkinColorRole::EditBackground);
+    if(name == "edit.selection")
+        return cast<u64>(UiSkinColorRole::EditSelection);
+    if(name == "edit.inactive_selection")
+        return cast<u64>(UiSkinColorRole::EditInactiveSelection);
+    if(name == "edit.caret")
+        return cast<u64>(UiSkinColorRole::EditCaret);
+    if(name == "edit.preedit")
+        return cast<u64>(UiSkinColorRole::EditPreedit);
+    if(name == "scrollbar.track")
+        return cast<u64>(UiSkinColorRole::ScrollbarTrack);
+    if(name == "scrollbar.thumb")
+        return cast<u64>(UiSkinColorRole::ScrollbarThumb);
+    if(name == "scrollbar.disabled")
+        return cast<u64>(UiSkinColorRole::ScrollbarDisabled);
+    if(name == "popup.backdrop")
+        return cast<u64>(UiSkinColorRole::PopupBackdrop);
+    if(name == "control.hover_tint")
+        return cast<u64>(UiSkinColorRole::ControlHoverTint);
+    if(name == "control.pressed_tint")
+        return cast<u64>(UiSkinColorRole::ControlPressedTint);
+    if(name == "control.disabled_tint")
+        return cast<u64>(UiSkinColorRole::ControlDisabledTint);
+    if(name == "progress.track_tint")
+        return cast<u64>(UiSkinColorRole::ProgressTrackTint);
+    if(name == "progress.fill_tint")
+        return cast<u64>(UiSkinColorRole::ProgressFillTint);
+    return cast<u64>(UiSkinColorRole::kCount);
+}
+
+b8 IsValidUiSkinPaletteChannelValue(in f32 value, in u64 componentIndex){
+    if(value < s_UiSkinPaletteChannelMin)
+        return false;
+    if(componentIndex == s_UiSkinAlphaComponentIndex)
+        return value <= s_UiSkinPaletteAlphaMax;
+    return value <= s_UiSkinPaletteRgbMax;
+}
+
+b8 IsValidUiSkinDefaultFontSize(in f32 defaultFontSize){
+    return defaultFontSize >= s_UiSkinMinDefaultFontSize && defaultFontSize <= s_UiSkinMaxDefaultFontSize;
+}
+
+b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRect rectangle, in UiSkinSliceInsets slice, in UiSkinDrawMode drawMode, in u32 atlasWidth, in u32 atlasHeight){
+    if(rectangle.width == 0u || rectangle.height == 0u || rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
+        return false;
+
+    if(drawMode == UiSkinDrawMode::Sprite)
+        return slice.left == 0u && slice.top == 0u && slice.right == 0u && slice.bottom == 0u;
+    if(drawMode == UiSkinDrawMode::NineSlice)
+        return cast<u64>(slice.left) + cast<u64>(slice.right) <= cast<u64>(rectangle.width) && cast<u64>(slice.top) + cast<u64>(slice.bottom) <= cast<u64>(rectangle.height);
+    return false;
+}
+
+UiSkinHeaderBinary BuildUiSkinHeaderBinary(in NameHash textureNameHash, in u32 atlasWidth, in u32 atlasHeight, in f32 referenceDensity, in u32 regionCount){
+    UiSkinHeaderBinary header;
+    header.textureNameHash = textureNameHash;
+    header.atlasWidth = atlasWidth;
+    header.atlasHeight = atlasHeight;
+    header.referenceDensity = referenceDensity;
+    header.regionCount = regionCount;
+    return header;
+}
+
+UiSkinRegionBinary PackUiSkinRegionBinary(in UiSkinRegion region){
+    UiSkinRegionBinary packed;
+    packed.nameHash = region.name.hash();
+    packed.x = region.rectangle.x;
+    packed.y = region.rectangle.y;
+    packed.width = region.rectangle.width;
+    packed.height = region.rectangle.height;
+    packed.sliceLeft = region.sliceInsets.left;
+    packed.sliceTop = region.sliceInsets.top;
+    packed.sliceRight = region.sliceInsets.right;
+    packed.sliceBottom = region.sliceInsets.bottom;
+    packed.paddingLeft = region.padding.left;
+    packed.paddingTop = region.padding.top;
+    packed.paddingRight = region.padding.right;
+    packed.paddingBottom = region.padding.bottom;
+    packed.minimumWidth = region.minimumWidth;
+    packed.minimumHeight = region.minimumHeight;
+    packed.drawMode = cast<u32>(region.drawMode);
+    return packed;
+}
+
+UiSkinRegion UnpackUiSkinRegionBinary(in UiSkinRegionBinary packed){
+    UiSkinRegion region;
+    region.name = Name(packed.nameHash);
+    region.rectangle.x = packed.x;
+    region.rectangle.y = packed.y;
+    region.rectangle.width = packed.width;
+    region.rectangle.height = packed.height;
+    region.sliceInsets.left = packed.sliceLeft;
+    region.sliceInsets.top = packed.sliceTop;
+    region.sliceInsets.right = packed.sliceRight;
+    region.sliceInsets.bottom = packed.sliceBottom;
+    region.padding.left = packed.paddingLeft;
+    region.padding.top = packed.paddingTop;
+    region.padding.right = packed.paddingRight;
+    region.padding.bottom = packed.paddingBottom;
+    region.minimumWidth = packed.minimumWidth;
+    region.minimumHeight = packed.minimumHeight;
+    if(packed.drawMode == cast<u32>(UiSkinDrawMode::NineSlice))
+        region.drawMode = UiSkinDrawMode::NineSlice;
+    else
+        region.drawMode = UiSkinDrawMode::Sprite;
+    return region;
+}
+
+UiSkinColorBinary PackUiSkinColorBinary(in UiSkinColor color){
+    UiSkinColorBinary packed;
+    packed.r = color.r;
+    packed.g = color.g;
+    packed.b = color.b;
+    packed.a = color.a;
+    return packed;
+}
+
+UiSkinColor UnpackUiSkinColorBinary(in UiSkinColorBinary packed){
+    UiSkinColor color;
+    color.r = packed.r;
+    color.g = packed.g;
+    color.b = packed.b;
+    color.a = packed.a;
+    return color;
+}
+
+UiSkinTypographyBinary PackUiSkinTypographyBinary(in UiSkinTypography typography){
+    UiSkinTypographyBinary packed;
+    packed.defaultFontSize = typography.defaultFontSize;
+    return packed;
+}
+
+UiSkinTypography UnpackUiSkinTypographyBinary(in UiSkinTypographyBinary packed){
+    UiSkinTypography typography;
+    typography.defaultFontSize = packed.defaultFontSize;
+    return typography;
+}
+
+[subsystem("ui_subsystem")]
+class UiSubsystem{
+    public Vector<AssetRef<FontAtlas>> basicFonts;
+    public AssetRef<UiSkin> basicSkin;
+    public AssetRef<PixelShader> outputPs;
+    public AssetRef<VertexShader> outputVs;
+    public AssetRef<PixelShader> ps;
+    public AssetRef<VertexShader> vs;
 }
 
 

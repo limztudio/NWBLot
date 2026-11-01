@@ -132,6 +132,39 @@ void GpuTaskGraph::DiscardNotificationScope::adoptPacketRecordingClaimWithinLock
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<GpuCompiledPacketView> GpuTaskGraph::ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)noexcept{
+    if(!planAccess.validFor(compiledGraph))
+        return MakeUnexpected(Failure{});
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
+        return MakeUnexpected(Failure{});
+    return packetView;
+}
+
+Expected<GpuCompiledPacketView> GpuTaskGraph::ResolveLeasedPacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const GpuPacketRecordingLease& lease)noexcept{
+    const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
+    if(!packetView || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
+        return MakeUnexpected(Failure{});
+    return *packetView;
+}
+
+Expected<GpuCompiledPacketView> GpuTaskGraph::ResolveAttemptPacketView(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuSubmissionPacketId packet,
+    const u64 recordingAttemptGeneration,
+    const b8 leaseValid
+)noexcept{
+    const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
+    if(!packetView || recordingAttemptGeneration == 0u || leaseValid)
+        return MakeUnexpected(Failure{});
+    return *packetView;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const{
     const GpuCompiledTaskView compiledTaskView = context.compiledPlan.findTask(taskID);
     const GpuCompiledTask* const compiledTask = compiledTaskView.plan;
@@ -210,6 +243,18 @@ Expected<void, GpuTaskGraph::RecordTaskFailure> GpuTaskGraph::recordTask(const G
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void GpuTaskGraph::discardPacketTasksWithinLock(const Span<const GpuTaskId> tasks, const u64 notificationGeneration)const noexcept{
+    for(const GpuTaskId taskId : tasks){
+        const GpuTaskNode& task = m_tasks[taskId.index];
+        task.lifecycleState = TaskLifecycleState::Discarded;
+        task.recordingClaimGeneration = 0u;
+        task.submissionClaimGeneration = 0u;
+        task.discardNotificationGeneration = notificationGeneration;
+        task.recordThunkInProgress = false;
+        task.recordThunkCompleted = false;
+    }
+}
 
 b8 GpuTaskGraph::beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept{
     const auto packetView = ResolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid());
@@ -320,7 +365,7 @@ b8 GpuTaskGraph::completePacketRecordingAbort(const GpuCompiledGraph& compiledGr
         }
         notification.activateWithinLock();
         notification.adoptPacketRecordingClaimWithinLock();
-        discardPacketTasksWithinLock(packetPlan, tasks, notificationGeneration);
+        discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount), notificationGeneration);
         abort.reset();
     }
 

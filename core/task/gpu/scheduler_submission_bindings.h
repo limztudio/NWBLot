@@ -50,22 +50,22 @@ struct TaskSubmissionBindings : NoCopy{
 
 
 public:
-    explicit TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)noexcept;
+    explicit TaskSubmissionBindings(Alloc::ScratchArena& scratchArena)noexcept
+        : scratchArena(scratchArena)
+        , timingTickets(scratchArena)
+        , submissionHooks(scratchArena)
+        , nextTimingTicket(scratchArena)
+    {}
 
 
 public:
     // The caller holds validated declaration and compiled-plan views for the admitted packet range.
-
-
-public:
     [[nodiscard]] b8 resolve(
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketRange& range,
-        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
-        usize taskTimingTicketCount,
-        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks,
-        usize taskSubmissionHookCount
+        Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
+        Span<const GpuTaskGraphTaskSubmissionHook> taskSubmissionHooks
     );
     [[nodiscard]] b8 validateOwnedTimingTicket(GpuSubmissionPacketId packet, GpuTimingSubmissionTicket* timingTicket)const noexcept;
     [[nodiscard]] const QueueSubmissionPreSubmitHook* collectPacket(GpuSubmissionPacketId packet, Vector<NotNull<GpuTimingSubmissionTicket*>, Alloc::ScratchArena>& inOutTimingTickets)const;

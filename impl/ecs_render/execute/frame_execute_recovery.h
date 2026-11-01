@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 
+#include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/compiled_graph.h>
 
@@ -29,8 +30,9 @@ class RendererFramePipeline;
 // Recovers a partly accepted deferred frame: runs the graph-owned recovery packet, then rejects the remaining normal packets.
 class FrameExecuteRecovery final : NoCopy{
 public:
-    FrameExecuteRecovery(RendererFramePipeline& renderer, Core::GpuTimingFrameTransaction& frameTimingTransaction, const Core::GpuCompiledGraph::ReadView& compiledPlan)noexcept
+    FrameExecuteRecovery(RendererFramePipeline& renderer, Core::Alloc::ScratchArena& scratchArena, Core::GpuTimingFrameTransaction& frameTimingTransaction, const Core::GpuCompiledGraph::ReadView& compiledPlan)noexcept
         : m_renderer(renderer)
+        , m_scratchArena(scratchArena)
         , m_frameTimingTransaction(frameTimingTransaction)
         , m_compiledPlan(compiledPlan)
     {}
@@ -46,6 +48,7 @@ public:
 
 private:
     RendererFramePipeline& m_renderer;
+    Core::Alloc::ScratchArena& m_scratchArena;
     Core::GpuTimingFrameTransaction& m_frameTimingTransaction;
     const Core::GpuCompiledGraph::ReadView& m_compiledPlan;
 };

@@ -153,7 +153,7 @@ private:
         CpuTaskScope& m_scope;
         u64 m_scopeIdentity = 0u;
         u64 m_publicationGeneration = 0u;
-        TaskHandle m_unrelatedAnchors[s_QueueCount]{};
+        Array<TaskHandle, s_QueueCount> m_unrelatedAnchors{};
     };
 
 
@@ -252,14 +252,7 @@ private:
     [[nodiscard]] ProfileSample prepareProfileLocked(CpuTaskProfileKind::Enum kind, TaskHandle task, CpuTaskProfileLabel label, usize workerIndex, CpuAffinity::Enum affinity)const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
     // Callers provide roots and visit filters after starting the locked search.
-    void beginLockedSearch()noexcept{
-        if(++m_searchGeneration == 0u){
-            for(u64& visit : m_searchVisits)
-                visit = 0u;
-            ++m_searchGeneration;
-        }
-        m_searchStack.clear();
-    }
+    void beginLockedSearch()noexcept;
 
 
 private:
@@ -275,9 +268,9 @@ private:
     Vector<ProfileLabelRecord, Alloc::GlobalArena> m_profileLabels;
     Vector<CpuTaskProfileEvent, Alloc::GlobalArena> m_profileEvents;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
-    ReadyQueue m_ready[s_QueueCount];
-    u32 m_readyWorkerCosts[s_CostValueCount]{};
-    u32 m_sleepingWorkers[s_AffinitySlotCount]{};
+    Array<ReadyQueue, s_QueueCount> m_ready;
+    Array<u32, s_CostValueCount> m_readyWorkerCosts{};
+    Array<u32, s_AffinitySlotCount> m_sleepingWorkers{};
     u32 m_freeNode = TaskHandle::s_InvalidIndex;
     u32 m_workerCount = 0u;
     u32 m_busyPerformance = 0u;
@@ -291,7 +284,7 @@ private:
     const ThreadId m_mainThread;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;
-    ConditionVariableAny m_workerChanged[s_AffinitySlotCount];
+    Array<ConditionVariableAny, s_AffinitySlotCount> m_workerChanged;
     usize m_outstanding = 0u;
     u32 m_joinWaiters = 0u;
     u32 m_handleJoinWaiters = 0u;
@@ -330,23 +323,23 @@ public:
 public:
     // Scopes accept concurrent producers; join before destroying the scope.
     template<typename Func>
-    [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options = {}){
+    Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options = {}){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, nullptr, 0u);
     }
 
     template<typename Func>
-    [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, TaskHandle dependency){
+    Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, TaskHandle dependency){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, {}, &dependency, 1u);
     }
 
     template<typename Func>
-    [[nodiscard]] Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options, const TaskHandle* dependencies, usize count){
+    Expected<TaskHandle, CpuTaskAdmissionError::Enum> submit(Func&& function, CpuTaskOptions options, const TaskHandle* dependencies, usize count){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, dependencies, count);
     }
 
 
 public:
-    void wait();
+    void wait(){ m_scheduler.waitScope(*this); }
     // Terminal cleanup aborts the shared service; use cancel() for ordinary scope cancellation.
     void drain()noexcept;
     void cancel()noexcept;
@@ -355,12 +348,12 @@ public:
 
 public:
     template<typename Func>
-    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelFor(usize begin, usize end, const Func& function){
+    Expected<void, CpuTaskAdmissionError::Enum> parallelFor(usize begin, usize end, const Func& function){
         return parallelFor(begin, end, 1u, function);
     }
 
     template<typename Func>
-    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> parallelFor(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
+    Expected<void, CpuTaskAdmissionError::Enum> parallelFor(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
         if(begin >= end)
             return {};
         TaskHandle parent;
@@ -409,9 +402,16 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::parallelFor(usize 
         for(usize index = first; index < last; ++index)
             function(index);
     };
-    return parallelRange(begin, end, grainSize, options, MakeNotNull(static_cast<const void*>(&range)), NotNull<RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context.get()))(first, last))){
-        (*static_cast<const decltype(range)*>(context.get()))(first, last);
-    }));
+    return parallelRange(
+        begin,
+        end,
+        grainSize,
+        options,
+        MakeNotNull(static_cast<const void*>(&range)),
+        NotNull<RangeFunction>([](NotNull<const void*> context, const usize first, const usize last)noexcept(noexcept((*static_cast<const decltype(range)*>(context.get()))(first, last))){
+            (*static_cast<const decltype(range)*>(context.get()))(first, last);
+        })
+    );
 }
 
 

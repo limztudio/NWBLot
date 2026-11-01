@@ -18,13 +18,6 @@ namespace __hidden_terminal_entry_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct TerminalTestError{
     int result;
 };
@@ -57,12 +50,12 @@ TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContex
 }
 
 TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup){
-    u32 order[3u] = {};
+    Array<u32, 3u> order = {};
     u32 count = 0u;
     b8 typedHandled = false;
     const int result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
         ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
-        ScopeExit second([&]()noexcept{ order[count] = s_ExpectedDualCount; ++count; });
+        ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
 
         throw 42;
     }, [&](const TerminalTestError&)noexcept{ typedHandled = true; return 0; }, [&]()noexcept{
@@ -73,9 +66,9 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
     EXPECT_EQ(result, -1);
     EXPECT_FALSE(typedHandled);
     EXPECT_EQ(count, 3u);
-    EXPECT_EQ(order[0u], s_ExpectedDualCount);
+    EXPECT_EQ(order[0u], 2u);
     EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[s_ThirdElementIndex], 3u);
+    EXPECT_EQ(order[2u], 3u);
 }
 
 

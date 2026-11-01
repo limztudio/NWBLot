@@ -49,10 +49,7 @@ public:
         return hasPresented ? ResourceStates::Present : ResourceStates::Unknown;
     }
 
-    void observeQueuePresentWaitDisposition(const QueuePresentWaitDisposition::Enum disposition)noexcept{
-        if(disposition == QueuePresentWaitDisposition::Consumed)
-            hasPresented = true;
-    }
+    void observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Enum disposition)noexcept;
 };
 
 struct SwapChainSurfaceFormatSelection{
@@ -66,105 +63,30 @@ struct SwapChainSurfaceFormatSelection{
 
 
 // Acceptance is narrower than binary-wait consumption: an out-of-date surface consumes its wait without presenting.
-[[nodiscard]] inline b8 IsQueuePresentationAccepted(const VkResult result)noexcept{
+[[nodiscard]] inline constexpr b8 IsQueuePresentationAccepted(const VkResult result)noexcept{
     return result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
 }
 
 // Vulkan specifies that presentation waits are still executed for the WSI failures listed below.
 // Host/device OOM rejects the operation before it is enqueued and leaves synchronization untouched.
 // Unknown errors stay distinct so callers can quarantine the acquired frame instead of guessing that its binary semaphore was consumed.
-inline QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(const VkResult result)noexcept{
-    switch(result){
-    case VK_SUCCESS:
-    case VK_SUBOPTIMAL_KHR:
-    case VK_ERROR_OUT_OF_DATE_KHR:
-    case VK_ERROR_SURFACE_LOST_KHR:
-    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
-    case VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT:
-        return QueuePresentWaitDisposition::Consumed;
-    case VK_ERROR_OUT_OF_HOST_MEMORY:
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-        return QueuePresentWaitDisposition::NotConsumed;
-    case VK_ERROR_DEVICE_LOST:
-        return QueuePresentWaitDisposition::DeviceLost;
-    default:
-        return QueuePresentWaitDisposition::Unknown;
-    }
-}
+[[nodiscard]] QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(VkResult result)noexcept;
 
 // A never-presented image has no reusable layout. Its list transitions from Unknown, never seeding retained Present as if WSI set it.
-inline DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(const ResourceStates::Mask nativeInitialState)noexcept{
-    if(nativeInitialState == ResourceStates::Unknown)
-        return DirectPresentTransitionPolicy::TransitionFromUnknown;
-    if(nativeInitialState == ResourceStates::Present)
-        return DirectPresentTransitionPolicy::PreservePresent;
-    return DirectPresentTransitionPolicy::Invalid;
-}
+[[nodiscard]] DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(ResourceStates::Mask nativeInitialState)noexcept;
 
 // Acquisition signals on the primary Graphics transport; a secondary transport needs an explicit sharing-contract extension first.
 // Kept separate from broad Graphics validation so same-class routing stays safe.
-inline b8 IsPrimaryGraphicsPresentationQueue(const GpuPhysicalQueueId& primaryGraphicsQueue, const GpuPhysicalQueueInfo* const executionQueue)noexcept{
+[[nodiscard]] inline b8 IsPrimaryGraphicsPresentationQueue(const GpuPhysicalQueueId& primaryGraphicsQueue, const GpuPhysicalQueueInfo* const executionQueue)noexcept{
     return primaryGraphicsQueue.valid() && executionQueue && executionQueue->queueClass == CommandQueue::Graphics && executionQueue->id == primaryGraphicsQueue;
 }
 
-inline b8 SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkFormat format, const VkColorSpaceKHR colorSpace)noexcept{
+[[nodiscard]] inline constexpr b8 SurfaceFormatSupports(const VkSurfaceFormatKHR& supported, const VkFormat format, const VkColorSpaceKHR colorSpace)noexcept{
     return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
 }
 
-[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(const VkSurfaceFormatKHR* const supportedFormats, const u32 supportedFormatCount, const Format::Enum requestedSdrFormat, const b8 hdr10Allowed)noexcept{
-    SwapChainSurfaceFormatSelection selection;
-    if(!supportedFormats || supportedFormatCount == 0u)
-        return MakeUnexpected(Failure{});
-
-    if(hdr10Allowed){
-        for(u32 formatIndex = 0u; formatIndex < supportedFormatCount; ++formatIndex){
-            const VkSurfaceFormatKHR& supported = supportedFormats[formatIndex];
-            if(!SurfaceFormatSupports(supported, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT))
-                continue;
-
-            selection.surfaceFormat = supported;
-            selection.surfaceFormat.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT;
-            selection.backBufferFormat = Format::R10G10B10A2_UNORM;
-            selection.outputMode = SwapChainOutputMode::HDR10;
-            return selection;
-        }
-    }
-
-    struct SdrCandidate{
-        VkFormat format = VK_FORMAT_UNDEFINED;
-        Format::Enum rhiFormat = Format::UNKNOWN;
-    };
-    const VkFormat requestedVkFormat = ConvertFormat(requestedSdrFormat);
-    const SdrCandidate candidates[] = {
-        { requestedVkFormat, requestedSdrFormat },
-        // RGBA8/BGRA8 sRGB are interchangeable presentation fallbacks for the engine's default request.
-        { VK_FORMAT_B8G8R8A8_SRGB, Format::BGRA8_UNORM_SRGB },
-        { VK_FORMAT_R8G8B8A8_SRGB, Format::RGBA8_UNORM_SRGB },
-    };
-    for(const SdrCandidate& candidate : candidates){
-        if(candidate.format == VK_FORMAT_UNDEFINED)
-            continue;
-        // Respect a caller's non-default SDR format. The two portable fallbacks are only for the engine default.
-        if(candidate.rhiFormat != requestedSdrFormat && requestedSdrFormat != Format::RGBA8_UNORM_SRGB && requestedSdrFormat != Format::BGRA8_UNORM_SRGB)
-            continue;
-
-        for(u32 formatIndex = 0u; formatIndex < supportedFormatCount; ++formatIndex){
-            const VkSurfaceFormatKHR& supported = supportedFormats[formatIndex];
-            if(!SurfaceFormatSupports(supported, candidate.format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR))
-                continue;
-
-            selection.surfaceFormat = supported;
-            selection.surfaceFormat.format = candidate.format;
-            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-            selection.backBufferFormat = candidate.rhiFormat;
-            selection.outputMode = SwapChainOutputMode::SDR;
-            return selection;
-        }
-    }
-
-    return MakeUnexpected(Failure{});
-}
+[[nodiscard]] Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(Span<const VkSurfaceFormatKHR> supportedFormats, Format::Enum requestedSdrFormat, b8 hdr10Allowed)noexcept;
+[[nodiscard]] VkExtent2D ResolveSwapChainSurfaceExtent(const VkSurfaceCapabilitiesKHR& surfaceCaps, u32 requestedWidth, u32 requestedHeight)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

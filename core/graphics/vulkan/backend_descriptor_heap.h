@@ -7,15 +7,15 @@
 
 #include "module.h"
 #include "backend_forward.h"
+#include "backend_core_context.h"
 
 #include <core/task/cpu/scheduler.h>
 
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 
@@ -111,12 +111,9 @@ private:
 
 public:
     DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)noexcept;
-    ~DescriptorBufferManager()noexcept;
-
-
-private:
-    [[nodiscard]] Expected<VkResult, VkResult> shutdownForLifecycleOperation();
-    void shutdownForDeviceTeardown()noexcept;
+    ~DescriptorBufferManager()noexcept{
+        shutdownForDeviceTeardown();
+    }
 
 
 public:
@@ -128,35 +125,42 @@ public:
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const noexcept;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
-    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept;
-    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const noexcept;
-    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const noexcept;
-    [[nodiscard]] u32 getMaxTexelBufferElements()const noexcept;
+    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept{
+        return Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
+    }
+
+    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const noexcept{
+        return Max<u64>(m_context.physicalDeviceProperties.limits.minStorageBufferOffsetAlignment, 1u);
+    }
+
+    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const noexcept{
+        return Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
+    }
+
+    [[nodiscard]] u32 getMaxTexelBufferElements()const noexcept{
+        return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
+    }
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
-    [[nodiscard]] Expected<DescriptorBufferSegment> allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
+    [[nodiscard]] Expected<DescriptorBufferSegment> allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes){
+        return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
+    }
 
+    void free(const DescriptorBufferSegment& segment){
+        freeForBindingGeneration(segment, 0u);
+    }
 
-private:
-    // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
-    [[nodiscard]] b8 reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
-    [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
-
-
-public:
-    void free(const DescriptorBufferSegment& segment);
-
-
-private:
-    void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);
-
-
-public:
     // Validates allocation identity, then encodes one descriptor.
     b8 writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
+    [[nodiscard]] Expected<VkResult, VkResult> shutdownForLifecycleOperation();
+    void shutdownForDeviceTeardown()noexcept;
+    // Driver layout sizes may exceed the working-size defaults; addresses become immutable after the first allocation in a generation.
+    [[nodiscard]] b8 reserveInitialCapacityForBindingGeneration(u32 resourceBytes, u32 samplerBytes, u64 requiredGeneration);
+    [[nodiscard]] Expected<DescriptorBufferSegment> allocateForBindingGeneration(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes, u64 requiredGeneration);
+    void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);
     [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const noexcept;
     [[nodiscard]] b8 isLiveSegmentLocked(const SegmentStorage& storage, const DescriptorBufferSegment& segment, DescriptorBufferSegmentKind::Enum expectedKind)const noexcept;
     b8 initializeSegment(SegmentStorage& segment, AStringView debugName, u32 capacityBytes);
@@ -263,6 +267,9 @@ private:
 
     public:
         [[nodiscard]] static usize RequiredBytes(u32 capacity);
+
+
+    public:
         [[nodiscard]] b8 initialize(Alloc::PersistentArena& arena, u32 newCapacity);
         void clear()noexcept;
     };
@@ -280,7 +287,7 @@ private:
 
 
 public:
-    class PendingRecordingLease final{
+    class PendingRecordingLease final : NoCopy{
         friend class GpuDescriptorHeap;
 
 
@@ -288,14 +295,6 @@ public:
         explicit PendingRecordingLease(GpuDescriptorHeap& heap);
     public:
         ~PendingRecordingLease()noexcept;
-        PendingRecordingLease(const PendingRecordingLease&) = delete;
-        PendingRecordingLease(PendingRecordingLease&&) = delete;
-
-
-    public:
-        PendingRecordingLease& operator=(const PendingRecordingLease&) = delete;
-
-        PendingRecordingLease& operator=(PendingRecordingLease&&) = delete;
 
 
     public:
@@ -404,7 +403,7 @@ private:
     FixedTable<TextureHandle> m_resourceDescriptorTextures;
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
     // Binding byte offsets within a set block.
-    u32 m_classBufferOffset[GpuDescriptorClass::Count] = {};
+    Array<u32, GpuDescriptorClass::Count> m_classBufferOffset = {};
     u32 m_accelStructBufferBindingOffset = 0u;
 
     SlotAllocator m_resourceSlots;

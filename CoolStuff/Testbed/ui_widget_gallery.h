@@ -8,7 +8,6 @@
 #include "namespace.h"
 #include "ui_combo_gallery.h"
 #include "ui_edit_gallery.h"
-#include "ui_list_gallery.h"
 #include "ui_nested_popup_gallery.h"
 #include "ui_numeric_edit_gallery.h"
 #include "ui_popup_gallery.h"
@@ -34,15 +33,23 @@ TESTBED_BEGIN
 
 class UiWidgetGallery final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVectorSingle LayoutBounds(SIMDVectorSingle displaySize, SIMDVectorSingle preferredTop)noexcept;
+    [[nodiscard]] static SIMDVectorSingle LayoutBounds(SIMDVectorSingle displaySize, f32 preferredTop)noexcept;
 
 
 public:
-    explicit UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
+        : m_edits(arena)
+        , m_searchCombos(arena)
+        , m_nestedPopups(arena)
+        , m_numericEdits(arena)
+        , m_textAreas(arena)
+    {}
 
 
 public:
-    [[nodiscard]] b8 loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems);
+    [[nodiscard]] b8 loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+        return m_images.loadAssets(arena, assets, sceneSubsystems);
+    }
     void paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds);
 
 
@@ -68,6 +75,9 @@ private:
     u32 m_selectedGallery = 0u;
     b8 m_enabled = true;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

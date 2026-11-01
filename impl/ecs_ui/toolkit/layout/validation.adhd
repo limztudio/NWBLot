@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../paint_types.adhd"
+#include "types.adhd"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +55,14 @@ b8 IsBoundedUiRect(in Rect rectangle){
     return end.x <= s_UiMaxFloatF64 && end.y <= s_UiMaxFloatF64 && HasPreciseUiRectEndpoints(rectangle);
 }
 
+b8 EqualUiRect(in Rect lhs, in Rect rhs){
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
+}
+
+b8 UiRectContainsPoint(in Rect rectangle, in Point position){
+    return position.x >= rectangle.x && position.y >= rectangle.y && position.x < rectangle.x + rectangle.width && position.y < rectangle.y + rectangle.height;
+}
+
 b8 IsValidUiPadding(in Insets padding){
     return isFinite(padding.left) && padding.left >= 0.0f && isFinite(padding.top) && padding.top >= 0.0f && isFinite(padding.right) && padding.right >= 0.0f && isFinite(padding.bottom) && padding.bottom >= 0.0f;
 }
@@ -71,8 +79,25 @@ b8 IsValidUiColor(in Color color){
     return isFinite(color.r) && color.r >= 0.0f && isFinite(color.g) && color.g >= 0.0f && isFinite(color.b) && color.b >= 0.0f && isFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
 }
 
+b8 IsValidPaintColor(in Color color){
+    return isFinite(color.r) && isFinite(color.g) && isFinite(color.b) && isFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
+}
+
 b8 IsValidUiExtent(in Point point){
     return isFinite(point.x) && point.x >= 0.0f && isFinite(point.y) && point.y >= 0.0f;
+}
+
+b8 IsValidLayoutSize(in LayoutSize size){
+    return size.policy <= LayoutSizePolicy::Stretch && isFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
+}
+
+b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
+    const Insets padding = description.padding;
+    return
+        description.direction <= LayoutDirection::Overlay && IsValidLayoutSize(description.width) && IsValidLayoutSize(description.height)
+        && IsValidUiPadding(padding) && isFinite(padding.left + padding.right) && isFinite(padding.top + padding.bottom)
+        && isFinite(description.gap) && description.gap >= 0.0f && IsValidUiExtent(description.intrinsicSize)
+    ;
 }
 
 

@@ -16,10 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionFeedbackState::ReflectionFeedbackState(const u16 deviceGeneration)noexcept
-    : m_deviceGeneration(deviceGeneration)
-{}
-
 void ReflectionFeedbackState::reset(const u16 deviceGeneration)noexcept{
     NothrowScopedLock lock(m_mutex);
 
@@ -41,40 +37,27 @@ void ReflectionFeedbackState::reset(const u16 deviceGeneration)noexcept{
 ReflectionFeedbackPlan ReflectionFeedbackState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const b8 enabled, const u64 graphicsFrameIndex)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    ReflectionFeedbackPlan result;
-    result.stamp = stamp;
-    result.settings = settings;
-    result.generation = m_generation;
-    result.sequence = m_nextSequence++;
-    result.acceptedSequence = m_acceptedSequence;
-    result.graphicsFrameIndex = graphicsFrameIndex;
-    result.enabled = enabled;
-    result.previousHardwareReady = m_hardwareReady;
-    result.quarantined = m_quarantined;
-    if(m_quarantined)
-        result.resetReason = ReflectionFeedbackResetReason::InvalidAcceptance;
-    else if(m_acceptedSequence == 0u)
-        result.resetReason = m_resourcesChanged ? ReflectionFeedbackResetReason::ResourcesChanged : ReflectionFeedbackResetReason::FirstObservation;
-    else if(enabled != m_enabled || !SameReflectionTraceSettings(settings, m_settings))
-        result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
-    else if(!stamp.matchesScene(m_stamp))
-        result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
-    else if(stamp.view != m_stamp.view)
-        result.resetReason = ReflectionFeedbackResetReason::ViewChanged;
-    result.reset = result.resetReason != ReflectionFeedbackResetReason::None;
-    result.epoch = m_epoch + (result.reset ? 1u : 0u);
-    result.startGraphicsFrame = result.reset ? graphicsFrameIndex : m_startGraphicsFrame;
-    result.probeIndex = result.reset ? 0u : m_nextProbeIndex;
-    result.eligible = !m_quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
-    result.reused = result.eligible && m_eligible && !result.reset;
-    result.previousBank = m_acceptedBank;
-    // Never overwrite the accepted bank.
-    result.currentBank = m_acceptedSequence != 0u ? 1u - m_acceptedBank : 0u;
-    if(!m_quarantined && result.reset && (!enabled || settings.traceMode != ReflectionTraceMode::Hybrid || settings.maxHardwareRaysPerFrame == 0u))
-        result.resetReason = ReflectionFeedbackResetReason::Disabled;
-    else if(!m_quarantined && result.reset && !stamp.trusted)
-        result.resetReason = ReflectionFeedbackResetReason::UntrustedScene;
-    return result;
+    const u64 sequence = m_nextSequence++;
+    return ResolveReflectionFeedbackPlan(
+        stamp,
+        settings,
+        enabled,
+        graphicsFrameIndex,
+        m_stamp,
+        m_settings,
+        m_generation,
+        sequence,
+        m_acceptedSequence,
+        m_epoch,
+        m_startGraphicsFrame,
+        m_nextProbeIndex,
+        m_acceptedBank,
+        m_enabled,
+        m_eligible,
+        m_hardwareReady,
+        m_resourcesChanged,
+        m_quarantined
+    );
 }
 
 b8 ReflectionFeedbackState::reserve(const ReflectionFeedbackPlan& plan)noexcept{
@@ -129,56 +112,8 @@ b8 ReflectionFeedbackState::accept(const ReflectionFeedbackPlan& plan, const Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ReflectionFeedbackControlHandle> CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    auto control = ReflectionFeedbackControlHandle(NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-    if(!control)
-        return MakeUnexpected(Failure{});
-    return control;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReflectionFeedbackReservation::ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan)noexcept
-    : m_control(Move(control))
-    , m_plan(plan)
-{
-    m_reserved = m_control && m_control->reserve(m_plan);
-}
-
-ReflectionFeedbackReservation::ReflectionFeedbackReservation(ReflectionFeedbackReservation&& other)noexcept
-    : m_control(Move(other.m_control))
-    , m_plan(other.m_plan)
-    , m_reserved(other.m_reserved)
-{
-    other.m_reserved = false;
-}
-
-ReflectionFeedbackReservation::~ReflectionFeedbackReservation()noexcept{
-    discard();
-}
-
-ReflectionFeedbackReservation& ReflectionFeedbackReservation::operator=(ReflectionFeedbackReservation&& other)noexcept{
-    if(this != &other){
-        discard();
-        m_control = Move(other.m_control);
-        m_plan = other.m_plan;
-        m_reserved = other.m_reserved;
-        other.m_reserved = false;
-    }
-    return *this;
-}
-
 void ReflectionFeedbackReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     if(m_reserved && !m_control->accept(m_plan, token, hardwareReady))
-        m_control->discard(m_plan);
-    m_reserved = false;
-    m_control = nullptr;
-}
-
-void ReflectionFeedbackReservation::discard()noexcept{
-    if(m_reserved)
         m_control->discard(m_plan);
     m_reserved = false;
     m_control = nullptr;

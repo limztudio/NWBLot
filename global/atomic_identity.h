@@ -21,6 +21,17 @@
     return identity;
 }
 
+[[nodiscard]] inline u64 AllocateServiceIdentity()noexcept{
+    static Atomic<u64> s_NextIdentity{ 1u };
+    return NextNonWrappingIdentity(s_NextIdentity);
+}
+
+inline void AdvanceNonWrappingRevision(u64& revision)noexcept{
+    if(revision == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++revision;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

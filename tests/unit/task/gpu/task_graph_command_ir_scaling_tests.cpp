@@ -29,10 +29,10 @@ namespace __hidden_task_graph_command_ir_scaling_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-[[nodiscard]] b8 AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){
+[[nodiscard]] b8 AppendMixedRecords(Core::GpuCommandIrCapture& capture, const usize begin, const usize end){
     for(usize index = begin; index < end; ++index){
-        const Graphics::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
-        const Graphics::GpuSubmissionPacketId packet{ .generation = s_CommandIrPacket.generation, .index = static_cast<u32>(index / 64u) };
+        const Core::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
+        const Core::GpuSubmissionPacketId packet{ .generation = s_CommandIrPacket.generation, .index = static_cast<u32>(index / 64u) };
         if(index % 2u == 0u){
             if(!capture.captureCopyBuffer(task, packet, s_CommandIrQueue, s_CommandIrSource, index * 16u, s_CommandIrDestination, index * 32u, 64u))
                 return false;
@@ -43,13 +43,13 @@ using TaskGraphTestUtils::TestArena;
     return true;
 }
 
-void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usize count){
+void VerifyMixedRecords(const Core::GpuCommandIrCapture& capture, const usize count){
     ASSERT_EQ(capture.recordCount(), count);
-    Graphics::GpuCommandIrStreamReader reader(capture.commandBytes());
+    Core::GpuCommandIrStreamReader reader(capture.commandBytes());
     EXPECT_EQ(reader.recordCount(), count);
     EXPECT_EQ(reader.graphGeneration(), count == 0u ? 0u : s_CommandIrTask.generation);
     EXPECT_EQ(reader.planGeneration(), count == 0u ? 0u : s_CommandIrPacket.generation);
-    Expected<Graphics::GpuCommandIrBuiltinTaskRecord, Graphics::GpuCommandIrStreamReadStatus::Enum> decoded = MakeUnexpected(Graphics::GpuCommandIrStreamReadStatus::End);
+    Expected<Core::GpuCommandIrBuiltinTaskRecord, Core::GpuCommandIrStreamReadStatus::Enum> decoded = MakeUnexpected(Core::GpuCommandIrStreamReadStatus::End);
     for(usize index = 0u; index < count; ++index){
         ASSERT_TRUE((decoded = reader.nextBuiltinTask()));
         EXPECT_EQ(decoded->task.generation, s_CommandIrTask.generation);
@@ -59,20 +59,20 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
         EXPECT_EQ(decoded->queue, s_CommandIrQueue);
         EXPECT_EQ(decoded->destination, s_CommandIrDestination);
         if(index % 2u == 0u){
-            EXPECT_EQ(decoded->opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
+            EXPECT_EQ(decoded->opcode, Core::GpuCommandIrOpcode::CopyBuffer);
             EXPECT_EQ(decoded->source, s_CommandIrSource);
             EXPECT_EQ(decoded->sourceOffsetBytes, index * 16u);
             EXPECT_EQ(decoded->destinationOffsetBytes, index * 32u);
             EXPECT_EQ(decoded->dataSizeBytes, 64u);
         }
         else{
-            EXPECT_EQ(decoded->opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
+            EXPECT_EQ(decoded->opcode, Core::GpuCommandIrOpcode::ClearBuffer);
             EXPECT_EQ(decoded->uintClearValue.r, index);
         }
     }
     const auto terminal1 = reader.nextBuiltinTask();
     ASSERT_FALSE(terminal1);
-    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_EQ(terminal1.error(), Core::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(reader.validation().valid());
 }
 
@@ -82,18 +82,18 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
 
 TEST(GpuCommandIrCapture, MixedRecordGrowthRollbackAndRefillPreserveTheExactPrefix){
     TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Core::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(capture.beginRecordingAttempt(31u));
     ASSERT_TRUE(AppendMixedRecords(capture, 0u, 257u));
-    Graphics::GraphicsBytes original(testArena.arena);
-    CopyCommandIrBytes(original, capture.commandBytes());
+    Core::GraphicsBytes original(testArena.arena);
+    CopyCommandIrBytes(capture.commandBytes(), original);
     VerifyMixedRecords(capture, 257u);
 
     capture.rollback(129u);
     VerifyMixedRecords(capture, 129u);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 31u);
     const BinaryByteView prefix = capture.commandBytes();
-    const usize headerSize = sizeof(Graphics::GpuCommandIrStreamHeader);
+    const usize headerSize = sizeof(Core::GpuCommandIrStreamHeader);
     EXPECT_EQ(NWB_MEMCMP(prefix.data() + headerSize, original.data() + headerSize, prefix.size() - headerSize), 0);
     const usize prefixBytes = prefix.size();
     capture.rollback(130u);
@@ -109,7 +109,7 @@ TEST(GpuCommandIrCapture, ResetAndRollbackReuseCapacityAcrossRecordingAttempts){
     TestArena testArena;
     const ArenaMemoryStats initial = testArena.arena.memoryStats();
     {
-        Graphics::GpuCommandIrCapture capture(testArena.arena);
+        Core::GpuCommandIrCapture capture(testArena.arena);
         ASSERT_TRUE(capture.beginRecordingAttempt(31u));
         ASSERT_TRUE(AppendMixedRecords(capture, 0u, 512u));
         const ArenaMemoryStats warmed = testArena.arena.memoryStats();
@@ -120,7 +120,7 @@ TEST(GpuCommandIrCapture, ResetAndRollbackReuseCapacityAcrossRecordingAttempts){
             EXPECT_EQ(capture.graphGeneration(), 0u);
             EXPECT_EQ(capture.planGeneration(), 0u);
             EXPECT_EQ(capture.recordingAttemptGeneration(), 0u);
-            EXPECT_EQ(capture.commandBytes().size(), sizeof(Graphics::GpuCommandIrStreamHeader));
+            EXPECT_EQ(capture.commandBytes().size(), sizeof(Core::GpuCommandIrStreamHeader));
             ASSERT_TRUE(capture.beginRecordingAttempt(attempt));
             ASSERT_TRUE(AppendMixedRecords(capture, 0u, 512u));
             EXPECT_EQ(capture.recordingAttemptGeneration(), attempt);
@@ -140,14 +140,14 @@ TEST(GpuCommandIrCapture, ResetAndRollbackReuseCapacityAcrossRecordingAttempts){
 
 TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollbackCompletes){
     TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Core::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(capture.beginRecordingAttempt(31u));
     ASSERT_TRUE(AppendMixedRecords(capture, 0u, 129u));
-    Graphics::GraphicsBytes original(testArena.arena);
-    CopyCommandIrBytes(original, capture.commandBytes());
+    Core::GraphicsBytes original(testArena.arena);
+    CopyCommandIrBytes(capture.commandBytes(), original);
     const ArenaMemoryStats before = testArena.arena.memoryStats();
     EXPECT_FALSE(capture.beginRecordingAttempt(32u));
-    const Graphics::GpuSubmissionPacketId otherPlan{ .generation = s_CommandIrPacket.generation + 1u, .index = 0u };
+    const Core::GpuSubmissionPacketId otherPlan{ .generation = s_CommandIrPacket.generation + 1u, .index = 0u };
     EXPECT_FALSE(capture.captureClearBuffer(s_CommandIrTask, otherPlan, s_CommandIrQueue, s_CommandIrDestination, 5u));
     EXPECT_FALSE(capture.captureCopyBuffer(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 0u, s_CommandIrDestination, 0u, 0u));
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
@@ -156,13 +156,13 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     VerifyMixedRecords(capture, 129u);
     capture.rollback(0u);
     ASSERT_TRUE(capture.beginRecordingAttempt(32u));
-    const Graphics::GpuTaskId otherTask{ .generation = s_CommandIrTask.generation + 1u, .index = 0u };
-    const Graphics::GpuGraphResourceId otherResource{ .generation = otherTask.generation, .index = 0u };
+    const Core::GpuTaskId otherTask{ .generation = s_CommandIrTask.generation + 1u, .index = 0u };
+    const Core::GpuGraphResourceId otherResource{ .generation = otherTask.generation, .index = 0u };
     ASSERT_TRUE(capture.captureClearBuffer(otherTask, otherPlan, s_CommandIrQueue, otherResource, 7u));
     EXPECT_EQ(capture.graphGeneration(), otherTask.generation);
     EXPECT_EQ(capture.planGeneration(), otherPlan.generation);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 32u);
-    EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(capture.commandBytes()).valid());
+    EXPECT_TRUE(Core::ValidateGpuCommandIrStream(capture.commandBytes()).valid());
 }
 
 // Opt-in scaling benchmark for command IR capture, rollback, and reset.

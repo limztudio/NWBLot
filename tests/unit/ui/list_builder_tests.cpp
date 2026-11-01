@@ -51,8 +51,8 @@ TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixel
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 initialHeight = target(row(1u))->rectangle.height;
-    const SIMDVectorDouble within = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(initialHeight)), VectorDoubleReplicate(0.25));
-    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(static_cast<f64>(m_source.specialIndex)), VectorDoubleReplicate(static_cast<f64>(initialHeight)), within))));
+    const f64 within = static_cast<f64>(initialHeight) * 0.25;
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * static_cast<f64>(initialHeight) + within));
     m_source.textCalls = 0u;
     m_source.keyCalls = 0u;
     m_source.lookupCalls = 0u;
@@ -63,20 +63,18 @@ TEST_F(UiListBuilderTests, DistantTallRowGrowsBeforePaintingAndPreservesItsPixel
     ASSERT_NE(tall, nullptr);
     const f32 grownHeight = tall->rectangle.height;
     EXPECT_GT(grownHeight, initialHeight);
-    const SIMDVectorDouble grown = VectorDoubleReplicate(static_cast<f64>(grownHeight));
-    EXPECT_NEAR(tall->rectangle.y, VectorDoubleGetX(VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(placement.viewport.y)), within)), 0.0001);
-    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(static_cast<f64>(m_source.specialIndex)), grown, within)));
-    EXPECT_DOUBLE_EQ(placement.contentHeight, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(m_source.count)), grown)));
+    const f64 grown = static_cast<f64>(grownHeight);
+    EXPECT_NEAR(tall->rectangle.y, static_cast<f64>(placement.viewport.y) - within, 0.0001);
+    EXPECT_DOUBLE_EQ(m_state.scrollOffset(), static_cast<f64>(m_source.specialIndex) * grown + within);
+    EXPECT_DOUBLE_EQ(placement.contentHeight, static_cast<f64>(m_source.count) * grown);
     const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
     const auto layout = m_text.layout({ .text = m_source.specialText, .fontSize = m_builder.style().fontSize });
     ASSERT_TRUE(metrics);
     ASSERT_TRUE(layout);
     const auto visual = m_text.measure(*layout, m_paint.displayMetrics());
     ASSERT_TRUE(visual);
-    const SIMDVectorSingle grownBound = VectorAdd(VectorReplicate(grownHeight), VectorReplicate(0.0001f));
-    const SIMDVectorSingle visualRowHeight = VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(metrics->padding.top)), VectorReplicate(metrics->padding.bottom));
-    EXPECT_GE(VectorGetX(grownBound), VectorGetX(visualRowHeight));
-    const u64 provisionalBound = static_cast<u64>(VectorGetX(VectorCeiling(VectorDivide(VectorReplicate(placement.viewport.height), VectorReplicate(initialHeight))))) + 1u;
+    EXPECT_GE(grownHeight + 0.0001f, visual->height + metrics->padding.top + metrics->padding.bottom);
+    const u64 provisionalBound = static_cast<u64>(Ceil(placement.viewport.height / initialHeight)) + 1u;
     EXPECT_LE(m_source.textCalls, provisionalBound);
     EXPECT_LE(m_source.keyCalls, provisionalBound * 2u + 2u);
     EXPECT_LE(m_source.lookupCalls, provisionalBound + 2u);
@@ -108,7 +106,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         ASSERT_TRUE(m_context.commitFrame(generation++));
         ASSERT_NE(target(row(1u)), nullptr);
         const f32 seed = target(row(1u))->rectangle.height;
-        ASSERT_TRUE(state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(source.specialIndex)), VectorDoubleReplicate(static_cast<f64>(seed))))));
+        ASSERT_TRUE(state.scrollTo(static_cast<f64>(source.specialIndex) * static_cast<f64>(seed)));
         ASSERT_TRUE(prepareSource(generation, source, state, Options(), display));
         ASSERT_TRUE(m_context.commitFrame(generation++));
         ASSERT_NE(target(row(source.specialIndex + 1u)), nullptr);
@@ -124,7 +122,7 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         case 1u: m_builder.style().fontSize = 12.0f; break;
         case 2u: display.pixelScaleX = 1.25f; display.pixelScaleY = 1.5f; break;
         case 3u: ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko")); break;
-        case 4u: m_builder.listStyle().row.padding.bottom = VectorGetX(VectorAdd(VectorReplicate(m_builder.listStyle().row.padding.bottom), VectorReplicate(2.0f))); break;
+        case 4u: m_builder.listStyle().row.padding.bottom = m_builder.listStyle().row.padding.bottom + 2.0f; break;
         case 5u: ++source.generation; break;
         case 6u: --source.count; break;
         }
@@ -136,16 +134,16 @@ TEST_F(UiListBuilderTests, InvisibleTallMaximumIsInvalidatedByFontShapingDisplay
         EXPECT_LT(refreshed, grown);
         const auto metrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
         ASSERT_TRUE(metrics);
-        SIMDVectorSingle expected = VectorReplicate(metrics->minimum.y);
+        f32 expected = metrics->minimum.y;
         const StringView language = change == 3u ? "ko" : "en";
         for(const StringView label : { StringView{}, StringView{ s_FirstRowText } }){
             const auto layout = m_text.layout({ .text = label, .language = language, .fontSize = m_builder.style().fontSize });
             ASSERT_TRUE(layout);
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);
-            expected = VectorMax(expected, VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(metrics->padding.top)), VectorReplicate(metrics->padding.bottom)));
+            expected = Max(expected, visual->height + metrics->padding.top + metrics->padding.bottom);
         }
-        EXPECT_FLOAT_EQ(refreshed, VectorGetX(expected));
+        EXPECT_FLOAT_EQ(refreshed, expected);
         EXPECT_LE(source.textCalls, 8u);
     }
 }
@@ -156,7 +154,7 @@ TEST_F(UiListBuilderTests, ReplacingTextServiceWithTheSameGenerationInvalidatesT
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 seed = target(row(1u))->rectangle.height;
-    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(m_source.specialIndex)), VectorDoubleReplicate(static_cast<f64>(seed))))));
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(m_source.specialIndex) * static_cast<f64>(seed)));
     ASSERT_TRUE(accept(2u));
     ASSERT_NE(target(row(m_source.specialIndex + 1u)), nullptr);
     const f32 grown = target(row(m_source.specialIndex + 1u))->rectangle.height;
@@ -204,7 +202,7 @@ TEST_F(UiListBuilderTests, SharedStateDeclarationsMergeSameMetricMaximaWithoutCo
         ASSERT_TRUE(m_context.commitFrame(generation++));
         ASSERT_NE(target(row(1u)), nullptr);
         const f32 firstHeight = target(row(1u))->rectangle.height;
-        const WidgetId secondRow = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id("second", s_PanelKey), s_RowsKey)), 1u));
+        const WidgetId secondRow = UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id("second", s_PanelKey), s_RowsKey), 1u);
         ASSERT_NE(target(secondRow), nullptr);
         const f32 secondHeight = target(secondRow)->rectangle.height;
         ASSERT_GT(firstHeight, secondHeight);
@@ -222,9 +220,9 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
     const f32 naturalHeight = target(row(1u))->rectangle.height;
-    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(naturalHeight)), VectorDoubleReplicate(10.25)))));
-    const WidgetId earlier = UiTestSupport::RequireWidgetId(MakeWidgetId(id("clipped", s_PanelKey), "earlier"));
-    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(MakeWidgetId(earlier, s_RowsKey));
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(naturalHeight) * 10.25));
+    const WidgetId earlier = UiTestSupport::RequireWidgetId(id("clipped", s_PanelKey), "earlier");
+    const WidgetId earlierRows = UiTestSupport::RequireWidgetId(earlier, s_RowsKey);
     Rect previousRow;
     Rect previousClip;
     for(u64 generation = 2u; generation <= 3u; ++generation){
@@ -243,11 +241,11 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
         ASSERT_TRUE(finishPanel());
         ASSERT_TRUE(m_context.commitFrame(generation));
         const HitTarget* hostTarget = target(earlier);
-        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 11u)));
+        const HitTarget* first = target(UiTestSupport::RequireWidgetPartId(earlierRows, 11u));
         ASSERT_NE(hostTarget, nullptr);
         ASSERT_NE(first, nullptr);
-        EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 10u))), nullptr);
-        EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(earlierRows, 17u))), nullptr);
+        EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(earlierRows, 10u)), nullptr);
+        EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(earlierRows, 17u)), nullptr);
         EXPECT_FLOAT_EQ(first->rectangle.height, naturalHeight);
         EXPECT_FLOAT_EQ(hostTarget->clip.height, clipped.height.value);
         EXPECT_GT(hostTarget->rectangle.height, hostTarget->clip.height);
@@ -255,10 +253,10 @@ TEST_F(UiListBuilderTests, SharedStyledContentKeepsItsFractionalFirstRowAndInher
         EXPECT_LT(first->clip.height, first->rectangle.height);
         const SIMDVectorSingle clipBottom = VectorAdd(VectorSet(first->clip.y, hostTarget->clip.y, 0.0f, 0.0f), VectorSet(first->clip.height, hostTarget->clip.height, 0.0f, 0.0f));
         EXPECT_FLOAT_EQ(VectorGetX(clipBottom), VectorGetY(clipBottom));
-        EXPECT_NEAR(VectorGetX(VectorDivide(VectorSubtract(VectorReplicate(first->clip.y), VectorReplicate(first->rectangle.y)), VectorReplicate(first->rectangle.height))), 0.25f, 0.00001f);
+        EXPECT_NEAR((first->clip.y - (first->rectangle.y)) / (first->rectangle.height), 0.25f, 0.00001f);
         if(generation != 2u){
-            ExpectRect(first->rectangle, previousRow);
-            ExpectRect(first->clip, previousClip);
+            UiPaintAssertions::ExpectRect(first->rectangle, previousRow);
+            UiPaintAssertions::ExpectRect(first->clip, previousClip);
         }
         previousRow = first->rectangle;
         previousClip = first->clip;
@@ -287,22 +285,22 @@ TEST_F(UiListBuilderTests, ContentViewportPreflightsTallSecondRowAtFractionalScr
     const f32 initialHeight = VectorGetX(rowHeight);
     const f32 finalHeight = VectorGetY(rowHeight);
     ASSERT_GT(finalHeight, initialHeight);
-    ASSERT_TRUE(m_state.scrollTo(VectorDoubleGetX(VectorDoubleMultiply(ConvertVectorSingleToDouble(rowHeight), VectorDoubleReplicate(0.25)))));
+    ASSERT_TRUE(m_state.scrollTo(static_cast<f64>(initialHeight) * 0.25));
     ASSERT_TRUE(begin(1u, display));
     ASSERT_TRUE(m_builder.beginPanel(s_PanelKey, { 10.0f, 10.0f, 320.0f, 260.0f }));
     ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_source, m_state, options).valid);
     EXPECT_FALSE(m_builder.button("after", ""));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(host()), nullptr);
+    ASSERT_NE(target(id(s_ListKey, s_PanelKey)), nullptr);
     ASSERT_NE(target(row(1u)), nullptr);
     ASSERT_NE(target(row(2u)), nullptr);
     EXPECT_FLOAT_EQ(target(row(1u))->rectangle.height, finalHeight);
     EXPECT_FLOAT_EQ(target(row(2u))->rectangle.height, finalHeight);
-    EXPECT_GE(VectorGetX(VectorAdd(VectorReplicate(m_state.placement().viewport.height), VectorReplicate(0.0001f))), finalHeight);
+    EXPECT_GE(m_state.placement().viewport.height + 0.0001f, finalHeight);
     const HitTarget* after = target(id("after", s_PanelKey));
     ASSERT_NE(after, nullptr);
-    EXPECT_FLOAT_EQ(after->rectangle.y, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(target(host())->rectangle.y), VectorReplicate(target(host())->rectangle.height)), VectorReplicate(m_builder.style().gap))));
+    EXPECT_FLOAT_EQ(after->rectangle.y, target(id(s_ListKey, s_PanelKey))->rectangle.y + target(id(s_ListKey, s_PanelKey))->rectangle.height + m_builder.style().gap);
     EXPECT_EQ(m_source.textCalls, 2u);
     EXPECT_EQ(m_source.textCallsByIndex[0u], 1u);
     EXPECT_EQ(m_source.textCallsByIndex[1u], 1u);
@@ -312,7 +310,7 @@ TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateI
     ASSERT_TRUE(accept(1u));
     ASSERT_NE(target(row(1u)), nullptr);
     const Rect oldBounds = target(row(1u))->rectangle;
-    const f64 acceptedStep = target(host())->scrollStep;
+    const f64 acceptedStep = target(id(s_ListKey, s_PanelKey))->scrollStep;
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(prepare(2u));
     EXPECT_DOUBLE_EQ(m_state.scrollOffset(), acceptedStep);

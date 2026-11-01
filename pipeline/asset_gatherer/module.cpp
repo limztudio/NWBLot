@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../command_line.h"
 #include "gather.h"
+
+#include <pipeline/command_line.h>
 
 #include <core/alloc/scratch.h>
 #include <core/assets/arena_names.h>
@@ -13,19 +14,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_PIPELINE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(Name("pipeline/asset_gatherer"));
+    Core::Assets::AssetArena arena(Name("pipeline/asset_gatherer"));
+    Core::Alloc::ScratchArena scratchArena(Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
     PipelineCommandLine commandLine(PipelineTool::AssetGatherer);
-    return commandLine.run(argc, argv, arena, [&](PipelineOptions& options){
-        NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(arena);
+    return commandLine.run(argc, argv, [&](PipelineOptions& options){
+        AssetGatherer::AssetGatherOptions gatherOptions(arena);
         gatherOptions.inputs = Move(options.inputs);
         gatherOptions.outputDirectory = Move(options.outputPath);
         gatherOptions.configuration = options.configuration;
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
-        gatherOptions.mergePayloads = NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena);
-        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
-    });
+        gatherOptions.mergePayloads = Core::Assets::QueryAutoCollectedAssetGatherMerge(scratchArena);
+        return AssetGatherer::GatherAssets(gatherOptions, scratchArena) ? s_PipelineExitSuccess : s_PipelineExitFailure;
+    }, arena, scratchArena);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

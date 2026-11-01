@@ -21,7 +21,11 @@
 #define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 16
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 
+#if defined(NWB_FINAL) || defined(NWB_OPTIMIZE)
+#define NWB_CAUSTIC_SW_GRID_SIDE 512u
+#else
 #define NWB_CAUSTIC_SW_GRID_SIDE 128u
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

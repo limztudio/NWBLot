@@ -7,7 +7,7 @@
 
 #include "global.h"
 
-#include <global/span.h>
+#include <global/filesystem/file_staging.h>
 #include <global/texture_payload.h>
 
 
@@ -32,8 +32,16 @@ inline constexpr AStringView s_AlphaWhiteKeyword = "white";
 inline constexpr AStringView s_AlphaBlackKeyword = "black";
 inline constexpr f32 s_AlphaWhiteConstant = 1.0f;
 inline constexpr f32 s_AlphaBlackConstant = 0.0f;
-inline constexpr AStringView s_TemporaryOutputSuffix = ".tmp";
-inline constexpr AStringView s_BackupOutputSuffix = ".old";
+inline constexpr AStringView s_PngExtension = ".png";
+inline constexpr AStringView s_JpgExtension = ".jpg";
+inline constexpr AStringView s_JpegExtension = ".jpeg";
+inline constexpr AStringView s_JfifExtension = ".jfif";
+inline constexpr AStringView s_TgaExtension = ".tga";
+inline constexpr AStringView s_QoiExtension = ".qoi";
+inline constexpr AStringView s_ExrExtension = ".exr";
+inline constexpr AStringView s_HdrExtension = ".hdr";
+inline constexpr Array<AStringView, 8u> s_SupportedInputExtensions = { s_PngExtension, s_JpgExtension, s_JpegExtension, s_JfifExtension, s_TgaExtension, s_QoiExtension, s_ExrExtension, s_HdrExtension };
+inline constexpr Array<AStringView, 2u> s_HdrInputExtensions = { s_ExrExtension, s_HdrExtension };
 
 struct AlphaSource{
     AlphaSourceMode::Enum mode = AlphaSourceMode::Original;
@@ -69,26 +77,22 @@ struct OutputPaths{
 
 
 public:
-    OutputPaths()
-        : metadata(UtilityDetail::Arena())
-        , data(UtilityDetail::Arena())
-        , metadataTemporary(UtilityDetail::Arena())
-        , dataTemporary(UtilityDetail::Arena())
-    {}
+    OutputPaths();
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 IsSupportedInputPath(const ScratchPath& path);
-[[nodiscard]] b8 IsHdrInputPath(const ScratchPath& path);
+[[nodiscard]] inline b8 IsHdrInputPath(const ScratchPath& path){
+    return PathHasListedExtension(path, s_HdrInputExtensions);
+}
 [[nodiscard]] Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, AStringView outputArgument, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 ValidateOutputPaths(const OutputPaths& outputPaths, b8 force, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<PreparedTexture> PrepareTexture(Span<const ScratchPath> inputPaths, TextureDimension::Enum dimension, b8 srgb, const AlphaSource& alphaSource, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, b8 force, Core::Alloc::ScratchArena& scratchArena);
 
-int Run(int argc, char** argv);
+i32 Run(i32 argc, char** argv);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

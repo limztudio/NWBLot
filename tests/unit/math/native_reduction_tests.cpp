@@ -2,17 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.h>
 #include <global/floating_point_environment.h>
+#include <global/process.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
 
 #include <gtest/gtest.h>
 
-#include <fenv.h>
-
 
 #if defined(NWB_PLATFORM_LINUX) && defined(NWB_HAS_AVX2)
-#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -89,13 +88,10 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
     // Scalar-lane reductions can commute multiple NaN payloads or accidentally evaluate an unused signaling lane.
-    constexpr u64 s_InputBits[][8]{
+    constexpr Array<Array<u64, 8>, 8> s_InputBits = {{
         { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff8000000000125ull, 0xfff8000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000126ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
@@ -104,8 +100,8 @@ TEST(MathNativeReduction, MultipleNaNsInactiveSignalingLanesAndOrderedCancellati
         { 1u, 0x8000000000000001ull, 0x8000000000000000ull, 0u, 0xbff0000000000000ull, 0xbff0000000000000ull, 0x3ff0000000000000ull, 0x3ff0000000000000ull },
         { 0x7ff8000000000123ull, 0xfff0000000000124ull, 0x7ff8000000000125ull, 0xfff0000000000126ull, 0xfff8000000000233ull, 0x7ff0000000000234ull, 0xfff0000000000235ull, 0x7ff8000000000236ull },
         { 0x7ff0000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000000ull, 0xfff0000000000000ull, 0xfff0000000000233ull, 0x7ff8000000000234ull, 0u, 0x7ff0000000000000ull }
-    };
-    constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    }};
+    constexpr Array<i32, 4> s_RoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : s_RoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(usize index = 0u; index < LengthOf(s_InputBits); ++index){
@@ -177,19 +173,16 @@ TEST(MathNativeReduction, ReciprocalLengthsPreserveZeroDivisionSubnormalSquaresA
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
-    constexpr u64 s_Cases[][4]{
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    constexpr Array<Array<u64, 4>, 6> s_Cases = {{
         { 0u, 0x8000000000000000ull, 0u, 0x8000000000000000ull },
         { 0x1e60000000000000ull, 0u, 0u, 0u },
         { 0x7ff0000000000000ull, 0u, 0u, 0u },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x7ff0000000000123ull, 0xfff0000000000124ull },
         { 0x4000000000000000ull, 0x4008000000000000ull, 0x4010000000000000ull, 0xfff0000000000124ull },
         { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull }
-    };
-    constexpr i32 s_RoundingModes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    }};
+    constexpr Array<i32, 4> s_RoundingModes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
     for(const i32 roundingMode : s_RoundingModes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(roundingMode));
         for(const auto& bits : s_Cases){

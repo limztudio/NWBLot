@@ -16,27 +16,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsPrefixTimingResolver::GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void GraphicsPrefixTimingResolver::resolve(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    Core::GpuTimingSubmissionTicket* const* ownedTickets,
-    usize ticketCount,
-    Core::GpuTimingSubmissionTicket** timingTickets,
-    Core::GpuTaskId* timingTasks,
+    const Span<Core::GpuTimingSubmissionTicket* const> ownedTickets,
+    const Span<Core::GpuTimingSubmissionTicket*> timingTickets,
+    const Span<Core::GpuTaskId> timingTasks,
     b8& asyncSpansOnePacket,
     GraphicsPrefixTimingResolutionResult& outResult
 )const noexcept{
-    RendererFramePipeline& pipeline = *m_pipeline;
+    const RendererFramePipeline& pipeline = m_pipeline;
     outResult = GraphicsPrefixTimingResolutionResult{};
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
-    Core::GpuTaskId resolvedTasks[s_TimingTaskCount] = {
+    const Array<Core::GpuTaskId, s_GraphicsPrefixTimingTaskCount> resolvedTasks = {
         pipeline.m_graphicsPrefixMeshViewSetupTask,
         pipeline.m_graphicsPrefixSceneShadingSetupTask,
         pipeline.m_graphicsPrefixDeferredClearTask,
@@ -46,12 +37,11 @@ void GraphicsPrefixTimingResolver::resolve(
         pipeline.m_graphicsPrefixCsgIntervalSampleTask.valid() ? pipeline.m_graphicsPrefixCsgIntervalSampleTask : pipeline.m_graphicsPrefixGbufferTask,
         pipeline.m_graphicsPrefixTask,
     };
-    static_assert(LengthOf(resolvedTasks) == s_TimingTaskCount);
-    if(ticketCount != s_TimingTaskCount || !timingTasks)
+    if(ownedTickets.size() != s_GraphicsPrefixTimingTaskCount || timingTickets.size() != s_GraphicsPrefixTimingTaskCount || timingTasks.size() != s_GraphicsPrefixTimingTaskCount)
         return;
-    for(usize taskIndex = 0u; taskIndex < s_TimingTaskCount; ++taskIndex)
+    for(usize taskIndex = 0u; taskIndex < s_GraphicsPrefixTimingTaskCount; ++taskIndex)
         timingTasks[taskIndex] = resolvedTasks[taskIndex];
-    for(usize prefixTaskIndex = 0u; prefixTaskIndex < ticketCount; ++prefixTaskIndex){
+    for(usize prefixTaskIndex = 0u; prefixTaskIndex < s_GraphicsPrefixTimingTaskCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = timingTasks[prefixTaskIndex];
         if(!compiledPlan.findTask(task).valid() || (prefixTaskIndex != 0u && !compiledPlan.taskPrecedesOrSharesPacket(timingTasks[prefixTaskIndex - 1u], task))){
             outResult.bindingsValid = false;

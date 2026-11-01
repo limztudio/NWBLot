@@ -254,7 +254,9 @@ namespace TriangleDoubleTests{
         const SIMDVectorDouble minimumA = VectorDoubleMin(zero, VectorDoubleMin(VectorDoubleSplatX(intervalA1), VectorDoubleSplatX(intervalA2)));
         const SIMDVectorDouble maximumA = VectorDoubleMax(zero, VectorDoubleMax(VectorDoubleSplatY(intervalA1), VectorDoubleSplatY(intervalA2)));
 #if defined(NWB_HAS_AVX2)
-        const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, absoluteB0, absoluteRoundoffB0), intervalB1 = projectionInterval(relativeB1, absoluteB1, absoluteRoundoffB1), intervalB2 = projectionInterval(relativeB2, absoluteB2, absoluteRoundoffB2);
+        const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, absoluteB0, absoluteRoundoffB0);
+        const SIMDVectorDouble intervalB1 = projectionInterval(relativeB1, absoluteB1, absoluteRoundoffB1);
+        const SIMDVectorDouble intervalB2 = projectionInterval(relativeB2, absoluteB2, absoluteRoundoffB2);
 #else
         const SIMDVectorDouble intervalB0 = projectionInterval(relativeB0, roundoffB0), intervalB1 = projectionInterval(relativeB1, roundoffB1), intervalB2 = projectionInterval(relativeB2, roundoffB2);
 #endif

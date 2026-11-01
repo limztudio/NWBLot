@@ -20,16 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererAvboitSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererAvboitState final : NoCopy{
-    friend class RendererAvboitSystem;
-
-
 public:
     RendererAvboitState()noexcept = default;
 
@@ -38,7 +29,7 @@ public:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     Core::SamplerHandle m_linearSampler;
     Core::ShaderHandle m_depthWarpComputeShader;
     Core::ShaderHandle m_integrateComputeShader;

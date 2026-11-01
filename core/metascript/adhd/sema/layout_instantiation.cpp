@@ -201,6 +201,30 @@ void LayoutOptimizer::collectTemplateInstantiationsInType(const TypeRef& type, c
         if(!cls->templateParams.empty() && type.templateArgs.size() == cls->templateParams.size())
             instantiateClassTemplate(*cls, type.templateArgs, unit);
     }
+    else if(const InterfaceDecl* iface = m_symbols.findInterface(type.name)){
+        if(!iface->templateParams.empty() && type.templateArgs.size() == iface->templateParams.size()){
+            for(const TypeRef* baseIface : iface->baseInterfaces){
+                if(!baseIface)
+                    continue;
+                if(const TypeRef* subBase = m_symbols.substituteTypeParams(*baseIface, iface->templateParams, type.templateArgs))
+                    collectTemplateInstantiationsInType(*subBase, depth + 1u, unit);
+            }
+            for(const MethodDecl* m : iface->methods){
+                if(!m)
+                    continue;
+                if(m->returnType){
+                    if(const TypeRef* subRet = m_symbols.substituteTypeParams(*m->returnType, iface->templateParams, type.templateArgs))
+                        collectTemplateInstantiationsInType(*subRet, depth + 1u, unit);
+                }
+                for(const ParamDecl& p : m->params){
+                    if(!p.type)
+                        continue;
+                    if(const TypeRef* subParam = m_symbols.substituteTypeParams(*p.type, iface->templateParams, type.templateArgs))
+                        collectTemplateInstantiationsInType(*subParam, depth + 1u, unit);
+                }
+            }
+        }
+    }
 }
 
 void LayoutOptimizer::instantiateClassTemplate(const ClassDecl& templateDecl, const Span<const TypeArg> templateArgs, TranslationUnit& unit){
@@ -244,6 +268,27 @@ void LayoutOptimizer::instantiateClassTemplate(const ClassDecl& templateDecl, co
 
     finalizeClassFieldLayouts(templateDecl.isSerialize, !templateDecl.implementedInterfaces.empty(), inst->orderedFields, inst->totalSize, inst->totalAlign);
     unit.templateInstantiations.push_back(inst);
+
+    for(const TypeRef* implIface : templateDecl.implementedInterfaces){
+        if(!implIface)
+            continue;
+        if(const TypeRef* resolvedIface = m_symbols.substituteTypeParams(*implIface, templateDecl.templateParams, templateArgs))
+            collectTemplateInstantiationsInType(*resolvedIface, unit);
+    }
+    for(const MethodDecl* method : templateDecl.methods){
+        if(!method || !method->templateParams.empty())
+            continue;
+        if(method->returnType){
+            if(const TypeRef* resolvedRet = m_symbols.substituteTypeParams(*method->returnType, templateDecl.templateParams, templateArgs))
+                collectTemplateInstantiationsInType(*resolvedRet, unit);
+        }
+        for(const ParamDecl& p : method->params){
+            if(!p.type)
+                continue;
+            if(const TypeRef* resolvedParam = m_symbols.substituteTypeParams(*p.type, templateDecl.templateParams, templateArgs))
+                collectTemplateInstantiationsInType(*resolvedParam, unit);
+        }
+    }
 }
 
 

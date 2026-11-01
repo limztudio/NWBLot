@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include <impl/ecs_ui/toolkit/global.h>
 
 #include <impl/assets_texture/asset.h>
 
@@ -45,10 +45,12 @@ private:
     };
 
 
-private:
-    ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture, ConstructionToken);
 public:
     ImageSource(ImageSource&&) = delete;
+
+
+private:
+    ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture, ConstructionToken);
 
 
 public:

@@ -63,19 +63,18 @@ struct SpirvEntryPointInstruction{
 };
 
 struct SpirvWordSource{
-    const u32* words;
-    usize wordCount;
+    Span<const u32> words;
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept{ return words != nullptr; }
+    [[nodiscard]] b8 valid()const noexcept{ return words.data() != nullptr; }
 
-    [[nodiscard]] usize size()const noexcept{ return wordCount; }
+    [[nodiscard]] usize size()const noexcept{ return words.size(); }
 
     [[nodiscard]] u32 word(const usize index)const noexcept{ return words[index]; }
 
     [[nodiscard]] AStringView nameBytes(const usize index, const usize count)const noexcept{
-        return AStringView(reinterpret_cast<const char*>(words + index), count * sizeof(u32));
+        return AStringView(reinterpret_cast<const char*>(words.data() + index), count * sizeof(u32));
     }
 };
 
@@ -90,7 +89,7 @@ public:
 
     [[nodiscard]] u32 word(const usize index)const noexcept{
         const u8* const wordBytes = bytecode.data() + index * sizeof(u32);
-        const u8 bytes[sizeof(u32)]{ wordBytes[0u], wordBytes[1u], wordBytes[2u], wordBytes[3u] };
+        const Array<u8, sizeof(u32)> bytes = {{ wordBytes[0u], wordBytes[1u], wordBytes[2u], wordBytes[3u] }};
         return BitCast<u32>(bytes);
     }
 
@@ -206,16 +205,16 @@ template<typename Source>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 IsValidSpirvModuleWords(const u32* words, const usize wordCount)noexcept{
-    return __hidden_spirv_entry_point::ScanSpirvEntryPoints(__hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{});
+b8 IsValidSpirvModuleWords(const Span<const u32> words)noexcept{
+    return __hidden_spirv_entry_point::ScanSpirvEntryPoints(__hidden_spirv_entry_point::SpirvWordSource{ words }, [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{});
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const u32* words, const usize wordCount, const AStringView entryName, const ShaderType::Mask shaderType)noexcept{
-    return __hidden_spirv_entry_point::ResolveEntryPointName(__hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, entryName, shaderType);
+Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const Span<const u32> words, const AStringView entryName, const ShaderType::Mask shaderType)noexcept{
+    return __hidden_spirv_entry_point::ResolveEntryPointName(__hidden_spirv_entry_point::SpirvWordSource{ words }, entryName, shaderType);
 }
 
 Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(const BinaryByteView bytecode, const AStringView entryName, const ShaderType::Mask shaderType)noexcept{

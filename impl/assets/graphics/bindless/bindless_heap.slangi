@@ -52,10 +52,9 @@ struct NwbBindlessHeapUint{
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2D<float4> g_NwbHeapStorageImages[];
 
-// Scalar uint and 3D float writable views share the StorageImage descriptor table through typed aliases.
+// 3D float writable views share the StorageImage descriptor table through a typed alias.
 #pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2D<uint> g_NwbHeapStorageImageUints[];
+#pragma warning(disable: 39001) // Deliberate typed alias of the StorageImage descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture3D<float> g_NwbHeapStorageImage3DFloats[];
 #pragma warning(pop)
 
@@ -138,10 +137,6 @@ RWTexture2DArray<uint4> nwbHeapStorageImage2DArrayUint4(const uint slot){
 
 RWTexture2D<float4> nwbHeapStorageImage2DFloat4(const uint slot){
     return g_NwbHeapStorageImages[slot];
-}
-
-RWTexture2D<uint> nwbHeapStorageImage2DUint(const uint slot){
-    return g_NwbHeapStorageImageUints[slot];
 }
 
 RWTexture3D<float> nwbHeapStorageImage3DFloat(const uint slot){

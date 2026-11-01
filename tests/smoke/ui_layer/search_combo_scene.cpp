@@ -94,13 +94,11 @@ b8 UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.endPanel())
         return false;
     observeState(context.text);
-    PaintKeyedSmokeValueMarkers<12u, 8u>(context, values(), m_sequence);
+    PaintKeyedSmokeValueMarkers<12u, 8u>(values(), m_sequence, context);
     return true;
 }
 
-b8 UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
     if(key < Core::Key::F4 || key > Core::Key::F9)
         return false;
     if(action != Core::InputAction::Press)

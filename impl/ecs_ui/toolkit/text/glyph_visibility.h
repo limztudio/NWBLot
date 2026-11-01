@@ -21,10 +21,6 @@ NWB_IMPL_UI_BEGIN
 
 struct AtlasGlyph;
 
-namespace TextGlyphIntersection{
-    enum Enum : u8{ Invalid, Invisible, Visible };
-};
-
 // Stateless queries borrow immutable layout and atlas metadata.
 class TextGlyphVisibility final{
 public:

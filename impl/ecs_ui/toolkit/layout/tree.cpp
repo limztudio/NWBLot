@@ -18,20 +18,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
-    const auto validSize = [](const LayoutSize& size)noexcept{
-        return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
-    };
-    const Insets& padding = description.padding;
-    return
-        description.direction <= LayoutDirection::Overlay && validSize(description.width) && validSize(description.height)
-        && IsValidUiPadding(padding)
-        && VectorIsFinite(VectorAdd(VectorSet(padding.left, padding.top, 0.0f, 0.0f), VectorSet(padding.right, padding.bottom, 0.0f, 0.0f)), VectorComponentMask::s_XY)
-        && IsFinite(description.gap) && description.gap >= 0.0f
-        && IsValidUiExtent(description.intrinsicSize)
-    ;
-}
-
 SIMDVectorSingle LayoutTree::Inset(const SIMDVectorSingle rectangle, const SIMDVectorSingle padding)noexcept{
     const SIMDVectorSingle paddingStart = VectorSwizzle<0, 1, 0, 1>(padding);
     const SIMDVectorSingle rectangleSize = VectorSwizzle<2, 3, 2, 3>(rectangle);
@@ -74,7 +60,7 @@ void LayoutTree::reset()noexcept{
 
 Expected<u32> LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& description){
     if(
-        m_buildFailed || m_nodes.size() >= m_maxNodes || !IsValidDescription(description)
+        m_buildFailed || m_nodes.size() >= m_maxNodes || !IsValidLayoutNodeDesc(description)
         || (m_nodes.empty() ? parent != s_LayoutNoParent : parent >= m_nodes.size())
         || (parent != s_LayoutNoParent && m_nodes[parent].description.direction == LayoutDirection::Leaf)
     ){
@@ -82,9 +68,9 @@ Expected<u32> LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& descri
         return MakeUnexpected(Failure{});
     }
     const u32 index = static_cast<u32>(m_nodes.size());
-    m_nodes.push_back({ description });
+    m_nodes.push_back(LayoutTreeNode(description));
     if(parent != s_LayoutNoParent){
-        Node& parentNode = m_nodes[parent];
+        LayoutTreeNode& parentNode = m_nodes[parent];
         if(parentNode.lastChild == s_LayoutNoParent)
             parentNode.firstChild = index;
         else

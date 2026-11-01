@@ -151,11 +151,20 @@ private:
     };
 
 
-
 private:
+    template<typename KeyT>
+    struct TypedPointerHasher{
+        [[nodiscard]] usize operator()(const KeyT& key)const noexcept{
+            usize hash = Hasher<const void*>{}(key.pointer);
+            HashCombine(hash, static_cast<u8>(key.type));
+            return hash;
+        }
+    };
+
     using GpuTaskNode = GpuTaskGraphDetail::GpuTaskNode;
     using GpuGraphResourceNode = GpuTaskGraphDetail::GpuGraphResourceNode;
     using ResourcePointerKey = GpuTaskGraphDetail::ResourcePointerKey;
+    using ResourcePointerHasher = TypedPointerHasher<ResourcePointerKey>;
     using ResourcePointerEqual = GpuTaskGraphDetail::ResourcePointerEqual;
     using ResourceImportMatch = GpuTaskGraphDetail::ResourceImportMatch;
     using ResourceBinding = GpuTaskGraphDetail::ResourceBinding;
@@ -163,23 +172,13 @@ private:
     using GpuGraphResourceSetNode = GpuTaskGraphDetail::GpuGraphResourceSetNode;
     using GpuGraphPipelineNode = GpuTaskGraphDetail::GpuGraphPipelineNode;
     using PipelinePointerKey = GpuTaskGraphDetail::PipelinePointerKey;
+    using PipelinePointerHasher = TypedPointerHasher<PipelinePointerKey>;
     using PipelinePointerEqual = GpuTaskGraphDetail::PipelinePointerEqual;
     using PipelineImportMatch = GpuTaskGraphDetail::PipelineImportMatch;
     using PipelineBinding = GpuTaskGraphDetail::PipelineBinding;
     using GpuExternalCompletionNode = GpuTaskGraphDetail::GpuExternalCompletionNode;
     using GpuUploadBlobNode = GpuTaskGraphDetail::GpuUploadBlobNode;
     using MarkerLabelRange = GpuTaskGraphDetail::MarkerLabelRange;
-
-    struct ResourcePointerHasher{
-        [[nodiscard]] usize operator()(const ResourcePointerKey& key)const noexcept;
-    };
-
-    struct PipelinePointerHasher{
-        [[nodiscard]] usize operator()(const PipelinePointerKey& key)const noexcept;
-    };
-
-
-private:
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
     using ResourcePointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, ResourcePointerEqual>;
     using PipelinePointerIndex = HashMap<PipelinePointerKey, u32, GraphicsArena, PipelinePointerHasher, PipelinePointerEqual>;
@@ -189,7 +188,7 @@ private:
     static constexpr usize s_InlineImportIndexCount = 32u;
     static constexpr usize s_InitialPointerIndexBucketCount = 2u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
-
+    static inline constexpr Name s_DeclarationScratchArena{ "core/task/gpu/declaration_scratch" };
 
 
 private:
@@ -197,39 +196,16 @@ private:
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
     [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
-
-private:
-    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet)noexcept{
-        if(!planAccess.validFor(compiledGraph))
-            return MakeUnexpected(Failure{});
-        const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-        if(!packetView.valid())
-            return MakeUnexpected(Failure{});
-        return packetView;
-    }
-
-    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveLeasedPacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, const GpuPacketRecordingLease& lease)noexcept{
-        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
-        if(!packetView || !lease.valid() || lease.m_packet != packet || lease.m_planGeneration != planAccess.planGeneration())
-            return MakeUnexpected(Failure{});
-        return *packetView;
-    }
-
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet)noexcept;
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveLeasedPacketView(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, const GpuPacketRecordingLease& lease)noexcept;
     [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveAttemptPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
-        const GpuSubmissionPacketId packet,
-        const u64 recordingAttemptGeneration,
-        const b8 leaseValid
-    )noexcept{
-        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
-        if(!packetView || recordingAttemptGeneration == 0u || leaseValid)
-            return MakeUnexpected(Failure{});
-        return *packetView;
-    }
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        b8 leaseValid
+    )noexcept;
 
-
-private:
     template<typename TaskT>
     static b8 RecordTaskPayload(const void* const payload, CommandList& commandList, const GpuTaskRecordContext& context)noexcept(IsSame_V<decltype(TaskT::Record(*static_cast<const typename TaskT::Payload*>(payload), commandList, context)), b8>
         && noexcept(TaskT::Record(*static_cast<const typename TaskT::Payload*>(payload), commandList, context))){
@@ -257,7 +233,31 @@ private:
 
 
 public:
-    explicit GpuTaskGraph(GraphicsArena& arena);
+    explicit GpuTaskGraph(GraphicsArena& arena)
+        : m_arena(arena)
+        , m_declarationScratch(s_DeclarationScratchArena)
+        , m_tasks(arena)
+        , m_dependencies(arena)
+        , m_externalDependencies(arena)
+        , m_externalStateSources(arena)
+        , m_externalStateSnapshots(arena)
+        , m_resourceUses(arena)
+        , m_resourceVersionUses(arena)
+        , m_resources(arena)
+        , m_resourceVersions(arena)
+        , m_initialOwnerHandoffSources(arena)
+        , m_initialOwnerHandoffStateSnapshots(arena)
+        , m_queueFamilyIndices(arena)
+        , m_resourceSets(arena)
+        , m_resourceSetMembers(arena)
+        , m_pipelines(arena)
+        , m_externalCompletions(arena)
+        , m_uploadBlobs(arena)
+        , m_markerText(arena)
+        , m_generation(AllocateGeneration())
+        , m_declarationRevision(AllocateGeneration())
+        , m_activeRecordingAttemptGeneration(AllocateGeneration())
+    {}
     ~GpuTaskGraph()noexcept(false);
 
 
@@ -358,7 +358,9 @@ public:
     [[nodiscard]] Expected<GpuGraphResourceId> importAccelStruct(const RayTracingAccelStructHandle& accelStruct, const GpuGraphResourceDesc& desc);
     [[nodiscard]] Expected<GpuGraphResourceId> importHazardDomain(const GpuGraphResourceDesc& desc);
     // One exact resource range gets one version ID; repeating a descriptor makes a new ID on purpose.
-    [[nodiscard]] Expected<GpuGraphResourceVersionId> declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
+    [[nodiscard]] Expected<GpuGraphResourceVersionId> declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
+        return appendResourceVersion(desc);
+    }
     // Stores an immutable resource collection. Set declarations expand to members at task creation.
     [[nodiscard]] Expected<GpuGraphResourceSetId> importResourceSet(const GpuGraphResourceSetDesc& desc);
     // Pipeline IDs are graph-local side-table entries. Metadata-only entries support analysis and capture setup.
@@ -390,6 +392,7 @@ private:
     [[nodiscard]] b8 beginSubmissionExceptionClosing(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
     [[nodiscard]] b8 waitForSubmissionExceptionRecordingClaims(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept;
 
+
 private:
     // Caller holds m_lifecycleMutex; preparation, submission binding and task-state checks remain path-specific.
     [[nodiscard]] b8 matchesPacketAttemptWithinLock(const GpuCompiledGraph& compiledGraph, const u64 planGeneration, const u64 recordingAttemptGeneration)const noexcept{
@@ -399,17 +402,7 @@ private:
     [[nodiscard]] Expected<void, RecordTaskFailure> recordTask(const GpuTaskId& taskID, CommandList& commandList, const GpuTaskRecordContext& context, const GpuPacketRecordingLease& lease)const;
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
-    void discardPacketTasksWithinLock(const GpuSubmissionPacket& packetPlan, const GpuTaskId* const tasks, const u64 notificationGeneration = 0u)const noexcept{
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.lifecycleState = TaskLifecycleState::Discarded;
-            task.recordingClaimGeneration = 0u;
-            task.submissionClaimGeneration = 0u;
-            task.discardNotificationGeneration = notificationGeneration;
-            task.recordThunkInProgress = false;
-            task.recordThunkCompleted = false;
-        }
-    }
+    void discardPacketTasksWithinLock(Span<const GpuTaskId> tasks, u64 notificationGeneration = 0u)const noexcept;
 
     // Claim packet tasks before recording. One artifact per packet per attempt; the lease names the recorder.
     [[nodiscard]] b8 beginPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, GpuPacketRecordingLease& outLease)const noexcept;
@@ -425,6 +418,7 @@ private:
     // Ordinary cleanup cannot discard a Recording packet: a retry must not re-arm payload while the original recorder owns it.
     void abortPacketRecording(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketRecordingLease& lease)const;
     [[nodiscard]] b8 packetReadyForSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration)const noexcept;
+
 
 private:
     [[nodiscard]] b8 beginPacketSubmission(
@@ -453,6 +447,7 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
 
+
 private:
     // Lowers a compiler-owned packet-boundary barrier through the existing state tracker. Task thunks own only barriers internal to their sequence.
     [[nodiscard]] b8 applyCompiledBarrier(
@@ -466,15 +461,36 @@ private:
     // Seeds retained states after barriers lower, keeping packet handoffs when the required state already matches.
     [[nodiscard]] b8 seedTaskRetainedResourceStates(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPacketRecordingAccess& recordingAccess, const GpuTaskId& taskID, CommandList& commandList)const;
 
+
 private:
     [[nodiscard]] b8 validForDeviceGeneration(u16 deviceGeneration)const noexcept;
-    [[nodiscard]] b8 validTask(const GpuTaskId& id)const noexcept;
-    [[nodiscard]] b8 validResource(const GpuGraphResourceId& id)const noexcept;
-    [[nodiscard]] b8 validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept;
-    [[nodiscard]] b8 validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
-    [[nodiscard]] b8 validUploadBlob(const GpuUploadBlobId& id)const noexcept;
-    [[nodiscard]] b8 validPipeline(const GpuGraphPipelineId& id)const noexcept;
-    [[nodiscard]] b8 validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
+    [[nodiscard]] b8 validTask(const GpuTaskId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_tasks.size();
+    }
+
+    [[nodiscard]] b8 validResource(const GpuGraphResourceId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_resources.size();
+    }
+
+    [[nodiscard]] b8 validResourceVersion(const GpuGraphResourceVersionId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_resourceVersions.size();
+    }
+
+    [[nodiscard]] b8 validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_resourceSets.size();
+    }
+
+    [[nodiscard]] b8 validUploadBlob(const GpuUploadBlobId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_uploadBlobs.size() && !m_uploadBlobs[id.index].bytes.empty();
+    }
+
+    [[nodiscard]] b8 validPipeline(const GpuGraphPipelineId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_pipelines.size();
+    }
+
+    [[nodiscard]] b8 validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
+        return id.valid() && id.generation == m_generation && id.index < m_externalCompletions.size();
+    }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const noexcept;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const noexcept;
     [[nodiscard]] GpuTaskGraphResourceVersionView resourceVersionAt(usize index)const noexcept;

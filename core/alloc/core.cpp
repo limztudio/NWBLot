@@ -81,8 +81,7 @@ void CoreFree(void* ptr, ArenaMemoryTracker* arenaTracker)noexcept{
     scalable_free(ptr);
 }
 
-void CoreFreeSize(void* ptr, usize size, ArenaMemoryTracker* arenaTracker)noexcept{
-    static_cast<void>(size);
+void CoreFreeSize(void* ptr, [[maybe_unused]] usize size, ArenaMemoryTracker* arenaTracker)noexcept{
     CoreFree(ptr, arenaTracker);
 }
 
@@ -96,8 +95,7 @@ void CoreFreeAligned(void* ptr, ArenaMemoryTracker* arenaTracker)noexcept{
     scalable_aligned_free(ptr);
 }
 
-void CoreFreeSizeAligned(void* ptr, usize size, ArenaMemoryTracker* arenaTracker)noexcept{
-    static_cast<void>(size);
+void CoreFreeSizeAligned(void* ptr, [[maybe_unused]] usize size, ArenaMemoryTracker* arenaTracker)noexcept{
     CoreFreeAligned(ptr, arenaTracker);
 }
 

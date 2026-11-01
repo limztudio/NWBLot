@@ -28,6 +28,34 @@ void SourceEmitter::emitSimdVectorCtorReg(MString& out, const MStringView simdTy
             return;
         }
         out.append(isDouble ? "::MatrixDoubleSet(" : "::MatrixSet(");
+        if(arguments.size() == 1u && arguments[0]){
+            const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(simdType);
+            const u32 elemCount = matInfo ? matInfo->elemCount : 16u;
+            if(simdType == "f64x3x3" && elemCount == 9u){
+                for(usize r = 0u; r < 3u; ++r){
+                    for(usize c = 0u; c < 3u; ++c){
+                        if(r > 0u || c > 0u)
+                            out.append(", ");
+                        emitExpr(out, *arguments[0]);
+                    }
+                    out.append(", 0.0");
+                }
+                out.append(", 0.0, 0.0, 0.0, 1.0)");
+                return;
+            }
+            for(usize i = 0u; i < 16u; ++i){
+                if(i > 0u)
+                    out.append(", ");
+                if(i < elemCount)
+                    emitExpr(out, *arguments[0]);
+                else if(i == 15u && elemCount == 12u)
+                    out.append(isDouble ? "1.0" : "1.0f");
+                else
+                    out.append(isDouble ? "0.0" : "0.0f");
+            }
+            out.push_back(')');
+            return;
+        }
         if(simdType == "f64x3x3" && arguments.size() == 9u){
             for(usize r = 0u; r < 3u; ++r){
                 for(usize c = 0u; c < 3u; ++c){

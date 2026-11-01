@@ -51,6 +51,14 @@ b8 FontAtlas::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     return checkVirtualPath(s_FontAtlasValidatePayloadContext) && ValidateFontAtlasPayload(m_payload, scratchArena);
 }
 
+void FontAtlas::setPayload(FontAtlasPayload&& payload)noexcept{
+    m_payload = Move(payload);
+}
+
+const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
+    return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

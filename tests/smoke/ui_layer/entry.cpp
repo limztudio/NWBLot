@@ -34,7 +34,7 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(ProjectR
     auto world = Tests::Smoke::CreateUiLayerSmokeWorld(context);
     if(!world)
         return nullptr;
-    return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(context, Move(*world));
+    return MakeUnique<Tests::Smoke::UiLayerSmokeProject>(Move(*world), context);
 }
 
 

@@ -12,8 +12,6 @@
 
 #include <gtest/gtest.h>
 
-#include <new>
-
 #if defined(__linux__)
 #include <sys/mman.h>
 #include <unistd.h>
@@ -33,13 +31,14 @@ namespace __hidden_storage_equality_tests{
 
 template<typename Element, usize Count>
 struct RawEqualityStorage{
+    Array<Element, Count> raw{};
+
+
 public:
-    friend b8 operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return MathTypeDetail::EqualArray<RawEqualityStorage, Count>(lhs, rhs); }
+    friend b8 operator==(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{
+        return MathTypeDetail::EqualElements<Element, Count>(MakeNotNull<const Element*>(lhs.raw.data()), MakeNotNull<const Element*>(rhs.raw.data()));
+    }
     friend b8 operator!=(const RawEqualityStorage& lhs, const RawEqualityStorage& rhs)noexcept{ return !(lhs == rhs); }
-
-
-public:
-    Element raw[Count]{};
 };
 
 template<typename Value, usize Count>
@@ -69,7 +68,7 @@ NWB_NOINLINE b8 StorageEqual(const Value& lhs, const Value& rhs)noexcept{ return
 template<typename Result>
 struct ExpectedVectorStorage{
     u64 prefix = 0u;
-    Expected<Result> values[2];
+    Array<Expected<Result>, 2> values;
 };
 
 template<typename Result>
@@ -104,7 +103,7 @@ void CheckNaNComparisonFlags(){
                     lhs.raw[lane] = rhs.raw[lane] = static_cast<f32>(lane + 1u);
                 lhs.raw[nanLane] = rhs.raw[nanLane] = BitCast<f32>(nanBits);
                 if(mismatch < Count && mismatch != nanLane)
-                    rhs.raw[mismatch] = VectorGetX(VectorAdd(VectorReplicate(rhs.raw[mismatch]), VectorSplatOne()));
+                    rhs.raw[mismatch] = rhs.raw[mismatch] + 1.0f;
                 ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
                 const b8 expected = LegacyEqual<Value, Count>(lhs, rhs);
                 const i32 expectedFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
@@ -167,7 +166,7 @@ void CheckRawEqualityComparisonFlags(){
                         lhs.raw[exceptionalLane] = BitCast<f32>(bits);
                         rhs.raw[exceptionalLane] = compareWithZero ? 0.0f : BitCast<f32>(bits);
                         if(mismatch < Count && mismatch != exceptionalLane)
-                            rhs.raw[mismatch] = VectorGetX(VectorAdd(VectorReplicate(rhs.raw[mismatch]), VectorSplatOne()));
+                            rhs.raw[mismatch] = rhs.raw[mismatch] + 1.0f;
                         const auto strict = ObserveEquality(lhs, rhs, LegacyEqual<Value, Count>);
                         ASSERT_TRUE(strict);
                         const auto actual = ObserveEquality(lhs, rhs, StorageEqual<Value>);

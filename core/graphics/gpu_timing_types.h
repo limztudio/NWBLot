@@ -201,7 +201,7 @@ struct GpuTimingRecorderStatistics{
     u64 quarantinedScopeCount = 0u;
     u64 beginFailureCount = 0u;
     u64 sampleListenerFailureCount = 0u;
-    u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::Count]{};
+    Array<u64, GpuTimingScopeSkipReason::Count> skippedScopeCountByReason{};
     u16 deviceGeneration = 0u;
     b8 queryCollectionEnabled = false;
     b8 timingSinkEnabled = false;

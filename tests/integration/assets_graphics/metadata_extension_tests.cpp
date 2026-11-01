@@ -36,8 +36,6 @@ constexpr AStringView s_RegistryLifetimeMetadataName = "tests/metadata_extension
 constexpr AStringView s_ProjectVirtualRoot = "project";
 constexpr AStringView s_BuildDirectory = "__build_obj";
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,7 +123,7 @@ public:
         , identity(++state.constructions)
     {
         if(recurse)
-            nested = &RequireParsedMetadataExtension<ReentrantExtension>(metadata, name, metadata, name, state, false);
+            nested = &RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, false);
     }
     ~ReentrantExtension()noexcept{
         ++state.destructions;
@@ -256,6 +254,9 @@ public:
 class ImplicitNameShader final : public Impl::TypedShader<ImplicitNameShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
+
+
+public:
     [[nodiscard]] static ThrowingImplicitAssetName& AssetTypeName()noexcept{
         static ThrowingImplicitAssetName s_Value;
         return s_Value;
@@ -303,18 +304,18 @@ TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheS
     {
         ParsedAssetMetadata metadata(arena);
         const Name name("tests/metadata_extension/aligned");
-        AlignedExtension& first = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, alignedState);
+        AlignedExtension& first = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState);
         const u64 afterFirst = arena.memoryStats().allocationCount;
-        AlignedExtension& second = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, alignedState, true);
+        AlignedExtension& second = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, alignedState, true);
         EXPECT_EQ(&first, &second);
         EXPECT_EQ(arena.memoryStats().allocationCount, afterFirst);
         EXPECT_EQ(reinterpret_cast<usize>(&first) % alignof(AlignedExtension), 0u);
         const ParsedAssetMetadata& borrowed = metadata;
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(borrowed, name), &first);
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, Name("tests/metadata_extension/absent")), nullptr);
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, borrowed), &first);
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(Name("tests/metadata_extension/absent"), metadata), nullptr);
         const Name textName("tests/metadata_extension/text");
-        const TextExtension& text = RequireParsedMetadataExtension<TextExtension>(metadata, textName, arena, textState);
-        EXPECT_EQ(FindParsedMetadataExtension<TextExtension>(metadata, textName), &text);
+        const TextExtension& text = RequireParsedMetadataExtension<TextExtension>(textName, metadata, arena, textState);
+        EXPECT_EQ(FindParsedMetadataExtension<TextExtension>(textName, metadata), &text);
     }
     EXPECT_EQ(alignedState.constructions, 1u);
     EXPECT_EQ(alignedState.destructions, 1u);
@@ -330,16 +331,16 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
     {
         ParsedAssetMetadata metadata(arena);
         const Name firstName(s_FirstMetadataName);
-        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(metadata, firstName, arena, state));
+        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(firstName, metadata, arena, state));
         for(usize index = 0u; index < 80u; ++index){
             const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
             const auto nameResult = ToName(nameText);
             ASSERT_TRUE(nameResult);
             ASSERT_TRUE(*nameResult);
-            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, **nameResult, arena, state);
-            EXPECT_EQ(created.identity, index + s_ExpectedDualCount);
+            const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(**nameResult, metadata, arena, state);
+            EXPECT_EQ(created.identity, index + 2u);
         }
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, firstName), first.get());
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(firstName, metadata), first.get());
         EXPECT_EQ(metadata.extensions.erase(firstName), 1u);
         EXPECT_EQ(state.destructions, 1u);
         metadata.extensions.clear();
@@ -380,10 +381,10 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
         EXPECT_EQ(firstState.memberDestructions, 1u);
         EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
         ASSERT_GT(secondOwnerArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(MakeNotNull(static_cast<TextExtension*>(secondMap.at(firstName).get()))->strings.size(), s_ExpectedDualCount);
+        EXPECT_EQ(MakeNotNull(static_cast<TextExtension*>(secondMap.at(firstName).get()))->strings.size(), 2u);
     }
     EXPECT_EQ(firstState.destructions, 1u);
-    EXPECT_EQ(secondState.destructions, s_ExpectedDualCount);
+    EXPECT_EQ(secondState.destructions, 2u);
     EXPECT_EQ(firstMapArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(secondMapArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
@@ -396,18 +397,18 @@ TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
     {
         ParsedAssetMetadata metadata(arena);
         const Name name(s_MovedSlotMetadataName);
-        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state));
+        const NotNull<AlignedExtension*> first = MakeNotNull(&RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state));
         ParsedMetadataExtension detached = Move(metadata.extensions.at(name));
         EXPECT_EQ(detached.get(), first.get());
-        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, name), nullptr);
-        AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state);
+        EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(name, metadata), nullptr);
+        AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state);
         EXPECT_NE(&replacement, first.get());
-        EXPECT_EQ(replacement.identity, s_ExpectedDualCount);
+        EXPECT_EQ(replacement.identity, 2u);
         EXPECT_EQ(metadata.extensions.size(), 1u);
         detached.reset();
         EXPECT_EQ(state.destructions, 1u);
     }
-    EXPECT_EQ(state.destructions, s_ExpectedDualCount);
+    EXPECT_EQ(state.destructions, 2u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -419,7 +420,7 @@ TEST(MetadataExtensionOwnership, ConstructorUnwindReleasesStorageAndConstructedM
         const Name name(s_ConstructorUnwindMetadataName);
         const u64 baseline = arena.memoryStats().usedBytes;
         EXPECT_THROW({
-            EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state, true).identity, 1u);
+            EXPECT_EQ(RequireParsedMetadataExtension<AlignedExtension>(name, metadata, arena, state, true).identity, 1u);
         }, ConstructionFailure
         );
         EXPECT_TRUE(metadata.extensions.empty());
@@ -436,7 +437,7 @@ TEST(MetadataExtensionOwnership, CallerUnwindDestroysPublishedExtensions){
     ExtensionState state;
     EXPECT_THROW({
         ParsedAssetMetadata metadata(arena);
-        const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, Name(s_CallerUnwindMetadataName), arena, state);
+        const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(Name(s_CallerUnwindMetadataName), metadata, arena, state);
         EXPECT_EQ(created.identity, 1u);
         throw CallerFailure{};
     }, CallerFailure
@@ -452,15 +453,15 @@ TEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue){
     {
         ParsedAssetMetadata metadata(arena);
         const Name name(s_ReentrantMetadataName);
-        ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(metadata, name, metadata, name, state, true);
-        EXPECT_EQ(result.identity, s_ExpectedDualCount);
+        ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(name, metadata, metadata, name, state, true);
+        EXPECT_EQ(result.identity, 2u);
         EXPECT_EQ(result.nested, nullptr);
-        EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(metadata, name));
+        EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(name, metadata));
         EXPECT_EQ(metadata.extensions.size(), 1u);
-        EXPECT_EQ(state.constructions, s_ExpectedDualCount);
+        EXPECT_EQ(state.constructions, 2u);
         EXPECT_EQ(state.destructions, 1u);
     }
-    EXPECT_EQ(state.destructions, s_ExpectedDualCount);
+    EXPECT_EQ(state.destructions, 2u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -499,7 +500,7 @@ TEST(MetadataExtensionOwnership, ExtensionsRetireBeforeTheEntryRegistryTheyBorro
         ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
         expectedBucketCount = metadata.entryRegistry.bucketCount();
         ASSERT_GE(expectedBucketCount, 7u);
-        const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(metadata, Name(s_RegistryLifetimeMetadataName), metadata.entryRegistry, observedBucketCount);
+        const RegistryBorrowingExtension& created = RequireParsedMetadataExtension<RegistryBorrowingExtension>(Name(s_RegistryLifetimeMetadataName), metadata, metadata.entryRegistry, observedBucketCount);
         EXPECT_EQ(&created.registry, &metadata.entryRegistry);
     }
     EXPECT_EQ(observedBucketCount, expectedBucketCount);
@@ -573,7 +574,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry, scratchArena));
             auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
             auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
-            EXPECT_EQ(ParseAssetMetadata(parseArena, files, cpuScheduler, scratchArena, metadata, root, NWB::Path(fixtureArena)), !rejectDuplicate);
+            EXPECT_EQ(ParseAssetMetadata(files, root, NWB::Path(fixtureArena), parseArena, cpuScheduler, scratchArena, metadata), !rejectDuplicate);
             ASSERT_EQ(samplers.size(), s_SamplerCount);
             EXPECT_GE(samplers.capacity(), s_SamplerCount);
             EXPECT_TRUE(models.empty());
@@ -620,7 +621,7 @@ TEST(MetadataDiscoveryAdmission, CaseDistinctNativeFilesBothReachMetadataAdmissi
     CookVector<ResolvedAssetRoot> roots(arena);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
     roots.emplace_back(NWB::Path(arena, root), s_ProjectVirtualRoot);
-    const auto files = DiscoverFilesWithExtension(arena, roots, s_NwbExtension, scratchArena);
+    const auto files = DiscoverFilesWithExtension(roots, s_NwbExtension, arena, scratchArena);
     ASSERT_TRUE(files);
     ASSERT_EQ(files->size(), 2u);
     EXPECT_NE((*files)[0].filePath, (*files)[1].filePath);
@@ -647,7 +648,7 @@ TEST(AssetCodecAdmission, NullClassAllocationDoesNotCallAssetLoad){
     NullAllocatedAsset::s_LoadCalled = false;
     NullAllocatedCodec codec;
     AssetBytes bytes(arena);
-    const auto result = codec.deserialize(arena, Name("project/tests/null_asset"), bytes);
+    const auto result = codec.deserialize(Name("project/tests/null_asset"), bytes, arena);
     EXPECT_FALSE(result);
     EXPECT_EQ(NullAllocatedAsset::s_ConstructorCalls, 0u);
     EXPECT_FALSE(NullAllocatedAsset::s_LoadCalled);

@@ -45,9 +45,9 @@ inline constexpr usize s_Utf8BomByteCount = 3u;
 inline constexpr u8 s_Utf8BomByte0 = 0xEFu;
 inline constexpr u8 s_Utf8BomByte1 = 0xBBu;
 inline constexpr u8 s_Utf8BomByte2 = 0xBFu;
-inline constexpr i32 s_Utf8TwoByteLength = 2;
-inline constexpr i32 s_Utf8ThreeByteLength = 3;
-inline constexpr i32 s_Utf8FourByteLength = 4;
+using BasicStringDetail::s_Utf8TwoByteLength;
+using BasicStringDetail::s_Utf8ThreeByteLength;
+using BasicStringDetail::s_Utf8FourByteLength;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -272,10 +272,6 @@ inline void StripUtf8Bom(StringT& inOutText)noexcept(noexcept(HasUtf8Bom(inOutTe
 }
 
 
-[[nodiscard]] inline constexpr b8 IsUtf8Continuation(const u8 value)noexcept{
-    return (value & BasicStringDetail::s_Utf8ContinuationMask) == BasicStringDetail::s_Utf8ContinuationMarker;
-}
-
 [[nodiscard]] inline constexpr b8 IsUtf8ScalarBoundary(const AStringView text, const usize byteOffset)noexcept{
     return byteOffset <= text.size() && (byteOffset == text.size() || !IsUtf8Continuation(static_cast<u8>(text[byteOffset])));
 }
@@ -286,71 +282,10 @@ struct DecodedUtf8CodePoint{
 };
 
 [[nodiscard]] inline Expected<DecodedUtf8CodePoint> DecodeUtf8CodePoint(const AStringView bytes)noexcept{
-    u32 unicode = 0u;
-    if(bytes.empty())
+    DecodedUtf8CodePoint decoded{};
+    if(!BasicStringDetail::TryDecodeUtf8CodePoint(decoded.codePoint, decoded.byteCount, bytes))
         return MakeUnexpected(Failure{});
-
-    const u8 c0 = static_cast<u8>(bytes[0]);
-    if(c0 < s_Utf8OneByteMaxExclusive){
-        unicode = c0;
-        return DecodedUtf8CodePoint{ unicode, 1 };
-    }
-
-    if((c0 & BasicStringDetail::s_Utf8TwoByteMask) == BasicStringDetail::s_Utf8TwoByteMarker){
-        if(bytes.size() < TextDetail::s_Utf8TwoByteLength)
-            return MakeUnexpected(Failure{});
-
-        const u8 c1 = static_cast<u8>(bytes[1]);
-        if(!IsUtf8Continuation(c1))
-            return MakeUnexpected(Failure{});
-
-        unicode = (static_cast<u32>(c0 & BasicStringDetail::s_Utf8TwoBytePayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits) | static_cast<u32>(c1 & BasicStringDetail::s_Utf8ContinuationPayloadMask);
-        if(unicode < BasicStringDetail::s_Utf8TwoByteMinCodePoint)
-            return MakeUnexpected(Failure{});
-        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8TwoByteLength };
-    }
-
-    if((c0 & BasicStringDetail::s_Utf8ThreeByteMask) == BasicStringDetail::s_Utf8ThreeByteMarker){
-        if(bytes.size() < TextDetail::s_Utf8ThreeByteLength)
-            return MakeUnexpected(Failure{});
-
-        const u8 c1 = static_cast<u8>(bytes[1]);
-        const u8 c2 = static_cast<u8>(bytes[2]);
-        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
-            return MakeUnexpected(Failure{});
-
-        unicode =
-            (static_cast<u32>(c0 & BasicStringDetail::s_Utf8ThreeBytePayloadMask) << (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u))
-            | (static_cast<u32>(c1 & BasicStringDetail::s_Utf8ContinuationPayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits)
-            | static_cast<u32>(c2 & BasicStringDetail::s_Utf8ContinuationPayloadMask)
-        ;
-        if(unicode < BasicStringDetail::s_Utf8ThreeByteMinCodePoint)
-            return MakeUnexpected(Failure{});
-        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8ThreeByteLength };
-    }
-
-    if((c0 & BasicStringDetail::s_Utf8FourByteMask) == BasicStringDetail::s_Utf8FourByteMarker){
-        if(bytes.size() < TextDetail::s_Utf8FourByteLength)
-            return MakeUnexpected(Failure{});
-
-        const u8 c1 = static_cast<u8>(bytes[1]);
-        const u8 c2 = static_cast<u8>(bytes[2]);
-        const u8 c3 = static_cast<u8>(bytes[3]);
-        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2) || !IsUtf8Continuation(c3))
-            return MakeUnexpected(Failure{});
-
-        unicode =
-            (static_cast<u32>(c0 & BasicStringDetail::s_Utf8FourBytePayloadMask) << (BasicStringDetail::s_Utf8ContinuationPayloadBits * 3u))
-            | (static_cast<u32>(c1 & BasicStringDetail::s_Utf8ContinuationPayloadMask) << (BasicStringDetail::s_Utf8ContinuationPayloadBits * 2u))
-            | (static_cast<u32>(c2 & BasicStringDetail::s_Utf8ContinuationPayloadMask) << BasicStringDetail::s_Utf8ContinuationPayloadBits)
-            | static_cast<u32>(c3 & BasicStringDetail::s_Utf8ContinuationPayloadMask)
-        ;
-        if(unicode < BasicStringDetail::s_Utf8FourByteMinCodePoint || unicode > s_UnicodeMaxCodePoint)
-            return MakeUnexpected(Failure{});
-        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8FourByteLength };
-    }
-
-    return MakeUnexpected(Failure{});
+    return decoded;
 }
 
 [[nodiscard]] inline Expected<DecodedUtf8CodePoint> DecodeUtf8Scalar(const AStringView bytes)noexcept{
@@ -360,7 +295,7 @@ struct DecodedUtf8CodePoint{
     return *decoded;
 }
 
-[[nodiscard]] inline constexpr Expected<usize> EncodeUtf8CodePoint(const u32 codePoint, char (&outBytes)[s_Utf8MaxSequenceBytes])noexcept{
+[[nodiscard]] inline constexpr Expected<usize> EncodeUtf8CodePoint(const u32 codePoint, const Span<char, s_Utf8MaxSequenceBytes> outBytes)noexcept{
     if(!IsUnicodeScalarValue(codePoint))
         return MakeUnexpected(Failure{});
     if(codePoint < BasicStringDetail::s_Utf8TwoByteMinCodePoint){
@@ -424,7 +359,6 @@ template<typename ByteContainer>
     && noexcept(bytes.data())
 ){
     using ByteType = typename ByteContainer::value_type;
-    static constexpr usize s_ByteTypeByteSize = 1u;
     static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "NextLfByteLine requires a byte-sized container");
 
     if(inOutCursor >= bytes.size())

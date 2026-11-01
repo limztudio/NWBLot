@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,9 +25,6 @@ namespace __hidden_assets_material_runtime{
 
 
 inline constexpr TStringView s_MaterialLoadBinaryContext = NWB_TEXT("Material::loadBinary");
-inline constexpr TStringView s_AvboitAccumulatePassText = NWB_TEXT("accumulate");
-inline constexpr TStringView s_AvboitOccupancyPassText = NWB_TEXT("occupancy");
-inline constexpr TStringView s_AvboitExtinctionPassText = NWB_TEXT("extinction");
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAssetCodec);
 
@@ -82,30 +80,30 @@ static b8 ValidateMaterialTypedLayout(const u64 layoutHash, const Span<const Mat
                 return false;
             }
 
-            const auto expectedFieldOffset = AlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType);
-            if(!expectedFieldOffset){
+            u32 expectedFieldOffset = 0u;
+            if(!TryAlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType, expectedFieldOffset)){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} alignment overflows"), failureContext, fieldIndex);
                 return false;
             }
-            if(field.offset != *expectedFieldOffset){
+            if(field.offset != expectedFieldOffset){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has misaligned offset"), failureContext, fieldIndex);
                 return false;
             }
 
             const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
-            if(fieldByteSize == 0u || *expectedFieldOffset > Limit<u32>::s_Max - fieldByteSize){
+            if(fieldByteSize == 0u || expectedFieldOffset > Limit<u32>::s_Max - fieldByteSize){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} byte size overflows"), failureContext, fieldIndex);
                 return false;
             }
-            expectedOffset = *expectedFieldOffset + fieldByteSize;
+            expectedOffset = expectedFieldOffset + fieldByteSize;
         }
 
-        const auto expectedBlockByteSize = AlignMaterialLayoutBlockByteSize(expectedOffset);
-        if(!expectedBlockByteSize){
+        u32 expectedBlockByteSize = 0u;
+        if(!TryAlignMaterialLayoutBlockByteSize(expectedOffset, expectedBlockByteSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size overflows"), failureContext, blockIndex);
             return false;
         }
-        if(*expectedBlockByteSize != block.byteSize){
+        if(expectedBlockByteSize != block.byteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size does not match its fields"), failureContext, blockIndex);
             return false;
         }
@@ -183,21 +181,12 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
     }
     payload.blocks.reserve(blockCount);
     for(u32 i = 0u; i < blockCount; ++i){
-        MaterialTypedLayoutBlockBinary blockBinary;
         const auto blockBinaryResult = ReadPOD<MaterialTypedLayoutBlockBinary>(binary, inOutCursor);
         if(!blockBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed layout block at index {}"), i);
             return MakeUnexpected(Failure{});
         }
-        blockBinary = *blockBinaryResult;
-
-        MaterialTypedLayoutBlock block;
-        block.blockName = Name(blockBinary.blockNameHash);
-        block.blockClass = static_cast<MaterialBlockClass::Enum>(blockBinary.blockClass);
-        block.fieldBegin = blockBinary.fieldBegin;
-        block.fieldCount = blockBinary.fieldCount;
-        block.byteSize = blockBinary.byteSize;
-        payload.blocks.push_back(block);
+        payload.blocks.push_back(UnpackMaterialTypedLayoutBlockBinary(*blockBinaryResult));
     }
 
     if(fieldCount > (binary.size() - inOutCursor) / s_MaterialTypedLayoutFieldBytes){
@@ -206,20 +195,12 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
     }
     payload.fields.reserve(fieldCount);
     for(u32 i = 0u; i < fieldCount; ++i){
-        MaterialTypedLayoutFieldBinary fieldBinary;
         const auto fieldBinaryResult = ReadPOD<MaterialTypedLayoutFieldBinary>(binary, inOutCursor);
         if(!fieldBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed typed layout field at index {}"), i);
             return MakeUnexpected(Failure{});
         }
-        fieldBinary = *fieldBinaryResult;
-
-        MaterialTypedLayoutField field;
-        field.fieldName = Name(fieldBinary.fieldNameHash);
-        field.fieldType = static_cast<MaterialLayoutFieldType::Enum>(fieldBinary.fieldType);
-        field.offset = fieldBinary.offset;
-        field.defaultValue = fieldBinary.defaultValue;
-        payload.fields.push_back(field);
+        payload.fields.push_back(UnpackMaterialTypedLayoutFieldBinary(*fieldBinaryResult));
     }
 
     u32 blockByteCount = 0u;
@@ -253,27 +234,16 @@ static Expected<MaterialTypedLayoutPayload> ReadMaterialTypedLayout(const Span<c
     }
     payload.resourceReferences.reserve(resourceReferenceCount);
     for(u32 i = 0u; i < resourceReferenceCount; ++i){
-        MaterialResourceReferenceBinary resourceReferenceBinary;
         const auto resourceReferenceBinaryResult = ReadPOD<MaterialResourceReferenceBinary>(binary, inOutCursor);
         if(!resourceReferenceBinaryResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
             return MakeUnexpected(Failure{});
         }
-        resourceReferenceBinary = *resourceReferenceBinaryResult;
-        const MaterialResourceKind::Enum resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
-        const Name resourceName(resourceReferenceBinary.resourceNameHash);
-        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceName)){
+        MaterialResourceReference resourceReference;
+        if(!TryUnpackMaterialResourceReferenceBinary(*resourceReferenceBinaryResult, resourceReference)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity"), i);
             return MakeUnexpected(Failure{});
         }
-
-        MaterialResourceReference resourceReference;
-        resourceReference.blockName = Name(resourceReferenceBinary.blockNameHash);
-        resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
-        resourceReference.resourceKind = resourceKind;
-        resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
-        if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
-            return MakeUnexpected(Failure{});
         payload.resourceReferences.push_back(resourceReference);
     }
 
@@ -415,13 +385,10 @@ b8 Material::loadBinary(const Span<const u8> binary){
         return false;
     }
     materialFlags = *materialFlagsResult;
-    if((materialFlags & ~MaterialFlag::All) != 0u){
+    if(!TryUnpackMaterialFlags(materialFlags, candidate.m_transparent, candidate.m_twoSided, candidate.m_refractive)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
-    candidate.m_transparent = (materialFlags & MaterialFlag::Transparent) != 0u;
-    candidate.m_twoSided = (materialFlags & MaterialFlag::TwoSided) != 0u;
-    candidate.m_refractive = (materialFlags & MaterialFlag::Refractive) != 0u;
 
     const auto shadingModelIdResult = ReadPOD<u32>(binary, cursor);
     if(!shadingModelIdResult){
@@ -438,45 +405,45 @@ b8 Material::loadBinary(const Span<const u8> binary){
     candidate.m_surfaceDispatchId = *surfaceDispatchIdResult;
 
     // Per-material AVBOIT shaders (transparent only): accumulate, occupancy, extinction as flag plus hash.
-    const auto readOptionalAvboitPixelShader = [&](const TStringView passLabel) -> Expected<Core::Assets::AssetRef<PixelShader>>{
+    const auto readOptionalAvboitPixelShader = [&](const AStringView passLabel) -> Expected<Core::Assets::AssetRef<PixelShader>>{
         u32 hasShader = 0u;
         const auto hasShaderResult = ReadPOD<u32>(binary, cursor);
         if(!hasShaderResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader presence flag"), passLabel);
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader presence flag"), ConvertString(passLabel));
             return MakeUnexpected(Failure{});
         }
         hasShader = *hasShaderResult;
         if(hasShader > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid AVBOIT {} pixel shader presence flag {}"), passLabel, hasShader);
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid AVBOIT {} pixel shader presence flag {}"), ConvertString(passLabel), hasShader);
             return MakeUnexpected(Failure{});
         }
         if(hasShader == 1u){
             NameHash shaderNameHash;
             const auto shaderNameHashResult = ReadPOD<NameHash>(binary, cursor);
             if(!shaderNameHashResult){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader name"), passLabel);
+                NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader name"), ConvertString(passLabel));
                 return MakeUnexpected(Failure{});
             }
             shaderNameHash = *shaderNameHashResult;
             Core::Assets::AssetRef<PixelShader> shaderRef;
             shaderRef.virtualPath = Name(shaderNameHash);
             if(!shaderRef.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT {} pixel shader name is empty"), passLabel);
+                NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT {} pixel shader name is empty"), ConvertString(passLabel));
                 return MakeUnexpected(Failure{});
             }
             return shaderRef;
         }
         return Core::Assets::AssetRef<PixelShader>{};
     };
-    const auto accumulateShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitAccumulatePassText);
+    const auto accumulateShader = readOptionalAvboitPixelShader(s_MaterialAvboitAccumulatePassLabel);
     if(!accumulateShader)
         return false;
     candidate.m_avboitAccumulatePixelShader = *accumulateShader;
-    const auto occupancyShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitOccupancyPassText);
+    const auto occupancyShader = readOptionalAvboitPixelShader(s_MaterialAvboitOccupancyPassLabel);
     if(!occupancyShader)
         return false;
     candidate.m_avboitOccupancyPixelShader = *occupancyShader;
-    const auto extinctionShader = readOptionalAvboitPixelShader(__hidden_assets_material_runtime::s_AvboitExtinctionPassText);
+    const auto extinctionShader = readOptionalAvboitPixelShader(s_MaterialAvboitExtinctionPassLabel);
     if(!extinctionShader)
         return false;
     candidate.m_avboitExtinctionPixelShader = *extinctionShader;

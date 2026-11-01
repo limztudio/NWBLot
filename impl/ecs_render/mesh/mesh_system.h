@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
@@ -42,8 +43,6 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-    struct MeshViewGpuData;
-    struct MeshViewBufferUpload;
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
         Name identity = s_NameNone;
@@ -102,66 +101,29 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMeshState;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererMeshSystem final : NoCopy{
-private:
-    static constexpr u32 s_MeshPositionBindingSlot = NWB_MESH_BINDING_POSITION;
-    static constexpr u32 s_MeshNormalBindingSlot = NWB_MESH_BINDING_NORMAL;
-    static constexpr u32 s_MeshTangentBindingSlot = NWB_MESH_BINDING_TANGENT;
-    static constexpr u32 s_MeshUv0BindingSlot = NWB_MESH_BINDING_UV0;
-    static constexpr u32 s_MeshColorBindingSlot = NWB_MESH_BINDING_COLOR;
-    static constexpr u32 s_MeshletDescBindingSlot = NWB_MESH_BINDING_MESHLET_DESC;
-    static constexpr u32 s_MeshletBoundsBindingSlot = NWB_MESH_BINDING_MESHLET_BOUNDS;
-    static constexpr u32 s_MeshletPositionRefBindingSlot = NWB_MESH_BINDING_MESHLET_POSITION_REFS;
-    static constexpr u32 s_MeshletAttributeRefBindingSlot = NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS;
-    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
-    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
-
-
 public:
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
 
     template<typename BindingHandler>
-    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, false))){
-        handler(s_MeshPositionBindingSlot, false);
-        handler(s_MeshNormalBindingSlot, false);
-        handler(s_MeshTangentBindingSlot, false);
-        handler(s_MeshUv0BindingSlot, false);
-        handler(s_MeshColorBindingSlot, false);
-        handler(s_MeshletDescBindingSlot, false);
-        handler(s_MeshletBoundsBindingSlot, true);
-        handler(s_MeshletPositionRefBindingSlot, true);
-        handler(s_MeshletAttributeRefBindingSlot, true);
-        handler(s_MeshletLocalVertexRefBindingSlot, false);
-        handler(s_MeshletPrimitiveIndexBindingSlot, true);
+    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(NWB_MESH_BINDING_POSITION, false))){
+        handler(NWB_MESH_BINDING_POSITION, false);
+        handler(NWB_MESH_BINDING_NORMAL, false);
+        handler(NWB_MESH_BINDING_TANGENT, false);
+        handler(NWB_MESH_BINDING_UV0, false);
+        handler(NWB_MESH_BINDING_COLOR, false);
+        handler(NWB_MESH_BINDING_MESHLET_DESC, false);
+        handler(NWB_MESH_BINDING_MESHLET_BOUNDS, true);
+        handler(NWB_MESH_BINDING_MESHLET_POSITION_REFS, true);
+        handler(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS, true);
+        handler(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS, false);
+        handler(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES, true);
     }
 
-    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept{
-        switch(bindingSlot){
-        case s_MeshPositionBindingSlot: return mesh.positionBuffer;
-        case s_MeshNormalBindingSlot: return mesh.normalBuffer;
-        case s_MeshTangentBindingSlot: return mesh.tangentBuffer;
-        case s_MeshUv0BindingSlot: return mesh.uv0Buffer;
-        case s_MeshColorBindingSlot: return mesh.colorBuffer;
-        case s_MeshletDescBindingSlot: return mesh.meshletDescBuffer;
-        case s_MeshletBoundsBindingSlot: return mesh.meshletBoundsBuffer;
-        case s_MeshletPositionRefBindingSlot: return mesh.meshletPositionRefDeltaBuffer;
-        case s_MeshletAttributeRefBindingSlot: return mesh.meshletAttributeRefDeltaBuffer;
-        case s_MeshletLocalVertexRefBindingSlot: return mesh.meshletLocalVertexRefBuffer;
-        case s_MeshletPrimitiveIndexBindingSlot: return mesh.meshletPrimitiveIndexBuffer;
-        default:
-            NWB_ASSERT(false);
-            return mesh.positionBuffer;
-        }
-    }
+    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot)noexcept;
 
     template<typename BufferHandler>
-    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, s_MeshPositionBindingSlot), DeclVal<const b8&>()))){
+    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler)noexcept(noexcept(handler(DeclVal<const u32&>(), MeshSourceBuffer(mesh, NWB_MESH_BINDING_POSITION), DeclVal<const b8&>()))){
         ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8 rawView)noexcept(noexcept(handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView))){
             handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
         });
@@ -169,13 +131,18 @@ public:
 
 
 public:
-    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState)noexcept;
+    RendererMeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererMeshState& meshState)noexcept
+        : m_arena(arena)
+        , m_world(world)
+        , m_graphics(graphics)
+        , m_assetManager(assetManager)
+        , m_meshState(meshState)
+    {}
 
 
 public:
     void invalidateResources();
     [[nodiscard]] Expected<NotNull<MeshResources*>> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset)noexcept;
     // Graph declaration resolves prepared keys without touching assets or mesh state.
     [[nodiscard]] Expected<NotNull<MeshResources*>> findMeshResources(const Name& meshKey)noexcept;
     [[nodiscard]] Expected<NotNull<MeshResources*>> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
@@ -197,13 +164,13 @@ public:
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
-    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState)noexcept;
-    void invalidateMeshViewBufferUploadMirror()noexcept;
+    [[nodiscard]] MeshViewBufferUpload prepareMeshViewBufferUpload(f32 fallbackAspectRatio)const noexcept;
+    void confirmMeshViewBufferUpload(const MeshViewGpuData& viewState)noexcept;
+    void invalidateMeshViewBufferUploadMirror()noexcept{ m_meshState.m_meshViewGpuDataValid = false; }
     [[nodiscard]] b8 prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
     [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
     [[nodiscard]] b8 meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept;
-    void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const noexcept;
+    void populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
 

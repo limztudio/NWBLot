@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 
@@ -31,7 +31,7 @@ class RendererMeshSystem;
 // Graphics-prefix scene uploads own mesh-view plus scene light/shading upload chain.
 struct PrefixSceneUploadInputs{
     RayTracingLightingClassificationInput rayTracingLightingInput;
-    const ECSRenderDetail::MeshViewGpuData& meshViewState;
+    const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId meshView;
     Core::GpuGraphResourceId lights;
     Core::GpuGraphResourceId sceneShading;
@@ -51,7 +51,7 @@ struct PrefixSceneUploadResult{
     Core::GpuTaskId meshViewSetupTask;
     Core::GpuTaskId sceneShadingSetupTask;
     RayTracingLightingClassification lightingClassification;
-    SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
+    Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lightData{};
     u32 lightCount = 0u;
     u64 sceneLightingContentHash = 0u;
 };
@@ -62,7 +62,12 @@ struct PrefixSceneUploadResult{
 
 class PrefixSceneUploadBuilder final : NoCopy{
 public:
-    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics)noexcept;
+    PrefixSceneUploadBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem, RendererMeshSystem& meshSystem, Core::GraphicsRuntime& graphics)noexcept
+        : m_graph(graph)
+        , m_deferredSystem(deferredSystem)
+        , m_meshSystem(meshSystem)
+        , m_graphics(graphics)
+    {}
 
 
 public:

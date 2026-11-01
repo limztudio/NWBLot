@@ -4,8 +4,9 @@
 
 #include "value.h"
 
+#include "operation_validator.h"
+
 #include <global/allocation_size.h>
-#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,22 +24,15 @@ namespace __hidden_metascript_value{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_IntegerOverflowMessage = NWB_TEXT("integer overflow");
-inline constexpr TStringView s_DivisionByZeroMessage = NWB_TEXT("division by zero");
-inline constexpr TStringView s_ListAppendSizeOverflowMessage = NWB_TEXT("list append size overflow");
-inline constexpr TStringView s_StringConcatenationSizeOverflowMessage = NWB_TEXT("string concatenation size overflow");
-inline constexpr TStringView s_ListConcatenationSizeOverflowMessage = NWB_TEXT("list concatenation size overflow");
-inline constexpr TStringView s_StringAppendSizeOverflowMessage = NWB_TEXT("string append size overflow");
-
-template<typename IntOverflowCheck, typename IntOp, typename SimdOp>
-void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, SimdOp&& simdOp, const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
+template<typename IntOverflowCheck, typename IntOp, typename FloatOp>
+void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOverflowCheck&& overflows, IntOp&& intOp, FloatOp&& floatOp, const TStringView invalidOpMessage, const b8 rejectZeroDivisor = false)noexcept{
     if(lhs.isInteger() && rhs.isInteger()){
         if(rejectZeroDivisor && rhs.asInteger() == 0){
-            NWB_ASSERT_MSG(false, s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
             return;
         }
         if(overflows(lhs.asInteger(), rhs.asInteger())){
-            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return;
         }
         target.setInteger(intOp(lhs.asInteger(), rhs.asInteger()));
@@ -47,10 +41,10 @@ void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOv
 
     if(lhs.isNumeric() && rhs.isNumeric()){
         if(rejectZeroDivisor && rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_DivisionByZeroText);
             return;
         }
-        target.setDouble(VectorDoubleGetX(simdOp(VectorDoubleReplicate(lhs.toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
+        target.setDouble(floatOp(lhs.toDouble(), rhs.toDouble()));
         return;
     }
 
@@ -67,35 +61,27 @@ void ApplyNumericBinary(Value& target, const Value& lhs, const Value& rhs, IntOv
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Value Value::Reference(MStringView val, MetaArena& arena){
+Value Value::Reference(const MStringView val, MetaArena& arena){
     Value out(arena);
     out.setReference(val);
     return out;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Value::Value(MetaArena& arena)noexcept
-    : m_arena(arena)
-{}
-
-Value::Value(i64 val, MetaArena& arena)noexcept
+Value::Value(const i64 val, MetaArena& arena)noexcept
     : m_arena(arena)
     , m_type(ValueType::Integer)
 {
     m_data.m_integer = val;
 }
 
-Value::Value(f64 val, MetaArena& arena)noexcept
+Value::Value(const f64 val, MetaArena& arena)noexcept
     : m_arena(arena)
     , m_type(ValueType::Double)
 {
     m_data.m_double = val;
 }
 
-Value::Value(MStringView val, MetaArena& arena)
+Value::Value(const MStringView val, MetaArena& arena)
     : m_arena(arena)
 {
     setStringOrReference(val, ValueType::String);
@@ -143,24 +129,22 @@ Value& Value::operator=(Value&& other){
 
 
 Value Value::operator+(const Value& rhs)const{
-    using namespace __hidden_metascript_value;
-
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return Value(m_arena);
         }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
     }
 
     if(isNumeric() && rhs.isNumeric())
-        return Value(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))), m_arena);
+        return Value(toDouble() + rhs.toDouble(), m_arena);
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         const auto lsv = asString();
         const auto rsv = rhs.asString();
         if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
-            NWB_ASSERT_MSG(false, s_StringConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_StringConcatenationSizeOverflowText);
             return Value(m_arena);
         }
 
@@ -182,12 +166,12 @@ Value Value::operator+(const Value& rhs)const{
         v.makeList();
         auto& dst = *v.m_data.m_list;
         if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
-            NWB_ASSERT_MSG(false, s_ListConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_ListConcatenationSizeOverflowText);
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
-        v.appendListCopies(*m_data.m_list, m_data.m_list->size());
-        v.appendListCopies(*rhs.m_data.m_list, rhs.m_data.m_list->size());
+        v.appendListCopies(*m_data.m_list);
+        v.appendListCopies(*rhs.m_data.m_list);
         return v;
     }
 
@@ -203,7 +187,7 @@ Value Value::operator-(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleSubtract(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a - b; },
         NWB_TEXT("invalid operand types for operator-")
     );
     return out;
@@ -217,7 +201,7 @@ Value Value::operator*(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleMultiply(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a * b; },
         NWB_TEXT("invalid operand types for operator*")
     );
     return out;
@@ -231,7 +215,7 @@ Value Value::operator/(const Value& rhs)const noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleDivide(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a / b; },
         NWB_TEXT("invalid operand types for operator/"),
         true
     );
@@ -239,11 +223,9 @@ Value Value::operator/(const Value& rhs)const noexcept{
 }
 
 Value& Value::operator+=(const Value& rhs){
-    using namespace __hidden_metascript_value;
-
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_IntegerOverflowText);
             return *this;
         }
         m_data.m_integer += rhs.m_data.m_integer;
@@ -251,13 +233,13 @@ Value& Value::operator+=(const Value& rhs){
     }
 
     if(isNumeric() && rhs.isNumeric()){
-        setDouble(VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(toDouble()), VectorDoubleReplicate(rhs.toDouble()))));
+        setDouble(toDouble() + rhs.toDouble());
         return *this;
     }
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
-            NWB_ASSERT_MSG(false, s_StringAppendSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, OperationValidator::s_StringAppendSizeOverflowText);
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
@@ -271,21 +253,21 @@ Value& Value::operator+=(const Value& rhs){
             // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
-                NWB_ASSERT_MSG(false, s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
                 return *this;
             }
             const usize appendCount = sourceList.size();
             const usize requiredListCapacity = m_data.m_list->size() + appendCount;
             ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
-            appendListCopies(sourceList, appendCount);
+            appendListCopies(Span<const Value>(sourceList.data(), appendCount));
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
-                NWB_ASSERT_MSG(false, s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
-            const auto rhsIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &rhs, 1u);
+            const auto rhsIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, Span<const Value>(&rhs, 1u));
             const usize requiredListCapacity = listSize + 1u;
             ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
             appendListCopy(rhsIndex ? (*m_data.m_list)[*rhsIndex] : rhs);
@@ -304,7 +286,7 @@ Value& Value::operator-=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return SubtractOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a - b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleSubtract(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a - b; },
         NWB_TEXT("invalid operand types for operator-=")
     );
     return *this;
@@ -317,7 +299,7 @@ Value& Value::operator*=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return MultiplyOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a * b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleMultiply(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a * b; },
         NWB_TEXT("invalid operand types for operator*=")
     );
     return *this;
@@ -330,7 +312,7 @@ Value& Value::operator/=(const Value& rhs)noexcept{
         rhs,
         [](const i64 a, const i64 b)noexcept{ return DivideOverflows<i64>(a, b); },
         [](const i64 a, const i64 b)noexcept{ return a / b; },
-        [](const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept{ return VectorDoubleDivide(a, b); },
+        [](const f64 a, const f64 b)noexcept{ return a / b; },
         NWB_TEXT("invalid operand types for operator/="),
         true
     );
@@ -388,14 +370,13 @@ Value::MapType& Value::asMap()noexcept{
     return *m_data.m_map;
 }
 
-void Value::setInteger(i64 val)noexcept{
+void Value::setInteger(const i64 val)noexcept{
     destroy();
     m_type = ValueType::Integer;
     m_data.m_integer = val;
 }
 
-
-void Value::setDouble(f64 val)noexcept{
+void Value::setDouble(const f64 val)noexcept{
     destroy();
     m_type = ValueType::Double;
     m_data.m_double = val;
@@ -454,7 +435,7 @@ void Value::append(Value&& val){
 
     const usize listSize = m_data.m_list->size();
     if(listSize == Limit<usize>::s_Max){
-        NWB_ASSERT_MSG(false, __hidden_metascript_value::s_ListAppendSizeOverflowMessage);
+        NWB_ASSERT_MSG(false, OperationValidator::s_ListAppendSizeOverflowText);
         return;
     }
 
@@ -463,7 +444,7 @@ void Value::append(Value&& val){
         return;
     }
 
-    const auto valIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &val, 1u);
+    const auto valIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, Span<const Value>(&val, 1u));
     if(valIndex){
         const usize requiredListCapacity = listSize + 1u;
         ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
@@ -535,7 +516,7 @@ void Value::copyFrom(const Value& other){
     case ValueType::List:
         candidate.makeList();
         candidate.m_data.m_list->reserve(other.m_data.m_list->size());
-        candidate.appendListCopies(*other.m_data.m_list, other.m_data.m_list->size());
+        candidate.appendListCopies(*other.m_data.m_list);
         break;
     case ValueType::Map:
         candidate.makeMap();
@@ -574,10 +555,9 @@ void Value::appendListCopy(const Value& val){
     m_data.m_list->push_back(Move(candidate));
 }
 
-void Value::appendListCopies(const Span<const Value> values, const usize count){
-    NWB_ASSERT(count <= values.size());
-    for(usize i = 0u; i < count; ++i)
-        appendListCopy(values[i]);
+void Value::appendListCopies(const Span<const Value> values){
+    for(const Value& value : values)
+        appendListCopy(value);
 }
 
 NotNull<Value::ListType*> Value::allocList()const{

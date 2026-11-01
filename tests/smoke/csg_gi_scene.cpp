@@ -46,7 +46,11 @@ static constexpr SmokeMaterialRef s_MixedMaterial{"project/smoke/gi/materials/cs
 static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surface";
 static constexpr Float4 s_Black(0.0f, 0.0f, 0.0f, 1.0f);
 static constexpr Float4 s_White(1.0f, 1.0f, 1.0f, 1.0f);
-static constexpr Name s_Groups[] = { Name("smoke/gi/passage"), Name("smoke/gi/cap"), Name("smoke/gi/mixed") };
+static constexpr Array<Name, 3> s_Groups = { Name("smoke/gi/passage"), Name("smoke/gi/cap"), Name("smoke/gi/mixed") };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct Box{
     Float3U minimum;
@@ -57,59 +61,59 @@ struct Box{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::ECS::EntityID CreateBox(Core::ECS::World& world, const Box& box, const SmokeMaterialRef& material, const Float4& tint){
+[[nodiscard]] static Core::ECS::EntityID CreateBox(const Box& box, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
     const SIMDVectorSingle minimum = LoadFloat(box.minimum);
     const SIMDVectorSingle maximum = LoadFloat(box.maximum);
     Float4 center;
     Float4 extent;
     StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
     StoreFloat(VectorSubtract(maximum, minimum), extent);
-    return CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_MaterialInterface, tint, center, extent);
+    return CreateTintedStaticMeshEntity(s_CubeMesh, material, s_MaterialInterface, tint, center, extent, world);
 }
 
-[[nodiscard]] static b8 CreateReferencePieces(Core::ECS::World& world, const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint){
+[[nodiscard]] static b8 CreateReferencePieces(const Box& box, const Box& cutter, const SmokeMaterialRef& material, const Float4& tint, Core::ECS::World& world){
     Float3U lower;
     Float3U upper;
     StoreFloat(VectorMax(LoadFloat(box.minimum), LoadFloat(cutter.minimum)), lower);
     StoreFloat(VectorMin(LoadFloat(box.maximum), LoadFloat(cutter.maximum)), upper);
     // Ordinary closed pieces provide independent triangle geometry for the same subtraction union.
-    const Box pieces[] = {
+    const Array<Box, 6> pieces = {{
         { box.minimum, Float3U(lower.x, box.maximum.y, box.maximum.z) },
         { Float3U(upper.x, box.minimum.y, box.minimum.z), box.maximum },
         { Float3U(lower.x, box.minimum.y, box.minimum.z), Float3U(upper.x, lower.y, box.maximum.z) },
         { Float3U(lower.x, upper.y, box.minimum.z), Float3U(upper.x, box.maximum.y, box.maximum.z) },
         { Float3U(lower.x, lower.y, box.minimum.z), Float3U(upper.x, upper.y, lower.z) },
         { Float3U(lower.x, lower.y, upper.z), Float3U(upper.x, upper.y, box.maximum.z) },
-    };
+    }};
     for(const auto& piece : pieces){
         if(piece.minimum.x >= piece.maximum.x || piece.minimum.y >= piece.maximum.y || piece.minimum.z >= piece.maximum.z)
             continue;
-        if(!CreateBox(world, piece, material, tint).valid())
+        if(!CreateBox(piece, material, tint, world).valid())
             return false;
     }
     return true;
 }
 
-[[nodiscard]] static b8 CreateSubtraction(Core::ECS::World& world, const Box& box, const Box& cutter, const u32 slot, const AStringView arm){
+[[nodiscard]] static b8 CreateSubtraction(const Box& box, const Box& cutter, const u32 slot, const AStringView arm, Core::ECS::World& world){
     const auto& material = slot == 0u ? s_DiffuseMaterial : s_CapMaterial;
     const Float4& tint = slot == 0u ? s_Black : s_White;
     if(arm == s_ReferenceArm)
-        return CreateReferencePieces(world, box, cutter, material, tint);
+        return CreateReferencePieces(box, cutter, material, tint, world);
 
-    const auto receiver = CreateBox(world, box, material, tint);
+    const auto receiver = CreateBox(box, material, tint, world);
     if(!receiver.valid())
         return false;
-    AddStaticCsgMeshReceiver(world, receiver, s_Groups[slot], true, false);
+    AddStaticCsgMeshReceiver(receiver, s_Groups[slot], true, false, world);
     // Overlapping cutters form one opening without an internal GI seam.
     const SIMDVectorSingle cutterBegin = VectorReplicate(cutter.minimum.x);
     const SIMDVectorSingle cutterSpan = VectorSubtract(VectorReplicate(cutter.maximum.x), cutterBegin);
     const SIMDVectorSingle overlap = VectorMultiplyAddExpression(cutterSpan, VectorSet(0.35f, 0.65f, 0.0f, 0.0f), cutterBegin);
     const f32 overlapBegin = VectorGetX(overlap);
     const f32 overlapEnd = VectorGetY(overlap);
-    const Box cuts[] = {
+    const Array<Box, 2> cuts = {{
         { cutter.minimum, Float3U(overlapEnd, cutter.maximum.y, cutter.maximum.z) },
         { Float3U(overlapBegin, cutter.minimum.y, cutter.minimum.z), cutter.maximum },
-    };
+    }};
     for(const auto& cut : cuts){
         auto entity = world.createEntity();
         auto& component = entity.addComponent<Impl::CsgCutterComponent>();
@@ -120,31 +124,31 @@ struct Box{
         const SIMDVectorSingle minimum = LoadFloat(cut.minimum);
         const SIMDVectorSingle maximum = LoadFloat(cut.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
-        AssignCsgCutterParameters(component, parameters);
-        AssignCsgCutterTransform(component, VectorScale(VectorAdd(minimum, maximum), 0.5f), QuaternionIdentity());
+        AssignCsgCutterParameters(parameters, component);
+        AssignCsgCutterTransform(VectorScale(VectorAdd(minimum, maximum), 0.5f), QuaternionIdentity(), component);
     }
     return true;
 }
 
-[[nodiscard]] static b8 CreateMixedSubtraction(Core::ECS::World& world, const AStringView arm){
+[[nodiscard]] static b8 CreateMixedSubtraction(const AStringView arm, Core::ECS::World& world){
     const Box box{ Float3U(-0.5f, -0.8f, -0.8f), Float3U(0.5f, 0.2f, 0.8f) };
     const Box cutter{ Float3U(-0.25f, -1.0f, -1.2f), Float3U(0.25f, 0.2f, 1.0f) };
     if(arm == s_ReferenceArm){
-        if(!CreateReferencePieces(world, box, cutter, s_MixedMaterial, s_White))
+        if(!CreateReferencePieces(box, cutter, s_MixedMaterial, s_White, world))
             return false;
-        const f32 quadCenters[] = { -0.875f, 0.875f };
+        const Array<f32, 2> quadCenters = { -0.875f, 0.875f };
         for(const f32 x : quadCenters){
-            if(!CreateTintedStaticMeshEntity(world, s_OpenQuadMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(x, -0.3f, -1.0f, 0.0f), Float4(1.25f, 1.0f, 1.0f, 0.0f)).valid())
+            if(!CreateTintedStaticMeshEntity(s_OpenQuadMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(x, -0.3f, -1.0f, 0.0f), Float4(1.25f, 1.0f, 1.0f, 0.0f), world).valid())
                 return false;
         }
         return true;
     }
 
     // One asset contains a closed solid and an independently open two-triangle surface.
-    const auto receiver = CreateTintedStaticMeshEntity(world, s_MixedMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(0.0f, -0.3f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.6f, 0.0f));
+    const auto receiver = CreateTintedStaticMeshEntity(s_MixedMesh, s_MixedMaterial, s_MaterialInterface, s_White, Float4(0.0f, -0.3f, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.6f, 0.0f), world);
     if(!receiver.valid())
         return false;
-    AddStaticCsgMeshReceiver(world, receiver, s_Groups[2], true, false);
+    AddStaticCsgMeshReceiver(receiver, s_Groups[2], true, false, world);
     auto entity = world.createEntity();
     auto& component = entity.addComponent<Impl::CsgCutterComponent>();
     component.receiverGroup = s_Groups[2];
@@ -152,8 +156,8 @@ struct Box{
     component.active = arm == s_CutArm;
     Impl::CsgBoxShapeParameters parameters;
     parameters.halfExtents = Float4(0.25f, 0.6f, 1.1f, 0.0f);
-    AssignCsgCutterParameters(component, parameters);
-    AssignCsgCutterTransform(component, VectorSet(0.0f, -0.4f, -0.1f, 0.0f), QuaternionIdentity());
+    AssignCsgCutterParameters(parameters, component);
+    AssignCsgCutterTransform(VectorSet(0.0f, -0.4f, -0.1f, 0.0f), QuaternionIdentity(), component);
     return true;
 }
 
@@ -212,7 +216,7 @@ Expected<b8> CsgGiScene::start(){
         return MakeUnexpected(Failure{});
     renderer.setRefractionEnabled(false);
 
-    const auto camera = CreateSmokeCamera(m_world, 1.3f, 5.5f, 0.0f);
+    const auto camera = CreateSmokeCamera(1.3f, 5.5f, 0.0f, m_world);
     const auto light = Impl::Scene::CreatePointLightEntity(m_world, Float4(0.0f, 1.3f, -3.0f, 0.0f), __hidden_csg_gi_scene::s_White, 20.0f, 15.0f);
     auto* lightComponent = m_world.tryGetComponent<Impl::Scene::LightComponent>(light);
     if(!camera.valid() || !lightComponent)
@@ -221,7 +225,7 @@ Expected<b8> CsgGiScene::start(){
     lightComponent->enableCaustics = false;
 
     using namespace __hidden_csg_gi_scene;
-    if(!CreateBox(m_world, { Float3U(-5.0f, -1.0f, -6.6f), Float3U(5.0f, 5.0f, -6.5f) }, s_DiffuseMaterial, Float4(0.02f, 0.02f, 1.0f, 1.0f)).valid())
+    if(!CreateBox({ Float3U(-5.0f, -1.0f, -6.6f), Float3U(5.0f, 5.0f, -6.5f) }, s_DiffuseMaterial, Float4(0.02f, 0.02f, 1.0f, 1.0f), m_world).valid())
         return MakeUnexpected(Failure{});
     for(u32 slot = 0u; slot < 2u; ++slot){
         const f32 x = slot == 0u ? -1.3f : 1.3f;
@@ -230,25 +234,25 @@ Expected<b8> CsgGiScene::start(){
         const SIMDVectorSingle maximumX = VectorAdd(VectorReplicate(x), halfWidths);
         const Box receiver{ Float3U(VectorGetX(minimumX), 0.3f, -0.8f), Float3U(VectorGetX(maximumX), 2.3f, 0.8f) };
         const Box cutter{ Float3U(VectorGetY(minimumX), 0.55f, -1.0f), Float3U(VectorGetY(maximumX), 2.05f, slot == 0u ? 1.0f : 0.4f) };
-        if(!CreateSubtraction(m_world, receiver, cutter, slot, arm))
+        if(!CreateSubtraction(receiver, cutter, slot, arm, m_world))
             return MakeUnexpected(Failure{});
     }
-    if(!CreateMixedSubtraction(m_world, arm))
+    if(!CreateMixedSubtraction(arm, m_world))
         return MakeUnexpected(Failure{});
-    const auto passage = CreateBox(m_world, { Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White);
+    const auto passage = CreateBox({ Float3U(-1.9f, 0.65f, 1.0f), Float3U(-0.7f, 1.95f, 1.08f) }, s_IndirectMaterial, s_White, m_world);
     // The cavity receiver sees bounced light from the green generated back cap.
-    const auto cavity = CreateBox(m_world, { Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White);
-    const auto control = CreateBox(m_world, { Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White);
+    const auto cavity = CreateBox({ Float3U(0.85f, 0.56f, -0.72f), Float3U(1.75f, 0.61f, 0.06f) }, s_IndirectMaterial, s_White, m_world);
+    const auto control = CreateBox({ Float3U(-0.35f, 2.7f, 0.0f), Float3U(0.35f, 3.15f, 0.06f) }, s_IndirectMaterial, s_White, m_world);
     if(!passage.valid() || !cavity.valid() || !control.valid())
         return MakeUnexpected(Failure{});
-    const auto mixedPassage = CreateBox(m_world, { Float3U(-0.2f, -0.7f, 1.0f), Float3U(0.2f, -0.4f, 1.08f) }, s_IndirectMaterial, s_White);
-    const auto mixedFloor = CreateBox(m_world, { Float3U(-1.3f, -0.82f, -1.85f), Float3U(-0.75f, -0.77f, -1.08f) }, s_IndirectMaterial, s_White);
+    const auto mixedPassage = CreateBox({ Float3U(-0.2f, -0.7f, 1.0f), Float3U(0.2f, -0.4f, 1.08f) }, s_IndirectMaterial, s_White, m_world);
+    const auto mixedFloor = CreateBox({ Float3U(-1.3f, -0.82f, -1.85f), Float3U(-0.75f, -0.77f, -1.08f) }, s_IndirectMaterial, s_White, m_world);
     if(!mixedPassage.valid() || !mixedFloor.valid())
         return MakeUnexpected(Failure{});
 
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, };
     constexpr u32 s_DefaultCaptureFrameCount = 360u;
-    auto capture = ConfigureSmokeFramebufferCapture(m_context, scratchArena, NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options);
+    auto capture = ConfigureSmokeFramebufferCapture(NWB_TEXT("GiTestSmokeProject"), s_DefaultCaptureFrameCount, options, m_context, scratchArena);
     if(!capture)
         return MakeUnexpected(Failure{});
     m_capture = Move(*capture);

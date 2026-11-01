@@ -10,6 +10,7 @@
 #include <core/alloc/module.h>
 
 #include <global/not_null.h>
+#include <global/span.h>
 #include <global/sync.h>
 
 
@@ -113,7 +114,10 @@ private:
 
 
     public:
-        explicit EventSlotLease(Recorder& recorder)noexcept;
+        explicit EventSlotLease(Recorder& recorder)noexcept
+            : m_recorder(recorder)
+            , m_lock(recorder.m_mutex)
+        {}
         ~EventSlotLease()noexcept;
 
 
@@ -129,7 +133,9 @@ public:
         : m_arena(arena)
         , m_events(arena)
     {}
-    ~Recorder()noexcept;
+    ~Recorder()noexcept{
+        releaseAvailableSlotsUnlocked();
+    }
 
 
 public:
@@ -182,8 +188,10 @@ private:
     [[nodiscard]] b8 appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload);
     [[nodiscard]] EventSlotPtr acquireSlotUnlocked()noexcept;
     void prepareDiagnosticSlotsUnlocked();
-    void recordCapturedDiagnostic(u64 frameIndex, NotNull<const u8*> payload, usize payloadBytes, u32 streamId)noexcept;
-    void dropDiagnosticCapture()noexcept;
+    void recordCapturedDiagnostic(u64 frameIndex, Span<const u8> payload, u32 streamId)noexcept;
+    void dropDiagnosticCapture()noexcept{
+        m_droppedDiagnosticCount.fetch_add(1u, MemoryOrder::relaxed);
+    }
     void recycleSlotUnlocked(EventSlotPtr&& slot)noexcept;
     void releaseAvailableSlotsUnlocked()noexcept;
     void publishSlotUnlocked(EventSlotLease& lease, const EventHeader& header);

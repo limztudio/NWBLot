@@ -147,6 +147,28 @@ b8 TypeChecker::checkTemplateArgBounds(const Span<const TemplateParamDecl> param
             if(!NormalizeConstantTemplateArg(const_cast<TypeArg&>(arg), enclosingClass, enclosingMethod, m_symbols)){
                 reportError(errors, span, "expected constant value argument for template value parameter");
                 ok = false;
+                continue;
+            }
+            const MStringView ctext = TrimView(arg.constantText);
+            const MStringView paramConstBase = m_symbols.resolveBaseTypeName(param.constValueType->name);
+            const b8 isBoolLit = (ctext == "true" || ctext == "false");
+            if(paramConstBase == "b8" && !isBoolLit && !HasConstValueTemplateParam(enclosingClass, enclosingMethod, ctext)){
+                const Stmt* gc = m_symbols.findGlobalConstant(ctext);
+                if(!gc || !gc->varType || m_symbols.resolveBaseTypeName(gc->varType->name) != "b8"){
+                    reportError(errors, span, "expected boolean constant value argument for 'const b8' template parameter");
+                    ok = false;
+                }
+            }
+            else if(paramConstBase != "b8" && isBoolLit){
+                reportError(errors, span, "cannot pass boolean literal for non-'b8' template value parameter");
+                ok = false;
+            }
+            else if(const EnumDecl* expectedEnum = m_symbols.findEnum(paramConstBase)){
+                const EnumDecl* argEnum = nullptr;
+                if(IsValidScopedEnumTemplateArg(ctext, m_symbols, &argEnum) && argEnum != expectedEnum){
+                    reportError(errors, span, "enum/flag template value argument does not match template parameter type");
+                    ok = false;
+                }
             }
             continue;
         }
@@ -258,17 +280,21 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
         }
     }
     else if(IsTypeAndCountBuiltinGeneric(typeRef.name)){
-        if(
-            typeRef.templateArgs.size() != 2u
-            || !typeRef.templateArgs[0].type
-            || !NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols)
-            || typeRef.templateArgs[1].constantText == "true"
-            || typeRef.templateArgs[1].constantText == "false"
-            || typeRef.templateArgs[1].constantText == "0"
-            || typeRef.templateArgs[1].constantText == "0u"
-            || typeRef.templateArgs[1].constantText == "0U"
-            || (!typeRef.templateArgs[1].constantText.empty() && typeRef.templateArgs[1].constantText[0] == '-')
-        ){
+        b8 validCapacity = typeRef.templateArgs.size() == 2u
+            && typeRef.templateArgs[0].type != nullptr
+            && NormalizeConstantTemplateArg(const_cast<TypeArg&>(typeRef.templateArgs[1]), enclosingClass, enclosingMethod, m_symbols);
+        if(validCapacity){
+            const MStringView capText = TrimView(typeRef.templateArgs[1].constantText);
+            if(capText == "true" || capText == "false" || (!capText.empty() && capText[0] == '-') || IsValidScopedEnumTemplateArg(capText, m_symbols)){
+                validCapacity = false;
+            }
+            else if(!HasConstValueTemplateParam(enclosingClass, enclosingMethod, capText)){
+                i64 capVal = 0;
+                if(TryEvaluateTextConstant(capText, m_symbols, capVal) && capVal <= 0)
+                    validCapacity = false;
+            }
+        }
+        if(!validCapacity){
             reportError(errors, typeRef.span, "built-in bounded container requires 1 element type argument and 1 positive integer compile-time constant capacity argument");
             ok = false;
         }
@@ -316,14 +342,14 @@ b8 TypeChecker::checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* e
     return ok;
 }
 
-void TypeChecker::markStringToPathAdaptation(ClassDecl* ownerClass, const MethodDecl* method, Expr& expr, const Span<const ScopedVarInfo> scope)const noexcept{
+void TypeChecker::markStringToPathAdaptation(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const ScopedVarInfo> scope, Expr& expr)const noexcept{
     const MStringView exprType = inferExprTypeName(ownerClass, method, expr, scope);
     if(expr.kind == ExprKind::StringLiteral || exprType == "String" || exprType == "StringView" || exprType == "CompactString")
         expr.adaptToTChar = true;
 }
 
 b8 TypeChecker::verifyConcreteClassImplementsInterface(
-    ClassDecl* ownerClass,
+    const ClassDecl* ownerClass,
     const MethodDecl& method,
     const Expr& rhsExpr,
     const TypeRef* expectedInterfaceType,

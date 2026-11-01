@@ -47,10 +47,14 @@ static constexpr usize s_GroupImageBytesField = 12u;
 static constexpr u32 s_MaxImageSide = 2048u;
 static constexpr u32 s_MaxChannelCount = 4u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct SourceFixture{
     Core::Assets::AssetVector<PreparedFontImageGroup> groups;
-    PreparedFontImageView views[s_GroupCount];
-    u8 sfnt[s_FontBytes] = { 0u, 1u, 4u, 0u, 127u, 128u, 255u };
+    Array<PreparedFontImageView, s_GroupCount> views = {};
+    Array<u8, s_FontBytes> sfnt = { 0u, 1u, 4u, 0u, 127u, 128u, 255u };
 
 
 public:
@@ -84,7 +88,7 @@ struct MalformedField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<Path> WriteCase(SourceTestArena& testArena, const AStringView filename, const Span<const u8> binary){
+[[nodiscard]] static Expected<Path> WriteCase(const AStringView filename, const Span<const u8> binary, SourceTestArena& testArena){
     Path candidate = Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_source_tests" / filename;
     if(!EnsureDirectories(candidate.parentPath()) || !WriteBinaryFile(candidate, binary))
         return MakeUnexpected(Failure{});
@@ -107,30 +111,30 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
-    auto pathResult = WriteCase(testArena, "image_integrity_control.font", binary);
+    auto pathResult = WriteCase("image_integrity_control.font", binary, testArena);
     ASSERT_TRUE(pathResult);
     Path path = Move(*pathResult);
     PreparedFontSource original(testArena.arena);
-    auto originalResult = ReadPreparedFontSource(path, original.fontBytes.get_allocator().arena(), true);
+    auto originalResult = ReadPreparedFontSource(path, true, original.fontBytes.get_allocator().arena());
     ASSERT_TRUE(originalResult);
     original = Move(*originalResult);
     ASSERT_EQ(original.groups.size(), s_GroupCount);
-    static constexpr AStringView s_Filenames[] = { "image_r.font", "image_rg.font", "image_rgb.font", "image_rgba.font", "image_hash.font" };
+    static constexpr Array<AStringView, 5> s_Filenames = { "image_r.font", "image_rg.font", "image_rgb.font", "image_rgba.font", "image_hash.font" };
     usize imageOffset = s_PixelOffset;
-    for(usize index = 0u; index < LengthOf(s_Filenames); ++index){
+    for(usize index = 0u; index < s_Filenames.size(); ++index){
         Core::Assets::AssetBytes corrupted(binary.begin(), binary.end(), testArena.arena);
         const usize corruptionOffset = index < s_GroupCount ? imageOffset : s_HeaderBytes + 16u;
         corrupted[corruptionOffset] ^= 0x80u;
-        auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
+        auto corruptedPathResult = WriteCase(s_Filenames[index], corrupted, testArena);
         ASSERT_TRUE(corruptedPathResult);
         path = Move(*corruptedPathResult);
-        EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, true)) << index;
+        EXPECT_FALSE(ReadPreparedFontSource(path, true, testArena.arena)) << index;
         PreparedFontSource fontOnly(testArena.arena);
-        auto fontOnlyResult = ReadPreparedFontSource(path, fontOnly.fontBytes.get_allocator().arena(), false);
+        auto fontOnlyResult = ReadPreparedFontSource(path, false, fontOnly.fontBytes.get_allocator().arena());
         ASSERT_TRUE(fontOnlyResult) << index;
         fontOnly = Move(*fontOnlyResult);
         EXPECT_EQ(fontOnly.fontBytes, original.fontBytes);
@@ -145,7 +149,7 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
         if(index < s_GroupCount)
             imageOffset += fixture.groups[index].pixels.size();
     }
-    EXPECT_EQ(logger.errorCount(), LengthOf(s_Filenames));
+    EXPECT_EQ(logger.errorCount(), s_Filenames.size());
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("image content hash differs")));
 }
 
@@ -155,23 +159,23 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModes){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
-    auto pathResult = WriteCase(testArena, "font_integrity_control.font", binary);
+    auto pathResult = WriteCase("font_integrity_control.font", binary, testArena);
     ASSERT_TRUE(pathResult);
     Path path = Move(*pathResult);
-    ASSERT_TRUE(ReadPreparedFontSource(path, testArena.arena, true));
-    static constexpr AStringView s_Filenames[] = { "font_corrupt_bytes.font", "font_corrupt_hash.font" };
-    static constexpr usize s_Offsets[] = { s_FontOffset, 24u };
-    for(usize index = 0u; index < LengthOf(s_Filenames); ++index){
+    ASSERT_TRUE(ReadPreparedFontSource(path, true, testArena.arena));
+    static constexpr Array<AStringView, 2> s_Filenames = { "font_corrupt_bytes.font", "font_corrupt_hash.font" };
+    static constexpr Array<usize, 2> s_Offsets = { s_FontOffset, 24u };
+    for(usize index = 0u; index < s_Filenames.size(); ++index){
         Core::Assets::AssetBytes corrupted(binary.begin(), binary.end(), testArena.arena);
         corrupted[s_Offsets[index]] ^= 0x40u;
-        auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
+        auto corruptedPathResult = WriteCase(s_Filenames[index], corrupted, testArena);
         ASSERT_TRUE(corruptedPathResult);
         path = Move(*corruptedPathResult);
         for(const b8 includePixels : { false, true })
-            EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels));
+            EXPECT_FALSE(ReadPreparedFontSource(path, includePixels, testArena.arena));
     }
     EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("SFNT content hash differs")));
@@ -184,51 +188,51 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_output"));
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
-    auto pathResult = WriteCase(testArena, "directory_control.font", binary);
+    auto pathResult = WriteCase("directory_control.font", binary, testArena);
     ASSERT_TRUE(pathResult);
     Path path = Move(*pathResult);
-    ASSERT_TRUE(ReadPreparedFontSource(path, outputArena, true));
-    static constexpr MalformedField s_Fields[] = {
-        { "magic.font", 0u, 0u, true },
-        { "retired_fon1.font", 0u, 0x464f4e31u, true },
-        { "old_version.font", 4u, 0u, true },
-        { "future_version.font", 4u, 2u, true },
-        { "face_index.font", 8u, 1u, true },
-        { "reserved.font", 20u, 1u, true },
-        { "font_zero.font", 12u, 0u, true },
-        { "font_limit.font", 12u, s_FontMaxSourceBytes + 1u, true },
-        { "font_overflow.font", 12u, Limit<u32>::s_Max, true },
-        { "font_length.font", 12u, s_FontBytes + 1u, false },
-        { "groups_zero.font", 16u, 0u, true },
-        { "groups_limit.font", 16u, 9u, true },
-        { "groups_overflow.font", 16u, Limit<u32>::s_Max, true },
-        { "missing_group_header.font", 16u, 5u, false },
-        { "width_zero.font", s_HeaderBytes, 0u, false },
-        { "width_limit.font", s_HeaderBytes, s_MaxImageSide + 1u, false },
-        { "width_overflow.font", s_HeaderBytes, Limit<u32>::s_Max, false },
-        { "height_zero.font", s_HeaderBytes + s_GroupHeightField, 0u, false },
-        { "height_limit.font", s_HeaderBytes + s_GroupHeightField, s_MaxImageSide + 1u, false },
-        { "height_overflow.font", s_HeaderBytes + s_GroupHeightField, Limit<u32>::s_Max, false },
-        { "channels_zero.font", s_HeaderBytes + s_GroupChannelsField, 0u, false },
-        { "channels_limit.font", s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount + 1u, false },
-        { "channels_overflow.font", s_HeaderBytes + s_GroupChannelsField, Limit<u32>::s_Max, false },
-        { "image_bytes_zero.font", s_HeaderBytes + s_GroupImageBytesField, 0u, false },
-        { "image_bytes_short.font", s_HeaderBytes + s_GroupImageBytesField, 14u, false },
-        { "image_bytes_long.font", s_HeaderBytes + s_GroupImageBytesField, 16u, false },
-        { "image_bytes_overflow.font", s_HeaderBytes + s_GroupImageBytesField, Limit<u32>::s_Max, false },
+    ASSERT_TRUE(ReadPreparedFontSource(path, true, outputArena));
+    static constexpr Array<MalformedField, 27> s_Fields = {
+        MalformedField{ "magic.font", 0u, 0u, true },
+        MalformedField{ "retired_fon1.font", 0u, 0x464f4e31u, true },
+        MalformedField{ "old_version.font", 4u, 0u, true },
+        MalformedField{ "future_version.font", 4u, 2u, true },
+        MalformedField{ "face_index.font", 8u, 1u, true },
+        MalformedField{ "reserved.font", 20u, 1u, true },
+        MalformedField{ "font_zero.font", 12u, 0u, true },
+        MalformedField{ "font_limit.font", 12u, s_FontMaxSourceBytes + 1u, true },
+        MalformedField{ "font_overflow.font", 12u, Limit<u32>::s_Max, true },
+        MalformedField{ "font_length.font", 12u, s_FontBytes + 1u, false },
+        MalformedField{ "groups_zero.font", 16u, 0u, true },
+        MalformedField{ "groups_limit.font", 16u, 9u, true },
+        MalformedField{ "groups_overflow.font", 16u, Limit<u32>::s_Max, true },
+        MalformedField{ "missing_group_header.font", 16u, 5u, false },
+        MalformedField{ "width_zero.font", s_HeaderBytes, 0u, false },
+        MalformedField{ "width_limit.font", s_HeaderBytes, s_MaxImageSide + 1u, false },
+        MalformedField{ "width_overflow.font", s_HeaderBytes, Limit<u32>::s_Max, false },
+        MalformedField{ "height_zero.font", s_HeaderBytes + s_GroupHeightField, 0u, false },
+        MalformedField{ "height_limit.font", s_HeaderBytes + s_GroupHeightField, s_MaxImageSide + 1u, false },
+        MalformedField{ "height_overflow.font", s_HeaderBytes + s_GroupHeightField, Limit<u32>::s_Max, false },
+        MalformedField{ "channels_zero.font", s_HeaderBytes + s_GroupChannelsField, 0u, false },
+        MalformedField{ "channels_limit.font", s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount + 1u, false },
+        MalformedField{ "channels_overflow.font", s_HeaderBytes + s_GroupChannelsField, Limit<u32>::s_Max, false },
+        MalformedField{ "image_bytes_zero.font", s_HeaderBytes + s_GroupImageBytesField, 0u, false },
+        MalformedField{ "image_bytes_short.font", s_HeaderBytes + s_GroupImageBytesField, 14u, false },
+        MalformedField{ "image_bytes_long.font", s_HeaderBytes + s_GroupImageBytesField, 16u, false },
+        MalformedField{ "image_bytes_overflow.font", s_HeaderBytes + s_GroupImageBytesField, Limit<u32>::s_Max, false },
     };
     for(const MalformedField& field : s_Fields){
         Core::Assets::AssetBytes malformed(binary.begin(), binary.end(), testArena.arena);
-        WriteLittleU32(malformed, field.offset, field.value);
-        auto malformedPathResult = WriteCase(testArena, field.filename, malformed);
+        WriteLittleU32(field.offset, field.value, malformed);
+        auto malformedPathResult = WriteCase(field.filename, malformed, testArena);
         ASSERT_TRUE(malformedPathResult);
         path = Move(*malformedPathResult);
         for(const b8 includePixels : { false, true }){
             const ArenaMemoryStats before = outputArena.memoryStats();
-            EXPECT_FALSE(ReadPreparedFontSource(path, outputArena, includePixels)) << field.filename;
+            EXPECT_FALSE(ReadPreparedFontSource(path, includePixels, outputArena)) << field.filename;
             const ArenaMemoryStats after = outputArena.memoryStats();
             EXPECT_EQ(after.usedBytes, before.usedBytes);
             EXPECT_LE(after.peakUsedBytes, before.usedBytes + 8u * sizeof(PreparedFontImageGroup));
@@ -238,19 +242,19 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     }
     // Valid maximum dimensions still require their full payload length before any SFNT/image allocation.
     Core::Assets::AssetBytes oversized(binary.begin(), binary.end(), testArena.arena);
-    WriteLittleU32(oversized, s_HeaderBytes, s_MaxImageSide);
-    WriteLittleU32(oversized, s_HeaderBytes + s_GroupHeightField, s_MaxImageSide);
-    WriteLittleU32(oversized, s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount);
-    WriteLittleU32(oversized, s_HeaderBytes + s_GroupImageBytesField, s_MaxImageSide * s_MaxImageSide * s_MaxChannelCount);
-    auto oversizedPathResult = WriteCase(testArena, "missing_large_image.font", oversized);
+    WriteLittleU32(s_HeaderBytes, s_MaxImageSide, oversized);
+    WriteLittleU32(s_HeaderBytes + s_GroupHeightField, s_MaxImageSide, oversized);
+    WriteLittleU32(s_HeaderBytes + s_GroupChannelsField, s_MaxChannelCount, oversized);
+    WriteLittleU32(s_HeaderBytes + s_GroupImageBytesField, s_MaxImageSide * s_MaxImageSide * s_MaxChannelCount, oversized);
+    auto oversizedPathResult = WriteCase("missing_large_image.font", oversized, testArena);
     ASSERT_TRUE(oversizedPathResult);
     path = Move(*oversizedPathResult);
     for(const b8 includePixels : { false, true }){
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(ReadPreparedFontSource(path, outputArena, includePixels));
+        EXPECT_FALSE(ReadPreparedFontSource(path, includePixels, outputArena));
         EXPECT_LE(outputArena.memoryStats().peakUsedBytes, before.usedBytes + 8u * sizeof(PreparedFontImageGroup));
     }
-    EXPECT_EQ(logger.errorCount(), 2u * (LengthOf(s_Fields) + 1u));
+    EXPECT_EQ(logger.errorCount(), 2u * (s_Fields.size() + 1u));
 }
 
 TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes){
@@ -259,36 +263,36 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModes){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, testArena.arena);
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, testArena.arena);
     ASSERT_TRUE(binaryResult);
     Core::Assets::AssetBytes& binary = *binaryResult;
-    auto pathResult = WriteCase(testArena, "length_control.font", binary);
+    auto pathResult = WriteCase("length_control.font", binary, testArena);
     ASSERT_TRUE(pathResult);
     Path path = Move(*pathResult);
-    ASSERT_TRUE(ReadPreparedFontSource(path, testArena.arena, true));
+    ASSERT_TRUE(ReadPreparedFontSource(path, true, testArena.arena));
     struct Cut{
         AStringView filename;
-        usize byteCount;
+        usize byteCount = 0u;
     };
-    const Cut cuts[] = {
-        { "short_header.font", s_HeaderBytes - 1u },
-        { "missing_directory.font", s_HeaderBytes },
-        { "short_directory.font", s_FontOffset - 1u },
-        { "short_font.font", s_PixelOffset - 1u },
-        { "missing_images.font", s_PixelOffset },
-        { "short_images.font", binary.size() - 1u },
-        { "trailing_byte.font", binary.size() + 1u },
+    const Array<Cut, 7> cuts = {
+        Cut{ "short_header.font", s_HeaderBytes - 1u },
+        Cut{ "missing_directory.font", s_HeaderBytes },
+        Cut{ "short_directory.font", s_FontOffset - 1u },
+        Cut{ "short_font.font", s_PixelOffset - 1u },
+        Cut{ "missing_images.font", s_PixelOffset },
+        Cut{ "short_images.font", binary.size() - 1u },
+        Cut{ "trailing_byte.font", binary.size() + 1u },
     };
     for(const Cut& cut : cuts){
         Core::Assets::AssetBytes malformed(binary.begin(), binary.end(), testArena.arena);
         malformed.resize(cut.byteCount);
-        auto malformedPathResult = WriteCase(testArena, cut.filename, malformed);
+        auto malformedPathResult = WriteCase(cut.filename, malformed, testArena);
         ASSERT_TRUE(malformedPathResult);
         path = Move(*malformedPathResult);
         for(const b8 includePixels : { false, true })
-            EXPECT_FALSE(ReadPreparedFontSource(path, testArena.arena, includePixels)) << cut.filename;
+            EXPECT_FALSE(ReadPreparedFontSource(path, includePixels, testArena.arena)) << cut.filename;
     }
-    EXPECT_EQ(logger.errorCount(), 2u * LengthOf(cuts));
+    EXPECT_EQ(logger.errorCount(), 2u * cuts.size());
 }
 
 TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
@@ -298,13 +302,13 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_serialize_output"));
     SourceFixture fixture(testArena.arena);
-    auto outputResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, outputArena);
+    auto outputResult = SerializePreparedFontSource({ fixture.sfnt.data(), fixture.sfnt.size() }, 0u, fixture.views, outputArena);
     ASSERT_TRUE(outputResult);
     constexpr u32 s_InvalidCaseCount = 18u;
     constexpr usize s_OverLimitGroupCount = 9u;
     for(u32 variant = 0u; variant < s_InvalidCaseCount; ++variant){
-        BinaryByteView sfnt{ fixture.sfnt, sizeof(fixture.sfnt) };
-        PreparedFontImageView views[s_OverLimitGroupCount];
+        BinaryByteView sfnt{ fixture.sfnt.data(), fixture.sfnt.size() };
+        Array<PreparedFontImageView, s_OverLimitGroupCount> views = {};
         for(usize index = 0u; index < s_GroupCount; ++index)
             views[index] = fixture.views[index];
         usize groupCount = s_GroupCount;
@@ -330,7 +334,7 @@ TEST(PreparedFontSource, InvalidSerializationInputsRejectWithoutAllocating){
         case 17u: views[0u].pixels = fixture.views[1u].pixels.first(views[0u].pixels.size() + 1u); break;
         }
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views, groupCount), outputArena)) << variant;
+        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, Span<const PreparedFontImageView>(views.data(), groupCount), outputArena)) << variant;
         EXPECT_EQ(outputArena.memoryStats().allocationCount, before.allocationCount);
     }
     EXPECT_EQ(logger.errorCount(), s_InvalidCaseCount);

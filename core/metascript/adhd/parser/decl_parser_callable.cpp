@@ -59,7 +59,12 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         m_cursor.advance();
 
         MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
-        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, decl->templateParams) && m_cursor.match(TokenType::ColonColon)){
+        MVector<TemplateParamDecl> ignoredLookaheadTemplateParams(m_cursor.arena());
+        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, ignoredLookaheadTemplateParams) && m_cursor.match(TokenType::ColonColon)){
+            if(decl->isReflect){
+                m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
+                return nullptr;
+            }
             if(m_cursor.match(TokenType::Tilde)){
                 if(!m_cursor.checkIdentifier(maybeClass)){
                     m_cursor.errorExpected("expected class name after '~' in out-of-line destructor");
@@ -153,6 +158,10 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         return nullptr;
 
     if(decl->ownerClassName.empty()){
+        if(decl->isReflect){
+            m_cursor.error(span.line, span.column, "'reflect' attribute is only permitted on class or interface methods, not free functions");
+            return nullptr;
+        }
         if(m_cursor.checkIdentifier("const") || m_cursor.checkIdentifier("override")){
             m_cursor.error(span.line, span.column, "'const' and 'override' qualifiers are only permitted on class methods, not free functions");
             return nullptr;

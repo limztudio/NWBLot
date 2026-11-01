@@ -402,7 +402,7 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
     ASSERT_TRUE(m_state.scrollTo({ 6.0f, 7.0f }));
     const u64 revision = m_state.revision();
     EXPECT_EQ(AStringView(m_host.publications[0u].text), AStringView("alpha\nbeta"));
-    UiComboTests::ExpectRect(m_host.publications[0u].placement.bounds, oldPlacement.bounds);
+    UiPaintAssertions::ExpectRect(m_host.publications[0u].placement.bounds, oldPlacement.bounds);
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_TRUE(beginParent(3u));

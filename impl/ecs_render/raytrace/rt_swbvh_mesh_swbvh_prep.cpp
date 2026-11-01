@@ -23,8 +23,8 @@ b8 RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(Core::
     Core::BufferHandle nodeBuffer = build.nodeBuffer;
     Core::BufferHandle parentBuffer = build.parentBuffer;
     const b8 recorded = build.performRefit
-        ? refitMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.nodeHeapHandle, build.parentHeapHandle, nodeBuffer, parentBuffer)
-        : buildMeshSwBvhPrepared(commandList, build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, build.nodeHeapHandle, build.parentHeapHandle, nodeBuffer, parentBuffer)
+        ? refitMeshSwBvhPrepared(build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.nodeHeapHandle, build.parentHeapHandle, commandList, nodeBuffer, parentBuffer)
+        : buildMeshSwBvhPrepared(build.positionHeapHandle.slot(), build.triangleIndexHeapHandle.slot(), build.primitiveCount, build.aabbMin, build.aabbMax, build.nodeHeapHandle, build.parentHeapHandle, commandList, nodeBuffer, parentBuffer)
     ;
     if(!recorded){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), ConvertString(build.meshName.resolvedText()));
@@ -84,7 +84,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     b8 hasCandidate = false;
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
-        if(RequiresMeshSwBvhUpdate(mesh)){
+        if(RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision)){
             hasCandidate = true;
             break;
         }
@@ -99,9 +99,9 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             state.m_bvhSortKeysBuffer
             && state.m_bvhSortPayloadBuffer
             && state.m_bvhVisitCounterBuffer
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhSortKeysHeapHandle)
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhSortPayloadHeapHandle)
-            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhVisitCounterHeapHandle)
+            && RayTracingDetail::IsHeapHandle(state.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && RayTracingDetail::IsHeapHandle(state.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            && RayTracingDetail::IsHeapHandle(state.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         ;
     };
     if(!sharedResourcesReady())
@@ -109,7 +109,7 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
 
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
         // Match the direct update policy, including off-screen mesh resources.
-        if(!RequiresMeshSwBvhUpdate(mesh))
+        if(!RequiresMeshSwBvhUpdateState(mesh.swBvhBuildPending, mesh.swBvhTopologyBuilt, mesh.swBvhBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.swBvhGeometryContentRevision))
             continue;
         if(
             !mesh.meshName
@@ -118,8 +118,8 @@ b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scratch
             || mesh.meshletPrimitiveIndexCount == 0u
             || (mesh.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u
             || !meshSwBvhResourcesReady(mesh.swBvhNodeBuffer, mesh.swBvhParentBuffer, mesh.swBvhNodeHeapHandle, mesh.swBvhParentHeapHandle)
-            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
-            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
+            || !RayTracingDetail::IsHeapHandle(mesh.swBvhPositionHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+            || !RayTracingDetail::IsHeapHandle(mesh.swBvhTriangleIndexHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             clearPreparedMeshSwBvhBuilds();
@@ -258,7 +258,7 @@ b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scrat
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        if(!RequiresMeshSwBvhUpdate(meshResources))
+        if(!RequiresMeshSwBvhUpdateState(meshResources.swBvhBuildPending, meshResources.swBvhTopologyBuilt, meshResources.swBvhBuildAccepted, meshResources.runtimeMesh, meshResources.runtimeGeometryContentRevision, meshResources.swBvhGeometryContentRevision))
             continue;
 
         if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer){

@@ -4,6 +4,7 @@
 
 #include "packet_runtime.h"
 #include "packet_runtime_internal.h"
+#include "compiler_internal.h"
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection/backend.h>
@@ -45,8 +46,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
         if(!scratch.stateMergeScratch.valid())
             return scratch.stateMergeScratch.copyFrom(scratch.stateSubsetScratch);
 
-        const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.initialStateSeed.buildFanIn(scratch.stateMergeScratch, branches, LengthOf(branches), stateFanInScratchArena))
+        const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &scratch.stateSubsetScratch }};
+        if(!scratch.initialStateSeed.buildFanIn(scratch.stateMergeScratch, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
         return scratch.stateMergeScratch.copyFrom(scratch.initialStateSeed);
     };
@@ -61,8 +62,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             return true;
         }
 
-        const CommandListResourceStateHandoff* const branches[] = { &scratch.externalMergedStateSeed, &scratch.stateMergeScratch, };
-        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches), stateFanInScratchArena))
+        const Array<const CommandListResourceStateHandoff*, 2> branches = {{ &scratch.externalMergedStateSeed, &scratch.stateMergeScratch }};
+        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
         return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
     };
@@ -73,14 +74,14 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
 
-    const auto appendStateSource = [&](const CommandListResourceStateHandoff* const sourceStates, const GpuTaskId* const sourceTasks, const u32 sourceTaskCount){
-        if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()) || (sourceTaskCount != 0u && !sourceTasks))
+    const auto appendStateSource = [&](const CommandListResourceStateHandoff* const sourceStates, const Span<const GpuTaskId> sourceTasks){
+        if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()) || (!sourceTasks.empty() && !sourceTasks.data()))
             return false;
 
         scratch.stateMergeScratch.reset();
 
-        for(u32 taskIndex = 0u; taskIndex < sourceTaskCount; ++taskIndex){
-            const GpuTaskGraphTaskView task = declarationAccess.taskAt(sourceTasks[taskIndex].index);
+        for(const GpuTaskId sourceTask : sourceTasks){
+            const GpuTaskGraphTaskView task = declarationAccess.taskAt(sourceTask.index);
             for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
                 const GpuTaskResourceUse& use = task.resourceUses[useIndex];
                 const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(use.resource.index);
@@ -106,8 +107,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
                     Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
                     if(!backingBuffer)
                         return false;
-                    Buffer* const buffers[] = { backingBuffer };
-                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+                    const Array<Buffer*, 1> buffers = {{ backingBuffer }};
+                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers.data(), buffers.size(), stateFanInScratchArena))
                         return false;
                     break;
                 }
@@ -128,7 +129,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
 
     const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-        const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
+        const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuTaskGraphCompilerDetail::FindInitialOwnerHandoffSource(resource, barrier.range, barrier.destinationQueue, &barrier.sourceQueue);
         if(!source)
             return false;
         const CommandListResourceStateHandoff* const sourceStates = source->stateSource;
@@ -161,8 +162,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
             if(!backingBuffer || !sourceStates->coversBufferWithOwnership(backingBuffer, barrier.sourceQueue, barrier.destinationQueue))
                 return false;
-            Buffer* const buffers[] = { backingBuffer };
-            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+            const Array<Buffer*, 1> buffers = {{ backingBuffer }};
+            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers.data(), buffers.size(), stateFanInScratchArena))
                 return false;
             break;
         }
@@ -208,7 +209,7 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
                 return MakeUnexpected(Failure{});
             if(source.applicableConsumerQueueClass != CommandQueue::kCount && source.applicableConsumerQueueClass != taskQueue->queueClass)
                 continue;
-            if(!appendStateSource(source.states, tasks + taskIndex, 1u))
+            if(!appendStateSource(source.states, Span<const GpuTaskId>(tasks + taskIndex, 1u)))
                 return MakeUnexpected(Failure{});
         }
     }
@@ -222,8 +223,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
         if(!scratch.initialStateSeed.valid())
             return scratch.initialStateSeed.copyFrom(scratch.stateSubsetScratch);
 
-        const CommandListResourceStateHandoff* const branches[] = { &scratch.stateSubsetScratch };
-        if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches, LengthOf(branches), stateFanInScratchArena))
+        const Array<const CommandListResourceStateHandoff*, 1> branches = {{ &scratch.stateSubsetScratch }};
+        if(!scratch.stateMergeScratch.buildFanIn(scratch.initialStateSeed, branches.data(), branches.size(), stateFanInScratchArena))
             return false;
         return scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch);
     };
@@ -242,8 +243,8 @@ Expected<const CommandListResourceStateHandoff*> GpuRecordedGraph::buildPacketIn
             Buffer* const backingBuffer = accelStruct->getBackingBuffer();
             if(!backingBuffer)
                 return false;
-            Buffer* const buffers[] = { backingBuffer };
-            if(!subset.buildResourceSubset(sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+            const Array<Buffer*, 1> buffers = {{ backingBuffer }};
+            if(!subset.buildResourceSubset(sourceStates, nullptr, 0u, buffers.data(), buffers.size(), stateFanInScratchArena))
                 return false;
         }
         else

@@ -58,10 +58,8 @@ public:
     static void PrepareMeshStreamReorder(const StreamVectorT& source, StreamVectorT& outStream, ScratchVector<u32>& outRemap);
     template<typename StreamVectorT>
     [[nodiscard]] static b8 RemapMeshStreamRef(const Name& virtualPath, const TStringView metaKind, const TStringView streamName, const StreamVectorT& source, Span<u32> remap, StreamVectorT& reordered, u32& index);
-    static void PrepareCommonMeshStreamReorder(const MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
     [[nodiscard]] static b8 RemapMeshletAttributeRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
     [[nodiscard]] static b8 RemapMeshletPositionRefs(const TStringView metaKind, MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder);
-    static void CommitCommonMeshStreamReorder(MeshCookEntry& entry, MeshCookCommonStreamReorder& reorder)noexcept;
     [[nodiscard]] static b8 ReorderMeshStreamsByMeshletTraversal(MeshCookEntry& entry, Core::Alloc::ScratchArena& scratchArena);
 
 

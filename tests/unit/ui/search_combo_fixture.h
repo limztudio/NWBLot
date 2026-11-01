@@ -39,130 +39,40 @@ namespace FilterMode{
 class FilterView final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-
     [[nodiscard]] virtual u64 revision()const noexcept override{ return contentRevision; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{
-        return mode == FilterMode::Empty ? 0u : mode == FilterMode::Second ? full->count / 2u : full->count;
-    }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        return mode == FilterMode::Second ? index * 2u + 2u : index + 1u;
-    }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        u64 index = 0u;
-        if(value == 0u || value > full->count || mode == FilterMode::Empty || (mode == FilterMode::Second && value % 2u != 0u))
-            return MakeUnexpected(Failure{});
-        index = mode == FilterMode::Second ? value / 2u - 1u : value - 1u;
-        return index;
-    }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const override{
-        u64 index = 0u;
-        if(start >= rowCount())
-            return MakeUnexpected(Failure{});
-        index = start;
-        if(enabled(index))
-            return index;
-        if(reverse){
-            if(index == 0u)
-                return MakeUnexpected(Failure{});
-            --index;
-        }
-        else{
-            if(index + 1u == rowCount())
-                return MakeUnexpected(Failure{});
-            ++index;
-        }
-        return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
-    }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
-        if(textMutation){
-            EditModel& query = *MakeNotNull(Exchange(textMutation, nullptr));
-            if(!query.setText(s_CallbackQuery))
-                ADD_FAILURE() << "callback query change failed";
-        }
-        return full->text(key(index) - 1u);
-    }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
-        if(enabledMutation){
-            EditModel& query = *MakeNotNull(Exchange(enabledMutation, nullptr));
-            if(!query.setText(s_EmptyResultQuery))
-                ADD_FAILURE() << "enabled callback query change failed";
-        }
-        return index < rowCount() && full->enabled(key(index) - 1u);
-    }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const override;
 
 
 public:
     const ComboSource* full = nullptr;
     u64 generation = 1701u;
     u64 contentRevision = 1u;
-    FilterMode::Enum mode = FilterMode::All;
     mutable EditModel* textMutation = nullptr;
     mutable EditModel* enabledMutation = nullptr;
+    FilterMode::Enum mode = FilterMode::All;
 };
 
 class SearchSource final : public ISearchableListDataSource{
 public:
-    explicit SearchSource(Core::Alloc::GlobalArena& arena)noexcept
-        : m_query(arena)
-    {
-        view.full = &full;
-        alternate.full = &full;
-    }
+    explicit SearchSource(Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return full.instanceGeneration(); }
-
     [[nodiscard]] virtual u64 revision()const noexcept override{ return full.revision(); }
-
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return full.rowCount(); }
-
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return full.key(index); }
-
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const noexcept override{ return full.indexOf(key); }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        return full.findEnabled(start, reverse);
-    }
-
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{ return full.findEnabled(start, reverse); }
     [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{ return full.text(index); }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const override{
-        if(fullMutation){
-            EditModel& query = *MakeNotNull(Exchange(fullMutation, nullptr));
-            if(!query.setText(s_EmptyResultQuery))
-                ADD_FAILURE() << "full source callback query change failed";
-        }
-        return full.enabled(index);
-    }
-
-    [[nodiscard]] virtual b8 filter(const AStringView query)override{
-        ++filterCalls;
-        if(filterMutation){
-            EditModel& model = *MakeNotNull(Exchange(filterMutation, nullptr));
-            if(!model.setText(s_CallbackQuery))
-                return false;
-        }
-        const AStringView previous{ m_query.data(), m_query.size() };
-        if(previous != query){
-            m_query.assign(query.data(), query.size());
-            ++view.contentRevision;
-        }
-        view.mode = query == s_SecondHalfQuery ? FilterMode::Second : query == s_EmptyResultQuery ? FilterMode::Empty : FilterMode::All;
-        return true;
-    }
-
+    [[nodiscard]] virtual b8 enabled(u64 index)const override;
+    [[nodiscard]] virtual b8 filter(AStringView query)override;
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ return alternateView ? alternate : view; }
-
-
-private:
-    AString<Core::Alloc::GlobalArena> m_query;
 
 
 public:
@@ -173,65 +83,24 @@ public:
     mutable EditModel* fullMutation = nullptr;
     u64 filterCalls = 0u;
     b8 alternateView = false;
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_query;
 };
 
 class SearchEditHost final : public IEditBoxHost{
 public:
-    explicit SearchEditHost(Context& context)noexcept
-        : m_context(context)
-    {}
+    explicit SearchEditHost(Context& context)noexcept : m_context(context){}
 
 
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)noexcept override{
-        ++contextScopedLoans;
-        return {};
-    }
-
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken& popup)override{
-        ++loans;
-        lastPopup = popup;
-        loanContextPopup = m_context.popupToken();
-        EditBoxResult result;
-        result.valid = true;
-        result.focused = options.enabled && m_context.input().focus() == widget.id;
-        result.submitted = submitted;
-        result.cancelled = cancelled;
-        submitted = false;
-        cancelled = false;
-        if(m_changeText){
-            result.valid = model.setText(m_nextText);
-            result.textChanged = result.valid;
-            m_changeText = false;
-        }
-        if(preedit){
-            result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
-            preedit = false;
-        }
-        return result;
-    }
-
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
-
-    [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView& view, const EditBoxPlacement&, const EditBoxOptions&)override{
-        ++publications;
-        publishContextPopup = m_context.popupToken();
-        publishedComposing = view.composing();
-        if(publishMutation){
-            EditModel& query = *MakeNotNull(Exchange(publishMutation, nullptr));
-            return query.setText("published");
-        }
-        return true;
-    }
-
-    void text(const AStringView value)noexcept{ m_nextText = value; m_changeText = true; }
-
-
-private:
-    Context& m_context;
-    AStringView m_nextText;
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, const EditBoxOptions& options, EditModel& model)noexcept override;
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken& popup, EditModel& model)override;
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual b8 publish(const WidgetState& widget, const EditBoxView& view, const EditBoxPlacement& placement, const EditBoxOptions& options)override;
+    void text(AStringView value)noexcept;
 
 
 public:
@@ -249,6 +118,8 @@ public:
 
 
 private:
+    Context& m_context;
+    AStringView m_nextText;
     b8 m_changeText = false;
 };
 
@@ -258,50 +129,20 @@ private:
 
 class SearchFixture : public ComboFixture{
 protected:
-    [[nodiscard]] static SearchComboOptions Options()noexcept{
-        SearchComboOptions value;
-        value.combo = NWB::UiComboTests::Options();
-        value.combo.popupHeight = 220.0f;
-        return value;
-    }
+    [[nodiscard]] static SearchComboOptions Options()noexcept;
 
 
 public:
-    SearchFixture()
-        : m_searchSource(m_arena)
-        , m_search(m_arena)
-        , m_host(m_context)
-    {}
+    SearchFixture();
 
 
 protected:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        m_builder.setEditHost(&m_host);
-    }
-
-    [[nodiscard]] b8 declareSearch(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
-            return false;
-        m_searchResult = m_builder.searchComboBox(s_ComboKey, m_searchSource, m_search, Options());
-        return m_searchResult.combo.valid;
-    }
-
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareSearch(u64 generation);
     [[nodiscard]] b8 prepareSearch(const u64 generation){ return declareSearch(generation) && finishPanel(); }
-
-    [[nodiscard]] b8 acceptSearch(const u64 generation){
-        return prepareSearch(generation) && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "query")); }
-
-    [[nodiscard]] b8 openSearch(const u64 generation){
-        const HitTarget* field = target(host());
-        if(!field)
-            return false;
-        click(Center(field->rectangle));
-        return acceptSearch(generation) && m_search.combo().isOpen();
-    }
+    [[nodiscard]] b8 acceptSearch(const u64 generation){ return prepareSearch(generation) && m_context.commitFrame(generation); }
+    [[nodiscard]] WidgetId query(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "query"); }
+    [[nodiscard]] b8 openSearch(u64 generation);
 
 
 protected:

@@ -36,8 +36,6 @@ static constexpr AStringView s_Main = "main";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -79,13 +77,13 @@ TEST(AssetsGraphics, ShaderArchiveRejectsNullAndTruncatedByteViewsWhileAdmitting
     record.sourceChecksum = 0x12345678u;
     records.push_back(Move(record));
     Core::Alloc::ScratchArena scratchArena(Name("tests/assets_graphics/archive_admission"));
-    const auto encoded = Core::ShaderArchive::SerializeIndex(testArena.arena, records, scratchArena);
+    const auto encoded = Core::ShaderArchive::SerializeIndex(records, testArena.arena, scratchArena);
     ASSERT_TRUE(encoded);
 
-    alignas(u32) u8 unalignedStorage[2048u] = {};
-    ASSERT_LT(encoded->size(), LengthOf(unalignedStorage));
-    u8* const unalignedBytes = unalignedStorage + 1u;
-    NWB_MEMCPY(unalignedBytes, sizeof(unalignedStorage) - 1u, encoded->data(), encoded->size());
+    alignas(u32) Array<u8, 2048u> unalignedStorage = {};
+    ASSERT_LT(encoded->size(), unalignedStorage.size());
+    u8* const unalignedBytes = unalignedStorage.data() + 1u;
+    NWB_MEMCPY(unalignedBytes, unalignedStorage.size() - 1u, encoded->data(), encoded->size());
     const auto admitted = Core::ShaderArchive::DeserializeIndex(testArena.arena, { unalignedBytes, encoded->size() });
     ASSERT_TRUE(admitted);
     ASSERT_EQ(admitted->size(), 1u);
@@ -103,50 +101,50 @@ static constexpr u32 PackSpirvStringWord(const char a, const char b, const char 
 }
 
 TEST(AssetsGraphics, WrongStageAndMalformedEntryInstructionsAreRejected){
-    const u32 words[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+    const Array<u32, 10u> words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
 
-    EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words, LengthOf(words)));
-    const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_Main, NWB::Core::ShaderType::Pixel);
+    EXPECT_TRUE(NWB::Core::IsValidSpirvModuleWords(words));
+    const auto entryPointResult1 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_TRUE(entryPointResult1);
 
-    const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, LengthOf(words), s_Main, NWB::Core::ShaderType::Compute);
+    const auto entryPointResult2 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Compute);
     ASSERT_FALSE(entryPointResult2);
     EXPECT_EQ(entryPointResult2.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
 
-    const u32 invalidWords[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
+    const Array<u32, 9u> invalidWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
 
-    const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, LengthOf(invalidWords), s_Main, NWB::Core::ShaderType::Pixel);
+    const auto entryPointResult3 = NWB::Core::ResolveSpirvEntryPointName(invalidWords, s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult3);
     EXPECT_EQ(entryPointResult3.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
-    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords, LengthOf(invalidWords)));
+    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(invalidWords));
 
-    const u32 malformedOtherStageEntryWords[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (4u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
+    const Array<u32, 9u> malformedOtherStageEntryWords = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (4u << 16u) | 15u, 0u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), };
 
-    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords)));
-    const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, LengthOf(malformedOtherStageEntryWords), s_Main, NWB::Core::ShaderType::Pixel);
+    EXPECT_FALSE(NWB::Core::IsValidSpirvModuleWords(malformedOtherStageEntryWords));
+    const auto entryPointResult4 = NWB::Core::ResolveSpirvEntryPointName(malformedOtherStageEntryWords, s_Main, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult4);
     EXPECT_EQ(entryPointResult4.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
 }
 
 TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatches){
     TestArena testArena;
-    constexpr u32 s_Words[] = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
-    constexpr char s_RequestedName[] = { 'm', 'a', 'i', 'n', 'X' };
-    const AStringView requestedName(s_RequestedName, 4u);
+    constexpr Array<u32, 10u> s_Words = { 0x07230203u, 0x00010500u, 0u, 16u, 0u, (5u << 16u) | 15u, 4u, 1u, PackSpirvStringWord('m', 'a', 'i', 'n'), 0u, };
+    constexpr Array<char, 5u> s_RequestedName = { 'm', 'a', 'i', 'n', 'X' };
+    const AStringView requestedName(s_RequestedName.data(), 4u);
     NWB::Core::GraphicsVector<u32> copiedWords(testArena.arena);
     AStringView copiedEntryPoint;
     {
-        NWB::Core::GraphicsVector<u32> sourceWords(s_Words, s_Words + LengthOf(s_Words), testArena.arena);
+        NWB::Core::GraphicsVector<u32> sourceWords(s_Words.begin(), s_Words.end(), testArena.arena);
         AStringView sourceEntryPoint;
-        const auto entryPointResult5 = NWB::Core::ResolveSpirvEntryPointName(sourceWords.data(), sourceWords.size(), requestedName, NWB::Core::ShaderType::Pixel);
+        const auto entryPointResult5 = NWB::Core::ResolveSpirvEntryPointName(sourceWords, requestedName, NWB::Core::ShaderType::Pixel);
         ASSERT_TRUE(entryPointResult5);
         sourceEntryPoint = *entryPointResult5;
         EXPECT_EQ(sourceEntryPoint.data(), reinterpret_cast<const char*>(sourceWords.data() + 8u));
         copiedWords = sourceWords;
-        const auto entryPointResult6 = NWB::Core::ResolveSpirvEntryPointName(copiedWords.data(), copiedWords.size(), requestedName, NWB::Core::ShaderType::Pixel);
+        const auto entryPointResult6 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
         ASSERT_TRUE(entryPointResult6);
         copiedEntryPoint = *entryPointResult6;
-        EXPECT_EQ(copiedEntryPoint.data(), reinterpret_cast<const char*>(copiedWords.data() + 8u));
+        EXPECT_EQ(copiedEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(copiedWords.data() + 8u)));
         EXPECT_NE(copiedEntryPoint.data(), sourceEntryPoint.data());
     }
     // Specializations retain their own bytecode, so their entry-name view must survive the original module.
@@ -161,7 +159,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatc
     const auto entryPointResult7 = Core::ResolveSpirvEntryPointName(unalignedModule, requestedName, Core::ShaderType::Pixel);
     ASSERT_TRUE(entryPointResult7);
     byteEntryPoint = *entryPointResult7;
-    EXPECT_EQ(byteEntryPoint.data(), reinterpret_cast<const char*>(unalignedBytes.data() + 1u + 8u * sizeof(u32)));
+    EXPECT_EQ(byteEntryPoint.data(), static_cast<const char*>(static_cast<const void*>(unalignedBytes.data() + 1u + 8u * sizeof(u32))));
     EXPECT_EQ(byteEntryPoint, s_Main);
     const auto entryPointResult8 = Core::ResolveSpirvEntryPointName(BinaryByteView{ unalignedModule.data(), unalignedModule.size() - 1u }, requestedName, Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult8);
@@ -172,7 +170,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndRejectMalformedMatc
     EXPECT_EQ(entryPointResult9.error(), Core::SpirvEntryPointLookupResult::InvalidSpirv);
 
     copiedWords.push_back(0u);
-    const auto entryPointResult10 = NWB::Core::ResolveSpirvEntryPointName(copiedWords.data(), copiedWords.size(), requestedName, NWB::Core::ShaderType::Pixel);
+    const auto entryPointResult10 = NWB::Core::ResolveSpirvEntryPointName(copiedWords, requestedName, NWB::Core::ShaderType::Pixel);
     ASSERT_FALSE(entryPointResult10);
     EXPECT_EQ(entryPointResult10.error(), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
 }
@@ -216,7 +214,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField){
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\n"));
     Impl::ShaderCook shaderCook(testArena.arena);
     constexpr AStringView s_ValidMetadata = "compute_shader asset;\nasset.entry_point = \"main\";\n";
-    constexpr AStringView s_RetiredMetadata[] = {
+    constexpr Array<AStringView, 4u> s_RetiredMetadata = {
         "shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
         "shader asset;\nasset.entry_point = \"main\";\n",
         "compute_shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n",
@@ -250,7 +248,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         AStringView fields;
         b8 accepted;
     };
-    constexpr MetadataCase s_Cases[] = {
+    constexpr Array<MetadataCase, 13u> s_Cases = {{
         { "", true },
         { "asset.ray_query = 0;\n", true },
         { "asset.ray_query = 1;\n", true },
@@ -264,7 +262,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false },
         { "asset.emit_mesh_compute_shadow = 0;\n", false },
         { "asset.emit_mesh_compute_shadow = 1;\n", false },
-    };
+    }};
     Impl::ShaderCook shaderCook(testArena.arena);
     for(const MetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.fields);
@@ -273,7 +271,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
         EXPECT_EQ(AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(metadataPath, testArena, scratchArena, shaderCook).has_value(), testCase.accepted);
     }
-    constexpr AStringView s_ShaderAssetTypes[] = { "vertex_shader", "pixel_shader", "ray_generation_shader" };
+    constexpr Array<AStringView, 3u> s_ShaderAssetTypes = { "vertex_shader", "pixel_shader", "ray_generation_shader" };
     for(const AStringView shaderAssetType : s_ShaderAssetTypes){
         const auto metadata = StringFormat(testArena.arena, "{} asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n", shaderAssetType);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
@@ -326,10 +324,10 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             ASSERT_TRUE(metadataResult4);
             if(metadataResult4)
                 shaderEntry = Move(*metadataResult4);
-            EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
-            EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
+            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
+            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
             const auto invalidSignature = StringFormat(testArena.arena, "{}=1;PROJECT_QUALITY=1", transportName);
-            EXPECT_FALSE(shaderCook.validateVariantSignature("project/shader", invalidSignature, shaderEntry.defineValues, scratchArena));
+            EXPECT_FALSE(Impl::ShaderCook::ValidateVariantSignature("project/shader", invalidSignature, shaderEntry.defineValues, scratchArena));
 
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
             auto metadataResult3 = AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::IncludeEntry>(includePath, testArena, scratchArena, shaderCook);
@@ -346,7 +344,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             ASSERT_TRUE(metadataResult2);
             if(metadataResult2)
                 includeEntry = Move(*metadataResult2);
-            EXPECT_TRUE(shaderCook.validateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
+            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
         }
     }
     EXPECT_TRUE(RemoveAllIfExists(root));
@@ -363,7 +361,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSigna
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
-    static constexpr AStringView s_InvalidDefines[] = { "\"\": [\"1\"]", "\"9QUALITY\": [\"1\"]", "\"PROJECT-QUALITY\": [\"1\"]", "\"PROJECT_QUALITY\": [\"1;OTHER=0\"]", "\"PROJECT_QUALITY\": [\" 1\"]", "\"PROJECT_QUALITY\": [\"1 \"]", };
+    static constexpr Array<AStringView, 6u> s_InvalidDefines = { "\"\": [\"1\"]", "\"9QUALITY\": [\"1\"]", "\"PROJECT-QUALITY\": [\"1\"]", "\"PROJECT_QUALITY\": [\"1;OTHER=0\"]", "\"PROJECT_QUALITY\": [\" 1\"]", "\"PROJECT_QUALITY\": [\"1 \"]", };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
     Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
@@ -396,7 +394,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSigna
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, validMetadata));
             ASSERT_TRUE(parse());
             const auto& defineValues = include ? includeEntry.defineValues : shaderEntry.defineValues;
-            EXPECT_TRUE(shaderCook.validateVariantSignature("project/define_probe", "PROJECT_QUALITY=1", defineValues, scratchArena));
+            EXPECT_TRUE(Impl::ShaderCook::ValidateVariantSignature("project/define_probe", "PROJECT_QUALITY=1", defineValues, scratchArena));
         }
     }
     EXPECT_TRUE(RemoveAllIfExists(root));

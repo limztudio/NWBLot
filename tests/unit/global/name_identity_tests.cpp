@@ -25,7 +25,6 @@ namespace __hidden_name_identity_tests{
 constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
 
 #if defined(NWB_BUILD_SYMBOLS)
-constexpr u32 s_ExpectedDualCount = 2u;
 #endif
 #if !defined(NWB_DEBUG)
 static constexpr AStringView s_RuntimeGenerated = "runtime/generated";
@@ -68,10 +67,10 @@ TEST(Global, DerivedNamesReportInvalidInputsAndPreserveCanonicalBinaryIdentity){
     const Name base("tests/derived_name/identity");
     constexpr AStringView s_Suffix = "suffix";
     constexpr AStringView s_UpperSuffix = "SUFFIX";
-    constexpr char s_EmbeddedNull[]{ 'a', '\0', 'b' };
+    constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
     EXPECT_FALSE(DeriveName(s_NameNone, s_Suffix));
     EXPECT_FALSE(DeriveName(base, AStringView{}));
-    EXPECT_FALSE(DeriveName(base, AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull))));
+    EXPECT_FALSE(DeriveName(base, AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size())));
     EXPECT_FALSE(FinishDerivedNameHash(NameHash{}));
     const auto lower = DeriveName(base, s_Suffix);
     const auto upper = DeriveName(base, s_UpperSuffix);
@@ -86,8 +85,8 @@ TEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks){
     constexpr AStringView s_Bounded = s_Source.substr(0u, 16u);
     constexpr Name s_ViewName{s_Bounded};
     constexpr Name s_LiteralName{"identity/bounded"};
-    constexpr char s_EmbeddedNull[]{ 'a', '\0', 'b' };
-    constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull)));
+    constexpr Array<char, 3u> s_EmbeddedNull = { 'a', '\0', 'b' };
+    constexpr auto s_InvalidName = Name::FromText(AStringView(s_EmbeddedNull.data(), s_EmbeddedNull.size()));
     static_assert(s_ViewName == s_LiteralName);
     static_assert(!s_InvalidName && s_InvalidName.error() == NameTextError::EmbeddedNull);
     static_assert(Name{AStringView{}} != s_NameNone);
@@ -134,13 +133,13 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
 
     const Name recorded{AStringView("identity/recorded_probe")};
     EXPECT_EQ(probe.recordCount, 1u);
-    char resolved[32u] = {};
-    EXPECT_FALSE(NameDetail::ResolveNameSymbolText(resolved, LengthOf(resolved), recorded.identityHash()));
+    Array<char, 32u> resolved = {};
+    EXPECT_FALSE(NameDetail::ResolveNameSymbolText(resolved.data(), LengthOf(resolved), recorded.identityHash()));
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
 #if defined(NWB_BUILD_SYMBOLS)
     EXPECT_EQ(s_Literal.hash(), s_Literal.identityHash());
-    EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
+    EXPECT_EQ(probe.recordCount, 2u);
 #endif
 }
 
@@ -149,9 +148,9 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
     const Name runtimeName{AStringView("Runtime\\Generated")};
-    char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(hashText, sizeof(hashText), runtimeName.identityHash());
-    const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
+    Array<char, NameDetail::s_DebugHashTextLength + 1u> hashText = {};
+    NameDetail::HashToDebugString(hashText.data(), sizeof(hashText), runtimeName.identityHash());
+    const AStringView hashView(hashText.data(), NameDetail::s_DebugHashTextLength);
     const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
 #if defined(NWB_DEBUG)
@@ -166,7 +165,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
 
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
     EXPECT_EQ(binaryName.resolvedText(), hashView);
-    EXPECT_STREQ(binaryName.c_str(), hashText);
+    EXPECT_STREQ(binaryName.c_str(), hashText.data());
 }
 
 TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
@@ -185,19 +184,19 @@ TEST(Global, DiagnosticNameTextNeverInvokesForeignSymbolCallbacks){
     );
 
     EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), s_Authored).view(), s_Authored.logText());
-    char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(hashText, sizeof(hashText), binary.identityHash());
-    EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), binary).view(), AStringView(hashText));
+    Array<char, NameDetail::s_DebugHashTextLength + 1u> hashText = {};
+    NameDetail::HashToDebugString(hashText.data(), sizeof(hashText), binary.identityHash());
+    EXPECT_EQ(MakeDiagnosticEventText(AStringView("{}"), binary).view(), AStringView(hashText.data()));
     EXPECT_EQ(probe.recordCount, 0u);
     EXPECT_EQ(probe.resolveCount, 0u);
 }
 
 TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
     NameSymbolCallbackProbe probe;
-    char source[NameDetail::s_DebugNameCapacity + 1u];
+    Array<char, NameDetail::s_DebugNameCapacity + 1u> source = {};
     for(char& character : source)
         character = 'x';
-    const auto nameResult = Name::FromText(AStringView(source, sizeof(source)));
+    const auto nameResult = Name::FromText(AStringView(source.data(), source.size()));
     ASSERT_TRUE(nameResult);
     const Name name = *nameResult;
 #if defined(NWB_DEBUG)
@@ -228,12 +227,12 @@ TEST(Global, NameHashTextDistinguishesNullEmptyAndEmbeddedNull){
     static_assert(*s_EmptyPointer == *s_EmptyView && *s_EmptyWidePointer == *s_EmptyWideView);
     static_assert(*s_EmptyView == ComputeNameHash(MakeNotNull("")));
     static_assert(*s_EmptyView != NameHash{});
-    constexpr char s_Narrow[]{ 'a', '\0', 'b', '\0' };
-    constexpr wchar s_Wide[]{ L'a', L'\0', L'b', L'\0' };
-    constexpr auto s_NarrowPointer = ComputeNameHash(s_Narrow);
-    constexpr auto s_WidePointer = ComputeNameHash(s_Wide);
-    constexpr auto s_NarrowBounded = ComputeNameHash(AStringView(s_Narrow, 3u));
-    constexpr auto s_WideBounded = ComputeNameHash(WStringView(s_Wide, 3u));
+    constexpr Array<char, 4u> s_Narrow = { 'a', '\0', 'b', '\0' };
+    constexpr Array<wchar, 4u> s_Wide = { L'a', L'\0', L'b', L'\0' };
+    constexpr auto s_NarrowPointer = ComputeNameHash(s_Narrow.data());
+    constexpr auto s_WidePointer = ComputeNameHash(s_Wide.data());
+    constexpr auto s_NarrowBounded = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
+    constexpr auto s_WideBounded = ComputeNameHash(WStringView(s_Wide.data(), 3u));
     static_assert(s_NarrowPointer && s_WidePointer);
     static_assert(*s_NarrowPointer == ComputeNameHash(MakeNotNull("a")));
     static_assert(*s_WidePointer == ComputeNameHash(MakeNotNull(L"a")));
@@ -248,7 +247,7 @@ TEST(Global, NameHashTextDistinguishesNullEmptyAndEmbeddedNull){
     const auto nullHash = ComputeNameHash(static_cast<const char*>(nullptr));
     ASSERT_FALSE(nullHash);
     EXPECT_EQ(nullHash.error(), NameTextError::NullText);
-    const auto boundedHash = ComputeNameHash(AStringView(s_Narrow, 3u));
+    const auto boundedHash = ComputeNameHash(AStringView(s_Narrow.data(), 3u));
     ASSERT_FALSE(boundedHash);
     EXPECT_EQ(boundedHash.error(), NameTextError::EmbeddedNull);
     EXPECT_EQ(probe.recordCount, 0u);
@@ -258,15 +257,15 @@ TEST(Global, NameHashTextDistinguishesNullEmptyAndEmbeddedNull){
 TEST(Global, RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries){
     static_assert(!noexcept(Name::FromText(AStringView{})));
     static_assert(Name{static_cast<const wchar*>(nullptr)} == s_NameNone);
-    constexpr char s_InvalidNarrow[]{ 'a', '\0', 'b' };
-    constexpr wchar s_InvalidWide[]{ L'a', L'\0', L'b' };
-    constexpr auto s_InvalidWideName = Name::FromText(WStringView(s_InvalidWide, LengthOf(s_InvalidWide)));
+    constexpr Array<char, 3u> s_InvalidNarrow = { 'a', '\0', 'b' };
+    constexpr Array<wchar, 3u> s_InvalidWide = { L'a', L'\0', L'b' };
+    constexpr auto s_InvalidWideName = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
     static_assert(!s_InvalidWideName && s_InvalidWideName.error() == NameTextError::EmbeddedNull);
     NameSymbolCallbackProbe probe;
-    const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow, LengthOf(s_InvalidNarrow)));
+    const auto invalidNarrow = Name::FromText(AStringView(s_InvalidNarrow.data(), s_InvalidNarrow.size()));
     ASSERT_FALSE(invalidNarrow);
     EXPECT_EQ(invalidNarrow.error(), NameTextError::EmbeddedNull);
-    const auto invalidWide = Name::FromText(WStringView(s_InvalidWide, LengthOf(s_InvalidWide)));
+    const auto invalidWide = Name::FromText(WStringView(s_InvalidWide.data(), s_InvalidWide.size()));
     ASSERT_FALSE(invalidWide);
     EXPECT_EQ(invalidWide.error(), NameTextError::EmbeddedNull);
     EXPECT_EQ(probe.recordCount, 0u);
@@ -289,11 +288,11 @@ TEST(Global, RuntimeNameTextAdmissionPreservesIdentityAndCallbackBoundaries){
 }
 
 TEST(Global, OptionalNameTextPreservesAbsenceAndOwnedContainerErrors){
-    constexpr char s_Invalid[]{ 'a', '\0', 'b' };
+    constexpr Array<char, 3u> s_Invalid = { 'a', '\0', 'b' };
     NWB::Tests::TestArena<> testArena;
     BasicString<char, NWB::Core::Alloc::GlobalArena> owned(testArena.arena);
-    owned.assign(s_Invalid, LengthOf(s_Invalid));
-    AInteropString generic(s_Invalid, LengthOf(s_Invalid));
+    owned.assign(s_Invalid.data(), s_Invalid.size());
+    AInteropString generic(s_Invalid.data(), s_Invalid.size());
     NameSymbolCallbackProbe probe;
     const auto emptyNarrow = ToName(AStringView{});
     ASSERT_TRUE(emptyNarrow);
@@ -301,10 +300,10 @@ TEST(Global, OptionalNameTextPreservesAbsenceAndOwnedContainerErrors){
     const auto emptyWide = ToName(WStringView{});
     ASSERT_TRUE(emptyWide);
     EXPECT_FALSE(*emptyWide);
-    const auto invalidView = ToName(AStringView(s_Invalid, LengthOf(s_Invalid)));
+    const auto invalidView = ToName(AStringView(s_Invalid.data(), s_Invalid.size()));
     ASSERT_FALSE(invalidView);
     EXPECT_EQ(invalidView.error(), NameTextError::EmbeddedNull);
-    const auto invalidOwned = ToName<char, NWB::Core::Alloc::GlobalArena>(owned);
+    const auto invalidOwned = ToName(owned);
     ASSERT_FALSE(invalidOwned);
     EXPECT_EQ(invalidOwned.error(), NameTextError::EmbeddedNull);
     const auto invalidGeneric = ToName(generic);
@@ -349,10 +348,10 @@ TEST(Global, RuntimeNameFactoryPreservesRecursiveRecorderGuard){
 
 TEST(Global, NameHashDebugTextRejectsInvalidHex){
     const NameHash source = ComputeNameHash(MakeNotNull("global_name_hash_debug_text"));
-    char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(hashText, sizeof(hashText), source);
+    Array<char, NameDetail::s_DebugHashTextLength + 1u> hashText = {};
+    NameDetail::HashToDebugString(hashText.data(), sizeof(hashText), source);
     hashText[0u] = 'g';
-    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText)));
+    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText.data())));
 }
 
 

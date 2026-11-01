@@ -4,9 +4,6 @@
 
 #include "context.h"
 
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,39 +14,11 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_context_popup{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 Geometry(const PopupScope& scope)noexcept{
-    if(
-        !IsFinite(scope.bounds.x) || !IsFinite(scope.bounds.y) || !IsFinite(scope.bounds.width) || !IsFinite(scope.bounds.height)
-        || !IsFinite(scope.viewport.x) || !IsFinite(scope.viewport.y) || !IsFinite(scope.viewport.width) || !IsFinite(scope.viewport.height)
-        || scope.bounds.width <= 0.0f || scope.bounds.height <= 0.0f || scope.viewport.width <= 0.0f || scope.viewport.height <= 0.0f
-    )
-        return false;
-    // Lanes are bounds right, bounds bottom, viewport right, viewport bottom. All inputs are finite here.
-    const SIMDVectorSingle end = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y), VectorSet(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height));
-    return VectorIsFinite(end, VectorComponentMask::s_XYZW) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && VectorGetX(end) <= VectorGetZ(end) && VectorGetY(end) <= VectorGetW(end);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Context::registerPopupScope(const WidgetState& state, PopupScope scope){
     if(
         m_failed || !currentDeclaration(state) || state.kind != WidgetKind::Popup
         || !scope.token.valid() || scope.token.widget != state.id || scope.token.declarationGeneration != state.declarationGeneration
-        || scope.parent != m_currentPopup || m_popups.size() == s_InputMaxPopups || !__hidden_ui_context_popup::Geometry(scope)
+        || scope.parent != m_currentPopup || m_popups.size() == s_InputMaxPopups || !HasValidPopupScopeGeometry(scope)
     ){
         fail();
         return false;
@@ -89,7 +58,7 @@ b8 Context::activatePopupScope(const PopupToken& token)noexcept{
 }
 
 b8 Context::updatePopupScope(const PopupToken& token, PopupScope scope)noexcept{
-    if(m_failed || !m_rootActive || !token.valid() || scope.token != token || !__hidden_ui_context_popup::Geometry(scope)){
+    if(m_failed || !m_rootActive || !token.valid() || scope.token != token || !HasValidPopupScopeGeometry(scope)){
         fail();
         return false;
     }
@@ -106,10 +75,6 @@ b8 Context::updatePopupScope(const PopupToken& token, PopupScope scope)noexcept{
     }
     fail();
     return false;
-}
-
-b8 Context::beginPopupScope(const WidgetState& state, PopupScope scope){
-    return registerPopupScope(state, scope) && activatePopupScope(scope.token);
 }
 
 b8 Context::endPopupScope(const b8 visible)noexcept{
@@ -158,10 +123,6 @@ void Context::discardPopupScope(const PopupToken& token)noexcept{
         if(removed[index - 1u])
             m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
-}
-
-b8 Context::hasPopupScope(const PopupToken& token)const noexcept{
-    return popupLayer(token) != 0u;
 }
 
 u32 Context::popupLayer(const PopupToken& token)const noexcept{

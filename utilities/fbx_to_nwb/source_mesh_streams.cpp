@@ -4,6 +4,8 @@
 
 #include "source_mesh_streams.h"
 
+#include <impl/assets_mesh/cook_source_streams.h>
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/mesh/tangent_frame_rebuild.h>
@@ -20,6 +22,27 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace UtilityDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Alloc::GlobalArena& Arena(){
+    static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
+    return s_Arena;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr StringView s_SourcePositionLabel = "position";
 inline constexpr StringView s_SourceNormalLabel = "normal";
 inline constexpr StringView s_SourceTangentLabel = "tangent";
@@ -28,19 +51,19 @@ inline constexpr StringView s_SourceColorLabel = "color";
 inline constexpr StringView s_SourceVertexRefLabel = "vertex_ref";
 
 template<typename Value, typename Lookup>
-[[nodiscard]] static Expected<u32> InternSourceValue(UtilityVector<Value>& stream, Lookup& lookup, const Value& value, const AStringView streamName){
-    auto found = lookup.find(value);
-    if(found != lookup.end())
+[[nodiscard]] static Expected<u32> InternSourceValue(const Value& value, const AStringView streamName, UtilityVector<Value>& inOutStream, Lookup& inOutLookup){
+    auto found = inOutLookup.find(value);
+    if(found != inOutLookup.end())
         return found.value();
 
-    if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
+    if(inOutStream.size() >= static_cast<usize>(Impl::s_MeshMissingStreamIndex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
 
-    const u32 index = static_cast<u32>(stream.size());
-    stream.push_back(value);
-    const auto inserted = lookup.emplace(value, index);
+    const u32 index = static_cast<u32>(inOutStream.size());
+    inOutStream.push_back(value);
+    const auto inserted = inOutLookup.emplace(value, index);
     if(!inserted.second){
         NWB_ASSERT(false);
         return MakeUnexpected(Failure{});
@@ -52,27 +75,74 @@ template<typename Value, typename Lookup>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FbxSourceMeshStreams::ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const b8 wantsSkinning){
-    mesh.positions.reserve(estimatedTriangleCorners);
-    mesh.normals.reserve(estimatedTriangleCorners);
-    mesh.uv0.reserve(estimatedTriangleCorners);
-    mesh.colors.reserve(estimatedTriangleCorners);
-    mesh.tangents.reserve(estimatedTriangleCorners);
-    mesh.indices.reserve(estimatedTriangleCorners);
-    mesh.vertexRefs.reserve(estimatedTriangleCorners);
-    if(wantsSkinning)
-        mesh.skin.reserve(estimatedTriangleCorners);
+b8 MeshSkinInfluenceEqual::operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const noexcept{
+    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
+        if(lhs.joint[i] != rhs.joint[i] || FloatingHashBits(lhs.weight.raw[i]) != FloatingHashBits(rhs.weight.raw[i]))
+            return false;
+    }
+    return true;
 }
 
-void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const b8 wantsSkinning){
-    context.positions.reserve(estimatedTriangleCorners);
-    context.normals.reserve(estimatedTriangleCorners);
-    context.tangents.reserve(estimatedTriangleCorners);
-    context.uv0.reserve(estimatedTriangleCorners);
-    context.colors.reserve(estimatedTriangleCorners);
+usize MeshSkinInfluenceHasher::operator()(const MeshSkinInfluence& value)const noexcept{
+    usize seed = Hasher<u16>{}(value.joint[0u]);
+    for(usize i = 1u; i < Impl::s_SkinInfluenceJointCount; ++i)
+        HashCombine(seed, value.joint[i]);
+    for(const f32 weight : value.weight.raw)
+        HashCombine(seed, FloatingHashBits(weight));
+    return seed;
+}
+
+usize SourceVertexRefHasher::operator()(const SourceVertexRef& value)const noexcept{
+    usize seed = Hasher<u32>{}(value.position);
+    HashCombine(seed, value.normal);
+    HashCombine(seed, value.tangent);
+    HashCombine(seed, value.uv0);
+    HashCombine(seed, value.color);
+    HashCombine(seed, value.skin);
+    return seed;
+}
+
+b8 SourceVertexRefEqual::operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
+    return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
+}
+
+SourceMeshBuildContext::SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
+    : mesh(sourceMesh)
+    , scratchArena(sourceScratchArena)
+    , positions(sourceScratchArena)
+    , normals(sourceScratchArena)
+    , tangents(sourceScratchArena)
+    , uv0(sourceScratchArena)
+    , colors(sourceScratchArena)
+    , skin(sourceScratchArena)
+    , vertexRefs(sourceScratchArena)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FbxSourceMeshStreams::ReserveSourceMeshStreams(const usize estimatedTriangleCorners, const b8 wantsSkinning, SourceMeshStreams& outMesh){
+    outMesh.positions.reserve(estimatedTriangleCorners);
+    outMesh.normals.reserve(estimatedTriangleCorners);
+    outMesh.uv0.reserve(estimatedTriangleCorners);
+    outMesh.colors.reserve(estimatedTriangleCorners);
+    outMesh.tangents.reserve(estimatedTriangleCorners);
+    outMesh.indices.reserve(estimatedTriangleCorners);
+    outMesh.vertexRefs.reserve(estimatedTriangleCorners);
     if(wantsSkinning)
-        context.skin.reserve(estimatedTriangleCorners);
-    context.vertexRefs.reserve(estimatedTriangleCorners);
+        outMesh.skin.reserve(estimatedTriangleCorners);
+}
+
+void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(const usize estimatedTriangleCorners, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
+    inOutContext.positions.reserve(estimatedTriangleCorners);
+    inOutContext.normals.reserve(estimatedTriangleCorners);
+    inOutContext.tangents.reserve(estimatedTriangleCorners);
+    inOutContext.uv0.reserve(estimatedTriangleCorners);
+    inOutContext.colors.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        inOutContext.skin.reserve(estimatedTriangleCorners);
+    inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
 b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept{
@@ -86,18 +156,18 @@ b8 FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& 
     return true;
 }
 
-b8 FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena){
-    mesh.tangents.clear();
+b8 FbxSourceMeshStreams::DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+    inOutMesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup(scratchArena);
-    compactLookup.reserve(mesh.vertexRefs.size());
+    compactLookup.reserve(inOutMesh.vertexRefs.size());
     UtilityVector<SourceVertexRef> compactVertexRefs;
-    compactVertexRefs.reserve(mesh.vertexRefs.size());
+    compactVertexRefs.reserve(inOutMesh.vertexRefs.size());
     UtilityScratchVector<u32> vertexRefRemap(scratchArena);
-    vertexRefRemap.reserve(mesh.vertexRefs.size());
+    vertexRefRemap.reserve(inOutMesh.vertexRefs.size());
 
-    for(SourceVertexRef ref : mesh.vertexRefs){
-        ref.tangent = s_MissingSourceStreamIndex;
+    for(SourceVertexRef ref : inOutMesh.vertexRefs){
+        ref.tangent = Impl::s_MeshMissingStreamIndex;
 
         auto found = compactLookup.find(ref);
         if(found != compactLookup.end()){
@@ -115,52 +185,52 @@ b8 FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh, Core::A
         vertexRefRemap.push_back(compactIndex);
     }
 
-    for(u32& index : mesh.indices){
+    for(u32& index : inOutMesh.indices){
         NWB_ASSERT(index < vertexRefRemap.size());
         index = vertexRefRemap[index];
     }
-    mesh.vertexRefs = Move(compactVertexRefs);
+    inOutMesh.vertexRefs = Move(compactVertexRefs);
     return true;
 }
 
 b8 FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices){
-    if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
+    if(mesh.max_face_triangles > Limit<usize>::s_Max / Impl::s_MeshletTriangleIndexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
     }
 
-    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * s_TriangleIndexCount;
+    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * Impl::s_MeshletTriangleIndexCount;
     if(inOutTriangleIndices.size() < triangleIndexCapacity)
         inOutTriangleIndices.resize(triangleIndexCapacity);
     return true;
 }
 
-Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(SourceMeshStreams& mesh, const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena){
+Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     SourceTangentReport outTangentReport;
-    NWB_ASSERT(!mesh.vertexRefs.empty());
-    NWB_ASSERT(!mesh.indices.empty());
-    NWB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
+    NWB_ASSERT(!inOutMesh.vertexRefs.empty());
+    NWB_ASSERT(!inOutMesh.indices.empty());
+    NWB_ASSERT((inOutMesh.indices.size() % Impl::s_MeshletTriangleIndexCount) == 0u);
 
     UtilityScratchVector<RebuildVertex> rebuildVertices(scratchArena);
-    rebuildVertices.reserve(mesh.vertexRefs.size());
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        NWB_ASSERT(ref.position < mesh.positions.size());
-        NWB_ASSERT(ref.normal < mesh.normals.size());
-        NWB_ASSERT(ref.uv0 < mesh.uv0.size());
+    rebuildVertices.reserve(inOutMesh.vertexRefs.size());
+    for(const SourceVertexRef& ref : inOutMesh.vertexRefs){
+        NWB_ASSERT(ref.position < inOutMesh.positions.size());
+        NWB_ASSERT(ref.normal < inOutMesh.normals.size());
+        NWB_ASSERT(ref.uv0 < inOutMesh.uv0.size());
 
-        const Vec3& position = mesh.positions[ref.position];
-        const Vec3& normal = mesh.normals[ref.normal];
-        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), mesh.uv0[ref.uv0] });
+        const Vec3& position = inOutMesh.positions[ref.position];
+        const Vec3& normal = inOutMesh.normals[ref.normal];
+        rebuildVertices.push_back(RebuildVertex{ Float4(position.x, position.y, position.z, 0.0f), Float4(normal.x, normal.y, normal.z, 0.0f), Float4(1.0f, 0.0f, 0.0f, 1.0f), inOutMesh.uv0[ref.uv0] });
     }
 
     UtilityScratchVector<u32> rebuildIndices(scratchArena);
-    rebuildIndices.reserve(mesh.indices.size());
-    for(usize indexBase = 0u; indexBase < mesh.indices.size(); indexBase += s_TriangleIndexCount){
-        const u32 i0 = mesh.indices[indexBase + 0u];
-        const u32 i1 = mesh.indices[indexBase + 1u];
-        const u32 i2 = mesh.indices[indexBase + 2u];
+    rebuildIndices.reserve(inOutMesh.indices.size());
+    for(usize indexBase = 0u; indexBase < inOutMesh.indices.size(); indexBase += Impl::s_MeshletTriangleIndexCount){
+        const u32 i0 = inOutMesh.indices[indexBase + 0u];
+        const u32 i1 = inOutMesh.indices[indexBase + 1u];
+        const u32 i2 = inOutMesh.indices[indexBase + 2u];
         NWB_ASSERT(i0 < rebuildVertices.size());
         NWB_ASSERT(i1 < rebuildVertices.size());
         NWB_ASSERT(i2 < rebuildVertices.size());
@@ -191,11 +261,11 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     }
 
     Vec4IndexMap tangentLookup(scratchArena);
-    tangentLookup.reserve(mesh.vertexRefs.size());
-    mesh.tangents.clear();
-    for(usize vertexRefIndex = 0u; vertexRefIndex < mesh.vertexRefs.size(); ++vertexRefIndex){
-        SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
-        const Vec3& storedNormal = mesh.normals[ref.normal];
+    tangentLookup.reserve(inOutMesh.vertexRefs.size());
+    inOutMesh.tangents.clear();
+    for(usize vertexRefIndex = 0u; vertexRefIndex < inOutMesh.vertexRefs.size(); ++vertexRefIndex){
+        SourceVertexRef& ref = inOutMesh.vertexRefs[vertexRefIndex];
+        const Vec3& storedNormal = inOutMesh.normals[ref.normal];
         const SIMDVectorSingle storedTangent = LoadFloat(rebuildVertices[vertexRefIndex].tangent);
         const SIMDVectorSingle normal = ::FrameNormalizeDirection(LoadFloat(storedNormal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
         const SIMDVectorSingle tangent = ::FrameResolveTangent(normal, VectorSetW(storedTangent, 0.0f), ::FrameFallbackTangent(normal));
@@ -206,7 +276,7 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
 
         Vec4 generatedTangent;
         StoreFloat(VectorSelect(tangent, ::FrameTangentHandedness(storedTangent, s_SIMDOne), s_SIMDMaskW), generatedTangent);
-        const auto tangentIndex = InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel);
+        const auto tangentIndex = InternSourceValue(generatedTangent, s_SourceTangentLabel, inOutMesh.tangents, tangentLookup);
         if(!tangentIndex)
             return MakeUnexpected(tangentIndex.error());
         ref.tangent = *tangentIndex;
@@ -217,38 +287,78 @@ Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(S
     return outTangentReport;
 }
 
-Expected<u32> FbxSourceMeshStreams::InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const b8 wantsSkinning){
+Expected<u32> FbxSourceMeshStreams::InternSourceCorner(const SourceTriangleCorner& corner, const b8 wantsSkinning, SourceMeshBuildContext& inOutContext){
     SourceVertexRef ref;
-    const auto positionIndex = InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel);
+    const auto positionIndex = InternSourceValue(corner.position, s_SourcePositionLabel, inOutContext.mesh.positions, inOutContext.positions);
     if(!positionIndex)
         return MakeUnexpected(positionIndex.error());
     ref.position = *positionIndex;
-    const auto normalIndex = InternSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel);
+    const auto normalIndex = InternSourceValue(corner.normal, s_SourceNormalLabel, inOutContext.mesh.normals, inOutContext.normals);
     if(!normalIndex)
         return MakeUnexpected(normalIndex.error());
     ref.normal = *normalIndex;
     if(corner.hasTangent){
-        const auto tangentIndex = InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel);
+        const auto tangentIndex = InternSourceValue(corner.tangent, s_SourceTangentLabel, inOutContext.mesh.tangents, inOutContext.tangents);
         if(!tangentIndex)
             return MakeUnexpected(tangentIndex.error());
         ref.tangent = *tangentIndex;
     }
-    const auto uv0Index = InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label);
+    const auto uv0Index = InternSourceValue(corner.uv0, s_SourceUv0Label, inOutContext.mesh.uv0, inOutContext.uv0);
     if(!uv0Index)
         return MakeUnexpected(uv0Index.error());
     ref.uv0 = *uv0Index;
-    const auto colorIndex = InternSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel);
+    const auto colorIndex = InternSourceValue(corner.color, s_SourceColorLabel, inOutContext.mesh.colors, inOutContext.colors);
     if(!colorIndex)
         return MakeUnexpected(colorIndex.error());
     ref.color = *colorIndex;
     if(wantsSkinning){
-        const auto skinIndex = InternSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText);
+        const auto skinIndex = InternSourceValue(corner.skin, s_SkinAssetTypeText, inOutContext.mesh.skin, inOutContext.skin);
         if(!skinIndex)
             return MakeUnexpected(skinIndex.error());
         ref.skin = *skinIndex;
     }
 
-    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel);
+    return InternSourceValue(ref, s_SourceVertexRefLabel, inOutContext.mesh.vertexRefs, inOutContext.vertexRefs);
+}
+
+b8 FbxSourceMeshStreams::ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
+    if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), ConvertString(context));
+        return false;
+    }
+    if(mesh.tangents.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), ConvertString(context));
+        return false;
+    }
+    if((mesh.indices.size() % Impl::s_MeshletTriangleIndexCount) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), ConvertString(context));
+        return false;
+    }
+
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefPositionName, ref.position, mesh.positions.size()))
+            return false;
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefNormalName, ref.normal, mesh.normals.size()))
+            return false;
+        if(ref.tangent == Impl::s_MeshMissingStreamIndex){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), ConvertString(context));
+            return false;
+        }
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefTangentName, ref.tangent, mesh.tangents.size()))
+            return false;
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_MeshUv0FieldNameView, ref.uv0, mesh.uv0.size()))
+            return false;
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(context, Impl::s_VertexRefColorName, ref.color, mesh.colors.size()))
+            return false;
+    }
+
+    for(const u32 index : mesh.indices){
+        if(index >= mesh.vertexRefs.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh triangle index references an out-of-range vertex_ref"), ConvertString(context));
+            return false;
+        }
+    }
+    return true;
 }
 
 

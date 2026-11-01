@@ -4,21 +4,21 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-#include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/deferred/task_graph_post_gbuffer_normalize_task.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
+#include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
-#include <impl/ecs_render/deferred/opaque_csg_interval_clear_builder.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_clear_builder.h>
 #include <impl/ecs_render/deferred/opaque_compute_emulation_producers.h>
-#include <impl/ecs_render/deferred/opaque_csg_interval_stage.h>
+#include <impl/ecs_render/csg/opaque_csg_interval_stage.h>
 #include <impl/ecs_render/deferred/opaque_shared_compute_emulation_chain.h>
 #include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
-#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
@@ -44,6 +44,40 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PostGbufferNormalizeGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(context, payload.shadowVisibilityTask);
+    if(!shadowVisibilityQueue)
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
+    if(shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
+        (*payload.asyncPrefixTiming)->finishTiming(commandList);
+        payload.asyncPrefixTiming->reset();
+    }
+    return true;
+}
+
+void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
+    payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
@@ -51,7 +85,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const b8 hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
-    const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    const MeshViewGpuData& meshViewState,
     const b8 meshViewUploadRequired,
     const DeferredGraphResourceImportResult& resources,
     const Span<const Core::GpuGraphResourceId> shadowTraceGeometryResources,
@@ -66,11 +100,9 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     GraphClearTimingRecordState& csgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
-    Core::GpuTimingSubmissionTicket** const timingTickets
+    const Span<Core::GpuTimingSubmissionTicket*> timingTickets
 ){
     using namespace RendererTaskGraphDetail;
-    namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
-    using PrefixTimingSlot = PrefixTimingSlotNs::Enum;
 
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -112,17 +144,17 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             || !resources.csgRemovedIntervalData.valid()
             || !resources.csgRemovedIntervalCount.valid()
         ))
-        || !timingTickets
+        || timingTickets.size() < static_cast<usize>(DeferredGraphicsPrefixTimingSlot::kCount)
         || !deferredClearTimingState.graphics
         || deferredClearTimingState.timing != &deferredClearTiming
         || !deferredClearTimingState.rebindableTimingTicket
     )
         return MakeUnexpected(Failure{});
-    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::Count); ++timingSlot){
+    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(DeferredGraphicsPrefixTimingSlot::kCount); ++timingSlot){
         if(!timingTickets[timingSlot])
             return MakeUnexpected(Failure{});
     }
-    const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot)noexcept{
+    const auto timingTicketSlot = [timingTickets](const DeferredGraphicsPrefixTimingSlot::Enum slot)noexcept{
         return &timingTickets[static_cast<usize>(slot)];
     };
     const Core::TextureSubresourceSet csgPeelSubresources(0u, 1u, 0u, deferredTargets.csgPeelLayerCount);
@@ -146,8 +178,8 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .meshViewAspectRatio = meshViewAspectRatio,
             .meshViewUploadRequired = meshViewUploadRequired,
             .asyncPrefixTiming = asyncPrefixTiming,
-            .meshViewSetupTimingTicket = *timingTicketSlot(PrefixTimingSlotNs::MeshViewSetup),
-            .sceneShadingSetupTimingTicket = *timingTicketSlot(PrefixTimingSlotNs::SceneShadingSetup),
+            .meshViewSetupTimingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::MeshViewSetup),
+            .sceneShadingSetupTimingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::SceneShadingSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
             .shadowVisibilityTask = m_deferredShadowVisibilityTask,
             .meshViewSetupReady = m_graphicsPrefixMeshViewSetupReady,
@@ -171,7 +203,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     clearScheduling.mergeWithPrevious = true;
     const Core::GpuClearTextureTaskRecordHooks deferredClearHooks{ .context = &deferredClearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
     Core::GpuTaskDesc deferredClearDesc;
-    deferredClearDesc.setIdentity(Name("render.graphics_prefix.deferred_clear_opaque_color")).setMarkerLabel("Deferred Clear Opaque Color").setScheduling(clearScheduling).setDependencies(&m_graphicsPrefixSceneShadingSetupTask, 1u);
+    deferredClearDesc.setIdentity(Name("render.graphics_prefix.deferred_clear_opaque_color")).setMarkerLabel("Deferred Clear Opaque Color").setScheduling(clearScheduling).setDependencies({ &m_graphicsPrefixSceneShadingSetupTask, 1u });
     Core::GpuClearTextureTaskDesc opaqueColorClearDesc;
     opaqueColorClearDesc.destination = resources.opaqueColor;
     opaqueColorClearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
@@ -211,7 +243,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         materialTypedBytes
     );
 
-    ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{ m_arena, m_graphics, m_materialSystem, m_csgSystem, deferredTargets, *timingTicketSlot(PrefixTimingSlotNs::Gbuffer), m_graphicsPrefixMeshViewSetupReady, m_graphicsPrefixSceneShadingSetupReady, };
+    ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{
+        m_arena,
+        m_graphics,
+        m_materialSystem,
+        m_csgSystem,
+        deferredTargets,
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
+        m_graphicsPrefixMeshViewSetupReady,
+        m_graphicsPrefixSceneShadingSetupReady,
+    };
     gbufferPayload.frameBindings = frameBindings;
     gbufferPayload.csgResources = csgResources;
 
@@ -257,9 +298,9 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_materialSystem,
         m_csgSystem,
         deferredTargets,
-        *timingTicketSlot(PrefixTimingSlotNs::CsgReceiverSpanBuild),
-        *timingTicketSlot(PrefixTimingSlotNs::CsgIntervalCombine),
-        *timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample),
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgReceiverSpanBuild),
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgIntervalCombine),
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgIntervalSample),
         m_graphicsPrefixMeshViewSetupReady,
         m_graphicsPrefixSceneShadingSetupReady,
         opaqueCsgIntervalSampleComputeEmulationTiming
@@ -313,16 +354,16 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     constexpr usize s_CsgReceiverSpanResourceUseCapacity = 6u;
     constexpr usize s_CsgIntervalCombineResourceUseCapacity = 11u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ scratchArena };
-    Core::GpuTaskResourceUse csgReceiverSpanResourceUses[s_CsgReceiverSpanResourceUseCapacity] = {};
+    Array<Core::GpuTaskResourceUse, s_CsgReceiverSpanResourceUseCapacity> csgReceiverSpanResourceUses = {};
     usize csgReceiverSpanResourceUseCount = 0u;
-    Core::GpuTaskResourceUse csgIntervalCombineResourceUses[s_CsgIntervalCombineResourceUseCapacity] = {};
+    Array<Core::GpuTaskResourceUse, s_CsgIntervalCombineResourceUseCapacity> csgIntervalCombineResourceUses = {};
     usize csgIntervalCombineResourceUseCount = 0u;
     Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
     Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
     Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
     Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput;
     Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet;
-    const MaterialPassDrawItemsView gbufferMaterialGeometryDrawSets[] = { opaqueDrawItems.regular, opaqueDrawItems.csgReceiverSurface, };
+    const Array<MaterialPassDrawItemsView, 2> gbufferMaterialGeometryDrawSets = { opaqueDrawItems.regular, opaqueDrawItems.csgReceiverSurface, };
     const b8 gbufferUsesMaterialGeometry = !opaqueDrawItems.regular.empty() || !opaqueDrawItems.csgReceiverSurface.empty();
     gbufferPayload.materialGeometryStatesGraphOwned = false;
     if(gbufferUsesMaterialGeometry){
@@ -360,7 +401,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_arena,
         m_materialSystem,
         deferredTargets,
-        *timingTicketSlot(PrefixTimingSlotNs::Gbuffer),
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
         m_graphicsPrefixMeshViewSetupReady,
         m_graphicsPrefixSceneShadingSetupReady,
     };
@@ -415,7 +456,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_arena,
         m_materialSystem,
         deferredTargets,
-        *timingTicketSlot(PrefixTimingSlotNs::Gbuffer),
+        *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
         m_graphicsPrefixMeshViewSetupReady,
         m_graphicsPrefixSceneShadingSetupReady,
     };
@@ -500,7 +541,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskResourceSetUse gbufferMaterialGeometrySetUse{ .resourceSet = gbufferMaterialGeometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse gbufferMaterialSampledTextureSetUse{ .resourceSet = gbufferMaterialSampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputUavSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
-    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
+    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{ .resourceSet = opaqueComputeEmulationOutputSet, .range = {}, .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState, .access = Core::GpuTaskResourceAccess::Read, };
     const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputUavSetUse{
         .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet,
         .range = {},
@@ -510,11 +551,11 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet,
         .range = {},
-        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
+        .requiredState = ECSRenderDetail::s_ObjectGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     constexpr usize s_GbufferMaterialResourceSetUseCapacity = 4u;
-    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[s_GbufferMaterialResourceSetUseCapacity] = {};
+    Array<Core::GpuTaskResourceSetUse, s_GbufferMaterialResourceSetUseCapacity> gbufferMaterialResourceSetUses = {};
     usize gbufferMaterialResourceSetUseCount = 0u;
     if(gbufferPayload.materialGeometryStatesGraphOwned)
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
@@ -527,9 +568,15 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{scratchArena};
-    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(opaqueDrawItems.regular.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)))
+    if(
+        gbufferPayload.materialDrawBuffersUploaded
+        && !objectGeometry.prepare(opaqueDrawItems.regular.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer))
+    )
         return MakeUnexpected(Failure{});
-    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(opaqueDrawItems.csgReceiverSurface.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)))
+    if(
+        gbufferPayload.materialDrawBuffersUploaded
+        && !objectGeometry.prepare(opaqueDrawItems.csgReceiverSurface.indexedDrawItems, frameBindings, scratchArena, gbufferDependency, objectGeometryReads, nullptr, timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer))
+    )
         return MakeUnexpected(Failure{});
     gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
 
@@ -576,9 +623,9 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setIdentity(Name("render.graphics_prefix.gbuffer"))
         .setMarkerLabel("Opaque G-Buffer")
         .setScheduling(gbufferScheduling)
-        .setDependencies(&gbufferDependency, 1u)
-        .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
-        .setResourceSetUses(gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr, gbufferMaterialResourceSetUseCount)
+        .setDependencies({ &gbufferDependency, 1u })
+        .setResourceUses(gbufferResourceUses)
+        .setResourceSetUses({ gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses.data() : nullptr, gbufferMaterialResourceSetUseCount })
     ;
     // Successors declare after G-buffer moves its payload. Keep frozen readiness/state bits by value, not from the moved payload.
     const b8 opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
@@ -602,7 +649,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .frameBindings = frameBindings,
                 .plan = opaqueSharedComputeEmulationPlan,
                 .objectGeometryReads = objectGeometryReads,
-                .timingTicket = *timingTicketSlot(PrefixTimingSlotNs::Gbuffer),
+                .timingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Gbuffer),
                 .meshViewSetupReady = m_graphicsPrefixMeshViewSetupReady,
                 .sceneShadingSetupReady = m_graphicsPrefixSceneShadingSetupReady,
                 .sharedComputeEmulationTiming = opaqueRegularSharedComputeEmulationTiming,
@@ -635,9 +682,9 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .csgResources = csgResources,
                 .opaqueDrawItems = opaqueDrawItems,
                 .csgFrameData = csgFrameData,
-                .receiverSpanResourceUses = { csgReceiverSpanResourceUses, csgReceiverSpanResourceUseCount },
-                .intervalCombineResourceUses = { csgIntervalCombineResourceUses, csgIntervalCombineResourceUseCount },
-                .intervalSampleTimingTicket = timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample),
+                .receiverSpanResourceUses = { csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUseCount },
+                .intervalCombineResourceUses = { csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUseCount },
+                .intervalSampleTimingTicket = timingTicketSlot(DeferredGraphicsPrefixTimingSlot::CsgIntervalSample),
                 .removedIntervalSubresources = csgRemovedIntervalSubresources,
                 .removedIntervalCountSubresources = csgRemovedIntervalCountSubresources,
                 .materialInstanceRange = materialInstanceRange,
@@ -691,13 +738,18 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         .setIdentity(Name("render.graphics_prefix.normalize"))
         .setMarkerLabel("Post-G-Buffer Normalize")
         .setScheduling(normalizeScheduling)
-        .setDependencies(&gbufferCompletionTask, 1u)
-        .setResourceUses(normalizeResourceUses.data(), normalizeResourceUses.size())
-        .setResourceSetUses(shadowTraceGeometryStatesGraphOwned ? &shadowTraceGeometrySetUse : nullptr, shadowTraceGeometryStatesGraphOwned ? 1u : 0u)
+        .setDependencies({ &gbufferCompletionTask, 1u })
+        .setResourceUses(normalizeResourceUses)
+        .setResourceSetUses({ shadowTraceGeometryStatesGraphOwned ? &shadowTraceGeometrySetUse : nullptr, shadowTraceGeometryStatesGraphOwned ? 1u : 0u })
     ;
     const auto graphicsPrefixTaskResult = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
         normalizeDesc,
-        PostGbufferNormalizeGraphTask::Payload{ .raytracingSystem = m_raytracingSystem, .asyncPrefixTiming = &asyncPrefixTiming, .timingTicket = *timingTicketSlot(PrefixTimingSlotNs::Normalize), .shadowVisibilityTask = &m_deferredShadowVisibilityTask, }
+        PostGbufferNormalizeGraphTask::Payload{
+            .raytracingSystem = m_raytracingSystem,
+            .asyncPrefixTiming = &asyncPrefixTiming,
+            .timingTicket = *timingTicketSlot(DeferredGraphicsPrefixTimingSlot::Normalize),
+            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
+        }
     );
     if(!graphicsPrefixTaskResult){
         m_graphicsPrefixTask = {};
@@ -706,7 +758,7 @@ Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     m_graphicsPrefixTask = *graphicsPrefixTaskResult;
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes immediately after this successful return.
-    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const SceneLightGpuData>(prefixSceneUploadResult->lightData, sceneLightCount));
+    m_raytracingSystem.publishPreparedLightingClassification(rayTracingLightingClassification, Span<const SceneLightGpuData>(prefixSceneUploadResult->lightData.data(), sceneLightCount));
     return prefixSceneUploadResult->sceneLightingContentHash;
 }
 

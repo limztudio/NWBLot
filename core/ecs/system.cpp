@@ -44,11 +44,6 @@ namespace __hidden_ecs_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ISystem::ISystem(Alloc::GlobalArena& arena)noexcept
-    : m_access(arena)
-{}
-
-
 void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
     for(auto& access : m_access){
         if(access.typeId != typeId)
@@ -65,17 +60,6 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)noexcept
-    : m_arena(arena)
-    , m_dependencies(arena)
-    , m_allSystems(arena)
-    , m_executionHandles(arena)
-    , m_executionDependencies(arena)
-    , m_executionResults(arena)
-    , m_dirty(false)
-{}
 
 
 void SystemScheduler::addSystem(ISystem& system){

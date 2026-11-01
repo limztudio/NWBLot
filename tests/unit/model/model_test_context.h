@@ -32,15 +32,11 @@ namespace ModelTests{
 
 struct EmptyAssetSource final : public Core::Assets::IAssetBinarySource{
 public:
-    virtual b8 readAssetBinary(const Name&, Core::Assets::AssetBytes& outBinary)const noexcept override{
-        outBinary.clear();
-        ++readCount;
-        return false;
-    }
+    mutable usize readCount = 0u;
 
 
 public:
-    mutable usize readCount = 0u;
+    virtual b8 readAssetBinary(const Name& virtualPath, Core::Assets::AssetBytes& outBinary)const noexcept override;
 };
 
 struct RuntimeContext{
@@ -56,27 +52,8 @@ public:
 
 
 public:
-    [[nodiscard]] Core::ECS::EntityID makeOwner(){
-        auto entity = testWorld.world.createEntity();
-        auto& component = entity.addComponent<Impl::ModelComponent>();
-        component.model = Core::Assets::AssetRef<Impl::Model>(s_ModelPath);
-        auto& runtime = entity.addComponent<Impl::ModelRuntimeComponent>();
-        runtime.model = component.model.name();
-        entity.addComponent<Impl::Scene::TransformComponent>();
-        return entity.id();
-    }
-
-    [[nodiscard]] Core::ECS::EntityID makeObject(const Core::ECS::EntityID owner){
-        auto entity = testWorld.world.createEntity();
-        auto& object = entity.addComponent<Impl::ModelObjectComponent>();
-        object.owner = owner;
-        object.model = Name(s_ModelPath);
-        object.object = Name("object");
-        entity.addComponent<Impl::Scene::TransformComponent>();
-        if(auto* const runtime = testWorld.world.tryGetComponent<Impl::ModelRuntimeComponent>(owner))
-            ++runtime->objectCount;
-        return entity.id();
-    }
+    [[nodiscard]] Core::ECS::EntityID makeOwner();
+    [[nodiscard]] Core::ECS::EntityID makeObject(Core::ECS::EntityID owner);
 };
 
 

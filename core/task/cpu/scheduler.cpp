@@ -375,7 +375,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(const CpuAffinity::En
         : (dispatch % __hidden_cpu_task_scheduler::s_NormalAdmissionPeriod == __hidden_cpu_task_scheduler::s_NormalAdmissionTick ? static_cast<usize>(CpuTaskPriority::Normal) : static_cast<usize>(CpuTaskPriority::Critical))
     ;
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
-    const usize costs[s_CostSlotCount] = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };
+    const Array<usize, s_CostSlotCount> costs = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };
     for(usize pass = 0u; pass < s_PrioritySlotCount; ++pass){
         const usize priority = pass == 0u ? firstPriority : (pass <= firstPriority ? pass - 1u : pass);
         for(const usize cost : costs){
@@ -644,6 +644,15 @@ b8 CpuTaskScheduler::isMainThread()const noexcept{
     return QueryCurrentThreadId() == m_mainThread;
 }
 
+void CpuTaskScheduler::beginLockedSearch()noexcept{
+    if(++m_searchGeneration == 0u){
+        for(u64& visit : m_searchVisits)
+            visit = 0u;
+        ++m_searchGeneration;
+    }
+    m_searchStack.clear();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -657,11 +666,6 @@ CpuTaskScope::~CpuTaskScope()noexcept(false){
 
     wait();
     drainOnFailure.release();
-}
-
-
-void CpuTaskScope::wait(){
-    m_scheduler.waitScope(*this);
 }
 
 void CpuTaskScope::drain()noexcept{

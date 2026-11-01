@@ -41,7 +41,7 @@ namespace __hidden_vulkan_descriptor_heap{
         if(abi.resourceSetIndex != 0u || abi.samplerSetIndex != abi.resourceSetIndex + 1u || abi.accelStructSetIndex != abi.samplerSetIndex + 1u)
             return false;
 
-        const u32 resourceBindings[s_ResourceClassCount] = {
+        const Array<u32, s_ResourceClassCount> resourceBindings = {{
             abi.sampledImageBinding,
             abi.storageImageBinding,
             abi.sampledBufferBinding,
@@ -51,7 +51,7 @@ namespace __hidden_vulkan_descriptor_heap{
             abi.sampledImage3DBinding,
             abi.sampledImage2DArrayUintBinding,
             abi.sampledImageCubeBinding,
-        };
+        }};
         for(u32 bindingIndex = 0u; bindingIndex < s_ResourceClassCount; ++bindingIndex){
             const u32 binding = resourceBindings[bindingIndex];
             if(binding >= s_MaxBindlessRegisterSpaces || (bindingIndex > 0u && resourceBindings[bindingIndex - 1u] >= binding))
@@ -617,7 +617,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
 
 b8 GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
     const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
-    const usize tableBytes[] = {
+    const Array<usize, 10> tableBytes = {{
         SlotAllocator::RequiredBytes(resourceCapacity),
         SlotAllocator::RequiredBytes(samplerCapacity),
         SlotAllocator::RequiredBytes(accelStructCapacity),
@@ -628,7 +628,7 @@ b8 GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 sa
         FixedTable<SamplerHandle>::RequiredBytes(samplerCapacity),
         FixedTable<GpuDescriptorHandle>::RequiredBytes(retirementJournalCapacity),
         FixedTable<RetiredSlot>::RequiredBytes(retirementJournalCapacity),
-    };
+    }};
     usize arenaBytes = 0u;
     for(const usize bytes : tableBytes)
         arenaBytes = AddSize(arenaBytes, bytes);

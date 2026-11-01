@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem;
+
+struct DeferredFrameTargets;
+
+// Surfel-GI lifecycle owns pool-initialization clears plus lifecycle plus snapshot-copy declaration.
+struct SurfelGiLifecycleInputs{
+    DeferredFrameTargets* targets = nullptr;
+    Core::GpuTaskId dependency;
+    Core::GpuGraphResourceId surfelPool;
+    Core::GpuGraphResourceId surfelCellHead;
+    Core::GpuGraphResourceId surfelCounter;
+    Core::GpuGraphResourceId surfelFreeList;
+    Core::GpuGraphResourceId surfelPoolSnapshot;
+    Core::GpuGraphResourceId surfelCellHeadSnapshot;
+    u64 poolSnapshotByteSize = 0u;
+    u64 cellHeadSnapshotByteSize = 0u;
+    Core::GpuTaskSchedulingHint scheduling;
+    Span<const Core::GpuExternalCompletionId> externalDependencies{};
+    Core::GpuTaskExternalStateSource computeStateSource;
+    Core::GpuTaskExternalStateSource counterStateSource;
+    b8 hasWork = false;
+};
+
+struct SurfelGiLifecycleResult{
+    Core::GpuTaskId preparationTask;
+    Core::GpuTaskId initializationLifecycleTask;
+    Core::GpuTaskId snapshotCopyTask;
+    Core::GpuTaskId dependency;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SurfelGiLifecycleBuilder final : NoCopy{
+public:
+    SurfelGiLifecycleBuilder(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem)noexcept
+        : m_graph(graph)
+        , m_raytracingSystem(raytracingSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<SurfelGiLifecycleResult> declare(const SurfelGiLifecycleInputs& inputs);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererRayTracingSystem& m_raytracingSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

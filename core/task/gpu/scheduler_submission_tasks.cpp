@@ -21,12 +21,9 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
-    const usize taskTimingTicketCount,
-    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount,
-    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount,
+    const Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
+    const Span<const GpuTaskGraphTaskAcceptedCallback> taskAcceptedCallbacks,
+    const Span<const GpuTaskGraphTaskSubmissionHook> taskSubmissionHooks,
     Alloc::ScratchArena& scratchArena,
     GpuTaskGraph& graph,
     GpuGraphSubmissionTransaction& transaction,
@@ -58,12 +55,12 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
-        || !acceptedCallbacks.resolve(declarationAccess, planAccess, range, taskAcceptedCallbacks, taskAcceptedCallbackCount)
+        || !acceptedCallbacks.resolve(declarationAccess, planAccess, range, taskAcceptedCallbacks)
     )
         return false;
 
     GpuTaskSubmissionDetail::TaskSubmissionBindings bindings(scratchArena);
-    if(!bindings.resolve(declarationAccess, planAccess, range, taskTimingTickets, taskTimingTicketCount, taskSubmissionHooks, taskSubmissionHookCount))
+    if(!bindings.resolve(declarationAccess, planAccess, range, taskTimingTickets, taskSubmissionHooks))
         return false;
 
     if(!bindings.timingTickets.empty()){
@@ -99,7 +96,19 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         const QueueSubmissionPreSubmitHook* const preSubmitHook = bindings.collectPacket(packet, resolvedTimingTickets);
         SubmissionAttemptExceptionScope packetExceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
         packetExceptionScope.setFailedPacket(packet);
-        if(!submitPacketWithinSubmissionOperation(compiledGraph, planAccess, recordedGraph, artifactOperation, packet, resolvedTimingTickets.size(), preSubmitHook, acceptedCallbacks, scratchArena, resolvedTimingTickets.data(), graph, transaction)){
+        if(!submitPacketWithinSubmissionOperation(
+            compiledGraph,
+            planAccess,
+            recordedGraph,
+            artifactOperation,
+            packet,
+            Span<const NotNull<GpuTimingSubmissionTicket*>>(resolvedTimingTickets.data(), resolvedTimingTickets.size()),
+            preSubmitHook,
+            acceptedCallbacks,
+            scratchArena,
+            graph,
+            transaction
+        )){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

@@ -6,7 +6,7 @@
 
 
 #include "slider.h"
-#include "../state/store.h"
+#include <impl/ecs_ui/toolkit/state/store.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +24,9 @@ class SliderFrame final : NoCopy{
 
 
 public:
-    explicit SliderFrame(SliderState& state)noexcept;
+    explicit SliderFrame(SliderState& state)noexcept
+        : m_state(state)
+    {}
 
 
 private:

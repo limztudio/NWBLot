@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 #include <impl/ecs_ui/toolkit/layout/rectangle.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/result.h>
 #include <global/simd/vector.h>
@@ -28,19 +29,12 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Metric rows 0..2 carry data; row 3 is padding.
-inline constexpr u32 s_MetricRowCount = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static SIMDMatrixDouble LoadMetrics(const ProgressMetrics& metrics)noexcept{
     if(
         !IsFinite(metrics.padding.left) || !IsFinite(metrics.padding.top) || !IsFinite(metrics.padding.right) || !IsFinite(metrics.padding.bottom)
         || !IsFinite(metrics.fillMinimum.x) || !IsFinite(metrics.fillMinimum.y) || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
     )
-        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+        return MakeInvalidUiMatrixDouble();
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
         VectorDoubleSet(metrics.fillMinimum.x, metrics.fillMinimum.y, 0.0, 0.0),
@@ -50,13 +44,8 @@ inline constexpr u32 s_MetricRowCount = 3u;
 }
 
 [[nodiscard]] static b8 ValidMetrics(const SIMDMatrixDouble& values)noexcept{
-    for(u32 index = 0u; index < s_MetricRowCount; ++index){
-        if(
-            VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
-            || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
-        )
-            return false;
-    }
+    if(!AreUiMatrixRowsNonNegativeFinite(values, s_ProgressMetricRowCount))
+        return false;
     const SIMDVectorDouble padding = VectorDoubleAdd(values.v[0], VectorDoubleSwizzle<2, 3, 2, 3>(values.v[0]));
     if(VectorDoubleGetX(padding) > Limit<f32>::s_Max || VectorDoubleGetY(padding) > Limit<f32>::s_Max)
         return false;
@@ -64,16 +53,6 @@ inline constexpr u32 s_MetricRowCount = 3u;
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
     return width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max && VectorDoubleGetX(values.v[2]) >= static_cast<f32>(width) && VectorDoubleGetY(values.v[2]) >= static_cast<f32>(height);
-}
-
-[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
-    const Insets padding{ region.padding.left, region.padding.top, region.padding.right, region.padding.bottom };
-    if(!IsBoundedUiPadding(padding))
-        return MakeUnexpected(Failure{});
-    const auto sliceExtents = LoadUiSkinSliceExtents(region);
-    if(!sliceExtents)
-        return MakeUnexpected(Failure{});
-    return LoadUiSkinMinimumSize(region, sliceExtents->value, density);
 }
 
 
@@ -95,17 +74,19 @@ Expected<ProgressMetrics> ProgressLayout::Measure(const ProgressOptions& options
         || !IsValidUiColor(style.trackTint) || !IsValidUiColor(style.fillTint) || !IsFinite(density) || density <= 0.0f
     )
         return MakeUnexpected(Failure{});
-    const auto trackMinimum = LoadMinimumSize(track, VectorDoubleReplicate(density));
+    if(
+        !IsBoundedUiPadding(Insets{ track.padding.left, track.padding.top, track.padding.right, track.padding.bottom })
+        || !IsBoundedUiPadding(Insets{ fill.padding.left, fill.padding.top, fill.padding.right, fill.padding.bottom })
+    )
+        return MakeUnexpected(Failure{});
+    const auto trackMinimum = LoadUiSkinMinimumSize(track, VectorDoubleReplicate(density));
     if(!trackMinimum)
         return MakeUnexpected(Failure{});
-    const auto fillMinimum = LoadMinimumSize(fill, VectorDoubleReplicate(density));
+    const auto fillMinimum = LoadUiSkinMinimumSize(fill, VectorDoubleReplicate(density));
     if(!fillMinimum)
         return MakeUnexpected(Failure{});
     ProgressMetrics candidate;
-    const SIMDVectorSingle stylePadding = VectorSet(style.padding.left, style.padding.top, style.padding.right, style.padding.bottom);
-    const SIMDVectorSingle trackPadding = VectorSet(track.padding.left, track.padding.top, track.padding.right, track.padding.bottom);
-    const SIMDVectorSingle padding = VectorSelect(trackPadding, stylePadding, VectorGreater(stylePadding, trackPadding));
-    candidate.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
+    candidate.padding = MaxUiPadding(style.padding, track.padding);
     candidate.fillMinimum = { VectorGetX(fillMinimum->value), VectorGetY(fillMinimum->value) };
     const SIMDVectorDouble innerWidthInnerHeightValue = VectorDoubleAdd(
         VectorDoubleAdd(VectorDoubleSet(static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top), 0.0, 0.0), VectorDoubleSet(candidate.padding.right, candidate.padding.bottom, 0.0, 0.0)),
@@ -135,20 +116,12 @@ Expected<ProgressPlacement> ProgressLayout::Place(const Rect& bounds, const Rect
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const SIMDVectorDouble boundsSize = VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0);
-    const SIMDVectorDouble paddingStart = VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0);
-    const SIMDVectorDouble firstInset = VectorDoubleSelect(boundsSize, paddingStart, VectorDoubleLess(paddingStart, boundsSize));
-    const SIMDVectorDouble remaining = VectorDoubleSubtract(boundsSize, firstInset);
-    const SIMDVectorDouble paddingEnd = VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0);
-    const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
-    const SIMDVectorDouble origin = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
-    const SIMDVectorDouble size = VectorDoubleSubtract(remaining, lastInset);
-    const auto content = MakeUiRect<UiRectPrecision::EmptyPaint>(VectorDoublePermute<0, 1, 4, 5>(origin, size));
+    const auto content = InsetUiRect<UiRectPrecision::EmptyPaint>(bounds, metrics.padding);
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
-    const SIMDVectorDouble normalizedVector = VectorDoubleClamp(VectorDoubleReplicate(fraction), VectorDoubleZero(), VectorDoubleSplatOne());
-    const f64 normalized = VectorDoubleGetX(normalizedVector);
+    const f64 normalized = Clamp(fraction, 0.0, 1.0);
+    const SIMDVectorDouble normalizedVector = VectorDoubleReplicate(normalized);
     candidate.fillReveal = candidate.content;
     candidate.fillCanvas = candidate.content;
     if(normalized == 0.0){

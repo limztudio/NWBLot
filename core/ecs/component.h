@@ -61,31 +61,6 @@ class ComponentPool final : public IComponentPool{
     friend struct ECSDetail::ViewTupleAccess;
 
 
-private:
-    [[nodiscard]] inline Expected<u32> findDenseIndex(EntityID entityId)const noexcept{
-        const u32 index = entityId.index();
-        if(index >= static_cast<u32>(m_sparse.size()))
-            return MakeUnexpected(Failure{});
-        const u32 denseIndex = m_sparse[index];
-        if(denseIndex >= static_cast<u32>(m_dense.size()))
-            return MakeUnexpected(Failure{});
-        if(m_dense[denseIndex] != entityId)
-            return MakeUnexpected(Failure{});
-
-        return denseIndex;
-    }
-
-    [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const noexcept{
-        const u32 index = entityId.index();
-        NWB_ASSERT(index < static_cast<u32>(m_sparse.size()));
-
-        const u32 denseIndex = m_sparse[index];
-        NWB_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
-        NWB_ASSERT(m_dense[denseIndex] == entityId);
-        return denseIndex;
-    }
-
-
 public:
     explicit ComponentPool(Alloc::GlobalArena& arena)noexcept
         : m_sparse(arena)
@@ -178,6 +153,30 @@ public:
 
     inline virtual u64 mutationVersion()const noexcept override{ return m_mutationVersion; }
 
+
+private:
+    [[nodiscard]] inline Expected<u32> findDenseIndex(EntityID entityId)const noexcept{
+        const u32 index = entityId.index();
+        if(index >= static_cast<u32>(m_sparse.size()))
+            return MakeUnexpected(Failure{});
+        const u32 denseIndex = m_sparse[index];
+        if(denseIndex >= static_cast<u32>(m_dense.size()))
+            return MakeUnexpected(Failure{});
+        if(m_dense[denseIndex] != entityId)
+            return MakeUnexpected(Failure{});
+
+        return denseIndex;
+    }
+
+    [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const noexcept{
+        const u32 index = entityId.index();
+        NWB_ASSERT(index < static_cast<u32>(m_sparse.size()));
+
+        const u32 denseIndex = m_sparse[index];
+        NWB_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
+        NWB_ASSERT(m_dense[denseIndex] == entityId);
+        return denseIndex;
+    }
 
 
 private:

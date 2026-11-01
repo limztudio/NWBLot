@@ -95,7 +95,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
     switch(stmt.kind){
     case StmtKind::ParallelForRange:{
         emitIndent(out, indent);
-        out.append("(void)__adhd_task_scope.parallelFor(0u, (");
+        out.append("__adhd_task_scope.parallelFor(0u, (");
         if(stmt.expr)
             emitExpr(out, *stmt.expr);
         out.append(").size(), 1u, [&](const usize __adhd_idx)noexcept{\r\n");
@@ -132,7 +132,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
     }
     case StmtKind::ParallelForIndex:{
         emitIndent(out, indent);
-        out.append("(void)__adhd_task_scope.parallelFor(static_cast<usize>(");
+        out.append("__adhd_task_scope.parallelFor(static_cast<usize>(");
         if(stmt.initStmt && stmt.initStmt->expr)
             emitExpr(out, *stmt.initStmt->expr);
         else if(stmt.initStmt && stmt.initStmt->isCtorInit && !stmt.initStmt->arguments.empty() && stmt.initStmt->arguments[0])
@@ -156,9 +156,16 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 emitExpr(out, *stmt.stepExpr->rhs);
                 out.push_back(')');
             }
-            else if(stmt.stepExpr->op == TokenType::Equal && stmt.stepExpr->rhs && stmt.stepExpr->rhs->kind == ExprKind::Binary && stmt.stepExpr->rhs->op == TokenType::Plus && stmt.stepExpr->rhs->rhs){
+            else if(stmt.stepExpr->op == TokenType::Equal && stmt.stepExpr->rhs && stmt.stepExpr->rhs->kind == ExprKind::Binary && stmt.stepExpr->rhs->op == TokenType::Plus){
+                const MStringView idxName = stmt.initStmt ? MStringView(stmt.initStmt->name.data(), stmt.initStmt->name.size()) : MStringView{};
+                const Expr* stepOperand = (stmt.stepExpr->rhs->rhs && stmt.stepExpr->rhs->rhs->kind == ExprKind::Identifier && stmt.stepExpr->rhs->rhs->text == idxName)
+                    ? stmt.stepExpr->rhs->lhs
+                    : stmt.stepExpr->rhs->rhs;
                 out.append("static_cast<usize>(");
-                emitExpr(out, *stmt.stepExpr->rhs->rhs);
+                if(stepOperand)
+                    emitExpr(out, *stepOperand);
+                else
+                    out.append("1u");
                 out.push_back(')');
             }
             else{
@@ -173,13 +180,20 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             emitScratchArenaPrologue(out, indent + 1u, "parallel");
         if(stmt.initStmt && stmt.initStmt->varType){
             emitIndent(out, indent + 1u);
-            out.append("const ");
-            m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
-            out.push_back(' ');
-            out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
-            out.append(" = static_cast<");
-            m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
-            out.append(">(__adhd_idx);\r\n");
+            if(stmt.initStmt->varType->isAuto){
+                out.append("const auto ");
+                out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
+                out.append(" = __adhd_idx;\r\n");
+            }
+            else{
+                out.append("const ");
+                m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+                out.push_back(' ');
+                out.append(stmt.initStmt->name.data(), stmt.initStmt->name.size());
+                out.append(" = static_cast<");
+                m_typeEmitter.emitTypeCpp(out, *stmt.initStmt->varType);
+                out.append(">(__adhd_idx);\r\n");
+            }
         }
         emitStatementList(out, stmt.statements, indent + 1u);
         emitIndent(out, indent);
@@ -197,9 +211,11 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         };
         if(!stmt.parallelDependencies.empty()){
             emitIndent(out, indent);
-            out.append("const ::NWB::Core::CpuTaskHandle __adhd_deps_");
+            out.append("const ::NWB::Array<::NWB::Core::CpuTaskHandle, ");
+            AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
+            out.append("u> __adhd_deps_");
             appendBlockSuffix();
-            out.append("[] = { ");
+            out.append(" = { ");
             for(usize i = 0u; i < stmt.parallelDependencies.size(); ++i){
                 if(i > 0u)
                     out.append(", ");
@@ -209,9 +225,12 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
             out.append(" };\r\n");
         }
         emitIndent(out, indent);
-        out.append("const auto __adhd_submit_");
-        appendBlockSuffix();
-        out.append(" = __adhd_task_scope.submit([&]()noexcept{\r\n");
+        if(!stmt.name.empty()){
+            out.append("const auto __adhd_submit_");
+            appendBlockSuffix();
+            out.append(" = ");
+        }
+        out.append("__adhd_task_scope.submit([&]()noexcept{\r\n");
         if(stmt.usesScratchArena)
             emitScratchArenaPrologue(out, indent + 1u, "parallel");
         emitStatementList(out, stmt.statements, indent + 1u);
@@ -221,19 +240,21 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         if(!stmt.parallelDependencies.empty()){
             out.append(", __adhd_deps_");
             appendBlockSuffix();
-            out.append(", ");
+            out.append(".data(), ");
             AppendAdhdUnsigned(out, stmt.parallelDependencies.size());
             out.push_back('u');
         }
         out.append(");\r\n");
-        emitIndent(out, indent);
-        out.append("[[maybe_unused]] const ::NWB::Core::CpuTaskHandle __adhd_task_");
-        appendBlockSuffix();
-        out.append(" = __adhd_submit_");
-        appendBlockSuffix();
-        out.append(".has_value() ? *__adhd_submit_");
-        appendBlockSuffix();
-        out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
+        if(!stmt.name.empty()){
+            emitIndent(out, indent);
+            out.append("const ::NWB::Core::CpuTaskHandle __adhd_task_");
+            appendBlockSuffix();
+            out.append(" = __adhd_submit_");
+            appendBlockSuffix();
+            out.append(".has_value() ? *__adhd_submit_");
+            appendBlockSuffix();
+            out.append(" : ::NWB::Core::CpuTaskHandle{};\r\n");
+        }
         break;
     }
     case StmtKind::ParallelCall:{
@@ -253,7 +274,7 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 out.append(");\r\n");
             }
             emitIndent(out, indent + 1u);
-            out.append("(void)__adhd_task_scope.submit([&");
+            out.append("__adhd_task_scope.submit([&");
             for(usize i = 0u; i < stmt.expr->arguments.size(); ++i){
                 const Expr* arg = stmt.expr->arguments[i];
                 if(!arg || !arg->isMutArg){
@@ -262,8 +283,12 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                 }
             }
             out.append("]()noexcept{ ");
-            if(stmt.expr->lhs)
-                emitExpr(out, *stmt.expr->lhs);
+            if(stmt.usesScratchArena){
+                out.append("\r\n");
+                emitScratchArenaPrologue(out, indent + 2u, "parallel");
+                emitIndent(out, indent + 2u);
+            }
+            emitCallTargetExpr(out, stmt.expr->lhs);
             if(!stmt.expr->callTemplateArgs.empty())
                 m_typeEmitter.emitTypeArgListCpp(out, stmt.expr->callTemplateArgs);
             out.push_back('(');
@@ -278,6 +303,10 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
                     AppendAdhdUnsigned(out, i);
                 }
             }
+            if(stmt.expr->injectClassArena)
+                out.append(", s_ClassArena");
+            else if(stmt.expr->injectScratchArena)
+                out.append(", __adhd_scratch");
             out.append("); }, ");
             AppendTaskOptions(out, stmt);
             out.append(");\r\n");
@@ -286,7 +315,12 @@ void SourceEmitter::emitParallelStmt(MString& out, const Stmt& stmt, const u32 i
         }
         else{
             emitIndent(out, indent);
-            out.append("(void)__adhd_task_scope.submit([&]()noexcept{ ");
+            out.append("__adhd_task_scope.submit([&]()noexcept{ ");
+            if(stmt.usesScratchArena){
+                out.append("\r\n");
+                emitScratchArenaPrologue(out, indent + 1u, "parallel");
+                emitIndent(out, indent + 1u);
+            }
             if(stmt.expr)
                 emitExpr(out, *stmt.expr);
             out.append("; }, ");

@@ -25,15 +25,6 @@ namespace ECSDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<usize... Is>
-using IndexSequence = ::IndexSequence<Is...>;
-
-template<typename... Ts>
-using IndexSequenceFor = ::IndexSequenceFor<Ts...>;
-
-template<typename... Ts>
-using ViewDenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
-
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
     static Span<const EntityID> EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
@@ -68,7 +59,7 @@ template<typename... Ts>
 struct ViewIterator{
     using ComponentTuple = Tuple<ComponentPool<Ts>*...>;
     using ValueTuple = Tuple<EntityID, Ts&...>;
-    using DenseIndexTuple = ViewDenseIndexTuple<Ts...>;
+    using DenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
 
 
 public:
@@ -113,7 +104,7 @@ public:
     void skipInvalid()noexcept{
         if constexpr(sizeof...(Ts) == 1u){
             if(index < count){
-                entity = entityAt(index);
+                entity = ViewTupleAccess::EntityAt(anchorEntities, index);
                 Get<0>(denseIndices) = static_cast<u32>(index);
             }
             else{
@@ -123,8 +114,8 @@ public:
         }
 
         while(index < count){
-            const EntityID entityId = entityAt(index);
-            if(resolveDenseIndices(entityId, index)){
+            const EntityID entityId = ViewTupleAccess::EntityAt(anchorEntities, index);
+            if(resolveDenseIndicesImpl(entityId, index, IndexSequenceFor<Ts...>{})){
                 entity = entityId;
                 break;
             }
@@ -133,10 +124,6 @@ public:
 
         if(index >= count)
             entity = s_InvalidEntityId;
-    }
-
-    b8 resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
-        return resolveDenseIndicesImpl(entityId, anchorDenseIndex, IndexSequenceFor<Ts...>{});
     }
 
     template<usize I>
@@ -151,10 +138,6 @@ public:
     template<usize... Is>
     b8 resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>)noexcept{
         return (resolveDenseIndex<Is>(entityId, anchorDenseIndex) && ...);
-    }
-
-    EntityID entityAt(usize denseIndex)const noexcept{
-        return ViewTupleAccess::EntityAt(anchorEntities, denseIndex);
     }
 
 
@@ -241,7 +224,7 @@ public:
 private:
     template<typename Func>
     void applyFunc(Func& func, const usize denseIndex)const noexcept(noexcept(DeclVal<Func&>()(DeclVal<Conditional_T<sizeof...(Ts) == 1u, const EntityID&, EntityID&>>(), DeclVal<Ts&>()...))){
-        const EntityID entityId = entityAt(denseIndex);
+        const EntityID entityId = ECSDetail::ViewTupleAccess::EntityAt(m_anchorEntities, denseIndex);
         if constexpr(sizeof...(Ts) == 1u){
             auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
             func(entityId, component);
@@ -268,7 +251,7 @@ private:
         m_anchorPoolIndex = 0;
         m_count = Limit<usize>::s_Max;
 
-        initializeAnchorImpl(ECSDetail::IndexSequenceFor<Ts...>{});
+        initializeAnchorImpl(IndexSequenceFor<Ts...>{});
 
         if(!m_valid){
             m_anchorEntities = {};
@@ -277,7 +260,7 @@ private:
     }
 
     template<usize... Is>
-    void initializeAnchorImpl(ECSDetail::IndexSequence<Is...>)noexcept{
+    void initializeAnchorImpl(IndexSequence<Is...>)noexcept{
         (updateAnchor<Is>(), ...);
     }
 
@@ -295,10 +278,6 @@ private:
             m_anchorEntities = ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
             m_anchorPoolIndex = I;
         }
-    }
-
-    EntityID entityAt(usize denseIndex)const noexcept{
-        return ECSDetail::ViewTupleAccess::EntityAt(m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/rhi/resource.h>
 
@@ -35,11 +36,6 @@ private:
 
 private:
     static_assert(IsSame_V<Identity, NotNull<Core::Buffer*>> || IsSame_V<Identity, u32>);
-
-
-private:
-    static constexpr usize s_InlineCount = 32u;
-    static constexpr usize s_PromotedIndexCapacity = s_InlineCount * 4u;
 
 
 public:
@@ -86,7 +82,7 @@ public:
 
 private:
     void appendNew(const Identity identity){
-        if(m_inlineCount < s_InlineCount){
+        if(m_inlineCount < s_SmallInlineIndexCapacity){
             if constexpr(IsSame_V<Identity, u32>)
                 m_inline[m_inlineCount] = identity;
             else
@@ -94,7 +90,7 @@ private:
             ++m_inlineCount;
             return;
         }
-        Index index(s_PromotedIndexCapacity, m_scratchArena);
+        Index index(s_PromotedInlineIndexCapacity, m_scratchArena);
         for(const InlineIdentity stored : m_inline){
             const Identity existing = [&]()noexcept{
                 if constexpr(IsSame_V<Identity, u32>)
@@ -114,7 +110,7 @@ private:
 
 private:
     Core::Alloc::ScratchArena& m_scratchArena;
-    InlineIdentity m_inline[s_InlineCount];
+    Array<InlineIdentity, s_SmallInlineIndexCapacity> m_inline{};
     usize m_inlineCount = 0u;
     Optional<Index> m_index;
 };

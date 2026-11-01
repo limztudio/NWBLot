@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deform_pipeline.h"
+#include "deform_wall_builder.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,24 +22,18 @@ NWB_IMPL_BEGIN
 // Shared viability classifier used by both preview and commit.
 [[nodiscard]] CsgDeformViability CheckCsgDeformCutsViability(
     Core::Alloc::ScratchArena& scratchArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    usize cutCount,
+    Span<const CsgDeformVertex> inputVertices,
+    Span<const CsgDeformTriangle> inputTriangles,
+    Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options
 );
 
 // Preview rebuild into scratch storage. Same code path as commit.
 [[nodiscard]] Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    usize cutCount,
+    Span<const CsgDeformVertex> inputVertices,
+    Span<const CsgDeformTriangle> inputTriangles,
+    Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
@@ -49,12 +43,9 @@ NWB_IMPL_BEGIN
 [[nodiscard]] Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    usize cutCount,
+    Span<const CsgDeformVertex> inputVertices,
+    Span<const CsgDeformTriangle> inputTriangles,
+    Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles

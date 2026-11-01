@@ -5,9 +5,7 @@ target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/logclient_shutdown_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/logger_producer_contract_tests.cpp"
-    "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
-    "${PROJECT_SOURCE_DIR}/logger/server/crash_paths.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_android.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_linux.cpp"
@@ -25,6 +23,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET nwb_logserver AND Python3_Inter
 endif()
 if(WIN32)
     target_sources(nwb_logserver_crash_tests PRIVATE
+        "${PROJECT_SOURCE_DIR}/logger/server/clipboard_text.cpp"
         "${PROJECT_SOURCE_DIR}/logger/server/crash_symbolicate_win32.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/minidump_boundary_tests.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"
@@ -34,3 +33,4 @@ endif()
 if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_dependencies(nwb_logserver_crash_tests nwb_crash_handler)
 endif()
+

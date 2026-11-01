@@ -20,7 +20,7 @@ namespace __hidden_adhd_simd_codegen_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr MStringView s_LaneCallSuffixes[4] = {
+inline constexpr Array<MStringView, 4> s_LaneCallSuffixes = {
     "X(",
     "Y(",
     "Z(",
@@ -68,10 +68,6 @@ inline constexpr MStringView s_LaneCallSuffixes[4] = {
     return "u64";
 }
 
-[[nodiscard]] MStringView IntSimdRawWordType(const b8 isDouble)noexcept{
-    return isDouble ? "u64" : "u32";
-}
-
 [[nodiscard]] MStringView SimdLaneCallSuffix(const u32 lane)noexcept{
     return __hidden_adhd_simd_codegen_utils::s_LaneCallSuffixes[lane < 4u ? lane : 3u];
 }
@@ -94,12 +90,6 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     if(SymbolTable::IsSimdVectorType(expr.resolvedSimdType, lanes))
         return lanes;
     return 4u;
-}
-
-[[nodiscard]] b8 IsUnitFloatLiteral(const Expr& expr)noexcept{
-    if(expr.kind != ExprKind::FloatLiteral && expr.kind != ExprKind::DoubleLiteral)
-        return false;
-    return expr.text == "1.0f" || expr.text == "1.0" || expr.text == "1.f";
 }
 
 [[nodiscard]] MStringView SimdRegisterCppType(const MStringView simdType)noexcept{
@@ -127,9 +117,8 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
 }
 
 [[nodiscard]] MStringView MapBuiltinMathFunction(const MStringView name)noexcept{
-    if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(name))
-        return fnInfo->cppExportName;
-    return {};
+    const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(name);
+    return fnInfo ? fnInfo->cppExportName : MStringView{};
 }
 
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
@@ -165,17 +154,6 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
 #undef NWB_ADHD_EXPORT_SIMD_BINARY_OP
     default: return {};
     }
-}
-
-[[nodiscard]] b8 IsSingleSwizzleLane(const MStringView text, u32& outLane)noexcept{
-    return text.size() == 1u && TryMapSwizzleCharToLane(text[0], outLane);
-}
-
-[[nodiscard]] u32 MapSwizzleCharToLane(const char c)noexcept{
-    u32 lane = 3u;
-    if(!TryMapSwizzleCharToLane(c, lane))
-        return 3u;
-    return lane;
 }
 
 [[nodiscard]] b8 IsSimdMulExpr(const Expr* expr, const Expr*& outMulA, const Expr*& outMulB)noexcept{

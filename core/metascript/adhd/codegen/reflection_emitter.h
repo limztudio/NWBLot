@@ -25,13 +25,14 @@ public:
 
 
 public:
-    void emitInterfaceReflectionDeclarations(MString& out, const InterfaceDecl& decl, MetaArena& arena)const;
+    void emitInterfaceReflectionDeclarations(const InterfaceDecl& decl, MetaArena& arena, MString& out)const;
     void emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const;
     void emitInlineClassReflection(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> fields)const;
     void emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const;
 
 
 private:
+    void emitClassReflectionMembers(MString& out, const ClassDecl& decl, Span<const FieldDecl* const> fields, b8 inlineBodies)const;
     void emitAssetDependencyMethods(MString& out, Span<const FieldDecl* const> fields)const;
     void emitDeserializeNwbMethod(MString& out, Span<const FieldDecl* const> fields)const;
     void emitExtractNwbAssetDependenciesMethod(MString& out, Span<const FieldDecl* const> fields)const;

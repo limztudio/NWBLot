@@ -32,7 +32,13 @@ NWB_IMPL_UI_BEGIN
 // Owns source bytes, exact font versions and LTR hard-line caret data; no model or service is retained.
 class EditCaretGeometry final{
 public:
-    explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
+        : m_arena(MakeNotNull(&arena))
+        , m_layout(arena)
+        , m_boundaries(arena)
+        , m_stops(arena)
+        , m_lines(arena)
+    {}
     EditCaretGeometry(EditCaretGeometry&&)noexcept = default;
     EditCaretGeometry(const EditCaretGeometry&) = delete;
 
@@ -62,10 +68,6 @@ public:
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_mode; }
 
     [[nodiscard]] b8 ready()const noexcept{ return m_ready; }
-
-
-private:
-    [[nodiscard]] Expected<usize> nearestStop(u32 lineIndex, Point point)const noexcept;
 
 
 private:

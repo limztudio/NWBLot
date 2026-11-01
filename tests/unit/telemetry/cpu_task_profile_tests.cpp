@@ -45,7 +45,7 @@ public:
 
     virtual void recordSample(const Perf::TimingScopeId scope, const f64 seconds, const u64 frameIndex)override{
         EXPECT_EQ(QueryCurrentThreadId(), m_owner);
-        ++m_recordedSamples;
+        ++recordedSamples;
         m_recorder.recordSample(scope, seconds, frameIndex);
         if(m_injectTasks && m_injectionBudget != 0u){
             --m_injectionBudget;
@@ -64,7 +64,8 @@ public:
 
 
 public:
-    usize m_recordedSamples = 0u;
+    usize recordedSamples = 0u;
+
 
 private:
     CpuTaskScheduler& m_scheduler;
@@ -173,7 +174,7 @@ TEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot){
     ASSERT_GT(pendingBefore, 0u);
     OwnerThreadTimingSink sink(scheduler, timing, true);
     Perf::CollectCpuTaskProfile(scheduler, sink);
-    EXPECT_EQ(sink.m_recordedSamples, pendingBefore);
+    EXPECT_EQ(sink.recordedSamples, pendingBefore);
     EXPECT_GT(scheduler.statistics().profilePendingEvents, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -202,7 +203,7 @@ TEST(CpuTaskProfileIntegration, NativeWorkerSamplesAreRecordedOnTheCollectorThre
     OwnerThreadTimingSink sink(scheduler, timing);
     Perf::CollectCpuTaskProfile(scheduler, sink);
     timing.publishFrame(20u);
-    EXPECT_GT(sink.m_recordedSamples, 0u);
+    EXPECT_GT(sink.recordedSamples, 0u);
     EXPECT_EQ(timing.stats(taskName).sampleCount, 1u);
     EXPECT_EQ(timing.stats(taskName).firstSampleFrameIndex, 19u);
     EXPECT_EQ(timing.stats(taskName).publishFrameIndex, 20u);

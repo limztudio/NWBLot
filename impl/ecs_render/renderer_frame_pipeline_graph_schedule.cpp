@@ -19,6 +19,50 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(const Core::GpuTaskGraph::DeclarationReadView& graph, const Core::GpuCompiledGraph::ReadView& compiledGraph, Core::Alloc::ScratchArena& scratchArena){
+    const Core::GpuSubmissionPacketRange range = compiledGraph.packetTimingEnvelopeRange();
+    if(!range.valid() || !compiledGraph.validPacketRange(range))
+        return false;
+
+    Vector<Core::GpuPacketEnvelopeMetricScope, Core::Alloc::ScratchArena> packetScopes{scratchArena};
+    Vector<Core::GpuPacketEnvelopeMetricQueueOutput, Core::Alloc::ScratchArena> queueOutputs{scratchArena};
+    packetScopes.reserve(range.packetCount);
+    queueOutputs.reserve(range.packetCount);
+    for(usize packetOffset = 0u; packetOffset < range.packetCount; ++packetOffset){
+        const Core::GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(range.first.index + packetOffset);
+        const Core::GpuCompiledPacketView packetView = compiledGraph.packet(packetID);
+        if(!packetView.valid() || !packetView.plan->recordsPacketEnvelopeTiming || packetView.plan->taskCount == 0u)
+            return false;
+
+        const auto packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetView.tasks[0u].index).identity);
+        if(!packetScopeName)
+            return false;
+        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{ .scopeName = *packetScopeName, .physicalQueue = packetView.plan->queue, });
+
+        b8 hasQueueOutput = false;
+        for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
+            hasQueueOutput = hasQueueOutput || output.physicalQueue == packetView.plan->queue;
+        if(hasQueueOutput)
+            continue;
+
+        const auto internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena);
+        if(!internalIdleScopeName || !*internalIdleScopeName)
+            return false;
+        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{ .physicalQueue = packetView.plan->queue, .internalIdleScopeName = **internalIdleScopeName, });
+    }
+
+    return m_graphics.gpuTiming().preparePacketEnvelopeMetrics(
+        m_graphics.getFrameIndex(),
+        packetScopes,
+        RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity,
+        queueOutputs
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTransaction& frameTimingTransaction){
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;

@@ -8,6 +8,8 @@
 #include <core/alloc/core.h>
 #include <core/alloc/general.h>
 
+#include <tests/common/floating_point_environment_guard.h>
+
 #include <global/global.h>
 
 #include <gtest/gtest.h>
@@ -31,6 +33,13 @@ namespace Tests{
 inline constexpr Name s_TestArena("tests/common/test_arena");
 inline constexpr Name s_DefaultTestArena("tests/common/default_test_arena");
 inline constexpr f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
+inline constexpr usize s_TestPropertyNumberBufferBytes = 32u;
+inline constexpr Array<u32, 3> s_TriangleIndices = { 0u, 1u, 2u };
+inline constexpr Array<u32, 6> s_QuadTriangleIndices = { 0u, 1u, 2u, 0u, 2u, 3u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename Tag = void>
 struct TestArena{
@@ -53,10 +62,7 @@ namespace TestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Core::Alloc::GlobalArena& Arena(){
-    static Core::Alloc::GlobalArena s_Arena(s_DefaultTestArena);
-    return s_Arena;
-}
+[[nodiscard]] Core::Alloc::GlobalArena& Arena();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,24 +79,10 @@ using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>
 using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
 [[nodiscard]] inline b8 NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(lhs), VectorReplicate(rhs)))) <= epsilon;
+    return Abs(lhs - rhs) <= epsilon;
 }
 
-[[nodiscard]] inline usize CountText(const AStringView text, const AStringView expected)noexcept{
-    if(expected.empty())
-        return 0u;
-
-    usize count = 0u;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const usize found = text.find(expected, offset);
-        if(found == AStringView::npos)
-            break;
-        ++count;
-        offset = found + expected.size();
-    }
-    return count;
-}
+[[nodiscard]] usize CountText(AStringView text, AStringView expected)noexcept;
 
 [[nodiscard]] inline b8 NearlyEqual3(const SIMDVectorSingle value, const f32 x, const f32 y, const f32 z, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
     return Vector3LessOrEqual(VectorAbs(VectorSubtract(value, VectorSet(x, y, z, 0.0f))), VectorReplicate(epsilon));
@@ -108,34 +100,7 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
     return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon) && NearlyEqual(value.w, w, epsilon);
 }
 
-inline TestVector<u32> MakeTriangleIndices(){
-    TestVector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
-    return indices;
-}
-
-inline TestVector<u32> MakeQuadTriangleIndices(){
-    TestVector<u32> indices = MakeTriangleIndices();
-    indices.push_back(0u);
-    indices.push_back(2u);
-    indices.push_back(3u);
-    return indices;
-}
-
-inline constexpr usize s_TestPropertyNumberBufferBytes = 32u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline void RecordUnsignedTestProperty(const AStringView key, const u64 value){
-    char text[s_TestPropertyNumberBufferBytes] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
+void RecordUnsignedTestProperty(AStringView key, u64 value);
 
 template<typename ArenaT>
 [[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const AStringView sourceFile){

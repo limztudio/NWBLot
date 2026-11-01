@@ -12,6 +12,7 @@
 
 #include <global/allocation_size.h>
 #include <global/expected.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +34,25 @@ static constexpr AStringView s_MetadataAssetVariable = "asset";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ResolvedAssetRoot{
+    Path path;
+    ACompactString virtualRoot;
+
+
+public:
+    explicit ResolvedAssetRoot(AssetArena& arena)noexcept
+        : path(arena)
+    {}
+    ResolvedAssetRoot(Path inPath, const AStringView inVirtualRoot)noexcept
+        : path(Move(inPath))
+        , virtualRoot(inVirtualRoot)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace AssetPathsDetail{
 
 
@@ -44,11 +64,11 @@ struct ConvertedPathByteCounter{
 
 
 public:
-    ConvertedPathByteCounter& operator*()noexcept{ return *this; }
+    constexpr ConvertedPathByteCounter& operator*()noexcept{ return *this; }
 
-    ConvertedPathByteCounter& operator++(int)noexcept{ return *this; }
+    constexpr ConvertedPathByteCounter& operator++(int)noexcept{ return *this; }
 
-    ConvertedPathByteCounter& operator=(const char){
+    constexpr ConvertedPathByteCounter& operator=(const char){
         byteCount = AddSize(byteCount, 1u);
         return *this;
     }
@@ -115,22 +135,10 @@ template<typename StringT, typename PathArenaT>
     return layout.accepted;
 }
 
-[[nodiscard]] inline Expected<ACompactString> ExtractAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
-    ACompactString virtualRoot;
-
-    const ::Path<Alloc::ScratchArena> virtualPathPath(scratchArena, virtualPath);
-    const auto componentIt = virtualPathPath.begin();
-    if(componentIt == virtualPathPath.end())
-        return MakeUnexpected(Failure{});
-
-    const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
-    if(!virtualRoot.assign(AStringView(componentText)) || virtualRoot.empty())
-        return MakeUnexpected(Failure{});
-    return virtualRoot;
-}
+[[nodiscard]] Expected<ACompactString> ExtractAssetVirtualRoot(AStringView virtualPath, Alloc::ScratchArena& scratchArena);
 
 template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
-[[nodiscard]] inline Expected<AString<ArenaT>> BuildDerivedAssetVirtualPathText(ArenaT& arena, const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] inline Expected<AString<ArenaT>> BuildDerivedAssetVirtualPathText(const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, ArenaT& arena, Alloc::ScratchArena& scratchArena){
     AString<ArenaT> virtualPath{arena};
     usize virtualPathSize = 0u;
     for(const b8 writeOutput : { false, true }){
@@ -184,394 +192,10 @@ template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ArenaT, typename RootArenaT, typename SourceArenaT>
-[[nodiscard]] inline Expected<AString<ArenaT>> BuildDerivedAssetVirtualPath(ArenaT& arena, const ::Path<RootArenaT>& assetRoot, const AStringView virtualRoot, const ::Path<SourceArenaT>& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
-    return AssetPathsDetail::BuildDerivedAssetVirtualPathText(arena, assetRoot, virtualRoot, sourceOrMetaPath, scratchArena);
-}
-
-[[nodiscard]] inline Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena){
-    const auto virtualPathText = AssetPathsDetail::BuildDerivedAssetVirtualPathText(scratchArena, assetRoot, virtualRoot, sourceOrMetaPath, scratchArena);
-    if(!virtualPathText)
-        return MakeUnexpected(Failure{});
-
-    const auto virtualPath = Name::FromText(AStringView(*virtualPathText));
-    if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
-        return MakeUnexpected(Failure{});
-    }
-
-    return *virtualPath;
-}
-
-[[nodiscard]] inline b8 HasReservedAssetVirtualRoot(const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
-    const auto virtualRoot = AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
-    if(!virtualRoot)
-        return false;
-
-    return virtualRoot->view() == s_EngineVirtualRoot || virtualRoot->view() == s_ProjectVirtualRoot;
-}
-
-template<typename AssetRootVector>
-[[nodiscard]] inline Expected<Path> ResolveVirtualAssetPath(AssetArena& arena, const AssetRootVector& assetRoots, const AStringView virtualPath, Alloc::ScratchArena& scratchArena){
-    const ::Path<Alloc::ScratchArena> virtualPathPath(scratchArena, virtualPath);
-    auto componentIt = virtualPathPath.begin();
-    if(componentIt == virtualPathPath.end())
-        return MakeUnexpected(Failure{});
-
-    ACompactString requestedVirtualRoot;
-    {
-        const AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, componentIt.nativeComponent());
-        if(!requestedVirtualRoot.assign(AStringView(componentText)) || requestedVirtualRoot.empty())
-            return MakeUnexpected(Failure{});
-    }
-    ++componentIt;
-
-    Optional<Path> firstResolvedPath;
-    for(const auto& assetRoot : assetRoots){
-        if(assetRoot.virtualRoot != requestedVirtualRoot)
-            continue;
-
-        Path resolvedPath(arena, assetRoot.path);
-        for(auto subIt = componentIt; subIt != virtualPathPath.end(); ++subIt){
-            AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, subIt.nativeComponent());
-            CanonicalizeTextInPlace(componentText);
-            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
-                NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"), ConvertString(virtualPath));
-                return MakeUnexpected(Failure{});
-            }
-
-            resolvedPath /= componentText;
-        }
-        resolvedPath = resolvedPath.lexicallyNormal();
-        const auto fileExists = FileExists(resolvedPath);
-        if(fileExists && *fileExists)
-            return resolvedPath;
-        const auto dirExists = IsDirectory(resolvedPath);
-        if(dirExists && *dirExists)
-            return resolvedPath;
-        if(!firstResolvedPath.has_value())
-            firstResolvedPath.emplace(Move(resolvedPath));
-    }
-
-    if(firstResolvedPath.has_value())
-        return Move(*firstResolvedPath);
-    return MakeUnexpected(Failure{});
-}
-
-[[nodiscard]] inline Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena){
-    const ::Path<Alloc::ScratchArena> parentDirectory(scratchArena, nwbFilePath.parentPathView());
-    if(parentDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty"), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-
-    auto nwbStem = PathToString(scratchArena, nwbFilePath.stemView());
-    CanonicalizeTextInPlace(nwbStem);
-    if(nwbStem.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-
-    const ::Path<Alloc::ScratchArena>* matchedSourcePath = nullptr;
-    usize matchCount = 0;
-    const auto entries = DirectoryIterator<Alloc::ScratchArena>::Create(parentDirectory);
-    if(!entries){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(parentDirectory), ConvertString(entries.error().message()));
-        return MakeUnexpected(Failure{});
-    }
-    for(const auto& dirEntry : *entries){
-        const auto isRegularFile = dirEntry.isRegularFile();
-        if(!isRegularFile){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}"), PathToString<tchar>(nwbFilePath), PathToString<tchar>(dirEntry.path()), ConvertString(isRegularFile.error().message()));
-            return MakeUnexpected(Failure{});
-        }
-        if(!*isRegularFile)
-            continue;
-
-        const ::Path<Alloc::ScratchArena>& candidatePath = dirEntry.path();
-        auto candidateExtension = PathToString(scratchArena, candidatePath.extensionView());
-        CanonicalizeTextInPlace(candidateExtension);
-        if(candidateExtension == s_NwbExtension)
-            continue;
-        auto candidateStem = PathToString(scratchArena, candidatePath.stemView());
-        CanonicalizeTextInPlace(candidateStem);
-        if(candidateStem != nwbStem)
-            continue;
-
-        matchedSourcePath = &candidatePath;
-        ++matchCount;
-        if(matchCount > 1){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    if(matchCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to find a paired source file with stem '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(nwbStem));
-        return MakeUnexpected(Failure{});
-    }
-
-    const ::Path<Alloc::ScratchArena> normalizedSourcePath = MakeNotNull(matchedSourcePath)->lexicallyNormal();
-    return PathToString(arena, normalizedSourcePath);
-}
-
-[[nodiscard]] inline b8 IsListedMetadataAssetField(const AStringView fieldName, const InitializerList<AStringView> allowedFields)noexcept{
-    for(const AStringView allowedField : allowedFields){
-        if(fieldName == allowedField)
-            return true;
-    }
-    return false;
-}
-
-template<typename MetadataValue, typename IsAllowedField>
-[[nodiscard]] inline b8 ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, IsAllowedField&& isAllowedField){
-    for(const auto& field : asset.asMap()){
-        const auto& fieldName = field.first;
-        const AStringView fieldNameText(fieldName.data(), fieldName.size());
-        if(isAllowedField(fieldNameText))
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unsupported asset field '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldNameText));
-        return false;
-    }
-    return true;
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline b8 ValidateMetadataAssetFields(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix, const InitializerList<AStringView> allowedFields){
-    return ValidateMetadataAssetFields(nwbFilePath, asset, diagnosticPrefix, [allowedFields](const AStringView fieldName)noexcept{
-        return IsListedMetadataAssetField(fieldName, allowedFields);
-    });
-}
-
-struct MetadataStringField{
-    AStringView text;
-    b8 present = false;
-};
-
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<MetadataStringField> ReadMetadataStringField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
-    MetadataStringField result;
-
-    const auto* fieldValue = object.findField(fieldName);
-    if(!fieldValue){
-        if(!required)
-            return result;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    result.present = true;
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto text = fieldValue->asString();
-    result.text = AStringView(text.data(), text.size());
-    if(required && result.text.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return result;
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> TryDecodeMetadataFiniteF32(const MetadataValue& value)noexcept(noexcept(!value.isNumeric() ? true : false) && noexcept(DeclVal<void(*)(f64)noexcept>()(value.toDouble()))){
-    if(!value.isNumeric())
-        return MakeUnexpected(Failure{});
-
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max))
-        return MakeUnexpected(Failure{});
-
-    return static_cast<f32>(numericValue);
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Value(const Path& nwbFilePath, const MetadataValue& value, const AStringView diagnosticPrefix, const AStringView fieldName){
-    const auto decoded = TryDecodeMetadataFiniteF32(value);
-    if(decoded)
-        return decoded;
-
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be numeric"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported float range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-    return MakeUnexpected(Failure{});
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<f32> ReadMetadataFiniteF32Field(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
-    const auto* fieldValue = object.findField(fieldName);
-    if(!fieldValue){
-        if(!required)
-            return 0.0f;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldName);
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<Name> ReadMetadataNameField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
-    const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
-    if(!text)
-        return MakeUnexpected(text.error());
-    // An absent optional field must remain s_NameNone. Name("") is a valid, non-null hash.
-    if(!text->present)
-        return s_NameNone;
-
-    const auto name = Name::FromText(text->text);
-    if(!name){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains an embedded null"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return *name;
-}
-
-template<typename AssetT, typename MetadataValue>
-[[nodiscard]] inline Expected<AssetRef<AssetT>> ReadMetadataAssetRefField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName, const b8 required){
-    const auto assetName = ReadMetadataNameField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
-    if(!assetName)
-        return MakeUnexpected(assetName.error());
-
-    AssetRef<AssetT> ref;
-    ref.virtualPath = *assetName;
-    if(required && !ref.valid())
-        return MakeUnexpected(Failure{});
-    return ref;
-}
-
-template<typename AssetT>
-[[nodiscard]] inline Expected<AssetRef<AssetT>> ParseMetadataReservedAssetRefText(
-    const Path& nwbFilePath,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldLabel,
-    const AStringView text,
-    Alloc::ScratchArena& scratchArena
-){
-    if(TrimView(text).empty() || text != TrimView(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be a non-empty trimmed virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    if(text.find('\\') != AStringView::npos || !HasReservedAssetVirtualRoot(text, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' must be an engine/- or project/-rooted virtual path"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    const auto ref = AssetRef<AssetT>::FromText(text);
-    if(!ref || !ref->valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' entry '{}' is invalid"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(text));
-        return MakeUnexpected(Failure{});
-    }
-    return *ref;
-}
-
-template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
-[[nodiscard]] inline b8 ParseMetadataDocumentText(const Path& filePath, const AStringView diagnosticPrefix, ParseDocument&& parseDoc, SourceStringT& ioText, MetadataDocument& outDoc){
-    if(!ReadTextFile(filePath, ioText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath));
-        return false;
-    }
-    StripUtf8Bom(ioText);
-
-    if(!parseDoc(AStringView(ioText))){
-        for(const auto& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(filePath), err.line, err.column, ConvertString(err.message));
-        }
-        return false;
-    }
-    return true;
-}
-
-[[nodiscard]] inline b8 CheckPairedSourceExtension(const Path& nwbFilePath, const AStringView sourcePath, const AStringView expectedExtension, const AStringView diagnosticPrefix, Alloc::ScratchArena& scratchArena){
-    const ::Path<Alloc::ScratchArena> sourcePathValue(scratchArena, sourcePath);
-    AString<Alloc::ScratchArena> extension(PathToString(scratchArena, sourcePathValue.extensionView()));
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) == expectedExtension)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': paired source '{}' must use '{}' extension"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(sourcePath), ConvertString(expectedExtension));
-    return false;
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataListField(const Path& nwbFilePath, const MetadataValue& object, const AStringView diagnosticPrefix, const AStringView fieldName){
-    const auto* fieldValue = object.findField(fieldName);
-    if(fieldValue && fieldValue->isList())
-        return MakeNotNull(fieldValue);
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-    return MakeUnexpected(Failure{});
-}
-
-template<typename CookEntryT>
-[[nodiscard]] inline b8 AssignCookEntryVirtualPath(CookEntryT& outEntry, const Name& virtualPath, const Path& nwbFilePath, const AStringView diagnosticPrefix){
-    outEntry.virtualPath = virtualPath;
-    if(outEntry.virtualPath)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': virtual path must not be empty"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
-    return false;
-}
-
-template<typename MetadataValue>
-[[nodiscard]] inline b8 CheckMetadataAssetMap(const Path& nwbFilePath, const MetadataValue& asset, const AStringView diagnosticPrefix){
-    if(asset.isMap())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath));
-    return false;
-}
-
-template<typename MetadataDocument>
-[[nodiscard]] inline const typename MetadataDocument::Declaration* FindMetadataAssetDeclaration(const MetadataDocument& doc)noexcept{
-    return doc.findDeclaration(s_MetadataAssetVariable);
-}
-
-template<typename MetadataDocument, typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
-    const auto* asset = doc.findVariable(s_MetadataAssetVariable);
-    if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': missing asset declaration '{}'"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_MetadataAssetVariable));
-        return MakeUnexpected(Failure{});
-    }
-    return MakeNotNull(asset);
-}
-
-template<typename MetadataDocument, typename MetadataValue>
-[[nodiscard]] inline Expected<NotNull<const MetadataValue*>> FindMetadataAssetMapValue(const Path& nwbFilePath, const MetadataDocument& doc, const AStringView diagnosticPrefix){
-    const auto asset = FindMetadataAssetValue<MetadataDocument, MetadataValue>(nwbFilePath, doc, diagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    if(!CheckMetadataAssetMap(nwbFilePath, **asset, diagnosticPrefix))
-        return MakeUnexpected(Failure{});
-    return *asset;
-}
-
-template<typename NamedEnumT, typename MetadataValue>
-[[nodiscard]] inline Expected<NamedEnumT> ParseNamedMetadataEnumField(
-    const Path& nwbFilePath,
-    const MetadataValue& object,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldName,
-    const Span<const ::NamedEnumCase<NamedEnumT>> cases,
-    const AStringView errorDetailText
-){
-    const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, true);
-    if(!text)
-        return MakeUnexpected(text.error());
-    const auto value = ParseNamedEnumText<NamedEnumT>(text->text, cases);
-    if(value)
-        return value;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(errorDetailText));
-    return MakeUnexpected(Failure{});
-}
+[[nodiscard]] Expected<Name> BuildDerivedAssetVirtualPath(const Path& assetRoot, AStringView virtualRoot, const Path& sourceOrMetaPath, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] b8 HasReservedAssetVirtualRoot(AStringView virtualPath, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<Path> ResolveVirtualAssetPath(Span<const ResolvedAssetRoot> assetRoots, AStringView virtualPath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

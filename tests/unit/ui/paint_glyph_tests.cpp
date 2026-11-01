@@ -94,7 +94,7 @@ TEST_F(UiPaintGlyphTests, NewerAppendOnlyPageUpgradesBindingWithoutMovingEarlier
     ASSERT_TRUE(appended);
     const Rect earlierUv{ 0.0f, 0.0f, 0.25f, 0.25f };
     ASSERT_TRUE(m_builder.drawGlyph(original, { 1.0f, 1.0f, 4.0f, 4.0f }, earlierUv));
-    ASSERT_TRUE(m_builder.prepareGlyphPages(&appended, 1u));
+    ASSERT_TRUE(m_builder.prepareGlyphPages(Span(&appended, 1u)));
     ASSERT_TRUE(m_builder.drawGlyph(appended, { 6.0f, 1.0f, 4.0f, 4.0f }, { 0.5f, 0.5f, 0.25f, 0.25f }));
     // A later caller retaining the old page must neither downgrade the binding nor split the compatible batch.
     ASSERT_TRUE(m_builder.drawGlyph(original, { 11.0f, 1.0f, 4.0f, 4.0f }, earlierUv));
@@ -149,8 +149,8 @@ TEST_F(UiPaintGlyphTests, FrozenSnapshotRetainsOldCoverageAfterBuilderReuseAndPa
 }
 
 TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeometry){
-    FixedVector<SharedGlyphPage, s_PaintMaxGlyphPages> pages;
-    for(usize index = 0u; index < s_PaintMaxGlyphPages; ++index){
+    FixedVector<SharedGlyphPage, s_PaintMaxImages> pages;
+    for(usize index = 0u; index < s_PaintMaxImages; ++index){
         auto pageCreationResult = makeGlyphPage(100u + index);
         ASSERT_TRUE(pageCreationResult);
         SharedGlyphPage page = Move(*pageCreationResult);
@@ -158,7 +158,7 @@ TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeo
         pages.push_back(Move(page));
     }
     ASSERT_TRUE(m_builder.drawGlyph(pages[0], { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
-    ASSERT_TRUE(m_builder.prepareGlyphPages(pages.data(), pages.size()));
+    ASSERT_TRUE(m_builder.prepareGlyphPages(pages));
     auto upgradeCreationResult = makeGlyphPage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult);
     const SharedGlyphPage upgrade = Move(*upgradeCreationResult);
@@ -168,10 +168,10 @@ TEST_F(UiPaintGlyphTests, RejectedPageAdmissionAtCapacityPreservesBindingsAndGeo
     ASSERT_TRUE(upgrade);
     ASSERT_TRUE(overflow);
     const Array<SharedGlyphPage, 2u> candidates{ upgrade, overflow };
-    EXPECT_FALSE(m_builder.prepareGlyphPages(candidates.data(), candidates.size()));
+    EXPECT_FALSE(m_builder.prepareGlyphPages(candidates));
     EXPECT_FALSE(m_builder.drawGlyph(overflow, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxGlyphPages);
+    ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages);
     for(usize index = 0u; index < pages.size(); ++index)
         EXPECT_EQ(snapshot.glyphPages()[index].get(), pages[index].get());
     EXPECT_EQ(snapshot.glyphPages()[0]->binding().generation, 1u);

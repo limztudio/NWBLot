@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "combo_style.adhd.h"
 #include "list.h"
 #include "popup.h"
 
@@ -22,6 +23,7 @@ NWB_IMPL_UI_BEGIN
 class ComboState final : NoCopy{
     friend class Builder;
     friend class ComboBehavior;
+    friend class SearchComboBehavior;
 
 
 public:

@@ -101,7 +101,7 @@ inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...)noexcept{}
 
-[[nodiscard]] inline StringView DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
+[[nodiscard]] constexpr StringView DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
     switch(type){
     case LogType::Assert:
         return DiagnosticEventName::s_Assert;
@@ -159,18 +159,6 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, WFormatStr
     logger.enqueue(StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...), type);
 }
 
-inline void EnqueuePreparedMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, LogString&& message){
-    const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
-    logger.enqueue(Move(message), type);
-}
-
-inline void EnqueuePreparedMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const LogString& message){
-    const DiagnosticEventText diagnosticMessage = MakeDiagnosticEventText(message);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
-    logger.enqueue(message, type);
-}
-
 inline void CaptureMessageDiagnostic(const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const DiagnosticEventText& diagnosticMessage)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventNameFromLogType(type), .category = diagnosticCategory, .message = diagnosticMessage.view(), .file = file, .line = line, });
 }
@@ -193,11 +181,13 @@ template<typename In>
 }
 
 inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, LogString&& message){
-    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, Move(message));
+    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
+    logger.enqueue(Move(message), type);
 }
 
 inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const LogString& message){
-    EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, message);
+    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
+    logger.enqueue(message, type);
 }
 
 inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const AStringView message){

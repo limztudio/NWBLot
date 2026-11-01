@@ -32,8 +32,7 @@ namespace __hidden_assets_graphics_mesh_cooker_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AString = AssetsGraphicsFixture::AString;
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using AString = TestAString;
 using TestArena = AssetsGraphicsFixture::TestArena;
 #if defined(NWB_FINAL)
 using CookSingleMetaFn = decltype(&AssetsGraphicsFixture::CookSingleMeshMeta);
@@ -48,17 +47,17 @@ static AString BuildMeshIndexMeta(const AStringView indexList){
     static_assert(s_IndexFieldOffset != AStringView::npos);
     AString meta(AssetsGraphicsFixture::s_MinimalMeshMeta.data(), s_IndexFieldOffset);
     meta += "asset.indices = ";
-    AssetsGraphicsFixture::AppendTestMeta(meta, indexList);
+    AssetsGraphicsFixture::AppendTestMeta(indexList, meta);
     meta += ";\n";
     return meta;
 }
 
 
 #if defined(NWB_FINAL)
-static void ExpectCookFailure(TestArena& testArena, const NotNull<CookSingleMetaFn> cookSingleMeta, const AStringView metaText, const AStringView caseName){
+static void ExpectCookFailure(const NotNull<CookSingleMetaFn> cookSingleMeta, const AStringView metaText, const AStringView caseName, TestArena& testArena){
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, caseName);
     ASSERT_TRUE(cookCase);
-    EXPECT_FALSE(cookSingleMeta.get()(metaText, testArena, *cookCase));
+    EXPECT_FALSE(cookSingleMeta.get()(metaText, *cookCase, testArena));
 
     EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
 }
@@ -66,11 +65,11 @@ static void ExpectCookFailure(TestArena& testArena, const NotNull<CookSingleMeta
 
 
 TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
-    static constexpr AStringView s_IndexLists[] = {
+    static constexpr Array<AStringView, 2u> s_IndexLists = {
         "[2, 0, 1]",
         "[[], [2, [], [0]], [[], 1], []]",
     };
-    const Float3U expectedPositions[] = {
+    const Array<Float3U, 3u> expectedPositions = {
         Float3U(0.0f, 0.5f, 0.0f),
         Float3U(-0.5f, -0.5f, 0.0f),
         Float3U(0.5f, -0.5f, 0.0f),
@@ -83,7 +82,7 @@ TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
         auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "mesh_index_corner_order");
         ASSERT_TRUE(cookCase);
         const AString meta = BuildMeshIndexMeta(indexList);
-        ASSERT_TRUE(AssetsGraphicsFixture::CookSingleMeshMeta(AStringView(meta.data(), meta.size()), testArena, *cookCase));
+        ASSERT_TRUE(AssetsGraphicsFixture::CookSingleMeshMeta(AStringView(meta.data(), meta.size()), *cookCase, testArena));
         auto loadedAsset = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, cookCase->outputDirectory);
         ASSERT_TRUE(loadedAsset);
         const auto& mesh = static_cast<const Impl::Mesh&>(**loadedAsset);
@@ -105,20 +104,21 @@ TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
 
 TEST(AssetsGraphics, MeshCookerReportsFirstInvalidNestedIndex){
 #if defined(NWB_FINAL)
-    static constexpr struct{
+    struct InvalidNestedIndexCase{
         AStringView indices;
         TStringView diagnostic;
-    } s_Cases[] = {
+    };
+    static constexpr Array<InvalidNestedIndexCase, 3u> s_Cases = {{
         { R"([[], [2, ["bad", -1]], 4294967296])", NWB_TEXT("'indices[1][1][0]' must contain only integer values") },
         { R"([[], [2, [-1, "later"]], 4294967296])", NWB_TEXT("'indices[1][1][0]' contains a non-integer or negative value") },
         { R"([[], [2, [4294967296, "later"]], -1])", NWB_TEXT("'indices[1][1][0]' contains a value that exceeds u32") },
-    };
+    }};
     for(const auto& testCase : s_Cases){
         SCOPED_TRACE(testCase.indices);
         CapturingLogger logger;
         Core::Common::LoggerRegistrationGuard loggerGuard(logger);
         TestArena testArena;
-        ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), BuildMeshIndexMeta(testCase.indices), "invalid_nested_mesh_index");
+        ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), BuildMeshIndexMeta(testCase.indices), "invalid_nested_mesh_index", testArena);
         EXPECT_TRUE(logger.sawErrorContaining(testCase.diagnostic));
         EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("'indices[1][1][1]'")));
         EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("'indices[2]'")));
@@ -133,55 +133,55 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
-    ExpectCookFailure(testArena, MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_MismatchedMeshMeta, "mismatched_mesh_streams");
+    ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields", testArena);
+    ExpectCookFailure(MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta), AssetsGraphicsFixture::s_MismatchedMeshMeta, "mismatched_mesh_streams", testArena);
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta("", AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "missing_mesh_normal_field"
+        "missing_mesh_normal_field",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingNormalVertexRefsField),
-        "missing_mesh_normal_vertex_ref"
+        "missing_mesh_normal_vertex_ref",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalListField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "empty_list_mesh_normal"
+        "empty_list_mesh_normal",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_EmptyNormalMapField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "empty_map_mesh_normal"
+        "empty_map_mesh_normal",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, "", AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "missing_mesh_tangent_field"
+        "missing_mesh_tangent_field",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_TriangleTangentField, AssetsGraphicsFixture::s_TriangleMissingTangentVertexRefsField),
-        "missing_mesh_tangent_vertex_ref"
+        "missing_mesh_tangent_vertex_ref",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_EmptyTangentListField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "empty_list_mesh_tangent"
+        "empty_list_mesh_tangent",
+        testArena
     );
     ExpectCookFailure(
-        testArena,
         MakeNotNull<CookSingleMetaFn>(AssetsGraphicsFixture::CookSingleMeshMeta),
         AssetsGraphicsFixture::BuildMeshTriangleMeta(AssetsGraphicsFixture::s_TriangleNormalField, AssetsGraphicsFixture::s_EmptyTangentMapField, AssetsGraphicsFixture::s_TriangleVertexRefsField),
-        "empty_map_mesh_tangent"
+        "empty_map_mesh_tangent",
+        testArena
     );
     EXPECT_GE(logger.errorCount(), 10u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));

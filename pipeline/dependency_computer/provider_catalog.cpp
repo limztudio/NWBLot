@@ -12,13 +12,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_DEPENDENCY_COMPUTER_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_dependency_provider_catalog{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB;
 namespace Assets = Core::Assets;
 
 inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
@@ -48,36 +53,6 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
     return Optional<Name>(*parentName);
 }
 
-[[nodiscard]] static b8 SelectInput(const NWB::Path& path, const b8 directory, const Span<const Assets::DiscoveredNwbFile> files, Assets::ScratchArena& scratchArena, const Span<u8> selected, Vector<usize, Assets::ScratchArena>& order){
-    Assets::ScratchString input = PathToString(scratchArena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
-    CanonicalizeTextInPlace(input);
-#else
-    if(!directory)
-        CanonicalizeTextInPlace(input);
-#endif
-    b8 matched = false;
-    for(usize index = 0u; index < files.size(); ++index){
-        const auto& file = files[index];
-        if(directory){
-            Assets::ScratchString physical = PathToString(scratchArena, file.filePath.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
-            CanonicalizeTextInPlace(physical);
-#endif
-            if(!IsPathPrefixText(AStringView(input), AStringView(physical)))
-                continue;
-        }
-        else if(AStringView(file.normalizedPathText) != AStringView(input))
-            continue;
-        if(!selected[index]){
-            order.push_back(index);
-            selected[index] = 1u;
-        }
-        matched = true;
-    }
-    return matched;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,23 +63,15 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DependencyProviderCatalog::DependencyProviderCatalog(NWB::Core::Assets::AssetArena& arena)noexcept
-    : m_arena(arena)
-    , m_repoRoot(arena)
-    , m_roots(arena)
-    , m_files(arena)
-    , m_virtualPaths(arena)
-{}
-
-b8 DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena){
+b8 DependencyProviderCatalog::discover(const PipelineOptions& options, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
     const AStringView repoText = options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot);
-    const auto absoluteRoot = AbsolutePath(NWB::Path(m_arena, repoText));
+    const auto absoluteRoot = AbsolutePath(Path(m_arena, repoText));
     if(!absoluteRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve repository root"));
         return false;
     }
-    NWB::Path repoRoot = absoluteRoot->lexicallyNormal();
+    Path repoRoot = absoluteRoot->lexicallyNormal();
     const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
     auto roots = Assets::ResolveAssetRoots(repoRoot, sources, options.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::HostFilesystem, scratchArena);
     if(!roots){
@@ -119,7 +86,7 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core
         NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no asset roots available for dependency resolution"));
         return false;
     }
-    auto files = Assets::DiscoverFilesWithExtension(m_arena, *roots, Assets::s_NwbExtension, scratchArena);
+    auto files = Assets::DiscoverFilesWithExtension(*roots, Assets::s_NwbExtension, m_arena, scratchArena);
     if(!files)
         return false;
     Assets::AssetVector<Name> virtualPaths(m_arena);
@@ -139,8 +106,8 @@ b8 DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core
 
 Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
     const PipelineOptions& options,
-    const NWB::Core::Assets::CookDependencyRegistry& dependencyRegistry,
-    NWB::Core::Alloc::ScratchArena& scratchArena
+    const Core::Assets::CookDependencyRegistry& dependencyRegistry,
+    Core::Alloc::ScratchArena& scratchArena
 )const{
     using namespace __hidden_dependency_provider_catalog;
     DependencyInputSelection selection(scratchArena);
@@ -171,46 +138,28 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(
         return selection;
     }
 
-    for(const auto& input : options.inputs){
-        const auto resolved = ResolveAbsolutePath(m_arena, m_repoRoot, AStringView(input));
-        if(!resolved){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), ConvertString(input));
-            return MakeUnexpected(Failure{});
+    const auto selectionResult = Assets::SelectDiscoveredNwbInputs(m_repoRoot, m_roots, m_files, options.inputs, true, scratchArena, selected, &order);
+    if(!selectionResult){
+        const auto& error = selectionResult.error();
+        switch(error.reason){
+            case Assets::CookInputSelectionFailure::ResolveInput:
+                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), ConvertString(error.rawInput));
+                break;
+            case Assets::CookInputSelectionFailure::NotFileOrDirectory:
+                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(error.resolvedPath));
+                break;
+            case Assets::CookInputSelectionFailure::DirectoryOutsideAssetRoots:
+            case Assets::CookInputSelectionFailure::NoMatchingAsset:
+            case Assets::CookInputSelectionFailure::None:
+                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'"), PathToString<tchar>(error.resolvedPath));
+                break;
         }
-        const NWB::Path& path = *resolved;
-        const auto directoryResult = IsDirectory(path);
-        const auto regular = directoryResult && *directoryResult ? Expected<b8, ErrorCode>(true) : IsRegularFile(path);
-        if(!directoryResult || (!*directoryResult && (!regular || !*regular))){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(path));
-            return MakeUnexpected(Failure{});
-        }
-        const b8 directory = *directoryResult;
-        b8 contained = !directory;
-        if(directory){
-            Assets::ScratchString inputPath = PathToString(scratchArena, path);
-#if defined(NWB_PLATFORM_WINDOWS)
-            CanonicalizeTextInPlace(inputPath);
-#endif
-            for(const auto& root : m_roots){
-                Assets::ScratchString rootPath = PathToString(scratchArena, root.path);
-#if defined(NWB_PLATFORM_WINDOWS)
-                CanonicalizeTextInPlace(rootPath);
-#endif
-                if(IsPathPrefixText(AStringView(rootPath), AStringView(inputPath))){
-                    contained = true;
-                    break;
-                }
-            }
-        }
-        if(!contained || (!SelectInput(path, directory, m_files, scratchArena, selected, order) && !directory)){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
-            return MakeUnexpected(Failure{});
-        }
+        return MakeUnexpected(Failure{});
     }
     return selection;
 }
 
-Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, NWB::Core::Alloc::ScratchArena& scratchArena)const{
+Expected<Core::Metascript::Document> DependencyProviderCatalog::read(const usize index, Core::Alloc::ScratchArena& scratchArena)const{
     using namespace __hidden_dependency_provider_catalog;
     NWB_ASSERT(index < m_files.size());
     Assets::ScratchString text(scratchArena);
@@ -224,8 +173,8 @@ Expected<usize> DependencyProviderCatalog::resolve(
     const Name& virtualPath,
     const Name& assetType,
     const AStringView virtualPathTextHint,
-    NWB::Core::Alloc::ScratchArena& scratchArena,
-    const NWB::Core::Assets::CookDependencyRegistry* const dependencyRegistry
+    Core::Alloc::ScratchArena& scratchArena,
+    const Core::Assets::CookDependencyRegistry* const dependencyRegistry
 )const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath)
@@ -266,7 +215,7 @@ Expected<usize> DependencyProviderCatalog::resolve(
                 continue;
             }
 
-            const auto* assetDeclaration = Assets::FindMetadataAssetDeclaration(*document);
+            const auto* assetDeclaration = document->findDeclaration(Assets::s_MetadataAssetVariable);
             if(!assetDeclaration)
                 continue;
             const auto documentAssetType = Name::FromText(AStringView(assetDeclaration->type.data(), assetDeclaration->type.size()));
@@ -306,24 +255,14 @@ Expected<usize> DependencyProviderCatalog::resolve(
             const auto document = read(index, scratchArena);
             if(!document)
                 return MakeUnexpected(Failure{});
-            const auto hasBunch = Assets::AssetsBunchCook::HasAssetBunchDeclaration(*document);
-            if(!hasBunch)
-                return MakeUnexpected(Failure{});
-            const auto hasComposite = *hasBunch ? Expected<b8, NameTextError::Enum>(false) : Assets::AssetsBunchCook::HasCompositeAssetDeclarations(*document);
-            if(!hasComposite)
-                return MakeUnexpected(Failure{});
-            if(!*hasBunch && !*hasComposite)
-                continue;
-
-            const auto expanded = *hasBunch
-                ? Assets::AssetsBunchCook::ExpandAssetBunch(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena)
-                : Assets::AssetsBunchCook::ExpandCompositeAsset(m_files[index].assetRoot, m_files[index].virtualRoot, m_files[index].filePath, *document, scratchArena)
-            ;
+            const auto expanded = TryExpandBunchOrCompositeDocument(m_files[index], *document, scratchArena);
             if(!expanded)
                 return MakeUnexpected(Failure{});
+            if(!*expanded)
+                continue;
 
             b8 bunchItemMatched = false;
-            for(const Assets::ExpandedAssetMetadata& item : *expanded){
+            for(const Assets::ExpandedAssetMetadata& item : **expanded){
                 if(item.virtualPath != virtualPath)
                     continue;
                 if(!MatchesExpectedAssetType(item.assetType, assetType, dependencyRegistry))
@@ -346,6 +285,34 @@ Expected<usize> DependencyProviderCatalog::resolve(
     }
     return matched;
 }
+
+Expected<Optional<Core::Assets::ExpandedAssetMetadataVector>> TryExpandBunchOrCompositeDocument(
+    const Core::Assets::DiscoveredNwbFile& file,
+    const Core::Metascript::Document& document,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    using namespace __hidden_dependency_provider_catalog;
+
+    auto expanded = Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook(Assets::AssetBunchExpandContext{
+        .assetRoot = file.assetRoot,
+        .virtualRoot = file.virtualRoot,
+        .nwbFilePath = file.filePath,
+        .doc = document,
+        .scratchArena = scratchArena,
+    });
+    if(!expanded){
+        if(expanded.error() == Assets::AssetBunchExpandFailure::Unsupported)
+            return Optional<Assets::ExpandedAssetMetadataVector>{};
+        return MakeUnexpected(Failure{});
+    }
+    return Optional<Assets::ExpandedAssetMetadataVector>(Move(*expanded));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_DEPENDENCY_COMPUTER_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

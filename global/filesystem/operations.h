@@ -21,6 +21,7 @@
 #include <unistd.h>
 #endif
 
+#include "../array.h"
 #include "../basic_string.h"
 #include "../generic.h"
 #include "../expected.h"
@@ -151,10 +152,9 @@ public:
 
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ReadSymlink(const Path<ArenaT>& path){
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ReadSymlink([[maybe_unused]] const Path<ArenaT>& path){
 #if defined(NWB_PLATFORM_WINDOWS)
-    static_cast<void>(path);
-    return MakeUnexpected(std::make_error_code(std::errc::function_not_supported));
+    return MakeUnexpected(MakeErrorCode(ErrorCondition::function_not_supported));
 #else
     TString<ArenaT> buffer(path.arena());
     usize capacity = GlobalFilesystemDetail::s_InitialPathBufferCapacity;
@@ -241,13 +241,13 @@ template<typename ArenaT>
 [[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> GetExecutablePath(ArenaT& arena){
 #if defined(NWB_PLATFORM_WINDOWS)
     constexpr usize s_MaxPathLength = 4096;
-    tchar executablePathBuffer[s_MaxPathLength];
-    const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer, static_cast<DWORD>(s_MaxPathLength));
+    Array<tchar, s_MaxPathLength> executablePathBuffer = {};
+    const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer.data(), static_cast<DWORD>(s_MaxPathLength));
     if(copiedLength == 0u)
         return MakeUnexpected(LastSystemError());
     if(copiedLength >= static_cast<DWORD>(s_MaxPathLength))
         return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
-    return Path<ArenaT>(arena, TStringView(executablePathBuffer, static_cast<usize>(copiedLength)));
+    return Path<ArenaT>(arena, TStringView(executablePathBuffer.data(), static_cast<usize>(copiedLength)));
 #elif defined(NWB_PLATFORM_LINUX)
     const auto path = ReadSymlink(Path<ArenaT>(arena, "/proc/self/exe"));
     if(!path)

@@ -166,15 +166,11 @@ struct GpuTaskGraphSchedulingTaskIndexView{
 
 
 public:
-    [[nodiscard]] u32 operator[](const usize index)const noexcept{
-        NWB_ASSERT(index < taskCount);
-        return taskIndices[index];
-    }
+    [[nodiscard]] u32 operator[](usize index)const noexcept;
 
 
 public:
     [[nodiscard]] b8 empty()const noexcept{ return taskCount == 0u; }
-
 };
 
 

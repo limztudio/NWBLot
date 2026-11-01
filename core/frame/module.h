@@ -8,7 +8,7 @@
 #include <core/global.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/task/gpu/scheduler.h>
-#include <core/common/module.h>
+#include <core/common/frame_data.h>
 #include <core/input/module.h>
 #include <core/os/clipboard.h>
 #include <core/os/text_input.h>
@@ -59,7 +59,9 @@ public:
 
 
 private:
-    static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY)noexcept;
+    static void ApplyPointerScale(void* userData, const f32 scaleX, const f32 scaleY)noexcept{
+        MakeNotNull(static_cast<Frame*>(userData))->m_input.setMousePositionScale(scaleX, scaleY);
+    }
 
 
 public:
@@ -80,10 +82,7 @@ public:
     void cleanup();
     b8 update(f32 delta);
 
-    inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept{
-        m_projectUpdateCallback = callback;
-        m_projectUpdateUserData = userData;
-    }
+    void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept;
 
     [[nodiscard]] inline GraphicsRuntime& graphics()noexcept{ return m_graphics; }
 

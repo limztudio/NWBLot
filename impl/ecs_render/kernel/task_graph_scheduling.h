@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 
 #include <core/task/gpu/task_desc.h>
 
@@ -35,6 +36,21 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }
 
+[[nodiscard]] constexpr Core::GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(const b8 generatePhase)noexcept{
+    return { generatePhase ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+}
+
+[[nodiscard]] constexpr Core::GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(const SharedComputeEmulationPhase::Enum phase)noexcept{
+    return SharedComputeEmulationCommandRequirements(phase == SharedComputeEmulationPhase::Generate);
+}
+
+template<typename Payload>
+struct SharedComputeEmulationPhaseTaskCommandRequirementsBase{
+public:
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
+        return SharedComputeEmulationCommandRequirements(payload.phase);
+    }
+};
 
 // Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
 // Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
@@ -45,8 +61,8 @@ void MakeSharedComputeEmulationPhaseTaskDesc(
     const Name identity,
     const AStringView markerLabel,
     const Core::GpuTaskId& dependency,
-    Span<const Core::GpuTaskResourceUse> resourceUses,
-    Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
+    const Span<const Core::GpuTaskResourceUse> resourceUses,
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
     Core::GpuTaskDesc& desc
 )noexcept;
 

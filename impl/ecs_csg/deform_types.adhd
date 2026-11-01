@@ -135,6 +135,43 @@ b8 CsgDeformValidOptions(in CsgDeformBuildOptions options){
     return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
 
+b8 IsFiniteCsgDeformVertex(in CsgDeformVertex vertex){
+    return
+        isFinite(vertex.position.x)
+        && isFinite(vertex.position.y)
+        && isFinite(vertex.position.z)
+        && isFinite(vertex.normal.x)
+        && isFinite(vertex.normal.y)
+        && isFinite(vertex.normal.z)
+        && isFinite(vertex.normal.w)
+        && isFinite(vertex.tangent.x)
+        && isFinite(vertex.tangent.y)
+        && isFinite(vertex.tangent.z)
+        && isFinite(vertex.tangent.w)
+        && isFinite(vertex.uv0.x)
+        && isFinite(vertex.uv0.y)
+        && isFinite(vertex.color.x)
+        && isFinite(vertex.color.y)
+        && isFinite(vertex.color.z)
+        && isFinite(vertex.color.w)
+    ;
+}
+
+b8 IsFiniteCsgDeformVertices(in Span<CsgDeformVertex> vertices){
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex)
+        if(!IsFiniteCsgDeformVertex(vertices[vertexIndex]))
+            return false;
+    return true;
+}
+
+CsgDeformTriangle MakeCsgDeformTriangle(in u32 first, in u32 second, in u32 third){
+    CsgDeformTriangle out;
+    out.indices[0u] = first;
+    out.indices[1u] = second;
+    out.indices[2u] = third;
+    return out;
+}
+
 b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexCount){
     for(usize triangleIndex = 0u; triangleIndex < triangles.size(); ++triangleIndex){
         const CsgDeformTriangle triangle = triangles[triangleIndex];

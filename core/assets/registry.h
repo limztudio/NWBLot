@@ -23,7 +23,10 @@ private:
 
 
 public:
-    explicit AssetRegistry(AssetArena& arena);
+    explicit AssetRegistry(AssetArena& arena)
+        : m_arena(arena)
+        , m_codecs(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    {}
 
 
 public:
@@ -31,10 +34,6 @@ public:
     b8 unregisterCodec(const Name& assetType)noexcept;
 
     [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAsset(const Name& assetType, const Name& virtualPath, Span<const u8> binary)const;
-
-
-private:
-    [[nodiscard]] Expected<UniquePtr<IAsset>> deserializeAssetByName(const Name& assetType, const Name& virtualPath, Span<const u8> binary)const;
 
 
 private:

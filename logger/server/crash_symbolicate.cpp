@@ -88,16 +88,16 @@ static void AppendSymbolStoreStatus(const CrashSymbolicationConfig& config, Core
 }
 
 static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackageSummary& summary){
-    if(summary.reasonKind == s_SignalReasonKind){
+    if(summary.reasonKind == Core::Crash::s_SignalReasonKind){
         outReport += s_ExceptionKey;
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
         outReport += " (";
-        char buffer[s_DecimalTextBufferCapacity];
+        Array<char, s_DecimalTextBufferCapacity> buffer{};
         outReport += FormatDecimal(static_cast<usize>(summary.reasonCode), buffer);
         outReport += ")\n";
         return;
     }
-    if(summary.reasonKind == s_WindowsExceptionReasonKind){
+    if(summary.reasonKind == Core::Crash::s_WindowsExceptionReasonKind){
         outReport += s_ExceptionKey;
         outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
@@ -105,15 +105,15 @@ static void AppendExceptionSummary(CrashReportText& outReport, const CrashPackag
         outReport += s_ReportLineEnd;
         return;
     }
-    if(summary.reasonKind == s_TerminateReasonKind){
+    if(summary.reasonKind == Core::Crash::s_TerminateReasonKind){
         outReport += "exception=std::terminate\n";
         return;
     }
-    if(summary.reasonKind == s_ManualDumpReasonKind){
+    if(summary.reasonKind == Core::Crash::s_ManualDumpReasonKind){
         outReport += "exception=manual diagnostic dump\n";
         return;
     }
-    if(summary.reasonKind == s_GpuCrashReasonKind){
+    if(summary.reasonKind == Core::Crash::s_GpuCrashReasonKind){
         outReport += "exception=GPU device removed / crash\n";
         return;
     }
@@ -214,7 +214,7 @@ static void AppendReportWithoutSection(AString<Core::Alloc::ScratchArena>& outRe
         if(summary.triggerLine != 0u){
             if(!summary.triggerFile.empty())
                 outReport += ":";
-            char buffer[s_DecimalTextBufferCapacity];
+            Array<char, s_DecimalTextBufferCapacity> buffer{};
             outReport += FormatDecimal(static_cast<usize>(summary.triggerLine), buffer);
         }
         outReport += s_ReportLineEnd;
@@ -271,11 +271,9 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, Core::Alloc::ScratchArena& scratchArena){
-    namespace Symbolicate = LoggerCrashSymbolicateDetail;
-
+CrashReportText BuildCrashSymbolicationReport(const CrashScratchPath& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, LogArena& arena, Core::Alloc::ScratchArena& scratchArena){
     CrashReportText detailReport{arena};
-    detailReport.reserve(Symbolicate::s_CrashReportReserveBytes);
+    detailReport.reserve(LoggerCrashSymbolicateDetail::s_CrashReportReserveBytes);
 
     detailReport += "package=";
     detailReport += PathToString<char>(scratchArena, packageDirectory);
@@ -287,40 +285,40 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const CrashScratc
     detailReport += summary.reasonKind;
     detailReport += "\nartifact_strategy=";
     detailReport += summary.artifactStrategy;
-    detailReport += Symbolicate::s_ReportLineEnd;
-    Symbolicate::AppendSymbolStoreStatus(config, scratchArena, detailReport);
-    Symbolicate::AppendEventSummary(summary, detailReport);
+    detailReport += s_ReportLineEnd;
+    LoggerCrashSymbolicateDetail::AppendSymbolStoreStatus(config, scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendEventSummary(summary, detailReport);
 
-    if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
+    if(summary.platform == Core::Crash::s_WindowsPlatformName){
 #if defined(NWB_PLATFORM_WINDOWS)
-        const auto decoded = Symbolicate::AppendWindowsMinidumpStack(scratchArena, packageDirectory, summary, config, detailReport);
+        const auto decoded = LoggerCrashSymbolicateDetail::AppendWindowsMinidumpStack(packageDirectory, summary, config, scratchArena, detailReport);
         if(!decoded)
-            Symbolicate::AppendNativeFailure(detailReport, decoded.error());
+            LoggerCrashSymbolicateDetail::AppendNativeFailure(detailReport, decoded.error());
         else if(!*decoded)
             detailReport += "stack_decode=unavailable\n";
 #else
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
-    else if(summary.platform == LoggerCrashSymbolicateDetail::s_LinuxPlatformName){
-        Symbolicate::AppendLinuxArtifactSummary(scratchArena, packageDirectory, config, detailReport);
+    else if(summary.platform == Core::Crash::s_LinuxPlatformName){
+        LoggerCrashSymbolicateDetail::AppendLinuxArtifactSummary(packageDirectory, config, scratchArena, detailReport);
     }
-    else if(summary.platform == LoggerCrashSymbolicateDetail::s_AndroidPlatformName){
-        Symbolicate::AppendAndroidTombstoneSummary(scratchArena, packageDirectory, detailReport);
+    else if(summary.platform == Core::Crash::s_AndroidPlatformName){
+        LoggerCrashSymbolicateDetail::AppendAndroidTombstoneSummary(packageDirectory, scratchArena, detailReport);
     }
     else{
         detailReport += "status=not_decoded\nresolver=unknown\ndetail=unknown crash platform\n";
     }
 
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash", scratchArena, detailReport);
-    Symbolicate::AppendRadeonGpuDetectiveSummary(scratchArena, packageDirectory, detailReport);
-    Symbolicate::AppendAftermathGpuDumpSummary(scratchArena, packageDirectory, detailReport);
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context", scratchArena, detailReport);
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata", scratchArena, detailReport);
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
-    Symbolicate::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
-    return Symbolicate::BuildOrderedCrashReport(scratchArena, summary, Move(detailReport));
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_GpuCrashReportFileName, "gpu_crash", scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendRadeonGpuDetectiveSummary(packageDirectory, scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendAftermathGpuDumpSummary(packageDirectory, scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_CpuContextFileName, "cpu_context", scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_MetadataFileName, "metadata", scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_BreadcrumbsFileName, "breadcrumbs", scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_SymbolicationFileName, "client_symbolication_note", scratchArena, detailReport);
+    LoggerCrashSymbolicateDetail::AppendOptionalTextFile(packageDirectory, Core::Crash::PackageNames::s_AndroidCollectionFileName, "android_collection", scratchArena, detailReport);
+    return LoggerCrashSymbolicateDetail::BuildOrderedCrashReport(scratchArena, summary, Move(detailReport));
 }
 
 

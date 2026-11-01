@@ -5,6 +5,9 @@
 #pragma once
 
 
+#include <cerrno>
+#include <clocale>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -255,6 +258,10 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline char* SetLocale(const int category, const char* locale)noexcept{
+    return std::setlocale(category, locale);
+}
 
 [[nodiscard]] constexpr b8 CanEnableDebugRuntime()noexcept{
 #if !defined(NWB_FINAL)

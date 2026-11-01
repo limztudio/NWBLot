@@ -27,17 +27,39 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label)noexcept{
-    Core::GpuGraphResourceDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Texture);
-    return desc;
-}
+[[nodiscard]] Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, AStringView label)noexcept;
+[[nodiscard]] Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, AStringView label)noexcept;
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc BufferResourceDesc(const Name& identity, const AStringView label)noexcept{
-    Core::GpuGraphResourceDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::Buffer);
-    return desc;
-}
+[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportExternalTexture(
+    Core::GpuTaskGraph& graph,
+    const Core::TextureHandle& texture,
+    const Name& identity,
+    AStringView label,
+    Optional<Core::ResourceStates::Mask> initialState = {},
+    Optional<Core::ResourceStates::Mask> externalFinalState = {}
+);
+
+[[nodiscard]] Expected<Core::GpuGraphResourceId> ImportExternalBuffer(
+    Core::GpuTaskGraph& graph,
+    const Core::BufferHandle& buffer,
+    const Name& identity,
+    AStringView label,
+    Optional<Core::ResourceStates::Mask> initialState = {},
+    Optional<Core::ResourceStates::Mask> externalFinalState = {}
+);
+
+[[nodiscard]] Expected<Core::GpuGraphResourceId> FindOrImportTexture(
+    Core::GpuTaskGraph& graph,
+    const Core::TextureHandle& texture,
+    AStringView resourceLabel,
+    Optional<Core::ResourceStates::Mask> initialState = {}
+);
+
+[[nodiscard]] Expected<Core::GpuGraphResourceId> FindOrImportBuffer(
+    Core::GpuTaskGraph& graph,
+    const Core::BufferHandle& buffer,
+    AStringView resourceLabel
+);
 
 template<typename Plan>
 [[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(Core::GpuTaskGraph& graph, const Plan& plan, Core::Alloc::ScratchArena& scratchArena, const Name& identity, const AStringView label){
@@ -47,93 +69,51 @@ template<typename Plan>
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
     members.reserve(plan.outputBuffers.size());
     for(const Core::BufferHandle& buffer : plan.outputBuffers){
-        if(!buffer)
+        const auto importedResource = FindOrImportBuffer(graph, buffer, label);
+        if(!importedResource || !importedResource->valid())
             return MakeUnexpected(Failure{});
-        Core::GpuGraphResourceId resource;
-        {
-            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-            if(!declarations.valid())
-                return MakeUnexpected(Failure{});
-            resource = declarations.findImportedBuffer(buffer);
-        }
-        if(!resource.valid()){
-            const Name bufferIdentity = buffer->getCreationDescription().debugName;
-            if(!bufferIdentity)
-                return MakeUnexpected(Failure{});
-            const auto importedResource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
-            if(!importedResource)
-                return MakeUnexpected(Failure{});
-            resource = *importedResource;
-        }
-        if(!resource.valid())
-            return MakeUnexpected(Failure{});
-        members.push_back(resource);
+        members.push_back(*importedResource);
     }
-    const auto resultResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members.data(), members.size()));
+    const auto resultResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel(label).setMembers(members));
     if(!resultResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceSetId result = *resultResult;
     return result;
 }
 
-[[nodiscard]] inline Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label)noexcept{
-    Core::GpuGraphResourceDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::HazardDomain);
-    return desc;
-}
+[[nodiscard]] Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, AStringView label)noexcept;
 
 [[nodiscard]] inline Core::GpuTaskResourceUse ReadUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource, const b8 hasIndependentStateSource = false)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Read, .hasIndependentStateSource = hasIndependentStateSource, };
 }
 
-
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadBufferUse(
-    const Core::GpuGraphResourceId resource,
+[[nodiscard]] Core::GpuTaskResourceUse ReadBufferUse(
+    Core::GpuGraphResourceId resource,
     const Core::BufferRange& range,
-    const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
-    const b8 hasIndependentStateSource = false
-)noexcept{
-    Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
-    result.range.bufferRange = range;
-    return result;
-}
+    Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
+    b8 hasIndependentStateSource = false
+)noexcept;
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadTextureUse(
-    const Core::GpuGraphResourceId resource,
+[[nodiscard]] Core::GpuTaskResourceUse ReadTextureUse(
+    Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
-    const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
-    const b8 hasIndependentStateSource = false
-)noexcept{
-    Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
-    result.range.textureSubresources = subresources;
-    return result;
-}
+    Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
+    b8 hasIndependentStateSource = false
+)noexcept;
 
 [[nodiscard]] inline Core::GpuTaskResourceUse WriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::Write, };
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse WriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
-    Core::GpuTaskResourceUse result = WriteUse(resource, state);
-    result.range.textureSubresources = subresources;
-    return result;
-}
-
-[[nodiscard]] inline Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label)noexcept{
-    Core::GpuGraphResourceDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphResourceType::AccelStruct);
-    return desc;
-}
+[[nodiscard]] Core::GpuTaskResourceUse WriteTextureUse(Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, Core::ResourceStates::Mask state)noexcept;
+[[nodiscard]] Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, AStringView label)noexcept;
 
 [[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteUse(const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
     return Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = state, .access = Core::GpuTaskResourceAccess::ReadWrite, };
 }
 
-[[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteTextureUse(const Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, const Core::ResourceStates::Mask state)noexcept{
-    Core::GpuTaskResourceUse result = ReadWriteUse(resource, state);
-    result.range.textureSubresources = subresources;
-    return result;
-}
+[[nodiscard]] Core::GpuTaskResourceUse ReadWriteTextureUse(Core::GpuGraphResourceId resource, const Core::TextureSubresourceSet& subresources, Core::ResourceStates::Mask state)noexcept;
+[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name& identity, AStringView label, const Core::GpuTaskId& dependency = {})noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

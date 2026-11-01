@@ -29,14 +29,6 @@ namespace __hidden_assets_model_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<ModelCookEntry> ParseModelDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
-static Expected<ModelCookEntry> ParseModelValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
 static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto modelEntry = ParseModelCookMetadata(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena);
     if(!modelEntry)
@@ -62,7 +54,17 @@ static b8 ExtractModelDependencies(const Core::Assets::CookDependencyItemContext
 }
 
 static b8 RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(registry, s_ModelAssetKindLabel, &ParseModelDocument, &ParseModelValue, &BuildModelAsset);
+    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
+        s_ModelAssetKindLabel,
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseModelCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+        },
+        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+            return ParseModelCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+        },
+        &BuildModelAsset,
+        registry
+    );
 }
 
 static b8 RegisterModelCookDependency(Core::Assets::CookDependencyRegistry& registry){

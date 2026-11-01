@@ -76,13 +76,8 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_stateTracker.rollbackRecordingAttempt();
     clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
-    if(m_currentCmdBuf){
-        m_currentCmdBuf->discardTimerQueryRecordingClaims();
-        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
-        m_currentCmdBuf->discardRetainedTextureStateCommits();
-        m_currentCmdBuf->releasePendingAccelStructBuildCommits();
-        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
-    }
+    if(m_currentCmdBuf)
+        m_currentCmdBuf->discardPendingRecordingCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
     m_nativeRecordingID = 0u;
@@ -359,11 +354,7 @@ void CommandList::abortRecordingAttemptWithoutCallbacks()noexcept{
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerStateWithoutCallbacks();
     if(m_currentCmdBuf){
-        m_currentCmdBuf->discardTimerQueryRecordingClaims();
-        m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
-        m_currentCmdBuf->discardRetainedTextureStateCommits();
-        m_currentCmdBuf->abandonPendingAccelStructBuildCommits();
-        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
+        m_currentCmdBuf->discardPendingRecordingCommits();
         abandonUnsubmittedUploadChunks();
         m_currentCmdBuf.reset();
     }

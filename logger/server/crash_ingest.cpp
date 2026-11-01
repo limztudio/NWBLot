@@ -5,8 +5,6 @@
 #include "crash_ingest.h"
 #include "crash_paths.h"
 
-#include <core/crash/package_names.h>
-
 #include <global/binary.h>
 #include <global/filesystem/archive.h>
 #include <global/filesystem/retention.h>
@@ -30,11 +28,9 @@ namespace __hidden_logger_crash_ingest{
 
 using CrashText = CrashReportText;
 using CrashBytes = Vector<u8, Core::Alloc::ScratchArena>;
-namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
 inline constexpr usize s_GeneratedJsonNeedleReserveSlack = 4u;
 inline constexpr AStringView s_MalformedFileFooterDetail = "malformed crash archive file footer";
-inline constexpr AStringView s_ReportLineEnd = "\n";
 inline constexpr Name s_IngestScratchArenaName("logger/server/crash_ingest/scratch");
 
 struct IngestFailure{
@@ -92,7 +88,7 @@ struct ArchiveFileHeader{
 };
 
 [[nodiscard]] static Expected<ArchiveFileHeader> ParseFileHeader(const AStringView line)noexcept{
-    constexpr AStringView prefix(CrashNames::s_ArchiveFileHeaderPrefix);
+    constexpr AStringView prefix(Core::Crash::PackageNames::s_ArchiveFileHeaderPrefix);
     if(line.size() <= prefix.size() || AStringView(line.data(), prefix.size()) != prefix)
         return MakeUnexpected(Failure{});
 
@@ -118,7 +114,7 @@ struct ArchiveFileHeader{
     return ArchiveFileHeader{ relativePath, static_cast<usize>(*fileSize) };
 }
 
-[[nodiscard]] static Expected<void, ErrorCode> WriteExtractedFile(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const AStringView relativePath, const u8* bytes, const usize byteCount){
+[[nodiscard]] static Expected<void, ErrorCode> WriteExtractedFile(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, const AStringView relativePath, const BinaryByteView fileBytes){
     const ::Path<Core::Alloc::ScratchArena> outputPath = ::Path<Core::Alloc::ScratchArena>(scratchArena, packageDirectory) / relativePath;
     const auto outputDirectory = outputPath.parentPath();
     if(!outputDirectory.empty()){
@@ -127,9 +123,8 @@ struct ArchiveFileHeader{
             return MakeUnexpected(ensured.error());
     }
 
-    if(!CanRepresentStreamSize(static_cast<u64>(byteCount)))
+    if(!CanRepresentStreamSize(static_cast<u64>(fileBytes.size())))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::value_too_large));
-    const BinaryByteView fileBytes{ bytes, byteCount };
     if(!WriteBinaryFile(outputPath, fileBytes))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::io_error));
     return {};
@@ -143,7 +138,7 @@ struct ArchiveFileHeader{
 
     usize cursor = 0u;
     auto line = NextLfByteLine(archiveBytes, cursor);
-    if(!line || *line != CrashNames::s_ArchiveHeaderLine){
+    if(!line || *line != Core::Crash::PackageNames::s_ArchiveHeaderLine){
         return MakeUnexpected(IngestFailure{ .detail = "invalid crash archive header", });
     }
 
@@ -166,7 +161,7 @@ struct ArchiveFileHeader{
             return MakeUnexpected(IngestFailure{ .detail = "truncated crash archive file payload", });
         }
 
-        const auto written = WriteExtractedFile(scratchArena, packageDirectory, header->relativePath, archiveBytes.data() + cursor, fileSize);
+        const auto written = WriteExtractedFile(scratchArena, packageDirectory, header->relativePath, BinaryByteView{ archiveBytes.data() + cursor, fileSize });
         if(!written)
             return MakeUnexpected(IngestFailure{ .detail = "failed to write extracted crash package file", .code = written.error(), });
         cursor += fileSize;
@@ -176,7 +171,7 @@ struct ArchiveFileHeader{
             return MakeUnexpected(IngestFailure{ .detail = s_MalformedFileFooterDetail, });
         }
         const auto endMarker = NextLfByteLine(archiveBytes, cursor);
-        if(!endMarker || *endMarker != CrashNames::s_ArchiveEntryEndLine){
+        if(!endMarker || *endMarker != Core::Crash::PackageNames::s_ArchiveEntryEndLine){
             return MakeUnexpected(IngestFailure{ .detail = s_MalformedFileFooterDetail, });
         }
 
@@ -298,12 +293,12 @@ template<typename ArenaT>
 [[nodiscard]] static Expected<CrashPackageSummary, IngestFailure> ValidateManifest(LogArena& arena, Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory){
     CrashPackageSummary outSummary(arena);
     AString<Core::Alloc::ScratchArena> manifest{scratchArena};
-    const auto read = ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest);
+    const auto read = ReadTextFile(packageDirectory / Core::Crash::PackageNames::s_ManifestFileName, manifest);
     if(!read)
         return MakeUnexpected(IngestFailure{ .detail = "missing manifest.json", .code = read.error(), });
 
     const AStringView manifestText(manifest.data(), manifest.size());
-    const auto manifestFormat = FindGeneratedJsonStringValue(scratchArena, scratchArena, manifestText, CrashNames::s_ManifestFormatKey);
+    const auto manifestFormat = FindGeneratedJsonStringValue(scratchArena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestFormatKey);
     const auto requireString = [&scratchArena, manifestText](const AStringView key){
         return FindGeneratedJsonStringValue(scratchArena, scratchArena, manifestText, key);
     };
@@ -313,43 +308,43 @@ template<typename ArenaT>
     const auto requireBool = [&scratchArena, manifestText](const AStringView key){
         return FindGeneratedJsonBoolValue(scratchArena, manifestText, key);
     };
-    auto crashId = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestCrashIdKey);
-    auto platform = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestPlatformKey);
-    auto reasonKind = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestReasonKindKey);
-    auto reasonCode = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, CrashNames::s_ManifestReasonCodeKey);
-    auto threadId = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, CrashNames::s_ManifestThreadIdKey);
-    auto event = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestEventKey);
-    auto triggerExpression = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestTriggerExpressionKey);
-    auto triggerMessage = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestTriggerMessageKey);
-    auto triggerFile = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestTriggerFileKey);
-    auto triggerLine = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, CrashNames::s_ManifestTriggerLineKey);
-    auto artifactStrategy = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, CrashNames::s_ManifestArtifactStrategyKey);
+    auto crashId = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestCrashIdKey);
+    auto platform = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestPlatformKey);
+    auto reasonKind = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestReasonKindKey);
+    auto reasonCode = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestReasonCodeKey);
+    auto threadId = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestThreadIdKey);
+    auto event = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestEventKey);
+    auto triggerExpression = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerExpressionKey);
+    auto triggerMessage = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerMessageKey);
+    auto triggerFile = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerFileKey);
+    auto triggerLine = FindGeneratedJsonUnsignedValue(scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestTriggerLineKey);
+    auto artifactStrategy = FindGeneratedJsonStringValue(arena, scratchArena, manifestText, Core::Crash::PackageNames::s_ManifestArtifactStrategyKey);
     if(
         !manifestFormat
         || !crashId
-        || !requireString(CrashNames::s_ManifestApplicationKey)
-        || !requireString(CrashNames::s_ManifestVersionKey)
-        || !requireString(CrashNames::s_ManifestBuildIdKey)
-        || !requireString(CrashNames::s_ManifestAbiKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestApplicationKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestVersionKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestBuildIdKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestAbiKey)
         || !platform
         || !reasonKind
         || !reasonCode
-        || !requireUnsigned(CrashNames::s_ManifestProcessIdKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestProcessIdKey)
         || !threadId
-        || !requireBool(CrashNames::s_ManifestHasExceptionContextKey)
-        || !requireUnsigned(CrashNames::s_ManifestFaultAddressKey)
-        || !requireUnsigned(CrashNames::s_ManifestInstructionPointerKey)
-        || !requireUnsigned(CrashNames::s_ManifestStackPointerKey)
-        || !requireUnsigned(CrashNames::s_ManifestFramePointerKey)
+        || !requireBool(Core::Crash::PackageNames::s_ManifestHasExceptionContextKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestFaultAddressKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestInstructionPointerKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestStackPointerKey)
+        || !requireUnsigned(Core::Crash::PackageNames::s_ManifestFramePointerKey)
         || !event
-        || !requireString(CrashNames::s_ManifestTriggerCategoryKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestTriggerCategoryKey)
         || !triggerExpression
         || !triggerMessage
         || !triggerFile
         || !triggerLine
-        || !requireString(CrashNames::s_ManifestDumpDetailModeKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestDumpDetailModeKey)
         || !artifactStrategy
-        || !requireString(CrashNames::s_ManifestHandlerLifetimeKey)
+        || !requireString(Core::Crash::PackageNames::s_ManifestHandlerLifetimeKey)
     ){
         return MakeUnexpected(IngestFailure{ .detail = "manifest.json is missing required fields", });
     }
@@ -366,7 +361,7 @@ template<typename ArenaT>
     outSummary.triggerLine = *triggerLine;
     outSummary.artifactStrategy = Move(*artifactStrategy);
 
-    if(*manifestFormat != CrashNames::s_ManifestFormatValue){
+    if(*manifestFormat != Core::Crash::PackageNames::s_ManifestFormatValue){
         return MakeUnexpected(IngestFailure{ .detail = "manifest.json has unsupported crash package format", });
     }
     if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty() || outSummary.event.empty()){
@@ -424,7 +419,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         return Ingest::RejectCrashUpload(arena, scratchArena, operationArchivePath, packageDirectory, config, summaryResult.error());
     const CrashPackageSummary& summary = *summaryResult;
 
-    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication, scratchArena);
+    CrashReportText symbolicationReport = BuildCrashSymbolicationReport(packageDirectory, summary, config.symbolication, arena, scratchArena);
     // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
     if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));

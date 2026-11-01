@@ -43,7 +43,7 @@ UiLayerSystem::UiLayerSystem(
     , m_textInput(textInput)
     , m_assetManager(assetManager)
     , m_defaultSceneSubsystems(arena)
-    , m_skinSelection(skin)
+    , m_skinSelection(MakeUiSkinSelectionState(skin))
     , m_paint(arena)
     , m_text(arena)
     , m_context(arena)
@@ -70,17 +70,12 @@ UiLayerSystem::~UiLayerSystem()noexcept{
     m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
 }
 
-void UiLayerSystem::setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode)noexcept{
-    m_renderer.setCommandRecordingMode(mode);
+void UiLayerSystem::setActiveSceneSubsystems(const ActiveSceneSubsystems* const subsystems)noexcept{
+    m_activeSceneSubsystems = subsystems;
+    m_renderer.setActiveSceneSubsystems(subsystems);
 }
 
-void UiLayerSystem::prepare(Core::ECS::World& world){
-    static_cast<void>(world);
-    synchronizeInput();
-}
-
-b8 UiLayerSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
-    static_cast<void>(sampleCount);
+b8 UiLayerSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount){
     m_resourcesReady = false;
     m_width = width;
     m_height = height;
@@ -99,22 +94,22 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, const u32
     }
 
     if(!m_fontsReady){
-        Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/load_fonts"));
+        Core::Alloc::ScratchArena scratchArena(s_UiLoadFontsArenaName);
         if(!loadFonts(scratchArena))
             return false;
     }
     if(!m_renderer.validateResources(width, height))
         return false;
 
-    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure(basicSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
+    const UiSkinSelectionResult::Enum selection = EnsureUiSkinSelection(m_skinSelection, basicSkin(), [this](const Core::Assets::AssetRef<UiSkin>& ref){
         const Core::Assets::AssetRef<UiSkin> resolvedRef = resolveSkin(ref);
-        if(ref == m_skinSelection.selected() && m_skinAsset){
+        if(ref == m_skinSelection.selected && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation());
+            return skin && ValidateUiSkinToolkitContract(*skin) && m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation);
         }
         auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(resolvedRef.name(), s_UiLayerSystemOwnerName);
         const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
-        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation()))
+        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(resolvedRef, *skin, m_skinSelection.generation))
             return false;
         m_skinAsset = Move(*candidateAsset);
         return true;
@@ -122,7 +117,7 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, const u32
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested().name().resolvedText()));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default"), ConvertString(m_skinSelection.requested.name().resolvedText()));
     }
 
     f32 scaleX = 1.0f;
@@ -135,16 +130,9 @@ b8 UiLayerSystem::validateResources(const u32 width, const u32 height, const u32
 
 void UiLayerSystem::invalidateResources(){
     m_resourcesReady = false;
-    m_blockCommandChars = false;
     m_frameDelta.clear();
-    m_editHost.reset();
-    m_context.abandonFrame();
-    m_ui.reset();
-    m_context.input().cancelDeviceInput(0u);
-    m_nativeKeyOwners.fill(0u);
-    m_blockNativeChars = false;
-    m_pressedButtons = 0u;
-    m_pointerOwner = 0u;
+    abandonPendingFrame(true);
+    resetNativeInputState();
     m_renderer.invalidateResources();
 }
 
@@ -170,13 +158,54 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
-    m_blockCommandChars = false;
     m_frameDelta.clear();
-    m_context.abandonFrame();
-    m_editHost.reset();
-    m_ui.reset();
+    abandonPendingFrame(true);
     const SIMDVectorSingle logicalSize = VectorDivide(VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)), VectorSet(scaleX, scaleY, scaleX, scaleY));
     m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
+}
+
+b8 UiLayerSystem::setInputBindings(const Span<const Ui::InputKeyBinding> bindings){
+    synchronizeNativeInput();
+    return m_context.input().setBindings(bindings);
+}
+
+void UiLayerSystem::abandonPendingFrame(const b8 resetUi)noexcept{
+    m_blockCommandChars = false;
+    m_context.abandonFrame();
+    m_editHost.reset();
+    if(resetUi)
+        m_ui.reset();
+}
+
+void UiLayerSystem::resetNormalizedInput(){
+    m_blockCommandChars = false;
+    m_context.resetInput();
+    m_editHost.reset();
+}
+
+void UiLayerSystem::resetNativeInputState()noexcept{
+    m_context.input().cancelDeviceInput(0u);
+    m_nativeKeyOwners.fill(0u);
+    m_pressedButtons = 0u;
+    m_pointerOwner = UiInputOwner::Scene;
+    m_blockNativeChars = false;
+    m_blockCommandChars = false;
+}
+
+Core::Assets::AssetRef<UiSkin> UiLayerSystem::basicSkin()const noexcept{
+    if(!m_activeSceneSubsystems)
+        return {};
+    const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
+    return uiSubsystem ? uiSubsystem->basicSkin : Core::Assets::AssetRef<UiSkin>{};
+}
+
+Core::Assets::AssetRef<UiSkin> UiLayerSystem::resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
+    const Core::Assets::AssetRef<UiSkin> fallbackSkin = basicSkin();
+    if(!fallbackSkin.valid())
+        return {};
+    if(!ref.valid() || ref == fallbackSkin)
+        return fallbackSkin;
+    return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
 }
 
 

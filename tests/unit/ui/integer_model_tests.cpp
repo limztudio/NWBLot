@@ -42,7 +42,7 @@ TEST_F(IntegerModelTests, SubmitCommitsExactLargeIntegerAndCancellationCannotRou
 
 TEST_F(IntegerModelTests, InvalidIncompleteAndOverflowSubmitPreserveThePendingDraft){
     ASSERT_TRUE(m_model.setValue(7));
-    const AStringView drafts[]{ "-", "x", "9223372036854775808", "-9223372036854775809" };
+    const Array<AStringView, 4> drafts{ "-", "x", "9223372036854775808", "-9223372036854775809" };
     for(const AStringView text : drafts){
         SCOPED_TRACE(text);
         ASSERT_TRUE(m_model.setDraft(text));
@@ -87,8 +87,8 @@ TEST_F(IntegerModelTests, BoundsAreInclusiveAndRejectRepresentableValuesOutsideT
 
 TEST_F(IntegerModelTests, ClampingCanonicalizesBothSidesButNeverRepresentationOverflow){
     const IntegerBounds bounds{ -10, 10, NumericBoundsPolicy::Clamp };
-    const AStringView drafts[]{ "-11", "+00011" };
-    const i64 expected[]{ -10, 10 };
+    const Array<AStringView, 2> drafts{ "-11", "+00011" };
+    const Array<i64, 2> expected{ -10, 10 };
     for(usize index = 0u; index < 2u; ++index){
         ASSERT_TRUE(m_model.setDraft(drafts[index]));
         const u64 external = m_model.draft().externalRevision();

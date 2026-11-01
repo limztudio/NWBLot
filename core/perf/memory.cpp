@@ -15,6 +15,65 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+MemorySnapshot MakeMemorySnapshot(const Name& scopeName, const u64 frameIndex, const ::ArenaMemoryStats& stats, const MemorySource::Enum source)noexcept{
+    MemorySnapshot snapshot;
+    snapshot.scopeName = scopeName;
+    snapshot.source = source;
+    snapshot.frameIndex = frameIndex;
+    snapshot.reservedBytes = stats.reservedBytes;
+    snapshot.usedBytes = stats.usedBytes;
+    snapshot.peakUsedBytes = stats.peakUsedBytes;
+    snapshot.allocationCount = stats.allocationCount;
+    snapshot.reallocationCount = stats.reallocationCount;
+    snapshot.deallocationCount = stats.deallocationCount;
+    return snapshot;
+}
+
+MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous)noexcept{
+    if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
+        return {};
+
+    const auto signedDifference = [](const u64 value, const u64 prior)noexcept -> Expected<i64>{
+        constexpr u64 s_MaxPositive = static_cast<u64>(Limit<i64>::s_Max);
+        if(value >= prior){
+            const u64 magnitude = value - prior;
+            if(magnitude > s_MaxPositive)
+                return MakeUnexpected(Failure{});
+            return static_cast<i64>(magnitude);
+        }
+
+        const u64 magnitude = prior - value;
+        constexpr u64 s_MaxNegative = s_MaxPositive + 1u;
+        if(magnitude > s_MaxNegative)
+            return MakeUnexpected(Failure{});
+        return magnitude == s_MaxNegative ? Limit<i64>::s_Min : -static_cast<i64>(magnitude);
+    };
+    const auto reservedBytes = signedDifference(current.reservedBytes, previous.reservedBytes);
+    const auto usedBytes = signedDifference(current.usedBytes, previous.usedBytes);
+    const auto peakUsedBytes = signedDifference(current.peakUsedBytes, previous.peakUsedBytes);
+    const auto allocationCount = signedDifference(current.allocationCount, previous.allocationCount);
+    const auto reallocationCount = signedDifference(current.reallocationCount, previous.reallocationCount);
+    const auto deallocationCount = signedDifference(current.deallocationCount, previous.deallocationCount);
+    if(!reservedBytes || !usedBytes || !peakUsedBytes || !allocationCount || !reallocationCount || !deallocationCount)
+        return {};
+
+    MemoryDelta delta;
+    delta.previousFrameIndex = previous.frameIndex;
+    delta.currentFrameIndex = current.frameIndex;
+    delta.reservedBytes = *reservedBytes;
+    delta.usedBytes = *usedBytes;
+    delta.peakUsedBytes = *peakUsedBytes;
+    delta.allocationCount = *allocationCount;
+    delta.reallocationCount = *reallocationCount;
+    delta.deallocationCount = *deallocationCount;
+    delta.hasSamples = true;
+    return delta;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void MemoryRecorder::setEnabled(const b8 enabled)noexcept{
     m_enabled = enabled;
     if(m_enabled)
@@ -174,18 +233,6 @@ const MemoryDelta& MemoryView::delta(const Name& scopeName, const MemorySource::
 const MemoryDelta& MemoryView::delta(const MemoryScopeId scope)const noexcept{
     static const MemoryDelta s_EmptyDelta;
     return m_recorder ? m_recorder->delta(scope) : s_EmptyDelta;
-}
-
-usize MemoryView::scopeCount()const noexcept{
-    return m_recorder ? m_recorder->scopeCount() : 0u;
-}
-
-MemoryScopeId MemoryView::scopeAt(const usize index)const noexcept{
-    return m_recorder ? m_recorder->scopeAt(index) : MemoryScopeId{};
-}
-
-Name MemoryView::scopeNameAt(const usize index)const noexcept{
-    return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
 const MemorySnapshot& MemoryView::snapshotAt(const usize index)const noexcept{

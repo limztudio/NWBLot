@@ -91,7 +91,7 @@ Cancellation has distinct meanings:
 
 Native pointer capture loss terminates its identified source directly because the OS may never deliver its release. The native adapter follows focus loss with explicit device termination. An idle native capture-release notification preserves known hover. Native adapters call `InputRouter::cancelDevice(device)` alongside their physical owner resets after focus or resource termination. This boundary ends only that device's pointer and command sequences, and invalidates its cursor geometry. The explicit API preserves completed actions and other devices' held sequences. Logical Escape cancellation and `reset()` retain consumed ownership until release; native termination explicitly ends the OS-owned sequences.
 
-Stable widget IDs derive from the host root identity and lifetime generation plus explicit scope/key hashes in `../id.h`. Labels and model values do not form identity. The retained context in `../context.h` validates current declaration lifetimes and retires removed ECS roots while a GPU frame remains pending.
+Stable widget IDs derive from the host root identity and lifetime generation plus explicit scope/key hashes in `../id.adhd`. Labels and model values do not form identity. The retained context in `../context.h` validates current declaration lifetimes and retires removed ECS roots while a GPU frame remains pending.
 
 ## Control hosts and visible parts
 
@@ -126,3 +126,4 @@ The top accepted scope owns pointer routing and focus traversal. Dismissing a ch
 `popupCount()`, `topPopupToken()` and `popupScope(token)` are read-only observations of accepted copied scopes. A closing scope remains observable until replacement publication or retirement. Returned target/scope pointers are borrowed only until publication, reset or declaration retirement.
 
 Event admission and consumption return their fixed event values in `Expected`. A failed result means rejection or no matching pending event; callers check it before accessing the event. `queue(event)` returns the normalized intent admitted into the queue. Consuming an active gesture retains its baseline, and consuming a completed gesture removes that record. No event value borrows storage from a removed queue entry.
+

@@ -7,11 +7,7 @@
 #include "volume_staging_detail.h"
 #include "arena_names.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-
 #include <global/error_code.h>
-#include <global/limit.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 

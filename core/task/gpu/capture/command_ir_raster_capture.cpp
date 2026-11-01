@@ -17,76 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_command_ir_raster_capture{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class HeapLeaseOwner final : public IGpuCommandIrRetainedOwner{
-public:
-    HeapLeaseOwner(GraphicsArena& arena, GpuDescriptorHeap& heap)
-        : m_arena(arena)
-        , m_lease(heap.acquirePendingRecordingLease())
-    {}
-    virtual ~HeapLeaseOwner()noexcept override = default;
-
-
-public:
-    virtual void retain()noexcept override{ m_references.fetch_add(1u, MemoryOrder::relaxed); }
-
-    virtual void release()noexcept override{
-        if(m_references.fetch_sub(1u, MemoryOrder::release) == 1u){
-            AtomicThreadFence(MemoryOrder::acquire);
-            DestroyArenaObjectNoexcept(m_arena, this);
-        }
-    }
-
-    [[nodiscard]] b8 valid()const noexcept{ return m_lease.valid(); }
-
-
-private:
-    GraphicsArena& m_arena;
-    GpuDescriptorHeap::PendingRecordingLease m_lease;
-    Atomic<u32> m_references{ 1u };
-};
-
-[[nodiscard]] static GpuCommandIrRecordContext EncodeContext(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept{
-    return { task.index, packet.index, queue.index, queue.deviceGeneration };
-}
-
-template<typename RecordT>
-static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode, const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue)noexcept(
-    noexcept(NWB_MEMSET(&DeclVal<RecordT&>(), 0, sizeof(RecordT)))
-    && noexcept(DeclVal<RecordT&>().header.opcode = DeclVal<const GpuCommandIrWireOpcode::Enum&>())
-    && noexcept(DeclVal<RecordT&>().header.byteSize = static_cast<u16>(sizeof(RecordT)))
-    && noexcept(DeclVal<RecordT&>().context = EncodeContext(DeclVal<const GpuTaskId&>(), DeclVal<const GpuSubmissionPacketId&>(), DeclVal<const GpuPhysicalQueueId&>()))
-){
-    static_assert(IsStandardLayout_V<RecordT> && IsTriviallyCopyable_V<RecordT>);
-    NWB_MEMSET(&record, 0, sizeof(record));
-    record.header.opcode = opcode;
-    record.header.byteSize = static_cast<u16>(sizeof(record));
-    record.context = EncodeContext(task, packet, queue);
-}
-
-[[nodiscard]] static GpuCommandIrFloatColor EncodeColor(const Color& color)noexcept{
-    return { color.r, color.g, color.b, color.a };
-}
-
-[[nodiscard]] static GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
-    return { rect.minX, rect.maxX, rect.minY, rect.maxY };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GpuCommandIrOwnerAnchor::GpuCommandIrOwnerAnchor(IGpuCommandIrRetainedOwner* const owner, AdoptRefT)noexcept
     : m_owner(owner)
 {}
@@ -173,7 +103,7 @@ b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuS
         if(framebuffer.colorAttachments.size() != 1u || framebuffer.depthAttachment.valid() || framebuffer.shadingRateAttachment.valid())
             return false;
     }
-    GpuCommandIrRasterVertexWire wires[s_MaxVertexAttributes]{};
+    Array<GpuCommandIrRasterVertexWire, s_MaxVertexAttributes> wires{};
     GpuCommandIrRasterStateOwner owner;
     owner.pipeline = state.pipelineOwner;
     owner.framebuffer = state.framebufferOwner;
@@ -191,7 +121,7 @@ b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuS
         owner.vertexBuffers.push_back(binding.buffer);
     }
     GpuCommandIrSetGraphicsStateRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::SetGraphicsState, task, packet, queue);
+    GpuCommandIrDetail::InitializeRecord(record, GpuCommandIrWireOpcode::SetGraphicsState, task, packet, queue);
     record.pipelineIndex = state.pipeline.index;
     record.colorAttachmentIndex = state.colorAttachment.index;
     record.framebufferOwnerIndex = m_rasterOwners ? static_cast<u32>(m_rasterOwners->stateOwners.size()) : 0u;
@@ -199,19 +129,19 @@ b8 GpuCommandIrCapture::captureSetGraphicsState(const GpuTaskId task, const GpuS
     record.indexOffset = state.indexOffset;
     record.blobOffsetBytes = static_cast<u64>(m_blobBytes.size());
     record.blobSizeBytes = static_cast<u64>(state.vertexBuffers.size() * sizeof(GpuCommandIrRasterVertexWire));
-    record.blendConstantColor = __hidden_gpu_command_ir_raster_capture::EncodeColor(state.blendConstantColor);
+    record.blendConstantColor = GpuCommandIrDetail::EncodeColor(state.blendConstantColor);
     record.viewportMinX = state.viewport.minX;
     record.viewportMaxX = state.viewport.maxX;
     record.viewportMinY = state.viewport.minY;
     record.viewportMaxY = state.viewport.maxY;
     record.viewportMinZ = state.viewport.minZ;
     record.viewportMaxZ = state.viewport.maxZ;
-    record.scissor = state.hasScissor ? __hidden_gpu_command_ir_raster_capture::EncodeRect(state.scissor) : GpuCommandIrRect{};
+    record.scissor = state.hasScissor ? GpuCommandIrDetail::EncodeRect(state.scissor) : GpuCommandIrRect{};
     record.vertexBindingCount = static_cast<u8>(state.vertexBuffers.size());
     record.hasScissor = state.hasScissor ? 1u : 0u;
     record.indexFormat = static_cast<u8>(state.indexFormat);
     record.stencilRef = state.dynamicStencilRefValue;
-    return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, BinaryByteView{ reinterpret_cast<const u8*>(wires), static_cast<usize>(record.blobSizeBytes) }, &owner, nullptr);
+    return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, BinaryByteView{ reinterpret_cast<const u8*>(wires.data()), static_cast<usize>(record.blobSizeBytes) }, &owner, nullptr);
 }
 
 b8 GpuCommandIrCapture::captureBindGraphicsHeap(
@@ -226,11 +156,11 @@ b8 GpuCommandIrCapture::captureBindGraphicsHeap(
 ){
     if(!pipeline.valid() || pipeline.generation != task.generation || !pipelineOwner || !descriptorOwner.valid() || !heap.isInitialized())
         return false;
-    auto* const lease = NewArenaObject<__hidden_gpu_command_ir_raster_capture::HeapLeaseOwner>(ownerArena, ownerArena, heap);
+    auto* const lease = NewArenaObject<GpuCommandIrRetainedOwnerBox<GpuDescriptorHeap::PendingRecordingLease>>(ownerArena, ownerArena, [&heap](){ return heap.acquirePendingRecordingLease(); });
     if(!lease)
         return false;
     GpuCommandIrOwnerAnchor leaseAnchor(lease, s_AdoptRef);
-    if(!lease->valid())
+    if(!lease->value().valid())
         return false;
     GpuCommandIrRasterHeapOwner owner;
     owner.pipeline = pipelineOwner;
@@ -238,7 +168,7 @@ b8 GpuCommandIrCapture::captureBindGraphicsHeap(
     owner.lease = Move(leaseAnchor);
     owner.descriptors = descriptorOwner;
     GpuCommandIrBindGraphicsHeapRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::BindGraphicsHeap, task, packet, queue);
+    GpuCommandIrDetail::InitializeRecord(record, GpuCommandIrWireOpcode::BindGraphicsHeap, task, packet, queue);
     record.pipelineIndex = pipeline.index;
     record.heapOwnerIndex = m_rasterOwners ? static_cast<u32>(m_rasterOwners->heapOwners.size()) : 0u;
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, &owner);
@@ -248,7 +178,7 @@ b8 GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubm
     if(bytes.empty() || !bytes.data() || bytes.size() > Limit<u32>::s_Max || (bytes.size() & (s_PushConstantSizeAlignment - 1u)) != 0u)
         return false;
     GpuCommandIrSetPushConstantsRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::SetPushConstants, task, packet, queue);
+    GpuCommandIrDetail::InitializeRecord(record, GpuCommandIrWireOpcode::SetPushConstants, task, packet, queue);
     record.blobOffsetBytes = static_cast<u64>(m_blobBytes.size());
     record.blobSizeBytes = static_cast<u64>(bytes.size());
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, bytes, nullptr, nullptr);
@@ -256,7 +186,7 @@ b8 GpuCommandIrCapture::capturePushConstants(const GpuTaskId task, const GpuSubm
 
 b8 GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue, const DrawArguments& arguments, const b8 indexed){
     GpuCommandIrDrawRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, indexed ? GpuCommandIrWireOpcode::DrawIndexed : GpuCommandIrWireOpcode::Draw, task, packet, queue);
+    GpuCommandIrDetail::InitializeRecord(record, indexed ? GpuCommandIrWireOpcode::DrawIndexed : GpuCommandIrWireOpcode::Draw, task, packet, queue);
     record.vertexCount = arguments.vertexCount;
     record.instanceCount = arguments.instanceCount;
     record.startIndexLocation = arguments.startIndexLocation;
@@ -267,7 +197,7 @@ b8 GpuCommandIrCapture::captureDraw(const GpuTaskId task, const GpuSubmissionPac
 
 b8 GpuCommandIrCapture::captureEndRenderPass(const GpuTaskId task, const GpuSubmissionPacketId packet, const GpuPhysicalQueueId queue){
     GpuCommandIrEndRenderPassRecord record;
-    __hidden_gpu_command_ir_raster_capture::InitializeRecord(record, GpuCommandIrWireOpcode::EndRenderPass, task, packet, queue);
+    GpuCommandIrDetail::InitializeRecord(record, GpuCommandIrWireOpcode::EndRenderPass, task, packet, queue);
     return appendRasterBytes(task, packet, queue, BinaryByteView{ reinterpret_cast<const u8*>(&record), sizeof(record) }, {}, nullptr, nullptr);
 }
 

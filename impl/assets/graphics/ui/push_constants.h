@@ -29,12 +29,12 @@
 #define NWB_UI_PUSH_CONSTANTS_FIELDS(FLOAT2_FIELD, UINT_FIELD) \
     FLOAT2_FIELD(scale) \
     FLOAT2_FIELD(translate) \
-    UINT_FIELD(textureSlot, NWB_UI_INVALID_HEAP_SLOT) \
-    UINT_FIELD(samplerSlot, NWB_UI_INVALID_HEAP_SLOT) \
-    UINT_FIELD(material, NWB_UI_MATERIAL_SOLID) \
-    UINT_FIELD(sdfChannel, 0u) \
-    UINT_FIELD(sdfSpreadPixels, 0u) \
-    UINT_FIELD(sdfDistanceEncoding, 0u)
+    UINT_FIELD(textureSlot) \
+    UINT_FIELD(samplerSlot) \
+    UINT_FIELD(material) \
+    UINT_FIELD(sdfChannel) \
+    UINT_FIELD(sdfSpreadPixels) \
+    UINT_FIELD(sdfDistanceEncoding)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -103,7 +103,7 @@ constexpr AStringView s_CasePrism = "prism";
 
 class GalleryBuilder final{
 public:
-    GalleryBuilder(Core::ECS::World& world, const b8 preview)noexcept
+    GalleryBuilder(const b8 preview, Core::ECS::World& world)noexcept
         : m_world(world)
         , m_preview(preview)
     {}
@@ -126,7 +126,7 @@ public:
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, s_PreviewAlpha) : Float4(0.90f, 0.98f, 1.0f, coverage);
         const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, s_PreviewAlpha) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
-        const auto entity = CreateTintedStaticMeshEntity(m_world, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale);
+        const auto entity = CreateTintedStaticMeshEntity(mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale, m_world);
 
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
@@ -157,9 +157,9 @@ public:
             return {};
         const Half packedIor = ConvertFloatToHalf(ior);
         const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
-        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedIor)))
             return MakeUnexpected(Failure{});
-        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)))
+        if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))))
             return MakeUnexpected(Failure{});
         return {};
     }
@@ -168,16 +168,17 @@ public:
         const b8 reference = caseName == s_CaseCsgReference;
         const b8 middle = caseName == s_CaseCsgMiddle;
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, s_Cube,
+            s_Cube,
             m_preview ? s_Preview : material, m_preview ? NameText<char>{s_Interface} : surfaceInterface, tint,
-            Float4(0.f, s_GalleryCenterHeight, reference || middle ? 0.5f : 0.f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
+            Float4(0.f, s_GalleryCenterHeight, reference || middle ? 0.5f : 0.f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, reference ? 1.f : (middle ? 3.f : 2.f), 0.f),
+            m_world
         );
         if(!entity.valid())
             return MakeUnexpected(Failure{});
         if(caseName != s_CaseCsgCap && !middle)
             return entity;
         const Name group("smoke/refraction/csg_optics");
-        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
+        AddStaticCsgMeshReceiver(entity, group, false, true, m_world);
         // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
         for(u32 index = 0u; index < (middle ? 2u : 1u); ++index){
             auto cutterEntity = m_world.createEntity();
@@ -188,8 +189,8 @@ public:
             cutter.shapeType = Impl::s_CsgPlaneShapeName;
             Impl::CsgPlaneShapeParameters parameters;
             parameters.normalDistance = index == 0u ? Float4(0.f, 0.f, 1.f, 0.f) : Float4(0.f, 0.f, -1.f, 1.f);
-            AssignCsgCutterParameters(cutter, parameters);
-            AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+            AssignCsgCutterParameters(parameters, cutter);
+            AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
         }
         return entity;
     }
@@ -199,11 +200,12 @@ public:
             // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
             constexpr f32 s_ForeignExit = 0.25f;
             const auto foreign = CreateTintedStaticMeshEntity(
-                m_world, s_Cube,
+                s_Cube,
                 m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
                 Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
                 Float4(0.f, s_GalleryCenterHeight, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
-                Float4(s_SlabFaceScale, s_SlabFaceScale, s_ForeignExit - s_IdentityForeignFront, 0.f)
+                Float4(s_SlabFaceScale, s_SlabFaceScale, s_ForeignExit - s_IdentityForeignFront, 0.f),
+                m_world
             );
             if(!foreign.valid())
                 return false;
@@ -230,7 +232,7 @@ public:
     }
 
     [[nodiscard]] b8 farPlaneReceiver(const Core::ECS::EntityID entity, const Name group){
-        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
+        AddStaticCsgMeshReceiver(entity, group, false, true, m_world);
         auto cutterEntity = m_world.createEntity();
         if(!cutterEntity.id().valid())
             return false;
@@ -239,16 +241,17 @@ public:
         cutter.shapeType = Impl::s_CsgPlaneShapeName;
         Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
-        AssignCsgCutterParameters(cutter, parameters);
-        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        AssignCsgCutterParameters(parameters, cutter);
+        AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
         return true;
     }
 
     b8 crossingOverflow(){
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
+            SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
             m_preview ? s_Preview : s_Glass, s_Interface, Float4(s_OpticalTransmission.x, s_OpticalTransmission.y, s_OpticalTransmission.z, m_preview ? s_PreviewAlpha : 0.f),
-            Float4(0.f, s_GalleryCenterHeight, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f)
+            Float4(0.f, s_GalleryCenterHeight, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f),
+            m_world
         );
         if(!entity.valid())
             return false;
@@ -260,10 +263,11 @@ public:
 
     b8 nearAirSlab(const b8 csg){
         const auto entity = CreateTintedStaticMeshEntity(
-            m_world, s_Cube,
+            s_Cube,
             m_preview ? s_Preview : s_OpticalVolume, m_preview ? NameText<char>{s_Interface} : NameText<char>{s_OpticalInterface},
             Float4(1.f, 1.f, 1.f, m_preview ? s_PreviewAlpha : 0.f),
-            Float4(0.f, s_GalleryCenterHeight, 1.25f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, 3.f, 0.f)
+            Float4(0.f, s_GalleryCenterHeight, 1.25f, 0.f), Float4(s_SlabFaceScale, s_SlabFaceScale, 3.f, 0.f),
+            m_world
         );
         if(!entity.valid())
             return false;
@@ -279,7 +283,7 @@ public:
     }
 
     void panel(const SmokeMaterialRef& material, const Float4& tint, const f32 x, const f32 y, const f32 z, const f32 halfWidth, const f32 halfHeight){
-        const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f));
+        const auto entity = CreateTintedStaticMeshEntity(s_Plane, material, s_Interface, tint, Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f), m_world);
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
         auto& transform = *MakeNotNull(m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
@@ -293,11 +297,11 @@ public:
         }
         for(u32 stripe = 0u; stripe < 36u; ++stripe){
             const f32 value = (stripe & 1u) != 0u ? 0.9f : 0.045f;
-            panel(s_Opaque, Float4(value, value, value, 1.0f), VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(stripe)), VectorReplicate(0.3f), VectorReplicate(-5.25f))), s_GalleryCenterHeight, s_BackdropDepth, 0.15f, s_BackdropHalfHeight);
+            panel(s_Opaque, Float4(value, value, value, 1.0f), static_cast<f32>(stripe) * 0.3f + -5.25f, s_GalleryCenterHeight, s_BackdropDepth, 0.15f, s_BackdropHalfHeight);
         }
         // A second direction and colored depth markers make ray displacement legible.
         for(u32 row = 0u; row < 9u; ++row)
-            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(row)), VectorReplicate(0.7f), VectorReplicate(-1.4f))), 4.48f, 5.4f, 0.015f);
+            panel(s_Opaque, Float4(0.2f, 0.24f, 0.28f, 1.0f), 0.0f, static_cast<f32>(row) * 0.7f + -1.4f, 4.48f, 5.4f, 0.015f);
         panel(s_Transparent, Float4(0.04f, 0.27f, 1.0f, s_DepthMarkerAlpha), 0.0f, 1.93f, 3.0f, 3.1f, 0.10f);
         panel(s_Transparent, Float4(1.0f, 0.035f, 0.025f, s_DepthMarkerAlpha), 0.0f, 1.05f, -2.5f, 1.55f, 0.04f);
     }
@@ -318,10 +322,10 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView caseName, const b8 geometryPreview){
+b8 CreateRefractionGalleryScene(const AStringView caseName, const b8 geometryPreview, Core::ECS::World& world){
     using namespace __hidden_refraction_gallery_scene;
 
-    const auto camera = CreateSmokeCamera(world, s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f);
+    const auto camera = CreateSmokeCamera(s_GalleryCenterHeight, s_GalleryCameraDistance, 0.0f, world);
     const auto light = Impl::Scene::CreateDirectionalLightEntity(world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
     if(!camera.valid() || !light.valid())
         return false;
@@ -331,7 +335,7 @@ b8 CreateRefractionGalleryScene(Core::ECS::World& world, const AStringView caseN
     cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));
     if(caseName == s_CaseIdentityReference || caseName == s_CaseIdentitySameIor || caseName == s_CaseIdentityDifferentIor)
         cameraComponent.setNearPlane(s_IdentityNearPlane);
-    GalleryBuilder scene(world, geometryPreview);
+    GalleryBuilder scene(geometryPreview, world);
     if(caseName == s_CaseCsgReference || caseName == s_CaseCsgCap || caseName == s_CaseCsgMiddle || caseName == s_CaseCsgUncut){
         const auto slab = scene.csgSlab(caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f), s_Glass, s_Interface);
         if(!slab)

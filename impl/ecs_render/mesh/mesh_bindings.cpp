@@ -5,7 +5,7 @@
 #include "mesh_system.h"
 
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
-#include <impl/ecs_render/mesh/compute_emulation_layout.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
@@ -29,8 +29,8 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
-        const auto layout = ECSRenderDetail::ResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
-        if(!layout){
+        ComputeEmulationLayout layout{};
+        if(!TryResolveComputeEmulationLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount, layout)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             return false;
         }
@@ -42,8 +42,8 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(layout->bufferByteSize)
-            .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
+            .setByteSize(layout.bufferByteSize)
+            .setStructStride(s_EmulatedVertexStride)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
@@ -60,7 +60,7 @@ b8 RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             return false;
         }
-        mesh.emulationIndexByteOffset = layout->indexByteOffset;
+        mesh.emulationIndexByteOffset = layout.indexByteOffset;
     }
 
     auto& device = m_graphics.getDevice();
@@ -170,7 +170,7 @@ b8 RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)co
     return ready;
 }
 
-void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const noexcept{
+void RendererMeshSystem::populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept{
     NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         outInstance.geometryHeapSlots[slotIndex] = 0u;
@@ -318,10 +318,12 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     }
 
     // A non-empty partial set signals a broken lifetime transition, never a safe merge.
-    for([[maybe_unused]] const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
+#if defined(NWB_DEBUG)
+    for(const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
         NWB_ASSERT(!handle.valid());
+#endif
 
-    Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> acquired{};
     Core::GpuDescriptorRetirementGuard retireAcquired(heap, acquired);
     b8 registered = true;
     ForEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const b8){

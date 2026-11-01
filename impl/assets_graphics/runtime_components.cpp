@@ -28,14 +28,6 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_ModelComponentAssetAutoRegistrar, ModelCo
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_MeshComponentAssetAutoRegistrar, MeshComponentAsset);
 NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, RendererComponentAsset);
 
-[[nodiscard]] static b8 LoadSingleAssetRefComponentPayload(const Span<const u8> payload, const TStringView context, Name& outVirtualPath){
-    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, context);
-    if(!binaryPayload)
-        return false;
-    outVirtualPath = Name(binaryPayload->assetHash);
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,7 +39,11 @@ NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(s_RendererComponentAssetAutoRegistrar, Rend
 
 
 b8 ModelComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"), component.model.virtualPath);
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, NWB_TEXT("ModelComponentAsset::loadComponentPayload"));
+    if(!binaryPayload)
+        return false;
+    component.model.virtualPath = Name(binaryPayload->assetHash);
+    return true;
 }
 
 b8 ModelComponentAsset::validatePayload()const{
@@ -65,7 +61,11 @@ b8 ModelComponentAsset::validatePayload()const{
 
 
 b8 MeshComponentAsset::loadComponentPayload(const Span<const u8> payload){
-    return __hidden_assets_graphics_runtime_components::LoadSingleAssetRefComponentPayload(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"), component.mesh.virtualPath);
+    const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<SingleAssetRefComponentPayloadBinary>(payload, NWB_TEXT("MeshComponentAsset::loadComponentPayload"));
+    if(!binaryPayload)
+        return false;
+    component.mesh.virtualPath = Name(binaryPayload->assetHash);
+    return true;
 }
 
 b8 MeshComponentAsset::validatePayload()const{
@@ -86,24 +86,10 @@ b8 RendererComponentAsset::loadComponentPayload(const Span<const u8> payload){
     const auto binaryPayload = ComponentAssetRuntime::ReadSinglePodPayload<RendererComponentPayloadBinary>(payload, NWB_TEXT("RendererComponentAsset::loadComponentPayload"));
     if(!binaryPayload)
         return false;
-    if(
-        binaryPayload->visible > 1u
-        || binaryPayload->opticalVolumeCoincidence > static_cast<u8>(OpticalVolumeCoincidence::SharedGroup)
-        || binaryPayload->opticalBoundaryMode > static_cast<u8>(OpticalBoundaryMode::ClosedPriority)
-        || binaryPayload->reserved0 != 0u
-        || binaryPayload->reserved1 != 0u
-    ){
+    if(!UnpackRendererComponentPayloadBinary(*binaryPayload, component)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::loadComponentPayload failed: invalid renderer flags"));
         return false;
     }
-    component = RendererComponent{};
-    component.material.virtualPath = Name(binaryPayload->materialHash);
-    component.visible = binaryPayload->visible != 0u;
-    component.opticalVolumeCoincidence = static_cast<OpticalVolumeCoincidence::Enum>(binaryPayload->opticalVolumeCoincidence);
-    component.opticalVolumeGroup = Name(binaryPayload->opticalVolumeGroupHash);
-    component.opticalVolumePriority = binaryPayload->opticalVolumePriority;
-    component.opticalBoundaryMode = static_cast<OpticalBoundaryMode::Enum>(binaryPayload->opticalBoundaryMode);
-    component.opticalMediumPriority = binaryPayload->opticalMediumPriority;
     return true;
 }
 
@@ -114,7 +100,7 @@ b8 RendererComponentAsset::validatePayload()const{
         NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' material must not be empty"), ConvertString(virtualPath().resolvedText()));
         return false;
     }
-    if(static_cast<u8>(component.opticalVolumeCoincidence) > static_cast<u8>(OpticalVolumeCoincidence::SharedGroup) || static_cast<u8>(component.opticalBoundaryMode) > static_cast<u8>(OpticalBoundaryMode::ClosedPriority)){
+    if(!IsValidRendererComponentOpticalConfig(component)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererComponentAsset::validatePayload failed: renderer_component '{}' has invalid optical enum value"), ConvertString(virtualPath().resolvedText()));
         return false;
     }

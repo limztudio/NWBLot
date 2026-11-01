@@ -58,14 +58,14 @@ private:
 
 
 private:
-    ProjectRuntimeContext& m_context;
-    Impl::RendererSystem& m_renderer;
     Core::Perf::TimingStats m_phaseWork;
     Core::Perf::TimingStats m_captureWork;
+    Array<u32, 4u> m_radii = { 1u, 3u, 2u, 1u };
+    ProjectRuntimeContext& m_context;
+    Impl::RendererSystem& m_renderer;
     u64 m_phaseSource = Limit<u64>::s_Max;
     u64 m_finalSource = Limit<u64>::s_Max;
     u64 m_lastPublish = 0u;
-    u32 m_radii[4] = { 1u, 3u, 2u, 1u };
     u32 m_phase = 0u;
     u32 m_lastPhase = 0u;
     b8 m_started = false;

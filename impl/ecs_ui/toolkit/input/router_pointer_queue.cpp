@@ -16,45 +16,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 InputRouter::IsPointerEvent(const InputEventType::Enum type)noexcept{
-    switch(type){
-    case InputEventType::PointerMove:
-    case InputEventType::PrimaryDown:
-    case InputEventType::PrimaryUp:
-    case InputEventType::SecondaryDown:
-    case InputEventType::SecondaryUp:
-    case InputEventType::PointerWheel:
-    case InputEventType::PointerLeave:
-    case InputEventType::PointerCaptureLost:
-        return true;
-    default: return false;
-    }
-}
-
 Expected<InputEvent> InputRouter::queuePointer(const PointerInput& input){
-    if(input.phase > PointerPhase::Scroll || input.intent > PointerIntent::ContextMenu)
-        return MakeUnexpected(Failure{});
     InputEvent event;
-    switch(input.phase){
-    case PointerPhase::Move: event.type = InputEventType::PointerMove; break;
-    case PointerPhase::Press: event.type = input.intent == PointerIntent::Activate ? InputEventType::PrimaryDown : InputEventType::SecondaryDown; break;
-    case PointerPhase::Release: event.type = input.intent == PointerIntent::Activate ? InputEventType::PrimaryUp : InputEventType::SecondaryUp; break;
-    case PointerPhase::Cancel: event.type = InputEventType::PointerCaptureLost; break;
-    case PointerPhase::Leave: event.type = InputEventType::PointerLeave; break;
-    case PointerPhase::Scroll: event.type = InputEventType::PointerWheel; break;
-    }
-    event.source = input.source;
-    event.position = input.position;
-    event.scrollX = input.scrollX;
-    event.scrollY = input.scrollY;
-    event.timestampMs = input.timestampMs;
-    event.extend = input.extend;
-    event.hoverCapable = input.hoverCapable;
+    if(!TryMakePointerInputEvent(input, event))
+        return MakeUnexpected(Failure{});
     return queue(event);
 }
 
 Expected<InputEvent> InputRouter::resolvePointerEvent(const InputEvent& event){
-    if(!IsPointerEvent(event.type))
+    if(!IsPointerInputEventType(event.type))
         return event;
     if(!event.source.valid() || !IsFinite(event.position.x) || !IsFinite(event.position.y))
         return MakeUnexpected(Failure{});

@@ -8,7 +8,7 @@
 #include "task_graph_resource_sets.h"
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <global/basic_string.h>
 
@@ -45,7 +45,7 @@ inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
         || leftCache.indexByteOffset != rightCache.indexByteOffset || leftCache.indexCount != rightCache.indexCount
     )
         return false;
-    Core::Buffer* rightSources[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    Array<Core::Buffer*, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> rightSources{};
     usize sourceIndex = 0u;
     ForEachMaterialPassMeshSourceBuffer(right.meshResources, [&](const Core::BufferHandle& source)noexcept{
         rightSources[sourceIndex++] = source.get();
@@ -61,21 +61,11 @@ inline constexpr usize s_DecodeExtraResourceUseCount = 3u;
     return same;
 }
 
-[[nodiscard]] Core::GpuTaskDesc TaskDesc(const Name identity, const AStringView label)noexcept{
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Tiny;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
-    return desc;
-}
-
 struct DecodeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     struct Payload{
         RendererMaterialSystem& materialSystem;
         RendererMeshSystem& meshSystem;
@@ -112,6 +102,8 @@ public:
 struct ReadyTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+
+public:
     struct Payload{};
 
 
@@ -128,13 +120,6 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-ObjectGeometryCacheGraph::ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept
-    : m_graph(graph)
-    , m_materialSystem(materialSystem)
-    , m_meshSystem(meshSystem)
-    , m_entries(arena)
-{}
 
 b8 ObjectGeometryCacheGraph::prepare(
     const Span<const MaterialPassDrawItem> draws,
@@ -175,7 +160,7 @@ b8 ObjectGeometryCacheGraph::prepare(
                 return false;
             entry.resource = *importedResource;
             if(cache.requiresDecode){
-                const MaterialPassDrawItemsView sets[] = {
+                const Array<MaterialPassDrawItemsView, 1u> sets = {
                     MaterialPassDrawItemsView{ {}, {}, Span<const MaterialPassDrawItem>(&draw, 1u) },
                 };
                 auto gatheredUses = GatherPreparedMaterialGeometryUses(sets, m_graph, scratchArena);
@@ -199,7 +184,7 @@ b8 ObjectGeometryCacheGraph::prepare(
                 if(!identity || !*identity)
                     return false;
                 Core::GpuTaskDesc desc = TaskDesc(**identity, "Object Geometry Decode");
-                desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
+                desc.setDependencies({ &dependency, 1u }).setResourceUses(uses);
                 const auto entryProducerResult = m_graph.addTask<DecodeTask>(desc, DecodeTask::Payload{ m_materialSystem, m_meshSystem, draw, frameBindings, timingTicket, rebindableTimingTicket, });
                 if(!entryProducerResult){
                     entry.producer = {};
@@ -239,7 +224,7 @@ b8 ObjectGeometryCacheGraph::prepare(
         return false;
     }
     Core::GpuTaskDesc ready = TaskDesc(**readyIdentity, "Object Geometry Ready");
-    ready.setDependencies(producers.data(), producers.size()).setResourceUses(cacheReads.data(), cacheReads.size());
+    ready.setDependencies(producers).setResourceUses(cacheReads);
     const auto dependencyResult = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
     if(!dependencyResult){
         dependency = {};

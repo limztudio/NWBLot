@@ -129,11 +129,11 @@ TYPED_TEST(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestorat
 
 TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField){
     auto& model = this->m_model;
-    char maximum[s_NumericEditMaxBytes];
+    Array<char, s_NumericEditMaxBytes> maximum{};
     for(char& digit : maximum)
         digit = '0';
     maximum[s_NumericEditMaxBytes - 1u] = '7';
-    ASSERT_TRUE(model.setDraft({ maximum, s_NumericEditMaxBytes }));
+    ASSERT_TRUE(model.setDraft({ maximum.data(), s_NumericEditMaxBytes }));
     ASSERT_TRUE(model.submit().committed);
     EXPECT_EQ(model.value(), 7);
     EXPECT_FALSE(model.dirty());
@@ -142,13 +142,13 @@ TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraf
     ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
     const DraftSnapshot before(this->m_arena, model.draft());
     const u64 epoch = model.revision();
-    char excessive[s_NumericEditMaxBytes + 1u];
+    Array<char, s_NumericEditMaxBytes + 1u> excessive{};
     for(char& digit : excessive)
         digit = '0';
-    EXPECT_FALSE(model.setDraft({ excessive, s_NumericEditMaxBytes + 1u }));
+    EXPECT_FALSE(model.setDraft({ excessive.data(), s_NumericEditMaxBytes + 1u }));
     EXPECT_FALSE(model.setDraft("\xC0\xAF"));
     EXPECT_FALSE(model.setDraft("1\n2"));
-    EXPECT_FALSE(model.lendDraft().replaceSelection({ excessive, s_NumericEditMaxBytes + 1u }));
+    EXPECT_FALSE(model.lendDraft().replaceSelection({ excessive.data(), s_NumericEditMaxBytes + 1u }));
     EXPECT_EQ(model.revision(), epoch);
     EXPECT_EQ(model.value(), 7);
     EXPECT_FALSE(model.dirty());
@@ -156,7 +156,7 @@ TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraf
 }
 
 template<typename Model, typename Bounds>
-void ExpectAtomicBadBounds(Core::Alloc::GlobalArena& arena, Model& model, const Bounds& bounds){
+void ExpectAtomicBadBounds(const Bounds& bounds, Core::Alloc::GlobalArena& arena, Model& model){
     ASSERT_TRUE(model.setValue(7));
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
@@ -175,17 +175,17 @@ void ExpectAtomicBadBounds(Core::Alloc::GlobalArena& arena, Model& model, const 
 }
 
 TEST_F(IntegerLifetimeTests, ReversedAndUnknownIntegerBoundsAreAtomic){
-    ExpectAtomicBadBounds(m_arena, m_model, IntegerBounds{ 10, 1 });
+    ExpectAtomicBadBounds(IntegerBounds{ 10, 1 }, m_arena, m_model);
     const auto unknown = static_cast<NumericBoundsPolicy::Enum>(3u);
-    ExpectAtomicBadBounds(m_arena, m_model, IntegerBounds{ -10, 10, unknown });
+    ExpectAtomicBadBounds(IntegerBounds{ -10, 10, unknown }, m_arena, m_model);
 }
 
 TEST_F(FloatLifetimeTests, ReversedNonfiniteAndUnknownFloatBoundsAreAtomic){
-    ExpectAtomicBadBounds(m_arena, m_model, FloatBounds{ 10.0, 1.0 });
-    ExpectAtomicBadBounds(m_arena, m_model, FloatBounds{ Limit<f64>::s_QuietNaN, 10.0 });
-    ExpectAtomicBadBounds(m_arena, m_model, FloatBounds{ -10.0, Limit<f64>::s_Infinity });
+    ExpectAtomicBadBounds(FloatBounds{ 10.0, 1.0 }, m_arena, m_model);
+    ExpectAtomicBadBounds(FloatBounds{ Limit<f64>::s_QuietNaN, 10.0 }, m_arena, m_model);
+    ExpectAtomicBadBounds(FloatBounds{ -10.0, Limit<f64>::s_Infinity }, m_arena, m_model);
     const auto unknown = static_cast<NumericBoundsPolicy::Enum>(3u);
-    ExpectAtomicBadBounds(m_arena, m_model, FloatBounds{ -10.0, 10.0, unknown });
+    ExpectAtomicBadBounds(FloatBounds{ -10.0, 10.0, unknown }, m_arena, m_model);
 }
 
 

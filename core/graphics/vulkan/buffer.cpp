@@ -155,10 +155,6 @@ Object Buffer::getNativeHandle(ObjectType objectType)noexcept{
     return Object(m_buffer);
 }
 
-b8 Buffer::isRetainedStateKnown()const noexcept{
-    return m_retainedStateKnown.load(MemoryOrder::acquire);
-}
-
 void Buffer::setRetainedStateKnown(const b8 known)noexcept{
     if(m_creationDesc.keepInitialState)
         m_retainedStateKnown.store(known, MemoryOrder::release);
@@ -418,12 +414,50 @@ Expected<BufferSuballocation> CommandList::prepareUploadStaging(const usize data
     return staging;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<void, CpuTaskAdmissionError::Enum> CopyHostMemory(const void* const src, const usize size, CpuTaskScheduler& cpuScheduler, void* const outDst, const usize parallelThreshold, const usize chunkSize){
+    if(!outDst || !src || size == 0)
+        return {};
+
+    const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
+    const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
+
+    if(cpuScheduler.isParallelEnabled() && size >= effectiveParallelThreshold){
+        const auto dstBytes = MakeNotNull(static_cast<u8*>(outDst));
+        const auto srcBytes = MakeNotNull(static_cast<const u8*>(src));
+        const usize chunkCount = DivideUp(size, effectiveChunkSize);
+        return cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex)noexcept{
+            const usize chunkOffset = chunkIndex * effectiveChunkSize;
+            const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
+            NWB_MEMCPY(dstBytes.get() + chunkOffset, chunkBytes, srcBytes.get() + chunkOffset, chunkBytes);
+        });
+    }
+
+    NWB_MEMCPY(outDst, size, src, size);
+    return {};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
 Expected<BufferSuballocation> CommandList::prepareUploadStaging(const void* data, const usize dataSize, TStringView operationName, const u32 alignment){
     const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
     if(!staging)
         return MakeUnexpected(staging.error());
 
-    const auto copied = VulkanDetail::CopyHostMemory(staging->cpuAddress, taskScheduler(), data, dataSize);
+    const auto copied = VulkanDetail::CopyHostMemory(data, dataSize, taskScheduler(), staging->cpuAddress);
     if(!copied){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: staging copy for {} rejected CPU work: {}"), operationName, static_cast<u32>(copied.error()));
         return MakeUnexpected(Failure{});

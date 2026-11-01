@@ -71,6 +71,19 @@ template<typename NameT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+i32 GpuQueueAssignmentScore::total()const noexcept{
+    const i64 score = static_cast<i64>(overlap) - static_cast<i64>(queueLoad) - static_cast<i64>(incomingCrossings) - static_cast<i64>(outgoingCrossings) - static_cast<i64>(ownershipTransfers);
+    if(score < static_cast<i64>(Limit<i32>::s_Min))
+        return Limit<i32>::s_Min;
+    if(score > static_cast<i64>(Limit<i32>::s_Max))
+        return Limit<i32>::s_Max;
+    return static_cast<i32>(score);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 usize GpuTaskTimingHistoryDetail::RouteHash::operator()(const RouteKey& value)const noexcept{
     using namespace __hidden_gpu_task_timing_feedback;
     return HashTimingRoute(HashTimingIdentity(value.task, value.variant, value.resolutionClass), value.queue, value.physicalQueue);
@@ -91,19 +104,6 @@ usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const AssignmentKey
 
 usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const GpuTaskTimingAssignmentKey& value)const noexcept{
     return __hidden_gpu_task_timing_feedback::HashTimingIdentity(value.task, value.variant, value.resolutionClass);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-i32 GpuQueueAssignmentScore::total()const noexcept{
-    const i64 score = static_cast<i64>(overlap) - static_cast<i64>(queueLoad) - static_cast<i64>(incomingCrossings) - static_cast<i64>(outgoingCrossings) - static_cast<i64>(ownershipTransfers);
-    if(score < static_cast<i64>(Limit<i32>::s_Min))
-        return Limit<i32>::s_Min;
-    if(score > static_cast<i64>(Limit<i32>::s_Max))
-        return Limit<i32>::s_Max;
-    return static_cast<i32>(score);
 }
 
 
@@ -139,11 +139,10 @@ b8 GpuTaskTimingBenefitExceedsHysteresis(const GpuTaskTimingHistory& incumbent, 
     if(!policy.valid() || !incumbent.valid() || !candidate.valid() || candidate.averageSeconds >= incumbent.averageSeconds)
         return false;
 
-    const SIMDVectorDouble incumbentSeconds = VectorDoubleReplicate(incumbent.averageSeconds);
-    const SIMDVectorDouble benefitSeconds = VectorDoubleSubtract(incumbentSeconds, VectorDoubleReplicate(candidate.averageSeconds));
-    if(VectorDoubleGetX(benefitSeconds) < policy.minimumAbsoluteBenefitSeconds)
+    const f64 benefitSeconds = incumbent.averageSeconds - candidate.averageSeconds;
+    if(benefitSeconds < policy.minimumAbsoluteBenefitSeconds)
         return false;
-    return VectorDoubleGetX(VectorDoubleDivide(benefitSeconds, incumbentSeconds)) >= policy.minimumRelativeBenefit;
+    return (benefitSeconds / incumbent.averageSeconds) >= policy.minimumRelativeBenefit;
 }
 
 
@@ -248,6 +247,7 @@ void GpuTaskTimingHistoryStore::reset()noexcept{
     m_assignments.clear();
     m_deviceGeneration = 0u;
 }
+
 
 void GpuTaskTimingHistoryStore::reset(GpuTaskTimingHistorySnapshot& outSnapshot)noexcept{
     reset();
@@ -401,11 +401,6 @@ const GpuTaskTimingHistory* GpuTaskTimingHistoryStore::find(const GpuTaskTimingK
 }
 
 
-const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept{
-    return findAssignmentState(key);
-}
-
-
 GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findHistoryRecord(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)noexcept{
     if(m_historyIndex){
         const auto found = m_historyIndex->find(GpuTaskTimingHistoryDetail::RouteLookup{ key, physicalQueue });
@@ -461,19 +456,19 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentSta
 void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
     NWB_ASSERT(!record.samples.empty());
 
-    SIMDVectorDouble averageSeconds = VectorDoubleZero();
-    // Keep the incremental average in sample order; extrema occupy X (minimum) and Y (maximum).
-    SIMDVectorDouble extremaSeconds = VectorDoubleReplicate(record.samples.front());
+    f64 averageSeconds = 0.0;
+    f64 minimumSeconds = record.samples.front();
+    f64 maximumSeconds = minimumSeconds;
     u32 sampleCount = 0u;
     for(const f64 sampleSeconds : record.samples){
         ++sampleCount;
-        const SIMDVectorDouble sample = VectorDoubleReplicate(sampleSeconds);
-        averageSeconds = VectorDoubleAdd(averageSeconds, VectorDoubleDivide(VectorDoubleSubtract(sample, averageSeconds), VectorDoubleReplicate(static_cast<f64>(sampleCount))));
-        extremaSeconds = VectorDoubleSelect(VectorDoubleMin(extremaSeconds, sample), VectorDoubleMax(extremaSeconds, sample), s_DoubleSIMDMaskY);
+        averageSeconds += (sampleSeconds - averageSeconds) / static_cast<f64>(sampleCount);
+        minimumSeconds = Min(minimumSeconds, sampleSeconds);
+        maximumSeconds = Max(maximumSeconds, sampleSeconds);
     }
-    record.entry.history.averageSeconds = VectorDoubleGetX(averageSeconds);
-    record.entry.history.minimumSeconds = VectorDoubleGetX(extremaSeconds);
-    record.entry.history.maximumSeconds = VectorDoubleGetY(extremaSeconds);
+    record.entry.history.averageSeconds = averageSeconds;
+    record.entry.history.minimumSeconds = minimumSeconds;
+    record.entry.history.maximumSeconds = maximumSeconds;
     record.entry.history.sampleCount = sampleCount;
 }
 

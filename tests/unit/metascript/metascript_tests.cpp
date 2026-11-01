@@ -28,12 +28,6 @@ constexpr AStringView s_NameField = "name";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
@@ -154,7 +148,7 @@ TEST(Metascript, ListSelfAppendCopiesOriginalValues){
 
     list += list;
 
-    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
+    ASSERT_EQ(list.asList().size(), 2u);
     CheckStringListElement(list.asList()[0u], text);
     CheckStringListElement(list.asList()[1u], text);
 }
@@ -169,7 +163,7 @@ TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
     list.append(Move(list));
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
+    ASSERT_EQ(list.asList().size(), 2u);
     CheckStringListElement(list.asList()[0u], text);
     ASSERT_TRUE(list.asList()[1u].isList());
     ASSERT_EQ(list.asList()[1u].asList().size(), 1u);
@@ -187,7 +181,7 @@ TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
     list.append(Move(list.asList()[0u]));
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
+    ASSERT_EQ(list.asList().size(), 2u);
     EXPECT_TRUE(list.asList()[0u].isNull());
     CheckStringListElement(list.asList()[1u], text);
 }
@@ -202,14 +196,14 @@ TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
     list += list.asList()[0u];
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
+    ASSERT_EQ(list.asList().size(), 2u);
     CheckStringListElement(list.asList()[0u], text);
     CheckStringListElement(list.asList()[1u], text);
 }
 
 TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
     constexpr usize s_InitialCount = 8u;
-    const usize sourceIndices[] = { 0u, 3u, 7u };
+    const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
     for(const usize sourceIndex : sourceIndices){
         for(const b8 moveSource : { false, true }){
             DestinationArena arena;
@@ -239,7 +233,7 @@ TEST(Metascript, AppendsFirstMiddleAndLastElementsAcrossReallocation){
 
 TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
     constexpr usize s_InitialCount = 8u;
-    const usize sourceIndices[] = { 0u, 3u, 7u };
+    const Array<usize, 3u> sourceIndices = { 0u, 3u, 7u };
     const AString text(128u, 'n');
     for(const usize sourceIndex : sourceIndices){
         DestinationArena arena;
@@ -307,7 +301,7 @@ TEST(Metascript, StructMetadataOwnsSourceAndSurvivesVariableStorageGrowth){
     {
         AString source("struct Description{ float value; }; Description runtime;\n");
         for(usize index = 0u; index < 128u; ++index){
-            char indexText[s_DecimalTextBufferBytes] = {};
+            Array<char, s_DecimalTextBufferBytes> indexText = {};
             const AStringView indexView = FormatDecimal(index, indexText);
             source.append("float extra");
             source.append(indexView.data(), indexView.size());
@@ -362,9 +356,9 @@ TEST(Metascript, InvalidAssignmentTargetsPreserveDiagnosticsAndDeclaredValue){
         MStringView message;
         i64 retainedValue;
     };
-    const InvalidTargetCase cases[] = {
-        { "float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7 },
-        { "float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9 },
+    const Array<InvalidTargetCase, 2u> cases = {
+        InvalidTargetCase{ "float asset = 7;\nmissing.value = 2;", "assignments must target a declared variable", 7 },
+        InvalidTargetCase{ "float asset = 9;\nasset.value = 2;", "cannot access field on non-map value", 9 },
     };
     for(const auto& testCase : cases){
         SCOPED_TRACE(testCase.message.data());

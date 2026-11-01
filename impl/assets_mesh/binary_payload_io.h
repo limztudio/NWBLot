@@ -21,6 +21,29 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace MeshBinaryPayload{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr TStringView s_MeshLoadBinaryContext = NWB_TEXT("Mesh::loadBinary");
+inline constexpr TStringView s_MeshSerializeContext = NWB_TEXT("MeshAssetCodec::serialize");
+inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
+
+static_assert(sizeof(MeshBinaryHeader) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 14u), "MeshBinaryHeader layout drifted");
+static_assert(alignof(MeshBinaryHeader) == s_MeshPackedAlignBytes, "MeshBinaryHeader must stay packed");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace MeshAssetBinaryPayload{
 
 
@@ -49,47 +72,22 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 MeshBaseHeaderComplete(const MeshBinaryHeader& header)noexcept{
-    return
-        header.positionCount != 0u
-        && header.normalCount != 0u
-        && header.tangentCount != 0u
-        && header.uv0Count != 0u
-        && header.colorCount != 0u
-        && header.meshletCount != 0u
-        && header.meshletCount <= static_cast<u64>(Limit<u32>::s_Max / s_MeshletBoundsStride)
-        && header.meshletBoundCount == header.meshletCount
-        && header.meshletPositionRefDeltaByteCount != 0u
-        && header.meshletAttributeRefDeltaByteCount != 0u
-        && header.meshletLocalVertexRefCount != 0u
-        && header.meshletPrimitiveIndexCount != 0u
-    ;
-}
-
-[[nodiscard]] inline b8 ReadMeshAttributeStreams(
-    const Span<const u8> binary,
+[[nodiscard]] b8 ReadMeshAttributeStreams(
+    Span<const u8> binary,
     const MeshBinaryHeader& header,
-    const TStringView failureContext,
+    TStringView failureContext,
     usize& inOutCursor,
     Core::Assets::AssetVector<Float3U>& outPositions,
     Core::Assets::AssetVector<Half4U>& outNormals,
     Core::Assets::AssetVector<Half4U>& outTangents,
     Core::Assets::AssetVector<Float2U>& outUv0,
     Core::Assets::AssetVector<Half4U>& outColors
-){
-    return
-        Core::Assets::ReadVectorPayload(binary, header.positionCount, failureContext, s_PositionsStreamLabel, inOutCursor, outPositions)
-        && Core::Assets::ReadVectorPayload(binary, header.normalCount, failureContext, s_NormalsStreamLabel, inOutCursor, outNormals)
-        && Core::Assets::ReadVectorPayload(binary, header.tangentCount, failureContext, s_TangentsStreamLabel, inOutCursor, outTangents)
-        && Core::Assets::ReadVectorPayload(binary, header.uv0Count, failureContext, s_Uv0StreamLabel, inOutCursor, outUv0)
-        && Core::Assets::ReadVectorPayload(binary, header.colorCount, failureContext, s_ColorsStreamLabel, inOutCursor, outColors)
-    ;
-}
+);
 
-[[nodiscard]] inline b8 ReadMeshletStreams(
-    const Span<const u8> binary,
+[[nodiscard]] b8 ReadMeshletStreams(
+    Span<const u8> binary,
     const MeshBinaryHeader& header,
-    const TStringView failureContext,
+    TStringView failureContext,
     usize& inOutCursor,
     Core::Assets::AssetVector<MeshletDesc>& outMeshlets,
     Core::Assets::AssetVector<MeshletBounds>& outMeshletBounds,
@@ -98,28 +96,7 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
     Core::Assets::AssetVector<MeshletLocalVertexRef>& outMeshletLocalVertexRefs,
     Core::Assets::AssetVector<u8>& outMeshletPrimitiveIndices,
     Core::Assets::AssetVector<u32>& outSolidTriangleWords
-){
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletCount, failureContext, s_MeshletsStreamLabel, inOutCursor, outMeshlets))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletBoundCount, failureContext, s_MeshletBoundsStreamLabel, inOutCursor, outMeshletBounds))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletPositionRefDeltaByteCount, failureContext, s_MeshletPositionRefDeltasStreamLabel, inOutCursor, outMeshletPositionRefDeltas))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletAttributeRefDeltaByteCount, failureContext, s_MeshletAttributeRefDeltasStreamLabel, inOutCursor, outMeshletAttributeRefDeltas))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletLocalVertexRefCount, failureContext, s_MeshletLocalVertexRefsStreamLabel, inOutCursor, outMeshletLocalVertexRefs))
-        return false;
-    if(!Core::Assets::ReadVectorPayload(binary, header.meshletPrimitiveIndexCount, failureContext, s_MeshletPrimitiveIndicesStreamLabel, inOutCursor, outMeshletPrimitiveIndices))
-        return false;
-    return Core::Assets::ReadVectorPayload(
-        binary,
-        (header.meshletPrimitiveIndexCount / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits,
-        failureContext,
-        s_SolidTriangleWordsStreamLabel,
-        inOutCursor,
-        outSolidTriangleWords
-    );
-}
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -132,35 +109,35 @@ inline constexpr TStringView s_SolidTriangleWordsStreamLabel = NWB_TEXT("solid t
 
 
 template<typename MeshT>
-[[nodiscard]] b8 AddMeshBaseReserveBytes(usize& reserveBytes, const MeshT& mesh)noexcept(
+[[nodiscard]] b8 AddMeshBaseReserveBytes(const MeshT& mesh, usize& inOutReserveBytes)noexcept(
     noexcept(
-        AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.normalStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.tangentStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.uv0Stream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.colorStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshlets())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletBounds())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPositionRefDeltas())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletAttributeRefDeltas())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.solidTriangleWords())
+        AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.positionStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.normalStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.tangentStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.uv0Stream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.colorStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshlets())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletBounds())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPositionRefDeltas())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletAttributeRefDeltas())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletLocalVertexRefs())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPrimitiveIndices())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.solidTriangleWords())
     )
 ){
     return
-        AddBinaryVectorReserveBytes(reserveBytes, mesh.positionStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.normalStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.tangentStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.uv0Stream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.colorStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshlets())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletBounds())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPositionRefDeltas())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletAttributeRefDeltas())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.solidTriangleWords())
+        AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.positionStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.normalStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.tangentStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.uv0Stream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.colorStream())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshlets())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletBounds())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPositionRefDeltas())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletAttributeRefDeltas())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletLocalVertexRefs())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.meshletPrimitiveIndices())
+        && AddBinaryVectorReserveBytes(inOutReserveBytes, mesh.solidTriangleWords())
     ;
 }
 

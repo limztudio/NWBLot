@@ -39,14 +39,6 @@ RadioGroupState::RadioGroupState()noexcept
     , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity))
 {}
 
-RadioGroupSnapshot RadioGroupState::snapshot()const noexcept{
-    return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision };
-}
-
-b8 RadioGroupState::matches(const RadioGroupSnapshot& value)const noexcept{
-    return snapshot() == value;
-}
-
 void RadioGroupState::select(const u64 key)noexcept{
     advanceRevision();
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity);

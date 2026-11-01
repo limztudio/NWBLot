@@ -9,7 +9,6 @@
 #include <global/simdmath.h>
 
 #include <basisu_comp.h>
-#include <basisu_enc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,6 +27,7 @@ namespace __hidden_encode_uastc{
 
 
 using FloatMipChain = basisu::vector<FloatPlanes>;
+using EncodedMip = TextureFormat::MipLevelLayout;
 static constexpr u32 s_EncoderWorkerCount = 1u;
 static constexpr f32 s_UnormScale = 255.0f;
 static constexpr f32 s_UnormRoundingBias = 0.5f;
@@ -40,71 +40,44 @@ struct AlphaTransport{
     u8 constantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
 };
 
-struct EncodedMip{
-    u64 offsetBytes = 0u;
-    u64 sizeBytes = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 blockCountX = 0u;
-    u32 blockCountY = 0u;
-    u32 sliceCount = 1u;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static Expected<::Vector<EncodedMip, Core::Alloc::ScratchArena>> BuildMipLevels(const TextureEncodeInput& entry, Core::Alloc::ScratchArena& scratchArena){
-    ::Vector<EncodedMip, Core::Alloc::ScratchArena> mipLevels(scratchArena);
-
-    const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(entry.dimension, entry.width, entry.height, entry.depth);
-    if(!mipCountResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: dimensions cannot form a complete mip chain."));
+    auto mipLevels = TextureFormat::BuildMipChainLayout(
+        entry.format,
+        entry.dimension,
+        entry.width,
+        entry.height,
+        entry.depth,
+        ::Vector<EncodedMip, Core::Alloc::ScratchArena>(scratchArena),
+        [](const TextureFormat::MipLevelLayout& level)noexcept -> EncodedMip{
+            return level;
+        }
+    );
+    if(!mipLevels){
+        switch(mipLevels.error().failure){
+        case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: dimensions cannot form a complete mip chain."));
+            break;
+        case TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} block grid exceeds runtime limits."), mipLevels.error().mipIndex);
+            break;
+        case TextureFormat::MipChainLayoutFailure::SliceCountInvalid:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} has an invalid slice count."), mipLevels.error().mipIndex);
+            break;
+        case TextureFormat::MipChainLayoutFailure::ByteSizeOverflow:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} byte size overflows."), mipLevels.error().mipIndex);
+            break;
+        case TextureFormat::MipChainLayoutFailure::OffsetOverflow:
+        default:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip payload offsets overflow."));
+            break;
+        }
         return MakeUnexpected(Failure{});
     }
-    mipLevels.reserve(*mipCountResult);
-    u32 mipWidth = entry.width;
-    u32 mipHeight = entry.height;
-    u32 mipDepth = entry.depth;
-    u64 offsetBytes = 0u;
-    for(u32 mipIndex = 0u; mipIndex < *mipCountResult; ++mipIndex){
-        const auto planeLayoutResult = TextureFormat::ComputeMipPlaneBlockLayout(entry.format, mipWidth, mipHeight);
-        if(!planeLayoutResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} block grid exceeds runtime limits."), mipIndex);
-            return MakeUnexpected(Failure{});
-        }
-        const auto sliceCountResult = TextureFormat::ComputeMipSliceCount(entry.dimension, mipDepth);
-        if(!sliceCountResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} has an invalid slice count."), mipIndex);
-            return MakeUnexpected(Failure{});
-        }
-        if(planeLayoutResult->planeByteCount > Limit<u64>::s_Max / *sliceCountResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip {} byte size overflows."), mipIndex);
-            return MakeUnexpected(Failure{});
-        }
-        const u64 sizeBytes = planeLayoutResult->planeByteCount * *sliceCountResult;
-        if(sizeBytes > Limit<u64>::s_Max - offsetBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: mip payload offsets overflow."));
-            return MakeUnexpected(Failure{});
-        }
-
-        EncodedMip mip;
-        mip.width = mipWidth;
-        mip.height = mipHeight;
-        mip.blockCountX = planeLayoutResult->blocksX;
-        mip.blockCountY = planeLayoutResult->blocksY;
-        mip.offsetBytes = offsetBytes;
-        mip.sizeBytes = sizeBytes;
-        mip.sliceCount = *sliceCountResult;
-        mipLevels.push_back(mip);
-
-        offsetBytes += sizeBytes;
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-        if(entry.dimension == TextureDimension::Texture3D)
-            mipDepth = mipDepth > 1u ? mipDepth >> 1u : 1u;
-    }
-    return mipLevels;
+    return Move(*mipLevels);
 }
 
 [[nodiscard]] static b8 InitializeEncoder(){
@@ -120,8 +93,8 @@ struct EncodedMip{
         return MakeUnexpected(Failure{});
     const u32 sourceWidth = source.front().get_width();
     const u32 sourceHeight = source.front().get_height();
-    const u32 targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
-    const u32 targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
+    const u32 targetWidth = TextureFormat::NextMipExtent(sourceWidth);
+    const u32 targetHeight = TextureFormat::NextMipExtent(sourceHeight);
     FloatPlanes filtered;
     filtered.resize(source.size());
     for(usize planeIndex = 0u; planeIndex < source.size(); ++planeIndex){

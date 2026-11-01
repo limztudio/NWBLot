@@ -6,7 +6,6 @@
 
 
 #include "../global.h"
-#include "material_typed_constants.h"
 #include <impl/assets_material/types.adhd.h>
 
 #include <core/assets/module.h>
@@ -40,19 +39,6 @@ static_assert(sizeof(MaterialTypedLayoutBlockBinary) == s_MaterialTypedLayoutBlo
 static_assert(sizeof(MaterialTypedLayoutFieldBinary) == s_MaterialTypedLayoutFieldBytes, "MaterialTypedLayoutFieldBinary layout drifted");
 static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceReferenceBytes, "MaterialResourceReferenceBinary layout drifted");
 
-// Transparent materials need all three pass shaders; opaque materials carry none.
-[[nodiscard]] inline b8 HasValidMaterialAvboitPixelShaderContract(
-    const b8 transparent,
-    const Core::Assets::AssetRef<PixelShader>& accumulatePixelShader,
-    const Core::Assets::AssetRef<PixelShader>& occupancyPixelShader,
-    const Core::Assets::AssetRef<PixelShader>& extinctionPixelShader
-)noexcept{
-    if(transparent)
-        return accumulatePixelShader.valid() && occupancyPixelShader.valid() && extinctionPixelShader.valid();
-
-    return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
-}
-
 // Materials hold only mesh and pixel stages. The compute emulation shader is found by the mesh shader name, so it is never stored here.
 [[nodiscard]] inline constexpr b8 IsSupportedMaterialShaderStage(const Core::ShaderType::Enum shaderType)noexcept{
     return shaderType == Core::ShaderType::MeshStage || shaderType == Core::ShaderType::PixelStage;
@@ -62,99 +48,12 @@ static_assert(sizeof(MaterialResourceReferenceBinary) == s_MaterialResourceRefer
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(s_MaterialLayoutFieldComponentsPerValueType == NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT, "Material layout field component count drifted");
+static_assert(s_MaterialLayoutFieldComponentsPerValueType == s_MaterialTypedValueComponentCount, "Material layout field component count drifted");
 static_assert(
     static_cast<u32>(MaterialParameterValueType::f32) - s_MaterialParameterFirstValueTypeId
         == (static_cast<u32>(MaterialLayoutFieldType::f32x4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
     "Material layout field/value type ordering must remain contiguous"
 );
-
-// Resource fields name an engine/project asset resolved to a heap slot at runtime.
-[[nodiscard]] inline b8 IsMaterialAssetReference(const AStringView resourceName)noexcept{
-    const usize rootEnd = resourceName.find('/');
-    if(rootEnd == AStringView::npos || rootEnd == 0u || rootEnd + 1u >= resourceName.size())
-        return false;
-
-    const AStringView virtualRoot = resourceName.substr(0u, rootEnd);
-    if(virtualRoot != Core::Assets::s_EngineVirtualRoot && virtualRoot != Core::Assets::s_ProjectVirtualRoot)
-        return false;
-
-    usize componentBegin = rootEnd + 1u;
-    for(usize index = componentBegin; index <= resourceName.size(); ++index){
-        if(index != resourceName.size() && resourceName[index] != '/')
-            continue;
-
-        const AStringView component = resourceName.substr(componentBegin, index - componentBegin);
-        if(component.empty() || component == "." || component == ".." || component.find('\\') != AStringView::npos)
-            return false;
-        componentBegin = index + 1u;
-    }
-    return true;
-}
-
-[[nodiscard]] inline b8 IsSupportedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const AStringView resourceName)noexcept{
-    return IsValidMaterialResourceKind(resourceKind) && IsMaterialAssetReference(resourceName);
-}
-
-// Serialized resource paths arrive as Name hashes; their original text is validated during cooking.
-[[nodiscard]] inline b8 IsValidSerializedMaterialResourceReference(const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
-    return resourceName && IsValidMaterialResourceKind(resourceKind);
-}
-
-[[nodiscard]] inline Expected<u32> AlignMaterialLayoutFieldOffset(const u32 byteOffset, const MaterialLayoutFieldType::Enum fieldType)noexcept{
-    const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
-    if(alignment == 0u)
-        return MakeUnexpected(Failure{});
-
-    return AlignUpU32Checked(byteOffset, alignment);
-}
-
-[[nodiscard]] inline Expected<u32> AlignMaterialLayoutBlockByteSize(const u32 byteSize)noexcept{
-    return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES);
-}
-
-[[nodiscard]] inline b8 AssignMaterialResourceReferenceAsset(MaterialResourceReference& reference, const MaterialResourceKind::Enum resourceKind, const Name& resourceName)noexcept{
-    switch(resourceKind){
-    case MaterialResourceKind::SampledImage2D:
-        reference.textureAsset.virtualPath = resourceName;
-        return true;
-    case MaterialResourceKind::Sampler:
-        reference.samplerAsset.virtualPath = resourceName;
-        return true;
-    default:
-        NWB_ASSERT(false);
-        return false;
-    }
-}
-
-[[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name)noexcept{
-    return UpdateFnv64(hash, reinterpret_cast<const u8*>(&name.hash()), sizeof(NameHash));
-}
-
-[[nodiscard]] inline u64 ComputeMaterialTypedLayoutHash(const Span<const MaterialTypedLayoutBlock> blocks, const Span<const MaterialTypedLayoutField> fields){
-    if(blocks.empty() && fields.empty())
-        return 0u;
-
-    u64 hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
-    const u32 blockCount = static_cast<u32>(blocks.size());
-    const u32 fieldCount = static_cast<u32>(fields.size());
-    Fnv64AppendValue(hash, blockCount);
-    Fnv64AppendValue(hash, fieldCount);
-    for(const MaterialTypedLayoutBlock& block : blocks){
-        hash = UpdateMaterialTypedLayoutHashName(hash, block.blockName);
-        Fnv64AppendValue(hash, static_cast<u32>(block.blockClass));
-        Fnv64AppendValue(hash, block.fieldBegin);
-        Fnv64AppendValue(hash, block.fieldCount);
-        Fnv64AppendValue(hash, block.byteSize);
-    }
-    for(const MaterialTypedLayoutField& field : fields){
-        hash = UpdateMaterialTypedLayoutHashName(hash, field.fieldName);
-        Fnv64AppendValue(hash, static_cast<u32>(field.fieldType));
-        Fnv64AppendValue(hash, field.offset);
-        Fnv64AppendValue(hash, field.defaultValue);
-    }
-    return hash;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,9 +61,7 @@ static_assert(
 
 class Material final : public Core::Assets::TypedAsset<Material>{
 public:
-    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
-
-    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, s_ShaderStageCount>;
+    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, static_cast<usize>(Core::ShaderType::Count)>;
     using TypedLayoutBlockVector = Core::Assets::AssetVector<MaterialTypedLayoutBlock>;
     using TypedLayoutFieldVector = Core::Assets::AssetVector<MaterialTypedLayoutField>;
     using TypedBlockByteVector = Core::Assets::AssetVector<u8>;
@@ -172,6 +69,8 @@ public:
 
 
 public:
+    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
+
     NWB_DEFINE_ASSET_TYPE("material")
 
 
@@ -195,6 +94,7 @@ public:
 
 public:
     b8 loadBinary(Span<const u8> binary);
+
 
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
@@ -230,6 +130,7 @@ public:
             return MakeUnexpected(Failure{});
         return shaderAsset;
     }
+
 
 public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const noexcept{ return m_shaderVariant; }

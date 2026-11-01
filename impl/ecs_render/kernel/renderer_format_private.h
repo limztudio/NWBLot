@@ -10,6 +10,8 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/backend_selection.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,32 +28,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<usize N>
-inline Core::Format::Enum SelectSupportedFormat(Core::Device& device, const Core::Format::Enum (&candidates)[N], const Core::FormatSupport::Mask requiredSupport)noexcept{
-    for(const Core::Format::Enum format : candidates){
-        if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
-}
-
-inline b8 CreateClampSampler(Core::Device& device, const b8 linearFiltering, Core::SamplerHandle& sampler){
-    if(sampler)
-        return true;
-
-    Core::SamplerDesc samplerDesc;
-    samplerDesc.setAllFilters(linearFiltering).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-    auto samplerResult = device.createSampler(samplerDesc);
-    if(samplerResult)
-        sampler = Move(*samplerResult);
-    else
-        sampler.reset();
-    if(samplerResult)
-        return true;
-
-    return false;
-}
+[[nodiscard]] Core::Format::Enum SelectSupportedFormat(Core::Device& device, Span<const Core::Format::Enum> candidates, Core::FormatSupport::Mask requiredSupport)noexcept;
+[[nodiscard]] b8 CreateClampSampler(Core::Device& device, b8 linearFiltering, Core::SamplerHandle& sampler);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

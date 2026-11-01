@@ -50,7 +50,7 @@ TEST_F(UiPopupInputTests, PopupSessionBeginsOnlyAfterAcceptedGeometryAndANewMode
     EXPECT_TRUE(m_textInput.activeSession().valid());
     EXPECT_NE(m_textInput.activeSession(), baseSession);
     EXPECT_EQ(m_textInput.starts, starts + 1u);
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
     ASSERT_TRUE(commit());
 }
 
@@ -78,7 +78,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelFencesQueuedNativeAndLocalIntentionsB
     ASSERT_TRUE(frame());
     EXPECT_TRUE(m_textInput.activeSession().valid());
     EXPECT_NE(m_textInput.activeSession(), oldSession);
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
 }
 
 TEST_F(UiPopupInputTests, ReopenedSameModelRejectsAnAlreadyCompletedPasteFromThePriorPopupLifetime){
@@ -99,7 +99,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelRejectsAnAlreadyCompletedPasteFromThe
     EXPECT_FALSE(m_clipboard.complete(oldRequest, "later paste"));
     ASSERT_TRUE(commit());
     ASSERT_TRUE(frame());
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
 }
 
 TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBeforeAcceptedRestoration){
@@ -136,7 +136,7 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     EXPECT_FALSE(m_textInput.activeSession().valid());
     ASSERT_TRUE(frame());
     EXPECT_TRUE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.publishedText(), "base");
+    EXPECT_EQ(m_textInput.surroundingText(), "base");
 }
 
 TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreAnUnfocusedEditor){
@@ -163,7 +163,7 @@ TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreA
     ASSERT_TRUE(frame());
     EXPECT_EQ(m_context.input().focus(), m_baseWidget.id);
     EXPECT_TRUE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.publishedText(), "base");
+    EXPECT_EQ(m_textInput.surroundingText(), "base");
 }
 
 
@@ -179,7 +179,7 @@ TEST_F(UiPopupInputTests, DeferredEditorStartsNativeSessionOnlyAfterPopupGeometr
     ASSERT_TRUE(prepareDeferred());
     EXPECT_TRUE(m_popupResult.focused);
     EXPECT_TRUE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
     ASSERT_TRUE(commit());
 }
 

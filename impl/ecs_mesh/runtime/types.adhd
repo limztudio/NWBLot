@@ -2,6 +2,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_mesh/payload_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class RuntimeMeshHandle{
+    public b8 operator==(in RuntimeMeshHandle rhs)const{
+        return this.value == rhs.value;
+    }
+
+    public b8 operator!=(in RuntimeMeshHandle rhs)const{
+        return this.value != rhs.value;
+    }
+
+    public b8 valid()const{
+        return this.value != 0u;
+    }
+
+    public void reset(){
+        this.value = 0u;
+    }
+
+    public u64 value = 0u;
+}
+
+const RuntimeMeshHandle s_InvalidRuntimeMeshHandle();
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 flag<u8> RuntimeMeshDirtyFlag{
     None = 0u,
     SkinningInputDirty,
@@ -9,6 +42,7 @@ flag<u8> RuntimeMeshDirtyFlag{
     MeshletBoundsDirty,
     All = SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,6 +83,62 @@ const usize s_RawByteLoadAlignmentBytes = 4u;
 
 const StringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
 const StringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
+
+const usize s_RuntimeMeshRequestInlineCapacity = 32u;
+const usize s_RuntimeMeshIndexBucketsPerRequest = 2u;
+
+class RuntimeMeshRequestKey{
+    public RuntimeMeshRequestKey(){
+        this.version = 0u;
+    }
+
+    public RuntimeMeshRequestKey(in NameHash inName, in u64 inVersion){
+        this.name = inName;
+        this.version = inVersion;
+    }
+
+    public b8 operator==(in RuntimeMeshRequestKey rhs)const{
+        return this.version == rhs.version && this.name == rhs.name;
+    }
+
+    public usize hash()const{
+        usize seed = hashValue(this.name);
+        return hashCombineValue(seed, this.version);
+    }
+
+    public NameHash name;
+    public u64 version;
+}
+
+class RuntimeMeshRequestEntry{
+    public RuntimeMeshRequestEntry(){
+        this.found = false;
+    }
+
+    public RuntimeMeshRequestEntry(in RuntimeMeshRequestKey inKey, in b8 inFound){
+        this.key = inKey;
+        this.found = inFound;
+    }
+
+    public RuntimeMeshRequestKey key;
+    public b8 found;
+}
+
+b8 TryComputePaddedRawByteCount(in usize logicalByteCount, mut usize outPaddedByteCount){
+    outPaddedByteCount = 0u;
+    if(logicalByteCount == 0u)
+        return false;
+    const usize trailingByteCount = (s_RawByteLoadAlignmentBytes - (logicalByteCount % s_RawByteLoadAlignmentBytes)) % s_RawByteLoadAlignmentBytes;
+    const usize paddedByteCount = logicalByteCount + trailingByteCount;
+    if(paddedByteCount < logicalByteCount)
+        return false;
+    outPaddedByteCount = paddedByteCount;
+    return true;
+}
+
+usize ExpectedMeshletSolidTriangleWordCount(in u32 meshletPrimitiveIndexCount){
+    return (cast<usize>(meshletPrimitiveIndexCount) / cast<usize>(s_MeshletTriangleIndexCount) + cast<usize>(s_MeshletSolidTriangleWordRoundUp)) / cast<usize>(s_MeshletSolidTriangleWordBits);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -22,15 +22,15 @@ namespace __hidden_shader_archive{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr char s_IndexMagic[] = "NWBSDX1";
-inline constexpr usize s_IndexMagicByteCount = sizeof(s_IndexMagic);
+static constexpr Array<char, 8> s_IndexMagic = {{ 'N', 'W', 'B', 'S', 'D', 'X', '1', '\0' }};
+inline constexpr usize s_IndexMagicByteCount = s_IndexMagic.size();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct IndexHeaderDisk{
-    char magic[s_IndexMagicByteCount];
+    Array<char, s_IndexMagicByteCount> magic{};
     u32 recordCount = 0;
 };
 
@@ -130,8 +130,9 @@ Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const
 
     NameHash derivedHash;
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
+    const u64 prefixHash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, s_VirtualPathPrefix);
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        u64 laneHash = UpdateFnv64(s_Fnv64OffsetBasis, reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()), s_VirtualPathPrefix.size());
+        u64 laneHash = prefixHash;
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
         laneHash = UpdateFnv64TextExact(laneHash, variantName);
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, stageName.hash(), lane);
@@ -141,7 +142,7 @@ Expected<Name> ShaderArchive::BuildVirtualPathName(const Name& shaderName, const
     return Name(derivedHash);
 }
 
-Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const Span<const Record> records, Alloc::ScratchArena& scratchArena){
+Expected<GraphicsBytes> ShaderArchive::SerializeIndex(const Span<const Record> records, GraphicsArena& arena, Alloc::ScratchArena& scratchArena){
     GraphicsBytes binary(arena);
 
     if(records.size() > Limit<u32>::s_Max){
@@ -194,7 +195,7 @@ Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, cons
     }
 
     __hidden_shader_archive::IndexHeaderDisk header;
-    NWB_MEMCPY(header.magic, sizeof(header.magic), __hidden_shader_archive::s_IndexMagic, sizeof(__hidden_shader_archive::s_IndexMagic));
+    header.magic = __hidden_shader_archive::s_IndexMagic;
     header.recordCount = static_cast<u32>(sortedRecords.size());
 
     const usize headerAndRecordBytes = sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk);
@@ -240,7 +241,7 @@ Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(
     }
 
     const auto& header = *decodedHeader;
-    if(NWB_MEMCMP(header.magic, __hidden_shader_archive::s_IndexMagic, sizeof(header.magic)) != 0){
+    if(header.magic != __hidden_shader_archive::s_IndexMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: invalid magic"));
         return MakeUnexpected(Failure{});
     }

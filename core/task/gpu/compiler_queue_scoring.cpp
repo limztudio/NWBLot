@@ -123,7 +123,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
             overlap = otherQueueCost;
         else if(otherQueueCost != 0u){
             const GpuTaskQueueAssignment unassignedTask{ .task = task.id, .initialQueue = {}, .queue = candidate.id, .score = {} };
-            overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, NotNull<const GpuTaskQueueAssignment*>(ownAssignment ? ownAssignment : &unassignedTask), 1u);
+            overlap = scoringData.independentQueueCost(schedulingReachability, candidate.id, Span<const GpuTaskQueueAssignment>(ownAssignment ? ownAssignment : &unassignedTask, 1u));
             if(ignoredAssignmentCount == 1u){
                 const GpuTaskQueueAssignment& excluded = assignments[ignoredAssignmentOffset];
                 if(excluded.queue != candidate.id && schedulingReachability.transitivelyIndependent(task.id, excluded.task))

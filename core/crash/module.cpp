@@ -47,19 +47,6 @@ inline constexpr usize s_LifecycleFailureTextCapacity = 192u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ArenaT>
-[[nodiscard]] static ::Path<ArenaT> DefaultCrashRootDirectory(ArenaT& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / PackageNames::s_DefaultRootDirectoryName;
-
-    const auto currentDirectory = GetCurrentPath(arena);
-    if(currentDirectory && !currentDirectory->empty())
-        return *currentDirectory / PackageNames::s_DefaultRootDirectoryName;
-
-    return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
-}
-
 static void StoreBreadcrumb(const AStringView category, const AStringView message)noexcept{
     CrashDetail::FixedBreadcrumb& breadcrumb = CrashDetail::g_State.breadcrumbs[CrashDetail::g_State.nextBreadcrumb % CrashDetail::s_MaxBreadcrumbs];
     breadcrumb.used = 1u;
@@ -95,7 +82,7 @@ static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
         hash = UpdateFnv64TextExact(hash, record.message);
     if(!record.file.empty())
         hash = UpdateFnv64TextExact(hash, record.file);
-    hash = UpdateFnv64(hash, reinterpret_cast<const u8*>(&record.line), sizeof(record.line));
+    hash = UpdateFnv64(hash, Span<const u8>(reinterpret_cast<const u8*>(&record.line), sizeof(record.line)));
     return hash;
 }
 
@@ -202,7 +189,7 @@ NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& rec
 CrashDetail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept{
     if(m_failureCount == 0u)
         return;
-    char text[__hidden_crash_module::s_LifecycleFailureTextCapacity] = {};
+    Array<char, __hidden_crash_module::s_LifecycleFailureTextCapacity> text = {};
     CopyFixedBuffer(text, "Native crash lifecycle failure: domain=");
     AppendUnsignedToFixedBuffer(text, static_cast<u64>(m_first.domain));
     AppendFixedBuffer(text, ", operation=");
@@ -222,7 +209,14 @@ CrashDetail::PlatformCleanupObservations::~PlatformCleanupObservations()noexcept
         AppendUnsignedToFixedBuffer(text, m_first.code);
     AppendFixedBuffer(text, ", total failures=");
     AppendUnsignedToFixedBuffer(text, m_failureCount);
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = CrashDetail::s_WarningEventName, .category = "crash_native_lifecycle", .expression = __hidden_crash_module::PlatformOperationText(m_first.operation), .message = AStringView(text), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{
+        .event = DiagnosticEventName::s_Warning,
+        .category = "crash_native_lifecycle",
+        .expression = __hidden_crash_module::PlatformOperationText(m_first.operation),
+        .message = FixedBufferView(text),
+        .file = __FILE__,
+        .line = __LINE__,
+    });
 }
 
 void CrashDetail::PlatformCleanupObservations::record(const PlatformFailure& failure)noexcept{
@@ -244,7 +238,15 @@ void CrashDetail::PlatformCleanupObservations::recordPrimary(const PlatformFailu
 
 template<typename ArenaT>
 ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena){
-    return __hidden_crash_module::DefaultCrashRootDirectory(arena);
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / PackageNames::s_DefaultRootDirectoryName;
+
+    const auto currentDirectory = GetCurrentPath(arena);
+    if(currentDirectory && !currentDirectory->empty())
+        return *currentDirectory / PackageNames::s_DefaultRootDirectoryName;
+
+    return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
 }
 
 template<typename ArenaT>
@@ -314,6 +316,10 @@ b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config){
     return true;
 }
 
+template ::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena);
+template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena);
+template b8 InstallCrashHandler(const CrashConfigT<Alloc::PersistentArena>& config);
+
 void UninstallCrashHandler()noexcept{
     CrashDetail::PlatformCleanupObservations observations;
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
@@ -331,7 +337,7 @@ b8 SetCrashMetadata(const AStringView key, const AStringView value)noexcept{
     CrashDetail::FixedMetadata* freeSlot = nullptr;
     for(usize i = 0u; i < CrashDetail::s_MaxMetadata; ++i){
         CrashDetail::FixedMetadata& metadata = CrashDetail::g_State.metadata[i];
-        if(metadata.used && AStringView(metadata.key) == key){
+        if(metadata.used && AStringView(metadata.key.data()) == key){
             CopyFixedBuffer(metadata.value, value);
             CrashDetail::PublishCrashStateSnapshot();
             return true;
@@ -366,10 +372,6 @@ void AddCrashBreadcrumb(const AStringView category, const AStringView message)no
     NothrowScopedLock lock(CrashDetail::g_State.mutex);
     __hidden_crash_module::StoreBreadcrumb(category, message);
 }
-
-template ::Path<Alloc::PersistentArena> DefaultCrashSpoolDirectory(Alloc::PersistentArena& arena);
-template ::Path<Alloc::PersistentArena> DefaultCrashHandlerExecutablePath(Alloc::PersistentArena& arena);
-template b8 InstallCrashHandler(const CrashConfigT<Alloc::PersistentArena>& config);
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     CrashDetail::CrashDumpRequestOptions options;

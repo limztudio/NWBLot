@@ -16,20 +16,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiTextEditSession::UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept
-    : m_service(service)
-    , m_event(arena)
-    , m_expectedModel(arena)
-    , m_publishedText(arena)
-{}
-
 UiTextEditSession::~UiTextEditSession()noexcept{
-    if(!release())
+    if(!cancel())
         TerminateInvariant();
 }
 
-
-Core::TextInputAdmission::Enum UiTextEditSession::begin(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, const Core::TextInputRect caret){
+Core::TextInputAdmission::Enum UiTextEditSession::begin(const UiTextEditOwner& owner, const Core::TextInputRect caret, Ui::EditModel& model){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!owner.valid() || model.composition().active)
@@ -54,7 +46,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(const Ui::UiTextEditOwne
     return Core::TextInputAdmission::Accepted;
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::refresh(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
+Core::TextInputAdmission::Enum UiTextEditSession::refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, const Core::TextInputRect caret){
     if(!m_service.isOwnerThread())
         return Core::TextInputAdmission::WrongThread;
     if(!m_token.valid() || !(m_owner == owner) || !m_expectedModel.matches(model))
@@ -67,7 +59,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::refresh(const Ui::UiTextEditOw
     return publishSurrounding(model);
 }
 
-UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model){
+UiTextEditResult UiTextEditSession::drain(const UiTextEditOwner& owner, Ui::EditModel& model){
     UiTextEditResult result;
     if(!m_service.isOwnerThread()){
         result.status = UiTextEditStatus::WrongThread;
@@ -77,7 +69,7 @@ UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::
         return result;
     if(!(m_owner == owner) || !m_expectedModel.matches(model)){
         result.status = m_owner == owner ? UiTextEditStatus::StaleModel : UiTextEditStatus::StaleOwner;
-        if(!release())
+        if(!cancel())
             result.status = UiTextEditStatus::NativeFailure;
         return result;
     }
@@ -89,7 +81,7 @@ UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::
         if(poll != Core::TextInputPollResult::Event){
             result.status = poll == Core::TextInputPollResult::WrongThread ? UiTextEditStatus::WrongThread : UiTextEditStatus::Cancelled;
             model.cancelComposition();
-            if(!release())
+            if(!cancel())
                 result.status = UiTextEditStatus::NativeFailure;
             break;
         }
@@ -102,7 +94,7 @@ UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::
         }
         if(result.status != UiTextEditStatus::Applied){
             model.cancelComposition();
-            if(!release())
+            if(!cancel())
                 result.status = UiTextEditStatus::NativeFailure;
             break;
         }
@@ -114,21 +106,34 @@ UiTextEditResult UiTextEditSession::drain(const Ui::UiTextEditOwner& owner, Ui::
         if(publishSurrounding(model) != Core::TextInputAdmission::Accepted){
             model.cancelComposition();
             result.status = UiTextEditStatus::NativeFailure;
-            if(!release())
+            if(!cancel())
                 TerminateInvariant();
         }
     }
     return result;
 }
 
-b8 UiTextEditSession::end(const Ui::UiTextEditOwner& owner, Ui::EditModel& model){
+b8 UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
     if(!m_service.isOwnerThread() || !m_token.valid() || !(m_owner == owner))
         return false;
     if(m_expectedModel.matches(model))
         model.cancelComposition();
-    return release();
+    return cancel();
 }
 
+b8 UiTextEditSession::cancel(){
+    if(!m_token.valid())
+        return true;
+    if(!m_service.isOwnerThread())
+        return false;
+    if(!m_service.end(m_token) && m_service.activeSession() == m_token)
+        return false;
+    m_token = {};
+    m_owner = {};
+    m_expectedModel.clear();
+    m_publishedText.clear();
+    return true;
+}
 
 b8 UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const noexcept{
     return
@@ -152,21 +157,6 @@ Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::E
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }
-
-b8 UiTextEditSession::release(){
-    if(!m_token.valid())
-        return true;
-    if(!m_service.isOwnerThread())
-        return false;
-    if(!m_service.end(m_token) && m_service.activeSession() == m_token)
-        return false;
-    m_token = {};
-    m_owner = {};
-    m_expectedModel.clear();
-    m_publishedText.clear();
-    return true;
-}
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

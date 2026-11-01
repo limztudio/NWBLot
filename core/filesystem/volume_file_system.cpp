@@ -7,11 +7,6 @@
 #include "volume_staging_detail.h"
 #include "arena_names.h"
 
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
-#include <core/filesystem/volume_naming.h>
-
-#include <global/limit.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -24,13 +19,6 @@ NWB_FILESYSTEM_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
-    : m_mountDirectory(arena)
-    , m_arena(arena)
-    , m_segmentPaths(m_arena)
-    , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
-{}
 
 b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
     Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_LoadMetadataScratch);
@@ -116,7 +104,7 @@ b8 VolumeFileSystem::mount(const VolumeMountDesc& desc){
             return false;
         }
         const auto& discoveredHeader = *decodedHeader;
-        if(NWB_MEMCMP(discoveredHeader.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
+        if(discoveredHeader.magic != FilesystemVolumeDetail::s_VolumeMagic){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, FilesystemVolumeDetail::s_VolumeDetailMagicMismatch);
             unmountLocked();
             return false;
@@ -221,7 +209,6 @@ usize VolumeFileSystem::segmentCount()const noexcept{
     return m_segmentPaths.size();
 }
 
-
 u64 VolumeFileSystem::fileCount()const noexcept{
     NothrowScopedLock lock(m_mutex);
     return static_cast<u64>(m_files.size());
@@ -257,11 +244,6 @@ b8 VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data
     ScopedLock lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
 }
-
-b8 VolumeFileSystem::flush(){
-    return compact(true);
-}
-
 
 void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
     ScopedLock lock(m_mutex);
@@ -336,7 +318,7 @@ b8 VolumeFileSystem::removeFile(const Name& virtualPath){
     }
 
     Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
-    if(flushMetadataLocked(scratchArena, &virtualPath)){
+    if(flushMetadataLocked(scratchArena, virtualPath)){
         m_files.erase(itr);
         return true;
     }
@@ -346,11 +328,7 @@ b8 VolumeFileSystem::removeFile(const Name& virtualPath){
 
 b8 VolumeFileSystem::fileExists(const Name& virtualPath)const noexcept{
     NothrowScopedLock lock(m_mutex);
-    if(!m_mounted)
-        return false;
-    if(!virtualPath)
-        return false;
-    return m_files.find(virtualPath) != m_files.end();
+    return m_mounted && virtualPath && m_files.find(virtualPath) != m_files.end();
 }
 
 Expected<u64> VolumeFileSystem::fileSize(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING){
@@ -449,7 +427,6 @@ b8 VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, 
 }
 
 b8 VolumeFileSystem::scanSegmentsLocked(){
-
     m_segmentPaths.clear();
 
     for(usize segmentIndex = 0u;; ++segmentIndex){
@@ -514,10 +491,6 @@ void VolumeFileSystem::unmountLocked()noexcept{
 
     m_segmentPaths.clear();
     m_files.clear();
-}
-
-Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 }
 
 

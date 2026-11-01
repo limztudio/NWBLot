@@ -14,49 +14,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_skin_region_index{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr usize s_LinearLookupRegionLimit = 128u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Core::Assets::AssetVector<u32> BuildRegionIndex(const Span<const UiSkinRegion> regions, Core::Assets::AssetArena& arena){
-    Core::Assets::AssetVector<u32> index(arena);
-    if(regions.size() > s_UiSkinMaxRegionCount)
-        return index;
-    index.reserve(regions.size());
-    for(u32 position = 0u; position < regions.size(); ++position)
-        index.push_back(position);
-    Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right)noexcept{
-        const Name& a = regions[left].name;
-        const Name& b = regions[right].name;
-        return a == b ? left < right : a < b;
-    });
-    return index;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, const u32 height, const f32 referenceDensity, RegionVector&& regions){
     RegionVector candidate(m_regions.get_allocator().arena());
     candidate = Move(regions);
-    auto index = __hidden_ui_skin_region_index::BuildRegionIndex(candidate, candidate.get_allocator().arena());
     m_regions = Move(candidate);
-    m_regionIndex = Move(index);
+    rebuildRegionIndex();
     m_texture = texture;
     m_atlasWidth = width;
     m_atlasHeight = height;
@@ -67,7 +29,7 @@ void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, 
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
     // Small skins scan faster; oversized programmatic objects remain inspectable without an unbounded index.
-    if(m_regions.size() <= __hidden_ui_skin_region_index::s_LinearLookupRegionLimit || m_regions.size() > s_UiSkinMaxRegionCount){
+    if(m_regions.size() <= s_UiSkinLinearLookupRegionLimit || m_regions.size() > s_UiSkinMaxRegionCount){
         for(const UiSkinRegion& region : m_regions){
             if(region.name == name)
                 return &region;
@@ -93,7 +55,19 @@ const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
 }
 
 void UiSkin::rebuildRegionIndex(){
-    m_regionIndex = __hidden_ui_skin_region_index::BuildRegionIndex(m_regions, m_regions.get_allocator().arena());
+    Core::Assets::AssetVector<u32> index(m_regions.get_allocator().arena());
+    if(m_regions.size() <= s_UiSkinMaxRegionCount){
+        index.reserve(m_regions.size());
+        for(u32 position = 0u; position < m_regions.size(); ++position)
+            index.push_back(position);
+        const Span<const UiSkinRegion> regions = m_regions;
+        Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right)noexcept{
+            const Name& a = regions[left].name;
+            const Name& b = regions[right].name;
+            return a == b ? left < right : a < b;
+        });
+    }
+    m_regionIndex = Move(index);
 }
 
 

@@ -20,13 +20,6 @@ namespace __hidden_task_graph_timing_history_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB::Core;
 
 struct TimingInput{
@@ -46,11 +39,11 @@ TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
         ASSERT_TRUE(store.recordNonCommittingSample(input.key, input.queue, 1.0));
     }
     const TimingInput base = Input(0u);
-    TimingInput inputs[13u];
+    Array<TimingInput, 13u> inputs;
     for(TimingInput& input : inputs)
         input = base;
     inputs[1u].key.variant = 1u;
-    inputs[s_ThirdElementIndex].key.resolutionClass = 1u;
+    inputs[2u].key.resolutionClass = 1u;
     inputs[3u].key.queue = CommandQueue::Compute;
     inputs[4u].queue.index = 1u;
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
@@ -86,7 +79,7 @@ TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
 
 TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLateSamples){
     GraphicsArena arena(Name("tests/timing_history/assignment_order"));
-    GpuTaskTimingHistoryStore store(arena, s_ExpectedDualCount);
+    GpuTaskTimingHistoryStore store(arena, 2u);
     for(u32 index = 1u; index < 80u; ++index){
         const TimingInput input = Input(index);
         ASSERT_TRUE(store.recordSample(input.key, input.queue, 1.0, 1u));
@@ -112,7 +105,7 @@ TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLat
     EXPECT_DOUBLE_EQ(history->averageSeconds, 8.0);
     EXPECT_DOUBLE_EQ(history->minimumSeconds, 6.0);
     EXPECT_DOUBLE_EQ(history->maximumSeconds, 10.0);
-    EXPECT_EQ(history->sampleCount, s_ExpectedDualCount);
+    EXPECT_EQ(history->sampleCount, 2u);
     ASSERT_TRUE(store.recordNonCommittingSample(graphics.key, graphics.queue, 14.0));
     EXPECT_EQ(store.findAssignment(assignmentKey)->lastAcceptedQueue, compute.queue);
     ASSERT_TRUE(store.noteAcceptedAssignment(graphics.key, graphics.queue, 30u));
@@ -127,7 +120,7 @@ TEST(GpuTaskTimingHistory, PreservesOrderedAverageAndExtremaAcrossRollingWindows
     constexpr u32 s_Capacity = 4u;
     GpuTaskTimingHistoryStore store(arena, s_Capacity);
     const TimingInput input = Input(0u);
-    const f64 samples[] = { 1.0e100, 1.0, 3.0e99, 2.0, 5.0e99, 3.0, 7.0e99, 7.0e99, 4.0 };
+    const Array<f64, 9u> samples = { 1.0e100, 1.0, 3.0e99, 2.0, 5.0e99, 3.0, 7.0e99, 7.0e99, 4.0 };
     for(usize index = 0u; index < LengthOf(samples); ++index){
         ASSERT_TRUE(store.recordNonCommittingSample(input.key, input.queue, samples[index]));
         const usize begin = index >= s_Capacity ? index + 1u - s_Capacity : 0u;
@@ -208,7 +201,7 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
         EXPECT_EQ(snapshot.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(first.key))->lastAcceptedFrameIndex, 10u);
         const TimingInput newer = Input(600u);
         EXPECT_EQ(snapshot.find(newer.key, newer.queue), nullptr);
-        store.resetForDeviceGeneration(s_ExpectedDualCount);
+        store.resetForDeviceGeneration(2u);
         EXPECT_EQ(store.historyCount(), 0u);
         EXPECT_EQ(store.find(first.key, first.queue), nullptr);
         EXPECT_EQ(store.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(first.key)), nullptr);
@@ -224,11 +217,11 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
     EXPECT_EQ(replacement.historyCount(), 0u);
     EXPECT_FALSE(snapshot.valid());
     EXPECT_EQ(snapshot.find(first.key, first.queue), nullptr);
-    replacement.resetForDeviceGeneration(s_ExpectedDualCount);
-    const TimingInput newGeneration = Input(0u, s_ExpectedDualCount);
+    replacement.resetForDeviceGeneration(2u);
+    const TimingInput newGeneration = Input(0u, 2u);
     ASSERT_TRUE(replacement.recordSample(newGeneration.key, newGeneration.queue, 7.0, 1u));
     replacement.snapshot(snapshot);
-    EXPECT_EQ(snapshot.deviceGeneration(), s_ExpectedDualCount);
+    EXPECT_EQ(snapshot.deviceGeneration(), 2u);
     EXPECT_EQ(snapshot.find(first.key, first.queue), nullptr);
     ASSERT_NE(snapshot.find(newGeneration.key, newGeneration.queue), nullptr);
     EXPECT_DOUBLE_EQ(snapshot.find(newGeneration.key, newGeneration.queue)->averageSeconds, 7.0);

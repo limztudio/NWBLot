@@ -76,9 +76,9 @@ TEST_F(UiLayoutTests, ExhaustedColumnSpaceCollapsesStretchAndClipsFixedOverflow)
     const u32 stretched = add(root, StretchContainer(LayoutDirection::Leaf));
     ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, 20.0f, 17.0f }));
     ASSERT_EQ(m_tree.boxes().size(), 3u);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(fixed)->rectangle, { 0.0f, 0.0f, 12.0f, 30.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(fixed)->hit, { 0.0f, 0.0f, 12.0f, 17.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(stretched)->rectangle, { 0.0f, 33.0f, 20.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->rectangle, { 0.0f, 0.0f, 12.0f, 30.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->hit, { 0.0f, 0.0f, 12.0f, 17.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(stretched)->rectangle, { 0.0f, 33.0f, 20.0f, 0.0f });
     EXPECT_FLOAT_EQ(m_tree.box(stretched)->hit.height, 0.0f);
 }
 
@@ -90,9 +90,9 @@ TEST_F(UiLayoutTests, OverlaySizesChildrenIndependentlyAndClipsToPaddedContent){
     const u32 stretched = add(root, StretchContainer(LayoutDirection::Leaf));
     ASSERT_TRUE(m_tree.arrange({ 10.0f, 20.0f, 41.0f, 31.0f }));
     ASSERT_EQ(m_tree.boxes().size(), 3u);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(fixed)->rectangle, { 12.0f, 23.0f, 70.0f, 80.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(fixed)->clip, { 12.0f, 23.0f, 35.0f, 23.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(stretched)->rectangle, { 12.0f, 23.0f, 35.0f, 23.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->rectangle, { 12.0f, 23.0f, 70.0f, 80.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(fixed)->clip, { 12.0f, 23.0f, 35.0f, 23.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(stretched)->rectangle, { 12.0f, 23.0f, 35.0f, 23.0f });
 }
 
 TEST_F(UiLayoutTests, UnclippedContainerOverflowStillHonorsViewportAndOuterAncestors){
@@ -104,8 +104,8 @@ TEST_F(UiLayoutTests, UnclippedContainerOverflowStillHonorsViewportAndOuterAnces
     const u32 leaf = add(container, FixedLeaf(80.0f, 70.0f));
     ASSERT_TRUE(m_tree.arrange({ 5.0f, 7.0f, 43.0f, 31.0f }));
     ASSERT_EQ(m_tree.boxes().size(), 3u);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(container)->hit, { 5.0f, 7.0f, 20.0f, 15.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(leaf)->hit, { 5.0f, 7.0f, 43.0f, 31.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(container)->hit, { 5.0f, 7.0f, 20.0f, 15.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(leaf)->hit, { 5.0f, 7.0f, 43.0f, 31.0f });
 }
 
 TEST_F(UiLayoutTests, FixedAndContentRootSizingRespectsViewportClipping){
@@ -117,8 +117,8 @@ TEST_F(UiLayoutTests, FixedAndContentRootSizingRespectsViewportClipping){
     add(root, FixedLeaf(20.0f, 18.0f));
     ASSERT_TRUE(m_tree.arrange({ 3.0f, 4.0f, 31.0f, 17.0f }));
     ASSERT_EQ(m_tree.boxes().size(), 2u);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(root)->rectangle, { 3.0f, 4.0f, 40.0f, 24.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(root)->clip, { 3.0f, 4.0f, 31.0f, 17.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->rectangle, { 3.0f, 4.0f, 40.0f, 24.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->clip, { 3.0f, 4.0f, 31.0f, 17.0f });
 }
 
 TEST_F(UiLayoutTests, OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretch){
@@ -130,12 +130,12 @@ TEST_F(UiLayoutTests, OddPhysicalDisplaySizesRemainLogicalAndDoNotRoundStretch){
     ASSERT_EQ(m_tree.boxes().size(), 3u);
     const Rect firstBefore = m_tree.box(first)->rectangle;
     const Rect secondBefore = m_tree.box(second)->rectangle;
-    EXPECT_FLOAT_EQ(firstBefore.width, VectorGetX(VectorMultiply(VectorReplicate(firstMetrics.logicalWidth), VectorReplicate(0.5f))));
-    EXPECT_FLOAT_EQ(VectorGetX(VectorAdd(VectorReplicate(secondBefore.x), VectorReplicate(secondBefore.width))), firstMetrics.logicalWidth);
+    EXPECT_FLOAT_EQ(firstBefore.width, firstMetrics.logicalWidth * 0.5f);
+    EXPECT_FLOAT_EQ(secondBefore.x + secondBefore.width, firstMetrics.logicalWidth);
     const DisplayMetrics secondMetrics{ firstMetrics.logicalWidth, firstMetrics.logicalHeight, 2.0f, 1.25f };
     ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, secondMetrics.logicalWidth, secondMetrics.logicalHeight }));
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(first)->rectangle, firstBefore);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(second)->rectangle, secondBefore);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(first)->rectangle, firstBefore);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(second)->rectangle, secondBefore);
 }
 
 TEST_F(UiLayoutTests, OversizedPaddingAndEmptyViewportProduceFiniteEmptyContentAndHit){
@@ -145,10 +145,10 @@ TEST_F(UiLayoutTests, OversizedPaddingAndEmptyViewportProduceFiniteEmptyContentA
     const u32 leaf = add(root, StretchContainer(LayoutDirection::Leaf));
     ASSERT_TRUE(m_tree.arrange({ 7.0f, 11.0f, 5.0f, 3.0f }));
     ASSERT_EQ(m_tree.boxes().size(), 2u);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(root)->content, { 12.0f, 14.0f, 0.0f, 0.0f });
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(leaf)->hit, { 12.0f, 14.0f, 0.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->content, { 12.0f, 14.0f, 0.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(leaf)->hit, { 12.0f, 14.0f, 0.0f, 0.0f });
     ASSERT_TRUE(m_tree.arrange({ 7.0f, 11.0f, 0.0f, 0.0f }));
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(root)->hit, { 7.0f, 11.0f, 0.0f, 0.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(root)->hit, { 7.0f, 11.0f, 0.0f, 0.0f });
 }
 
 TEST_F(UiLayoutTests, InvalidViewportOrOverflowCannotPublishPartialBoxes){
@@ -161,7 +161,7 @@ TEST_F(UiLayoutTests, InvalidViewportOrOverflowCannotPublishPartialBoxes){
     EXPECT_FALSE(m_tree.arrange({ Limit<f32>::s_QuietNaN, 0.0f, 1.0f, 1.0f }));
     EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, Limit<f32>::s_Infinity, 1.0f }));
     EXPECT_EQ(m_tree.box(0u), published);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(0u)->rectangle, before);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, before);
     m_tree.reset();
     const u32 root = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Row));
     add(root, FixedLeaf(Limit<f32>::s_Max * 0.75f, 1.0f));
@@ -169,7 +169,7 @@ TEST_F(UiLayoutTests, InvalidViewportOrOverflowCannotPublishPartialBoxes){
     EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
     EXPECT_EQ(m_tree.boxes().size(), 1u);
     EXPECT_EQ(m_tree.box(0u), published);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(0u)->rectangle, before);
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, before);
     m_tree.reset();
     add(s_LayoutNoParent, FixedLeaf(Limit<f32>::s_Max * 0.75f, 10.0f));
     EXPECT_FALSE(m_tree.arrange({ Limit<f32>::s_Max, 0.0f, 0.0f, 0.0f }));
@@ -197,12 +197,12 @@ TEST_F(UiLayoutTests, InvalidConstructionPoisonsTheBuildUntilResetAndPreservesPu
     m_tree.reset();
     add(s_LayoutNoParent, FixedLeaf(7.0f, 9.0f));
     ASSERT_TRUE(m_tree.arrange({ 3.0f, 4.0f, 21.0f, 13.0f }));
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(0u)->rectangle, { 3.0f, 4.0f, 7.0f, 9.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(0u)->rectangle, { 3.0f, 4.0f, 7.0f, 9.0f });
 }
 
 TEST_F(UiLayoutTests, InvalidDescriptionsAndBoundedCapacityRejectNodeAdmission){
     LayoutNodeDesc invalid;
-    LayoutNodeDesc invalidDescriptions[7u];
+    Array<LayoutNodeDesc, 7u> invalidDescriptions;
     invalidDescriptions[0u].width = { LayoutSizePolicy::Stretch, 0.0f };
     invalidDescriptions[1u].width = { LayoutSizePolicy::Fixed, -1.0f };
     invalidDescriptions[2u].height = { LayoutSizePolicy::Content, Limit<f32>::s_QuietNaN };
@@ -240,7 +240,7 @@ TEST_F(UiLayoutTests, MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNodes
     ASSERT_EQ(m_tree.nodeCount(), s_LayoutMaxNodes);
     ASSERT_TRUE(m_tree.arrange({ 3.0f, 5.0f, 101.0f, 79.0f }));
     ASSERT_EQ(m_tree.boxes().size(), s_LayoutMaxNodes);
-    NWB::UiWidgetTests::ExpectRect(m_tree.box(parent)->rectangle, { 3.0f, 5.0f, 101.0f, 79.0f });
+    NWB::UiPaintAssertions::ExpectRect(m_tree.box(parent)->rectangle, { 3.0f, 5.0f, 101.0f, 79.0f });
     EXPECT_FALSE(m_tree.addNode(parent, FixedLeaf(1.0f, 1.0f)));
 }
 

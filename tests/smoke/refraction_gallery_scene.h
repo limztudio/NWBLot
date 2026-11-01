@@ -18,7 +18,7 @@ namespace Tests::Smoke{
 
 
 // Optional gallery cases use the same renderer and readback path as the original regression fixture.
-[[nodiscard]] b8 CreateRefractionGalleryScene(Core::ECS::World& world, AStringView caseName, b8 geometryPreview);
+[[nodiscard]] b8 CreateRefractionGalleryScene(AStringView caseName, b8 geometryPreview, Core::ECS::World& world);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

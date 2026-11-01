@@ -210,7 +210,7 @@ protected:
         else
             EXPECT_EQ(m_context.input().focus(), m_displayedFocus);
         ASSERT_NE(target(query()), nullptr);
-        ExpectRect(target(query())->rectangle, m_displayedEditor);
+        UiPaintAssertions::ExpectRect(target(query())->rectangle, m_displayedEditor);
     }
 
     void verifyFilterRejection(const SelectionMutation::Enum mutation){

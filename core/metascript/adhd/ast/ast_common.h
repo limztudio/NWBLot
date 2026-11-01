@@ -104,13 +104,13 @@ template<typename T>
 }
 
 inline void AppendAdhdUnsigned(MString& out, usize value){
-    char buf[32];
+    Array<char, 32> buf;
     usize idx = 0u;
     if(value == 0u){
         out.push_back('0');
         return;
     }
-    while(value > 0u && idx < sizeof(buf)){
+    while(value > 0u && idx < buf.size()){
         buf[idx++] = static_cast<char>('0' + (value % 10u));
         value /= 10u;
     }
@@ -235,6 +235,10 @@ inline void AppendAdhdUnsigned(MString& out, usize value){
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SCALAR_TYPE
     return false;
+}
+
+[[nodiscard]] constexpr b8 IsNumericScalarType(const MStringView name)noexcept{
+    return IsIntegerScalarType(name) || IsFloatScalarType(name);
 }
 
 [[nodiscard]] constexpr b8 ResolveFixedWidthIntScalar(const MStringView name, usize& outSize, usize& outAlign, b8* outIsSigned = nullptr)noexcept{

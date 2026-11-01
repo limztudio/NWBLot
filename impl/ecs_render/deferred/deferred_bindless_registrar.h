@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/api.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>

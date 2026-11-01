@@ -24,18 +24,13 @@ void UiLayerSystem::routePointerInput(const Ui::PointerInput& input, b8* consume
     const auto normalized = m_context.input().queuePointer(input);
     if(!normalized){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing pointer input"));
-        m_context.resetInput();
-        m_editHost.reset();
-        m_blockCommandChars = false;
+        resetNormalizedInput();
         return;
     }
     const Ui::InputRoutingResult result = m_context.input().process();
     if(result.pointerRouted)
         m_editHost.input(*normalized, previousCapture, false);
-    if(result.activationOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
-    if(result.gestureOverflow)
-        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
+    logInputRoutingOverflows(result);
     if(consumed)
         *consumed = result.pointerConsumed;
 }

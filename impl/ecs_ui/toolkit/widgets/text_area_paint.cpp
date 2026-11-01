@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -24,8 +24,8 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     if(!textAreaMatches(frame))
         return false;
     TextAreaState& state = *frame.state;
-    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
-    const f32 caretWidth = VectorGetX(VectorDivide(VectorSplatOne(), VectorReplicate(m_paint.displayMetrics().pixelScaleX)));
+    const Rect clip = visibleClip(box.clip);
+    const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
     const Rect& visualBounds = item.editView.visualBounds();
     const auto viewport = ScrollbarLayout::Calculate(box.rectangle, clip, item.padding, { visualBounds.width, visualBounds.height }, caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
     if(!viewport)
@@ -52,7 +52,7 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     state.m_scrollY = placement.scrollY;
     HitTarget target;
     target.rectangle = box.rectangle;
-    target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
+    target.clip = visibleClip(box.clip);
     target.enabled = item.editOptions.enabled;
     target.focusable = item.editOptions.enabled;
     target.textEditable = item.editOptions.enabled;

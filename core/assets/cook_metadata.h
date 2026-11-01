@@ -11,9 +11,11 @@
 #pragma once
 
 
+#include "cook_dependency_registry.h"
 #include "cook_entry_registry.h"
 #include "expanded_metadata.h"
 #include "metadata_extension.h"
+#include "metadata_fields.h"
 
 #include <core/assets/paths.h>
 #include <core/task/cpu/scheduler.h>
@@ -37,20 +39,134 @@ using ParsedMetadataExtensionMap = CookMap<Name, ParsedMetadataExtension>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ResolvedAssetRoot{
-    Path path;
-    ACompactString virtualRoot;
+template<typename EntryT>
+using ParseMetadataValueFn = Expected<EntryT>(*)(Name, const Path&, const Core::Metascript::Value&, AssetArena&, Alloc::ScratchArena&);
+
+template<typename MetadataValue>
+[[nodiscard]] inline Expected<b8> ParseMetadataBoolField(
+    const Path& nwbFilePath,
+    const AStringView diagnosticPrefix,
+    const MetadataValue& value,
+    const AStringView fieldLabel,
+    const AStringView errorDetailText = "must be an integer boolean (0 or 1)"
+){
+    if(!value.isInteger()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel), ConvertString(errorDetailText));
+        return MakeUnexpected(Failure{});
+    }
+    const i64 integerValue = value.asInteger();
+    if(integerValue != 0 && integerValue != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be 0 or 1"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return MakeUnexpected(Failure{});
+    }
+    return integerValue != 0;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline b8 ReadOptionalMetadataBoolField(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    b8& outValue
+){
+    const MetadataValue* const fieldValue = asset.findField(fieldLabel);
+    if(!fieldValue)
+        return true;
+    const auto parsed = ParseMetadataBoolField(nwbFilePath, diagnosticPrefix, *fieldValue, fieldLabel, "must be 0 or 1");
+    if(!parsed)
+        return false;
+    outValue = *parsed;
+    return true;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline b8 ReadOptionalFiniteF32Field(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    f32& outValue
+){
+    const MetadataValue* const fieldValue = asset.findField(fieldLabel);
+    if(!fieldValue)
+        return true;
+    const auto parsed = ReadMetadataFiniteF32Value(nwbFilePath, *fieldValue, diagnosticPrefix, fieldLabel);
+    if(!parsed)
+        return false;
+    outValue = *parsed;
+    return true;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline b8 ReadOptionalI32Field(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldLabel,
+    i32& outValue
+){
+    const MetadataValue* const fieldValue = asset.findField(fieldLabel);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isInteger()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return false;
+    }
+    const i64 integerValue = fieldValue->asInteger();
+    if(integerValue < static_cast<i64>(Limit<i32>::s_Min) || integerValue > static_cast<i64>(Limit<i32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported 32-bit signed integer range"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
+        return false;
+    }
+    outValue = static_cast<i32>(integerValue);
+    return true;
+}
+
+template<typename EntryT, typename ParseValueFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    const AStringView diagnosticPrefix,
+    ParseValueFn&& parseValue,
+    Alloc::ScratchArena& scratchArena
+){
+    auto virtualPathResult = BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    const auto asset = FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, diagnosticPrefix);
+    if(!asset)
+        return MakeUnexpected(asset.error());
+    return parseValue(*virtualPathResult, **asset);
+}
+
+template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookMetadataDocument(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    const AStringView diagnosticPrefix,
+    AssetArena& arena,
+    Alloc::ScratchArena& scratchArena
+){
+    return ParseCookMetadataDocument<EntryT>(assetRoot, virtualRoot, nwbFilePath, doc, diagnosticPrefix, [&](const Name virtualPath, const Core::Metascript::Value& asset){
+        return ParseValFn(virtualPath, nwbFilePath, asset, arena, scratchArena);
+    }, scratchArena);
+}
+
+template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
+[[nodiscard]] inline Expected<EntryT> ParseCookDependencyEntry(const CookDependencyItemContext& context, const AStringView diagnosticPrefix){
+    return context.document
+        ? ParseCookMetadataDocument<EntryT, ParseValFn>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, diagnosticPrefix, context.arena, context.scratchArena)
+        : ParseValFn(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
+    ;
+}
 
 
-public:
-    explicit ResolvedAssetRoot(CookArena& arena)noexcept
-        : path(arena)
-    {}
-    ResolvedAssetRoot(Path&& inPath, AStringView inVirtualRoot)noexcept
-        : path(Move(inPath))
-        , virtualRoot(inVirtualRoot)
-    {}
-};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct DiscoveredNwbFile{
     Path assetRoot;
@@ -121,24 +237,24 @@ public:
 };
 
 template<typename T>
-[[nodiscard]] T* FindParsedMetadataExtension(ParsedAssetMetadata& metadata, const Name& extensionName)noexcept{
-    auto found = metadata.extensions.find(extensionName);
-    return found == metadata.extensions.end() ? nullptr : static_cast<T*>(found.value().get());
+[[nodiscard]] T* FindParsedMetadataExtension(const Name& extensionName, ParsedAssetMetadata& inOutMetadata)noexcept{
+    auto found = inOutMetadata.extensions.find(extensionName);
+    return found == inOutMetadata.extensions.end() ? nullptr : static_cast<T*>(found.value().get());
 }
 
 template<typename T>
-[[nodiscard]] const T* FindParsedMetadataExtension(const ParsedAssetMetadata& metadata, const Name& extensionName)noexcept{
+[[nodiscard]] const T* FindParsedMetadataExtension(const Name& extensionName, const ParsedAssetMetadata& metadata)noexcept{
     auto found = metadata.extensions.find(extensionName);
     return found == metadata.extensions.end() ? nullptr : static_cast<const T*>(found.value().get());
 }
 
 template<typename T, typename... Args>
-[[nodiscard]] T& RequireParsedMetadataExtension(ParsedAssetMetadata& metadata, const Name& extensionName, Args&&... args){
-    if(T* existing = FindParsedMetadataExtension<T>(metadata, extensionName))
+[[nodiscard]] T& RequireParsedMetadataExtension(const Name& extensionName, ParsedAssetMetadata& inOutMetadata, Args&&... args){
+    if(T* existing = FindParsedMetadataExtension<T>(extensionName, inOutMetadata))
         return *existing;
 
-    ParsedMetadataExtension pending = MakeParsedMetadataExtension<T>(metadata.arena, Forward<Args>(args)...);
-    auto inserted = metadata.extensions.try_emplace(extensionName, Move(pending));
+    ParsedMetadataExtension pending = MakeParsedMetadataExtension<T>(inOutMetadata.arena, Forward<Args>(args)...);
+    auto inserted = inOutMetadata.extensions.try_emplace(extensionName, Move(pending));
     if(!inserted.second && !inserted.first.value())
         inserted.first.value() = Move(pending);
     return *static_cast<T*>(inserted.first.value().get());
@@ -214,18 +330,44 @@ public:
     explicit CompositeRootAssetTypeAutoRegistrar(const Name& assetType);
 };
 
+struct AssetPairedSidecarRule{
+    AStringView firstToken;
+    AStringView sidecarExtension;
+    AStringView bunchScanKeyword;
+};
+
+class NonStandaloneAssetTypeAutoRegistrar final{
+public:
+    explicit NonStandaloneAssetTypeAutoRegistrar(const Name& assetType, AStringView tokenText = {});
+};
+
+class NonStandaloneFirstTokenSuffixAutoRegistrar final{
+public:
+    explicit NonStandaloneFirstTokenSuffixAutoRegistrar(AStringView tokenSuffix);
+};
+
+class AssetPairedSidecarRuleAutoRegistrar final{
+public:
+    explicit AssetPairedSidecarRuleAutoRegistrar(const AssetPairedSidecarRule& rule);
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void RegisterCompositeRootAssetType(const Name& assetType);
 [[nodiscard]] b8 IsCompositeRootAssetType(const Name& assetType);
-[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(CookArena& cookArena, Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, ScratchArena& scratchArena);
+void RegisterNonStandaloneAssetType(const Name& assetType, AStringView tokenText = {});
+void RegisterNonStandaloneFirstTokenSuffix(AStringView tokenSuffix);
+[[nodiscard]] b8 IsNonStandaloneAssetType(const Name& assetType);
+[[nodiscard]] b8 IsLikelyNonStandaloneFirstToken(AStringView firstToken);
+void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
+[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(Span<const ResolvedAssetRoot> assetRoots, AStringView expectedExtension, CookArena& cookArena, ScratchArena& scratchArena);
 [[nodiscard]] b8 AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
-[[nodiscard]] b8 ParseAssetMetadata(CookArena& cookArena, Span<const DiscoveredNwbFile> nwbFiles, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata, const Path& repoRoot, const Path& assetCacheDirectory);
+[[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& repoRoot, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

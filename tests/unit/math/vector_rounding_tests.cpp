@@ -63,10 +63,10 @@ NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first
 
 TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
     // Contraction retains the 2^-26 residual lost by separate rounding.
-    volatile f32 first[]{ 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
-    volatile f32 second[]{ 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
-    volatile f32 addend[]{ -1.0f, 1.0f, -0.0f, -0.0f };
-    volatile f32 difference[]{ 1.0f, -1.0f, -0.0f, 0.0f };
+    Array<volatile f32, 4u> first = { 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
+    Array<volatile f32, 4u> second = { 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
+    Array<volatile f32, 4u> addend = { -1.0f, 1.0f, -0.0f, -0.0f };
+    Array<volatile f32, 4u> difference = { 1.0f, -1.0f, -0.0f, 0.0f };
     const SIMDVectorSingle lhs = VectorSet(first[0], first[1], first[2], first[3]);
     const SIMDVectorSingle rhs = VectorSet(second[0], second[1], second[2], second[3]);
     const SIMDVectorSingle sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
@@ -84,27 +84,26 @@ TEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads){
 #endif
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
+    ScopeExit restoreControl([&]()noexcept{
         _mm_setcsr(originalControl);
-#endif
     });
+#endif
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
-    constexpr u32 s_Modes[]{ 0u, 0x40u, 0x8000u, 0x8040u };
+    constexpr Array<u32, 4> s_Modes = { 0u, 0x40u, 0x8000u, 0x8040u };
     const u32 heldControl = _mm_getcsr();
 #else
-    constexpr u32 s_Modes[]{ 0u };
+    constexpr Array<u32, 1> s_Modes = { 0u };
 #endif
-    volatile u64 bits[][4]{
+    Array<Array<volatile u64, 4u>, 2u> bits = {{
         { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
         { 1u, 0x8000000000000001ull, 0x7ff0000000000000ull, 0xfff0000000000000ull },
-    };
-    const u64 expected[][4]{
+    }};
+    const Array<Array<u64, 4>, 2> expected = {{
         { 0x8000000000000000ull, 0u, 0x7ff8123456789abcull, 0xfff8abcdef012345ull },
         { 1u, 0x8000000000000001ull, 0x3ff0000000000000ull, 0xbff0000000000000ull },
-    };
+    }};
     for(const u32 mode : s_Modes){
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_AVX)
         _mm_setcsr((heldControl & ~(0x8040u | 0x3fu)) | mode);
@@ -124,18 +123,18 @@ TEST(Math, OrderedDoubleClampPreservesZeroNanAndSubnormalPayloads){
 }
 
 TEST(Math, MinMaxReturnSecondOperandForSignedZeroAndUnorderedLanes){
-    volatile u32 singleBits[][4]{
+    Array<Array<volatile u32, 4u>, 4u> singleBits = {{
         { 0u, 0x80000000u, 0x7FC12345u, 0x40E00000u },
         { 0x80000000u, 0u, 0x40800000u, 0x7FC56789u },
         { 0x7FC12345u, 0xFFC12345u, 0x7F800000u, 0xFF800000u },
         { 0x7FC56789u, 0xFFC56789u, 0x7F800000u, 0xFF800000u }
-    };
-    volatile u64 doubleBits[][4]{
+    }};
+    Array<Array<volatile u64, 4u>, 4u> doubleBits = {{
         { 0u, 0x8000000000000000u, 0x7FF8123456789ABCu, 0x401C000000000000u },
         { 0x8000000000000000u, 0u, 0x4010000000000000u, 0x7FF8ABCDEF012345u },
         { 0x7FF8123456789ABCu, 0xFFF8123456789ABCu, 0x7FF0000000000000u, 0xFFF0000000000000u },
         { 0x7FF8ABCDEF012345u, 0xFFF8ABCDEF012345u, 0x7FF0000000000000u, 0xFFF0000000000000u }
-    };
+    }};
     for(usize pair = 0u; pair < LengthOf(singleBits); pair += 2u){
         for(const b8 reverse : { false, true }){
             const usize firstRow = pair + (reverse ? 1u : 0u);
@@ -165,18 +164,15 @@ TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvali
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    volatile u32 runtimeBits[]{ 0u, 0x80000000u, 0x7f800000u, 2u };
+    Array<volatile u32, 4u> runtimeBits = { 0u, 0x80000000u, 0x7f800000u, 2u };
     const SIMDVectorSingle input = VectorSetInt(runtimeBits[0], runtimeBits[1], runtimeBits[2], runtimeBits[3]);
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
     const SIMDVectorSingle root = VectorSqrt(input);
     const i32 rootInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_EQ(rootInvalid, 0);
-    const u32 expectedRoot[]{ 0u, 0x80000000u, 0x7f800000u, BitCast<u32>(0x1p-74f) };
+    const Array<u32, 4> expectedRoot = { 0u, 0x80000000u, 0x7f800000u, BitCast<u32>(0x1p-74f) };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(root, lane), expectedRoot[lane]) << lane;
 
@@ -184,7 +180,7 @@ TEST(Math, SingleSquareRootsPreserveSignedZeroSubnormalsAndInfinityWithoutInvali
     const SIMDVectorSingle reciprocalRoot = VectorReciprocalSqrt(input);
     const i32 reciprocalInvalid = TestFloatingPointExceptions(FE_INVALID);
     EXPECT_EQ(reciprocalInvalid, 0);
-    const u32 expectedReciprocal[]{ 0x7f800000u, 0xff800000u, 0u, BitCast<u32>(0x1p+74f) };
+    const Array<u32, 4> expectedReciprocal = { 0x7f800000u, 0xff800000u, 0u, BitCast<u32>(0x1p+74f) };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(reciprocalRoot, lane), expectedReciprocal[lane]) << lane;
 #endif
@@ -198,11 +194,11 @@ TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
     EXPECT_EQ(precision.w, -0x1.0000000001p-40);
 
     // Expression contraction retains the 2^-54 residual under the scalar compiler policy.
-    volatile f64 runtimeInputs[][4]{
+    Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
         { 0x1.0000002p+0, -0x1.0000002p+0, 0.0, -0.0 },
         { 0x1.ffffffcp-1, 0x1.ffffffcp-1, -0.0, 1.0 },
         { -1.0, 1.0, -0.0, -0.0 },
-    };
+    }};
     const SIMDVectorDouble first = VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]);
     const SIMDVectorDouble second = VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]);
     const SIMDVectorDouble addend = VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]);
@@ -232,18 +228,15 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
     ASSERT_TRUE(SetFloatingPointRoundingMode(FE_TONEAREST));
 
     // FMA retains the 2^-54 residual and preserves the sign of zero on cancellation.
-    volatile f64 doubleInputs[][4]{
+    Array<Array<volatile f64, 4u>, 3u> doubleInputs = {{
         { 0x1.0000002p+0, -0x1.0000002p+0, 1.0, -0.0 },
         { 0x1.ffffffcp-1, 0x1.ffffffcp-1, 1.0, 1.0 },
         { 1.0, -1.0, 1.0, 0.0 }
-    };
+    }};
     const SIMDVectorDouble first = VectorDoubleSet(doubleInputs[0][0], doubleInputs[0][1], doubleInputs[0][2], doubleInputs[0][3]);
     const SIMDVectorDouble second = VectorDoubleSet(doubleInputs[1][0], doubleInputs[1][1], doubleInputs[1][2], doubleInputs[1][3]);
     const SIMDVectorDouble difference = VectorDoubleSet(doubleInputs[2][0], doubleInputs[2][1], doubleInputs[2][2], doubleInputs[2][3]);
@@ -257,14 +250,14 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
     constexpr u64 s_NegativeDoubleResidual = 0u;
     constexpr u64 s_PositiveDoubleResidual = 0u;
 #endif
-    constexpr u64 s_DoubleExpected[]{ s_NegativeDoubleResidual, s_PositiveDoubleResidual, 0u, 0x8000000000000000u };
-    constexpr u64 s_DoubleNegativeExpected[]{ s_PositiveDoubleResidual, s_NegativeDoubleResidual, 0u, 0u };
+    constexpr Array<u64, 4> s_DoubleExpected = { s_NegativeDoubleResidual, s_PositiveDoubleResidual, 0u, 0x8000000000000000u };
+    constexpr Array<u64, 4> s_DoubleNegativeExpected = { s_PositiveDoubleResidual, s_NegativeDoubleResidual, 0u, 0u };
 
-    volatile f32 singleInputs[][4]{
+    Array<Array<volatile f32, 4u>, 3u> singleInputs = {{
         { 0x1.0008p+0f, -0x1.0008p+0f, 1.0f, -0.0f },
         { 0x1.fffp-1f, 0x1.fffp-1f, 1.0f, 1.0f },
         { 1.0f, -1.0f, 1.0f, 0.0f }
-    };
+    }};
     const SIMDVectorSingle singleFirst = VectorSet(singleInputs[0][0], singleInputs[0][1], singleInputs[0][2], singleInputs[0][3]);
     const SIMDVectorSingle singleSecond = VectorSet(singleInputs[1][0], singleInputs[1][1], singleInputs[1][2], singleInputs[1][3]);
     const SIMDVectorSingle singleDifference = VectorSet(singleInputs[2][0], singleInputs[2][1], singleInputs[2][2], singleInputs[2][3]);
@@ -276,7 +269,7 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
     constexpr u32 s_NegativeSingleResidual = 0u;
     constexpr u32 s_PositiveSingleResidual = 0u;
 #endif
-    constexpr u32 s_SingleExpected[]{ s_NegativeSingleResidual, s_PositiveSingleResidual, 0u, 0x80000000u };
+    constexpr Array<u32, 4> s_SingleExpected = { s_NegativeSingleResidual, s_PositiveSingleResidual, 0u, 0x80000000u };
     for(usize lane = 0u; lane < 4u; ++lane){
         EXPECT_EQ(VectorDoubleGetIntByIndex(productMinusDifference, lane), s_DoubleExpected[lane]) << lane;
         EXPECT_EQ(VectorDoubleGetIntByIndex(productPlusNegativeDifference, lane), s_DoubleExpected[lane]) << lane;
@@ -286,14 +279,14 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
 }
 
 TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
-    const SIMDVectorDouble inputs[]{
+    const Array<SIMDVectorDouble, 6> inputs = {{
         { 0.0, -0.0, 0x1p-1022, -0x1p-1022 },
         { BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 3u }) },
         { 0x1.fffffffffffffp-1, 0x1.0000000000001p+0, -0x1.fffffffffffffp-1, -0x1.0000000000001p+0 },
         { 0x1p+53, -0x1p+53, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
         { Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_Max, -Limit<f64>::s_Max },
         { Limit<f64>::s_QuietNaN, -Limit<f64>::s_QuietNaN, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
-    };
+    }};
     for(const SIMDVectorDouble input : inputs){
         const SIMDVectorDouble floor = VectorDoubleFloor(input);
         const SIMDVectorDouble ceiling = VectorDoubleCeiling(input);
@@ -313,18 +306,18 @@ TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
 }
 
 TEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes){
-    const SIMDVectorDouble inputs[]{
+    const Array<SIMDVectorDouble, 4> inputs = {{
         { 0.5, -0.5, 1.5, -1.5 },
         { 2.5, -2.5, 0x1.fffffffffffffp-2, -0x1.fffffffffffffp-2 },
         { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
         { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
-    };
-    const SIMDVectorDouble expected[]{
+    }};
+    const Array<SIMDVectorDouble, 4> expected = {{
         { 0.0, -0.0, 2.0, -2.0 },
         { 2.0, -2.0, 0.0, -0.0 },
         { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
         { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
-    };
+    }};
     for(usize index = 0u; index < LengthOf(inputs); ++index){
         const SIMDVectorDouble rounded = VectorDoubleRound(inputs[index]);
         for(usize lane = 0u; lane < 4u; ++lane)
@@ -336,50 +329,47 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    const i32 modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    volatile f32 runtimeInputs[][4]{
+    const Array<i32, 4> modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    Array<Array<volatile f32, 4u>, 4u> runtimeInputs = {{
         { 0.5f, -0.5f, 1.5f, -1.5f },
         { 0.25f, -0.25f, 2.5f, -2.5f },
         { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
         { 0x1p-149f, -0x1p-149f, 0x1.fffffep+22f, -0x1.fffffep+22f },
-    };
-    const f32 expected[][4][4]{
-        {
+    }};
+    const Array<Array<Array<f32, 4>, 4>, 4> expected = {{
+        {{
             { 0.0f, -0.0f, 2.0f, -2.0f },
             { 0.0f, -0.0f, 2.0f, -2.0f },
             { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
             { 0.0f, -0.0f, 0x1p+23f, -0x1p+23f },
-        },
-        {
+        }},
+        {{
             { 0.0f, -0.0f, 1.0f, -1.0f },
             { 0.0f, -0.0f, 2.0f, -2.0f },
             { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
             { 0.0f, -0.0f, 0x1.fffffcp+22f, -0x1.fffffcp+22f },
-        },
-        {
+        }},
+        {{
             { 0.0f, -1.0f, 1.0f, -2.0f },
             { 0.0f, -1.0f, 2.0f, -3.0f },
             { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
             { 0.0f, -1.0f, 0x1.fffffcp+22f, -0x1p+23f },
-        },
-        {
+        }},
+        {{
             { 1.0f, -0.0f, 2.0f, -1.0f },
             { 1.0f, -0.0f, 3.0f, -2.0f },
             { -0.0f, 0.0f, 0x1p+23f, -0x1p+23f },
             { 1.0f, -0.0f, 0x1p+23f, -0x1.fffffcp+22f },
-        },
-    };
-    volatile u32 specialBits[]{ 0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u };
+        }},
+    }};
+    Array<volatile u32, 4u> specialBits = { 0x7f800000u, 0xff800000u, 0x7fc01234u, 0xffc05678u };
     for(const i32 mode : modes){
         ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
         for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
             const SIMDVectorSingle input = VectorSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            const SIMDVectorSingle results[]{ VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
+            const Array<SIMDVectorSingle, 4> results = { VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
             for(usize operation = 0u; operation < LengthOf(results); ++operation){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(VectorGetIntByIndex(results[operation], lane), BitCast<u32>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
@@ -387,7 +377,7 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
         }
         const SIMDVectorSingle special = VectorSetInt(specialBits[0], specialBits[1], specialBits[2], specialBits[3]);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const SIMDVectorSingle specialResults[]{ VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
+        const Array<SIMDVectorSingle, 4> specialResults = { VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
         const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
         EXPECT_EQ(invalid, 0) << mode;
         for(usize operation = 0u; operation < LengthOf(specialResults); ++operation){
@@ -401,44 +391,41 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    const i32 roundingModes[]{ FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    volatile f64 runtimeInputs[][4]{
+    const Array<i32, 3> roundingModes = { FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    Array<Array<volatile f64, 4u>, 4u> runtimeInputs = {{
         { 0.5, -0.5, 1.5, -1.5 },
         { 0.25, -0.25, 2.5, -2.5 },
         { -0.0, 0.0, 0x1p+53, -0x1p+53 },
         { 0x1p-1074, -0x1p-1074, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
-    };
-    const SIMDVectorDouble expected[][4]{
-        {
+    }};
+    const Array<Array<SIMDVectorDouble, 4>, 4> expected = {{
+        {{
             { 0.0, -0.0, 2.0, -2.0 },
             { 0.0, -0.0, 2.0, -2.0 },
             { -0.0, 0.0, 0x1p+53, -0x1p+53 },
             { 0.0, -0.0, 0x1p+52, -0x1p+52 },
-        },
-        {
+        }},
+        {{
             { 0.0, -0.0, 1.0, -1.0 },
             { 0.0, -0.0, 2.0, -2.0 },
             { -0.0, 0.0, 0x1p+53, -0x1p+53 },
             { 0.0, -0.0, 0x1.ffffffffffffep+51, -0x1.ffffffffffffep+51 },
-        },
-        {
+        }},
+        {{
             { 0.0, -1.0, 1.0, -2.0 },
             { 0.0, -1.0, 2.0, -3.0 },
             { -0.0, 0.0, 0x1p+53, -0x1p+53 },
             { 0.0, -1.0, 0x1.ffffffffffffep+51, -0x1p+52 },
-        },
-        {
+        }},
+        {{
             { 1.0, -0.0, 2.0, -1.0 },
             { 1.0, -0.0, 3.0, -2.0 },
             { -0.0, 0.0, 0x1p+53, -0x1p+53 },
             { 1.0, -0.0, 0x1p+52, -0x1.ffffffffffffep+51 },
-        },
-    };
+        }},
+    }};
     for(const i32 mode : roundingModes){
         const auto setStatus = SetFloatingPointRoundingMode(mode);
         EXPECT_TRUE(setStatus);
@@ -446,7 +433,7 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
             continue;
         for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
             const SIMDVectorDouble input = VectorDoubleSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            const SIMDVectorDouble results[]{ VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input), };
+            const Array<SIMDVectorDouble, 4> results = { VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input) };
             for(usize operation = 0u; operation < LengthOf(results); ++operation){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;

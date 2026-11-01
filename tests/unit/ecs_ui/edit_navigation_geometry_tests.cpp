@@ -21,18 +21,18 @@ TEST_F(UiEditNavigationHostTests, CandidateGeometryCannotReplacePublishedYHitsBe
     ASSERT_TRUE(m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(activateNavigation());
     const u64 displayed = m_context.input().layoutGeneration();
-    const TextInputRect native = m_textInput.nativeCaret();
+    const TextInputRect native = m_textInput.caretRect();
     ASSERT_TRUE(prepareNavigation({}, { 10.0f, 80.0f, 180.0f, 48.0f }));
     EXPECT_EQ(m_context.input().layoutGeneration(), displayed);
     m_host.commitFrame(m_generation);
-    EXPECT_EQ(m_textInput.nativeCaret().y, native.y);
+    EXPECT_EQ(m_textInput.caretRect().y, native.y);
     ASSERT_TRUE(click({ 20.0f, 38.0f }));
     ASSERT_TRUE(commit());
     ASSERT_TRUE(navigationFrame({}, { 10.0f, 80.0f, 180.0f, 48.0f }));
     EXPECT_EQ(m_navigationModel.caret(), 4u);
     EXPECT_EQ(m_navigationModel.anchor(), 4u);
     EXPECT_FLOAT_EQ(m_placement.caret.y, 92.0f);
-    EXPECT_EQ(m_textInput.nativeCaret().y, 92);
+    EXPECT_EQ(m_textInput.caretRect().y, 92);
     EXPECT_TRUE(m_resolver.records.empty());
 }
 

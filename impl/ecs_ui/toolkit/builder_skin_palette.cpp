@@ -14,27 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_builder_skin_palette{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Color Resolve(const UiSkin& skin, const UiSkinColorRole::Enum role)noexcept{
-    const UiSkinColor& value = skin.palette().colors[role];
-    return { value.r, value.g, value.b, value.a };
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void Builder::setSkin(const UiSkin& skin)noexcept{
     if(!balanced() || m_context.failed()){
         m_context.fail();
@@ -46,32 +25,30 @@ void Builder::setSkin(const UiSkin& skin)noexcept{
         m_style.fontSize = nextDefaultFontSize;
     m_skinDefaultFontSize = nextDefaultFontSize;
     using namespace UiSkinColorRole;
-    const auto resolve = [&skin](const Enum role)noexcept{
-        return __hidden_ui_builder_skin_palette::Resolve(skin, role);
-    };
+    const UiSkinPalette& palette = skin.palette();
 
-    m_style.text = resolve(TextNormal);
-    m_style.disabledText = resolve(TextDisabled);
-    m_tooltipStyle.text = resolve(TextTooltip);
-    m_editStyle.background = resolve(EditBackground);
-    m_editStyle.text = resolve(TextNormal);
-    m_editStyle.disabledText = resolve(TextDisabled);
-    m_editStyle.selection = resolve(EditSelection);
-    m_editStyle.inactiveSelection = resolve(EditInactiveSelection);
-    m_editStyle.caret = resolve(EditCaret);
-    m_editStyle.preedit = resolve(EditPreedit);
-    m_scrollbarStyle.trackColor = resolve(ScrollbarTrack);
-    m_scrollbarStyle.thumbColor = resolve(ScrollbarThumb);
-    m_scrollbarStyle.disabledColor = resolve(ScrollbarDisabled);
-    m_popupStyle.backdrop = resolve(PopupBackdrop);
-    m_radioGroupStyle.hoverTint = resolve(ControlHoverTint);
-    m_radioGroupStyle.pressedTint = resolve(ControlPressedTint);
-    m_radioGroupStyle.disabledTint = resolve(ControlDisabledTint);
-    m_sliderStyle.hoverTint = resolve(ControlHoverTint);
-    m_sliderStyle.pressedTint = resolve(ControlPressedTint);
-    m_sliderStyle.disabledTint = resolve(ControlDisabledTint);
-    m_progressStyle.trackTint = resolve(ProgressTrackTint);
-    m_progressStyle.fillTint = resolve(ProgressFillTint);
+    m_style.text = ResolveUiSkinColor(palette, TextNormal);
+    m_style.disabledText = ResolveUiSkinColor(palette, TextDisabled);
+    m_tooltipStyle.text = ResolveUiSkinColor(palette, TextTooltip);
+    m_editStyle.background = ResolveUiSkinColor(palette, EditBackground);
+    m_editStyle.text = ResolveUiSkinColor(palette, TextNormal);
+    m_editStyle.disabledText = ResolveUiSkinColor(palette, TextDisabled);
+    m_editStyle.selection = ResolveUiSkinColor(palette, EditSelection);
+    m_editStyle.inactiveSelection = ResolveUiSkinColor(palette, EditInactiveSelection);
+    m_editStyle.caret = ResolveUiSkinColor(palette, EditCaret);
+    m_editStyle.preedit = ResolveUiSkinColor(palette, EditPreedit);
+    m_scrollbarStyle.trackColor = ResolveUiSkinColor(palette, ScrollbarTrack);
+    m_scrollbarStyle.thumbColor = ResolveUiSkinColor(palette, ScrollbarThumb);
+    m_scrollbarStyle.disabledColor = ResolveUiSkinColor(palette, ScrollbarDisabled);
+    m_popupStyle.backdrop = ResolveUiSkinColor(palette, PopupBackdrop);
+    m_radioGroupStyle.hoverTint = ResolveUiSkinColor(palette, ControlHoverTint);
+    m_radioGroupStyle.pressedTint = ResolveUiSkinColor(palette, ControlPressedTint);
+    m_radioGroupStyle.disabledTint = ResolveUiSkinColor(palette, ControlDisabledTint);
+    m_sliderStyle.hoverTint = ResolveUiSkinColor(palette, ControlHoverTint);
+    m_sliderStyle.pressedTint = ResolveUiSkinColor(palette, ControlPressedTint);
+    m_sliderStyle.disabledTint = ResolveUiSkinColor(palette, ControlDisabledTint);
+    m_progressStyle.trackTint = ResolveUiSkinColor(palette, ProgressTrackTint);
+    m_progressStyle.fillTint = ResolveUiSkinColor(palette, ProgressFillTint);
 }
 
 

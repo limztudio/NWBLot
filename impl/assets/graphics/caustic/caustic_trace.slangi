@@ -13,7 +13,7 @@
 #include "../shadow/shadow_surface.slangi"
 #include "../mesh/surface.slangi"
 #include "../optics/ray_precision.slangi"
-#include "photon_push_constants.h"
+#include "photon_push_constants.slangi"
 #include "../raytrace/optical_events.slangi"
 #include "splat_constants.slangi"
 
@@ -281,7 +281,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
             break;
         const NwbOpticalMedium transmitted = nwbOpticalDominantMedium(transmittedMedia);
         const float3 normal = entering ? boundary.geometricNormal : -boundary.geometricNormal;
-        const NwbDielectricInterface interface = nwbDielectricTransmit(direction, normal, incident.ior, transmitted.ior);
+        const NwbDielectricInterface interface = nwbDielectricTransmit(direction, normal, half(incident.ior), half(transmitted.ior));
         if(interface.totalInternalReflection){
             ++result.tirCount;
             break;

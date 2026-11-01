@@ -32,21 +32,15 @@ namespace __hidden_ui_text_font{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_LifecycleCategory = "ui_font_lifecycle";
-inline constexpr f32 s_FixedPointRoundBias = 0.5f;
-// Native outline bounds grow by one font unit on each side.
-inline constexpr f64 s_OutlineBoundsMargin = 1.0;
-inline constexpr f64 s_OutlineBoundsMarginBothSides = 2.0;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static b8 HasTable(hb_face_t& face, hb_tag_t tag){
     hb_blob_t* blob = hb_face_reference_table(&face, tag);
     const b8 present = hb_blob_get_length(blob) != 0u;
     hb_blob_destroy(blob);
     return present;
+}
+
+[[nodiscard]] static constexpr i32 FixedPointScale(const f32 fontSize)noexcept{
+    return static_cast<i32>(fontSize * s_TextFixedPointScale + s_TextFixedPointRoundBiasF32);
 }
 
 
@@ -78,8 +72,7 @@ private:
         }
     }
 
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block)noexcept{
-        static_cast<void>(oldSize);
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, [[maybe_unused]] FT_Long oldSize, FT_Long newSize, void* block)noexcept{
         if(newSize <= 0){
             Release(memory, block);
             return nullptr;
@@ -181,13 +174,13 @@ private:
             const FT_Error error = FT_Done_Face(m_face);
             m_face = nullptr;
             if(error != 0)
-                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_ui_text_font::s_LifecycleCategory, .message = "UI FreeType face destruction failed", .file = __FILE__, .line = __LINE__, });
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TextFontLifecycleCategory, .message = "UI FreeType face destruction failed", .file = __FILE__, .line = __LINE__, });
         }
         if(m_library){
             const FT_Error error = FT_Done_Library(m_library);
             m_library = nullptr;
             if(error != 0)
-                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = __hidden_ui_text_font::s_LifecycleCategory, .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
+                CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_TextFontLifecycleCategory, .message = "UI FreeType library destruction failed", .file = __FILE__, .line = __LINE__, });
         }
     }
 
@@ -210,12 +203,15 @@ private:
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const SIMDVectorDouble scale = VectorDoubleDivide(VectorDoubleSet(static_cast<f64>(fontSize), static_cast<f64>(fontSize), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(m_face->units_per_EM), static_cast<f64>(m_face->units_per_EM), 1.0, 1.0));
         const SIMDVectorDouble leftTopUnits = VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMax), 0.0, 0.0);
-        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(__hidden_ui_text_font::s_OutlineBoundsMargin, __hidden_ui_text_font::s_OutlineBoundsMargin, 0.0, 0.0));
+        const SIMDVectorDouble leftTopBounds = VectorDoubleSubtract(VectorDoubleSelect(leftTopUnits, VectorDoubleNegate(leftTopUnits), s_DoubleSIMDMaskY), VectorDoubleSet(s_TextOutlineBoundsMargin, s_TextOutlineBoundsMargin, 0.0, 0.0));
         const SIMDVectorDouble leftTopValue = VectorDoubleMultiply(leftTopBounds, scale);
         const f64 left = VectorDoubleGetX(leftTopValue);
         const f64 top = VectorDoubleGetY(leftTopValue);
         const SIMDVectorDouble widthHeightValue = VectorDoubleMultiply(
-            VectorDoubleAdd(VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)), VectorDoubleSet(__hidden_ui_text_font::s_OutlineBoundsMarginBothSides, __hidden_ui_text_font::s_OutlineBoundsMarginBothSides, 0.0, 0.0)),
+            VectorDoubleAdd(
+                VectorDoubleSubtract(VectorDoubleSet(static_cast<f64>(box.xMax), static_cast<f64>(box.yMax), 0.0, 0.0), VectorDoubleSet(static_cast<f64>(box.xMin), static_cast<f64>(box.yMin), 0.0, 0.0)),
+                VectorDoubleSet(s_TextOutlineBoundsMarginBothSides, s_TextOutlineBoundsMarginBothSides, 0.0, 0.0)
+            ),
             scale
         );
         const f64 width = VectorDoubleGetX(widthHeightValue);
@@ -279,9 +275,9 @@ const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state
 
 Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     FontMetrics metrics{};
-    if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / s_TextFixedPointScale || fontSize > s_TextMaxFontSize)
+    if(!valid() || !IsValidTextFontSize(fontSize))
         return MakeUnexpected(Failure{});
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(__hidden_ui_text_font::s_FixedPointRoundBias))));
+    const i32 scale = __hidden_ui_text_font::FixedPointScale(fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     hb_font_extents_t extents{};
     if(!hb_font_get_h_extents(m_state->m_scaledFont, &extents))
@@ -291,15 +287,15 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     metrics.ascender = VectorGetX(positiveExtents);
     metrics.descender = VectorGetY(positiveExtents);
     metrics.lineGap = VectorGetZ(positiveExtents);
-    if(!(VectorGetX(VectorAdd(VectorSplatX(positiveExtents), VectorSplatY(positiveExtents))) > 0.0f))
+    if(!(metrics.ascender + metrics.descender > 0.0f))
         return MakeUnexpected(Failure{});
     return metrics;
 }
 
 b8 FontFace::shape(const ShapeRequest& request, u32 byteBegin, u32 byteEnd, PaintVector<RawShapedGlyph>& output)const{
-    if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / s_TextFixedPointScale || request.fontSize > s_TextMaxFontSize)
+    if(!valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes || !IsValidTextFontSize(request.fontSize))
         return false;
-    const i32 scale = static_cast<i32>(VectorGetX(VectorMultiplyAddExpression(VectorReplicate(request.fontSize), VectorReplicate(s_TextFixedPointScale), VectorReplicate(__hidden_ui_text_font::s_FixedPointRoundBias))));
+    const i32 scale = __hidden_ui_text_font::FixedPointScale(request.fontSize);
     hb_font_set_scale(m_state->m_scaledFont, scale, scale);
     const hb_script_t script = hb_script_from_iso15924_tag(request.scriptTag);
     if(script == HB_SCRIPT_INVALID)

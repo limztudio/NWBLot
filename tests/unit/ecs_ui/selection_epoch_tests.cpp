@@ -22,7 +22,7 @@ namespace EpochMutation{
 
 class UiSelectionEpochTests : public UiEditBoxHostTests{
 protected:
-    [[nodiscard]] Ui::UiTextEditOwner owner()const noexcept{ return { { 271u }, 3u, m_model.instanceGeneration() }; }
+    [[nodiscard]] UiTextEditOwner owner()const noexcept{ return { { 271u }, 3u, m_model.instanceGeneration() }; }
 
     [[nodiscard]] b8 seedSelection(){ return m_model.setText("abcd") && m_model.setSelection(1u, 3u); }
 
@@ -50,7 +50,7 @@ protected:
     }
 
     void clipboardRejected(const EpochMutation::Enum mutation){
-        const Ui::EditClipboardAction::Enum actions[]{ Ui::EditClipboardAction::Cut, Ui::EditClipboardAction::Paste };
+        const Array<Ui::EditClipboardAction::Enum, 2u> actions = { Ui::EditClipboardAction::Cut, Ui::EditClipboardAction::Paste };
         m_clipboard.delayed = true;
         for(const auto action : actions){
             SCOPED_TRACE(action);
@@ -78,7 +78,7 @@ protected:
         ASSERT_TRUE(seedSelection());
         UiTextEditSession session(m_arena, m_textInput);
         const TextInputRect caret{ 100, 32, 1, 18 };
-        ASSERT_EQ(session.begin(owner(), m_model, caret), TextInputAdmission::Accepted);
+        ASSERT_EQ(session.begin(owner(), caret, m_model), TextInputAdmission::Accepted);
         const TextInputSessionToken token = session.token();
         const u64 surrounding = session.surroundingRevision();
         const u64 revision = m_model.revision();
@@ -89,8 +89,8 @@ protected:
         EXPECT_FALSE(session.matchesPublished(owner(), m_model));
         if(refresh){
             EXPECT_EQ(session.refresh(owner(), m_model, { 400, 320, 2, 20 }), TextInputAdmission::InvalidSession);
-            EXPECT_EQ(m_textInput.nativeCaret().x, caret.x);
-            EXPECT_EQ(m_textInput.nativeCaret().y, caret.y);
+            EXPECT_EQ(m_textInput.caretRect().x, caret.x);
+            EXPECT_EQ(m_textInput.caretRect().y, caret.y);
             EXPECT_EQ(session.surroundingRevision(), surrounding);
             EXPECT_EQ(session.token(), token);
         }
@@ -100,7 +100,7 @@ protected:
         EXPECT_FALSE(result.textChanged);
         EXPECT_FALSE(session.token().valid());
         EXPECT_FALSE(m_textInput.activeSession().valid());
-        EXPECT_EQ(m_textInput.commitFor(token, "later"), TextInputAdmission::InvalidSession);
+        EXPECT_EQ(m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
         expectSelectionPreserved(revision, externalRevision);
     }
 
@@ -119,7 +119,7 @@ protected:
         EXPECT_FALSE(m_result.selectionChanged);
         EXPECT_EQ(m_model.selectionGeneration(), selectionGeneration);
         expectSelectionPreserved(revision, externalRevision);
-        EXPECT_EQ(m_textInput.commitFor(token, "later"), TextInputAdmission::InvalidSession);
+        EXPECT_EQ(m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
         EXPECT_NE(m_textInput.activeSession(), token);
     }
 };
@@ -197,7 +197,7 @@ TEST_F(UiSelectionEpochTests, OrderedHostRetiresOldNativeTextAndKeepsTheApplicat
     EXPECT_EQ(m_model.caret(), 0u);
     EXPECT_EQ(m_model.selectionGeneration(), selectionGeneration);
     EXPECT_FALSE(m_model.canUndo());
-    EXPECT_EQ(m_textInput.commitFor(token, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(token, "later"), TextInputAdmission::InvalidSession);
     ASSERT_EQ(m_textInput.commit("fresh"), TextInputAdmission::Accepted);
     m_host.collectNative();
     ASSERT_TRUE(frame(m_model));

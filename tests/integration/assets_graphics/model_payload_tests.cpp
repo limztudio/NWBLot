@@ -32,16 +32,18 @@ static constexpr AStringView s_TestsModelPayloadMesh = "tests/model_payload/mesh
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
 
 struct ModelInputs{
+    Core::Assets::AssetArena arena{ Name("tests/model_payload/inputs") };
+    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_payload/validation_scratch") };
+    Model model{ arena, Name("tests/model_payload/model") };
+    Model::SkeletonObjectVector skeletonObjects{ arena };
+    Model::StaticMeshObjectVector staticMeshObjects{ arena };
+    Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
+
+
 public:
     ModelInputs(){
         skeletonObjects.push_back(ModelSkeletonObject{ .name = Name(s_Rig), .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton") });
@@ -55,15 +57,6 @@ public:
     void publish(){
         model.setObjects(Model::SkeletonObjectVector(skeletonObjects), Model::StaticMeshObjectVector(staticMeshObjects), Model::SkinnedMeshObjectVector(skinnedMeshObjects));
     }
-
-
-public:
-    Core::Assets::AssetArena arena{ Name("tests/model_payload/inputs") };
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_payload/validation_scratch") };
-    Model model{ arena, Name("tests/model_payload/model") };
-    Model::SkeletonObjectVector skeletonObjects{ arena };
-    Model::StaticMeshObjectVector staticMeshObjects{ arena };
-    Model::SkinnedMeshObjectVector skinnedMeshObjects{ arena };
 };
 
 
@@ -78,7 +71,7 @@ TEST(ModelPayload, RejectsDuplicateNamesWithinAndAcrossObjectKinds){
         switch(duplicateCase){
         case 0u: inputs.skeletonObjects.push_back(inputs.skeletonObjects.front()); break;
         case 1u: inputs.staticMeshObjects.push_back(inputs.staticMeshObjects.front()); break;
-        case s_ExpectedDualCount: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects.front()); break;
+        case 2u: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects.front()); break;
         case 3u: inputs.staticMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
         case 4u: inputs.skinnedMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
         case 5u: inputs.skinnedMeshObjects.front().name = inputs.staticMeshObjects.front().name; break;
@@ -98,7 +91,7 @@ TEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels){
         switch(invalidCase){
         case 0u: inputs.skeletonObjects.front().name = s_NameNone; break;
         case 1u: inputs.skeletonObjects.front().skeleton.reset(); break;
-        case s_ExpectedDualCount: inputs.staticMeshObjects.front().name = s_NameNone; break;
+        case 2u: inputs.staticMeshObjects.front().name = s_NameNone; break;
         case 3u: inputs.staticMeshObjects.front().mesh.reset(); break;
         case 4u: inputs.skinnedMeshObjects.front().name = s_NameNone; break;
         case 5u: inputs.skinnedMeshObjects.front().skin.reset(); break;
@@ -125,7 +118,7 @@ TEST(ModelPayload, RejectsMissingOrWrongKindParents){
         switch(invalidCase){
         case 0u: inputs.staticMeshObjects.front().parentObject = Name("missing"); break;
         case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_Prop); break;
-        case s_ExpectedDualCount: inputs.staticMeshObjects.front().parentObject = Name(s_Body); break;
+        case 2u: inputs.staticMeshObjects.front().parentObject = Name(s_Body); break;
         case 3u: inputs.staticMeshObjects.front().parentObject = s_NameNone; break;
         case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name("missing"); break;
         case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_Prop); break;
@@ -182,9 +175,9 @@ TEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejecti
     ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        inputs.skinnedMeshObjects.front().name = iteration % s_ExpectedDualCount == 0u ? Name(s_Body) : Name(s_Prop);
+        inputs.skinnedMeshObjects.front().name = iteration % 2u == 0u ? Name(s_Body) : Name(s_Prop);
         inputs.publish();
-        EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % s_ExpectedDualCount == 0u);
+        EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % 2u == 0u);
         const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
         EXPECT_EQ(current.usedBytes, warm.usedBytes);
         EXPECT_EQ(current.reservedBytes, warm.reservedBytes);

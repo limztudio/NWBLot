@@ -4,14 +4,16 @@
 
 #include "deferred_system.h"
 
+#include <impl/ecs_render/caustic/rt_caustic_state.h>
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/shared/renderer_scene_private.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets_graphics/deferred/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -33,16 +35,14 @@ namespace __hidden_deferred_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PushConstants{
-    u32 resourceSlots = 0u;
-    u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
-};
-static_assert(sizeof(PushConstants) == sizeof(u32) * 2u);
+static_assert(sizeof(DeferredLightingPushConstants) == sizeof(u32) * 2u);
 
 
 struct DeferredLightingGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
@@ -53,8 +53,8 @@ struct DeferredLightingGraphTask{
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        static_cast<void>(context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
+
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
             return deferredSystem.renderDeferredLighting(taskCommandList, targets, payload.useLaggedLightingHistory);
         });
@@ -76,37 +76,28 @@ SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploa
     NWB_ASSERT(m_deferredState.m_lightBuffer);
     SceneShadingBufferUploads uploads{};
 
-    f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, uploads.lightData, causticLightImportance);
+    Array<f32, NWB_SCENE_MAX_LIGHTS> causticLightImportance{};
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, uploads.lightData, causticLightImportance);
 
     // Rank caustic lights into params.w; needs a refractive instance.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
-        Span<const f32>(causticLightImportance, lightCount),
+        Span<const f32>(causticLightImportance.data(), lightCount),
         rayTracingInput.refractiveInstanceCount,
-        Span<SceneLightGpuData>(uploads.lightData, lightCount)
+        Span<SceneLightGpuData>(uploads.lightData.data(), lightCount)
     );
     uploads.lightingClassification.causticLightCount = causticLightCount;
     // Bitmask of shadow slots holding a light.
-    u32 softShadowSlotMask = 0u;
-    for(u32 i = 0u; i < lightCount; ++i){
-        const f32 slot = uploads.lightData[i].params.z;
-        if(slot >= 0.f){
-            const u32 slotIndex = static_cast<u32>(slot);
-            if(slotIndex < NWB_SCENE_SHADOW_SLOT_COUNT)
-                softShadowSlotMask |= (1u << slotIndex);
-        }
-    }
-    uploads.lightingClassification.softShadowSlotMask = softShadowSlotMask;
+    uploads.lightingClassification.softShadowSlotMask = ResolveSoftShadowSlotMask(Span<const SceneLightGpuData>(uploads.lightData.data(), lightCount));
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(SceneLightGpuData);
-    NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
-    const b8 lightDataUnchanged = m_deferredState.m_lightGpuDataValid && m_deferredState.m_lightGpuDataCount == lightCount && NWB_MEMCMP(m_deferredState.m_lightGpuData, uploads.lightData, lightByteCount) == 0;
+    NWB_ASSERT(lightByteCount <= m_deferredState.m_lightGpuData.size());
+    const b8 lightDataUnchanged = m_deferredState.m_lightGpuDataValid && m_deferredState.m_lightGpuDataCount == lightCount && NWB_MEMCMP(m_deferredState.m_lightGpuData.data(), uploads.lightData.data(), lightByteCount) == 0;
     // A zero-light scene has nothing to copy; still record the empty mirror.
     uploads.lightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
     uploads.lightCount = lightCount;
 
-    uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio, lightCount);
-    uploads.sceneShadingUploadRequired = !(m_deferredState.m_sceneShadingGpuDataValid && NWB_MEMCMP(m_deferredState.m_sceneShadingGpuData, &uploads.sceneShadingState, sizeof(uploads.sceneShadingState)) == 0);
+    uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(fallbackAspectRatio, lightCount, m_world);
+    uploads.sceneShadingUploadRequired = !(m_deferredState.m_sceneShadingGpuDataValid && NWB_MEMCMP(m_deferredState.m_sceneShadingGpuData.data(), &uploads.sceneShadingState, sizeof(uploads.sceneShadingState)) == 0);
     return uploads;
 }
 
@@ -121,13 +112,13 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
         if(lightByteCount != 0u){
-            NWB_MEMCPY(m_deferredState.m_lightGpuData, sizeof(m_deferredState.m_lightGpuData), lights.data(), lightByteCount);
+            NWB_MEMCPY(m_deferredState.m_lightGpuData.data(), m_deferredState.m_lightGpuData.size(), lights.data(), lightByteCount);
         }
         m_deferredState.m_lightGpuDataCount = lightCount;
         m_deferredState.m_lightGpuDataValid = true;
     }
     if(sceneShadingUploadRequired){
-        NWB_MEMCPY(m_deferredState.m_sceneShadingGpuData, sizeof(m_deferredState.m_sceneShadingGpuData), &sceneShadingState, sizeof(sceneShadingState));
+        NWB_MEMCPY(m_deferredState.m_sceneShadingGpuData.data(), m_deferredState.m_sceneShadingGpuData.size(), &sceneShadingState, sizeof(sceneShadingState));
         m_deferredState.m_sceneShadingGpuDataValid = true;
     }
 }
@@ -145,7 +136,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         sceneShadingBufferDesc
             .setByteSize(sizeof(SceneShadingGpuData))
             .setIsConstantBuffer(true)
-            .setDebugName(ECSRenderDetail::s_SceneShadingBufferName)
+            .setDebugName(s_SceneShadingBufferName)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -165,7 +156,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         lightBufferDesc
             .setByteSize(static_cast<u64>(sizeof(SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
             .setStructStride(sizeof(SceneLightGpuData))
-            .setDebugName(ECSRenderDetail::s_SceneLightBufferName)
+            .setDebugName(s_SceneLightBufferName)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -184,7 +175,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // Local layout carries the heap slot plus the swap-chain mode.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredLightingPushConstants)));
 
         auto lightingBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
         if(lightingBindingLayoutResult)
@@ -203,7 +194,7 @@ b8 RendererDeferredSystem::createDeferredLightingResources(){
     }
 
     // Shading is material-driven via the generated BXDF dispatch.
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_deferredState.m_lightingComputeShader, &DeferredSubsystem::lightingCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredLightingCS"))
+    if(!m_shaderSystem.loadShader<ComputeShader>(&DeferredSubsystem::lightingCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredLightingCS", m_deferredState.m_lightingComputeShader))
         return false;
 
     return true;
@@ -258,7 +249,7 @@ b8 RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList
     computeState.setPipeline(m_deferredState.m_lightingPipeline.get());
     commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_lightingPipeline);
-    const __hidden_deferred_lighting::PushConstants pushConstants{ resourceSlots.slot(), m_graphics.isHDR10OutputActive() ? NWB_DEFERRED_PRESENTATION_HDR10 : NWB_DEFERRED_PRESENTATION_SDR };
+    const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot(), m_graphics.isHDR10OutputActive());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     const u32 groupCountX = (targets.width + NWB_DEFERRED_LIGHTING_GROUP_SIZE - 1u) / NWB_DEFERRED_LIGHTING_GROUP_SIZE;

@@ -54,10 +54,10 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness)noexcept
-    : m_context(context)
+ReflectionRoughnessScene::ReflectionRoughnessScene(const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness, ProjectRuntimeContext& context, NWB::Core::ECS::World& world)noexcept
+    : m_bindJoints(context.objectArena)
+    , m_context(context)
     , m_world(world)
-    , m_bindJoints(context.objectArena)
     , m_camera(camera)
     , m_light(light)
     , m_roughness(roughness){}
@@ -139,16 +139,16 @@ b8 ReflectionRoughnessScene::applyMutation(){
 
 NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
     using namespace __hidden_reflection_roughness_scene;
-    const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, material, s_Interface, color, position, scale);
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, material, s_Interface, color, position, scale, m_world);
     if(!entity.valid())
         return entity;
     auto& transform = m_world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
     StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(roughness);
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
         return NWB::Core::ECS::s_InvalidEntityId;
-    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!NWB::Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(packedRoughness)))
         return NWB::Core::ECS::s_InvalidEntityId;
     return entity;
 }
@@ -178,12 +178,12 @@ b8 ReflectionRoughnessScene::createDeformingSource(){
     m_bindJoints.reserve(skeleton.joints().size());
     for(const NWB::Impl::SkeletonJoint& joint : skeleton.joints())
         m_bindJoints.push_back(joint.localBindPose);
-    const auto redModel = CreateTintedModelEntity(m_world, s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f));
+    const auto redModel = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(1.f, 0.f, 0.f, 1.f), Float4(-1.6f, 0.55f, -8.f, 0.f), Float4(0.85f, 0.85f, 0.85f, 0.f), m_world);
     m_red = redModel.entity;
     if(!m_red.valid() || !redModel.tintApplied)
         return false;
     SyncSmokeModelRuntimes(m_world);
-    m_skeleton = FindSpawnedModelObject(m_world, m_red, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton);
+    m_skeleton = FindSpawnedModelObject(m_red, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, m_world);
     return m_skeleton.valid();
 }
 

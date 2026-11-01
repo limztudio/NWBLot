@@ -19,12 +19,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetRegistry::AssetRegistry(AssetArena& arena)
-    : m_arena(arena)
-    , m_codecs(0, Hasher<Name>(), EqualTo<Name>(), arena)
-{}
-
-
 b8 AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const b8 replaceExisting){
     if(!codec){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: rejected null codec registration"));
@@ -71,10 +65,6 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(const Name& assetTyp
         return MakeUnexpected(Failure{});
     }
 
-    return deserializeAssetByName(assetType, virtualPath, binary);
-}
-
-Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(const Name& assetType, const Name& virtualPath, const Span<const u8> binary)const{
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
     if(found == m_codecs.end()){
@@ -83,7 +73,7 @@ Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(const Name& as
     }
     const NotNull<IAssetCodec*> codec(found.value().get());
 
-    return codec->deserialize(m_arena, virtualPath, binary);
+    return codec->deserialize(virtualPath, binary, m_arena);
 }
 
 

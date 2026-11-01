@@ -10,9 +10,6 @@
 
 #include "build.h"
 
-#include "build_inputs.h"
-#include "cook_paths.h"
-
 #include <core/assets/volume/arena_names.h>
 #include <core/assets/volume/built_asset.h>
 #include <core/assets/volume/cooked_object_cache.h>
@@ -40,21 +37,19 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildAssets(const AssetBuildOptions& options){
+b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchArena){
     Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
-    if(options.assetType.view() != s_GraphicsAssetBuildType){
+    if(options.assetType.view() != Assets::AssetsVolumeCookDetail::s_AssetVolumeName){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), ConvertString(options.assetType.view()));
         return false;
     }
-
-    Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
 
     auto paths = ResolveCookPaths(options, arena);
     if(!paths)
         return false;
     const Assets::ResolvedCookPaths& resolvedPaths = *paths;
 
-    auto discoveredFiles = Assets::DiscoverFilesWithExtension(arena, resolvedPaths.assetRoots, Assets::s_NwbExtension, scratchArena);
+    auto discoveredFiles = Assets::DiscoverFilesWithExtension(resolvedPaths.assetRoots, Assets::s_NwbExtension, arena, scratchArena);
     if(!discoveredFiles)
         return false;
 
@@ -66,7 +61,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
     Assets::ParsedAssetMetadata parsedMetadata(arena);
     if(!Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry, scratchArena))
         return false;
-    if(!Assets::ParseAssetMetadata(arena, nwbFiles, options.services.cpuScheduler, scratchArena, parsedMetadata, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory))
+    if(!Assets::ParseAssetMetadata(nwbFiles, resolvedPaths.repoRoot, resolvedPaths.cacheDirectory, arena, options.services.cpuScheduler, scratchArena, parsedMetadata))
         return false;
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
@@ -82,10 +77,10 @@ b8 BuildAssets(const AssetBuildOptions& options){
         return false;
 
     Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
-    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, plannedFileCount))
+    if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(plannedFileCount, manifest))
         return false;
 
-    Assets::AssetsVolumeCookDetail::VirtualPathHashSet seenVirtualPathHashes{scratchArena};
+    Assets::CookEntryPathHashSet seenVirtualPathHashes{scratchArena};
     if(plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
         seenVirtualPathHashes.reserve(static_cast<usize>(plannedFileCount));
 
@@ -93,7 +88,7 @@ b8 BuildAssets(const AssetBuildOptions& options){
         if(!manifestCooker(manifest, seenVirtualPathHashes, scratchArena))
             return false;
     }
-    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(arena, options.services.cpuScheduler, configurationSafeName, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
+    if(!Assets::AssetsVolumeCookDetail::BuildRegistryObjectManifestEntries(configurationSafeName, arena, options.services.cpuScheduler, scratchArena, parsedMetadata, manifest, seenVirtualPathHashes))
         return false;
 
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))
@@ -101,6 +96,11 @@ b8 BuildAssets(const AssetBuildOptions& options){
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), ConvertString(options.outputDirectory));
     return true;
+}
+
+b8 BuildAssets(const AssetBuildOptions& options){
+    Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
+    return BuildAssets(options, scratchArena);
 }
 
 

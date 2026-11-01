@@ -2,10 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/arena_owner_fixture.h>
+
 #include <core/alloc/general.h>
 #include <core/alloc/persistent.h>
 
 #include <global/arena_c_allocator.h>
+#include <global/span.h>
 
 #include <gtest/gtest.h>
 
@@ -29,22 +32,13 @@ inline constexpr usize s_SmallArenaPayloadBytes = 1024u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectSameStats(const ArenaMemoryStats& actual, const ArenaMemoryStats& expected){
-    EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
-    EXPECT_EQ(actual.usedBytes, expected.usedBytes);
-    EXPECT_EQ(actual.peakUsedBytes, expected.peakUsedBytes);
-    EXPECT_EQ(actual.allocationCount, expected.allocationCount);
-    EXPECT_EQ(actual.reallocationCount, expected.reallocationCount);
-    EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
-}
-
-void FillPattern(u8* const bytes, const usize byteCount)noexcept{
-    for(usize index = 0u; index < byteCount; ++index)
+void FillPattern(const Span<u8> bytes)noexcept{
+    for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(index * 17u + 3u);
 }
 
-void ExpectPattern(const u8* const bytes, const usize byteCount){
-    for(usize index = 0u; index < byteCount; ++index)
+void ExpectPattern(const Span<const u8> bytes){
+    for(usize index = 0u; index < bytes.size(); ++index)
         EXPECT_EQ(bytes[index], static_cast<u8>(index * 17u + 3u));
 }
 
@@ -60,21 +54,21 @@ TEST(PersistentArenaTests, StructureAlignedSizeFitsExactPayloadAndReusesTheFixed
     const ArenaMemoryStats initial = arena.memoryStats();
     auto* const first = static_cast<u8*>(arena.allocate(1u, s_PayloadBytes));
     ASSERT_NE(first, nullptr);
-    FillPattern(first, s_PayloadBytes);
+    FillPattern(Span(first, s_PayloadBytes));
     const ArenaMemoryStats allocated = arena.memoryStats();
     EXPECT_EQ(allocated.reservedBytes, initial.reservedBytes);
     EXPECT_GT(allocated.usedBytes, 0u);
     EXPECT_EQ(allocated.allocationCount, initial.allocationCount + 1u);
 
     EXPECT_EQ(arena.allocate(1u, 1u), nullptr);
-    ExpectSameStats(arena.memoryStats(), allocated);
+    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(allocated, arena.memoryStats());
 
     arena.deallocate(first, 1u, s_PayloadBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
     auto* const reused = static_cast<u8*>(arena.allocate(1u, s_PayloadBytes));
     ASSERT_NE(reused, nullptr);
-    FillPattern(reused, s_PayloadBytes);
-    ExpectPattern(reused, s_PayloadBytes);
+    FillPattern(Span(reused, s_PayloadBytes));
+    ExpectPattern(Span(reused, s_PayloadBytes));
     arena.deallocate(reused, 1u, s_PayloadBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
@@ -130,12 +124,12 @@ TEST(PersistentArenaTests, ReusesAdjacentFreeBlocksForGrowthAndCoalescing){
     auto* const neighbor = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
     ASSERT_NE(growth, nullptr);
     ASSERT_NE(neighbor, nullptr);
-    FillPattern(growth, s_GrowthBytes);
+    FillPattern(Span(growth, s_GrowthBytes));
     arena.deallocate(neighbor, 1u, s_BlockBytes);
 
     auto* const grown = static_cast<u8*>(arena.reallocate(growth, 1u, s_GrownBytes));
     ASSERT_EQ(grown, growth);
-    ExpectPattern(grown, s_GrowthBytes);
+    ExpectPattern(Span(grown, s_GrowthBytes));
     arena.deallocate(grown, 1u, s_GrownBytes);
 
     auto* const first = static_cast<u8*>(arena.allocate(1u, s_BlockBytes));
@@ -167,19 +161,19 @@ TEST(PersistentArenaTests, ReallocationGrowsAcrossMultipleDeferredAdjacentBlocks
     ASSERT_NE(first, nullptr);
     ASSERT_NE(second, nullptr);
     ASSERT_NE(third, nullptr);
-    FillPattern(first, s_BlockBytes);
+    FillPattern(Span(first, s_BlockBytes));
 
     arena.deallocate(second, 1u, s_BlockBytes);
     const ArenaMemoryStats beforeFailedGrowth = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(first, 1u, s_GrownBytes), nullptr);
-    ExpectPattern(first, s_BlockBytes);
-    ExpectSameStats(arena.memoryStats(), beforeFailedGrowth);
+    ExpectPattern(Span(first, s_BlockBytes));
+    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(beforeFailedGrowth, arena.memoryStats());
 
     arena.deallocate(third, 1u, s_BlockBytes);
 
     auto* const grown = static_cast<u8*>(arena.reallocate(first, 1u, s_GrownBytes));
     ASSERT_EQ(grown, first);
-    ExpectPattern(grown, s_BlockBytes);
+    ExpectPattern(Span(grown, s_BlockBytes));
     arena.deallocate(grown, 1u, s_GrownBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
@@ -193,12 +187,12 @@ TEST(PersistentArenaTests, FailedAlignedReallocationRetainsPayloadAndStats){
     auto* const blocker = static_cast<u8*>(arena.allocate(1u, 800u));
     ASSERT_NE(initial, nullptr);
     ASSERT_NE(blocker, nullptr);
-    FillPattern(initial, s_InitialBytes);
+    FillPattern(Span(initial, s_InitialBytes));
     const ArenaMemoryStats beforeFailure = arena.memoryStats();
 
     EXPECT_EQ(arena.reallocate(initial, 256u, 1536u), nullptr);
-    ExpectPattern(initial, s_InitialBytes);
-    ExpectSameStats(arena.memoryStats(), beforeFailure);
+    ExpectPattern(Span(initial, s_InitialBytes));
+    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(beforeFailure, arena.memoryStats());
 
     arena.deallocate(initial, 1u, s_InitialBytes);
     arena.deallocate(blocker, 1u, 800u);
@@ -214,17 +208,17 @@ TEST(PersistentArenaTests, ReallocationMaintainsRequestedAlignmentAcrossShrinkAn
 
     auto* const initial = static_cast<u8*>(arena.allocate(1u, s_InitialBytes));
     ASSERT_NE(initial, nullptr);
-    FillPattern(initial, s_InitialBytes);
+    FillPattern(Span(initial, s_InitialBytes));
 
     auto* const shrunk = static_cast<u8*>(arena.reallocate(initial, 256u, 256u));
     ASSERT_NE(shrunk, nullptr);
     EXPECT_EQ(reinterpret_cast<usize>(shrunk) % 256u, 0u);
-    ExpectPattern(shrunk, 256u);
+    ExpectPattern(Span(shrunk, 256u));
 
     auto* const grown = static_cast<u8*>(arena.reallocate(shrunk, s_HighAlignment, s_GrownBytes));
     ASSERT_NE(grown, nullptr);
     EXPECT_EQ(reinterpret_cast<usize>(grown) % s_HighAlignment, 0u);
-    ExpectPattern(grown, 256u);
+    ExpectPattern(Span(grown, 256u));
     arena.deallocate(grown, s_HighAlignment, s_GrownBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
@@ -251,7 +245,7 @@ TEST(PersistentArenaTests, NullAndZeroReallocationFollowAllocationAccounting){
 
     const ArenaMemoryStats before = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(nullptr, 64u, 0u), nullptr);
-    ExpectSameStats(arena.memoryStats(), before);
+    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(before, arena.memoryStats());
 
     auto* const allocation = static_cast<u8*>(arena.reallocate(nullptr, 64u, 33u));
     ASSERT_NE(allocation, nullptr);

@@ -32,13 +32,13 @@ namespace AssetsVolumeCookDetail{
 
 
 [[nodiscard]] b8 BuildRegistryObjectManifestEntries(
+    AStringView configurationSafeName,
     Core::Alloc::GlobalArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
-    AStringView configurationSafeName,
     ScratchArena& scratchArena,
     ParsedAssetMetadata& parsedMetadata,
     AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& seenVirtualPathHashes
+    CookEntryPathHashSet& seenVirtualPathHashes
 );
 
 

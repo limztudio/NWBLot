@@ -28,9 +28,7 @@ namespace __hidden_built_asset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
 using ScratchBytes = Vector<u8, ScratchArena>;
-using ScratchString = AString<ScratchArena>;
 using ScratchPath = ::Path<ScratchArena>;
 
 inline constexpr u32 s_Magic = 0x4142574eu;
@@ -69,7 +67,7 @@ namespace BuiltAssetDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 WriteBinaryFileIfChanged(__hidden_built_asset::ScratchBytes& existing, const __hidden_built_asset::ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent){
+b8 WriteBinaryFileIfChanged(const __hidden_built_asset::ScratchPath& path, const Span<const u8> bytes, const b8 replaceDifferent, __hidden_built_asset::ScratchBytes& existing){
     const auto read = ReadBinaryFile(path, existing);
     if(read && __hidden_built_asset::BytesMatch(existing, bytes))
         return true;
@@ -78,7 +76,7 @@ b8 WriteBinaryFileIfChanged(__hidden_built_asset::ScratchBytes& existing, const 
         return false;
     }
 
-    __hidden_built_asset::ScratchString temporaryName(__hidden_built_asset::s_TemporaryNamePrefix, path.arena());
+    ScratchString temporaryName(__hidden_built_asset::s_TemporaryNamePrefix, path.arena());
     AppendHexU64(CurrentProcessId(), temporaryName);
     temporaryName += __hidden_built_asset::s_TemporaryNameSeparator;
     AppendHexU64(__hidden_built_asset::g_TemporarySequence.fetch_add(__hidden_built_asset::s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
@@ -113,15 +111,15 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
 
     __hidden_built_asset::ScratchBytes artifactBytes(scratchArena);
     __hidden_built_asset::ScratchBytes existingBytes(scratchArena);
-    __hidden_built_asset::ScratchString manifestText(scratchArena);
-    __hidden_built_asset::ScratchString filename(scratchArena);
+    __hidden_built_asset::ScratchBytes manifestBytes(scratchArena);
+    ScratchString filename(scratchArena);
     filename.reserve(NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size());
     const __hidden_built_asset::ScratchPath scratchOutputDirectory(scratchArena, outputDirectory);
     __hidden_built_asset::ScratchPath path(scratchArena);
     usize manifestLineBytes = NameDetail::s_HexDigitsPerHashLane * __hidden_built_asset::s_FilenameHexFieldCount + s_Extension.size();
     usize manifestReserveBytes = 0u;
     if(AddBinaryReserveBytes(manifestLineBytes, 1u) && AddBinaryRepeatedReserveBytes(manifestReserveBytes, manifest.entries.size(), manifestLineBytes))
-        manifestText.reserve(manifestReserveBytes);
+        manifestBytes.reserve(manifestReserveBytes);
     u64 artifactIndex = 0u;
     for(const auto& entry : manifest.entries){
         const u8* const payloadData = entry.payloadBytes.data();
@@ -167,17 +165,17 @@ b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::A
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolume: failed to inspect built asset '{}'"), PathToString<tchar>(path));
                 return false;
             }
-            if(!WriteBinaryFileIfChanged(existingBytes, path, artifactBytes, false))
+            if(!WriteBinaryFileIfChanged(path, artifactBytes, false, existingBytes))
                 return false;
             break;
         }
-        manifestText += filename;
-        manifestText += '\n';
+        AppendTextBytesNoReserveUnchecked(manifestBytes, AStringView(filename));
+        manifestBytes.push_back(static_cast<u8>('\n'));
     }
 
     path = scratchOutputDirectory;
     path /= s_ManifestFilename;
-    return WriteBinaryFileIfChanged(existingBytes, path, Span<const u8>(reinterpret_cast<const u8*>(manifestText.data()), manifestText.size()));
+    return WriteBinaryFileIfChanged(path, manifestBytes, true, existingBytes);
 }
 
 Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){

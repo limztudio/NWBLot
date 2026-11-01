@@ -10,7 +10,6 @@
 #include <global/limit.h>
 #include <global/text_utils.h>
 
-#include <cerrno>
 #include <gtest/gtest.h>
 #include <tbb/scalable_allocator.h>
 
@@ -26,8 +25,6 @@ namespace __hidden_allocator_usage_boundary_tests{
 
 using namespace NWB::Core::Alloc;
 using ArenaOwnerTestSupport::OwnerStats;
-
-inline constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,7 +76,7 @@ TEST(AllocatorUsageBoundaries, GlobalArenaChargesUsableBytesAcrossOddSizeRealloc
     EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
     EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().allocationCount, 1u);
-    EXPECT_EQ(arena.memoryStats().reallocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, 2u);
     EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
 }
 

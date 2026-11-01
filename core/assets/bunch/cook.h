@@ -11,6 +11,7 @@
 #pragma once
 
 
+#include <core/assets/cook_metadata.h>
 #include <core/assets/expanded_metadata.h>
 #include <core/metascript/parser.h>
 
@@ -30,16 +31,11 @@ namespace AssetsBunchCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = Core::Alloc::ScratchArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<b8, NameTextError::Enum> HasAssetBunchDeclaration(const Core::Metascript::Document& doc);
 [[nodiscard]] Expected<b8, NameTextError::Enum> HasCompositeAssetDeclarations(const Core::Metascript::Document& doc);
-[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
-[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, ScratchArena& scratchArena);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandAssetBunch(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector> ExpandCompositeAsset(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> ExpandAssetBunchForAssetCook(const AssetBunchExpandContext& context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

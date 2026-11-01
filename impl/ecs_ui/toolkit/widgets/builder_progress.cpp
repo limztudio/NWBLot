@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 Builder::progress(const AStringView stableKey, const f64 fraction, const ProgressOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked() || !m_skin){
         m_context.fail();
         return false;
     }
@@ -53,12 +53,8 @@ b8 Builder::progress(const AStringView stableKey, const f64 fraction, const Prog
     LayoutNodeDesc description;
     description.width = frame.options.width;
     description.intrinsicSize = frame.metrics.contentSize;
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    if(!addItemNode(description, item))
         return false;
-    }
-    item.node = *admittedNode;
     m_scope->m_progress.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return true;

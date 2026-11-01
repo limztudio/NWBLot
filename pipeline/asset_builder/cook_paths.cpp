@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_paths.h"
+#include "build.h"
 
 #include <core/common/log.h>
 
@@ -41,19 +41,30 @@ Expected<Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& op
     }
 
     Assets::ResolvedCookPaths paths(arena);
-    const Path requestedRepoRoot(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot));
-    auto repoRoot = AbsolutePath(requestedRepoRoot);
-    if(!repoRoot){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), ConvertString(repoRoot.error().message()));
-        return MakeUnexpected(Failure{});
+    if(!options.resolvedRepoRoot.empty())
+        paths.repoRoot = options.resolvedRepoRoot;
+    else{
+        const Path requestedRepoRoot(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot));
+        auto repoRoot = AbsolutePath(requestedRepoRoot);
+        if(!repoRoot){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), ConvertString(repoRoot.error().message()));
+            return MakeUnexpected(Failure{});
+        }
+        paths.repoRoot = repoRoot->lexicallyNormal();
     }
-    paths.repoRoot = repoRoot->lexicallyNormal();
 
     paths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), ConvertString(assetRoot.path), ConvertString(assetRoot.virtualRoot.view()));
+            if(!assetRoot.resolvedPath.empty())
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), PathToString<tchar>(assetRoot.resolvedPath), ConvertString(assetRoot.virtualRoot.view()));
+            else
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'"), ConvertString(assetRoot.path), ConvertString(assetRoot.virtualRoot.view()));
             return MakeUnexpected(Failure{});
+        }
+        if(!assetRoot.resolvedPath.empty()){
+            paths.assetRoots.emplace_back(Path(arena, assetRoot.resolvedPath), assetRoot.virtualRoot);
+            continue;
         }
         auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, AStringView(assetRoot.path));
         if(!resolvedAssetRoot){

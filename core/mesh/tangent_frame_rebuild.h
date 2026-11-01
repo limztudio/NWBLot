@@ -32,7 +32,6 @@ static_assert(IsStandardLayout_V<TangentFrameRebuildVertex>, "TangentFrameRebuil
 static_assert(IsTriviallyCopyable_V<TangentFrameRebuildVertex>, "TangentFrameRebuildVertex must stay cheap to copy");
 static_assert(sizeof(TangentFrameRebuildVertex) == sizeof(f32) * 16u, "TangentFrameRebuildVertex layout drifted");
 static_assert(alignof(TangentFrameRebuildVertex) >= alignof(Float4), "TangentFrameRebuildVertex must stay SIMD-aligned");
-static constexpr usize s_AlignRemainderZero = 0;
 static_assert((offsetof(TangentFrameRebuildVertex, position) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::position must stay SIMD-aligned");
 static_assert((offsetof(TangentFrameRebuildVertex, normal) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::normal must stay SIMD-aligned");
 static_assert((offsetof(TangentFrameRebuildVertex, tangent) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::tangent must stay SIMD-aligned");
@@ -131,8 +130,10 @@ static_assert(alignof(Expected<TangentFrameDirections>) >= alignof(TangentFrameD
 
 
 template<typename ScratchArenaT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const usize vertexCount, const u32* indices, const usize indexCount, TangentFrameRebuildVertex* vertices){
-    if(!vertices || !indices || vertexCount == 0u || indexCount == 0u || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max))
+[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const Span<const u32> indices, const Span<TangentFrameRebuildVertex> vertices){
+    const usize vertexCount = vertices.size();
+    const usize indexCount = indices.size();
+    if(!vertices.data() || !indices.data() || vertexCount == 0u || indexCount == 0u || (indexCount % TangentFrameRebuildDetail::s_IndicesPerTriangle) != 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return MakeUnexpected(Failure{});
 
     const usize triangleCount = indexCount / TangentFrameRebuildDetail::s_IndicesPerTriangle;
@@ -221,11 +222,6 @@ template<typename ScratchArenaT>
     }
 
     return result;
-}
-
-template<typename ScratchArenaT>
-[[nodiscard]] inline Expected<TangentFrameRebuildResult> RebuildTangentFrames(ScratchArenaT& scratchArena, const Span<const u32> indices, const Span<TangentFrameRebuildVertex> vertices){
-    return RebuildTangentFrames(scratchArena, vertices.size(), indices.data(), indices.size(), vertices.data());
 }
 
 

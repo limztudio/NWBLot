@@ -43,47 +43,19 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-
-    [[nodiscard]] virtual u64 revision()const override{ return contentRevision; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        ++keyCalls;
-        return rawKey(index);
-    }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        ++lookupCalls;
-        return UiWidgetTests::FindArithmeticFixtureRowIndex(count, removed, reverse, value);
-    }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
-        ++searchCalls;
-        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, backwards, disabled, [this](const u64 index)noexcept{ return rawKey(index); });
-    }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const override{
-        ++textCalls;
-        return index % 2u == 0u ? "First" : "Second";
-    }
-
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        ++enabledCalls;
-        return index < count && rawKey(index) != disabled;
-    }
-
-    void resetCounters()const noexcept{
-        keyCalls = 0u;
-        lookupCalls = 0u;
-        searchCalls = 0u;
-        textCalls = 0u;
-        enabledCalls = 0u;
-    }
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
+    [[nodiscard]] virtual u64 revision()const override{ observeCallback(); return contentRevision; }
+    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 backwards)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override;
+    void resetCounters()const noexcept;
 
 
 protected:
+    virtual void observeCallback()const noexcept{}
     [[nodiscard]] u64 rawKey(const u64 index)const noexcept{
         return UiWidgetTests::ArithmeticFixtureRowKey(count, removed, reverse, index);
     }
@@ -95,22 +67,15 @@ public:
     u64 contentRevision = 1u;
     u64 removed = 0u;
     u64 disabled = 0u;
-    b8 reverse = false;
     mutable u64 keyCalls = 0u;
     mutable u64 lookupCalls = 0u;
     mutable u64 searchCalls = 0u;
     mutable u64 textCalls = 0u;
     mutable u64 enabledCalls = 0u;
+    b8 reverse = false;
 };
 
-[[nodiscard]] inline ComboOptions Options()noexcept{
-    ComboOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 220.0f };
-    options.height = { LayoutSizePolicy::Fixed, 32.0f };
-    options.popupHeight = 144.0f;
-    options.placeholder = "Choose";
-    return options;
-}
+[[nodiscard]] ComboOptions Options()noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,44 +83,26 @@ public:
 
 class ComboFixture : public WidgetFixture{
 protected:
+    using WidgetFixture::press;
+
+
+protected:
     [[nodiscard]] b8 declareCombo(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareSource(generation, m_source, m_state, options, bounds);
     }
-
-    [[nodiscard]] b8 declareSource(const u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
-        if(!begin(generation) || !m_builder.beginPanel(s_ComboPanelKey, bounds))
-            return false;
-        m_result = m_builder.comboBox(s_ComboKey, source, state, options);
-        return m_result.valid;
-    }
-
+    [[nodiscard]] b8 declareSource(u64 generation, const IListDataSource& source, ComboState& state, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds);
     [[nodiscard]] b8 prepare(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return declareCombo(generation, options, bounds) && finishPanel();
     }
-
     [[nodiscard]] b8 accept(const u64 generation, const ComboOptions& options = Options(), const Rect& bounds = s_ComboPanelBounds){
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
-
-    [[nodiscard]] WidgetId host(const AStringView key = s_ComboKey)const{ return id(key, s_ComboPanelKey); }
-
-    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), "popup")); }
-
-    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(MakeWidgetId(host(key), s_ComboRowsKey)); }
-
+    [[nodiscard]] WidgetId popup(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), "popup"); }
+    [[nodiscard]] WidgetId list(const AStringView key = s_ComboKey)const{ return UiTestSupport::RequireWidgetId(id(key, s_ComboPanelKey), s_ComboRowsKey); }
     [[nodiscard]] WidgetId row(const u64 key, const AStringView combo = s_ComboKey)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(list(combo), s_ListRowsKey)), key));
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(list(combo), s_ListRowsKey), key);
     }
-
-    using WidgetFixture::press;
-
-    [[nodiscard]] b8 openByPointer(const u64 generation){
-        const HitTarget* field = target(host());
-        if(!field)
-            return false;
-        click(Center(field->rectangle));
-        return accept(generation) && m_state.isOpen();
-    }
+    [[nodiscard]] b8 openByPointer(u64 generation);
 
 
 protected:

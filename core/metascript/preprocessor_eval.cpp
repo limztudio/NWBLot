@@ -188,7 +188,15 @@ private:
             const TokenType::Enum op = m_current.type;
             advance();
             const i64 right = parseAdditive();
-            left = op == TokenType::LessLess ? (left << right) : (left >> right);
+            if(right < 0 || right >= 64){
+                left = (op == TokenType::GreaterGreater && right >= 64 && left < 0) ? -1 : 0;
+            }
+            else if(op == TokenType::LessLess){
+                left = static_cast<i64>(static_cast<u64>(left) << static_cast<u32>(right));
+            }
+            else{
+                left = left >> static_cast<u32>(right);
+            }
         }
         return left;
     }
@@ -217,9 +225,9 @@ private:
             if(op == TokenType::Star)
                 left = left * right;
             else if(op == TokenType::Slash)
-                left = left / right;
+                left = (left == Limit<i64>::s_Min && right == -1) ? Limit<i64>::s_Min : (left / right);
             else
-                left = left % right;
+                left = (left == Limit<i64>::s_Min && right == -1) ? 0 : (left % right);
         }
         return left;
     }
@@ -358,7 +366,7 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
             }
 
             if(IsAsciiDigit(current[i])){
-                i = AppendPreprocessorNumber(currentView, i, next);
+                i = AppendPreprocessorNumber(currentView, i, true, next);
                 continue;
             }
 
@@ -445,7 +453,7 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                         continue;
                     }
                     if(IsAsciiDigit(macro.body[b])){
-                        b = AppendPreprocessorNumber(bodyView, b, next);
+                        b = AppendPreprocessorNumber(bodyView, b, true, next);
                         continue;
                     }
                     if(IsAsciiIdentifierStart(macro.body[b])){
@@ -495,7 +503,7 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
             continue;
         }
         if(IsAsciiDigit(exprText[i])){
-            i = AppendPreprocessorNumber(exprText, i, expanded, false);
+            i = AppendPreprocessorNumber(exprText, i, false, expanded);
             continue;
         }
         if(IsAsciiIdentifierStart(exprText[i])){
@@ -515,9 +523,18 @@ b8 Preprocessor::evaluateCondition(const MStringView exprText, const u32 line, b
                 u32 parenDepth = 0u;
                 usize scan = afterIdent;
                 while(scan < exprText.size()){
-                    if(exprText[scan] == '(')
+                    const MChar ch = exprText[scan];
+                    if(ch == '\'' && scan > 0u && (IsAsciiDigit(exprText[scan - 1u]) || IsAsciiIdentifierChar(exprText[scan - 1u]))){
+                        ++scan;
+                        continue;
+                    }
+                    if(ch == '"' || ch == '\''){
+                        scan = SkipQuotedLiteral(exprText, scan);
+                        continue;
+                    }
+                    if(ch == '(')
                         ++parenDepth;
-                    else if(exprText[scan] == ')'){
+                    else if(ch == ')'){
                         if(--parenDepth == 0u){
                             ++scan;
                             break;

@@ -228,7 +228,9 @@ struct Token{
 
 class Lexer final{
 public:
-    explicit Lexer(MStringView source)noexcept;
+    explicit Lexer(const MStringView source)noexcept
+        : m_source(source)
+    {}
 
 
 public:
@@ -261,7 +263,7 @@ private:
     u32 m_column = 1;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
-    u32 m_savedLines[64] = {};
+    Array<u32, 64> m_savedLines{};
     u32 m_savedLineDepth = 0;
     b8 m_hasPendingError = false;
 };

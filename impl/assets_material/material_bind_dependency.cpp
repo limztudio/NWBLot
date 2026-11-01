@@ -43,7 +43,7 @@ static b8 TryResolveMaterialBindDependencyInterface(const ScratchPath& normalize
 
     ScratchString extension = PathToString(scratchArena, normalizedDependency.extensionView());
     CanonicalizeTextInPlace(extension);
-    if(extension != MaterialBindNames::SourceExtensionText())
+    if(extension != s_MaterialBindSourceExtensionText)
         return true;
 
     ScratchPath relativePath = normalizedDependency.lexicallyRelative(normalizedMaterialBindIncludeRoot);
@@ -76,11 +76,11 @@ static const MaterialBindEntry* FindMaterialBindEntry(const Span<const MaterialB
 
 
 Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
-    MaterialCookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
     const Span<const MaterialBindEntry> materialBindEntries,
     const Span<const Path> dependencies,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace MaterialCookDetail;

@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include "text_edit_session.h"
-#include "edit_clipboard_controller.h"
-#include "clipboard_publications.h"
+#include <impl/ecs_ui/text_edit_session.h>
+#include <impl/ecs_ui/edit_clipboard_controller.h>
+#include <impl/ecs_ui/clipboard_publications.h>
 
 #include <impl/ecs_ui/toolkit/context.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
@@ -50,7 +50,7 @@ private:
 
     struct Entry{
         Ui::WidgetState widget;
-        Ui::UiTextEditOwner owner;
+        UiTextEditOwner owner;
         Ui::PopupToken popup;
         Ui::EditModelSnapshot expected;
         UiEditBoxGeometry candidate;
@@ -78,7 +78,7 @@ private:
     };
 
     struct Event{
-        Ui::UiTextEditOwner owner;
+        UiTextEditOwner owner;
         Core::TextInputEvent native;
         Ui::EditCommandRequest command;
         Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
@@ -110,17 +110,27 @@ private:
 
 public:
     UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context, Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
-    virtual ~UiEditBoxHost()noexcept override;
+    virtual ~UiEditBoxHost()noexcept override{ cancelTransfers(); }
 
 
 public:
-    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options)override;
-    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
-    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
+    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, Ui::EditModel& model)override{
+        return editBorrowed(widget, options, m_context.popupToken(), model, nullptr);
+    }
+    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model)override{
+        return editBorrowed(widget, options, popup, model, nullptr);
+    }
+    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink& actions)override{
+        return editBorrowed(widget, options, popup, model, &actions);
+    }
     [[nodiscard]] virtual Ui::EditBoxResult editNavigated(
-        const Ui::WidgetState& widget, Ui::EditModel& model,
-        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
-        Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
+        const Ui::WidgetState& widget,
+        const Ui::EditBoxOptions& options,
+        const Ui::PopupToken& popup,
+        Ui::EditModel& model,
+        Ui::EditNavigationState& navigation,
+        Ui::IEditNavigationResolver& resolver,
+        Ui::IEditActionSink& actions
     )override;
     [[nodiscard]] virtual b8 publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
@@ -141,16 +151,17 @@ public:
 private:
     [[nodiscard]] Entry* find(Ui::WidgetId widget)noexcept;
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
+    [[nodiscard]] const Entry* focusedTextEntry()const noexcept;
     [[nodiscard]] b8 append(Event&& event);
     [[nodiscard]] b8 compositionActive(const Entry& entry)const noexcept;
-    void discard(const Ui::UiTextEditOwner& owner)noexcept;
+    void discard(const UiTextEditOwner& owner)noexcept;
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation = nullptr);
     [[nodiscard]] b8 apply(const Ui::EditBoxOptions& options, Event& event, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation);
     [[nodiscard]] b8 applyNavigation(const Event& event, Ui::EditNavigationDirection::Enum direction, Ui::EditModel& model, NavigationBorrow& navigation);
     [[nodiscard]] b8 applyAction(const Ui::EditBoxOptions& options, Ui::EditAction::Enum action, Entry& entry, Ui::EditModel& model, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
     [[nodiscard]] b8 rejectBorrowedMutation()noexcept;
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
-    void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, b8 inputMethod);
+    void synchronizeSession(const Ui::EditBoxOptions& options, b8 inputMethod, Entry& entry, Ui::EditModel& model);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept;
     [[nodiscard]] Expected<usize> hit(const Entry& entry, Ui::Point position)const noexcept;
     [[nodiscard]] Expected<usize> hitWord(const Entry& entry, Ui::Point position)const noexcept;
@@ -167,12 +178,12 @@ private:
     UiEditClipboardController m_clipboard;
     UiEditClipboardController m_primary;
     UiClipboardPublications m_publications;
-    Ui::UiEditClickTracker m_clickTracker;
+    UiEditClickTracker m_clickTracker;
     Ui::PaintVector<Entry> m_entries;
     Ui::PaintVector<Event> m_events;
     Ui::EditModelSnapshot m_nativePublished;
-    Ui::UiTextEditOwner m_clipboardOwner;
-    Ui::UiTextEditOwner m_primaryOwner;
+    UiTextEditOwner m_clipboardOwner;
+    UiTextEditOwner m_primaryOwner;
     Ui::DisplayMetrics m_display;
     u64 m_generation = 0u;
     u64 m_lastNativeSequence = 0u;

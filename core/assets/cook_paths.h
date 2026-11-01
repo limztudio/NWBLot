@@ -63,26 +63,67 @@ public:
     {}
 };
 
+struct IndexedCookPath{
+    AStringView text;
+    usize fileIndex = 0u;
+};
+
+class PathSelectionIndex final{
+public:
+    PathSelectionIndex(Span<const DiscoveredNwbFile> files, b8 preserveCase, ScratchArena& scratchArena);
+
+
+public:
+    [[nodiscard]] b8 selectRange(AStringView path, b8 prefix, Span<u8> outSelected, Vector<usize, ScratchArena>* outOrder = nullptr)const;
+    [[nodiscard]] Span<const IndexedCookPath> entries()const noexcept{ return m_entries; }
+
+
+private:
+    Vector<IndexedCookPath, ScratchArena> m_entries;
+    Optional<Vector<ScratchString, ScratchArena>> m_ownedPaths;
+};
+
+namespace CookInputSelectionFailure{
+    enum Enum : u8{
+        None,
+        ResolveInput,
+        NotFileOrDirectory,
+        DirectoryOutsideAssetRoots,
+        NoMatchingAsset
+    };
+};
+
+struct CookInputSelectionError{
+    AStringView rawInput;
+    Path resolvedPath;
+    CookInputSelectionFailure::Enum reason = CookInputSelectionFailure::None;
+
+
+public:
+    explicit CookInputSelectionError(CookArena& arena)noexcept
+        : resolvedPath(arena)
+    {}
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Retains first-occurrence order and original path spelling; callers select their duplicate identity contract.
 [[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(const Path& repoRoot, Span<const CookString> sources, b8 inferFromInputs, AssetRootDuplicatePolicy::Enum duplicatePolicy, ScratchArena& scratchArena);
-[[nodiscard]] inline b8 PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
-    const auto removed = RemoveAllIfExists(includeRoot);
-    if(!removed){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(removed.error().message()));
-        return false;
-    }
-
-    const auto ensured = EnsureDirectories(includeRoot);
-    if(!ensured){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
-        return false;
-    }
-    return true;
-}
+[[nodiscard]] b8 IsDirectoryWithinAssetRoots(const Path& directoryPath, Span<const ResolvedAssetRoot> assetRoots, ScratchArena& scratchArena);
+[[nodiscard]] Expected<void, CookInputSelectionError> SelectDiscoveredNwbInputs(
+    const Path& repoRoot,
+    Span<const ResolvedAssetRoot> assetRoots,
+    Span<const DiscoveredNwbFile> files,
+    Span<const AssetString> inputs,
+    b8 allowEmptyDirectory,
+    ScratchArena& scratchArena,
+    Span<u8> outSelected,
+    Vector<usize, ScratchArena>* outOrder = nullptr
+);
+void CompactSelectedDiscoveredNwbFiles(Span<const u8> selected, DiscoveredNwbFileVector& inOutFiles)noexcept;
+[[nodiscard]] b8 PrepareGeneratedIncludeRoot(const Path& includeRoot, AStringView generatorName);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

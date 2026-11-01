@@ -61,57 +61,30 @@ public:
 public:
     // Cooked RGB values use the engine's linear working space; alpha is linear coverage.
     void setPayload(
-        const u32 width,
-        const u32 height,
+        u32 width,
+        u32 height,
         MipLevelVector&& mipLevels,
         Core::Assets::AssetBytes&& payloadBytes,
-        const TextureDimension::Enum dimension,
-        const u32 depth,
-        const TexturePayloadFormat::Enum payloadFormat,
-        const TextureAlphaMode::Enum alphaMode,
-        const u8 alphaConstantUnorm8
-    )noexcept{
-        m_width = width;
-        m_height = height;
-        m_dimension = dimension;
-        m_depth = depth;
-        m_payloadFormat = payloadFormat;
-        m_alphaMode = alphaMode;
-        m_alphaConstantUnorm8 = alphaConstantUnorm8;
-        m_mipLevels = Move(mipLevels);
-        m_payloadBytes = Move(payloadBytes);
-    }
+        TextureDimension::Enum dimension,
+        u32 depth,
+        TexturePayloadFormat::Enum payloadFormat,
+        TextureAlphaMode::Enum alphaMode,
+        u8 alphaConstantUnorm8
+    )noexcept;
 
+
+public:
     [[nodiscard]] u32 width()const noexcept{ return m_width; }
-
     [[nodiscard]] u32 height()const noexcept{ return m_height; }
-
     [[nodiscard]] TextureDimension::Enum dimension()const noexcept{ return m_dimension; }
-
     [[nodiscard]] u32 depth()const noexcept{ return m_depth; }
-
     [[nodiscard]] TexturePayloadFormat::Enum payloadFormat()const noexcept{ return m_payloadFormat; }
-
     [[nodiscard]] TextureAlphaMode::Enum alphaMode()const noexcept{ return m_alphaMode; }
-
     [[nodiscard]] u8 alphaConstantUnorm8()const noexcept{ return m_alphaConstantUnorm8; }
-
     [[nodiscard]] const MipLevelVector& mipLevels()const noexcept{ return m_mipLevels; }
-
     [[nodiscard]] const Core::Assets::AssetBytes& payloadBytes()const noexcept{ return m_payloadBytes; }
-
-    [[nodiscard]] u64 primaryPayloadByteCount()const noexcept{
-        if(m_mipLevels.empty())
-            return 0u;
-        const TextureMipLevel& lastMip = m_mipLevels.back();
-        return lastMip.offsetBytes + lastMip.sizeBytes;
-    }
-
-    [[nodiscard]] const u8* alphaUastcBlocks()const noexcept{
-        if(m_alphaMode != TextureAlphaMode::SeparateUastcLdr4x4)
-            return nullptr;
-        return m_payloadBytes.data() + static_cast<usize>(primaryPayloadByteCount());
-    }
+    [[nodiscard]] u64 primaryPayloadByteCount()const noexcept;
+    [[nodiscard]] const u8* alphaUastcBlocks()const noexcept;
 
 
 private:

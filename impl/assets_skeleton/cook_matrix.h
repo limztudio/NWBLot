@@ -14,7 +14,6 @@
 #include <impl/assets_skeleton/joint_types.adhd.h>
 
 #include <core/assets/paths.h>
-#include <core/common/log.h>
 #include <core/metascript/parser.h>
 
 
@@ -33,44 +32,7 @@ namespace AssetsSkeletonCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView metaKind, const AStringView label){
-    SkeletonJointMatrix matrix = ::MatrixIdentity<Float34>();
-
-    if(!value.isList() || value.asList().size() != s_SkeletonJointMatrixRowCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto& rows = value.asList();
-    for(usize rowIndex = 0u; rowIndex < s_SkeletonJointMatrixRowCount; ++rowIndex){
-        const Core::Metascript::Value& row = rows[rowIndex];
-        if(!row.isList() || row.asList().size() != s_SkeletonJointMatrixColumnCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex);
-            return MakeUnexpected(Failure{});
-        }
-
-        f32 rowValues[s_SkeletonJointMatrixColumnCount] = {};
-        const auto& columns = row.asList();
-        for(usize columnIndex = 0u; columnIndex < s_SkeletonJointMatrixColumnCount; ++columnIndex){
-            const Core::Metascript::Value& column = columns[columnIndex];
-            auto columnIndexResult = Core::Assets::TryDecodeMetadataFiniteF32(column);
-            if(!columnIndexResult){
-                if(!column.isNumeric()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
-                    return MakeUnexpected(Failure{});
-                }
-
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range"), ConvertString(metaKind), PathToString<tchar>(nwbFilePath), ConvertString(label), rowIndex, columnIndex);
-                return MakeUnexpected(Failure{});
-            }
-            rowValues[columnIndex] = *columnIndexResult;
-        }
-
-        matrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);
-    }
-
-    return matrix;
-}
+[[nodiscard]] Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(const Path& nwbFilePath, const Core::Metascript::Value& value, AStringView metaKind, AStringView label);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

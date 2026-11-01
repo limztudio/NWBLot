@@ -37,7 +37,7 @@ namespace __hidden_stress_frame_graph_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WriteJsonText(OutputFileStream& output, const AStringView text){
+void WriteJsonText(const AStringView text, OutputFileStream& output){
     constexpr AStringView s_HexDigits = "0123456789abcdef";
     constexpr u8 s_JsonControlCharLimit = 0x20u;
     constexpr u8 s_NibbleBits = 4u;
@@ -70,7 +70,7 @@ void WriteJsonText(OutputFileStream& output, const AStringView text){
     }
 }
 
-void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysicalQueueId& queue){
+void WriteQueue(const Core::Telemetry::FrameGraphPhysicalQueueId& queue, OutputFileStream& output){
     if(!queue.valid()){
         output << "null";
         return;
@@ -100,7 +100,8 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         ++runtimeOwnerCount;
         const auto& statistics = node.runtimeStatistics;
         if(statistics.planGeneration == 0u || statistics.compile.taskCount == 0u || statistics.compile.packetCount == 0u || statistics.submission.acceptedPacketCount == 0u || !ValidateNormalFrameSnapshotCompletion(payload, statistics)){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressFrameGraphSnapshot: invalid normal completion graph={} plan={} attempt={} tasks={} packets={} rejected_packets={} rejected_tasks={} rejected_submissions={} recovery_submissions={} accepted_packets={} accepted_tasks={}")
+            NWB_LOGGER_ESSENTIAL_INFO(
+                NWB_TEXT("StressFrameGraphSnapshot: invalid normal completion graph={} plan={} attempt={} tasks={} packets={} rejected_packets={} rejected_tasks={} rejected_submissions={} recovery_submissions={} accepted_packets={} accepted_tasks={}")
                 , statistics.graphGeneration, statistics.planGeneration, statistics.recordingAttemptGeneration, statistics.compile.taskCount, statistics.compile.packetCount
                 , statistics.submission.rejectedPacketCount, statistics.submission.rejectedTaskCount, statistics.submission.rejectedSubmissionCount, statistics.submission.recoverySubmissionCount
                 , statistics.submission.acceptedPacketCount, statistics.submission.acceptedTaskCount
@@ -149,7 +150,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
     return true;
 }
 
-[[nodiscard]] b8 WriteSnapshot(OutputFileStream& output, const Core::Telemetry::FrameGraphPayload& payload, const u64 graphicsFrame, const u64 completedFrames){
+[[nodiscard]] b8 WriteSnapshot(const Core::Telemetry::FrameGraphPayload& payload, const u64 graphicsFrame, const u64 completedFrames, OutputFileStream& output){
     output.precision(17);
     output << "{\n\"type\":\"stress_frame_graph_snapshot\",\"source_frame\":" << payload.frameIndex
         << ",\"graphics_frame_at_capture\":" << graphicsFrame << ",\"completed_frames\":" << completedFrames
@@ -160,20 +161,20 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         if(index != 0u)
             output << ",\n";
         output << "{\"index\":" << index << ",\"name\":";
-        WriteJsonText(output, node.name.resolvedText());
+        WriteJsonText(node.name.resolvedText(), output);
         output << ",\"label\":";
-        WriteJsonText(output, node.label);
+        WriteJsonText(node.label, output);
         output << ",\"kind\":" << static_cast<u32>(node.kind) << ",\"flags\":" << static_cast<u32>(node.flags);
         if(node.compiledTask.present){
             output << ",\"plan_generation\":" << node.compiledTask.planGeneration << ",\"packet_index\":" << node.compiledTask.packetIndex << ",\"packetization_decision\":" << static_cast<u32>(node.compiledTask.packetizationDecision);
         }
         if(node.queueAssignment.present){
             output << ",\"queue_class\":";
-            WriteJsonText(output, QueueClassLabel(node.queueAssignment.queueClass));
+            WriteJsonText(QueueClassLabel(node.queueAssignment.queueClass), output);
             output << ",\"planned_queue\":";
-            WriteQueue(output, node.queueAssignment.plannedQueue);
+            WriteQueue(node.queueAssignment.plannedQueue, output);
             output << ",\"accepted_queue\":";
-            WriteQueue(output, node.queueAssignment.acceptedQueue);
+            WriteQueue(node.queueAssignment.acceptedQueue, output);
             output << ",\"dedicated\":" << (node.queueAssignment.dedicated ? "true" : "false") << ",\"assignment_reason\":" << static_cast<u32>(node.queueAssignment.reason) << ",\"assignment_modifiers\":" << static_cast<u32>(node.queueAssignment.modifiers);
         }
         if(node.runtimeStatistics.present){
@@ -212,9 +213,9 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         if(index != 0u)
             output << ",\n";
         output << "{\"owner_node\":" << record.ownerNodeIndex << ",\"queue\":";
-        WriteQueue(output, statistics.queue);
+        WriteQueue(statistics.queue, output);
         output << ",\"queue_class\":";
-        WriteJsonText(output, QueueClassLabel(statistics.queueClass));
+        WriteJsonText(QueueClassLabel(statistics.queueClass), output);
         output << ",\"tasks\":" << statistics.compile.taskCount << ",\"packets\":" << statistics.compile.packetCount
             << ",\"prologue_barriers\":" << statistics.compile.prologueBarrierCount
             << ",\"epilogue_barriers\":" << statistics.compile.epilogueBarrierCount
@@ -231,9 +232,9 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
         if(index != 0u)
             output << ",\n";
         output << "{\"owner_node\":" << packet.ownerNodeIndex << ",\"plan_generation\":" << packet.packetGeneration << ",\"packet_index\":" << packet.packetIndex << ",\"queue\":";
-        WriteQueue(output, packet.queue);
+        WriteQueue(packet.queue, output);
         output << ",\"queue_class\":";
-        WriteJsonText(output, QueueClassLabel(packet.queueClass));
+        WriteJsonText(QueueClassLabel(packet.queueClass), output);
         output << ",\"tasks\":" << packet.taskCount << ",\"command_lists\":" << packet.commandListCount
             << ",\"planned_waits\":" << packet.plannedWaitTokenCount
             << ",\"same_queue_elisions\":" << packet.sameQueueWaitElisionCount
@@ -259,7 +260,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStringView outputPath, const u64 completedFrames){
+b8 CaptureStressFrameGraphSnapshot(const AStringView outputPath, const u64 completedFrames, ProjectRuntimeContext& context){
     const u64 graphicsFrame = context.graphics.getFrameIndex();
     if(outputPath.empty() || completedFrames == 0u || graphicsFrame == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: no completed frame or output path"));
@@ -316,7 +317,7 @@ b8 CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AString
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
         return false;
     }
-    const b8 snapshotWritten = __hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames);
+    const b8 snapshotWritten = __hidden_stress_frame_graph_snapshot::WriteSnapshot(*payload, graphicsFrame, completedFrames, output);
     output.close();
     if(!snapshotWritten || !output.good()){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));

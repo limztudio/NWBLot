@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cpu_task_scheduler_test_support.h"
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/terminal_entry.h>
@@ -21,15 +23,9 @@ namespace __hidden_cpu_task_range_tests{
 
 
 constexpr u32 s_CompletionTimeoutMS = 10000u;
-constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
-
-[[nodiscard]] CpuTaskSchedulerConfig OneWorker()noexcept{
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 1u;
-    config.heterogeneous = false;
-    return config;
-}
+using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
 void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<b8>& done){
     const Timer start = TimerNow();
@@ -37,7 +33,7 @@ void PumpUntil(CpuTaskScheduler& scheduler, const Atomic<b8>& done){
         if(DurationInMS<u64>(TimerNow(), start) > __hidden_cpu_task_range_tests::s_CompletionTimeoutMS)
             TerminateInvariant();
         scheduler.pumpMainThread();
-        SleepMS(__hidden_cpu_task_range_tests::s_PollIntervalMS);
+        SleepMS(s_PollIntervalMS);
     }
 }
 
@@ -75,7 +71,7 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
 
 TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
     using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(OneWorker());
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     const auto cpuTaskAdmission = scheduler.submit([&](){
         const usize worker = scheduler.currentWorkerIndex();
         const auto affinity = scheduler.currentWorkerAffinity();
@@ -94,7 +90,7 @@ TEST(CpuTaskRangeTests, SingleChunkKeepsItsCallingWorkersIdentity){
 
 TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
     using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(OneWorker());
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     Atomic<b8> done{ false };
     usize worker = 0u;
     Thread producer([&](){
@@ -108,7 +104,7 @@ TEST(CpuTaskRangeTests, ExternalSingleChunkUsesAWorkerInsteadOfTheProducer){
 
 TEST(CpuTaskRangeTests, ExternalMainThreadRangeWaitsForTheOwner){
     using namespace __hidden_cpu_task_range_tests;
-    CpuTaskScheduler scheduler(OneWorker());
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     Atomic<b8> done{ false };
     const ThreadId owner = QueryCurrentThreadId();
     u32 callbacks = 0u;

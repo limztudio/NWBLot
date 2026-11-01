@@ -51,7 +51,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GlobalUniquePtr<IClipboardService>> CreateClipboardService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
+Expected<GlobalUniquePtr<IClipboardService>> CreateClipboardService(Alloc::GlobalArena& arena, [[maybe_unused]] void* const nativeWindowHandle){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(nativeWindowHandle){
         auto service = MakeGlobalUnique<Win32ClipboardService>(arena, arena, MakeNotNull(nativeWindowHandle));
@@ -59,8 +59,6 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateClipboardService(Alloc::Globa
             return MakeUnexpected(Failure{});
         return service;
     }
-#else
-    static_cast<void>(nativeWindowHandle);
 #endif
     auto service = MakeGlobalUnique<__hidden_clipboard_factory::UnsupportedClipboardService>(arena, arena);
     if(!service)

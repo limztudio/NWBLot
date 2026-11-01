@@ -27,7 +27,7 @@ using namespace Impl::Ui;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<SharedImageSource> MakeSeededImage(Core::Alloc::GlobalArena& arena, const StringView path, const u8 seed, const u32 width, const u32 height){
+Expected<SharedImageSource> MakeSeededImage(const StringView path, const u8 seed, const u32 width, const u32 height, Core::Alloc::GlobalArena& arena){
     const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
     if(!mipCount)
         return MakeUnexpected(mipCount.error());

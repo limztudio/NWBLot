@@ -47,10 +47,10 @@ TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
     ASSERT_TRUE(metrics);
     auto placement = RadioGroupLayout::Place({ 10.0f, 20.0f, 140.0f, 112.0f }, { 30.0f, 30.0f, 70.0f, 80.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRect(placement->clip, { 30.0f, 30.0f, 70.0f, 80.0f });
-    UiWidgetTests::ExpectRect(placement->rows[0u].clip, { 30.0f, 30.0f, 70.0f, 18.0f });
-    UiWidgetTests::ExpectRect(placement->rows[0u].textClip, { 46.0f, 30.0f, 54.0f, 18.0f });
-    UiWidgetTests::ExpectRect(placement->rows[2u].clip, { 30.0f, 80.0f, 70.0f, 24.0f });
+    UiPaintAssertions::ExpectRect(placement->clip, { 30.0f, 30.0f, 70.0f, 80.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[0u].clip, { 30.0f, 30.0f, 70.0f, 18.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[0u].textClip, { 46.0f, 30.0f, 54.0f, 18.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[2u].clip, { 30.0f, 80.0f, 70.0f, 24.0f });
 }
 
 TEST(UiRadioGroupLayoutTests, FullChoiceBoundProducesAllRowsWithoutVirtualization){
@@ -75,7 +75,7 @@ TEST(UiRadioGroupLayoutTests, EmptyGroupHasOnlyPaddingAndNoChoiceGeometry){
     auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 8.0f, 8.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     EXPECT_EQ(placement->count, 0u);
-    UiWidgetTests::ExpectRect(placement->content, { 4.0f, 4.0f, 0.0f, 0.0f });
+    UiPaintAssertions::ExpectRect(placement->content, { 4.0f, 4.0f, 0.0f, 0.0f });
     EXPECT_EQ(placement->rows[0u].key, 0u);
 }
 
@@ -85,7 +85,7 @@ TEST(UiRadioGroupLayoutTests, NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabel
     ASSERT_TRUE(metrics);
     auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 20.0f, 40.0f }, { 0.0f, 0.0f, 20.0f, 40.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRect(placement->rows[0u].indicator, { 4.0f, 10.0f, 12.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(placement->rows[0u].indicator, { 4.0f, 10.0f, 12.0f, 12.0f });
     EXPECT_FLOAT_EQ(placement->rows[0u].mark.width, 4.8f);
     EXPECT_FLOAT_EQ(placement->rows[0u].textClip.width, 0.0f);
 }
@@ -142,9 +142,9 @@ TEST(UiRadioGroupLayoutTests, InvalidAndUnrepresentableBoundsRejectPlacement){
     auto metrics = RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
-    const Rect invalid[]{
-        { 0.0f, 0.0f, -1.0f, 112.0f }, { Limit<f32>::s_QuietNaN, 0.0f, 140.0f, 112.0f },
-        { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, { 0.0f, 1.0e20f, 140.0f, 112.0f },
+    const Array<Rect, 4> invalid{
+        Rect{ 0.0f, 0.0f, -1.0f, 112.0f }, Rect{ Limit<f32>::s_QuietNaN, 0.0f, 140.0f, 112.0f },
+        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, Rect{ 0.0f, 1.0e20f, 140.0f, 112.0f },
     };
     for(const Rect& rectangle : invalid){
         EXPECT_FALSE(RadioGroupLayout::Place(rectangle, bounds, choices, *metrics));

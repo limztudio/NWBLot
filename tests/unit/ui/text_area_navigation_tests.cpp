@@ -38,8 +38,6 @@ public:
 
 
 protected:
-
-
     [[nodiscard]] b8 shapeCurrent(){
         return m_view.snapshot(m_model) && m_view.shape(m_text, { .fontSize = 14.0f }) == TextLayoutStatus::Success;
     }
@@ -141,7 +139,7 @@ TEST_F(UiTextAreaNavigationTests, APageWithinTheCurrentRowKeepsTheActiveCaret){
     ASSERT_TRUE(m_model.setText("MMMM\nMMMM\nMMMM"));
     ASSERT_TRUE(m_model.setSelection(7u, 7u));
     ASSERT_TRUE(shapeCurrent());
-    const f32 height = VectorGetX(VectorMultiply(VectorReplicate(m_view.caretGeometry().lines()[1u].height), VectorReplicate(0.25f)));
+    const f32 height = m_view.caretGeometry().lines()[1u].height * 0.25f;
     const auto down = resolve(EditNavigationDirection::PageDown, height);
     ASSERT_TRUE(down);
     EXPECT_EQ(down->committedByte, 7u);
@@ -174,7 +172,7 @@ TEST_F(UiTextAreaNavigationTests, PageReachesTheTrailingEmptyLine){
 }
 
 TEST_F(UiTextAreaNavigationTests, EmptyDocumentResolvesEveryDirectionWithoutMoving){
-    const EditNavigationDirection::Enum directions[]{ EditNavigationDirection::Up, EditNavigationDirection::Down, EditNavigationDirection::PageUp, EditNavigationDirection::PageDown };
+    const Array<EditNavigationDirection::Enum, 4> directions{ EditNavigationDirection::Up, EditNavigationDirection::Down, EditNavigationDirection::PageUp, EditNavigationDirection::PageDown };
     for(const auto direction : directions){
         const auto result = resolve(direction, 160.0f);
         ASSERT_TRUE(result);
@@ -197,7 +195,7 @@ TEST_F(UiTextAreaNavigationTests, InvalidViewportValuesPreserveTheBorrowedModelA
     ASSERT_TRUE(m_model.setSelection(1u, 1u));
     const u64 selection = m_model.selectionGeneration();
     const u64 stateRevision = m_state.revision();
-    const f32 heights[]{ -1.0f, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
+    const Array<f32, 4> heights{ -1.0f, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
     for(const f32 height : heights){
         EXPECT_FALSE(resolve(EditNavigationDirection::Down, height));
         EXPECT_FALSE(resolve(EditNavigationDirection::PageUp, height));
@@ -211,7 +209,7 @@ TEST_F(UiTextAreaNavigationTests, InvalidViewportValuesPreserveTheBorrowedModelA
 TEST_F(UiTextAreaNavigationTests, InvalidDirectionAndFontParametersFailClosed){
     ASSERT_TRUE(m_model.setText("MM\nMM"));
     EXPECT_FALSE(resolve(static_cast<EditNavigationDirection::Enum>(255u), 160.0f));
-    const f32 sizes[]{ 0.0f, -1.0f, Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
+    const Array<f32, 4> sizes{ 0.0f, -1.0f, Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
     for(const f32 size : sizes){
         TextAreaNavigationResolver resolver(m_arena, m_text, m_context, m_state, size);
         EXPECT_FALSE(resolver.resolve(m_model, EditNavigationDirection::Down, m_state.navigation().snapshot(), 0.0f));

@@ -66,8 +66,9 @@ InputBindings::InputBindings(Core::Alloc::GlobalArena& arena)
     restoreDefaults();
 }
 
-b8 InputBindings::set(const InputKeyBinding* bindings, const usize count){
-    if(count > s_InputMaxBindings || (count != 0u && bindings == nullptr))
+b8 InputBindings::set(const Span<const InputKeyBinding> bindings){
+    const usize count = bindings.size();
+    if(count > s_InputMaxBindings)
         return false;
     for(usize index = 0u; index < count; ++index){
         if(!__hidden_ui_input_bindings::ValidBinding(bindings[index]))
@@ -79,8 +80,8 @@ b8 InputBindings::set(const InputKeyBinding* bindings, const usize count){
     }
     BindingVector candidate(m_bindings.get_allocator());
     candidate.reserve(s_InputMaxBindings);
-    if(count != 0u)
-        candidate.assign(bindings, bindings + count);
+    if(!bindings.empty())
+        candidate.assign(bindings.begin(), bindings.end());
     m_bindings.swap(candidate);
     return true;
 }

@@ -6,7 +6,7 @@
 #include "ui_gallery_constants.h"
 
 #include <impl/assets_ui_skin/asset.h>
-#include <impl/assets_ui_skin/subsystem.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
 #include <impl/ecs_ui/toolkit/images/image_loader.h>
 
 #include <core/common/log.h>
@@ -42,6 +42,7 @@ void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     constexpr f32 s_SliceWidth = 96.0f;
     constexpr Color s_SliceTint{ 0.8f, 0.9f, 1.0f, 0.8f };
     constexpr f32 s_TextureHeight = 48.0f;
+    static constexpr Name s_RadioMarkRegion("radio.mark");
     Builder& ui = context.ui;
     if(!ui.beginPanel("image_gallery", { x, y, s_OrdinaryGalleryWidth, s_PanelHeight }))
         return;
@@ -50,7 +51,7 @@ void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     ImageOptions sprite;
     sprite.width = { LayoutSizePolicy::Fixed, s_SpriteSize };
     sprite.height = { LayoutSizePolicy::Fixed, s_SpriteSize };
-    valid = ui.image("sprite", Name("radio.mark"), sprite) && valid;
+    valid = ui.image("sprite", s_RadioMarkRegion, sprite) && valid;
     ImageOptions slice = sprite;
     slice.width.value = s_SliceWidth;
     slice.tint = s_SliceTint;
@@ -66,6 +67,9 @@ void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom image declaration failed"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

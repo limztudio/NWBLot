@@ -14,6 +14,224 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace RayTracingSoftwareBvhDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
+    Fnv64AppendValue(inOutHash, instance.transform);
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceContributionToHitGroupIndex));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.flags));
+    Fnv64AppendValue(inOutHash, instance.bottomLevelAS);
+}
+
+u64 ComputeTlasStaticSceneHash(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(const Core::RayTracingInstanceDesc& instance : instances)
+        AppendTlasInstanceStaticCacheInput(instance, hash);
+    return hash;
+}
+
+u64 ComputeSceneSwBvhStaticSceneHash(const Span<const SceneSwBvhInstanceGpu> instances, const Span<const SceneBvhPrimitiveCalculation> primitives)noexcept{
+    NWB_ASSERT(instances.size() == primitives.size());
+
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const SceneSwBvhInstanceGpu& instance = instances[index];
+
+        Fnv64AppendValue(hash, instance.worldToObject);
+        Fnv64AppendValue(hash, instance.primitiveCount);
+        Fnv64AppendValue(hash, primitives[index].aabbMin.x);
+        Fnv64AppendValue(hash, primitives[index].aabbMin.y);
+        Fnv64AppendValue(hash, primitives[index].aabbMin.z);
+        Fnv64AppendValue(hash, 0.0f);
+        Fnv64AppendValue(hash, primitives[index].aabbMax.x);
+        Fnv64AppendValue(hash, primitives[index].aabbMax.y);
+        Fnv64AppendValue(hash, primitives[index].aabbMax.z);
+        Fnv64AppendValue(hash, 0.0f);
+        Fnv64AppendValue(hash, primitives[index].transparentOccluder);
+    }
+    return hash;
+}
+
+Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(const Core::BufferHandle& bufferHandle, Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache){
+    if(!bufferHandle)
+        return MakeUnexpected(Failure{});
+
+    Core::Buffer& buffer = *bufferHandle;
+    const NotNull<const Core::Buffer*> bufferKey(&buffer);
+    auto found = cache.find(bufferKey);
+    if(found != cache.end()){
+        NWB_ASSERT(found.value().handle.valid());
+        found.value().seenThisFrame = true;
+        return found.value().handle;
+    }
+
+    const auto handle = RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
+    if(!handle)
+        return MakeUnexpected(Failure{});
+
+    Core::GpuDescriptorRetirementGuard descriptorRetirement(heap, *handle);
+    RtMeshHeapHandleCacheEntry entry;
+    entry.keepAlive = bufferHandle;
+    entry.handle = *handle;
+    entry.seenThisFrame = true;
+    if(!cache.insert({bufferKey, Move(entry)}).second){
+        NWB_ASSERT(false);
+        return MakeUnexpected(Failure{});
+    }
+    descriptorRetirement.release();
+    return *handle;
+}
+
+void SweepUnseenMeshHeapHandles(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache){
+    for(auto it = cache.begin(); it != cache.end(); ){
+        if(it.value().seenThisFrame){
+            it.value().seenThisFrame = false;
+            ++it;
+        }
+        else{
+            heap.free(it.value().handle);
+            it = cache.erase(it);
+        }
+    }
+}
+
+void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept{
+    for(auto it = cache.begin(); it != cache.end(); ++it)
+        it.value().seenThisFrame = false;
+}
+
+Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
+    PreparedMeshBlasBuild build;
+    if(!meshResources.meshName || !meshResources.positionBuffer || !meshResources.triangleIndexBuffer || !meshResources.blas || !meshResources.blas->getBackingBufferHandle())
+        return MakeUnexpected(Failure{});
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
+        return MakeUnexpected(Failure{});
+
+    const b8 firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
+    const b8 performRefit = meshResources.runtimeMesh && !firstBuild && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount);
+    build.meshName = meshResources.meshName;
+    build.positionBuffer = meshResources.positionBuffer;
+    build.triangleIndexBuffer = meshResources.triangleIndexBuffer;
+    build.blas = meshResources.blas;
+    build.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
+    build.runtimeMeshVersion = meshResources.runtimeMeshVersion;
+    build.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
+    build.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
+    build.positionByteSize = positionDesc.byteSize;
+    build.vertexStride = static_cast<u32>(positionDesc.structStride);
+    build.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    build.indexCount = meshResources.meshletPrimitiveIndexCount;
+    build.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
+    build.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
+    build.runtimeMesh = meshResources.runtimeMesh;
+    build.buildPending = meshResources.blasBuildPending;
+    build.firstBuild = firstBuild;
+    build.backingFresh = meshResources.blasBackingFresh;
+    build.performRefit = performRefit;
+    return build;
+}
+
+b8 MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
+    if(
+        meshResources.meshName != build.meshName
+        || meshResources.runtimeMesh != build.runtimeMesh
+        || meshResources.runtimeMeshVersion != build.runtimeMeshVersion
+        || meshResources.runtimeGeometryContentRevision != build.geometryContentRevision
+        || meshResources.blasGeometryContentRevision != build.acceptedGeometryContentRevision
+        || meshResources.positionBuffer.get() != build.positionBuffer.get()
+        || meshResources.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+        || meshResources.blas.get() != build.blas.get()
+        || !meshResources.blas
+        || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+        || meshResources.meshletPrimitiveIndexCount != build.indexCount
+        || meshResources.blasBuildPending != build.buildPending
+        || (meshResources.blasBuildPending || !meshResources.blasBuildAccepted) != build.firstBuild
+        || meshResources.blasBackingFresh != build.backingFresh
+        || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
+    )
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
+    return positionDesc.structStride == build.vertexStride && positionDesc.byteSize == build.positionByteSize && build.vertexStride != 0u && build.vertexCount == positionDesc.byteSize / build.vertexStride;
+}
+
+b8 RecordPreparedMeshBlasBuild(const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList){
+    if(
+        !build.positionBuffer
+        || !build.triangleIndexBuffer
+        || !build.blas
+        || !build.blasBackingBuffer
+        || build.vertexStride == 0u
+        || build.vertexCount == 0u
+        || build.indexCount == 0u
+        || build.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+    )
+        return false;
+
+    Core::RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(build.positionBuffer.get())
+        .setVertexFormat(Core::Format::RGB32_FLOAT)
+        .setVertexStride(build.vertexStride)
+        .setVertexCount(build.vertexCount)
+        .setIndexBuffer(build.triangleIndexBuffer.get())
+        .setIndexFormat(Core::Format::R32_UINT)
+        .setIndexCount(build.indexCount)
+    ;
+    Core::RayTracingGeometryDesc geometry;
+    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(build.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
+    if(build.performRefit)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
+
+    // Mixed geometry input ownership establishes these states locally; fully declared inputs use the packet prologue.
+    if(!meshBlasGeometryBuildInputStatesGraphOwned){
+        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    }
+    commandList.commitBarriers();
+    commandList.buildBottomLevelAccelStruct(build.blas.get(), &geometry, 1u, buildFlags);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
+        return;
+    }
+    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+}
+
 b8 RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(m_rayTracingState.m_bvhSortPipeline)
         return true;
@@ -46,7 +264,7 @@ b8 RendererRayTracingSystem::ensureBvhSortPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_rayTracingState.m_bvhSortShader, &BvhSubsystem::bitonicSortCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort")){
+    if(!m_shaderSystem.loadShader<ComputeShader>(&BvhSubsystem::bitonicSortCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_BvhBitonicSort", m_rayTracingState.m_bvhSortShader)){
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
@@ -73,7 +291,7 @@ b8 RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         return false;
 
     const auto sortHandlesReady = [this]()noexcept{
-        return RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle) && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle);
+        return RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer) && RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer);
     };
 
     if(m_rayTracingState.m_bvhSortKeysBuffer && m_rayTracingState.m_bvhSortPayloadBuffer && m_rayTracingState.m_bvhSortCapacity >= paddedCount){
@@ -85,13 +303,13 @@ b8 RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::Invalid();
         const auto acquireDescriptors = [&]() -> Expected<void>{
             if(!m_rayTracingState.m_bvhSortKeysHeapHandle.valid()){
-                const auto acquiredKeysResult = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get());
+                const auto acquiredKeysResult = RayTracingDetail::RegisterHeapBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredKeysResult)
                     return MakeUnexpected(Failure{});
                 acquiredKeys = *acquiredKeysResult;
             }
             if(!m_rayTracingState.m_bvhSortPayloadHeapHandle.valid()){
-                const auto acquiredPayloadResult = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortPayloadBuffer.get());
+                const auto acquiredPayloadResult = RayTracingDetail::RegisterHeapBuffer(heap, *m_rayTracingState.m_bvhSortPayloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
                 if(!acquiredPayloadResult)
                     return MakeUnexpected(Failure{});
                 acquiredPayload = *acquiredPayloadResult;
@@ -148,11 +366,11 @@ b8 RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     Core::GpuDescriptorHandle keysHeapHandle;
     Core::GpuDescriptorHandle payloadHeapHandle;
     const auto acquireDescriptors = [&]() -> Expected<void>{
-        const auto keysHeapHandleResult = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *keysBuffer.get());
+        const auto keysHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *keysBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!keysHeapHandleResult)
             return MakeUnexpected(Failure{});
         keysHeapHandle = *keysHeapHandleResult;
-        const auto payloadHeapHandleResult = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *payloadBuffer.get());
+        const auto payloadHeapHandleResult = RayTracingDetail::RegisterHeapBuffer(heap, *payloadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
         if(!payloadHeapHandleResult)
             return MakeUnexpected(Failure{});
         payloadHeapHandle = *payloadHeapHandleResult;
@@ -179,8 +397,8 @@ b8 RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 
     NWB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
     NWB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
     NWB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
-    NWB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
-    NWB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
+    NWB_ASSERT(RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
+    NWB_ASSERT(RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle, Core::GpuDescriptorClass::StorageBuffer));
 
     // Padded count is power-of-two and group-aligned.
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
@@ -280,7 +498,7 @@ b8 RendererRayTracingSystem::ensureBvhBuildPipeline(){
     const auto createBuildPipeline = [this, &device, &heap](Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> BvhSubsystem::* member, const NameText<char> debugLabel)->b8{
         if(pipeline)
             return true;
-        if(!m_shaderSystem.loadShader<ComputeShader>(shader, member, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
+        if(!m_shaderSystem.loadShader<ComputeShader>(member, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
             return false;
 
         Core::ComputePipelineDesc pipelineDesc;
@@ -312,11 +530,11 @@ b8 RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
         return false;
 
     if(m_rayTracingState.m_bvhVisitCounterBuffer && m_rayTracingState.m_bvhBuildCapacity >= primitiveCount){
-        if(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle))
+        if(RayTracingDetail::IsHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer))
             return true;
 
         if(!m_rayTracingState.m_bvhVisitCounterHeapHandle.valid()){
-            const auto acquired = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get());
+            const auto acquired = RayTracingDetail::RegisterHeapBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
             if(acquired){
                 m_rayTracingState.m_bvhVisitCounterHeapHandle = *acquired;
                 return true;
@@ -345,7 +563,7 @@ b8 RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
     }
     Core::BufferHandle counterBuffer = Move(*counterBufferResult);
 
-    const auto counterHeapHandle = RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *counterBuffer.get());
+    const auto counterHeapHandle = RayTracingDetail::RegisterHeapBuffer(heap, *counterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true);
     if(!counterHeapHandle){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
         return false;
@@ -356,20 +574,6 @@ b8 RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
     m_rayTracingState.m_bvhVisitCounterHeapHandle = *counterHeapHandle;
     m_rayTracingState.m_bvhBuildCapacity = capacity;
     return true;
-}
-
-void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortKeysHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhSortPayloadHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
-        return;
-    }
-    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 b8 RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){

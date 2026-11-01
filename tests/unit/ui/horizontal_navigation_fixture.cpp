@@ -55,14 +55,13 @@ PopupScope Popup(const HitTarget& owner, const u64 openGeneration)noexcept{
 
 
 HorizontalNavigationFixture::HorizontalNavigationFixture()
-    : m_arena(Name("tests/ui/horizontal_navigation"))
-    , m_router(m_arena)
+    : RouterTestFixture(Name("tests/ui/horizontal_navigation"))
 {
     for(usize index = 0u; index < 2u; ++index){
         HitTarget& host = m_targets[index];
         host.id = { index + 1u };
         host.declarationGeneration = 7u;
-        host.rectangle = { VectorGetX(VectorMultiply(VectorReplicate(static_cast<f32>(index)), VectorReplicate(140.0f))), 0.0f, 100.0f, 100.0f };
+        host.rectangle = { static_cast<f32>(index) * 140.0f, 0.0f, 100.0f, 100.0f };
         host.clip = { 0.0f, 0.0f, 300.0f, 200.0f };
         host.focusable = true;
         host.control = { 11u + index, 21u, 31u };
@@ -78,11 +77,6 @@ HorizontalNavigationFixture::HorizontalNavigationFixture()
     editor.focusable = true;
     editor.textEditable = true;
     editor.control = { 101u, 102u, 103u };
-}
-
-InputRoutingResult HorizontalNavigationFixture::send(const InputEvent& event){
-    EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-    return m_router.process();
 }
 
 InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const b8 repeat){
@@ -107,9 +101,9 @@ void HorizontalNavigationFixture::focusTarget(const usize index){
     EXPECT_EQ(m_router.focus(), m_targets[index].id);
 }
 
-b8 HorizontalNavigationFixture::publish(const usize count, const PopupScope* popups, const usize popupCount){
+b8 HorizontalNavigationFixture::publish(const usize count, const Span<const PopupScope> popups){
     const u64 generation = m_generation + 1u;
-    if(!m_router.commitTargets(m_targets.data(), count, generation, popups, popupCount))
+    if(!m_router.commitTargets(Span<const HitTarget>(m_targets.data(), count), generation, popups))
         return false;
     m_generation = generation;
     return true;

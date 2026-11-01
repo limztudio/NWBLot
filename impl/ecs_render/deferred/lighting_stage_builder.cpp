@@ -5,7 +5,7 @@
 #include "lighting_stage_builder.h"
 
 #include <impl/ecs_render/deferred/deferred_system.h>
-#include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/ecs_render/shadow/rt_shadow_state.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -16,15 +16,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& graph, RendererDeferredSystem& deferredSystem)noexcept
-    : m_graph(graph)
-    , m_deferredSystem(deferredSystem)
-{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,13 +53,13 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
     const b8 hasTransparentRenderers = inputs.hasTransparentRenderers;
 
     // Live Lighting joins current producers via graph edges; lagged Lighting reads history.
-    const Core::GpuTaskId hardwareLightingDependencies[] = { inputs.shadowVisibilityTask, inputs.surfelGiTask, inputs.avboitFinalTask, inputs.hardwareCausticsTask, };
-    const Core::GpuTaskId softwareLightingDependencies[] = { inputs.shadowVisibilityTask, inputs.softwareCausticsTask, inputs.surfelGiTask, inputs.avboitFinalTask, };
+    const Array<Core::GpuTaskId, 4u> hardwareLightingDependencies = { inputs.shadowVisibilityTask, inputs.surfelGiTask, inputs.avboitFinalTask, inputs.hardwareCausticsTask, };
+    const Array<Core::GpuTaskId, 4u> softwareLightingDependencies = { inputs.shadowVisibilityTask, inputs.softwareCausticsTask, inputs.surfelGiTask, inputs.avboitFinalTask, };
     // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
-    const Core::GpuTaskId laggedLightingDependencies[] = { inputs.graphicsPrefixTask, inputs.avboitFinalTask, };
+    const Array<Core::GpuTaskId, 2u> laggedLightingDependencies = { inputs.graphicsPrefixTask, inputs.avboitFinalTask, };
     constexpr usize s_TransparentLaggedLightingDependencyCount = 2u;
     const usize laggedLightingDependencyCount = hasTransparentRenderers ? s_TransparentLaggedLightingDependencyCount : 1u;
-    const Core::GpuTaskId laggedLightingSelectorUploadDependencies[] = { inputs.graphicsPrefixTask };
+    const Array<Core::GpuTaskId, 1u> laggedLightingSelectorUploadDependencies = { inputs.graphicsPrefixTask };
     const b8 laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     Core::GpuTaskId historySlotsUploadTask;
     if(laggedBindlessSlotsGraphOwned){
@@ -86,7 +77,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
             .setIdentity(Name("render.lagged_lighting.bindless_slots_upload"))
             .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
             .setScheduling(uploadScheduling)
-            .setDependencies(laggedLightingSelectorUploadDependencies, LengthOf(laggedLightingSelectorUploadDependencies))
+            .setDependencies(laggedLightingSelectorUploadDependencies)
         ;
         const auto historySlotsUploadTaskResult = m_graph.addUploadBufferTask(
             uploadDesc,
@@ -102,23 +93,26 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         }
         historySlotsUploadTask = *historySlotsUploadTaskResult;
     }
-    const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = { inputs.graphicsPrefixTask, historySlotsUploadTask, inputs.avboitFinalTask, };
+    const Array<Core::GpuTaskId, 3u> laggedLightingWithSelectorDependencies = { inputs.graphicsPrefixTask, historySlotsUploadTask, inputs.avboitFinalTask, };
     const Core::GpuTaskId* const lightingDependencies = inputs.declaresHardwareCaustics
-        ? (useLaggedLightingHistory ? laggedLightingDependencies : hardwareLightingDependencies)
-        : (useLaggedLightingHistory ? laggedLightingDependencies : softwareLightingDependencies)
+        ? (useLaggedLightingHistory ? laggedLightingDependencies.data() : hardwareLightingDependencies.data())
+        : (useLaggedLightingHistory ? laggedLightingDependencies.data() : softwareLightingDependencies.data())
     ;
-    const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned ? laggedLightingWithSelectorDependencies : lightingDependencies;
+    const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned ? laggedLightingWithSelectorDependencies.data() : lightingDependencies;
     constexpr usize s_TransparentLaggedSelectorDependencyCount = 3u;
     constexpr usize s_OpaqueLaggedSelectorDependencyCount = 2u;
-    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned ? (hasTransparentRenderers ? s_TransparentLaggedSelectorDependencyCount : s_OpaqueLaggedSelectorDependencyCount) :(useLaggedLightingHistory ? laggedLightingDependencyCount : LengthOf(hardwareLightingDependencies));
+    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
+        ? (hasTransparentRenderers ? s_TransparentLaggedSelectorDependencyCount : s_OpaqueLaggedSelectorDependencyCount)
+        : (useLaggedLightingHistory ? laggedLightingDependencyCount : hardwareLightingDependencies.size())
+    ;
 
-    const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = { inputs.historyReadReadyCompletion, };
-    const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory ? laggedLightingExternalDependencies : nullptr;
-    const usize lightingExternalDependencyCount = useLaggedLightingHistory ? LengthOf(laggedLightingExternalDependencies) : 0u;
+    const Array<Core::GpuExternalCompletionId, 1u> laggedLightingExternalDependencies = { inputs.historyReadReadyCompletion, };
+    const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory ? laggedLightingExternalDependencies.data() : nullptr;
+    const usize lightingExternalDependencyCount = useLaggedLightingHistory ? laggedLightingExternalDependencies.size() : 0u;
 
     // Active lagged Lighting receives compiler-owned state seeds for its shared prefix inputs while it reads history.
     // Transparent depth is the exception: the finalizer above orders its temporary DepthRead layout before Lighting samples it.
-    const Core::GpuTaskResourceUse resourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 11u> resourceUses = {
         ReadTextureUse(inputs.albedo, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.normal, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
         ReadTextureUse(inputs.worldPosition, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource),
@@ -141,9 +135,9 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(Core::GpuTaskGraph& g
         .setIdentity(Name("render.deferred_lighting"))
         .setMarkerLabel(RendererGpuPassText::s_DeferredLightingLabel)
         .setScheduling(scheduling)
-        .setDependencies(resolvedLightingDependencies, lightingDependencyCount)
-        .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
+        .setDependencies({ resolvedLightingDependencies, lightingDependencyCount })
+        .setExternalDependencies({ lightingExternalDependencies, lightingExternalDependencyCount })
+        .setResourceUses(resourceUses)
     ;
     const auto lightingTaskResult = m_deferredSystem.declareDeferredLightingTask(m_graph, desc, useLaggedLightingHistory, deferredTargets, timingTicket);
     if(!lightingTaskResult){

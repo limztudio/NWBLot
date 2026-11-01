@@ -25,7 +25,14 @@ class CaptureSession;
 
 class FrameGraphRegistry final : NoCopy{
 public:
-    explicit FrameGraphRegistry(Alloc::GlobalArena& arena);
+    explicit FrameGraphRegistry(Alloc::GlobalArena& arena)
+        : m_contributors(arena)
+        , m_nodes(arena)
+        , m_edges(arena)
+        , m_pendingNameEdges(arena)
+        , m_physicalQueueRuntimeStatistics(arena)
+        , m_packetSubmissionStatistics(arena)
+    {}
 
 
 public:

@@ -33,7 +33,7 @@ namespace ReflectionRoughnessCase{
 
 class ReflectionRoughnessScene final{
 public:
-    ReflectionRoughnessScene(ProjectRuntimeContext& context, Core::ECS::World& world, Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness)noexcept;
+    ReflectionRoughnessScene(Core::ECS::EntityID camera, Core::ECS::EntityID light, f32 roughness, ProjectRuntimeContext& context, Core::ECS::World& world)noexcept;
 
 
 public:
@@ -43,15 +43,16 @@ public:
     [[nodiscard]] b8 deforming()const noexcept{ return m_case == ReflectionRoughnessCase::Deform || m_case == ReflectionRoughnessCase::StaticDeform; }
     [[nodiscard]] b8 applyMutation();
 
+
 private:
     [[nodiscard]] Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position, const Float4& scale, f32 f0 = 0.f, f32 roughness = 0.f);
     [[nodiscard]] b8 createDeformingSource();
 
 
 private:
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
-    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
     Core::ECS::EntityID m_camera;
     Core::ECS::EntityID m_light;
     Core::ECS::EntityID m_red;

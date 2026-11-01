@@ -42,8 +42,8 @@ struct OptionPresence{
     b8 flipWinding = false;
 };
 
-inline constexpr int s_FbxToNwbExitSuccess = 0;
-inline constexpr int s_FbxToNwbExitFailure = 1;
+inline constexpr i32 s_FbxToNwbExitSuccess = 0;
+inline constexpr i32 s_FbxToNwbExitFailure = 1;
 inline constexpr AStringView s_FbxToNwbAppName = "fbx_to_nwb";
 inline constexpr AStringView s_FbxToNwbHelpFlag = "-h,--help";
 inline constexpr AStringView s_FbxToNwbInputOption = "input";
@@ -73,12 +73,12 @@ inline constexpr u32 s_CliOptionPresentCount = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena){
+i32 ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Alloc::ScratchArena& scratchArena){
     if(error.get_exit_code() == s_FbxToNwbExitSuccess)
         return app.exit(error, NWB_COUT, NWB_CERR);
 
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
-    const int result = app.exit(error, report, report);
+    const i32 result = app.exit(error, report, report);
     const ScratchString message = Move(report).str();
     if(message.empty())
         NWB_LOGGER_ERROR(NWB_TEXT("{}"), ConvertString(AStringView(error.what())));
@@ -87,12 +87,12 @@ int ExitParseError(const CLI::App& app, const CLI::ParseError& error, Core::Allo
     return result;
 }
 
-int ExitValidation(const CLI::App& app, const AStringView option, const AStringView message, Core::Alloc::ScratchArena& scratchArena){
+i32 ExitValidation(const CLI::App& app, const AStringView option, const AStringView message, Core::Alloc::ScratchArena& scratchArena){
     return ExitParseError(app, CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())), scratchArena);
 }
 
-Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, b8& prompted){
-    prompted = true;
+Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, b8& inOutPrompted){
+    inOutPrompted = true;
     NWB_COUT << label;
     if(!defaultValue.empty())
         NWB_COUT << " [" << defaultValue << "]";
@@ -108,8 +108,8 @@ Expected<AString> PromptString(const AStringView label, const AStringView defaul
     return line;
 }
 
-b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
-    prompted = true;
+b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
+    inOutPrompted = true;
     ScratchString line(scratchArena);
     for(;;){
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
@@ -129,8 +129,8 @@ b8 PromptBool(const AStringView label, const b8 defaultValue, Core::Alloc::Scrat
     }
 }
 
-f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
-    prompted = true;
+f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
+    inOutPrompted = true;
     ScratchString line(scratchArena);
     for(;;){
         NWB_COUT << label << " [" << defaultValue << "]: ";
@@ -151,7 +151,7 @@ f64 PromptDouble(const AStringView label, const f64 defaultValue, Core::Alloc::S
     }
 }
 
-b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
+b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& options, Core::Alloc::ScratchArena& scratchArena, b8& inOutPrompted){
     const auto exists = FileExists(outputPath);
     if(!exists){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), ConvertString(exists.error().message()));
@@ -166,95 +166,95 @@ b8 ValidateOutputOverwrite(const ScratchPath& outputPath, const ImportOptions& o
         return false;
     }
 
-    return PromptBool("Output already exists. Overwrite it?", false, scratchArena, prompted);
+    return PromptBool("Output already exists. Overwrite it?", false, scratchArena, inOutPrompted);
 }
 
-b8 ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
-    if(options.inputPath.empty()){
-        if(options.acceptDefaults){
+b8 ConfigurePromptsBeforeLoad(const OptionPresence& presence, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
+    if(inOutOptions.inputPath.empty()){
+        if(inOutOptions.acceptDefaults){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
 
-        auto input = PromptString("Input FBX or NWB path", {}, prompted);
+        auto input = PromptString("Input FBX or NWB path", {}, inOutPrompted);
         if(!input){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
-        options.inputPath = Move(*input);
+        inOutOptions.inputPath = Move(*input);
     }
-    options.inputPath = UnquoteMatchingAsciiQuotes(Move(options.inputPath));
+    inOutOptions.inputPath = UnquoteMatchingAsciiQuotes(Move(inOutOptions.inputPath));
 
-    if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
-        const b8 convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, prompted);
-        options.preserveSpace = !convertSpace;
+    if(!presence.preserveSpace && !inOutOptions.acceptDefaults && !inOutOptions.listMeshes){
+        const b8 convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, scratchArena, inOutPrompted);
+        inOutOptions.preserveSpace = !convertSpace;
     }
 
     return true;
 }
 
-b8 ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
-    if(!presence.assetType && !options.acceptDefaults){
+b8 ConfigurePromptsAfterLoad(const OptionPresence& presence, const Span<const MeshInstance> visibleInstances, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
+    if(!presence.assetType && !inOutOptions.acceptDefaults){
         const ScratchString choices = OutputAssetTypeOptionsText(scratchArena);
         ScratchString prompt("Asset type (", scratchArena);
         prompt.reserve(AddSize(AddSize(prompt.size(), choices.size()), 1u));
         prompt += choices;
         prompt += ")";
-        auto assetType = PromptString(prompt, options.assetType, prompted);
+        auto assetType = PromptString(prompt, inOutOptions.assetType, inOutPrompted);
         if(!assetType)
             return false;
-        options.assetType = Move(*assetType);
+        inOutOptions.assetType = Move(*assetType);
     }
 
-    if(!presence.mesh && !options.acceptDefaults){
+    if(!presence.mesh && !inOutOptions.acceptDefaults){
         PrintMeshInstances(visibleInstances, scratchArena);
-        auto selector = PromptString("Mesh selector (all, first, index, node name, or mesh name)", options.meshSelector, prompted);
+        auto selector = PromptString("Mesh selector (all, first, index, node name, or mesh name)", inOutOptions.meshSelector, inOutPrompted);
         if(!selector)
             return false;
-        options.meshSelector = Move(*selector);
+        inOutOptions.meshSelector = Move(*selector);
     }
 
-    if(!presence.output && !options.acceptDefaults){
-        const auto defaultOutput = PathToGenericString(scratchArena, DefaultOutputPath(options.inputPath, scratchArena));
-        auto output = PromptString(s_OutputPathPromptLabel, defaultOutput, prompted);
+    if(!presence.output && !inOutOptions.acceptDefaults){
+        const auto defaultOutput = PathToGenericString(scratchArena, DefaultOutputPath(inOutOptions.inputPath, scratchArena));
+        auto output = PromptString(s_OutputPathPromptLabel, defaultOutput, inOutPrompted);
         if(!output)
             return false;
-        options.outputPath = Move(*output);
+        inOutOptions.outputPath = Move(*output);
     }
-    if(options.outputPath.empty())
-        options.outputPath = PathToGenericString(scratchArena, DefaultOutputPath(options.inputPath, scratchArena));
-    options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
+    if(inOutOptions.outputPath.empty())
+        inOutOptions.outputPath = PathToGenericString(scratchArena, DefaultOutputPath(inOutOptions.inputPath, scratchArena));
+    inOutOptions.outputPath = UnquoteMatchingAsciiQuotes(Move(inOutOptions.outputPath));
 
-    if(!presence.normalMode && !options.acceptDefaults){
+    if(!presence.normalMode && !inOutOptions.acceptDefaults){
         const ScratchString choices = NormalModeOptionsText(scratchArena);
         ScratchString prompt("Normal mode (", scratchArena);
         prompt.reserve(AddSize(AddSize(prompt.size(), choices.size()), 1u));
         prompt += choices;
         prompt += ")";
-        auto normalMode = PromptString(prompt, options.normalMode, prompted);
+        auto normalMode = PromptString(prompt, inOutOptions.normalMode, inOutPrompted);
         if(!normalMode)
             return false;
-        options.normalMode = Move(*normalMode);
+        inOutOptions.normalMode = Move(*normalMode);
     }
 
-    if(!presence.scale && !options.acceptDefaults)
-        options.scale = PromptDouble("Additional uniform scale", options.scale, scratchArena, prompted);
+    if(!presence.scale && !inOutOptions.acceptDefaults)
+        inOutOptions.scale = PromptDouble("Additional uniform scale", inOutOptions.scale, scratchArena, inOutPrompted);
 
-    if(!presence.local && !options.acceptDefaults)
-        options.bakeTransforms = PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, scratchArena, prompted);
+    if(!presence.local && !inOutOptions.acceptDefaults)
+        inOutOptions.bakeTransforms = PromptBool("Bake node transforms into the mesh?", inOutOptions.bakeTransforms, scratchArena, inOutPrompted);
 
-    if(!presence.ignoreColors && !options.acceptDefaults)
-        options.importColors = PromptBool("Import FBX vertex colors when present?", options.importColors, scratchArena, prompted);
+    if(!presence.ignoreColors && !inOutOptions.acceptDefaults)
+        inOutOptions.importColors = PromptBool("Import FBX vertex colors when present?", inOutOptions.importColors, scratchArena, inOutPrompted);
 
-    if(!presence.defaultColor && !options.acceptDefaults){
-        auto colorText = PromptString("Default RGBA color for vertices without FBX color", options.defaultColorText, prompted);
+    if(!presence.defaultColor && !inOutOptions.acceptDefaults){
+        auto colorText = PromptString("Default RGBA color for vertices without FBX color", inOutOptions.defaultColorText, inOutPrompted);
         if(!colorText)
             return false;
-        options.defaultColorText = Move(*colorText);
+        inOutOptions.defaultColorText = Move(*colorText);
     }
 
-    if(!presence.flipWinding && !options.acceptDefaults)
-        options.flipWinding = PromptBool("Flip triangle winding?", options.flipWinding, scratchArena, prompted);
+    if(!presence.flipWinding && !inOutOptions.acceptDefaults)
+        inOutOptions.flipWinding = PromptBool("Flip triangle winding?", inOutOptions.flipWinding, scratchArena, inOutPrompted);
 
     return true;
 }
@@ -294,46 +294,46 @@ b8 IsNwbRefreshMode(const ImportOptions& options, Core::Alloc::ScratchArena& scr
     if(options.refreshNwb)
         return true;
     const ScratchPath inputPath(scratchArena, options.inputPath);
-    const AStringView extensions[] = { s_NwbOutputExtension };
-    return PathHasListedExtension(inputPath, extensions);
+    static constexpr Array<AStringView, 1u> s_Extensions = { Core::Assets::s_NwbExtension };
+    return PathHasListedExtension(inputPath, s_Extensions);
 }
 
-void WriteRefreshCount(ScratchStringStream& report, const AStringView name, const usize before, const usize after){
-    report << "  " << name << ": " << before << " -> " << after << s_ReportLineEndText;
+void WriteRefreshCount(const AStringView name, const usize before, const usize after, ScratchStringStream& inOutReport){
+    inOutReport << "  " << name << ": " << before << " -> " << after << s_ReportLineEndText;
 }
 
-void WriteCanonicalizeReport(ScratchStringStream& report, const SourceMeshCanonicalizeReport& canonicalizeReport){
-    WriteRefreshCount(report, s_PositionsStreamLabel, canonicalizeReport.before.positions, canonicalizeReport.after.positions);
-    WriteRefreshCount(report, s_NormalsStreamLabel, canonicalizeReport.before.normals, canonicalizeReport.after.normals);
-    WriteRefreshCount(report, s_TangentsStreamLabel, canonicalizeReport.before.tangents, canonicalizeReport.after.tangents);
-    WriteRefreshCount(report, s_Uv0StreamLabel, canonicalizeReport.before.uv0, canonicalizeReport.after.uv0);
-    WriteRefreshCount(report, s_ColorsStreamLabel, canonicalizeReport.before.colors, canonicalizeReport.after.colors);
-    WriteRefreshCount(report, s_SkinStreamLabel, canonicalizeReport.before.skin, canonicalizeReport.after.skin);
-    WriteRefreshCount(report, s_VertexRefsStreamLabel, canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs);
-    WriteRefreshCount(report, s_IndicesStreamLabel, canonicalizeReport.before.indices, canonicalizeReport.after.indices);
+void WriteCanonicalizeReport(const SourceMeshCanonicalizeReport& canonicalizeReport, ScratchStringStream& inOutReport){
+    WriteRefreshCount(Impl::s_MeshPositionsFieldNameView, canonicalizeReport.before.positions, canonicalizeReport.after.positions, inOutReport);
+    WriteRefreshCount(Impl::s_MeshNormalsFieldNameView, canonicalizeReport.before.normals, canonicalizeReport.after.normals, inOutReport);
+    WriteRefreshCount(Impl::s_MeshTangentsFieldNameView, canonicalizeReport.before.tangents, canonicalizeReport.after.tangents, inOutReport);
+    WriteRefreshCount(Impl::s_MeshUv0FieldNameView, canonicalizeReport.before.uv0, canonicalizeReport.after.uv0, inOutReport);
+    WriteRefreshCount(Impl::s_MeshColorsFieldNameView, canonicalizeReport.before.colors, canonicalizeReport.after.colors, inOutReport);
+    WriteRefreshCount(s_SkinStreamLabel, canonicalizeReport.before.skin, canonicalizeReport.after.skin, inOutReport);
+    WriteRefreshCount(Impl::s_MeshVertexRefsFieldNameView, canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs, inOutReport);
+    WriteRefreshCount(Impl::s_MeshIndicesFieldNameView, canonicalizeReport.before.indices, canonicalizeReport.after.indices, inOutReport);
 }
 
-int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, ImportOptions& options, b8& prompted){
-    if(options.listMeshes)
+i32 RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, ImportOptions& inOutOptions, b8& inOutPrompted){
+    if(inOutOptions.listMeshes)
         return ExitValidation(app, s_FbxToNwbListMeshesFlag, "Only valid for FBX input.", scratchArena);
 
-    if(!presence.output && !options.acceptDefaults){
-        auto output = PromptString(s_OutputPathPromptLabel, options.inputPath, prompted);
+    if(!presence.output && !inOutOptions.acceptDefaults){
+        auto output = PromptString(s_OutputPathPromptLabel, inOutOptions.inputPath, inOutPrompted);
         if(!output)
             return s_FbxToNwbExitFailure;
-        options.outputPath = Move(*output);
+        inOutOptions.outputPath = Move(*output);
     }
-    if(options.outputPath.empty())
-        options.outputPath = options.inputPath;
-    options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
+    if(inOutOptions.outputPath.empty())
+        inOutOptions.outputPath = inOutOptions.inputPath;
+    inOutOptions.outputPath = UnquoteMatchingAsciiQuotes(Move(inOutOptions.outputPath));
 
-    const ScratchPath outputPath(scratchArena, options.outputPath);
+    const ScratchPath outputPath(scratchArena, inOutOptions.outputPath);
     if(outputPath.empty())
         return ExitValidation(app, s_FbxToNwbOutputOption, s_OutputPathEmptyText, scratchArena);
-    if(!ValidateOutputOverwrite(outputPath, options, scratchArena, prompted))
+    if(!ValidateOutputOverwrite(outputPath, inOutOptions, scratchArena, inOutPrompted))
         return s_FbxToNwbExitFailure;
 
-    const ScratchPath inputPath(scratchArena, options.inputPath);
+    const ScratchPath inputPath(scratchArena, inOutOptions.inputPath);
     const auto canonicalizeReport = RefreshNwbMeshAsset(inputPath, outputPath, cpuScheduler, scratchArena);
     if(!canonicalizeReport)
         return s_FbxToNwbExitFailure;
@@ -342,7 +342,7 @@ int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::Cpu
     const auto inputText = PathToGenericString(scratchArena, inputPath);
     ScratchStringStream report(s_FileOpenWrite, scratchArena);
     report << "Refreshed " << outputText << s_ReportLineEndText << "  input: " << inputText << s_ReportLineEndText;
-    WriteCanonicalizeReport(report, *canonicalizeReport);
+    WriteCanonicalizeReport(*canonicalizeReport, report);
     NWB_LOGGER_ESSENTIAL_INFO(ConvertString(report.str()));
     return s_FbxToNwbExitSuccess;
 }
@@ -357,10 +357,9 @@ int RunNwbRefresh(const CLI::App& app, const OptionPresence& presence, Core::Cpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompted){
+i32 Run(i32 argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, b8& prompted){
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
-    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_UtilityScratch);
 
     CLI::App app{ __hidden_command_line::s_FbxToNwbAppName.data() };
     app.set_help_flag(__hidden_command_line::s_FbxToNwbHelpFlag.data(), "Show help");
@@ -451,7 +450,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompte
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
             options.includeHidden = __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, scratchArena, prompted);
 
-        UtilityVector<MeshInstance> instances = CollectMeshInstances(scene->scene, options.includeHidden);
+        UtilityVector<MeshInstance> instances = CollectMeshInstances(*scene->scene, options.includeHidden);
         if(options.listMeshes){
             PrintMeshInstances(instances, scratchArena);
             return __hidden_command_line::s_FbxToNwbExitSuccess;
@@ -525,7 +524,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, b8& prompte
             << "  positions: " << mesh.positions.size() << s_ReportLineEndText
             << "  normals: " << mesh.normals.size() << s_ReportLineEndText
             << "  vertex_refs: " << mesh.vertexRefs.size() << s_ReportLineEndText
-            << "  triangles: " << (mesh.indices.size() / s_TriangleIndexCount) << s_ReportLineEndText
+            << "  triangles: " << (mesh.indices.size() / Impl::s_MeshletTriangleIndexCount) << s_ReportLineEndText
             << "  asset_type: " << options.assetType << s_ReportLineEndText
             << "  normal_mode: " << options.normalMode << s_ReportLineEndText
             << "  tangents: " << SourceTangentModeText(tangentReport.mode) << s_ReportLineEndText

@@ -6,7 +6,7 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
@@ -72,28 +72,7 @@ template<typename Dispatch>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TransparentCsgIntervalRecordInputs::TransparentCsgIntervalRecordInputs(
-    Core::Alloc::GlobalArena& arena,
-    RendererMaterialSystem& materialSystemIn,
-    RendererCsgSystem& csgSystemIn,
-    DeferredFrameTargets& targetsIn,
-    Core::GpuTimingSubmissionTicket& timingTicketIn,
-    Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
-)noexcept
-    : materialSystem(materialSystemIn)
-    , csgSystem(csgSystemIn)
-    , targets(targetsIn)
-    , timingTicket(timingTicketIn)
-    , transparentCsgIntervalsTiming(transparentCsgIntervalsTimingIn)
-    , transparentCsgSnapshot(arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.transparentCsgSnapshot.captured)
         return false;
 
@@ -111,8 +90,7 @@ b8 AvboitCsgReceiverSpanGraphTask::Record(const Payload& payload, Core::CommandL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 AvboitCsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.transparentCsgSnapshot.captured)
         return false;
 

@@ -39,6 +39,8 @@ struct DeferredPresentGraphTask{
     // Acquired backbuffer recording belongs to the primary presentation timeline.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
 
+
+public:
     // All bindings required: present closes the async-final range when shadow runs on compute.
     // Only the output-layer contributor stays optional.
     struct Payload{

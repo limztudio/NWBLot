@@ -8,6 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Name s_ModelSyncRuntimeArena = "impl/ecs_model/sync_runtime";
+const usize s_ParallelModelObjectTransformGrainSize = 256u;
+
 [reflect]
 class ModelComponent{
     public AssetRef<Model> model;
@@ -42,6 +45,10 @@ class ModelSkeletonComponent{
 
 [reflect]
 class ModelStaticMeshAttachmentComponent{
+    public b8 hasJointAttachment()const{
+        return this.parentEntity.valid() && this.parentJointIndex != s_SkeletonInvalidJointIndex;
+    }
+
     public Name parentObject = s_NameNone;
     public Name parentJoint = s_NameNone;
     public EntityID parentEntity = s_InvalidEntityId;
@@ -55,6 +62,16 @@ class ModelAttachmentJointQuery{
     public EntityID parentEntity = s_InvalidEntityId;
     public u32 parentJointIndex = s_SkeletonInvalidJointIndex;
     public b8 resolved = false;
+}
+
+ModelObjectComponent MakeModelObjectComponent(in EntityID owner, in Name model, in Name object, in SkeletonJointMatrix localTransform, in ModelObjectKind kind){
+    ModelObjectComponent out;
+    out.owner = owner;
+    out.model = model;
+    out.object = object;
+    out.localTransform = localTransform;
+    out.kind = kind;
+    return out;
 }
 
 

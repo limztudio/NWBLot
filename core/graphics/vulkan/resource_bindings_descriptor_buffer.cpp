@@ -44,65 +44,6 @@ DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanCon
     , m_samplerSegment(context.objectArena, VulkanDetail::AllocateDescriptorBufferStorageIdentity())
 {}
 
-DescriptorBufferManager::~DescriptorBufferManager()noexcept{
-    shutdownForDeviceTeardown();
-}
-
-Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperation(){
-    VkResult idleResult = VK_SUCCESS;
-    {
-        ScopedLock lifecycleLock(m_lifecycleMutex);
-        if(m_lifecycleTransitioning){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
-            return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
-        }
-        if(m_resourceSegment.buffer == VK_NULL_HANDLE && m_samplerSegment.buffer == VK_NULL_HANDLE && !m_resourceSegment.allocation && !m_samplerSegment.allocation){
-            m_bindingGeneration = 0u;
-            m_enabled = false;
-            return idleResult;
-        }
-
-        m_lifecycleTransitioning = true;
-        m_bindingGeneration = 0u;
-        m_enabled = false;
-    }
-
-    idleResult = m_device.waitForNativeIdle();
-    if(idleResult == VK_ERROR_DEVICE_LOST)
-        m_device.markDeviceLost();
-    if(idleResult != VK_SUCCESS && idleResult != VK_ERROR_DEVICE_LOST){
-        {
-            ScopedLock lifecycleLock(m_lifecycleMutex);
-
-            m_lifecycleTransitioning = false;
-        }
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
-        return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
-    }
-
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-    ScopedLock resourceLock(m_resourceSegment.mutex);
-    ScopedLock samplerLock(m_samplerSegment.mutex);
-
-    shutdownSegment(m_resourceSegment);
-    shutdownSegment(m_samplerSegment);
-    m_lifecycleTransitioning = false;
-    return idleResult;
-}
-
-void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
-    NothrowScopedLock operationLock(m_lifecycleOperationMutex);
-    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
-    NothrowScopedLock resourceLock(m_resourceSegment.mutex);
-    NothrowScopedLock samplerLock(m_samplerSegment.mutex);
-
-    m_bindingGeneration = 0u;
-    m_enabled = false;
-    shutdownSegment(m_resourceSegment);
-    shutdownSegment(m_samplerSegment);
-    m_lifecycleTransitioning = false;
-}
-
 b8 DescriptorBufferManager::initialize(){
     UniqueLock<Futex> operationLock(m_lifecycleOperationMutex);
 
@@ -223,24 +164,59 @@ u32 DescriptorBufferManager::getOffsetAlignmentBytes()const noexcept{
     return VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
 }
 
-u64 DescriptorBufferManager::getUniformBufferAddressAlignmentBytes()const noexcept{
-    return Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
+Expected<VkResult, VkResult> DescriptorBufferManager::shutdownForLifecycleOperation(){
+    VkResult idleResult = VK_SUCCESS;
+    {
+        ScopedLock lifecycleLock(m_lifecycleMutex);
+        if(m_lifecycleTransitioning){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
+            return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
+        }
+        if(m_resourceSegment.buffer == VK_NULL_HANDLE && m_samplerSegment.buffer == VK_NULL_HANDLE && !m_resourceSegment.allocation && !m_samplerSegment.allocation){
+            m_bindingGeneration = 0u;
+            m_enabled = false;
+            return idleResult;
+        }
+
+        m_lifecycleTransitioning = true;
+        m_bindingGeneration = 0u;
+        m_enabled = false;
+    }
+
+    idleResult = m_device.waitForNativeIdle();
+    if(idleResult == VK_ERROR_DEVICE_LOST)
+        m_device.markDeviceLost();
+    if(idleResult != VK_SUCCESS && idleResult != VK_ERROR_DEVICE_LOST){
+        {
+            ScopedLock lifecycleLock(m_lifecycleMutex);
+
+            m_lifecycleTransitioning = false;
+        }
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
+        return MakeUnexpected(idleResult == VK_SUCCESS ? VK_ERROR_INITIALIZATION_FAILED : idleResult);
+    }
+
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+    ScopedLock resourceLock(m_resourceSegment.mutex);
+    ScopedLock samplerLock(m_samplerSegment.mutex);
+
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_lifecycleTransitioning = false;
+    return idleResult;
 }
 
-u64 DescriptorBufferManager::getStorageBufferAddressAlignmentBytes()const noexcept{
-    return Max<u64>(m_context.physicalDeviceProperties.limits.minStorageBufferOffsetAlignment, 1u);
-}
+void DescriptorBufferManager::shutdownForDeviceTeardown()noexcept{
+    NothrowScopedLock operationLock(m_lifecycleOperationMutex);
+    NothrowScopedLock lifecycleLock(m_lifecycleMutex);
+    NothrowScopedLock resourceLock(m_resourceSegment.mutex);
+    NothrowScopedLock samplerLock(m_samplerSegment.mutex);
 
-u64 DescriptorBufferManager::getTexelBufferAddressAlignmentBytes()const noexcept{
-    return Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
-}
-
-u32 DescriptorBufferManager::getMaxTexelBufferElements()const noexcept{
-    return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
-}
-
-Expected<DescriptorBufferSegment> DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
-    return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
+    m_bindingGeneration = 0u;
+    m_enabled = false;
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_lifecycleTransitioning = false;
 }
 
 b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32 resourceBytes, const u32 samplerBytes, const u64 requiredGeneration){
@@ -380,10 +356,6 @@ Expected<DescriptorBufferSegment> DescriptorBufferManager::allocateForBindingGen
 
     segment.writableOffsetBytes = *alignedOffset + sizeBytes;
     return finishAllocation(*alignedOffset);
-}
-
-void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
-    freeForBindingGeneration(segment, 0u);
 }
 
 void DescriptorBufferManager::freeForBindingGeneration(const DescriptorBufferSegment& segment, const u64 requiredGeneration){

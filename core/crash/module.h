@@ -109,6 +109,11 @@ using CrashConfig = CrashConfigT<Alloc::PersistentArena>;
 
 
 template<typename ArenaT>
+[[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);
+template<typename ArenaT>
+[[nodiscard]] ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena);
+
+template<typename ArenaT>
 [[nodiscard]] b8 InstallCrashHandler(const CrashConfigT<ArenaT>& config);
 // Hook registration/removal belongs to quiescent process startup/shutdown; native terminate/filter APIs provide no compare-exchange.
 // Windows preserves detached upload completion after its bounded shutdown wait.
@@ -122,11 +127,6 @@ void UninstallCrashHandler()noexcept;
 void AddCrashBreadcrumb(AStringView category, AStringView message)noexcept;
 [[nodiscard]] CrashDumpResult CaptureCrashDump(AStringView category = AStringView(), AStringView message = AStringView());
 [[nodiscard]] CrashDumpResult CaptureGpuCrashDump(AStringView message, AStringView binaryDump = AStringView(), GpuCrashDumpKind::Enum dumpKind = GpuCrashDumpKind::Aftermath);
-
-template<typename ArenaT>
-[[nodiscard]] ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena);
-template<typename ArenaT>
-[[nodiscard]] ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

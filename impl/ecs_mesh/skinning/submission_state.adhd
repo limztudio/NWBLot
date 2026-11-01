@@ -12,8 +12,63 @@
 const usize s_MeshSkinningResourceBufferCount = 19u;
 const usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
 
+const usize s_SkinningDeformationUseCapacity = 13u;
+const usize s_SkinningPostDispatchUseCapacity = 11u;
+const usize s_SkinningLocalBoundsUseCapacity = 3u;
+const usize s_SkinningFinalizerUseCapacity = 6u;
+const usize s_SkinningPromotedIndexCapacityFactor = 4u;
+const usize s_SkinningLiveStateInlineBufferCount = 32u;
+
+const b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
+const b8 s_RuntimeSkinningMeshletConeCullingEnabled = false;
+const u32 s_PerRuntimeMeshTimingQueries = 128u;
+
+const u32 s_SkinJointWordCount = 2u;
+const u32 s_SkinJointBits = 16u;
+const usize s_SkinRestPositionElementBytes = 12u;
+const usize s_SkinRestNormalElementBytes = 8u;
+const usize s_SkinRestTangentElementBytes = 8u;
+
 const Name s_PrepareRuntimeArena = "impl/ecs_mesh/skinning_prepare";
 const Name s_FrameUploadArena = "impl/ecs_mesh/skinning_frame_upload";
+const Name s_SerialMergeDomain = "mesh_skinning.serial";
+
+const Name s_SkinningComputeShaderName = "ECSMeshSkinning_SkinningCS";
+const Name s_MeshletBoundsComputeShaderName = "ECSMeshSkinning_MeshletBoundsCS";
+const Name s_LocalBoundsComputeShaderName = "ECSMeshSkinning_LocalBoundsCS";
+const Name s_RepackNormalsComputeShaderName = "ECSMeshSkinning_RepackNormalsCS";
+
+const Name s_GraphBoundsPipelineName = "mesh_skinning.graph_bounds_pipeline";
+const Name s_GraphLocalBoundsPipelineName = "mesh_skinning.graph_local_bounds_pipeline";
+const Name s_GraphSkinningPipelineName = "mesh_skinning.graph_skinning_pipeline";
+const Name s_GraphRepackPipelineName = "mesh_skinning.graph_repack_pipeline";
+
+const StringView s_RuntimePrefix = ":runtime_";
+const StringView s_RevisionSeparator = "_revision_";
+const StringView s_OwnerSeparator = "_";
+
+const StringView s_SkinnedPositionsLabel = "Runtime Skinned Positions";
+const StringView s_SkinnedNormalsLabel = "Runtime Skinned Normals";
+const StringView s_MeshletDescriptorsLabel = "Runtime Meshlet Descriptors";
+const StringView s_MeshletLocalVertexRefsLabel = "Runtime Meshlet Local Vertex Refs";
+const StringView s_MeshletPrimitiveIndicesLabel = "Runtime Meshlet Primitive Indices";
+const StringView s_MeshletAttributeDeltasLabel = "Runtime Meshlet Attribute Deltas";
+
+const StringView s_RestPositionsSuffix = "rest_positions";
+const StringView s_RestNormalsSuffix = "rest_normals";
+const StringView s_RestTangentsSuffix = "rest_tangents";
+const StringView s_SkinnedPositionsSuffix = "skinned_positions";
+const StringView s_SkinnedNormalsSuffix = "skinned_normals";
+const StringView s_SkinnedTangentsSuffix = "skinned_tangents";
+const StringView s_Uv0Suffix = "uv0";
+const StringView s_ColorsSuffix = "colors";
+const StringView s_MeshletsSuffix = "meshlets";
+const StringView s_MeshletBoundsSuffix = "meshlet_bounds";
+const StringView s_MeshletPositionRefDeltasSuffix = "meshlet_position_ref_deltas";
+const StringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attribute_ref_deltas";
+const StringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
+const StringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
+const StringView s_AttributeSkinsSuffix = "attribute_skins";
 
 class SkinnedRuntimeMeshIdentity{
     public Name meshKey = s_NameNone;
@@ -118,6 +173,62 @@ class MeshSkinningRestToSkinnedCopyByteCounts{
     public usize positionBytes = 0u;
     public usize normalBytes = 0u;
     public usize tangentBytes = 0u;
+}
+
+Array<u32, 2u> PackSkinInfluenceJoints(in SkinInfluence4 sourceSkin){
+    Array<u32, 2u> packed;
+    for(u32 wordIndex = 0u; wordIndex < s_SkinJointWordCount; ++wordIndex){
+        const u32 influenceIndex = wordIndex * 2u;
+        packed[wordIndex] = cast<u32>(sourceSkin.joint[influenceIndex]) | (cast<u32>(sourceSkin.joint[influenceIndex + 1u]) << s_SkinJointBits);
+    }
+    return packed;
+}
+
+b8 TryResolveMeshSkinningRestToSkinnedCopyByteCounts(in usize positionCount, in usize normalCount, in usize tangentCount, mut MeshSkinningRestToSkinnedCopyByteCounts outCounts){
+    outCounts = MeshSkinningRestToSkinnedCopyByteCounts();
+    if(positionCount == 0u || normalCount == 0u || tangentCount == 0u)
+        return false;
+    const usize positionBytes = positionCount * s_SkinRestPositionElementBytes;
+    if(positionBytes / s_SkinRestPositionElementBytes != positionCount)
+        return false;
+    const usize normalBytes = normalCount * s_SkinRestNormalElementBytes;
+    if(normalBytes / s_SkinRestNormalElementBytes != normalCount)
+        return false;
+    const usize tangentBytes = tangentCount * s_SkinRestTangentElementBytes;
+    if(tangentBytes / s_SkinRestTangentElementBytes != tangentCount)
+        return false;
+    outCounts.positionBytes = positionBytes;
+    outCounts.normalBytes = normalBytes;
+    outCounts.tangentBytes = tangentBytes;
+    return true;
+}
+
+Name DeriveRuntimeResourceName(in Name sourceName, in u64 ownerId, in u32 editRevision, in StringView label){
+    Name outName = s_NameNone;
+    if(sourceName == s_NameNone || label.empty())
+        return outName;
+    native(in sourceName, in ownerId, in editRevision, in label, mut outName){
+        Array<char, s_DecimalTextBufferBytes> ownerBuffer;
+        Array<char, s_DecimalTextBufferBytes> revisionBuffer;
+        const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
+        const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
+        if(!ownerText.empty() && !revisionText.empty()){
+            if(auto derivedHash = BeginDerivedNameHash(sourceName)){
+                if(
+                    UpdateDerivedNameHashText(*derivedHash, s_RuntimePrefix)
+                    && UpdateDerivedNameHashText(*derivedHash, ownerText)
+                    && UpdateDerivedNameHashText(*derivedHash, s_RevisionSeparator)
+                    && UpdateDerivedNameHashText(*derivedHash, revisionText)
+                    && UpdateDerivedNameHashText(*derivedHash, s_OwnerSeparator)
+                    && UpdateDerivedNameHashText(*derivedHash, label)
+                ){
+                    if(const auto finished = FinishDerivedNameHash(*derivedHash))
+                        outName = *finished;
+                }
+            }
+        }
+    }
+    return outName;
 }
 
 

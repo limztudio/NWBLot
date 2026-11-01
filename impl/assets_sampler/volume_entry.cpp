@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -29,16 +28,15 @@ namespace __hidden_assets_sampler_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<SamplerCookEntry> ParseSamplerDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
 static b8 RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterSingleDocumentCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
-        registry,
+    return Core::Assets::RegisterDocumentValueCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         SamplerBinaryPayload::s_SamplerAssetKindLabel,
-        &ParseSamplerDocument,
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseSamplerCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+        },
+        nullptr,
         [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildSamplerAsset(entry, arena); },
+        registry,
         false
     );
 }

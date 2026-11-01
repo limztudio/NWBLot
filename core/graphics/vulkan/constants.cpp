@@ -40,7 +40,7 @@ public:
     {}
 };
 
-static constexpr FormatMapping s_FormatMappings[] = {
+static constexpr Array<FormatMapping, 105> s_FormatMappings = {{
     { Format::RGBA32_FLOAT           , VK_FORMAT_R32G32B32A32_SFLOAT           , 16, false, false, false },
     { Format::RGBA32_UINT            , VK_FORMAT_R32G32B32A32_UINT             , 16, false, false, false },
     { Format::RGBA32_SINT            , VK_FORMAT_R32G32B32A32_SINT             , 16, false, false, false },
@@ -159,10 +159,10 @@ static constexpr FormatMapping s_FormatMappings[] = {
     { Format::ASTC_12x12_UNORM       , VK_FORMAT_ASTC_12x12_UNORM_BLOCK        ,  0, false, false, true  },
     { Format::ASTC_12x12_UNORM_SRGB  , VK_FORMAT_ASTC_12x12_SRGB_BLOCK         ,  0, false, false, true  },
     { Format::ASTC_12x12_FLOAT       , VK_FORMAT_ASTC_12x12_SFLOAT_BLOCK_EXT   ,  0, false, false, true  },
-};
+}};
 
 struct FormatLookup{
-    VkFormat formats[Format::Count]{};
+    Array<VkFormat, Format::Count> formats{};
 
 
 public:

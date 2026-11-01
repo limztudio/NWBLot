@@ -4,8 +4,6 @@
 
 #include "layer_system.h"
 
-#include <impl/assets_ui_skin/toolkit_contract.h>
-
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 
@@ -22,8 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
-    static_cast<void>(world);
+Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update([[maybe_unused]] Core::ECS::World& world, const f32 delta){
     m_frameDelta.add(delta);
     synchronizeInput();
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
@@ -40,13 +37,12 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(skin);
-    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation(), Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
-    constexpr usize s_PaintReserveQuads = 256u;
-    m_paint.reserve(s_PaintReserveQuads);
+    m_paint.begin(m_display, m_frameGeneration, m_skinSelection.generation, Core::Assets::AssetRef<UiSkin>(skin.virtualPath()), skin);
+    m_paint.reserve(s_UiLayerPaintReserveQuads);
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u || m_context.input().primaryDown() || m_context.input().secondaryDown());
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
-    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs)noexcept{
+    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const UiLiveRoot& lhs, const UiLiveRoot& rhs)noexcept{
         return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
     });
     for(const auto& root : m_liveRoots){
@@ -69,18 +65,13 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> UiLayerSystem::update(Core::EC
     }
     if(!m_context.finishFrame()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
-        m_context.abandonFrame();
-        m_editHost.reset();
-        m_blockCommandChars = false;
-        m_ui.reset();
+        abandonPendingFrame(true);
         return {};
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
-        m_context.abandonFrame();
-        m_editHost.reset();
-        m_blockCommandChars = false;
+        abandonPendingFrame();
     }
     return {};
 }
@@ -99,15 +90,13 @@ b8 UiLayerSystem::collectRoots(){
         m_liveRoots.push_back({ entity, component.order });
         m_rootIdentities.push_back({ entity.id, 1u });
     });
-    m_context.retainRoots(m_rootIdentities.data(), m_rootIdentities.size());
+    m_context.retainRoots(m_rootIdentities);
     return !overflow;
 }
 
 void UiLayerSystem::synchronizeInput(){
     if(!collectRoots()){
-        m_context.resetInput();
-        m_editHost.reset();
-        m_blockCommandChars = false;
+        resetNormalizedInput();
         return;
     }
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
@@ -117,11 +106,8 @@ void UiLayerSystem::synchronizeInput(){
             NWB_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
-        else if(status == Core::PresentationReceiptStatus::Rejected){
-            m_context.abandonFrame();
-            m_editHost.reset();
-            m_blockCommandChars = false;
-        }
+        else if(status == Core::PresentationReceiptStatus::Rejected)
+            abandonPendingFrame();
     }
     m_editHost.synchronizeFocus();
 }

@@ -3,9 +3,10 @@
 
 
 #include "csg_system.h"
+#include "format_private.h"
 
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
@@ -16,6 +17,27 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Format::Enum SelectCsgFormat(const Core::Format::Enum candidate, const Core::FormatSupport::Mask requiredSupport, Core::Device& device)noexcept{
+    const Array<Core::Format::Enum, 1> candidates = { candidate };
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,10 +72,10 @@ b8 RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     NWB_ASSERT(targets.csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalDataFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgRemovedIntervalCountFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
-    NWB_ASSERT(targets.csgReceiverEventLayerCount == ECSRenderDetail::s_CsgReceiverEventLayerCount);
-    NWB_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
-    NWB_ASSERT(targets.csgRemovedIntervalLayerCount == ECSRenderDetail::s_CsgRemovedIntervalLayerCount);
+    NWB_ASSERT(targets.csgPeelLayerCount == s_CsgPeelLayerCount);
+    NWB_ASSERT(targets.csgReceiverEventLayerCount == s_CsgReceiverEventLayerCount);
+    NWB_ASSERT(targets.csgReceiverSpanLayerCount == s_CsgReceiverSpanLayerCount);
+    NWB_ASSERT(targets.csgRemovedIntervalLayerCount == s_CsgRemovedIntervalLayerCount);
 
     auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const b8 renderTarget){
         Core::TextureDesc desc;

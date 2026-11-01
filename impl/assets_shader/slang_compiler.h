@@ -29,14 +29,6 @@ namespace SlangShaderCompiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_Spirv15TargetProfileText = "spirv_1_5";
-inline constexpr AStringView s_Spirv15RayQueryTargetProfileText = "spirv_1_5+spvrayquerykhr";
-inline constexpr AStringView s_SpvRayQueryCapabilityText = "spvRayQueryKHR";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<u64> ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode);
 

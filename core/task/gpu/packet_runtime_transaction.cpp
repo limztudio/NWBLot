@@ -208,6 +208,44 @@ b8 GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
     return true;
 }
 
+b8 GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperation(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuRecordingAttemptScope* const preparationAttempt)noexcept{
+    if(!SubmissionOperation::ActiveFor(*this) || recordingAttemptGeneration == 0u)
+        return false;
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+
+    NothrowScopedLock lock(m_mutex);
+    const GpuGraphSubmissionBinding submissionBinding(m_transactionIdentity, m_resetGeneration);
+    if(
+        !validForLocked(planAccess)
+        || !submissionBinding.valid()
+        || (m_recordingAttemptGeneration != 0u && m_recordingAttemptGeneration != recordingAttemptGeneration)
+        || (m_activeSubmissionBinding.valid() && m_activeSubmissionBinding != submissionBinding)
+        || !graph.bindSubmissionTransaction(compiledGraph, recordingAttemptGeneration, submissionBinding, preparationAttempt)
+    )
+        return false;
+    if(!m_activeSubmissionBinding.valid())
+        m_submissionBindingResolved = false;
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
+    m_activeSubmissionBinding = submissionBinding;
+    m_submissionStatistics.recordingAttemptGeneration = recordingAttemptGeneration;
+    return true;
+}
+
+b8 GpuGraphSubmissionTransaction::matchesRecordingAttemptBinding(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, const u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const noexcept{
+    GpuCompiledGraph::ReadView planAccess(compiledGraph);
+    if(!planAccess.valid())
+        return false;
+    NothrowScopedLock lock(m_mutex);
+    return
+        recordingAttemptGeneration != 0u
+        && validForLocked(planAccess)
+        && m_recordingAttemptGeneration == recordingAttemptGeneration
+        && m_activeSubmissionBinding == submissionBinding
+        && graph.matchesSubmissionTransaction(compiledGraph, recordingAttemptGeneration, submissionBinding)
+    ;
+}
 
 void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
     if(!m_activeSubmissionBinding.valid() || m_submissionBindingResolved || !allPacketsTerminalLocked())
@@ -354,7 +392,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(const GpuTaskGraph& gra
     m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
     m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
     m_submissionStatistics.inheritedTimelineWaitElisionCount += nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
-    m_submissionStatistics.submissionSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_submissionStatistics.submissionSeconds), VectorDoubleReplicate(nativeSubmissionInfo.submissionSeconds)));
+    m_submissionStatistics.submissionSeconds += nativeSubmissionInfo.submissionSeconds;
     if(packet.joinsAcceptedQueueFrontier)
         ++m_submissionStatistics.acceptedFrontierSubmissionCount;
     if(packet.isRecoverySubmission)

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.h>
 #include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/scope_exit.h>
@@ -32,13 +33,10 @@ TEST(MathBoxNormal, FiniteSquaredLengthDoesNotOverflowInUnusedReductionLanes){
     using namespace __hidden_box_normal_tests;
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            __builtin_trap();
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
     // Z squared is finite but overflows if doubled in an unused SIMD lane.
-    volatile u32 inputBits[]{ 0xc6ab1d80u, 0x51272bbbu, 0x5f60eb2cu, 0x677561fau, 0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u, 0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u, 0x86a287b0u };
+    Array<volatile u32, 13u> inputBits = { 0xc6ab1d80u, 0x51272bbbu, 0x5f60eb2cu, 0x677561fau, 0xc1aeb5b9u, 0x7213a692u, 0xd272655fu, 0xdd4e3655u, 0xa3419f79u, 0xb181e207u, 0xcedc8003u, 0x65e759c3u, 0x86a287b0u };
     const SIMDVectorSingle position = VectorSetInt(inputBits[0], inputBits[1], inputBits[2], inputBits[3]);
     const SIMDVectorSingle extents = VectorSetInt(inputBits[4], inputBits[5], inputBits[6], inputBits[7]);
     const SIMDVectorSingle fallback = VectorSetInt(inputBits[8], inputBits[9], inputBits[10], inputBits[11]);

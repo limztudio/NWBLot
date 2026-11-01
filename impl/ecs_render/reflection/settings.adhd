@@ -2,41 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
-enum<u8> ReflectionTraceMode{
-    Disabled,
-    ScreenSpace,
-    Hardware,
-    Hybrid
-}
+#include <impl/ecs_render/reflection/types.adhd>
 
-[reflect]
-enum<u8> ReflectionDebugView{
-    None,
-    TraceSource,
-    Confidence
-}
 
-const u32 s_ReflectionDefaultTemporalMaxSamples = 16u;
-const u32 s_ReflectionDefaultSpatialRadius = 2u;
-const f32 s_ReflectionDefaultMaxRayDistance = 100.0f;
-const f32 s_ReflectionDefaultDistanceFadeStart = 80.0f;
-const f32 s_ReflectionDefaultRoughnessCutoff = 0.8f;
-const u32 s_ReflectionDefaultMaxHardwareRaysPerFrame = 262144u;
-const u32 s_ReflectionDefaultMaxOpticalQueries = 16u;
-const u32 s_ReflectionDefaultScreenMaxSteps = 96u;
-const f32 s_ReflectionDefaultScreenThickness = 0.03f;
-const f32 s_ReflectionDefaultScreenConfidenceThreshold = 0.8f;
-const f32 s_ReflectionDefaultScreenEdgeFade = 0.05f;
-const f32 s_ReflectionDefaultEnvTopR = 0.15f;
-const f32 s_ReflectionDefaultEnvTopG = 0.2f;
-const f32 s_ReflectionDefaultEnvTopB = 0.3f;
-const f32 s_ReflectionDefaultEnvBottomRgb = 0.04f;
-const f32x3u s_ReflectionDefaultEnvironmentTop(s_ReflectionDefaultEnvTopR, s_ReflectionDefaultEnvTopG, s_ReflectionDefaultEnvTopB);
-const f32x3u s_ReflectionDefaultEnvironmentBottom(s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb, s_ReflectionDefaultEnvBottomRgb);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// One timed range owns a begin and an end timestamp query.
-const u32 s_ReflectionGpuTimingQueriesPerRange = 2u;
 
 [reflect]
 class ReflectionSettings{
@@ -147,47 +117,9 @@ b8 SameReflectionEstimatorSettings(in ReflectionSettings first, in ReflectionSet
     return first.temporalEnabled == second.temporalEnabled && first.temporalMaxSamples == second.temporalMaxSamples && SameReflectionTraceSettings(first, second);
 }
 
-// Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
-class ReflectionSceneContentStamp{
-    public ReflectionSceneContentStamp(){
-        this.geometry = 0u;
-        this.material = 0u;
-        this.lighting = 0u;
-        this.view = 0u;
-        this.trusted = false;
-    }
 
-    public ReflectionSceneContentStamp(in u64 inGeometry, in u64 inMaterial, in u64 inLighting, in u64 inView, in b8 inTrusted){
-        this.geometry = inGeometry;
-        this.material = inMaterial;
-        this.lighting = inLighting;
-        this.view = inView;
-        this.trusted = inTrusted;
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    public b8 matchesScene(in ReflectionSceneContentStamp other)const{
-        return this.geometry == other.geometry && this.material == other.material && this.lighting == other.lighting && this.trusted == other.trusted;
-    }
-
-    public u64 geometry;
-    public u64 material;
-    public u64 lighting;
-    public u64 view;
-    public b8 trusted;
-}
-
-enum<u8> ReflectionFeedbackResetReason{
-    None,
-    FirstObservation,
-    ResourcesChanged,
-    SettingsChanged,
-    SceneChanged,
-    ViewChanged,
-    Disabled,
-    UntrustedScene,
-    HardwareChanged,
-    InvalidAcceptance
-}
 
 class ReflectionFeedbackPlan{
     public ReflectionSceneContentStamp stamp;
@@ -220,6 +152,78 @@ class ReflectionFeedbackOutcome{
     public ReflectionFeedbackResetReason resetReason = ReflectionFeedbackResetReason::None;
 }
 
+ReflectionFeedbackPlan ResolveReflectionFeedbackPlan(
+    in ReflectionSceneContentStamp stamp,
+    in ReflectionSettings settings,
+    in b8 enabled,
+    in u64 graphicsFrameIndex,
+    in ReflectionSceneContentStamp previousStamp,
+    in ReflectionSettings previousSettings,
+    in u64 generation,
+    in u64 sequence,
+    in u64 acceptedSequence,
+    in u64 epoch,
+    in u64 startGraphicsFrame,
+    in u32 nextProbeIndex,
+    in u32 acceptedBank,
+    in b8 previousEnabled,
+    in b8 previousEligible,
+    in b8 previousHardwareReady,
+    in b8 resourcesChanged,
+    in b8 quarantined
+){
+    ReflectionFeedbackPlan result;
+    result.stamp = stamp;
+    result.settings = settings;
+    result.generation = generation;
+    result.sequence = sequence;
+    result.acceptedSequence = acceptedSequence;
+    result.graphicsFrameIndex = graphicsFrameIndex;
+    result.enabled = enabled;
+    result.previousHardwareReady = previousHardwareReady;
+    result.quarantined = quarantined;
+    if(quarantined)
+        result.resetReason = ReflectionFeedbackResetReason::InvalidAcceptance;
+    else if(acceptedSequence == 0u){
+        if(resourcesChanged)
+            result.resetReason = ReflectionFeedbackResetReason::ResourcesChanged;
+        else
+            result.resetReason = ReflectionFeedbackResetReason::FirstObservation;
+    }
+    else if(enabled != previousEnabled || !SameReflectionTraceSettings(settings, previousSettings))
+        result.resetReason = ReflectionFeedbackResetReason::SettingsChanged;
+    else if(!stamp.matchesScene(previousStamp))
+        result.resetReason = ReflectionFeedbackResetReason::SceneChanged;
+    else if(stamp.view != previousStamp.view)
+        result.resetReason = ReflectionFeedbackResetReason::ViewChanged;
+    result.reset = result.resetReason != ReflectionFeedbackResetReason::None;
+    if(result.reset)
+        result.epoch = epoch + 1u;
+    else
+        result.epoch = epoch;
+    if(result.reset)
+        result.startGraphicsFrame = graphicsFrameIndex;
+    else
+        result.startGraphicsFrame = startGraphicsFrame;
+    if(result.reset)
+        result.probeIndex = 0u;
+    else
+        result.probeIndex = nextProbeIndex;
+    result.eligible = !quarantined && enabled && stamp.trusted && settings.traceMode == ReflectionTraceMode::Hybrid && settings.maxHardwareRaysPerFrame > 0u;
+    result.reused = result.eligible && previousEligible && !result.reset;
+    result.previousBank = acceptedBank;
+    // Never overwrite the accepted bank.
+    if(acceptedSequence != 0u)
+        result.currentBank = 1u - acceptedBank;
+    else
+        result.currentBank = 0u;
+    if(!quarantined && result.reset && (!enabled || settings.traceMode != ReflectionTraceMode::Hybrid || settings.maxHardwareRaysPerFrame == 0u))
+        result.resetReason = ReflectionFeedbackResetReason::Disabled;
+    else if(!quarantined && result.reset && !stamp.trusted)
+        result.resetReason = ReflectionFeedbackResetReason::UntrustedScene;
+    return result;
+}
+
 ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedbackPlan plan, in b8 hardwareReady){
     const b8 hardwareChanged = !plan.reset && plan.acceptedSequence != 0u && plan.previousHardwareReady != hardwareReady;
     ReflectionFeedbackOutcome result;
@@ -241,18 +245,6 @@ ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(in ReflectionFeedback
     else
         result.resetReason = plan.resetReason;
     return result;
-}
-
-enum<u8> ReflectionHistoryResetReason{
-    None,
-    FirstSample,
-    SceneChanged,
-    ViewChanged,
-    SettingsChanged,
-    HardwareChanged,
-    UntrustedScene,
-    Disabled,
-    ResourcesChanged
 }
 
 class ReflectionHistoryPlan{
@@ -284,6 +276,73 @@ class ReflectionHistoryOutcome{
     public b8 reused = false;
     public b8 reset = false;
     public ReflectionHistoryResetReason resetReason = ReflectionHistoryResetReason::None;
+}
+
+ReflectionHistoryPlan ResolveReflectionHistoryPlan(
+    in ReflectionSceneContentStamp stamp,
+    in ReflectionSettings settings,
+    in u64 graphicsFrameIndex,
+    in ReflectionSceneContentStamp previousStamp,
+    in ReflectionSettings previousSettings,
+    in u64 generation,
+    in u64 sequence,
+    in u64 acceptedSequence,
+    in u64 epoch,
+    in u64 historyStartGraphicsFrame,
+    in u32 nextSampleIndex,
+    in u32 sampleCount,
+    in u32 acceptedBank,
+    in b8 previousEligible,
+    in b8 previousHardwareReady,
+    in b8 resourcesChanged
+){
+    ReflectionHistoryPlan result;
+    result.stamp = stamp;
+    result.graphicsFrameIndex = graphicsFrameIndex;
+    result.historyStartGraphicsFrame = historyStartGraphicsFrame;
+    result.settings = settings;
+    result.generation = generation;
+    result.sequence = sequence;
+    result.acceptedSequence = acceptedSequence;
+    result.previousHardwareReady = previousHardwareReady;
+    if(acceptedSequence == 0u){
+        if(resourcesChanged)
+            result.resetReason = ReflectionHistoryResetReason::ResourcesChanged;
+        else
+            result.resetReason = ReflectionHistoryResetReason::FirstSample;
+    }
+    else if(!SameReflectionEstimatorSettings(settings, previousSettings))
+        result.resetReason = ReflectionHistoryResetReason::SettingsChanged;
+    else if(!stamp.matchesScene(previousStamp))
+        result.resetReason = ReflectionHistoryResetReason::SceneChanged;
+    else if(stamp.view != previousStamp.view)
+        result.resetReason = ReflectionHistoryResetReason::ViewChanged;
+    result.reset = result.resetReason != ReflectionHistoryResetReason::None;
+    if(result.reset)
+        result.epoch = epoch + 1u;
+    else
+        result.epoch = epoch;
+    if(result.reset)
+        result.sampleIndex = 0u;
+    else
+        result.sampleIndex = nextSampleIndex;
+    result.eligible = settings.temporalEnabled && stamp.trusted && settings.traceMode != ReflectionTraceMode::Disabled;
+    result.reused = result.eligible && previousEligible && !result.reset && sampleCount > 0u;
+    if(result.reused)
+        result.previousSampleCount = sampleCount;
+    else
+        result.previousSampleCount = 0u;
+    result.previousBank = acceptedBank;
+    // Rejected transitions keep last accepted history.
+    if((result.eligible || previousEligible) && acceptedSequence != 0u)
+        result.currentBank = 1u - acceptedBank;
+    else
+        result.currentBank = 0u;
+    if(result.reset && (!settings.temporalEnabled || settings.traceMode == ReflectionTraceMode::Disabled))
+        result.resetReason = ReflectionHistoryResetReason::Disabled;
+    else if(result.reset && !stamp.trusted)
+        result.resetReason = ReflectionHistoryResetReason::UntrustedScene;
+    return result;
 }
 
 ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPlan plan, in b8 hardwareReady){
@@ -326,120 +385,60 @@ ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(in ReflectionHistoryPla
     return result;
 }
 
-class ReflectionFeedbackExtent{
-    public ReflectionFeedbackExtent(){
-        this.width = 0u;
-        this.height = 0u;
-        this.tilesX = 0u;
-        this.tilesY = 0u;
-        this.entryCount = 0u;
-        this.byteCount = 0u;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void PopulateReflectionFrameSettingsParameters(in ReflectionSettings settings, mut ReflectionFrameParameters outParameters){
+    outParameters.traceMode = cast<u32>(settings.traceMode);
+    outParameters.samplingSeed = settings.samplingSeed;
+    outParameters.maxOpticalQueries = settings.maxOpticalQueries;
+    outParameters.debugView = cast<u32>(settings.debugView);
+    outParameters.maxRayDistance = settings.maxRayDistance;
+    outParameters.distanceFadeStart = settings.distanceFadeStart;
+    outParameters.roughnessCutoff = settings.roughnessCutoff;
+    outParameters.environmentTopR = settings.environmentTop.x;
+    outParameters.environmentTopG = settings.environmentTop.y;
+    outParameters.environmentTopB = settings.environmentTop.z;
+    outParameters.environmentBottomR = settings.environmentBottom.x;
+    outParameters.environmentBottomG = settings.environmentBottom.y;
+    outParameters.environmentBottomB = settings.environmentBottom.z;
+    outParameters.screenMaxSteps = settings.screenMaxSteps;
+    outParameters.screenThickness = settings.screenThickness;
+    outParameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
+    outParameters.screenEdgeFade = settings.screenEdgeFade;
+    if(settings.diagnosticsEnabled)
+        outParameters.diagnosticsEnabled = 1u;
+    else
+        outParameters.diagnosticsEnabled = 0u;
+}
+
+ReflectionFrameParameters ResolveReflectionUploadFrameParameters(
+    in ReflectionFrameParameters baseParameters,
+    in ReflectionHistoryPlan historyPlan,
+    in ReflectionFeedbackPlan feedbackPlan,
+    in b8 feedbackReserved,
+    in b8 hardwarePreparationReady
+){
+    ReflectionFrameParameters parameters = baseParameters;
+    if(!hardwarePreparationReady)
+        parameters.hardwareEnabled = 0u;
+    b8 hardwareReady = parameters.hardwareEnabled != 0u;
+    ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(historyPlan, hardwareReady);
+    ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(feedbackPlan, hardwareReady);
+    parameters.feedbackFlags = 0u;
+    parameters.feedbackProbeIndex = feedback.probeIndex;
+    if(feedbackReserved && feedback.eligible){
+        parameters.feedbackFlags = s_ReflectionFeedbackWriteEnabled;
+        if(feedback.reused)
+            parameters.feedbackFlags |= s_ReflectionFeedbackPreviousValid;
     }
-
-    public ReflectionFeedbackExtent(in u32 inWidth, in u32 inHeight, in u32 inTilesX, in u32 inTilesY, in u32 inEntryCount, in u32 inByteCount){
-        this.width = inWidth;
-        this.height = inHeight;
-        this.tilesX = inTilesX;
-        this.tilesY = inTilesY;
-        this.entryCount = inEntryCount;
-        this.byteCount = inByteCount;
-    }
-
-    public b8 valid()const{
-        return this.byteCount != 0u;
-    }
-
-    public u32 width;
-    public u32 height;
-    public u32 tilesX;
-    public u32 tilesY;
-    public u32 entryCount;
-    public u32 byteCount;
+    parameters.sampleIndex = history.sampleIndex;
+    ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
+    parameters.sampleBaseX = sampleBase.x;
+    parameters.sampleBaseY = sampleBase.y;
+    return parameters;
 }
-
-const u32 s_ReflectionFeedbackGroupSize = 8u;
-const u64 s_ReflectionFeedbackSurfaceCount = 2u;
-const u64 s_ReflectionFeedbackHeaderBytes = 16u;
-const u64 s_ReflectionFeedbackEntryBytes = 4u;
-const u64 s_ReflectionFeedbackMaxCount = 0xffffffffull;
-
-b8 TryComputeReflectionFeedbackExtent(in u32 width, in u32 height, mut ReflectionFeedbackExtent outExtent){
-    if(width == 0u || height == 0u)
-        return false;
-    const u32 tilesX = divideUp(width, s_ReflectionFeedbackGroupSize);
-    const u32 tilesY = divideUp(height, s_ReflectionFeedbackGroupSize);
-    const u64 entryCount = cast<u64>(tilesX) * cast<u64>(tilesY) * s_ReflectionFeedbackSurfaceCount;
-    const u64 byteCount = s_ReflectionFeedbackHeaderBytes + entryCount * s_ReflectionFeedbackEntryBytes;
-    if(entryCount > s_ReflectionFeedbackMaxCount || byteCount > s_ReflectionFeedbackMaxCount)
-        return false;
-    outExtent = ReflectionFeedbackExtent(width, height, tilesX, tilesY, cast<u32>(entryCount), cast<u32>(byteCount));
-    return true;
-}
-
-class ReflectionDepthPyramidMip{
-    public Name taskIdentity = s_NameNone;
-    public u32 sampledSlot = 0u;
-    public u32 storageSlot = 0u;
-    public u32 width = 0u;
-    public u32 height = 0u;
-}
-
-[serialize]
-class ReflectionFrameParameters{
-    public u32 width = 0u;
-    public u32 height = 0u;
-    public u32 traceMode = 0u;
-    public u32 hardwareEnabled = 0u;
-    public u32 opaqueSpecularSlot = 0u;
-    public u32 glassSpecularSlot = 0u;
-    public u32 opaqueOutputSlot = 0u;
-    public u32 glassOutputSlot = 0u;
-    public u32 opaqueRadianceSlot = 0u;
-    public u32 glassRadianceSlot = 0u;
-    public u32 queueSlot = 0u;
-    public u32 counterSlot = 0u;
-    public u32 argsSlot = 0u;
-    public u32 queueCapacity = 0u;
-    public u32 maxHardwareRays = 0u;
-    public u32 sampleIndex = 0u;
-    public u32 deferredResourcesSlot = 0u;
-    public u32 viewSlot = 0u;
-    public u32 materialContextSlot = 0u;
-    public u32 debugView = 0u;
-    public u32 depthPyramidSlot = 0u;
-    public u32 depthMipCount = 0u;
-    public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
-    public u32 diagnosticsEnabled = 0u;
-    public u32 samplingSeed = 0u;
-    public u32 sampleBaseX = 0u;
-    public u32 sampleBaseY = 0u;
-    public u32 maxOpticalQueries = s_ReflectionDefaultMaxOpticalQueries;
-    public u32 feedbackReadSlot = 0u;
-    public u32 feedbackWriteSlot = 0u;
-    public u32 feedbackFlags = 0u;
-    public u32 feedbackProbeIndex = 0u;
-    public f32 maxRayDistance = s_ReflectionDefaultMaxRayDistance;
-    public f32 distanceFadeStart = s_ReflectionDefaultDistanceFadeStart;
-    public f32 roughnessCutoff = s_ReflectionDefaultRoughnessCutoff;
-    public f32 environmentTopR = s_ReflectionDefaultEnvTopR;
-    public f32 environmentTopG = s_ReflectionDefaultEnvTopG;
-    public f32 environmentTopB = s_ReflectionDefaultEnvTopB;
-    public f32 environmentBottomR = s_ReflectionDefaultEnvBottomRgb;
-    public f32 environmentBottomG = s_ReflectionDefaultEnvBottomRgb;
-    public f32 environmentBottomB = s_ReflectionDefaultEnvBottomRgb;
-    public f32 screenThickness = s_ReflectionDefaultScreenThickness;
-    public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
-    public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
-}
-
-const StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionBuildArgsVariant = "NWB_RT_CSG_ENABLED=0";
-const StringView s_ReflectionCsgBuildArgsVariant = "NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1;NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0;NWB_RT_CSG_ENABLED=1";
-const StringView s_ReflectionHwCsgUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2;NWB_RT_CSG_ENABLED=1";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

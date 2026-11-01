@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
 
@@ -19,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 b8 Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text, TooltipState& state, const TooltipOptions& options){
     Item* anchor = annotationAnchor(anchorKey);
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes){
+    if(panelDeclarationBlocked() || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes){
         m_context.fail();
         return false;
     }
@@ -73,9 +72,9 @@ b8 Builder::paintTooltips(){
             return false;
         if(!frame.state->visible())
             continue;
-        const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box->clip)));
+        const Rect clip = visibleClip(box->clip);
         const Point& pointer = m_context.input().pointerPosition();
-        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
+        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(LoadRect(box->rectangle), LoadRect(clip));
         const f32 left = VectorGetX(visibleBounds);
         const f32 top = VectorGetY(visibleBounds);
         const f32 right = VectorGetZ(visibleBounds);
@@ -95,10 +94,8 @@ b8 Builder::paintTooltips(){
         const UiSkinRegion* background = region(frame.style.background, frame.style.fallback);
         if(!background)
             return false;
-        const SIMDVectorSingle firstPadding = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-        const SIMDVectorSingle secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top, frame.style.padding.right, frame.style.padding.bottom);
-        const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
-        const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
+        const Insets padding = MaxUiPadding(frame.style.padding, background->padding);
+        const SIMDVectorSingle paddingValue = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
         const auto textBounds = m_text.measure(frame.text, m_paint.displayMetrics());
         if(!textBounds)
             return false;
@@ -117,8 +114,8 @@ b8 Builder::paintTooltips(){
             return false;
         m_paint.pushClip(placement->bounds);
         const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-        const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
+        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), paddingValue);
+        const Rect content = StoreRect(inset);
         m_paint.pushClip(content);
         b8 painted = false;
         if(backgroundPainted){

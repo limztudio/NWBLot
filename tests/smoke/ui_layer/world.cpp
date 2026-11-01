@@ -85,7 +85,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
     const b8 progressSmoke = IsUiLayerProgressSmokeEnabled();
     const b8 imageSmoke = IsUiLayerImageSmokeEnabled();
     const b8 textureImageSmoke = IsUiLayerTextureImageSmokeEnabled();
-    const b8 textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
+    const b8 textAreaSmoke = ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA");
     const b8 numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
     const b8 listSmoke = IsUiLayerListSmokeEnabled();
     const b8 comboSmoke = IsUiLayerComboSmokeEnabled();
@@ -97,7 +97,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         || (popupToolsSmoke && IsUiLayerPopupToolsSkinSmokeEnabled())
         || (nestedPopupSmoke && IsUiLayerNestedPopupSkinSmokeEnabled())
         || (numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled())
-        || (textAreaSmoke && IsUiLayerTextAreaSkinSmokeEnabled())
+        || (textAreaSmoke && ReadSmokeEnvironmentFlag("NWB_UI_LAYER_TEXT_AREA_SKIN"))
         || (radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled())
         || (sliderSmoke && IsUiLayerSliderSkinSmokeEnabled())
         || (progressSmoke && IsUiLayerProgressSkinSmokeEnabled())
@@ -146,7 +146,7 @@ Expected<NotNullUniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRunt
         bindings.push_back({ .key = Core::Key::W, .command = Impl::Ui::InputCommand::Left });
         bindings.push_back({ .key = Core::Key::R, .command = Impl::Ui::InputCommand::FocusNext });
         bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
-        if(!layer.setInputBindings(bindings.data(), bindings.size())){
+        if(!layer.setInputBindings(bindings)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
             return MakeUnexpected(Failure{});
         }

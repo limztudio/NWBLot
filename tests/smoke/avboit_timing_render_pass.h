@@ -41,6 +41,23 @@ private:
 };
 
 
+class ShadowTimingRenderPass final : public Core::IRenderPass{
+public:
+    explicit ShadowTimingRenderPass(Core::GraphicsRuntime& graphics)noexcept;
+    virtual ~ShadowTimingRenderPass()noexcept override;
+
+
+public:
+    [[nodiscard]] b8 start();
+    void stop();
+    virtual b8 shouldRenderUnfocused()noexcept override{ return true; }
+
+
+private:
+    b8 m_registered = false;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

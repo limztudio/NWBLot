@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-
-#include <global/simplemath.h>
+#include <impl/ecs_ui/toolkit/builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,7 +21,7 @@ b8 Builder::paintPopup(){
         return false;
     if(m_scope->m_popupOptions.modal){
         const Color& color = m_scope->m_popupPaintStyle.backdrop;
-        if(!IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b) || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f)
+        if(!IsValidPaintColor(color))
             return false;
         m_paint.fillRect(m_scope->m_popupPlacement.viewport, color);
     }

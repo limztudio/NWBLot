@@ -4,6 +4,7 @@
 
 #include "csg_smoke_helpers.h"
 #include "framebuffer_capture.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 
@@ -66,13 +67,16 @@ static constexpr SmokeMaterialRef s_GlassMaterial{"project/smoke/csg_shadow/mate
 static constexpr AStringView s_MaterialInterface = "project/shaders/csg_shadow";
 static constexpr SmokeMaterialRef s_OpenMaterial{"project/smoke/reflection/materials/optical_volume"};
 static constexpr AStringView s_OpenInterface = "project/shaders/reflection_optical";
-static constexpr Name s_Groups[] = { Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"), Name("csg_shadow/glass_hole"), Name("csg_shadow/overlap_a"), Name("csg_shadow/overlap_b"), Name("csg_shadow/glass_control"), };
-static constexpr Name s_AnalyticGroups[] = {
+static constexpr Array<Name, 7> s_Groups = {
+    Name("csg_shadow/opaque_hole"), Name("csg_shadow/opaque_cap"), Name("csg_shadow/glass_depth"), Name("csg_shadow/glass_hole"),
+    Name("csg_shadow/overlap_a"), Name("csg_shadow/overlap_b"), Name("csg_shadow/glass_control"),
+};
+static constexpr Array<Name, 6> s_AnalyticGroups = {
     Name("csg_shadow/analytic_plane"), Name("csg_shadow/analytic_sphere"), Name("csg_shadow/analytic_capsule"),
     Name("csg_shadow/analytic_axial_capsule"), Name("csg_shadow/analytic_union"), Name("csg_shadow/analytic_control"),
 };
-static constexpr AStringView s_OpenCaseNames[] = { "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65", };
-static constexpr Name s_OpenGroups[] = { Name("csg_shadow/open_five"), Name("csg_shadow/open_six") };
+static constexpr Array<AStringView, 6> s_OpenCaseNames = { "reference", "retained", "clipped_reference", "clipped", "boundary64", "terminal65", };
+static constexpr Array<Name, 2> s_OpenGroups = { Name("csg_shadow/open_five"), Name("csg_shadow/open_six") };
 static constexpr SmokeMeshRef s_OpenPairMesh{"project/meshes/csg_shadow_open_2"};
 static constexpr SmokeMeshRef s_OpenFiveMesh{"project/meshes/csg_shadow_open_5"};
 static constexpr SmokeMeshRef s_OpenSixMesh{"project/meshes/csg_shadow_open_6"};
@@ -112,7 +116,7 @@ struct Box{
 class CsgShadowSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorld(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
+        auto world = CreateSmokeWorldOrDie(s_ProjectName, context);
         auto& renderer = AddSmokeRenderSystems(*world, context);
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
@@ -122,6 +126,101 @@ private:
         presentation.toneMap = NWB::Impl::PresentationToneMap::LinearClamp;
         NWB_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), NWB_TEXT("Invalid CSG shadow presentation settings"));
         return world;
+    }
+
+
+public:
+    explicit CsgShadowSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateWorld(context))
+    {}
+    virtual ~CsgShadowSmokeProject()noexcept override{ destroyWorld(); }
+
+
+public:
+    virtual b8 onStartup()override{
+        if(!readMode())
+            return false;
+        const auto camera = CreateSmokeCamera(0.0f, -s_CameraDepth, 0.0f, *m_world);
+        NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
+        auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
+        const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
+        cameraTransform.position.x = cameraX;
+        const auto receiver = CreateTintedStaticMeshEntity(s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f), *m_world);
+        NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
+        auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
+        const auto light = m_pointLight
+            ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
+            : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
+        NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
+        auto& lightComponent = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light));
+        lightComponent.angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
+        lightComponent.sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        lightComponent.enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
+#else
+        lightComponent.enableCaustics = false;
+#endif
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
+            , ConvertString(m_finiteLightSource ? s_Finite : s_Hard)
+            , static_cast<f64>(lightComponent.angularRadius), static_cast<f64>(lightComponent.sourceRadius)
+        );
+        if(m_openAtlas){
+            if(!createOpenAtlas())
+                return false;
+        }
+        else if(m_analyticAtlas)
+            createAnalyticAtlas();
+        else
+            createAtlas();
+        const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
+            , static_cast<u32>(m_arm), ConvertString(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
+            , static_cast<f64>(cameraX)
+        );
+        constexpr u32 s_DefaultCaptureFrameCount = 120u;
+        auto capture = ConfigureSmokeFramebufferCapture(s_ProjectName, s_DefaultCaptureFrameCount, {}, m_context);
+        if(!capture)
+            return false;
+        m_capture = Move(*capture);
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
+        if(!configureTiming(scratchArena))
+            return false;
+#endif
+        return true;
+    }
+
+    virtual void onShutdown()override{
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing)
+            m_timing->finish();
+#endif
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: shutdown"));
+    }
+
+    virtual b8 onUpdate(const f32 delta)override{
+        if(m_capture)
+            m_capture->update();
+        ++m_update;
+        if(m_arm == Arm::Moved && m_update == s_MoveUpdate){
+            for(u32 index = 0u; index < m_movingCount; ++index){
+                auto& cutter = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_movingCutters[index]));
+                AssignCsgCutterTransform(LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity(), cutter);
+            }
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
+        }
+        const f32 fixedDelta = RendererBaselineFixedDelta();
+        if(!TickSmokeWorld(fixedDelta > 0.0f ? fixedDelta : delta, *m_world))
+            return false;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+        if(m_timing && !m_timing->update())
+            return false;
+#endif
+        return true;
     }
 
 
@@ -168,7 +267,7 @@ private:
                 return false;
             const AStringView selected(value->data(), value->size());
             b8 found = false;
-            for(u32 index = 0u; index < LengthOf(s_OpenCaseNames); ++index){
+            for(u32 index = 0u; index < s_OpenCaseNames.size(); ++index){
                 if(selected == s_OpenCaseNames[index]){
                     m_openCase = static_cast<OpenCase::Enum>(index);
                     found = true;
@@ -192,9 +291,9 @@ private:
         StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
         StoreFloat(VectorSubtract(maximum, minimum), extent);
         const auto entity = CreateTintedStaticMeshEntity(
-            *m_world, mesh, transparent ? (m_openAtlas ? s_OpenMaterial : s_GlassMaterial) : s_OpaqueMaterial,
+            mesh, transparent ? (m_openAtlas ? s_OpenMaterial : s_GlassMaterial) : s_OpaqueMaterial,
             transparent && m_openAtlas ? NameText<char>{s_OpenInterface} : NameText<char>{s_MaterialInterface}, Float4(1.0f, 1.0f, 1.0f, 1.0f),
-            center, extent
+            center, extent, *m_world
         );
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProject: box creation failed"));
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
@@ -206,12 +305,12 @@ private:
             const Half4U packedTransmission = MakeHalf4U(0.25f, 0.5f, 0.75f, 0.0f);
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
                 *m_world, entity, Name(s_OpenInterface), "runtime.ior", NWB::Impl::MaterialLayoutFieldType::f16,
-                NWB::Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
+                NWB::Impl::PackMaterialInstanceValue(packedIor)
             ), NWB_TEXT("CsgShadowSmokeProject: open-sheet IOR override failed")
             );
             NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
                 *m_world, entity, Name(s_OpenInterface), "runtime.unit_transmission", NWB::Impl::MaterialLayoutFieldType::f16x3,
-                NWB::Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
+                NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(packedTransmission.raw, 3u))
             ), NWB_TEXT("CsgShadowSmokeProject: open-sheet transmission override failed")
             );
         }
@@ -228,14 +327,14 @@ private:
             return;
         }
         // Six disjoint ordinary boxes represent the subtraction without CSG components or generated caps.
-        const Box pieces[] = {
+        const Array<Box, 6> pieces = {{
             { box.minimum, Float3U(lower.x, box.maximum.y, box.maximum.z) },
             { Float3U(upper.x, box.minimum.y, box.minimum.z), box.maximum },
             { Float3U(lower.x, box.minimum.y, box.minimum.z), Float3U(upper.x, lower.y, box.maximum.z) },
             { Float3U(lower.x, upper.y, box.minimum.z), Float3U(upper.x, box.maximum.y, box.maximum.z) },
             { Float3U(lower.x, lower.y, box.minimum.z), Float3U(upper.x, upper.y, lower.z) },
             { Float3U(lower.x, lower.y, upper.z), Float3U(upper.x, upper.y, box.maximum.z) },
-        };
+        }};
         for(const auto& piece : pieces){
             if(piece.minimum.x < piece.maximum.x && piece.minimum.y < piece.maximum.y && piece.minimum.z < piece.maximum.z)
                 createBox(piece, transparent);
@@ -248,7 +347,7 @@ private:
             return;
         }
         const auto entity = createBox(box, transparent);
-        AddStaticCsgMeshReceiver(*m_world, entity, s_Groups[groupIndex], !transparent, transparent);
+        AddStaticCsgMeshReceiver(entity, s_Groups[groupIndex], !transparent, transparent, *m_world);
         auto cutterEntity = m_world->createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_Groups[groupIndex];
@@ -258,14 +357,14 @@ private:
         const SIMDVectorSingle minimum = LoadFloat(cutterBox.minimum);
         const SIMDVectorSingle maximum = LoadFloat(cutterBox.maximum);
         StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         const SIMDVectorSingle finalCenter = VectorScale(VectorAdd(minimum, maximum), 0.5f);
         SIMDVectorSingle initialCenter = finalCenter;
         if(moving && m_arm == Arm::Moved)
             initialCenter = VectorSubtract(initialCenter, VectorScale(VectorSet(0.6f, 0.0f, 0.0f, 0.0f), m_pointLight ? 0.5f : 1.0f));
-        AssignCsgCutterTransform(cutter, initialCenter, QuaternionIdentity());
+        AssignCsgCutterTransform(initialCenter, QuaternionIdentity(), cutter);
         if(moving){
-            NWB_ASSERT(m_movingCount < LengthOf(m_movingCutters));
+            NWB_ASSERT(m_movingCount < m_movingCutters.size());
             m_movingCutters[m_movingCount] = cutterEntity.id();
             StoreFloat(finalCenter, m_finalCutterCenters[m_movingCount]);
             ++m_movingCount;
@@ -321,7 +420,7 @@ private:
         cutter.receiverGroup = s_AnalyticGroups[groupIndex];
         cutter.shapeType = shapeType;
         cutter.active = m_arm == Arm::Cut;
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         SIMDVectorSingle determinant;
         StoreFloat(MatrixInverse(&determinant, shapeToWorld), cutter.worldToShape);
         StoreFloat(shapeToWorld, cutter.shapeToWorld);
@@ -334,7 +433,7 @@ private:
             const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
             const Box box = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
             const auto entity = createBox(box, true);
-            AddStaticCsgMeshReceiver(*m_world, entity, s_AnalyticGroups[slot], false, true);
+            AddStaticCsgMeshReceiver(entity, s_AnalyticGroups[slot], false, true, *m_world);
         }
 
         NWB::Impl::CsgPlaneShapeParameters plane;
@@ -370,16 +469,16 @@ private:
                 return false;
             // Separate ordinary two-sheet instances give an independent exact even-pair reference beyond the ordinary four-event approximation.
             for(u32 pair = 0u; pair < 3u; ++pair){
-                const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-7.0f), VectorScale(VectorReplicate(static_cast<f32>(pair)), 0.8f));
-                const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
+                const f32 lower = -7.0f + static_cast<f32>(pair) * 0.8f;
+                const SIMDVectorSingle depths = VectorAdd(VectorReplicate(lower), VectorSet(0.0f, 0.4f, 0.0f, 0.0f));
                 if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(0.5f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(1.9f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
         }
         else if(m_openCase == OpenCase::ClippedReference){
             for(u32 pair = 0u; pair < 2u; ++pair){
-                const SIMDVectorSingle lower = VectorAdd(VectorReplicate(-6.5f), VectorReplicate(static_cast<f32>(pair)));
-                const SIMDVectorSingle depths = VectorAdd(lower, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
+                const f32 lower = -6.5f + static_cast<f32>(pair);
+                const SIMDVectorSingle depths = VectorAdd(VectorReplicate(lower), VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
                 if(!createBox(StoreBoxBounds(VectorPermute<0, 1, 4, 3>(VectorSet(-1.9f, -0.7f, 0.0f, 0.0f), depths), VectorPermute<0, 1, 5, 3>(VectorSet(-0.5f, 0.7f, 0.0f, 0.0f), depths)), true, s_OpenPairMesh).valid())
                     return false;
             }
@@ -388,14 +487,14 @@ private:
         }
         else{
             const SmokeMeshRef firstMesh = m_openCase == OpenCase::Boundary64 ? s_OpenBoundaryMesh : m_openCase == OpenCase::Terminal65 ? s_OpenOverflowMesh : s_OpenFiveMesh;
-            const SmokeMeshRef meshes[] = { firstMesh, s_OpenSixMesh };
+            const Array<SmokeMeshRef, 2> meshes = { firstMesh, s_OpenSixMesh };
             for(u32 tile = 0u; tile < 2u; ++tile){
                 const f32 x = tile == 0u ? -1.2f : 1.2f;
                 const SIMDVectorSingle center = VectorSet(x, 0.0f, 0.0f, 0.0f);
                 const SIMDVectorSingle halfExtent = VectorSet(0.7f, 0.7f, 0.0f, 0.0f);
                 const Box bounds = StoreBoxBounds(VectorSetZ(VectorSubtract(center, halfExtent), -7.0f), VectorSetZ(VectorAdd(center, halfExtent), -5.0f));
                 const auto receiver = createBox(bounds, true, meshes[tile]);
-                AddStaticCsgMeshReceiver(*m_world, receiver, s_OpenGroups[tile], false, true);
+                AddStaticCsgMeshReceiver(receiver, s_OpenGroups[tile], false, true, *m_world);
                 auto entity = m_world->createEntity();
                 if(!entity.id().valid())
                     return false;
@@ -404,8 +503,8 @@ private:
                 cutter.shapeType = Name(s_PlaneShapePath);
                 NWB::Impl::CsgPlaneShapeParameters plane;
                 plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, clipped ? 6.75f : 8.0f);
-                AssignCsgCutterParameters(cutter, plane);
-                AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+                AssignCsgCutterParameters(plane, cutter);
+                AssignCsgCutterTransform(VectorZero(), QuaternionIdentity(), cutter);
             }
         }
         const u32 firstCount = m_openCase == OpenCase::Boundary64 ? 64u : m_openCase == OpenCase::Terminal65 ? 65u : clipped ? 4u : 5u;
@@ -487,122 +586,26 @@ private:
     }
 
 
-public:
-    explicit CsgShadowSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context)
-        , m_world(CreateWorld(context))
-    {}
-    virtual ~CsgShadowSmokeProject()noexcept override{ destroyWorld(); }
-
-
-public:
-    virtual b8 onStartup()override{
-        if(!readMode())
-            return false;
-        const auto camera = CreateSmokeCamera(*m_world, 0.0f, -s_CameraDepth, 0.0f);
-        NWB_FATAL_ASSERT_MSG(camera.valid(), NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
-        auto& cameraTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera));
-        const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
-        cameraTransform.position.x = cameraX;
-        const auto receiver = CreateTintedStaticMeshEntity(*m_world, s_PlaneMesh, s_OpaqueMaterial, s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f));
-        NWB_FATAL_ASSERT_MSG(receiver.valid(), NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
-        auto& receiverTransform = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver));
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform.rotation);
-        const auto light = m_pointLight
-            ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
-            : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
-        NWB_FATAL_ASSERT_MSG(light.valid(), NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
-        auto& lightComponent = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light));
-        lightComponent.angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
-        lightComponent.sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-        lightComponent.enableCaustics = !ReadSmokeEnvironmentFlag("NWB_CSG_CAUSTIC_DISABLED");
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgCausticSmokeProject: photons {}"), lightComponent.enableCaustics ? NWB_TEXT("enabled") : NWB_TEXT("disabled"));
-#else
-        lightComponent.enableCaustics = false;
-#endif
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , ConvertString(m_finiteLightSource ? s_Finite : s_Hard)
-            , static_cast<f64>(lightComponent.angularRadius), static_cast<f64>(lightComponent.sourceRadius)
-        );
-        if(m_openAtlas){
-            if(!createOpenAtlas())
-                return false;
-        }
-        else if(m_analyticAtlas)
-            createAnalyticAtlas();
-        else
-            createAtlas();
-        const b8 hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), ConvertString(m_pointLight ? s_Point : s_Directional), hardware ? 1u : 0u
-            , static_cast<f64>(cameraX)
-        );
-        constexpr u32 s_DefaultCaptureFrameCount = 120u;
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_DefaultCaptureFrameCount);
-        if(!capture)
-            return false;
-        m_capture = Move(*capture);
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-        if(!configureTiming(scratchArena))
-            return false;
-#endif
-        return true;
-    }
-
-    virtual void onShutdown()override{
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-        if(m_timing)
-            m_timing->finish();
-#endif
-        destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: shutdown"));
-    }
-
-    virtual b8 onUpdate(const f32 delta)override{
-        if(m_capture)
-            m_capture->update();
-        ++m_update;
-        if(m_arm == Arm::Moved && m_update == s_MoveUpdate){
-            for(u32 index = 0u; index < m_movingCount; ++index){
-                auto& cutter = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_movingCutters[index]));
-                AssignCsgCutterTransform(cutter, LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity());
-            }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
-        }
-        const f32 fixedDelta = RendererBaselineFixedDelta();
-        const auto updated = m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-#if defined(NWB_CSG_CAUSTIC_SMOKE)
-        if(m_timing && !m_timing->update())
-            return false;
-#endif
-        return true;
-    }
-
-
 private:
+    Array<Float4, 2u> m_finalCutterCenters{};
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     UniquePtr<FramebufferCapture> m_capture;
 #if defined(NWB_CSG_CAUSTIC_SMOKE)
     UniquePtr<NWB::Tests::Smoke::CsgCausticTimingProbe> m_timing;
-    b8 m_timingRegistered = false;
 #endif
-    EntityID m_movingCutters[2] = {};
-    Float4 m_finalCutterCenters[2] = {};
+    Array<EntityID, 2u> m_movingCutters{};
     u32 m_movingCount = 0u;
     u32 m_update = 0u;
     Arm::Enum m_arm = Arm::Cut;
+    OpenCase::Enum m_openCase = OpenCase::Retained;
+#if defined(NWB_CSG_CAUSTIC_SMOKE)
+    b8 m_timingRegistered = false;
+#endif
     b8 m_pointLight = false;
     b8 m_finiteLightSource = false;
     b8 m_analyticAtlas = false;
     b8 m_openAtlas = false;
-    OpenCase::Enum m_openCase = OpenCase::Retained;
 };
 
 

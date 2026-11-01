@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -20,12 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererDeferredSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace ECSRenderDetail{
 
 
@@ -35,6 +30,8 @@ namespace ECSRenderDetail{
 struct SceneShadingSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+
+public:
     // All bindings required: setup uploads scene shading and publishes readiness.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
@@ -43,7 +40,7 @@ struct SceneShadingSetupGraphTask{
         u32 lightCount = 0u;
         b8 lightUploadRequired = false;
         b8 sceneShadingUploadRequired = false;
-        SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
+        Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lightData = {};
         SceneShadingGpuData sceneShadingState;
     };
 
@@ -51,7 +48,7 @@ struct SceneShadingSetupGraphTask{
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept;
+    static void Discarded(Payload& payload)noexcept{ payload.ready = false; }
 };
 
 

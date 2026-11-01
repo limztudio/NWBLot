@@ -31,7 +31,7 @@ TEST(GlobalSync, FutexPreservesEveryIncrementUnderContention){
     Futex mutex;
     Latch startGate(s_ThreadCount + 1u);
     u32 value = 0u;
-    Thread workers[s_ThreadCount];
+    Array<Thread, s_ThreadCount> workers;
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         workers[threadIndex] = Thread([&mutex, &startGate, &value]()noexcept{
             startGate.arrive_and_wait();

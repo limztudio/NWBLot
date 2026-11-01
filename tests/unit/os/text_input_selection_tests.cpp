@@ -22,15 +22,18 @@ using namespace NWB::Core;
 
 class SelectionTextInput final : public QueuedTextInputService{
 public:
+    using QueuedTextInputService::emitCommit;
+    using QueuedTextInputService::emitPreedit;
+    using QueuedTextInputService::emitDeleteSurrounding;
+
+
+public:
     explicit SelectionTextInput(Alloc::GlobalArena& arena)
         : QueuedTextInputService(arena)
     {}
 
 
 public:
-    using QueuedTextInputService::emitCommit;
-    using QueuedTextInputService::emitPreedit;
-    using QueuedTextInputService::emitDeleteSurrounding;
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{ return { true, true, true, true }; }
 };
 

@@ -13,9 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 #include <core/common/log.h>
@@ -30,7 +29,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Device final : public RefCounter<GraphicsResource>, NoCopy{
+class Device final : public RefCounter<GraphicsResource>{
     friend Expected<DeviceHandle> CreateDevice(const DeviceDesc& desc);
     friend class ::NWB::Core::GpuTaskScheduler;
     friend class BackendContext;
@@ -61,30 +60,15 @@ private:
 private:
     class SubmissionOperationLease final : NoCopy{
     private:
-        [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept{
-            static thread_local const SubmissionOperationLease* s_ActiveLease = nullptr;
-            return s_ActiveLease;
-        }
+        [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept;
 
 
     public:
-        [[nodiscard]] static b8 ActiveFor(const Device& device)noexcept{
-            for(const SubmissionOperationLease* lease = ActiveLease(); lease; lease = lease->m_previousActiveLease){
-                if(lease->m_device == &device)
-                    return true;
-            }
-            return false;
-        }
+        [[nodiscard]] static b8 ActiveFor(const Device& device)noexcept;
 
 
     public:
-        explicit SubmissionOperationLease(Device& device)noexcept{
-            if(!device.beginSubmissionOperation())
-                return;
-            m_device = &device;
-            m_previousActiveLease = ActiveLease();
-            ActiveLease() = this;
-        }
+        explicit SubmissionOperationLease(Device& device)noexcept;
         ~SubmissionOperationLease()noexcept;
 
 
@@ -134,33 +118,7 @@ private:
     public:
         // The caller supplies a validated, non-empty ring layout.
         // Both arrays allocate once with device-lifetime backing, so their spans fit the persistent arena.
-        [[nodiscard]] b8 initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
-            const auto expectedSlotCount = TryMultiply<usize>(newLayout.physicalQueueCount, newLayout.slotsPerQueue);
-            if(metadata || newLayout.physicalQueueCount == 0u || newLayout.slotsPerQueue == 0u || !expectedSlotCount || *expectedSlotCount != newLayout.totalSlotCount)
-                return false;
-            const auto slotRecordBytes = TryMultiply<usize>(newLayout.totalSlotCount, sizeof(AmdBreadcrumbSlotRecord));
-            const auto nextSerialBytes = TryMultiply<usize>(newLayout.physicalQueueCount, sizeof(u64));
-            if(!slotRecordBytes || !nextSerialBytes)
-                return false;
-
-            const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(*slotRecordBytes, alignof(AmdBreadcrumbSlotRecord));
-            const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(*nextSerialBytes, alignof(u64));
-            if(AddOverflows<usize>(slotRecordAllocationBytes, nextSerialAllocationBytes))
-                return false;
-
-            metadata.emplace(allocationLog, slotRecordAllocationBytes + nextSerialAllocationBytes, newLayout.totalSlotCount, newLayout.physicalQueueCount);
-            if(!metadata->slotRecords || !metadata->nextSerials){
-                metadata.reset();
-                return false;
-            }
-
-            for(usize slotIndex = 0u; slotIndex < metadata->slotRecordCount; ++slotIndex)
-                metadata->slotRecords[slotIndex] = {};
-            for(usize queueIndex = 0u; queueIndex < metadata->nextSerialCount; ++queueIndex)
-                metadata->nextSerials[queueIndex] = 0u;
-            layout = newLayout;
-            return true;
-        }
+        [[nodiscard]] b8 initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog);
     };
 
 
@@ -239,22 +197,6 @@ public:
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc);
     [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
 
-
-private:
-    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, b8 graphSubmissionAuthorized);
-    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
-    [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
-    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
-        CommandList* const* commandLists,
-        usize numCommandLists,
-        const GpuPhysicalQueueId& executionQueue,
-        const QueueSubmissionDesc& submitDesc,
-        b8 graphSubmissionAuthorized,
-        DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
-    );
-
-
-public:
     // The registry owns every active native VkQueue.
     // Broad CommandQueue calls use the primary record; graph recording/submission picks a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
@@ -268,10 +210,7 @@ public:
     [[nodiscard]] b8 supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
     // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
     // Partial-width timestamps remain valid for modular ordinary durations only.
-    [[nodiscard]] b8 supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
-        const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
-        return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == s_CompleteTimestampValidBits;
-    }
+    [[nodiscard]] b8 supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(const GpuPhysicalQueueId& queue, u64 recordingWorkerDomain, u32 recordingWorkerIndex)const noexcept;
     [[nodiscard]] b8 matchesPhysicalQueueIdentity(CommandQueue::Enum queue, u16 physicalQueueIndex, u16 deviceGeneration)const noexcept;
@@ -320,13 +259,23 @@ public:
     [[nodiscard]] Expected<u64> queueGetCompletedInstance(CommandQueue::Enum queue);
     [[nodiscard]] Expected<u64> queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
 
-public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)noexcept;
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue)noexcept;
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap()noexcept{ return m_gpuDescriptorHeap; }
 
 
 private:
+    void prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, b8 graphSubmissionAuthorized);
+    void finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, u64 submittedID, b8 submissionAccepted);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(CommandList* const* commandLists, usize numCommandLists, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc);
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
+        CommandList* const* commandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        const QueueSubmissionDesc& submitDesc,
+        b8 graphSubmissionAuthorized,
+        DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy = DeviceLossDiagnosticPolicy::Capture
+    );
     void markDeviceLost()noexcept{ m_deviceLost.store(true, MemoryOrder::release); }
     [[nodiscard]] VkResult waitForNativeIdle()noexcept;
     [[nodiscard]] b8 waitForSubmissionTokenInternal(const QueueSubmissionToken& token, DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy);
@@ -368,9 +317,9 @@ private:
         TStringView operationName,
         TStringView resourceName
     )const;
-    [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
+    [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const;
     template<typename PipelineT>
-    [[nodiscard]] b8 configurePipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena, PipelineT& pipeline)const{
+    [[nodiscard]] b8 configurePipelineBindings(Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena, PipelineT& pipeline)const{
         auto bindings = buildPipelineBindings(bindingLayouts, operationName, scratchArena);
         if(bindings){
             static_cast<PipelineBindingState&>(pipeline) = Move(*bindings);
@@ -398,7 +347,7 @@ private:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         return false;
     }
-    void appendPipelineShaderStage(Shader& shader, VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const;
+    void appendPipelineShaderStage(const Shader& shader, VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const;
 
 
 private:

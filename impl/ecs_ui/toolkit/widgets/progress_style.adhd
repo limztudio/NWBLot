@@ -8,6 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Metric rows 0..2 carry data; row 3 is padding.
+const u32 s_ProgressMetricRowCount = 3u;
+
 class ProgressOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 height = s_StyleControlHeight;

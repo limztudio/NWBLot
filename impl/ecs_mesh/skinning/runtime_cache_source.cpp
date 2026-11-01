@@ -6,13 +6,10 @@
 
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_ref_encode.h>
-#include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_mesh/meshlet_ref_validation.h>
 
 #include <core/assets/manager.h>
-#include <core/alloc/scratch.h>
-#include <core/common/log.h>
 
 #include <global/scope_exit.h>
 
@@ -37,28 +34,6 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] b8 ResolveAttributeSkins(
-    const Span<const MeshletDesc> meshlets,
-    const Span<const MeshletPositionStreamRef> positionRefs,
-    const Span<const MeshletLocalVertexRef> localVertexRefs,
-    const usize attributeRefCount,
-    MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins
-){
-    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(meshlets, positionRefs, localVertexRefs, attributeRefCount, [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
-            static_cast<void>(attributeIndex);
-            static_cast<void>(previousSkin);
-            static_cast<void>(skinIndex);
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities"), meshletIndex);
-            return false;
-        },
-        [](const usize attributeIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced"), attributeIndex);
-            return false;
-        },
-        outAttributeSkins
-    );
-}
 
 [[nodiscard]] b8 BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
@@ -118,37 +93,58 @@ static constexpr TStringView s_AssetLoadContext = NWB_TEXT("MeshSkinningRuntimeC
         instance.meshlets.push_back(runtimeMeshlet);
 
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
-            const auto sourceRef = DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), sourceMeshlet, localPositionIndex, false);
-            if(!sourceRef || !MeshMeshletRefValidation::MeshletPositionRefInRange(*sourceRef, mesh.positionStream().size(), skinStream.size(), false) || sourceRef->position >= skinStream.size()){
+            MeshletPositionStreamRef sourceRef;
+            if(
+                !TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), sourceMeshlet, localPositionIndex, false, sourceRef)
+                || !MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), false)
+                || sourceRef.position >= skinStream.size()
+            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid"), meshletIndex, localPositionIndex);
                 return false;
             }
 
-            MeshletPositionStreamRef runtimeRef = *sourceRef;
+            MeshletPositionStreamRef runtimeRef = sourceRef;
             runtimeRef.position = static_cast<u32>(runtimePositionRefs.size());
-            runtimeRef.skin = sourceRef->position;
-            instance.restPositions.push_back(mesh.positionStream()[sourceRef->position]);
+            runtimeRef.skin = sourceRef.position;
+            instance.restPositions.push_back(mesh.positionStream()[sourceRef.position]);
             runtimePositionRefs.push_back(runtimeRef);
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
-            const auto sourceRef = DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), sourceMeshlet, localAttributeIndex);
-            if(!sourceRef || !MeshMeshletRefValidation::MeshletAttributeRefInRange(*sourceRef, mesh.normalStream().size(), mesh.tangentStream().size(), mesh.uv0Stream().size(), mesh.colorStream().size())){
+            MeshletAttributeStreamRef sourceRef;
+            if(
+                !TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), sourceMeshlet, localAttributeIndex, sourceRef)
+                || !MeshletAttributeRefInRange(sourceRef, mesh.normalStream().size(), mesh.tangentStream().size(), mesh.uv0Stream().size(), mesh.colorStream().size())
+            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid"), meshletIndex, localAttributeIndex);
                 return false;
             }
 
-            instance.restNormals.push_back(mesh.normalStream()[sourceRef->normal]);
-            instance.restTangents.push_back(mesh.tangentStream()[sourceRef->tangent]);
+            instance.restNormals.push_back(mesh.normalStream()[sourceRef.normal]);
+            instance.restTangents.push_back(mesh.tangentStream()[sourceRef.tangent]);
 
-            MeshletAttributeStreamRef runtimeRef = *sourceRef;
+            MeshletAttributeStreamRef runtimeRef = sourceRef;
             runtimeRef.normal = static_cast<u32>(runtimeAttributeRefs.size());
             runtimeRef.tangent = static_cast<u32>(runtimeAttributeRefs.size());
             runtimeAttributeRefs.push_back(runtimeRef);
         }
     }
 
-    if(!ResolveAttributeSkins(instance.meshlets, runtimePositionRefs, instance.meshletLocalVertexRefs, runtimeAttributeRefs.size(), instance.attributeSkins))
+    if(!MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
+        instance.meshlets,
+        runtimePositionRefs,
+        instance.meshletLocalVertexRefs,
+        runtimeAttributeRefs.size(),
+        [](const usize meshletIndex, [[maybe_unused]] const usize attributeIndex, [[maybe_unused]] const u32 previousSkin, [[maybe_unused]] const u32 skinIndex){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities"), meshletIndex);
+            return false;
+        },
+        [](const usize attributeIndex){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced"), attributeIndex);
+            return false;
+        },
+        instance.attributeSkins
+    ))
         return false;
 
     if(!EncodeMeshletRefDeltas(runtimePositionRefs, runtimeAttributeRefs, true, [&](const usize meshletIndex, const TStringView reason){

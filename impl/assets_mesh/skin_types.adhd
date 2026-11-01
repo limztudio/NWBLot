@@ -9,6 +9,17 @@ const u32 s_MeshBinaryMagic = 0x4D534837u; // MSH7
 const usize s_MeshPackedAlignBytes = 1u;
 const f32 s_SkinValidationEpsilon = 0.000001f;
 const f32 s_SkinWeightSumEpsilon = 0.001f;
+const StringView s_SkinMetaDiagnosticPrefix = "Skin meta";
+const StringView s_SkinMetaMeshField = "mesh";
+const StringView s_SkinMetaSkeletonField = "skeleton";
+const StringView s_SkinInfluencesField = "influences";
+const StringView s_SkinInverseBindMatricesField = "inverse_bind_matrices";
+const StringView s_SkinJointsField = "joints";
+const StringView s_SkinWeightsField = "weights";
+const StringView s_SkinMetaKind = "Skin";
+const StringView s_SkinInfluenceDiagnosticPrefix = "Skin influence";
+const StringView s_SkinIntegerListValueKind = "integer";
+const StringView s_SkinNumericListValueKind = "numeric";
 
 [serialize]
 class SkinInfluence4{
@@ -71,6 +82,14 @@ b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJ
     if(inverseBindMatrixCount == 0u)
         return true;
     return skeletonJointCount != 0u && inverseBindMatrixCount == cast<usize>(skeletonJointCount);
+}
+
+[subsystem("skinning_subsystem")]
+class SkinningSubsystem{
+    public AssetRef<ComputeShader> localBoundsCs;
+    public AssetRef<ComputeShader> meshletBoundsCs;
+    public AssetRef<ComputeShader> repackNormalsCs;
+    public AssetRef<ComputeShader> skinningCs;
 }
 
 

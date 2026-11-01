@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,14 +19,12 @@ b8 Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placemen
         return false;
     if(!interactive || placement.centerTravel.width <= 0.0f)
         return true;
-    const auto trackResult = MakeWidgetId(frame.m_widget.id, s_WidgetPartTrack);
-    if(!trackResult)
+    WidgetId track;
+    if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack, track))
         return false;
-    const WidgetId track = *trackResult;
-    const auto thumbResult = MakeWidgetId(frame.m_widget.id, s_WidgetPartThumb);
-    if(!thumbResult)
+    WidgetId thumb;
+    if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb, thumb))
         return false;
-    const WidgetId thumb = *thumbResult;
     auto control = m_context.takeControlAction(frame.m_widget, true, frame.m_token);
     b8 hasControl = control.has_value();
     auto trackGesture = m_context.takePartPointerGesture(frame.m_widget, track, true);

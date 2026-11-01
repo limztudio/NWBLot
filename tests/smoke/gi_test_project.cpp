@@ -4,6 +4,7 @@
 
 #include "framebuffer_capture.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_capture_teardown.h"
 #include "csg_gi_scene.h"
 #include "presentation_fps_probe.h"
 #include "smoke_environment.h"
@@ -46,9 +47,18 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
+using NWB::Tests::Smoke::TickSmokeWorld;
 
 using GiTestMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
+struct ComplexSceneBox{
+    Float4 position;
+    Float4 scale;
+    Float4 tint;
+    f32 yawDegrees;
+    b8 indirectOnly = false;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,16 +103,8 @@ static constexpr u32 s_ComplexRandomBodyCount = 20u;
 static constexpr u32 s_ComplexRandomBodySeed = 0x7A31C5E9u;
 static constexpr u64 s_ComplexCaptureWarmupPresentations = 360u;
 
-struct ComplexSceneBox{
-    Float4 position;
-    Float4 scale;
-    Float4 tint;
-    f32 yawDegrees;
-    b8 indirectOnly = false;
-};
-
 // Offset partition doorways expose different mixes of red and blue bounce light.
-static constexpr ComplexSceneBox s_ComplexSceneBoxes[] = {
+static constexpr Array<ComplexSceneBox, 28> s_ComplexSceneBoxes = {{
     // Front doorway: x=-0.4..0.5 at z=-0.35, with a high lintel.
     { Float4(-1.20f, 0.625f, -0.35f, 0.0f), Float4(1.60f, 1.25f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
     { Float4( 1.25f, 0.625f, -0.35f, 0.0f), Float4(1.50f, 1.25f, 0.13f, 0.0f), s_NeutralPanelTint, 0.0f },
@@ -142,22 +144,22 @@ static constexpr ComplexSceneBox s_ComplexSceneBoxes[] = {
     { Float4( 1.475f, 2.04f,  0.000f, 0.0f), Float4(1.05f, 0.12f, 4.00f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 0.000f, 2.04f, -1.575f, 0.0f), Float4(1.90f, 0.12f, 0.85f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 0.000f, 2.04f,  0.975f, 0.0f), Float4(1.90f, 0.12f, 2.05f, 0.0f), s_BlackEnclosureTint, 0.0f },
-};
+}};
 
 // Indirect-only white fins next to the floor patches show only bounced light.
-static constexpr ComplexSceneBox s_ComplexBouncePatches[] = {
+static constexpr Array<ComplexSceneBox, 2> s_ComplexBouncePatches = {{
     { Float4(-0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_RedBounceTint, 0.0f },
     { Float4( 0.45f, 0.025f, -0.55f, 0.0f), Float4(0.85f, 0.05f, 0.80f, 0.0f), s_BlueBounceTint, 0.0f },
-};
+}};
 
 // Enclose the maze behind the camera so light enters only through the skylight.
-static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
+static constexpr Array<ComplexSceneBox, 5> s_ComplexFrontEnclosureBoxes = {{
     { Float4(-2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 2.00f, 1.00f, -1.50f, 0.0f), Float4(0.12f, 6.00f, 7.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 0.00f, 1.00f, -5.00f, 0.0f), Float4(4.10f, 2.10f, 0.12f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 0.00f,-0.06f, -3.50f, 0.0f), Float4(4.10f, 0.12f, 3.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
     { Float4( 0.00f, 2.04f, -3.50f, 0.0f), Float4(4.10f, 0.12f, 3.10f, 0.0f), s_BlackEnclosureTint, 0.0f },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -173,7 +175,7 @@ private:
 public:
     explicit GiTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeRenderWorldOrDie(s_ProjectName, context))
         , m_csgGiScene(context, *m_world)
     {}
     virtual ~GiTestSmokeProject()noexcept override{
@@ -214,10 +216,10 @@ public:
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
-            *m_world,
             m_complexSceneEnabled ? s_ComplexCameraHeight : s_CameraHeight,
             m_complexSceneEnabled ? s_ComplexCameraDistance : s_CameraDistance,
-            m_complexSceneEnabled ? s_ComplexCameraPitch : s_CameraPitch
+            m_complexSceneEnabled ? s_ComplexCameraPitch : s_CameraPitch,
+            *m_world
         );
 
         // Use a near-vertical sun in the closed maze to light only the floor patches through the skylight.
@@ -235,13 +237,13 @@ public:
 
         // The white floor reveals colored GI in the wall's direct shadow.
         m_floorEntity = CreateTintedStaticMeshEntity(
-            *m_world,
             s_GroundMesh,
             m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.90f, 0.90f, 0.90f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(enclosureScale, 1.0f, enclosureScale, 0.0f)
+            Float4(enclosureScale, 1.0f, enclosureScale, 0.0f),
+            *m_world
         );
 
         m_redWallEntity = createWall(Float4(s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f), m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, enclosureScale, wallHeightScale);
@@ -266,7 +268,7 @@ public:
             const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
             if(captureFreezeFrame != 0u){
                 const NWB::Tests::Smoke::FramebufferCaptureOptions options{ .shouldCapture = ShouldCaptureComplex, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u };
-                auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, scratchArena, s_ProjectName, captureFreezeFrame, options);
+                auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(s_ProjectName, captureFreezeFrame, options, m_context, scratchArena);
                 if(!capture || !*capture){
                     NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: complex GI baseline requires application framebuffer capture"));
                     return false;
@@ -286,12 +288,7 @@ public:
     virtual b8 onUpdate(const f32 delta)override{
         if(m_csgGiScene.active()){
             m_csgGiScene.update();
-            const auto updated = m_world->tick(1.0f / 60.0f);
-            if(!updated){
-                NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-                return false;
-            }
-            return true;
+            return TickSmokeWorld(1.0f / 60.0f, *m_world);
         }
         const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
@@ -359,13 +356,10 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
-        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
@@ -404,7 +398,7 @@ private:
 
     [[nodiscard]] b8 createComplexScene(){
         for(const ComplexSceneBox& box : s_ComplexSceneBoxes){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, box.indirectOnly ? s_ComplexIndirectMaterial : s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, *m_world);
             if(!entity.valid())
                 return false;
             if(box.yawDegrees != 0.0f){
@@ -416,19 +410,19 @@ private:
         }
 
         for(const ComplexSceneBox& box : s_ComplexBouncePatches){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, *m_world);
             if(!entity.valid())
                 return false;
         }
 
         for(const ComplexSceneBox& box : s_ComplexFrontEnclosureBoxes){
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale);
+            const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, box.tint, box.position, box.scale, *m_world);
             if(!entity.valid())
                 return false;
         }
 
         // Place 20 non-overlapping seeded bodies without blocking the skylight or doorways.
-        ComplexSceneBox placedBodies[s_ComplexRandomBodyCount] = {};
+        Array<ComplexSceneBox, s_ComplexRandomBodyCount> placedBodies{};
         u32 placedBodyCount = 0u;
         u32 randomState = s_ComplexRandomBodySeed;
         // Scale the top 24 random bits into 0..1.
@@ -471,20 +465,20 @@ private:
             const f32 x = VectorGetX(footprint);
             const f32 z = VectorGetY(footprint);
             const b8 frontRow = z < -1.8f;
-            const SIMDVectorSingle unitRandom = VectorScale(VectorSet(heightRandom, shadeRandom, yawRandom, 0.0f), 1.0f / 16777216.0f);
+            const SIMDVectorSingle unitRandom = VectorScale(VectorSet(heightRandom, shadeRandom, 0.0f, 0.0f), 1.0f / 16777216.0f);
             const SIMDVectorSingle heightShade = VectorMultiplyAddExpression(VectorSet(frontRow ? 0.34f : 0.68f, 0.32f, 0.0f, 0.0f), unitRandom, VectorSet(frontRow ? 0.22f : 0.30f, 0.62f, 0.0f, 0.0f));
             // Truncate equals a u32 cast here because the scaled value is in 0..7.
-            const SIMDVectorSingle yawSteps = VectorScale(VectorSubtract(VectorTruncate(VectorScale(unitRandom, 7.0f)), VectorReplicate(3.0f)), 15.0f);
+            const f32 yawSteps = (static_cast<f32>(static_cast<u32>((yawRandom / 16777216.0f) * 7.0f)) - 3.0f) * 15.0f;
             const f32 width = VectorGetZ(footprint);
             const f32 depth = VectorGetW(footprint);
             const f32 height = VectorGetX(heightShade);
             const f32 shade = VectorGetY(heightShade);
-            const f32 yawDegrees = VectorGetZ(yawSteps);
+            const f32 yawDegrees = yawSteps;
             Float4 position;
             StoreFloat(VectorMultiply(VectorPermute<0, 4, 1, 6>(footprint, heightShade), VectorSet(1.0f, 0.5f, 1.0f, 1.0f)), position);
             const ComplexSceneBox body{ position, Float4(width, height, depth, 0.0f), Float4(shade, shade, shade, 1.0f), yawDegrees };
             // Leave the line from the camera through the front doorway clear.
-            if(z < -1.8f && VectorGetX(VectorAbs(footprint)) < 0.72f)
+            if(z < -1.8f && Abs(x) < 0.72f)
                 continue;
             // Sun through the roof opening must still land on both colored floor sources.
             if(x > -1.12f && x < 1.12f && z > -1.20f && z < 0.18f)
@@ -502,7 +496,7 @@ private:
             if(blocked)
                 continue;
 
-            const auto entity = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, body.tint, body.position, body.scale);
+            const auto entity = CreateTintedStaticMeshEntity(s_BoxMesh, s_ComplexDiffuseMaterial, s_SmokeSurfaceMaterialInterface, body.tint, body.position, body.scale, *m_world);
             if(!entity.valid())
                 return false;
             if(body.yawDegrees != 0.0f){
@@ -519,15 +513,15 @@ private:
         }
 
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created")
-            , LengthOf(s_ComplexSceneBoxes)
-            , LengthOf(s_ComplexBouncePatches)
-            , LengthOf(s_ComplexFrontEnclosureBoxes)
+            , s_ComplexSceneBoxes.size()
+            , s_ComplexBouncePatches.size()
+            , s_ComplexFrontEnclosureBoxes.size()
             , placedBodyCount
             , s_ComplexRandomBodySeed
         );
         if(m_coverageViewEnabled){
             // Place the probe cube where its -X and -Z faces share one spatial cell.
-            const auto probe = CreateTintedStaticMeshEntity(*m_world, s_BoxMesh, s_CoverageProbeMaterial, s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f));
+            const auto probe = CreateTintedStaticMeshEntity(s_BoxMesh, s_CoverageProbeMaterial, s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f), *m_world);
             if(!probe.valid())
                 return false;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
@@ -541,7 +535,7 @@ private:
         const SIMDVectorSingle yawQuat = QuaternionRotationRollPitchYawFromVector(VectorScale(VectorSet(0.0f, yawDeg, 0.0f, 0.0f), s_PI / 180.0f));
         const SIMDVectorSingle wallRotation = QuaternionMultiply(pitchQuat, yawQuat);
 
-        auto entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(width, 1.0f, height, 0.0f));
+        auto entity = CreateTintedStaticMeshEntity(s_GroundMesh, m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(width, 1.0f, height, 0.0f), *m_world);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(wallRotation, transform->rotation);
@@ -555,14 +549,14 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Tests::Smoke::CsgGiScene m_csgGiScene;
     UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_complexCapture;
-    NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::PresentationFpsProbe m_presentationFpsProbe;
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     Timer m_complexLiveWarmupStartTime = {};
     u64 m_complexLiveWarmupStartPresentations = 0u;
+    NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     f32 m_complexMinLiveWarmupSeconds = s_ComplexMinLiveWarmupSeconds;
     b8 m_rendererBaselineCapturePaused = false;

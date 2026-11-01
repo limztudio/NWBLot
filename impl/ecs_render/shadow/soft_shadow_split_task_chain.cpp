@@ -4,7 +4,7 @@
 
 #include "soft_shadow_split_task_chain.h"
 
-#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -56,10 +56,6 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
     using namespace RendererTaskGraphDetail;
 
     const SoftShadowSplitRoute& route = inputs.route;
-    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
-    };
-
     if((inputs.rayTracingPlan.lightSpace.push.csgFlags & NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS) != 0u){
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);
         const Core::GpuGraphResourceId receiverView = declarations.findImportedBuffer(inputs.rayTracingPlan.lightSpace.receiverView);
@@ -72,7 +68,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
             return MakeUnexpected(Failure{});
         }
         const Core::TextureSubresourceSet layers(0u, 1u, 0u, inputs.targets.csgRemovedIntervalLayerCount);
-        const Core::GpuTaskResourceUse receiverReads[]{
+        const Array<Core::GpuTaskResourceUse, 5u> receiverReads{
             ReadUse(receiverView, Core::ResourceStates::ConstantBuffer),
             ReadUse(receiverCapState, Core::ResourceStates::ConstantBuffer),
             ReadTextureUse(receiverCapDepth, layers, Core::ResourceStates::UnorderedAccess),
@@ -87,9 +83,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
     constexpr usize s_LightSpaceReadCapacity = 9u;
     lightSpaceReads.reserve(s_LightSpaceReadCapacity + inputs.rayTracingPlan.lightSpace.csgDynamicBounds.size() + (route.traceGeometryStatesGraphOwned ? 0u : inputs.traceGeometryResources.size()));
-    if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, importBuffer, [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state)noexcept{
-        lightSpaceReads.push_back(ReadUse(resource, state));
-    }))
+    if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(inputs.rayTracingResources, m_graph, lightSpaceReads))
         return MakeUnexpected(Failure{});
     lightSpaceReads.push_back(ReadUse(inputs.materialContextSlots, Core::ResourceStates::ConstantBuffer));
     lightSpaceReads.push_back(ReadUse(inputs.currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -108,7 +102,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
             resource = declarations.findImportedBuffer(buffer);
         }
         if(!resource.valid()){
-            const auto importedResource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
+            const auto importedResource = ImportExternalBuffer(m_graph, buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
             if(!importedResource){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return MakeUnexpected(Failure{});
@@ -145,7 +139,7 @@ Expected<SoftShadowSplitTaskChainBuilder::LightSpaceShadowMaps> SoftShadowSplitT
         return MakeUnexpected(Failure{});
     }
     const LightSpaceShadowGraph maps = Move(*mapsResult);
-    const Core::GpuGraphResourceId mapBuffers[] = { maps.counts, maps.events, maps.views };
+    const Array<Core::GpuGraphResourceId, 3u> mapBuffers = { maps.counts, maps.events, maps.views };
     for(const auto resource : mapBuffers){
         uses.opaque.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         uses.transparentTrace.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
@@ -187,15 +181,15 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         .setIdentity(Name("render.shadow_visibility.opaque"))
         .setMarkerLabel("Shadow Visibility Opaque")
         .setScheduling(opaqueScheduling)
-        .setDependencies(&shadowTraceDependency, 1u)
-        .setExternalDependencies(inputs.historyWriterDrainDependencies.data(), inputs.historyWriterDrainDependencies.size())
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.opaque.data(), uses.opaque.size())
-        .setResourceSetUses(
+        .setDependencies({ &shadowTraceDependency, 1u })
+        .setExternalDependencies(inputs.historyWriterDrainDependencies)
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses.opaque)
+        .setResourceSetUses({
             route.hardwareCsgShadow ? inputs.traceResourceSetUses.data()
                 : (!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned ? &inputs.traceGeometrySetUse : nullptr),
             route.hardwareCsgShadow ? inputs.traceResourceSetUses.size() : (!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned ? 1u : 0u)
-        )
+        })
     ;
     const auto opaqueTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
         m_graph,
@@ -220,15 +214,15 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     tasks.opaque = *opaqueTaskResult;
 
     if(!route.combinedSoftTemporal){
-        const Core::GpuTaskId opaqueFirstWaveletDependencies[] = { tasks.opaque };
+        const Array<Core::GpuTaskId, 1u> opaqueFirstWaveletDependencies = { tasks.opaque };
         Core::GpuTaskDesc opaqueFirstWaveletDesc;
         opaqueFirstWaveletDesc
             .setIdentity(route.combinedSoftWavelet ? Name("render.shadow_visibility.opaque_temporal_merge") : Name("render.shadow_visibility.opaque_first_wavelet"))
             .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Opaque Temporal Merge" : "Shadow Opaque First Wavelet")
             .setScheduling(tailScheduling)
-            .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
-            .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-            .setResourceUses(uses.opaqueFirstWavelet, uses.opaqueFirstWaveletCount)
+            .setDependencies(opaqueFirstWaveletDependencies)
+            .setExternalStateSources(inputs.stateSources)
+            .setResourceUses({ uses.opaqueFirstWavelet.data(), uses.opaqueFirstWaveletCount })
         ;
         const auto opaqueFirstWaveletTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
             m_graph,
@@ -255,14 +249,14 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     }
 
     if(!route.combinedSoftUpsample){
-        const Core::GpuTaskId opaqueResolveDependencies[] = { tasks.opaqueFirstWavelet };
+        const Array<Core::GpuTaskId, 1u> opaqueResolveDependencies = { tasks.opaqueFirstWavelet };
         Core::GpuTaskDesc opaqueResolveDesc;
         opaqueResolveDesc
             .setIdentity(Name("render.shadow_visibility.opaque_soft_resolve"))
             .setMarkerLabel("Shadow Opaque Soft Resolve")
             .setScheduling(tailScheduling)
-            .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
-            .setResourceUses(uses.opaqueResolve, uses.opaqueResolveCount)
+            .setDependencies(opaqueResolveDependencies)
+            .setResourceUses({ uses.opaqueResolve.data(), uses.opaqueResolveCount })
         ;
         const auto opaqueResolveTaskResult = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
             m_graph,
@@ -298,16 +292,16 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     const SoftShadowSplitRoute& route = inputs.route;
 
     const Core::GpuTaskId opaqueCompletionTask = route.combinedSoftTemporal ? tasks.opaque : route.combinedSoftUpsample ? tasks.opaqueFirstWavelet : tasks.opaqueResolve;
-    const Core::GpuTaskId traceDependencies[] = { opaqueCompletionTask };
+    const Array<Core::GpuTaskId, 1u> traceDependencies = { opaqueCompletionTask };
     Core::GpuTaskDesc traceDesc;
     traceDesc
         .setIdentity(Name("render.shadow_visibility.soft_transparent_trace"))
         .setMarkerLabel("Shadow Transparent Soft Trace")
         .setScheduling(tailScheduling)
-        .setDependencies(traceDependencies, LengthOf(traceDependencies))
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.transparentTrace.data(), uses.transparentTrace.size())
-        .setResourceSetUses(!inputs.traceResourceSetUses.empty() ? inputs.traceResourceSetUses.data() : nullptr, inputs.traceResourceSetUses.size())
+        .setDependencies(traceDependencies)
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses.transparentTrace)
+        .setResourceSetUses({ !inputs.traceResourceSetUses.empty() ? inputs.traceResourceSetUses.data() : nullptr, inputs.traceResourceSetUses.size() })
     ;
     const auto transparentTraceTaskResult = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
         m_graph,
@@ -329,15 +323,15 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
 
     Core::GpuTaskId transparentFirstWaveletDependency = tasks.transparentTrace;
     if(uses.graphOwnsTransparentTemporalMergeEntryStates){
-        const Core::GpuTaskId transparentTemporalMergeDependencies[] = { transparentFirstWaveletDependency, };
+        const Array<Core::GpuTaskId, 1u> transparentTemporalMergeDependencies = { transparentFirstWaveletDependency, };
         Core::GpuTaskDesc transparentTemporalMergeDesc;
         transparentTemporalMergeDesc
             .setIdentity(route.combinedSoftTemporal ? Name("render.shadow_visibility.combined_temporal_merge") : Name("render.shadow_visibility.transparent_temporal_merge"))
             .setMarkerLabel(route.combinedSoftTemporal ? "Shadow Combined Temporal Merge" : "Shadow Transparent Temporal Merge")
             .setScheduling(tailScheduling)
-            .setDependencies(transparentTemporalMergeDependencies, LengthOf(transparentTemporalMergeDependencies))
-            .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-            .setResourceUses(uses.transparentTemporalMerge, uses.transparentTemporalMergeCount)
+            .setDependencies(transparentTemporalMergeDependencies)
+            .setExternalStateSources(inputs.stateSources)
+            .setResourceUses({ uses.transparentTemporalMerge.data(), uses.transparentTemporalMergeCount })
         ;
         const auto transparentTemporalMergeTaskResult = m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
             m_graph,
@@ -362,14 +356,14 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         transparentFirstWaveletDependency = tasks.transparentTemporalMerge;
     }
 
-    const Core::GpuTaskId transparentFirstWaveletDependencies[] = { transparentFirstWaveletDependency };
+    const Array<Core::GpuTaskId, 1u> transparentFirstWaveletDependencies = { transparentFirstWaveletDependency };
     Core::GpuTaskDesc transparentFirstWaveletDesc;
     transparentFirstWaveletDesc
         .setIdentity(route.combinedSoftWavelet ? Name("render.shadow_visibility.combined_first_wavelet") : Name("render.shadow_visibility.transparent_first_wavelet"))
         .setMarkerLabel(route.combinedSoftWavelet ? "Shadow Combined First Wavelet" : "Shadow Transparent First Wavelet")
         .setScheduling(tailScheduling)
-        .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
-        .setResourceUses(uses.transparentFirstWavelet, uses.transparentFirstWaveletCount)
+        .setDependencies(transparentFirstWaveletDependencies)
+        .setResourceUses({ uses.transparentFirstWavelet.data(), uses.transparentFirstWaveletCount })
     ;
     const auto transparentFirstWaveletTaskResult = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
         m_graph,
@@ -392,14 +386,14 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     }
     tasks.transparentFirstWavelet = *transparentFirstWaveletTaskResult;
 
-    const Core::GpuTaskId foldDependencies[] = { tasks.transparentFirstWavelet };
+    const Array<Core::GpuTaskId, 1u> foldDependencies = { tasks.transparentFirstWavelet };
     Core::GpuTaskDesc foldDesc;
     foldDesc
         .setIdentity(Name("render.shadow_visibility.soft_transparent_fold"))
         .setMarkerLabel("Shadow Transparent Soft Fold")
         .setScheduling(tailScheduling)
-        .setDependencies(foldDependencies, LengthOf(foldDependencies))
-        .setResourceUses(uses.transparentFold, uses.transparentFoldCount)
+        .setDependencies(foldDependencies)
+        .setResourceUses({ uses.transparentFold.data(), uses.transparentFoldCount })
     ;
     // The terminal fold owns effect completion, so lighting, recovery and acceptance observe fully folded visibility.
     const auto foldTaskResult = m_raytracingSystem.declareShadowTransparentSoftFoldTask(

@@ -31,6 +31,11 @@ class RadioGroupStyle{
 }
 
 const u32 s_RadioGroupMaxChoices = 64u;
+const u32 s_RadioGroupStampFencePassCount = 2u;
+// Metric rows 0..2 carry data; row 3 is padding.
+const u32 s_RadioGroupMetricRowCount = 3u;
+const f32 s_RadioGroupMaxMarkInset = 0.5f;
+const f64 s_RadioGroupMaxMarkInsetF64 = 0.5;
 
 class RadioGroupOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -114,6 +119,112 @@ class RadioGroupPlacement{
     public Rect content;
     public Array<RadioGroupChoicePlacement, s_RadioGroupMaxChoices> rows;
     public u32 count = 0u;
+}
+
+b8 IsValidRadioGroupChoices(in RadioGroupChoices choices){
+    if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.count > s_RadioGroupMaxChoices){
+        return false;
+    }
+    for(u32 index = 0u; index < choices.count; ++index){
+        if(choices.rows[index].key == 0u){
+            return false;
+        }
+        for(u32 previous = 0u; previous < index; ++previous){
+            if(choices.rows[previous].key == choices.rows[index].key){
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+b8 TryFindRadioGroupChoice(in RadioGroupChoices choices, in u64 key, mut u32 outIndex){
+    if(key == 0u){
+        return false;
+    }
+    for(u32 candidate = 0u; candidate < choices.count; ++candidate){
+        if(choices.rows[candidate].key == key){
+            outIndex = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+u64 FindEnabledRadioGroupChoice(in RadioGroupChoices choices, in u32 start, in b8 reverse){
+    if(choices.count == 0u || start >= choices.count){
+        return 0u;
+    }
+    u32 index = start;
+    for(u32 visited = 0u; visited < choices.count; ++visited){
+        if(choices.rows[index].enabled){
+            return choices.rows[index].key;
+        }
+        if(reverse){
+            if(index == 0u){
+                index = choices.count - 1u;
+            }
+            else{
+                index = index - 1u;
+            }
+        }
+        else{
+            if(index + 1u == choices.count){
+                index = 0u;
+            }
+            else{
+                index = index + 1u;
+            }
+        }
+    }
+    return 0u;
+}
+
+b8 IsValidRadioGroupOptions(in RadioGroupOptions options){
+    return options.enabled
+        && options.width.policy <= LayoutSizePolicy::Stretch
+        && isFinite(options.width.value)
+        && options.width.value >= 0.0f
+        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f);
+}
+
+u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 cursor, in ControlActionKind kind){
+    if(choices.count == 0u){
+        return 0u;
+    }
+    if(kind == ControlActionKind::Home){
+        return FindEnabledRadioGroupChoice(choices, 0u, false);
+    }
+    if(kind == ControlActionKind::End){
+        return FindEnabledRadioGroupChoice(choices, choices.count - 1u, true);
+    }
+    const b8 reverse = kind == ControlActionKind::Up || kind == ControlActionKind::Left;
+    u32 current = 0u;
+    if(!TryFindRadioGroupChoice(choices, cursor, current)){
+        u32 fallbackStart = 0u;
+        if(reverse){
+            fallbackStart = choices.count - 1u;
+        }
+        return FindEnabledRadioGroupChoice(choices, fallbackStart, reverse);
+    }
+    u32 start = 0u;
+    if(reverse){
+        if(current == 0u){
+            start = choices.count - 1u;
+        }
+        else{
+            start = current - 1u;
+        }
+    }
+    else{
+        if(current + 1u == choices.count){
+            start = 0u;
+        }
+        else{
+            start = current + 1u;
+        }
+    }
+    return FindEnabledRadioGroupChoice(choices, start, reverse);
 }
 
 

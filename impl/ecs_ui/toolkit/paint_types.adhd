@@ -2,6 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font_atlas/types.adhd>
+#include <impl/assets_ui_skin/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+native{
+#include <global/sha256.h>
+#include <impl/ecs_ui/toolkit/images/image_source.h>
+namespace NWB::Impl{
+class UiSkin;
+class Texture;
+class Font;
+}
+namespace NWB::Impl::Ui{
+template<typename TUiSkin, typename TTexture>
+class SkinBindingRecord;
+template<typename TFont>
+class GlyphPageBindingRecord;
+template<typename TFont>
+class SdfAtlasPageBindingRecord;
+using SkinBinding = SkinBindingRecord<NWB::Impl::UiSkin, NWB::Impl::Texture>;
+using GlyphPageBinding = GlyphPageBindingRecord<NWB::Impl::Font>;
+using SdfAtlasPageBinding = SdfAtlasPageBindingRecord<NWB::Impl::Font>;
+}
+}
+
+
 class Point{
     public f32 x = 0.0f;
     public f32 y = 0.0f;
@@ -78,8 +107,8 @@ enum<u8> UiRectPrecision{
 const u32 s_GlyphAtlasPageExtent = 512u;
 const u32 s_GlyphAtlasGlyphGutter = 2u;
 const usize s_GlyphAtlasMaxPages = 16u;
-const usize s_PaintMaxGlyphPages = 64u;
-const usize s_PaintMaxImages = s_PaintMaxGlyphPages;
+const u32 s_SdfMaxChannelCount = 4u;
+const usize s_PaintMaxImages = 64u;
 const usize s_PaintMaxOverlayDepth = 16u;
 const usize s_PaintDefaultClipDepth = 8u;
 
@@ -96,7 +125,7 @@ class GpuPaintPushConstants{
     public u32 samplerSlot = 0xffffffffu;
     public u32 material = 0u;
     public u32 sdfChannel = 0u;
-    public f32 sdfSpreadPixels = 1.0f;
+    public u32 sdfSpreadPixels = 0u;
     public u32 sdfDistanceEncoding = 0u;
 }
 
@@ -107,19 +136,212 @@ class GpuOutputPushConstants{
     public u32 presentationMode = 0u;
 }
 
-const usize s_GpuMaxGlyphPages = s_PaintMaxImages;
-const usize s_GpuMaxSdfPages = s_PaintMaxImages;
-const usize s_GpuMaxTextureImages = s_PaintMaxImages;
+const u32 s_PaintQuadVertexCount = 4u;
+const u32 s_PaintQuadIndexCount = 6u;
+const u32 s_PaintNineSliceAxisCells = 3u;
+
+// Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
+class SkinBindingRecord<TUiSkin, TTexture>{
+    public AssetRef<TUiSkin> skin;
+    public AssetRef<TTexture> texture;
+    public u64 generation = 0u;
+    public u32 atlasWidth = 0u;
+    public u32 atlasHeight = 0u;
+    public f32 referenceDensity = 1.0f;
+}
+
+class PaintOverlayFrame{
+    public usize clipDepth = 0u;
+    public u32 layer = 0u;
+}
+
+class GlyphPageBindingRecord<TFont>{
+    public b8 operator==(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font && this.fontGeneration == rhs.fontGeneration && this.atlasIdentity == rhs.atlasIdentity && this.generation == rhs.generation && this.index == rhs.index && this.width == rhs.width && this.height == rhs.height;
+    }
+
+    public b8 operator!=(in GlyphPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font || this.fontGeneration != rhs.fontGeneration || this.atlasIdentity != rhs.atlasIdentity || this.generation != rhs.generation || this.index != rhs.index || this.width != rhs.width || this.height != rhs.height;
+    }
+
+    public AssetRef<TFont> font;
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+}
+
+class SdfAtlasPageBindingRecord<TFont>{
+    public b8 operator==(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font == rhs.font
+            && this.fontSha256 == rhs.fontSha256
+            && this.pixelsSha256 == rhs.pixelsSha256
+            && this.fontGeneration == rhs.fontGeneration
+            && this.atlasIdentity == rhs.atlasIdentity
+            && this.generation == rhs.generation
+            && this.index == rhs.index
+            && this.width == rhs.width
+            && this.height == rhs.height
+            && this.channelCount == rhs.channelCount
+            && this.spreadPixels == rhs.spreadPixels
+            && this.distanceEncoding == rhs.distanceEncoding;
+    }
+
+    public b8 operator!=(in SdfAtlasPageBindingRecord<TFont> rhs)const{
+        return this.font != rhs.font
+            || this.fontSha256 != rhs.fontSha256
+            || this.pixelsSha256 != rhs.pixelsSha256
+            || this.fontGeneration != rhs.fontGeneration
+            || this.atlasIdentity != rhs.atlasIdentity
+            || this.generation != rhs.generation
+            || this.index != rhs.index
+            || this.width != rhs.width
+            || this.height != rhs.height
+            || this.channelCount != rhs.channelCount
+            || this.spreadPixels != rhs.spreadPixels
+            || this.distanceEncoding != rhs.distanceEncoding;
+    }
+
+    public AssetRef<TFont> font;
+    public Sha256Digest fontSha256 = Sha256Digest();
+    public Sha256Digest pixelsSha256 = Sha256Digest();
+    public u64 fontGeneration = 0u;
+    public u64 atlasIdentity = 0u;
+    public u64 generation = 0u;
+    public u32 index = 0u;
+    public u32 width = 0u;
+    public u32 height = 0u;
+    public u32 channelCount = s_SdfMaxChannelCount;
+    public u32 spreadPixels = 0u;
+    public u32 distanceEncoding = s_FontAtlasDistanceEncoding;
+}
+
+[inline]
+Color ResolveUiSkinColor(in UiSkinPalette palette, in UiSkinColorRole role){
+    const UiSkinColor value = palette.colors[cast<usize>(role)];
+    Color out;
+    out.r = value.r;
+    out.g = value.g;
+    out.b = value.b;
+    out.a = value.a;
+    return out;
+}
+
+b8 SameGlyphPageKey<TFont>(in GlyphPageBindingRecord<TFont> first, in GlyphPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
+}
+
+b8 ValidGlyphPageBinding<TFont>(in GlyphPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_GlyphAtlasMaxPages
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_GlyphAtlasPageExtent
+        && binding.height <= s_GlyphAtlasPageExtent
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height);
+}
+
+b8 SameSdfAtlasPageKey<TFont>(in SdfAtlasPageBindingRecord<TFont> first, in SdfAtlasPageBindingRecord<TFont> second){
+    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index;
+}
+
+[inline]
+b8 SameTextureImageKey(in ImageSource first, in ImageSource second){
+    return first.identity() == second.identity() && first.generation() == second.generation();
+}
+
+b8 ValidSdfAtlasPageBinding<TFont>(in SdfAtlasPageBindingRecord<TFont> binding, in usize pixelByteCount){
+    return binding.font.valid()
+        && binding.fontGeneration != 0u
+        && binding.atlasIdentity != 0u
+        && binding.generation != 0u
+        && binding.index < s_FontAtlasMaxGroupCount
+        && binding.width != 0u
+        && binding.height != 0u
+        && binding.width <= s_FontAtlasMaxExtent
+        && binding.height <= s_FontAtlasMaxExtent
+        && binding.channelCount != 0u
+        && binding.channelCount <= s_SdfMaxChannelCount
+        && binding.spreadPixels >= s_FontAtlasMinSpreadPixels
+        && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
+        && binding.distanceEncoding == s_FontAtlasDistanceEncoding
+        && pixelByteCount == cast<usize>(binding.width) * cast<usize>(binding.height) * cast<usize>(binding.channelCount);
+}
+
+[inline]
+b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
+    if(command.material == PaintMaterial::Glyph)
+        return cast<usize>(command.glyphPageIndex) < pageCount && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
+    if(command.material == PaintMaterial::SdfGlyph)
+        return command.glyphPageIndex == 0xffffffffu;
+    if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin || command.material == PaintMaterial::Image)
+        return command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
+    return false;
+}
+
+[inline]
+b8 ValidDrawCommandImageBinding(in DrawCommand command, in usize imageCount){
+    if(command.material == PaintMaterial::Image)
+        return cast<usize>(command.textureImageIndex) < imageCount && command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
+    return command.textureImageIndex == 0xffffffffu;
+}
+
 const usize s_GpuTargetSlotCount = 3u;
 const usize s_GpuFrameCount = 4u;
 // Raster uses outside the page lists: color target, skin atlas, vertex buffer, and index buffer.
 const usize s_GpuRasterFixedResourceUses = 4u;
+const usize s_GpuRasterDependencyCapacity = 3u;
+const usize s_GpuInitialVertexCapacity = 4096u;
+const usize s_GpuInitialIndexCapacity = 12288u;
 const u32 s_GpuFullscreenTriangleVertexCount = 3u;
 const u32 s_GpuTimingHeightShift = 16u;
+const u32 s_GpuFrameTimingQueryCount = 2u;
+const u32 s_GpuRgbChannelCount = 3u;
+const u32 s_GpuRgbaChannelCount = 4u;
+const u32 s_GpuOutputResourceUseCount = 2u;
+const f32 s_GpuClipSpaceExtent = 2.0f;
+const StringView s_GpuTextureImageMarkerLabel = "UI Texture Image";
 const Name s_GpuLayerTextureName = "ui.layer";
+const Name s_GpuLayerReadyName = "ui.layer_ready";
 const Name s_GpuAtlasTextureName = "ui.atlas";
+const Name s_GpuAtlasReadyName = "ui.atlas_ready";
 const Name s_GpuVertexBufferName = "ui.vertices";
 const Name s_GpuIndexBufferName = "ui.indices";
+const Name s_GpuRasterPipelineName = "ui.raster_pipeline";
+const Name s_GpuVertexUploadTaskName = "ui.vertex_upload";
+const Name s_GpuIndexUploadTaskName = "ui.index_upload";
+const Name s_GpuClearTaskName = "ui.clear";
+const Name s_GpuRasterTaskName = "ui.raster";
+const Name s_GpuGlyphPageTextureName = "ui.glyph_page";
+const Name s_GpuGlyphPageReadyPrefix = "ui.glyph_page_ready/";
+const Name s_GpuGlyphPagePrefix = "ui.glyph_page/";
+const Name s_GpuSdfPageTextureName = "ui.sdf_page";
+const Name s_GpuSdfUploadArenaName = "impl/ecs_ui/gpu/sdf_upload";
+const Name s_GpuSdfPageReadyPrefix = "ui.sdf_page_ready/";
+const Name s_GpuSdfPagePrefix = "ui.sdf_page/";
+const Name s_GpuTextureImageReadyPrefix = "ui.texture_image_ready/";
+const Name s_GpuTextureImagePrefix = "ui.texture_image/";
+const Name s_GpuTargetInitTextureName = "ui.target_initialization";
+const Name s_GpuTargetInitClearTaskName = "ui.target_initialization_clear";
+const Name s_GpuTargetInitReadyTaskName = "ui.target_initialization_ready";
+const Name s_GpuVertexShaderName = "UiLayer_VS";
+const Name s_GpuPixelShaderName = "UiLayer_PS";
+const Name s_GpuOutputVertexShaderName = "UiLayer_OutputVS";
+const Name s_GpuOutputPixelShaderName = "UiLayer_OutputPS";
+const Name s_GpuVertexPositionSemantic = "POSITION";
+const Name s_GpuVertexTexCoordSemantic = "TEXCOORD";
+const Name s_GpuVertexColorSemantic = "COLOR";
+const Name s_GpuFrameTimingBeginTaskName = "ui.frame_timing_begin";
+const Name s_GpuAcquiredReadyName = "ui.acquired_ready";
+const Name s_GpuBackBufferTextureName = "ui.backbuffer";
+const Name s_GpuOutputPipelineName = "ui.output_pipeline";
+const Name s_GpuOutputTaskName = "ui.output";
+const Name s_GpuFrameTimingEndTaskName = "ui.frame_timing_end";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

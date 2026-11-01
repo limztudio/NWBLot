@@ -118,6 +118,38 @@ template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 Device::AmdBreadcrumbBuffer::initializeMetadata(const VulkanDetail::AmdBreadcrumbRingLayout& newLayout, const Name& allocationLog){
+    const auto expectedSlotCount = TryMultiply<usize>(newLayout.physicalQueueCount, newLayout.slotsPerQueue);
+    if(metadata || newLayout.physicalQueueCount == 0u || newLayout.slotsPerQueue == 0u || !expectedSlotCount || *expectedSlotCount != newLayout.totalSlotCount)
+        return false;
+    const auto slotRecordBytes = TryMultiply<usize>(newLayout.totalSlotCount, sizeof(AmdBreadcrumbSlotRecord));
+    const auto nextSerialBytes = TryMultiply<usize>(newLayout.physicalQueueCount, sizeof(u64));
+    if(!slotRecordBytes || !nextSerialBytes)
+        return false;
+
+    const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(*slotRecordBytes, alignof(AmdBreadcrumbSlotRecord));
+    const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(*nextSerialBytes, alignof(u64));
+    if(AddOverflows<usize>(slotRecordAllocationBytes, nextSerialAllocationBytes))
+        return false;
+
+    metadata.emplace(allocationLog, slotRecordAllocationBytes + nextSerialAllocationBytes, newLayout.totalSlotCount, newLayout.physicalQueueCount);
+    if(!metadata->slotRecords || !metadata->nextSerials){
+        metadata.reset();
+        return false;
+    }
+
+    for(usize slotIndex = 0u; slotIndex < metadata->slotRecordCount; ++slotIndex)
+        metadata->slotRecords[slotIndex] = {};
+    for(usize queueIndex = 0u; queueIndex < metadata->nextSerialCount; ++queueIndex)
+        metadata->nextSerials[queueIndex] = 0u;
+    layout = newLayout;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Device::Device(const DeviceDesc& desc)
     : RefCounter<GraphicsResource>(desc.cpuScheduler)
     , m_submissionOperationState(0u)

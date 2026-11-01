@@ -27,7 +27,6 @@ namespace __hidden_telemetry_diagnostic{
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 inline constexpr usize s_PayloadTextFieldCount = 5u;
-inline constexpr StringView s_WarningEventName = "warning";
 inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycle";
 
 
@@ -65,21 +64,21 @@ inline constexpr StringView s_LifecycleCategory = "telemetry_diagnostic_lifecycl
     return header;
 }
 
-[[nodiscard]] static Expected<usize> BuildCapturedPayload(const DiagnosticEventRecord& record, u8 (&payload)[s_DiagnosticCapturePayloadCapacity])noexcept{
+[[nodiscard]] static Expected<usize> BuildCapturedPayload(const DiagnosticEventRecord& record, Array<u8, s_DiagnosticCapturePayloadCapacity>& payload)noexcept{
     const Array<AStringView, s_PayloadTextFieldCount> fields{ record.event, record.category, record.expression, record.message, record.file };
     usize payloadBytes = sizeof(EncodedDiagnosticPayloadHeader);
     for(const AStringView text : fields){
-        if(text.size() > sizeof(payload) - payloadBytes)
+        if(text.size() > payload.size() - payloadBytes)
             return MakeUnexpected(Failure{});
         payloadBytes += text.size();
     }
 
     const EncodedDiagnosticPayloadHeader header = MakePayloadHeader(record);
-    NWB_MEMCPY(payload, sizeof(payload), &header, sizeof(header));
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     usize cursor = sizeof(header);
     for(const AStringView text : fields){
         if(!text.empty())
-            NWB_MEMCPY(payload + cursor, sizeof(payload) - cursor, text.data(), text.size());
+            NWB_MEMCPY(payload.data() + cursor, payload.size() - cursor, text.data(), text.size());
         cursor += text.size();
     }
     return payloadBytes;
@@ -103,7 +102,7 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 BuildDiagnosticPayload(TelemetryArena&, const DiagnosticEventRecord& record, TelemetryBytes& outPayload){
+b8 BuildDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena&, TelemetryBytes& outPayload){
     outPayload.clear();
 
     const AStringView event = record.event;
@@ -180,7 +179,7 @@ Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* const payload, co
 
 b8 RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, const u64 frameIndex, const u32 streamId){
     return recorder.recordBuiltPayload(EventKind::Diagnostic, frameIndex, streamId, [&record](TelemetryArena& arena, TelemetryBytes& payload){
-        return BuildDiagnosticPayload(arena, record, payload);
+        return BuildDiagnosticPayload(record, arena, payload);
     });
 }
 
@@ -227,23 +226,37 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard()noexcept{
 
     ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
     ::DiagnosticDetail::g_EventActive.notifyAll();
-    if(callbackOwnershipChanged)
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_telemetry_diagnostic::s_WarningEventName, .category = __hidden_telemetry_diagnostic::s_LifecycleCategory, .message = "Telemetry: diagnostic callback ownership changed before capture guard destruction", .file = __FILE__, .line = __LINE__, });
-    if(guardOwnershipChanged)
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_telemetry_diagnostic::s_WarningEventName, .category = __hidden_telemetry_diagnostic::s_LifecycleCategory, .message = "Telemetry: diagnostic capture guard ownership changed before destruction", .file = __FILE__, .line = __LINE__, });
+    if(callbackOwnershipChanged){
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Warning,
+            .category = __hidden_telemetry_diagnostic::s_LifecycleCategory,
+            .message = "Telemetry: diagnostic callback ownership changed before capture guard destruction",
+            .file = __FILE__,
+            .line = __LINE__,
+        });
+    }
+    if(guardOwnershipChanged){
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Warning,
+            .category = __hidden_telemetry_diagnostic::s_LifecycleCategory,
+            .message = "Telemetry: diagnostic capture guard ownership changed before destruction",
+            .file = __FILE__,
+            .line = __LINE__,
+        });
+    }
 }
 
 void DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record)noexcept{
     if(!m_recorder.m_diagnosticCaptureEnabled.load(MemoryOrder::acquire))
         return;
 
-    u8 payload[s_DiagnosticCapturePayloadCapacity];
+    Array<u8, s_DiagnosticCapturePayloadCapacity> payload;
     const auto payloadBytes = __hidden_telemetry_diagnostic::BuildCapturedPayload(record, payload);
     if(!payloadBytes){
         m_recorder.dropDiagnosticCapture();
         return;
     }
-    m_recorder.recordCapturedDiagnostic(frameIndex(), NotNull<const u8*>(payload), *payloadBytes, streamId());
+    m_recorder.recordCapturedDiagnostic(frameIndex(), Span<const u8>(payload.data(), *payloadBytes), streamId());
 }
 
 

@@ -5,104 +5,13 @@
 #pragma once
 
 
+#include "path_detail.h"
+
 #include <functional>
 #include <iterator>
 #include <string>
 
 #include "../allocation_size.h"
-#include "../basic_string.h"
-#include "../generic.h"
-#include "../type.h"
-#include "../type_properties.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace GlobalFilesystemPathDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_DriveRootNameLength = 2u;
-inline constexpr usize s_DotDotLength = 2u;
-inline constexpr usize s_RelativeParentStepLength = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT>
-concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar> || SameAs<CharT, char8_t>;
-
-template<typename SourceT>
-concept PathSourceLike = CanMakeCharView<SourceT> || CanMakeWCharView<SourceT> || requires(const SourceT& source){ BasicStringView<char8_t>(source); };
-
-template<typename CharT>
-[[nodiscard]] inline b8 IsSeparator(const CharT ch)noexcept(IsArithmetic_V<CharT>){
-    return ch == static_cast<CharT>('/')
-#if defined(NWB_PLATFORM_WINDOWS)
-        || ch == static_cast<CharT>('\\')
-#endif
-    ;
-}
-
-template<typename CharT>
-[[nodiscard]] inline CharT PreferredSeparator()noexcept(IsArithmetic_V<CharT>){
-#if defined(NWB_PLATFORM_WINDOWS)
-    return static_cast<CharT>('\\');
-#else
-    return static_cast<CharT>('/');
-#endif
-}
-
-template<typename CharT>
-[[nodiscard]] inline usize RootNameLength(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(text.size() >= s_DriveRootNameLength && text[1] == static_cast<CharT>(':'))
-        return s_DriveRootNameLength;
-    if(text.size() > 2u && IsSeparator(text[0]) && IsSeparator(text[1]) && !IsSeparator(text[2])){
-        usize end = 2u;
-        while(end < text.size() && !IsSeparator(text[end]))
-            ++end;
-        return end;
-    }
-#else
-    static_cast<void>(text);
-#endif
-    return 0u;
-}
-
-template<typename CharT>
-[[nodiscard]] inline usize RootDirectoryLength(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    const usize rootNameLength = RootNameLength(text);
-    if(rootNameLength < text.size() && IsSeparator(text[rootNameLength]))
-        return rootNameLength + 1u;
-    if(rootNameLength == 0u && !text.empty() && IsSeparator(text[0]))
-        return 1u;
-    return 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename CharT>
-[[nodiscard]] inline b8 IsDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == 1u && text[0] == static_cast<CharT>('.');
-}
-
-template<typename CharT>
-[[nodiscard]] inline b8 IsDotDot(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return text.size() == GlobalFilesystemPathDetail::s_DotDotLength && text[0] == static_cast<CharT>('.') && text[1] == static_cast<CharT>('.');
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,10 +20,14 @@ template<typename CharT>
 template<typename ArenaT>
 class Path{
 public:
+    class Iterator;
+
     using Arena = ArenaT;
     using value_type = tchar;
     using native_string_view = BasicStringView<value_type>;
     using string_type = BasicString<value_type, ArenaT>;
+    using iterator = Iterator;
+    using const_iterator = Iterator;
 
 
 public:
@@ -163,10 +76,9 @@ public:
 
         [[nodiscard]] b8 operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
 
-        // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
-
 
     public:
+        // Needs a non-end iterator. The view borrows the source path; mutating or destroying it invalidates the view.
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
             NWB_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);
@@ -250,9 +162,18 @@ public:
     };
 
 
-public:
-    using iterator = Iterator;
-    using const_iterator = Iterator;
+private:
+    [[nodiscard]] static b8 IsAbsoluteView(const native_string_view text)noexcept{
+        if(text.empty())
+            return false;
+
+#if defined(NWB_PLATFORM_WINDOWS)
+        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(text);
+        if(rootNameLength != 0u && GlobalFilesystemPathDetail::RootDirectoryLength(text) > rootNameLength)
+            return true;
+#endif
+        return GlobalFilesystemPathDetail::IsSeparator(text[0]);
+    }
 
 
 public:
@@ -579,18 +500,6 @@ public:
 
 
 private:
-    [[nodiscard]] static b8 IsAbsoluteView(const native_string_view text)noexcept{
-        if(text.empty())
-            return false;
-
-#if defined(NWB_PLATFORM_WINDOWS)
-        const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(text);
-        if(rootNameLength != 0u && GlobalFilesystemPathDetail::RootDirectoryLength(text) > rootNameLength)
-            return true;
-#endif
-        return GlobalFilesystemPathDetail::IsSeparator(text[0]);
-    }
-
     [[nodiscard]] b8 aliasesText(const native_string_view view)const noexcept{
         if(m_text.empty() || view.empty())
             return false;

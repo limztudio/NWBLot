@@ -26,23 +26,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_FontAtlasMetaDiagnosticPrefix = "Font atlas meta";
-inline constexpr AStringView s_FontAtlasMetaFontField = "font";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct FontAtlasCookEntry{
-    Core::Assets::AssetArena& arena;
     FontAtlasPayload payload;
     Name virtualPath = s_NameNone;
 
 
 public:
     explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : arena(memoryArena)
-        , payload(memoryArena)
+        : payload(memoryArena)
     {}
 };
 
@@ -50,9 +41,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] Expected<u32> ReadFontAtlasMetadataU32(const Path& path, const Core::Metascript::Value& map, AStringView diagnosticPrefix, AStringView field, u32 minimum, u32 maximum);
+[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(FontAtlasCookEntry&& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

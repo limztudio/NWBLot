@@ -1,0 +1,501 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_material/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_MaterialMetaDiagnosticPrefix = "Material meta";
+const StringView s_MaterialMetaInterfaceField = "interface";
+const StringView s_MaterialMetaSurfaceField = "surface";
+const StringView s_MaterialMetaShadersField = "shaders";
+const StringView s_MaterialMetaShaderVariantField = "shader_variant";
+const StringView s_MaterialMetaParametersField = "parameters";
+const StringView s_MaterialMetaTransparentField = "transparent";
+const StringView s_MaterialMetaTwoSidedField = "two_sided";
+const StringView s_MaterialMetaRefractiveField = "refractive";
+const StringView s_MaterialMetaBxdfField = "bxdf";
+const StringView s_MaterialBxdfExtension = ".bxdf";
+const StringView s_MaterialSurfaceExtension = ".surface";
+
+const StringView s_MaterialBindSourceExtensionText = ".bind";
+const StringView s_MaterialBindGeneratedIncludeCacheDirectoryText = "material_bind_includes";
+const StringView s_MaterialBindTypedBindingImplicitDefineText = "NWB_MATERIAL_TYPED_BINDING";
+const StringView s_MaterialBindTypedBindingImplicitDefineValueText = "1";
+
+const StringView s_MaterialConstantAttribute = "material_constant";
+const StringView s_MaterialMutableAttribute = "material_mutable";
+const StringView s_MaterialDefaultAttribute = "default";
+const StringView s_MaterialBindDiagnosticPrefix = "Material bind";
+
+const StringView s_MaterialBindNameKey = "name";
+const StringView s_MaterialBindTypeKey = "type";
+const StringView s_MaterialBindAttributesKey = "attributes";
+const StringView s_MaterialBindArgumentsKey = "arguments";
+const StringView s_MaterialBindFieldsKey = "fields";
+
+const StringView s_MaterialBindFieldTypeTexture2D = "texture2d";
+const StringView s_MaterialBindFieldTypeSampler = "sampler";
+
+const StringView s_MaterialBindInterfaceHashSymbolPrefix = "INTERFACE_HASH_";
+const StringView s_MaterialBindLayoutHashSymbol = "LAYOUT_HASH";
+const StringView s_MaterialBindBlockCountSymbol = "BLOCK_COUNT";
+const StringView s_MaterialBindFieldCountSymbol = "FIELD_COUNT";
+const StringView s_MaterialBindStorageConstantSymbol = "STORAGE_CONSTANT";
+const StringView s_MaterialBindStorageMutableSymbol = "STORAGE_MUTABLE";
+const StringView s_MaterialBindConstantByteSizeSymbol = "CONSTANT_BYTE_SIZE";
+const StringView s_MaterialBindMutableByteSizeSymbol = "MUTABLE_BYTE_SIZE";
+const StringView s_MaterialBindStorageSymbolSuffix = "_STORAGE";
+const StringView s_MaterialBindByteOffsetSymbolSuffix = "_BYTE_OFFSET";
+const StringView s_MaterialBindByteSizeSymbolSuffix = "_BYTE_SIZE";
+const StringView s_MaterialBindKeySymbolSuffix = "_KEY";
+const StringView s_MaterialBindDefaultSymbolSuffix = "_DEFAULT";
+
+const StringView s_GeneratedDefineDirective = "#define ";
+const StringView s_GeneratedUndefDirective = "#undef ";
+const StringView s_GeneratedIncludeDirective = "#include \"";
+const StringView s_GeneratedIncludeDirectiveEnd = "\"\n";
+const StringView s_GeneratedReturnPrefix = "    return ";
+const StringView s_GeneratedFunctionEnd = "}\n\n";
+
+const u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
+const u64 s_MaterialBindU64LowWordMask = 0xFFFFFFFFul;
+const u32 s_MaterialBindU64HighWordBitShift = 32u;
+const usize s_MaterialBindGeneratedStructReserveBytes = 32u;
+const usize s_MaterialBindGeneratedFieldReserveBytes = 8u;
+const usize s_MaterialBindGeneratedInstanceReserveBytes = 64u;
+const u32 s_MaterialBindGeneratedSeparatorNewlineCount = 3u;
+const StringView s_MaterialBindAccessorInstanceParameter = "(const NwbMeshInstanceData instance){\n";
+const StringView s_MaterialBindRequirementError = "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
+const StringView s_GeneratedEndifBlock = "#endif\n\n";
+const StringView s_GeneratedEndifBlockBeforeSeparator = "#endif\n\n\n";
+const StringView s_MaterialBindFallbackUpperIdentifier = "VALUE";
+const StringView s_MaterialBindFallbackPascalIdentifier = "Value";
+const StringView s_MaterialBindGeneratedSymbolPrefix = "NWB_MATERIAL_BIND_";
+const StringView s_MaterialBindAccessorNamePrefix = "nwbMaterialBindLoad";
+const StringView s_MaterialBindSeparatorChunk = "////////////////";
+const StringView s_MaterialBindUint2Open = "uint2(";
+const StringView s_MaterialBindUint2Separator = ", ";
+const StringView s_MaterialBindCloseParen = ")";
+const StringView s_MaterialBindIncludeGuardPrefix = "NWB_GENERATED_MATERIAL_BIND_";
+const StringView s_MaterialBindLoadFunctionPrefix = "nwbMaterialLoad";
+const StringView s_MaterialBindStaticConstPrefix = "static const ";
+const StringView s_MaterialBindConstantAssign = " = ";
+const StringView s_MaterialBindStatementEnd = ";\n";
+const StringView s_MaterialBindUIntTypeName = "uint";
+const StringView s_MaterialBindUInt2TypeName = "uint2";
+const StringView s_MaterialBindLoadInstanceArgPrefix = "(instance, ";
+const StringView s_MaterialBindCallStatementEnd = ");\n";
+const StringView s_MaterialBindResourceLoadConstantUIntPrefix = "(nwbMaterialLoadConstantUInt(instance, ";
+const StringView s_MaterialBindNestedCallStatementEnd = "));\n";
+const StringView s_MaterialBindIndent = "    ";
+const StringView s_MaterialBindBlockValueDeclSuffix = " value;\n";
+const StringView s_MaterialBindBlockValueMemberPrefix = "    value.";
+const StringView s_MaterialBindInstanceCallEnd = "(instance);\n";
+const StringView s_MaterialBindReturnBlockValueLine = "    return value;\n";
+const StringView s_MaterialBindGeneratedHeaderLine = "// generated by NWBLot material bind cook\n";
+const StringView s_GeneratedIfndefDirective = "#ifndef ";
+const StringView s_GeneratedNewlineDefineDirective = "\n#define ";
+const StringView s_GeneratedIncludeGuardEnd = "\n\n\n";
+const StringView s_MaterialBindIfndefTypedBindingLine = "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
+const StringView s_MaterialBindIfndefTypedBindingRequiredValueLine = "#ifndef NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+const StringView s_MaterialBindTypedBindingMismatchIfLine = "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+const StringView s_MaterialBindTypedBindingMismatchError = "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\"\n";
+const StringView s_MaterialBindStructKeywordPrefix = "struct ";
+const StringView s_MaterialBindStructOpenBrace = "{\n";
+const StringView s_MaterialBindStructCloseBrace = "};\n\n";
+const StringView s_MaterialBindIncludeGenerationLabel = "Material bind include generation";
+
+const StringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
+const StringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
+const StringView s_DeferredBxdfIncludeSubDir = "deferred_modules";
+const StringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
+const StringView s_DeferredBxdfUnknownFallbackSource = "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
+const StringView s_GeneratedUndefBlockEnd = "\n\n";
+const StringView s_GeneratedSwitchCaseLabel = "    case ";
+const StringView s_GeneratedSwitchCaseReturn = "u: return ";
+const StringView s_GeneratedSwitchEnd = "    }\n";
+const StringView s_GeneratedDispatchEnd = "}\n\n#endif\n";
+const usize s_ShadowSurfaceBindLayoutAliasCount = 7u;
+const usize s_ShadowSurfaceBindInstanceAliasReserveCount = 4u;
+const StringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
+const StringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
+const StringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
+const StringView s_ShadowSurfaceIncludeSubDir = "shadow_modules";
+const StringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
+const StringView s_ShadowSurfaceUnknownFallbackSource = "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
+
+const StringView s_AvboitAccumulatePixelShaderGeneratedPrefix = "generated/avboit_accumulate_ps/";
+const StringView s_AvboitOccupancyPixelShaderGeneratedPrefix = "generated/avboit_occupancy_ps/";
+const StringView s_AvboitExtinctionPixelShaderGeneratedPrefix = "generated/avboit_extinction_ps/";
+const StringView s_GeneratedCacheDirectory = "generated";
+const StringView s_GeneratedShaderSourceExtension = ".slang";
+const StringView s_GeneratedPixelShaderBindHookLine = "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
+const StringView s_GeneratedPixelShaderCookCacheLine = "// assembles this here, in the cook cache. Do not edit -- regenerated every cook.\n";
+
+const u64 s_MaterialParameterKeyHashLowWordMask = 0xFFFFFFFFul;
+const u32 s_MaterialParameterKeyHashHighWordBitShift = 32u;
+const StringView s_MaterialBoolTrueTextToken = "true";
+const StringView s_MaterialBoolTrueNumberToken = "1";
+const StringView s_MaterialBoolFalseTextToken = "false";
+const StringView s_MaterialBoolFalseNumberToken = "0";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsAllowedMaterialAssetField(in StringView fieldName){
+    return fieldName == s_MaterialMetaInterfaceField
+        || fieldName == s_MaterialMetaSurfaceField
+        || fieldName == s_MaterialMetaShadersField
+        || fieldName == s_MaterialMetaShaderVariantField
+        || fieldName == s_MaterialMetaParametersField
+        || fieldName == s_MaterialMetaTransparentField
+        || fieldName == s_MaterialMetaTwoSidedField
+        || fieldName == s_MaterialMetaRefractiveField
+        || fieldName == s_MaterialMetaBxdfField;
+}
+
+class MaterialParameterType{
+    public MaterialParameterValueType valueType = MaterialParameterValueType::None;
+    public u32 componentCount = 0u;
+}
+
+b8 TryParseMaterialParameterBaseTypeText(in StringView baseTypeText, mut MaterialParameterValueType outValueType){
+    switch(baseTypeText){
+        case "bool":
+            outValueType = MaterialParameterValueType::b8;
+            return true;
+        case "char":
+            outValueType = MaterialParameterValueType::i8;
+            return true;
+        case "uchar":
+            outValueType = MaterialParameterValueType::u8;
+            return true;
+        case "short":
+            outValueType = MaterialParameterValueType::i16;
+            return true;
+        case "ushort":
+            outValueType = MaterialParameterValueType::u16;
+            return true;
+        case "int":
+            outValueType = MaterialParameterValueType::i32;
+            return true;
+        case "uint":
+            outValueType = MaterialParameterValueType::u32;
+            return true;
+        case "half":
+            outValueType = MaterialParameterValueType::f16;
+            return true;
+        case "float":
+            outValueType = MaterialParameterValueType::f32;
+            return true;
+        default:
+            outValueType = MaterialParameterValueType::None;
+            return false;
+    }
+}
+
+b8 TryParseMaterialParameterTypeText(in StringView typeText, mut MaterialParameterType outType){
+    outType = MaterialParameterType();
+    if(typeText.empty())
+        return false;
+
+    MaterialParameterValueType valueType = MaterialParameterValueType::None;
+    if(TryParseMaterialParameterBaseTypeText(typeText, valueType)){
+        outType.valueType = valueType;
+        outType.componentCount = 1u;
+        return true;
+    }
+
+    if(typeText.size() > 1u){
+        const u8 suffix = cast<u8>(typeText[typeText.size() - 1u]);
+        if(suffix >= 50u && suffix <= 52u){
+            if(TryParseMaterialParameterBaseTypeText(typeText.substr(0u, typeText.size() - 1u), valueType)){
+                outType.valueType = valueType;
+                outType.componentCount = cast<u32>(suffix - 48u);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+b8 TryParseMaterialBindResourceFieldTypeText(in StringView typeText, mut MaterialLayoutFieldType outFieldType){
+    if(typeText == s_MaterialBindFieldTypeTexture2D){
+        outFieldType = MaterialLayoutFieldType::SampledImage2D;
+        return true;
+    }
+    if(typeText == s_MaterialBindFieldTypeSampler){
+        outFieldType = MaterialLayoutFieldType::Sampler;
+        return true;
+    }
+    outFieldType = MaterialLayoutFieldType::None;
+    return false;
+}
+
+b8 TryParseMaterialLayoutFieldTypeText(in StringView typeText, mut MaterialLayoutFieldType outFieldType){
+    if(TryParseMaterialBindResourceFieldTypeText(typeText, outFieldType))
+        return true;
+
+    MaterialParameterType paramType;
+    if(!TryParseMaterialParameterTypeText(typeText, paramType)){
+        outFieldType = MaterialLayoutFieldType::None;
+        return false;
+    }
+
+    const MaterialLayoutFieldType fieldType = MaterialLayoutFieldTypeFromParameterType(paramType.valueType, paramType.componentCount);
+    if(!IsValidMaterialLayoutFieldType(fieldType)){
+        outFieldType = MaterialLayoutFieldType::None;
+        return false;
+    }
+
+    outFieldType = fieldType;
+    return true;
+}
+
+StringView MaterialBindFieldLookupFunctionStorageName(in MaterialBlockClass blockClass){
+    switch(blockClass){
+        case MaterialBlockClass::MaterialConstant:
+            return "Constant";
+        case MaterialBlockClass::MaterialMutable:
+            return "Mutable";
+        default:
+            return "";
+    }
+}
+
+StringView MaterialBindFieldLookupFunctionTypeName(in MaterialLayoutFieldType fieldType){
+    switch(fieldType){
+        case MaterialLayoutFieldType::b8: return "Bool";
+        case MaterialLayoutFieldType::b8x2: return "Bool2";
+        case MaterialLayoutFieldType::b8x3: return "Bool3";
+        case MaterialLayoutFieldType::b8x4: return "Bool4";
+        case MaterialLayoutFieldType::i8: return "Char";
+        case MaterialLayoutFieldType::i8x2: return "Char2";
+        case MaterialLayoutFieldType::i8x3: return "Char3";
+        case MaterialLayoutFieldType::i8x4: return "Char4";
+        case MaterialLayoutFieldType::u8: return "UChar";
+        case MaterialLayoutFieldType::u8x2: return "UChar2";
+        case MaterialLayoutFieldType::u8x3: return "UChar3";
+        case MaterialLayoutFieldType::u8x4: return "UChar4";
+        case MaterialLayoutFieldType::i16: return "Short";
+        case MaterialLayoutFieldType::i16x2: return "Short2";
+        case MaterialLayoutFieldType::i16x3: return "Short3";
+        case MaterialLayoutFieldType::i16x4: return "Short4";
+        case MaterialLayoutFieldType::u16: return "UShort";
+        case MaterialLayoutFieldType::u16x2: return "UShort2";
+        case MaterialLayoutFieldType::u16x3: return "UShort3";
+        case MaterialLayoutFieldType::u16x4: return "UShort4";
+        case MaterialLayoutFieldType::i32: return "Int";
+        case MaterialLayoutFieldType::i32x2: return "Int2";
+        case MaterialLayoutFieldType::i32x3: return "Int3";
+        case MaterialLayoutFieldType::i32x4: return "Int4";
+        case MaterialLayoutFieldType::u32: return "UInt";
+        case MaterialLayoutFieldType::u32x2: return "UInt2";
+        case MaterialLayoutFieldType::u32x3: return "UInt3";
+        case MaterialLayoutFieldType::u32x4: return "UInt4";
+        case MaterialLayoutFieldType::f16: return "Half";
+        case MaterialLayoutFieldType::f16x2: return "Half2";
+        case MaterialLayoutFieldType::f16x3: return "Half3";
+        case MaterialLayoutFieldType::f16x4: return "Half4";
+        case MaterialLayoutFieldType::f32: return "Float";
+        case MaterialLayoutFieldType::f32x2: return "Float2";
+        case MaterialLayoutFieldType::f32x3: return "Float3";
+        case MaterialLayoutFieldType::f32x4: return "Float4";
+        default: return "";
+    }
+}
+
+StringView MaterialBindResourceSlangTypeName(in MaterialLayoutFieldType fieldType){
+    switch(fieldType){
+        case MaterialLayoutFieldType::SampledImage2D:
+            return "Texture2D<float4>";
+        case MaterialLayoutFieldType::Sampler:
+            return "SamplerState";
+        default:
+            return "";
+    }
+}
+
+StringView MaterialBindResourceHeapAccessorName(in MaterialLayoutFieldType fieldType){
+    switch(fieldType){
+        case MaterialLayoutFieldType::SampledImage2D:
+            return "nwbHeapSampledImage2DNonUniform";
+        case MaterialLayoutFieldType::Sampler:
+            return "nwbHeapSamplerNonUniform";
+        default:
+            return "";
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MaterialBindTypedLayoutBlockLookupEntry{
+    public u32 blockIndex = 0u;
+    public u32 byteBegin = 0u;
+    public u32 constantByteBegin = 0u;
+}
+
+class MaterialBindTypedLayoutParameterLookupEntry{
+    public Name blockName = s_NameNone;
+    public u32 fieldIndex = 0u;
+    public u32 byteOffset = 0u;
+    public u32 constantByteOffset = 0u;
+}
+
+class MaterialBindStorageByteSizes{
+    public u32 constantBytes = 0u;
+    public u32 mutableBytes = 0u;
+}
+
+class MaterialTypedValueData{
+    public u32x4 meta(0u, 0u, 0u, 0u);
+    public u32x4 data(0u, 0u, 0u, 0u);
+}
+
+class MaterialParameterCall{
+    public StringView typeText = "";
+    public StringView arguments = "";
+}
+
+class MaterialParameterTokens{
+    public Array<StringView, 4> values;
+    public u32 count = 0u;
+}
+
+b8 IsMaterialAsciiSpace(in i8 ch){
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v';
+}
+
+StringView TrimMaterialTextView(in StringView text){
+    usize begin = 0u;
+    while(begin < text.size() && IsMaterialAsciiSpace(text[begin]))
+        ++begin;
+    usize end = text.size();
+    while(end > begin && IsMaterialAsciiSpace(text[end - 1u]))
+        --end;
+    return text.substr(begin, end - begin);
+}
+
+b8 SplitMaterialParameterCall(in StringView text, mut MaterialParameterCall outCall){
+    outCall = MaterialParameterCall();
+    const StringView trimmed = TrimMaterialTextView(text);
+    usize openParen = trimmed.size();
+    for(usize i = 0u; i < trimmed.size(); ++i){
+        if(trimmed[i] == '('){
+            openParen = i;
+            break;
+        }
+    }
+    if(openParen >= trimmed.size() || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
+        return false;
+
+    const StringView typeText = TrimMaterialTextView(trimmed.substr(0u, openParen));
+    const StringView arguments = TrimMaterialTextView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
+    if(typeText.empty() || arguments.empty())
+        return false;
+    outCall.typeText = typeText;
+    outCall.arguments = arguments;
+    return true;
+}
+
+b8 ReadMaterialParameterToken(in StringView text, mut usize inOutCursor, mut StringView outToken){
+    outToken = "";
+    while(inOutCursor < text.size() && (IsMaterialAsciiSpace(text[inOutCursor]) || text[inOutCursor] == ','))
+        ++inOutCursor;
+    if(inOutCursor >= text.size())
+        return false;
+
+    const usize begin = inOutCursor;
+    while(inOutCursor < text.size() && !IsMaterialAsciiSpace(text[inOutCursor]) && text[inOutCursor] != ',')
+        ++inOutCursor;
+
+    const StringView token = TrimMaterialTextView(text.substr(begin, inOutCursor - begin));
+    if(token.empty())
+        return false;
+    outToken = token;
+    return true;
+}
+
+b8 SplitMaterialParameterTokens(in StringView text, mut MaterialParameterTokens outTokens){
+    outTokens = MaterialParameterTokens();
+    usize cursor = 0u;
+    StringView token = "";
+    while(ReadMaterialParameterToken(text, cursor, token)){
+        if(outTokens.count >= s_MaterialTypedValueComponentCount)
+            return false;
+        outTokens.values[cast<usize>(outTokens.count)] = token;
+        ++outTokens.count;
+    }
+    return outTokens.count != 0u;
+}
+
+u32x4u MaterialTypedValueToLayoutValue(in MaterialTypedValueData parameter){
+    return u32x4u(parameter.data.x, parameter.data.y, parameter.data.z, parameter.data.w);
+}
+
+b8 TryParseMaterialBoolToken(in StringView token, mut u32 outValue){
+    if(token == s_MaterialBoolTrueTextToken || token == s_MaterialBoolTrueNumberToken){
+        outValue = 1u;
+        return true;
+    }
+    if(token == s_MaterialBoolFalseTextToken || token == s_MaterialBoolFalseNumberToken){
+        outValue = 0u;
+        return true;
+    }
+    outValue = 0u;
+    return false;
+}
+
+StringView StripMaterialNumericSuffix(in StringView token, in u8 suffixLower, in u8 suffixUpper){
+    if(token.size() <= 1u)
+        return token;
+
+    const u8 suffix = cast<u8>(token[token.size() - 1u]);
+    if(suffix == suffixLower || suffix == suffixUpper)
+        return token.substr(0u, token.size() - 1u);
+    return token;
+}
+
+b8 TryComputeMaterialBindStorageByteSizes(in Span<MaterialTypedLayoutBlock> blocks, mut MaterialBindStorageByteSizes outSizes){
+    outSizes = MaterialBindStorageByteSizes();
+    for(usize i = 0u; i < blocks.size(); ++i){
+        const MaterialTypedLayoutBlock block = blocks[i];
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
+            if(block.byteSize > 0xFFFFFFFFu - outSizes.constantBytes)
+                return false;
+            outSizes.constantBytes += block.byteSize;
+        }
+        else if(block.blockClass == MaterialBlockClass::MaterialMutable){
+            if(block.byteSize > 0xFFFFFFFFu - outSizes.mutableBytes)
+                return false;
+            outSizes.mutableBytes += block.byteSize;
+        }
+        else
+            return false;
+    }
+    return true;
+}
+
+u32 ComputeMaterialBindBlockStorageByteBegin(in Span<MaterialTypedLayoutBlock> blocks, in u32 blockIndex){
+    u32 byteBegin = 0u;
+    const MaterialBlockClass blockClass = blocks[cast<usize>(blockIndex)].blockClass;
+    for(u32 currentBlockIndex = 0u; currentBlockIndex < blockIndex; ++currentBlockIndex){
+        const MaterialTypedLayoutBlock block = blocks[cast<usize>(currentBlockIndex)];
+        if(block.blockClass != blockClass)
+            continue;
+        byteBegin += block.byteSize;
+    }
+    return byteBegin;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

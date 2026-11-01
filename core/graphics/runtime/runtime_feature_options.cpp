@@ -66,10 +66,6 @@ b8 GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept{
     return true;
 }
 
-void GraphicsRuntime::setPipelineCacheDirectory(const Path& directory){
-    m_deviceCreationParams.pipelineCacheDirectory = directory;
-}
-
 b8 GraphicsRuntime::setFilesystemFactory(const Filesystem::FilesystemFactory& factory){
     if(m_backend->getDevice())
         return false;

@@ -40,18 +40,6 @@ SliderState::SliderState()noexcept
     , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
 {}
 
-ControlToken SliderState::controlToken()const noexcept{
-    return { m_inputGeneration, m_admissionGeneration, m_instanceGeneration };
-}
-
-SliderSnapshot SliderState::snapshot()const noexcept{
-    return { .press = m_press, .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .pressMoved = m_pressMoved };
-}
-
-b8 SliderState::matches(const SliderSnapshot& value)const noexcept{
-    return snapshot() == value;
-}
-
 b8 SliderState::setValue(const f64 value)noexcept{
     if(!IsFinite(value))
         return false;

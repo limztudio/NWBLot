@@ -148,6 +148,25 @@ Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept
     };
 }
 
+[[nodiscard]] Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept{
+    Telemetry::FrameGraphRuntimeStatistics statistics;
+    statistics.graphGeneration = 71u;
+    statistics.planGeneration = 72u;
+    statistics.recordingAttemptGeneration = 73u;
+    statistics.deviceGeneration = 17u;
+    statistics.compile.taskCount = packetCount;
+    statistics.compile.packetCount = packetCount;
+    statistics.recording.packetCount = packetCount;
+    statistics.recording.taskCount = packetCount;
+    statistics.recording.commandListCount = packetCount;
+    statistics.submission.acceptedPacketCount = packetCount;
+    statistics.submission.acceptedTaskCount = packetCount;
+    statistics.submission.nativeSubmissionCount = packetCount;
+    statistics.submission.nativeCommandListCount = packetCount;
+    statistics.present = true;
+    return statistics;
+}
+
 Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept{
     if(queueIndex == 1u){
         return Telemetry::FrameGraphPhysicalQueueRuntimeStatistics{

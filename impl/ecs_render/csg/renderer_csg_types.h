@@ -50,6 +50,18 @@ static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must st
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
+[[nodiscard]] inline Core::Rect ToCoreRect(const CsgWorkRect& rect)noexcept{
+    return Core::Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
+}
+
+class MeshSystem;
+
+namespace CsgFrameCacheDetail{
+    [[nodiscard]] Expected<CsgFrameStateCacheSignature> BuildSignature(Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry, const MeshSystem& meshSystem);
+};
+
+[[nodiscard]] Expected<BinaryByteView> ResolveCsgCutterParameterBytes(const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter)noexcept;
+
 // Call-scoped calculation scratch; retained scene/GPU values use Float storage.
 struct CsgClipWorkBounds{
     SIMDVectorSingle minBounds = VectorZero();
@@ -59,58 +71,7 @@ struct CsgClipWorkBounds{
 
 public:
     // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
-    [[nodiscard]] b8 resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const u8* parameterBytes, usize parameterByteSize, const CsgClipWorkBounds& receiverBounds);
-};
-
-struct CsgFrameWorkRegion{
-    u32 minX = Limit<u32>::s_Max;
-    u32 minY = Limit<u32>::s_Max;
-    u32 maxX = 0u;
-    u32 maxY = 0u;
-    b8 fullFrame = false;
-
-
-public:
-    [[nodiscard]] b8 bounded()const noexcept{ return !fullFrame && minX < maxX && minY < maxY; }
-
-    [[nodiscard]] b8 valid()const noexcept{ return fullFrame || bounded(); }
-
-    [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
-
-    [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
-
-    void expandWorldBounds(const SIMDMatrix& worldToClip, SIMDVectorSingle minBounds, SIMDVectorSingle maxBounds, u32 frameWidth, u32 frameHeight)noexcept;
-    void expandFull()noexcept{ fullFrame = true; }
-
-    void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
-        if(fullFrame || frameWidth == 0u || frameHeight == 0u)
-            return;
-
-        const SIMDVectorSingle clampInput = VectorSet(static_cast<f32>(rectMinX), static_cast<f32>(rectMaxX), static_cast<f32>(rectMinY), static_cast<f32>(rectMaxY));
-        const SIMDVectorSingle clampExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), static_cast<f32>(frameHeight));
-        const SIMDVectorSingle clampedLanes = VectorMax(VectorMin(clampInput, clampExtent), VectorZero());
-        const i32 clampedMinX = static_cast<i32>(VectorGetX(clampedLanes));
-        const i32 clampedMaxX = static_cast<i32>(VectorGetY(clampedLanes));
-        const i32 clampedMinY = static_cast<i32>(VectorGetZ(clampedLanes));
-        const i32 clampedMaxY = static_cast<i32>(VectorGetW(clampedLanes));
-        if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
-            return;
-
-        const SIMDVectorSingle accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSwizzle<0, 2, 0, 2>(clampedLanes));
-        const SIMDVectorSingle accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSwizzle<1, 3, 1, 3>(clampedLanes));
-        minX = static_cast<u32>(VectorGetX(accumulatedMin));
-        minY = static_cast<u32>(VectorGetY(accumulatedMin));
-        maxX = static_cast<u32>(VectorGetX(accumulatedMax));
-        maxY = static_cast<u32>(VectorGetY(accumulatedMax));
-    }
-
-    [[nodiscard]] Core::Rect resolveRect(const u32 frameWidth, const u32 frameHeight)const noexcept{
-        if(!bounded())
-            return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
-
-        const SIMDVectorSingle resolvedMax = VectorMin(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f));
-        return Core::Rect(static_cast<i32>(minX), static_cast<i32>(VectorGetX(resolvedMax)), static_cast<i32>(minY), static_cast<i32>(VectorGetY(resolvedMax)));
-    }
+    [[nodiscard]] b8 resolveCutter(const CsgShapeRegistry& shapeRegistry, const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, BinaryByteView parameterBytes, const CsgClipWorkBounds& receiverBounds);
 };
 
 struct CsgFrameGpuData{
@@ -128,11 +89,7 @@ public:
 
 public:
     [[nodiscard]] b8 hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-
-    void reserve(const usize receiverCapacity, const usize cutterCapacity){
-        receiverRanges.reserve(receiverCapacity);
-        cutters.reserve(cutterCapacity);
-    }
+    void reserve(usize receiverCapacity, usize cutterCapacity);
 };
 
 struct CsgFrameGpuDataView{

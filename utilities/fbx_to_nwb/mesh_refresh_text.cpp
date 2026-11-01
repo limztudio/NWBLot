@@ -49,6 +49,10 @@ struct AssignmentRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
+    return value.isReference() && value.asReference() == variableName;
+}
+
 [[nodiscard]] static Expected<AssignmentRange> FindListAssignmentRange(const AStringView source, const AStringView variableName, const AStringView fieldName)noexcept{
     AssignmentRange outRange;
     Core::Metascript::Lexer lexer(source);
@@ -111,7 +115,7 @@ template<typename Value, typename WriteValue>
     out << s_ListOpenText;
     for(const Value& value : values){
         out << s_ListItemIndentText;
-        writeValue(out, value);
+        writeValue(value, out);
         out << s_ListItemSuffixText;
     }
     out << s_ListCloseText;
@@ -122,7 +126,7 @@ template<typename Value, typename WriteValue>
     ScratchStringStream out(s_FileOpenWrite, scratchArena);
     out.precision(s_OutputFloatPrecision);
     out << s_ListOpenText;
-    for(usize i = 0u; i < indices.size(); i += s_TriangleIndexCount)
+    for(usize i = 0u; i < indices.size(); i += Impl::s_MeshletTriangleIndexCount)
         out << s_RowOpenText << indices[i] << s_RowItemSeparatorText << indices[i + 1u] << s_RowItemSeparatorText << indices[i + 2u] << s_RowSuffixText;
     out << s_ListCloseText;
     return Move(out).str();
@@ -138,7 +142,7 @@ template<typename Value, typename WriteValue>
     return Move(out).str();
 }
 
-[[nodiscard]] static b8 AddReplacement(TextReplacements& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText){
+[[nodiscard]] static b8 AddReplacement(const AStringView source, const AStringView variableName, const AStringView fieldName, ScratchString&& replacementText, TextReplacements& inOutReplacements){
     auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
     if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing or ambiguous direct list assignment '{}.{}'"), ConvertString(variableName), ConvertString(fieldName));
@@ -146,58 +150,13 @@ template<typename Value, typename WriteValue>
     }
 
     const AssignmentRange& range = *replacementResult;
-    replacements.push_back(TextReplacement{ range.begin, range.end, Move(replacementText) });
+    inOutReplacements.push_back(TextReplacement{ range.begin, range.end, Move(replacementText) });
     return true;
 }
 
-[[nodiscard]] b8 AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena){
-    if(before.positions != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList<Vec3>(after.positions, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
-        return false;
-    if(before.normals != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList<Vec3>(after.normals, [](ScratchStringStream& out, const Vec3& value){ WriteVec3(out, value); }, scratchArena)))
-        return false;
-    if(before.tangents != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList<Vec4>(after.tangents, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
-        return false;
-    if(before.uv0 != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList<Vec2>(after.uv0, [](ScratchStringStream& out, const Vec2& value){ WriteVec2(out, value); }, scratchArena)))
-        return false;
-    if(before.colors != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList<Vec4>(after.colors, [](ScratchStringStream& out, const Vec4& value){ WriteVec4(out, value); }, scratchArena)))
-        return false;
 
-    const b8 componentRefsChanged =
-        before.positions != after.positions.size()
-        || before.normals != after.normals.size()
-        || before.tangents != after.tangents.size()
-        || before.uv0 != after.uv0.size()
-        || before.colors != after.colors.size()
-        || before.vertexRefs != after.vertexRefs.size()
-    ;
-    if(componentRefsChanged && !AddReplacement(replacements, source, variableName, s_VertexRefsStreamLabel, WriteVertexRefList(after.vertexRefs, scratchArena)))
-        return false;
-    if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices, scratchArena)))
-        return false;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    return true;
-}
-
-void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacement> replacements){
-    Sort(replacements.begin(), replacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
-        return lhs.begin > rhs.begin;
-    });
-
-    usize capacity = inOutSource.size();
-    for(const TextReplacement& replacement : replacements){
-        NWB_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
-        const usize oldSize = replacement.end - replacement.begin;
-        if(replacement.text.size() > oldSize)
-            capacity = AddSize(capacity, replacement.text.size() - oldSize);
-    }
-    inOutSource.reserve(capacity);
-    for(const TextReplacement& replacement : replacements)
-        inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
-}
-
-[[nodiscard]] static b8 IsReferenceTo(const Core::Metascript::Value& value, const AStringView variableName)noexcept{
-    return value.isReference() && value.asReference() == variableName;
-}
 
 [[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName){
     SkinReference result;
@@ -225,6 +184,51 @@ void ApplyTextReplacements(ScratchString& inOutSource, const Span<TextReplacemen
     }
 
     return result;
+}
+
+[[nodiscard]] b8 AppendMeshReplacements(const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements){
+    if(before.positions != after.positions.size() && !AddReplacement(source, variableName, Impl::s_MeshPositionsFieldNameView, WriteValueList<Vec3>(after.positions, WriteVec3<ScratchStringStream>, scratchArena), inOutReplacements))
+        return false;
+    if(before.normals != after.normals.size() && !AddReplacement(source, variableName, Impl::s_MeshNormalsFieldNameView, WriteValueList<Vec3>(after.normals, WriteVec3<ScratchStringStream>, scratchArena), inOutReplacements))
+        return false;
+    if(before.tangents != after.tangents.size() && !AddReplacement(source, variableName, Impl::s_MeshTangentsFieldNameView, WriteValueList<Vec4>(after.tangents, WriteVec4<ScratchStringStream>, scratchArena), inOutReplacements))
+        return false;
+    if(before.uv0 != after.uv0.size() && !AddReplacement(source, variableName, Impl::s_MeshUv0FieldNameView, WriteValueList<Vec2>(after.uv0, WriteVec2<ScratchStringStream>, scratchArena), inOutReplacements))
+        return false;
+    if(before.colors != after.colors.size() && !AddReplacement(source, variableName, Impl::s_MeshColorsFieldNameView, WriteValueList<Vec4>(after.colors, WriteVec4<ScratchStringStream>, scratchArena), inOutReplacements))
+        return false;
+
+    const b8 componentRefsChanged =
+        before.positions != after.positions.size()
+        || before.normals != after.normals.size()
+        || before.tangents != after.tangents.size()
+        || before.uv0 != after.uv0.size()
+        || before.colors != after.colors.size()
+        || before.vertexRefs != after.vertexRefs.size()
+    ;
+    if(componentRefsChanged && !AddReplacement(source, variableName, Impl::s_MeshVertexRefsFieldNameView, WriteVertexRefList(after.vertexRefs, scratchArena), inOutReplacements))
+        return false;
+    if(before.vertexRefs != after.vertexRefs.size() && !AddReplacement(source, variableName, Impl::s_MeshIndicesFieldNameView, WriteIndexList(after.indices, scratchArena), inOutReplacements))
+        return false;
+
+    return true;
+}
+
+void ApplyTextReplacements(const Span<TextReplacement> inOutReplacements, ScratchString& inOutSource){
+    Sort(inOutReplacements.begin(), inOutReplacements.end(), [](const TextReplacement& lhs, const TextReplacement& rhs)noexcept{
+        return lhs.begin > rhs.begin;
+    });
+
+    usize capacity = inOutSource.size();
+    for(const TextReplacement& replacement : inOutReplacements){
+        NWB_ASSERT(replacement.begin <= replacement.end && replacement.end <= inOutSource.size());
+        const usize oldSize = replacement.end - replacement.begin;
+        if(replacement.text.size() > oldSize)
+            capacity = AddSize(capacity, replacement.text.size() - oldSize);
+    }
+    inOutSource.reserve(capacity);
+    for(const TextReplacement& replacement : inOutReplacements)
+        inOutSource.replace(replacement.begin, replacement.end - replacement.begin, replacement.text);
 }
 
 

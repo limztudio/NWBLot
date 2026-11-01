@@ -32,7 +32,7 @@ b8 GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(const GpuCompiledGraph& 
         if(task.lifecycleState != TaskLifecycleState::Recording || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.recordingClaimGeneration != lease.m_claimGeneration || task.recordThunkInProgress)
             return false;
     }
-    discardPacketTasksWithinLock(packetPlan, tasks);
+    discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount));
     lease.reset();
     releasePacketRecordingClaimWithinLock();
     return true;

@@ -53,8 +53,6 @@ b8 TypeChecker::IsEscapingMutCaptureLambda(const Expr* rhs, const Span<const Sco
 
 b8 TypeChecker::checkCallableArguments(
     ClassDecl* ownerClass,
-    MethodDecl& method,
-    MVector<Expr*>& arguments,
     const Span<const ScopedVarInfo> scope,
     const MethodDecl* targetCallable,
     const ClassDecl* targetOwnerCls,
@@ -63,6 +61,8 @@ b8 TypeChecker::checkCallableArguments(
     const TypeRef* invokedFuncType,
     const ScopedVarInfo* localCallable,
     const MStringView calledMemberName,
+    MethodDecl& method,
+    MVector<Expr*>& arguments,
     MVector<ParseError>& errors
 ){
     b8 ok = true;
@@ -115,17 +115,26 @@ b8 TypeChecker::checkCallableArguments(
                 PropagateFuncCaptureBytes(localCallable->lambdaExpr->lambdaParams[i].type, arg, scope, m_symbols);
             }
         }
-        else if(i == 0u && recvTypeRef && !recvTypeRef->templateArgs.empty() && recvTypeRef->templateArgs[0].type){
-            if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName); memberInfo && memberInfo->adaptsFirstArgToElement){
-                expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
+        else if(recvTypeRef && !recvTypeRef->templateArgs.empty()){
+            if(i == 0u && (calledMemberName == "compare_exchange_weak" || calledMemberName == "compare_exchange_strong"))
+                paramIsMut = true;
+            if(i == 0u && recvTypeRef->templateArgs[0].type){
+                if(const BuiltinMemberMethodInfo* memberInfo = FindBuiltinMemberMethod(calledMemberName); memberInfo && memberInfo->adaptsFirstArgToElement){
+                    expectedParamTypeRef = recvTypeRef->templateArgs[0].type;
+                    expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
+                    PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
+                }
+            }
+            else if(i == 1u && recvTypeRef->templateArgs.size() >= 2u && recvTypeRef->templateArgs[1].type && (calledMemberName == "try_emplace" || calledMemberName == "insert_or_assign")){
+                expectedParamTypeRef = recvTypeRef->templateArgs[1].type;
                 expectedParamType = m_symbols.resolveBaseTypeName(expectedParamTypeRef->name);
                 PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
             }
         }
         arg->isMutArg = paramIsMut || expectedParamType == "Span" || expectedParamType == "StringView";
         if(expectedParamType == "Path")
-            markStringToPathAdaptation(ownerClass, &method, *arg, scope);
-        if(!checkExpr(ownerClass, method, *arg, scope, paramIsMut, errors))
+            markStringToPathAdaptation(ownerClass, &method, scope, *arg);
+        if(!checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
         if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
             if(!verifyConcreteClassImplementsInterface(
@@ -171,10 +180,10 @@ b8 TypeChecker::checkCallableArguments(
     return ok;
 }
 
-b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MVector<ParseError>& errors){
+b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
     b8 ok = true;
 
-    if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
+    if(expr.lhs && !checkExpr(ownerClass, scope, false, method, *expr.lhs, errors))
         ok = false;
 
     const MethodDecl* targetCallable = nullptr;
@@ -237,11 +246,22 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& e
                     reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
                     ok = false;
                 }
+                if(!IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, callArgCount)){
+                    reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");
+                    ok = false;
+                }
+                if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseCallee); simdVecInfo && simdVecInfo->isMixed && callArgCount == 1u && expr.arguments[0]){
+                    const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *expr.arguments[0], scope);
+                    if(arg0Type != baseCallee){
+                        reportError(errors, expr.span, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
+                        ok = false;
+                    }
+                }
             }
             if(baseCallee == "Path"){
                 for(Expr* arg : expr.arguments){
                     if(arg)
-                        markStringToPathAdaptation(ownerClass, &method, *arg, scope);
+                        markStringToPathAdaptation(ownerClass, &method, scope, *arg);
                 }
             }
         }
@@ -335,7 +355,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& e
 
             if((targetCallable && !targetCallable->isConst) || isMutatingContainerOp){
                 const b8 savedDeref = expr.lhs->lhs->derefNotNull;
-                if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
+                if(!checkExpr(ownerClass, scope, true, method, *expr.lhs->lhs, errors))
                     ok = false;
                 expr.lhs->lhs->derefNotNull = savedDeref;
             }
@@ -414,8 +434,6 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& e
 
     if(!checkCallableArguments(
         ownerClass,
-        method,
-        expr.arguments,
         scope,
         targetCallable,
         targetOwnerCls,
@@ -424,6 +442,8 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& e
         invokedFuncType,
         localCallable,
         calledMemberName,
+        method,
+        expr.arguments,
         errors
     )){
         ok = false;
@@ -432,7 +452,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& e
     return ok;
 }
 
-b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
+b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
     b8 ok = true;
 
     if(expr.lambdaReturnType && !checkReturnTypeRef(*expr.lambdaReturnType, ownerClass, &method, expr.span, errors))
@@ -511,6 +531,7 @@ b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
         lambdaScope.push_back(paramVar);
     }
     const b8 savedInLambda = m_inLambda;
+    const b8 savedLambdaMutatesContainer = m_activeLambdaMutatesContainer;
     const TypeRef* savedLambdaRet = m_activeLambdaReturnType;
     const u32 savedLoop = m_loopDepth;
     const u32 savedSwitch = m_switchDepth;
@@ -518,6 +539,7 @@ b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     const b8 savedMethodTaskScope = method.usesTaskScope;
     const b8 savedParScratch = m_activeParallelBlockUsesScratch;
     m_inLambda = true;
+    m_activeLambdaMutatesContainer = false;
     m_activeLambdaReturnType = expr.lambdaReturnType;
     m_loopDepth = 0u;
     m_switchDepth = 0u;
@@ -526,6 +548,8 @@ b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     m_activeParallelBlockUsesScratch = false;
     if(!checkStatementList(ownerClass, method, expr.lambdaBody, lambdaScope, errors))
         ok = false;
+    if(m_activeLambdaMutatesContainer)
+        expr.hasMutContainerCapture = true;
     if(expr.lambdaReturnType && !IsVoidTypeRef(m_symbols.unwrapTypeAlias(expr.lambdaReturnType))){
         if(!StatementsContainReturnOrNative(expr.lambdaBody)){
             reportError(errors, expr.span, "non-void lambda must contain a 'return' statement");
@@ -538,6 +562,7 @@ b8 TypeChecker::checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     method.usesTaskScope = savedMethodTaskScope;
     m_activeParallelBlockUsesScratch = savedParScratch;
     m_inLambda = savedInLambda;
+    m_activeLambdaMutatesContainer = savedLambdaMutatesContainer;
     m_activeLambdaReturnType = savedLambdaRet;
     m_loopDepth = savedLoop;
     m_switchDepth = savedSwitch;

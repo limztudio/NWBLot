@@ -56,43 +56,6 @@ namespace ProcessExecutionFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The value is the raw shell status from std::system. A -1 result with errno set means the shell did not run.
-template<typename ArenaT>
-[[nodiscard]] inline Expected<int, ErrorCondition> RunSystemCommand(ArenaT& arena, const AStringView command){
-    if(command.find(char{}) != AStringView::npos)
-        return MakeUnexpected(ErrorCondition::invalid_argument);
-    const AString<ArenaT> nativeCommand(command, arena);
-    errno = 0;
-    const int status = std::system(nativeCommand.c_str());
-    if(status == -1 && errno != 0)
-        return MakeUnexpected(static_cast<ErrorCondition>(errno));
-    return status;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline Expected<int, ErrorCondition> RunSystemCommand(const AString<ArenaT>& command){
-#if defined(NWB_PLATFORM_WINDOWS)
-    AString<ArenaT> systemCommand("\"", command.get_allocator());
-    systemCommand += command;
-    systemCommand += '"';
-    errno = 0;
-    const int status = std::system(systemCommand.c_str());
-#else
-    errno = 0;
-    const int status = std::system(command.c_str());
-#endif
-    if(status == -1 && errno != 0)
-        return MakeUnexpected(static_cast<ErrorCondition>(errno));
-    return status;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace ProcessExecutionDetail{
 
 
@@ -309,7 +272,7 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile(ArenaT& arena, const Span<const AStringView> arguments, const AStringView outputPath){
+[[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile([[maybe_unused]] ArenaT& arena, const Span<const AStringView> arguments, const AStringView outputPath){
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
 #if defined(NWB_PLATFORM_WINDOWS)
@@ -374,8 +337,6 @@ template<typename ArenaT>
         return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
     return static_cast<int>(exitCode);
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-    static_cast<void>(arena);
-
     const int outputFileDescriptor = ::open(nativeOutputPath.c_str(), O_CREAT | O_TRUNC | O_WRONLY, ProcessExecutionDetail::s_RedirectedOutputFileMode);
     if(outputFileDescriptor < 0)
         return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);
@@ -407,7 +368,6 @@ template<typename ArenaT>
         return MakeUnexpected(ProcessExecutionFailure::ExitQueryFailed);
     return *exitCode;
 #else
-    static_cast<void>(arena);
     return MakeUnexpected(ProcessExecutionFailure::Unsupported);
 #endif
 }

@@ -69,18 +69,9 @@ BeginFrameResult BackendContext::beginFrame(){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities for a requested resize. {}"), ResultToString(capabilitiesResult));
             return result;
         }
-        if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
-            result.suggestedWidth = surfaceCaps.currentExtent.width;
-            result.suggestedHeight = surfaceCaps.currentExtent.height;
-        }
-        else{
-            const SIMDVectorDouble requestedExtent = VectorDoubleSet(static_cast<f64>(m_swapChainState.backBufferWidth), static_cast<f64>(m_swapChainState.backBufferHeight), 0.0, 0.0);
-            const SIMDVectorDouble minExtent = VectorDoubleSet(static_cast<f64>(surfaceCaps.minImageExtent.width), static_cast<f64>(surfaceCaps.minImageExtent.height), 0.0, 0.0);
-            const SIMDVectorDouble maxExtent = VectorDoubleSet(static_cast<f64>(surfaceCaps.maxImageExtent.width), static_cast<f64>(surfaceCaps.maxImageExtent.height), 0.0, 0.0);
-            const SIMDVectorDouble clampedExtent = VectorDoubleClamp(requestedExtent, minExtent, maxExtent);
-            result.suggestedWidth = static_cast<u32>(VectorDoubleGetX(clampedExtent));
-            result.suggestedHeight = static_cast<u32>(VectorDoubleGetY(clampedExtent));
-        }
+        const VkExtent2D extent = VulkanDetail::ResolveSwapChainSurfaceExtent(surfaceCaps, m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+        result.suggestedWidth = extent.width;
+        result.suggestedHeight = extent.height;
         result.status = BeginFrameStatus::ResizeRequired;
         return result;
     }
@@ -282,8 +273,8 @@ Expected<b8, PresentationFailure> BackendContext::present(){
 
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
-        CommandList* const directCommandLists[] = { &directCommandList };
-        const auto directSubmission = m_rhiDevice->executeCommandListsInternal(directCommandLists, LengthOf(directCommandLists), primaryGraphicsQueue, submitDesc, false, Device::DeviceLossDiagnosticPolicy::Defer);
+        const Array<CommandList*, 1> directCommandLists = {{ &directCommandList }};
+        const auto directSubmission = m_rhiDevice->executeCommandListsInternal(directCommandLists.data(), directCommandLists.size(), primaryGraphicsQueue, submitDesc, false, Device::DeviceLossDiagnosticPolicy::Defer);
         if(!directSubmission){
             if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after submit rejection."));

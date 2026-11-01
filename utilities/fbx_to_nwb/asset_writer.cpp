@@ -6,6 +6,7 @@
 #include "asset_writer_format.h"
 #include "asset_writer_skeleton.h"
 
+#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 #include <global/allocation_size.h>
@@ -29,7 +30,6 @@ namespace __hidden_asset_writer{
 inline constexpr AStringView s_MeshSplitFileName = "mesh.nwb";
 inline constexpr AStringView s_SkeletonSplitFileName = "skeleton.nwb";
 inline constexpr AStringView s_SkinSplitFileName = "skin.nwb";
-inline constexpr AStringView s_AssetsSourceDirectoryText = "assets";
 inline constexpr AStringView s_MeshNameSuffix = "/mesh";
 inline constexpr AStringView s_SkeletonNameSuffix = "/skeleton";
 inline constexpr AStringView s_SkinNameSuffix = "/skin";
@@ -42,17 +42,17 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
     Core::Alloc::ScratchArena& scratchArena = outputPath.arena();
     const AStringView trimmedVirtualRoot = TrimView(virtualRoot);
 
-    ScratchPath noExtension = outputPath;
+    ScratchPath noExtension(scratchArena, outputPath);
     noExtension.replaceExtension();
 
-    BasicString<ScratchPath::value_type, Core::Alloc::ScratchArena> relativeNative(scratchArena);
+    BasicString<typename ScratchPath::value_type, Core::Alloc::ScratchArena> relativeNative(scratchArena);
     relativeNative.reserve(noExtension.native().size());
     b8 foundAssets = false;
     for(auto partIt = noExtension.begin(); partIt != noExtension.end(); ++partIt){
         const auto partText = partIt.nativeComponent();
-        b8 assetsDirectory = partText.size() == s_AssetsSourceDirectoryText.size();
+        b8 assetsDirectory = partText.size() == Core::Assets::s_AssetsDirectoryName.size();
         for(usize i = 0u; assetsDirectory && i < partText.size(); ++i)
-            assetsDirectory = ToAsciiLower(partText[i]) == static_cast<ScratchPath::value_type>(s_AssetsSourceDirectoryText[i]);
+            assetsDirectory = ToAsciiLower(partText[i]) == static_cast<typename ScratchPath::value_type>(Core::Assets::s_AssetsDirectoryName[i]);
         if(assetsDirectory){
             foundAssets = true;
             relativeNative.clear();
@@ -60,7 +60,7 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
         }
         if(foundAssets){
             if(!relativeNative.empty())
-                relativeNative.push_back(static_cast<ScratchPath::value_type>('/'));
+                relativeNative.push_back(static_cast<typename ScratchPath::value_type>('/'));
             relativeNative.append(partText.data(), partText.size());
         }
     }
@@ -68,7 +68,7 @@ ScratchString BuildVirtualBasePath(const ScratchPath& outputPath, const AStringV
     if(relativeNative.empty())
         relativePath = noExtension.filenameView();
     else
-        relativePath = BasicStringView<ScratchPath::value_type>(relativeNative);
+        relativePath = BasicStringView<typename ScratchPath::value_type>(relativeNative);
 
     auto relativeText = PathToGenericString(scratchArena, relativePath);
     while(!relativeText.empty() && (relativeText.front() == '/' || relativeText.front() == '\\'))
@@ -171,7 +171,7 @@ b8 WriteNwbAsset(
         return false;
     SourceMeshStreams& splitMesh = alignedMesh->mesh;
     UtilityVector<MeshSkinInfluence>& positionSkin = alignedMesh->skin;
-    if(!AssetWriterSkeletonDetail::RemapSkinInfluences(positionSkin, skeletonOutput.oldToNewJointIndices))
+    if(!AssetWriterSkeletonDetail::RemapSkinInfluences(skeletonOutput.oldToNewJointIndices, positionSkin))
         return false;
 
     const ScratchPath skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;

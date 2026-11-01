@@ -28,9 +28,9 @@ template<typename T, typename ArenaT>
         return nullptr;
 
     if(IsConstantEvaluated())
-        return reinterpret_cast<T*>(arena.allocate(1u, byteCount));
+        return static_cast<T*>(arena.allocate(1u, byteCount));
 
-    return reinterpret_cast<T*>(arena.allocate(alignof(T), byteCount));
+    return static_cast<T*>(arena.allocate(alignof(T), byteCount));
 }
 
 template<typename T, typename ArenaT>

@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/task/gpu/output_layer_contributor.h>
@@ -168,10 +168,7 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredSystem.invalidateResources();
 }
 
-void RendererFramePipeline::update(Core::ECS::World& world, f32 delta)noexcept{
-    static_cast<void>(world);
-    static_cast<void>(delta);
-}
+void RendererFramePipeline::update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept{}
 
 b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_shadowPreparationOutcome.resourcesValid = false;
@@ -199,7 +196,7 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
             return false;
     }
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    Core::Alloc::ScratchArena scratchArena(s_PrepareArena);
     m_meshSystem.pruneRuntimeMeshResources(scratchArena);
     const b8 hasVisibleTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
     m_preparedHasTransparentRenderers = isTransparentFeatureEnabled() && hasVisibleTransparentRenderers;
@@ -303,17 +300,12 @@ b8 RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
 
 b8 RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
-    // A range costs one begin/end pair. Raster scopes emit many; sort and interval-clear scopes each emit two.
-    static constexpr u32 s_GpuTimingQueriesPerRange = 2u;
-    static constexpr u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
-    static constexpr u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
-    static constexpr u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
 
     struct ScopeReservation{
         const Core::GpuTimingScopeDefinition& scope;
         u32 queryCount;
     };
-    const ScopeReservation scopeReservations[] = {
+    const Array<ScopeReservation, 63u> scopeReservations = {{
         { RendererGpuTimingScope::s_MeshDispatch, s_GpuTimingHighFrequencyScopeQueryBudget },
         { RendererGpuTimingScope::s_Raster, s_GpuTimingHighFrequencyScopeQueryBudget },
         { RendererGpuTimingScope::s_Frame, s_GpuTimingQueriesPerRange },
@@ -377,7 +369,7 @@ b8 RendererFramePipeline::prepareGpuTimingScopes(){
         { RendererGpuTimingScope::s_SurfelTrace, s_GpuTimingQueriesPerRange },
         { RendererGpuTimingScope::s_SurfelResolve, s_GpuTimingQueriesPerRange },
         { RendererGpuTimingScope::s_SurfelUpsample, s_GpuTimingQueriesPerRange },
-    };
+    }};
 
     for(const ScopeReservation& reservation : scopeReservations){
         if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope.identity, device, reservation.queryCount)){
@@ -506,11 +498,7 @@ void RendererFramePipeline::resetDeferredCausticsTaskState()noexcept{
     m_deferredCausticPhotonTask = {};
     m_deferredCausticGeometryTask = {};
     m_deferredCausticResolvePrepareTask = {};
-    m_deferredCausticResolveWaveletTask = {};
-    m_deferredCausticResolveSecondWaveletTask = {};
-    m_deferredCausticResolveThirdWaveletTask = {};
-    m_deferredCausticResolveFourthWaveletTask = {};
-    m_deferredCausticResolveFifthWaveletTask = {};
+    m_deferredCausticResolveWaveletTasks = {};
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
 }

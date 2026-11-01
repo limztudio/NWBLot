@@ -36,11 +36,10 @@ struct PopupDeclaration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiNestedPopupContextTests : public testing::Test{
+class UiNestedPopupContextTests : public UiTestSupport::ContextTestFixture{
 public:
     UiNestedPopupContextTests()
-        : m_arena(Name("tests/ui/nested_popup_context"))
-        , m_context(m_arena)
+        : ContextTestFixture(Name("tests/ui/nested_popup_context"))
     {}
 
 
@@ -87,16 +86,6 @@ protected:
     [[nodiscard]] b8 finish(){
         return m_context.endRoot() && m_context.finishFrame();
     }
-
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
-        return m_context.input().process();
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    Context m_context;
 };
 
 
@@ -393,7 +382,7 @@ TEST_F(UiNestedPopupContextTests, AcceptedChildActionCanOnlyBeConsumedDuringThat
 
 TEST_F(UiNestedPopupContextTests, EighthNestedActivationIsBoundedAndNinthReservationFails){
     ASSERT_TRUE(begin(1u));
-    const AStringView keys[]{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
+    const Array<AStringView, 8> keys{ "popup0", "popup1", "popup2", "popup3", "popup4", "popup5", "popup6", "popup7" };
     for(usize index = 0u; index < s_InputMaxPopups; ++index){
         const auto popupResult = reserve(keys[index]);
         ASSERT_TRUE(popupResult);

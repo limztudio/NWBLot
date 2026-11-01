@@ -3,6 +3,7 @@
 
 
 #include "project.h"
+#include "ui_gallery_constants.h"
 
 #include <global/simd/vector2.h>
 
@@ -17,10 +18,8 @@ TESTBED_BEGIN
 
 
 namespace __hidden_ui_controls{
-static constexpr f32 s_OverviewInset = 18.0f;
 static constexpr f32 s_OverviewWidth = 360.0f;
 static constexpr f32 s_OverviewHeight = 160.0f;
-static constexpr StringView s_WindowTitle = "NWB Testbed";
 static constexpr StringView s_RendererLine = "Renderer: mesh / compute emulation";
 static constexpr StringView s_CharacterLine = "Character: female model";
 };
@@ -31,7 +30,7 @@ static constexpr StringView s_CharacterLine = "Character: female model";
 
 void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::WindowOptions options;
-    options.initialBounds = { __hidden_ui_controls::s_OverviewInset, __hidden_ui_controls::s_OverviewInset, __hidden_ui_controls::s_OverviewWidth, __hidden_ui_controls::s_OverviewHeight };
+    options.initialBounds = { s_GalleryMargin, s_GalleryMargin, __hidden_ui_controls::s_OverviewWidth, __hidden_ui_controls::s_OverviewHeight };
     options.contentHeightFirstUse = true;
     const auto gallery = m_uiPreview.galleryBounds(context);
     if(!gallery)
@@ -42,13 +41,16 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
         return;
     NWB::Impl::Ui::SeparatorOptions separator;
     separator.thickness = 1.0f;
-    if(context.ui.beginWindow("testbed_window", __hidden_ui_controls::s_WindowTitle, m_uiWindow, options)){
+    if(context.ui.beginWindow("testbed_window", s_WindowTitleText, m_uiWindow, options)){
         const b8 declared = context.ui.label("renderer", __hidden_ui_controls::s_RendererLine) && context.ui.separator("separator", separator) && context.ui.label("character", __hidden_ui_controls::s_CharacterLine);
         NWB_FATAL_ASSERT(declared);
     }
     const b8 ended = context.ui.endWindow();
     NWB_FATAL_ASSERT(ended);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

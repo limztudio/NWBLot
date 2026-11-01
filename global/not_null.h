@@ -21,7 +21,7 @@ class NotNull{
 
 public:
     NotNull() = delete;
-    NotNull(std::nullptr_t) = delete;
+    NotNull(Nullptr) = delete;
     constexpr explicit NotNull(T ptr)noexcept
         : m_ptr(ptr)
     {
@@ -46,7 +46,7 @@ public:
 
     constexpr NotNull& operator=(NotNull&&)noexcept = default;
 
-    NotNull& operator=(std::nullptr_t) = delete;
+    NotNull& operator=(Nullptr) = delete;
 
     constexpr NotNull& operator=(T ptr)noexcept{
         NWB_ASSERT_MSG(ptr, "NotNull requires non-null pointer.");

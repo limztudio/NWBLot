@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <core/common/frame_data.h>
 #include <core/graphics/api.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/gpu_timing.h>
@@ -32,6 +33,14 @@ namespace GraphicsModuleDetail{
 
 
 class GraphicsRuntime{
+public:
+    using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
+    // A synchronous caller may declare one isolated graph through this callback.
+    // The graph owns all native recording and submission; the callback keeps only declaration-time inputs and returns its terminal task.
+    // `userData` stays caller-owned during the call.
+    using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
+
+
 private:
     using Backend = GraphicsBackend::Backend;
     using BackendOwner = GlobalUniquePtr<Backend>;
@@ -80,14 +89,6 @@ public:
     };
 
 
-public:
-    using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
-    // A synchronous caller may declare one isolated graph through this callback.
-    // The graph owns all native recording and submission; the callback keeps only declaration-time inputs and returns its terminal task.
-    // `userData` stays caller-owned during the call.
-    using StandaloneTaskGraphDeclaration = Expected<GpuTaskId>(*)(void* userData, GpuTaskGraph& graph);
-
-
 private:
     // runFrame creates this on the stack only for a capture-enabled normal frame.
     // It stages phase durations and registers scope identities; only successful frames flush sample values.
@@ -95,7 +96,9 @@ private:
 
 
 public:
-    GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming);
+    GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming)
+        : GraphicsRuntime(allocator, cpuScheduler, gpuTasks, gpuTiming, nullptr)
+    {}
     GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming, Perf::TimingSink* cpuTiming);
     ~GraphicsRuntime()noexcept(false);
 
@@ -116,7 +119,7 @@ public:
     // Must be configured before device creation.
     b8 setSwapChainReadbackEnabled(b8 enabled)noexcept;
     b8 setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
-    void setPipelineCacheDirectory(const Path& directory);
+    void setPipelineCacheDirectory(const Path& directory){ m_deviceCreationParams.pipelineCacheDirectory = directory; }
     b8 setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Holds the update/event loop while runFrame records nothing, so an external capture can sample the last finished frame.
     void setFrameSubmissionSuspended(b8 suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
@@ -155,10 +158,7 @@ public:
         m_taskGraphPresentationContributor = contributor;
     }
 
-    void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept{
-        if(m_taskGraphPresentationContributor == &contributor)
-            m_taskGraphPresentationContributor = nullptr;
-    }
+    void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept;
 
     [[nodiscard]] IGpuTaskGraphPresentationContributor* taskGraphPresentationContributor()const noexcept{
         return m_taskGraphPresentationContributor;
@@ -169,10 +169,7 @@ public:
         m_taskGraphOutputLayerContributor = contributor;
     }
 
-    void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
-        if(m_taskGraphOutputLayerContributor == &contributor)
-            m_taskGraphOutputLayerContributor = nullptr;
-    }
+    void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept;
 
     [[nodiscard]] IGpuTaskGraphOutputLayerContributor* taskGraphOutputLayerContributor()const noexcept{
         return m_taskGraphOutputLayerContributor;
@@ -197,7 +194,9 @@ public:
     [[nodiscard]] b8 isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
 
     void getWindowDimensions(i32& width, i32& height)const noexcept;
+
     void getDPIScaleInfo(f32& x, f32& y)const noexcept;
+
     [[nodiscard]] TStringView getWindowTitle()const noexcept{ return m_windowTitle; }
     void setWindowTitle(TStringView title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
@@ -207,7 +206,9 @@ public:
     [[nodiscard]] const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept{ return m_acquiredPresentationFrame; }
     [[nodiscard]] Texture* getBackBuffer(u32 index)const noexcept;
     [[nodiscard]] u32 getBackBufferCount()const noexcept;
-    [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const noexcept;
+    [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const noexcept{
+        return index < m_swapChainFramebuffers.size() ? m_swapChainFramebuffers[index].get() : nullptr;
+    }
 
     [[nodiscard]] Expected<BufferHandle> createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] Expected<TextureHandle> createTexture(const TextureDesc& desc)const;
@@ -236,20 +237,14 @@ public:
     void animate(f64 elapsedTime);
     // Allocation/submission work before each frame's preparation. After acquire, before render(); headless callers use it to order without beginFrame().
     [[nodiscard]] b8 prepareFramePreamble();
-    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render();
+    [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> render(){ return renderWithPhaseTiming(nullptr); }
+    void notifyPointerScaleChanged()const;
+    [[nodiscard]] b8 shouldRenderUnfocused()const;
+    b8 animateRenderPresent(){ return animateRenderPresentInternal(nullptr); }
 
 
 private:
     [[nodiscard]] Expected<void, CpuTaskAdmissionError::Enum> renderWithPhaseTiming(CpuTimingPhaseBatch* phaseTiming);
-
-
-public:
-    void notifyPointerScaleChanged()const;
-    [[nodiscard]] b8 shouldRenderUnfocused()const;
-    b8 animateRenderPresent();
-
-
-private:
     b8 animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
     [[nodiscard]] b8 registerCpuTimingScopes();
     [[nodiscard]] b8 resizeBackBuffer(u32 width, u32 height);

@@ -7,7 +7,7 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
@@ -44,7 +44,7 @@ struct OpaqueIntervalReadiness{
 
 [[nodiscard]] inline OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(const CsgOpaqueIntervalRecordInputs& payload, RendererMaterialSystem& materialSystem)noexcept{
     OpaqueIntervalReadiness readiness{};
-    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     const MaterialPassDrawItemPartitionsView opaqueDrawItems = frameSetupReady ? payload.opaqueDrawSnapshot.drawItemsView() : MaterialPassDrawItemPartitionsView{};
     if(frameSetupReady)
         readiness.csgFrameData = payload.opaqueDrawSnapshot.csgFrameDataView();
@@ -83,8 +83,7 @@ template<typename Dispatch>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     return __hidden_opaque_interval_tasks::RecordOpaqueInterval(
         payload,
         commandList,
@@ -98,8 +97,7 @@ b8 CsgReceiverSpanBuildGraphTask::Record(const Payload& payload, Core::CommandLi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     return __hidden_opaque_interval_tasks::RecordOpaqueInterval(
         payload,
         commandList,
@@ -113,32 +111,7 @@ b8 CsgIntervalCombineGraphTask::Record(const Payload& payload, Core::CommandList
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgIntervalSampleGraphTask::Payload::Payload(
-    Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphicsIn,
-    RendererMaterialSystem& materialSystemIn,
-    RendererCsgSystem& csgSystemIn,
-    DeferredFrameTargets& targetsIn,
-    Core::GpuTimingSubmissionTicket*& timingTicketIn,
-    const b8& meshViewSetupReadyIn,
-    const b8& sceneShadingSetupReadyIn
-)noexcept
-    : graphics(graphicsIn)
-    , materialSystem(materialSystemIn)
-    , csgSystem(csgSystemIn)
-    , targets(targetsIn)
-    , timingTicket(timingTicketIn)
-    , meshViewSetupReady(meshViewSetupReadyIn)
-    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
-    , opaqueDrawSnapshot(arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.opaqueDrawSnapshot.captured || (payload.csgComputeEmulationOutputStatesGraphOwned && !payload.opaqueCsgComputeEmulationTiming))
         return false;
 
@@ -148,7 +121,7 @@ b8 CsgIntervalSampleGraphTask::Record(const Payload& payload, Core::CommandList&
     DeferredFrameTargets& deferredTargets = payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
 
-    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     const MaterialPassDrawItemPartitionsView opaqueDrawItems = frameSetupReady ? payload.opaqueDrawSnapshot.drawItemsView() : MaterialPassDrawItemPartitionsView{};
     const CsgFrameGpuDataView csgFrameData = frameSetupReady ? payload.opaqueDrawSnapshot.csgFrameDataView() : CsgFrameGpuDataView{};
 

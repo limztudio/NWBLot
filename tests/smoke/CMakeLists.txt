@@ -13,6 +13,8 @@ target_sources(nwb_presentation_fps_probe_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
 )
 target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common)
 
@@ -94,18 +96,36 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
         target_sources("${TARGET_NAME}" PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_teardown.h"
+            "${CMAKE_CURRENT_LIST_DIR}/arrow_yaw_input_handler.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/arrow_yaw_input_handler.h"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_smoke_helpers.h"
+            "${CMAKE_CURRENT_LIST_DIR}/fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.h"
+            "${CMAKE_CURRENT_LIST_DIR}/gpu_pass_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/gpu_pass_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
+            "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.h"
-            "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.h"
-            "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.h"
-            "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.h"
-            "${CMAKE_CURRENT_LIST_DIR}/reflection_quality_settings.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/reflection_quality_settings.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_teardown.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_capture_teardown.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_environment.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_environment.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_project_helpers.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_scene_helpers.h"
         )
+        if("nwb_ecs_model" IN_LIST ARGN)
+            target_sources("${TARGET_NAME}" PRIVATE
+                "${CMAKE_CURRENT_LIST_DIR}/smoke_skinned_scene_helpers.cpp"
+                "${CMAKE_CURRENT_LIST_DIR}/smoke_skinned_scene_helpers.h"
+            )
+        endif()
         set_target_properties("${TARGET_NAME}" PROPERTIES DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}" WIN32_EXECUTABLE ON VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}")
         nwb_target_link_libraries_whole_archive("${TARGET_NAME}" nwb_assets_mesh nwb_assets_skeleton nwb_assets_model nwb_assets_material nwb_assets_shader nwb_assets_texture nwb_assets_sampler nwb_assets_subsystem nwb_assets_scene nwb_assets_graphics)
         target_link_libraries("${TARGET_NAME}" PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_ecs_model_renderer nwb_assets_graphics ${ARGN})
@@ -195,28 +215,34 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                 set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_smoke")
                 add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                         --working-directory "${_nwb_csg_shadow_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}" --route "${_nwb_csg_route}" --light "${_nwb_csg_light}")
-                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
+                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS
+                    "csg_shadow;${_nwb_csg_route}_raytracing")
                 set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker_smoke")
                 add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                         --working-directory "${_nwb_csg_shadow_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker"
                         --route "${_nwb_csg_route}" --light "${_nwb_csg_light}" --light-source finite --blocker-search center1)
-                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
+                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS
+                    "csg_shadow;${_nwb_csg_route}_raytracing")
             endforeach()
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_analytic_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_csg_shadow_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_analytic" --route "${_nwb_csg_route}" --atlas analytic)
-            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_analytic_smoke_timeout_seconds} LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
+            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_analytic_smoke_timeout_seconds} LABELS
+                "csg_shadow;${_nwb_csg_route}_raytracing")
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_open_smoke")
-            add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py" --warning-policy "$<IF:$<CONFIG:fin>,disabled,enabled>" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+            add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py" --warning-policy "$<IF:$<CONFIG:fin>,disabled,enabled>"
+                "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_csg_shadow_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_open" --route "${_nwb_csg_route}")
-            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_open_smoke_timeout_seconds} LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
+            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_open_smoke_timeout_seconds} LABELS
+                "csg_shadow;${_nwb_csg_route}_raytracing")
         endforeach()
         foreach(_nwb_csg_route IN ITEMS hardware software)
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_approximate_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_csg_shadow_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_approximate" --route "${_nwb_csg_route}" --light point
                     --capture-cadence reuse_one_frame --map-resolution-divisor ${_nwb_csg_shadow_approximate_map_divisor})
-            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS "csg_shadow;${_nwb_csg_route}_raytracing")
+            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_shadow_smoke_timeout_seconds} LABELS
+                "csg_shadow;${_nwb_csg_route}_raytracing")
         endforeach()
         unset(_nwb_csg_shadow_test)
         unset(_nwb_csg_light)
@@ -241,7 +267,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_dependencies(nwb_csg_caustic_smoke nwb_csg_caustic_smoke_assets)
         add_test(NAME nwb_csg_caustic_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_caustic_smoke>"
                 --working-directory "${_nwb_csg_caustic_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_caustic")
-        set_tests_properties(nwb_csg_caustic_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_caustic_capture_smoke_timeout_seconds} LABELS "csg;caustic;hardware_raytracing;software_raytracing")
+        set_tests_properties(nwb_csg_caustic_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_caustic_capture_smoke_timeout_seconds} LABELS
+            "csg;caustic;hardware_raytracing;software_raytracing")
         unset(_nwb_csg_caustic_runtime_root)
 
         nwb_declare_executable(nwb_reflection_smoke)
@@ -316,7 +343,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         set_tests_properties(nwb_csg_reflection_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_reflection_capture_smoke_timeout_seconds})
 
         add_test(NAME nwb_csg_reflection_collection_reuse_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py" "--csg-reuse" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
-                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-root" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse" "--timeout" "${_nwb_csg_reflection_reuse_script_timeout_seconds}" ${_nwb_reflection_logserver_args})
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-root" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse" "--timeout" "${_nwb_csg_reflection_reuse_script_timeout_seconds}"
+                    ${_nwb_reflection_logserver_args})
         set_tests_properties(nwb_csg_reflection_collection_reuse_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_reflection_capture_smoke_timeout_seconds})
 
         add_test(NAME nwb_reflection_queue_boundary_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py" "--queue-boundaries" "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
@@ -346,6 +374,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.cpp"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -480,7 +510,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             add_custom_target(nwb_texture_smoke_assets DEPENDS "${_nwb_texture_smoke_asset_stamp}")
             add_dependencies(nwb_texture_smoke nwb_texture_smoke_assets)
 
-            nwb_add_window_capture_smoke(nwb_texture_capture_smoke texture_smoke_capture.bmp "$<TARGET_FILE:nwb_texture_smoke>" "${_nwb_texture_smoke_runtime_root}" "NWB Texture Smoke" "--application-capture" "--application-capture-frame-count" "${_nwb_texture_smoke_capture_frame_count}"
+            nwb_add_window_capture_smoke(nwb_texture_capture_smoke texture_smoke_capture.bmp "$<TARGET_FILE:nwb_texture_smoke>" "${_nwb_texture_smoke_runtime_root}" "NWB Texture Smoke" "--application-capture"
+                "--application-capture-frame-count" "${_nwb_texture_smoke_capture_frame_count}"
                 "--expect-texture-smoke" "--expect-log-message" "TextureSmokeProject: bounded sRGB clear edges preserve alpha and neighboring pixels" "--reject-log-message" "[ERROR]" "--reject-log-message" "failed to resolve shader")
 
             unset(_nwb_texture_smoke_asset_stamp)
@@ -524,7 +555,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             set(_nwb_csg_temporal_test "nwb_csg_gi_${TEST_SUFFIX}_smoke")
             add_test(NAME "${_nwb_csg_temporal_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_temporal_smoke.py" "--executable" "$<TARGET_FILE:nwb_csg_visible_smoke>" "--working-directory" "${_nwb_csg_visible_runtime_root}"
                     "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${TEST_SUFFIX}" "--view" "${VIEW}" "--motion" "${MOTION}" "--route" "${ROUTE}"
-                    "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_csg_temporal_script_timeout_seconds}" ${_nwb_csg_temporal_logserver_args} ${ARGN})
+                    "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_csg_temporal_script_timeout_seconds}"
+                        ${_nwb_csg_temporal_logserver_args} ${ARGN})
             set_tests_properties("${_nwb_csg_temporal_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_temporal_ctest_timeout_seconds})
         endfunction()
 
@@ -631,7 +663,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "--expect-log-message" "SkinnedCausticSmokeProject: skinned glass refractor over ground created" "--expect-log-message" "SkinnedCausticSmokeProject: shutdown")
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
-                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout ${_nwb_skinned_caustic_transition_script_timeout_seconds} ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
+                --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout ${_nwb_skinned_caustic_transition_script_timeout_seconds}
+                    ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
         set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_skinned_caustic_transition_ctest_timeout_seconds})
 
         # The crowd stresses scene updates and opaque/transparent shadows across two lights.
@@ -678,6 +711,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.cpp"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
@@ -697,6 +732,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.cpp"
+            "${PROJECT_SOURCE_DIR}/tests/common/frame_graph_snapshot_validation.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
@@ -722,8 +759,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/shadow_timing_render_pass.h"
-            "${CMAKE_CURRENT_LIST_DIR}/shadow_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
         )
         nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
         # Cook private timing materials for NWB_SOFT_SHADOW_TEST_TIMING=1 A/B runs.
@@ -750,7 +787,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         # Separate opt-in fixture for same-cell perpendicular face GI coverage.
         nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--settle-seconds" "${_nwb_gi_coverage_probe_settle_seconds}"
-            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_gi_coverage_probe_script_timeout_seconds}" "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created" "--expect-log-message" "GiTestSmokeProject: shutdown"
+            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_gi_coverage_probe_script_timeout_seconds}" "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"
+                "--expect-log-message" "GiTestSmokeProject: shutdown"
             "--expect-surfel-coverage-probe")
         set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1" TIMEOUT ${_nwb_gi_coverage_probe_ctest_timeout_seconds})
 
@@ -765,7 +803,8 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                 add_test(NAME "nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke.py" --executable "$<TARGET_FILE:nwb_gi_test_smoke>"
                         --working-directory "${_nwb_gi_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}" --route "${_nwb_csg_gi_route}"
                         ${_nwb_csg_gi_lighting_args} ${_nwb_skinning_culling_logserver_args} "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
-                set_tests_properties("nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_gi_smoke_timeout_seconds} LABELS "csg_gi")
+                set_tests_properties("nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT
+                    ${_nwb_csg_gi_smoke_timeout_seconds} LABELS "csg_gi")
             endforeach()
         endforeach()
         unset(_nwb_csg_gi_route)
@@ -790,3 +829,4 @@ endif()
 if(TARGET nwb_loader AND TARGET nwb_ecs_ui AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     add_subdirectory(ui_layer)
 endif()
+

@@ -22,7 +22,6 @@ namespace __hidden_scratch_reuse_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_TailTagOffset = 17u;
 constexpr u32 s_PathReserveBytes = 96u;
 constexpr u32 s_SentinelByte = 71u;
@@ -43,8 +42,8 @@ struct AllocationRequest{
 
 
 template<usize Count>
-[[nodiscard]] static b8 RunAllocationBatch(ScratchArena& arena, const AllocationRequest (&requests)[Count]){
-    u8* allocations[Count] = {};
+[[nodiscard]] static b8 RunAllocationBatch(const Array<AllocationRequest, Count>& requests, ScratchArena& arena){
+    Array<u8*, Count> allocations{};
     usize prepared = 0u;
     b8 valid = true;
     for(; prepared < Count; ++prepared){
@@ -71,7 +70,7 @@ template<usize Count>
 }
 
 // Public container operations model collecting and sorting transient work while a caller retains earlier storage.
-[[nodiscard]] static b8 RunScopedCollection(ScratchArena& arena, const usize count){
+[[nodiscard]] static b8 RunScopedCollection(const usize count, ScratchArena& arena){
     Vector<u64, ScratchArena> keys(arena);
     keys.resize(count);
     for(usize index = 0u; index < count; ++index)
@@ -106,25 +105,25 @@ template<usize Count>
 
 TEST(ScratchArenaReuse, ReverseFreesCrossChunkBoundariesAndReuseAllEmptyChunks){
     ScratchArena arena(Name{"tests/scratch_reuse/cross_chunk"}, 256u);
-    constexpr AllocationRequest s_Requests[]{ { 8u, 192u }, { 8u, 128u }, { 8u, 768u } };
-    ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
+    constexpr Array<AllocationRequest, 3> s_Requests = { AllocationRequest{ 8u, 192u }, AllocationRequest{ 8u, 128u }, AllocationRequest{ 8u, 768u } };
+    ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
     const ArenaMemoryStats warm = arena.memoryStats();
     EXPECT_EQ(warm.usedBytes, 0u);
     EXPECT_EQ(warm.allocationCount, 3u);
     EXPECT_EQ(warm.deallocationCount, 3u);
     EXPECT_EQ(warm.peakUsedBytes, 1088u);
     for(usize iteration = 0u; iteration < 32u; ++iteration){
-        ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
         const ArenaMemoryStats current = arena.memoryStats();
         EXPECT_EQ(current.usedBytes, 0u);
         EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
-        EXPECT_EQ(current.allocationCount, (iteration + s_ExpectedDualCount) * 3u);
+        EXPECT_EQ(current.allocationCount, (iteration + 2u) * 3u);
         EXPECT_EQ(current.deallocationCount, current.allocationCount);
     }
 }
 
 TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
-    constexpr usize s_Alignments[]{ 1u, s_ExpectedDualCount, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
+    constexpr Array<usize, 9u> s_Alignments = { 1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
     ArenaMemoryStats before;
     ArenaMemoryStats live;
     b8 valid = true;
@@ -132,7 +131,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
     ArenaMemoryStats released;
     {
         ScratchArena arena(Name{"tests/scratch_reuse/cold_alignment_buckets"}, 257u);
-        u8* allocations[LengthOf(s_Alignments)] = {};
+        Array<u8*, LengthOf(s_Alignments)> allocations = {};
         before = HeapBackingMemoryStats();
         for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
             const usize alignment = s_Alignments[index];
@@ -172,7 +171,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
 
 TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     ScratchArena arena(Name{"tests/scratch_reuse/invalid_alignment"}, 256u);
-    auto* sentinel = static_cast<u8*>(arena.allocate(s_ExpectedDualCount, 32u));
+    auto* sentinel = static_cast<u8*>(arena.allocate(2u, 32u));
     ASSERT_NE(sentinel, nullptr);
     sentinel[0u] = s_SentinelByte;
     const ArenaMemoryStats before = arena.memoryStats();
@@ -192,14 +191,14 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
     EXPECT_THROW(EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max), nullptr), AllocationSizeException);
     EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
-    arena.deallocate(sentinel, s_ExpectedDualCount, 32u);
+    arena.deallocate(sentinel, 2u, 32u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
 TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentinels){
     ScratchArena arena(Name{"tests/scratch_reuse/alignments"}, 256u);
-    constexpr usize s_Alignments[]{ 1u, 8u, 64u, 256u };
-    u8* sentinels[LengthOf(s_Alignments)] = {};
+    constexpr Array<usize, 4u> s_Alignments = { 1u, 8u, 64u, 256u };
+    Array<u8*, LengthOf(s_Alignments)> sentinels = {};
     for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
         sentinels[index] = static_cast<u8*>(arena.allocate(s_Alignments[index], 64u));
         ASSERT_NE(sentinels[index], nullptr);
@@ -207,12 +206,12 @@ TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentin
         sentinels[index][63u] = static_cast<u8>(index + 83u);
     }
     const ArenaMemoryStats retained = arena.memoryStats();
-    constexpr AllocationRequest s_Requests[]{
-        { 1u, 256u }, { 8u, 256u }, { 64u, 256u }, { 256u, 256u },
-        { 1u, 1536u }, { 8u, 1536u }, { 64u, 1536u }, { 256u, 1536u },
+    constexpr Array<AllocationRequest, 8> s_Requests = {
+        AllocationRequest{ 1u, 256u }, AllocationRequest{ 8u, 256u }, AllocationRequest{ 64u, 256u }, AllocationRequest{ 256u, 256u },
+        AllocationRequest{ 1u, 1536u }, AllocationRequest{ 8u, 1536u }, AllocationRequest{ 64u, 1536u }, AllocationRequest{ 256u, 1536u },
     };
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
         EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
         for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
             EXPECT_EQ(sentinels[index][0u], static_cast<u8>(index + s_SentinelByte));
@@ -286,8 +285,8 @@ TEST(ScratchArenaReuse, RelocatedAndZeroSizedTopReallocationsExposeThePreviousLi
     EXPECT_EQ(moved[0u], 97u);
     arena.deallocate(moved, 8u, 8192u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    constexpr AllocationRequest s_AfterRelocation[]{ { 8u, 128u }, { 8u, 8192u } };
-    ASSERT_TRUE(RunAllocationBatch(arena, s_AfterRelocation));
+    constexpr Array<AllocationRequest, 2> s_AfterRelocation = { AllocationRequest{ 8u, 128u }, AllocationRequest{ 8u, 8192u } };
+    ASSERT_TRUE(RunAllocationBatch(s_AfterRelocation, arena));
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -323,8 +322,8 @@ TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLas
     EXPECT_EQ(arena.reallocate(resized, 8u, 0u), resized);
     arena.deallocate(resized, 8u, 0u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    EXPECT_EQ(arena.memoryStats().allocationCount, s_ExpectedDualCount);
-    EXPECT_EQ(arena.memoryStats().deallocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(arena.memoryStats().allocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, 2u);
 }
 
 TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllocation){
@@ -379,8 +378,8 @@ TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTo
     EXPECT_EQ(relocated[0u], 101u);
     arena.deallocate(relocated, 8u, s_CachedBytes);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    constexpr AllocationRequest s_Requests[]{ { 8u, 128u }, { 8u, 1024u } };
-    ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
+    constexpr Array<AllocationRequest, 2> s_Requests = { AllocationRequest{ 8u, 128u }, AllocationRequest{ 8u, 1024u } };
+    ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().allocationCount, arena.memoryStats().deallocationCount);
 }
@@ -423,18 +422,18 @@ TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndC
 
 TEST(ScratchArenaReuse, LargeSmallLargeRequestsDoNotRecreateUndersizedCachedChunks){
     ScratchArena arena(Name{"tests/scratch_reuse/mixed_sizes"}, 256u);
-    constexpr AllocationRequest s_SmallFirst[]{ { 8u, 64u }, { 8u, 8192u }, { 8u, 96u }, { 8u, 512u } };
-    constexpr AllocationRequest s_LargeFirst[]{ { 8u, 8192u }, { 8u, 96u }, { 8u, 64u }, { 8u, 8192u } };
+    constexpr Array<AllocationRequest, 4> s_SmallFirst = { AllocationRequest{ 8u, 64u }, AllocationRequest{ 8u, 8192u }, AllocationRequest{ 8u, 96u }, AllocationRequest{ 8u, 512u } };
+    constexpr Array<AllocationRequest, 4> s_LargeFirst = { AllocationRequest{ 8u, 8192u }, AllocationRequest{ 8u, 96u }, AllocationRequest{ 8u, 64u }, AllocationRequest{ 8u, 8192u } };
     for(usize iteration = 0u; iteration < 3u; ++iteration){
-        ASSERT_TRUE(RunAllocationBatch(arena, s_SmallFirst));
-        ASSERT_TRUE(RunAllocationBatch(arena, s_LargeFirst));
+        ASSERT_TRUE(RunAllocationBatch(s_SmallFirst, arena));
+        ASSERT_TRUE(RunAllocationBatch(s_LargeFirst, arena));
     }
     const ArenaMemoryStats warm = arena.memoryStats();
     const ArenaMemoryStats beforeHeap = HeapBackingMemoryStats();
     b8 valid = true;
     for(usize iteration = 0u; iteration < 64u; ++iteration){
-        valid &= RunAllocationBatch(arena, s_SmallFirst);
-        valid &= RunAllocationBatch(arena, s_LargeFirst);
+        valid &= RunAllocationBatch(s_SmallFirst, arena);
+        valid &= RunAllocationBatch(s_LargeFirst, arena);
     }
     const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
     EXPECT_TRUE(valid);
@@ -449,11 +448,11 @@ TEST(ScratchArenaReuse, NestedContainerDestructionAndCallerUnwindPreserveEarlier
     Vector<u64, ScratchArena> caller(arena);
     caller.assign(48u, 0x12345678u);
     const ArenaMemoryStats retained = arena.memoryStats();
-    ASSERT_TRUE(RunScopedCollection(arena, s_CollectionCount));
+    ASSERT_TRUE(RunScopedCollection(s_CollectionCount, arena));
     const ArenaMemoryStats warm = arena.memoryStats();
     EXPECT_EQ(warm.usedBytes, retained.usedBytes);
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        ASSERT_TRUE(RunScopedCollection(arena, s_CollectionCount));
+        ASSERT_TRUE(RunScopedCollection(s_CollectionCount, arena));
         EXPECT_EQ(arena.memoryStats().usedBytes, retained.usedBytes);
         EXPECT_EQ(arena.memoryStats().reservedBytes, warm.reservedBytes);
     }
@@ -485,8 +484,8 @@ TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingF
     ArenaMemoryStats live;
     {
         ScratchArena arena(s_Owner, 256u);
-        constexpr AllocationRequest s_Requests[]{ { 8u, 192u }, { 8u, 128u }, { 8u, 768u } };
-        ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
+        constexpr Array<AllocationRequest, 3> s_Requests = { AllocationRequest{ 8u, 192u }, AllocationRequest{ 8u, 128u }, AllocationRequest{ 8u, 768u } };
+        ASSERT_TRUE(RunAllocationBatch(s_Requests, arena));
         live = arena.memoryStats();
         EXPECT_EQ(live.usedBytes, 0u);
         EXPECT_GT(live.reservedBytes, 0u);

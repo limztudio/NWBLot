@@ -57,7 +57,7 @@ struct RelativeCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats){
+static void PrepareWorkload(const usize directoryCount, const AStringView directoryToken, const usize tokenRepeats, PathFixture& fixture){
     const usize directoryBytes = directoryToken.size() * tokenRepeats;
     fixture.relativeText.reserve(directoryCount * (directoryBytes + 1u) + 32u);
     for(usize directory = 0u; directory < directoryCount; ++directory){
@@ -76,7 +76,7 @@ static void PrepareWorkload(PathFixture& fixture, const usize directoryCount, co
 }
 
 [[nodiscard]] static b8 BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
-    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena);
+    const auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("project"), fixture.sourcePath, scratchArena, scratchArena);
     return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
 
@@ -88,7 +88,7 @@ TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclaratio
     AssetArena arena(Name("tests/asset_path/metadata_declaration"));
     Metascript::Document document(arena);
     ASSERT_TRUE(document.parse("metadata helper; sampler decoy; texture asset;"));
-    const Metascript::Document::Declaration* const asset = FindMetadataAssetDeclaration(document);
+    const Metascript::Document::Declaration* const asset = document.findDeclaration(s_MetadataAssetVariable);
     ASSERT_NE(asset, nullptr);
     EXPECT_EQ(asset->variable, "asset");
     EXPECT_EQ(asset->type, "texture");
@@ -96,13 +96,13 @@ TEST(AssetPaths, MetadataAssetDeclarationUsesTheCookerNameRegardlessOfDeclaratio
 
     ASSERT_TRUE(document.parse("texture entry;"));
     ASSERT_NE(document.findDeclaration("entry"), nullptr);
-    EXPECT_EQ(FindMetadataAssetDeclaration(document), nullptr);
+    EXPECT_EQ(document.findDeclaration(s_MetadataAssetVariable), nullptr);
 }
 
 TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
     AssetArena inputArena(Name("tests/asset_path/relative_inputs"));
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/relative_scratch"));
-    constexpr RelativeCase s_Cases[]{
+    constexpr Array<RelativeCase, 10u> s_Cases = {{
         { "Models//./Hero.LOD0.NWB///", "models/hero.lod0.nwb", true },
         { "./.Hidden/../Ignored", ".hidden", false },
         { "Dir.Name/.../File.", "dir.name/.../file.", true },
@@ -113,7 +113,7 @@ TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
         { "Valid/Part/../After", "valid/part", false },
         { "Valid/./../After", "valid", false },
         { "/Rooted/After", "", false },
-    };
+    }};
     AString<Alloc::ScratchArena> output(scratchArena);
     for(const RelativeCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.input);
@@ -152,15 +152,15 @@ TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/derived_scratch"));
     const NWB::Path source = fixture.assetRoot / "Models//./Hero.LOD0.NWB";
-    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("MiXeD/Root"), source, scratchArena);
+    const auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView("MiXeD/Root"), source, scratchArena, scratchArena);
     ASSERT_TRUE(output);
     EXPECT_EQ(AStringView(*output), "MiXeD/Root/models/hero.lod0");
     const NWB::Path hiddenSource = fixture.assetRoot / "Folder.Name/.Hidden";
-    const auto hiddenOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_Project), hiddenSource, scratchArena);
+    const auto hiddenOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), hiddenSource, scratchArena, scratchArena);
     ASSERT_TRUE(hiddenOutput);
     EXPECT_EQ(AStringView(*hiddenOutput), "project/folder.name/.hidden");
     const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
-    const auto extensionlessOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(""), extensionlessSource, scratchArena);
+    const auto extensionlessOutput = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(""), extensionlessSource, scratchArena, scratchArena);
     ASSERT_TRUE(extensionlessOutput);
     EXPECT_EQ(AStringView(*extensionlessOutput), "/folder/noextension");
 
@@ -172,7 +172,7 @@ TEST(AssetPaths, DerivedOwningTextOutlivesBorrowedScratchSourcePath){
     {
         Alloc::ScratchArena scratchArena(Name("tests/asset_path/borrowed_source_scratch"));
         const ::Path<Alloc::ScratchArena> source = ::Path<Alloc::ScratchArena>(scratchArena, fixture.assetRoot) / "Models/Hero.LOD0.NWB";
-        auto output = BuildDerivedAssetVirtualPath(fixture.arena, fixture.assetRoot, AStringView(s_Project), source, scratchArena);
+        auto output = AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), source, fixture.arena, scratchArena);
         ASSERT_TRUE(output);
         retained = Move(*output);
     }
@@ -186,9 +186,9 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/rejection_scratch"));
     const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_Project), outside, scratchArena));
+    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), outside, scratchArena, scratchArena));
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_Project), outside, scratchArena));
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_Project), fixture.assetRoot, scratchArena));
+    EXPECT_FALSE(AssetPathsDetail::BuildDerivedAssetVirtualPathText(fixture.assetRoot, AStringView(s_Project), fixture.assetRoot, scratchArena, scratchArena));
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_Project), fixture.assetRoot, scratchArena));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
@@ -196,7 +196,7 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
 TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaUse){
     for(const b8 unicode : { false, true }){
         PathFixture fixture;
-        PrepareWorkload(fixture, 8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u);
+        PrepareWorkload(8u, unicode ? AStringView("ÉTAGE_한글_東京_😀_") : AStringView("Long_COMPONENT_"), unicode ? 8u : 12u, fixture);
         Alloc::ScratchArena scratchArena(Name("tests/asset_path/repeated_scratch"), 65536u);
         auto* const sentinel = static_cast<u8*>(scratchArena.allocate(1u, 64u));
         ASSERT_NE(sentinel, nullptr);
@@ -272,14 +272,14 @@ TEST(AssetPaths, RejectedUnicodeParentPreservesItsFullPrefixAndRetiresOutputStor
 
 TEST(AssetPaths, StemAndExtensionPreserveTrailingSeparatorsDotsAndRoots){
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/native_filename_spans"));
-    constexpr AStringView s_Cases[][3]{
+    constexpr Array<Array<AStringView, 3u>, 6u> s_Cases = {{
         { "foo.bar/", "foo", ".bar" },
         { "Folder/.Hidden///", ".Hidden", "" },
         { "Folder/..//", ".", "." },
         { "Folder/Name.///", "Name", "." },
         { "/", "", "" },
         { "", "", "" },
-    };
+    }};
     for(const auto& testCase : s_Cases){
         const ::Path<Alloc::ScratchArena> path(scratchArena, testCase[0]);
         const auto stem = path.stem();

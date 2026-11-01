@@ -4,11 +4,8 @@
 
 #include "module.h"
 
+#include <core/assets/paths.h>
 #include <core/common/log.h>
-
-#include <global/diagnostics.h>
-#include <global/error_code.h>
-#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,108 +24,72 @@ namespace __hidden_output{
 
 
 inline constexpr AStringView s_NewLine = "\r\n";
-inline constexpr AStringView s_NwbOutputExtension = ".nwb";
-inline constexpr u32 s_OutputFileCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PublicationPaths{
-    ScratchPath data;
-    ScratchPath metadata;
-    ScratchPath dataTemporary;
-    ScratchPath metadataTemporary;
-    ScratchPath dataBackup;
-    ScratchPath metadataBackup;
-
-
-public:
-    [[nodiscard]] static ScratchPath MakeBackup(Core::Alloc::ScratchArena& scratchArena, const Path& path){
-        ScratchPath backup(scratchArena, path);
-        backup += s_BackupOutputSuffix;
-        return backup;
-    }
-
-
-public:
-    PublicationPaths(Core::Alloc::ScratchArena& scratchArena, const OutputPaths& paths)
-        : data(scratchArena, paths.data)
-        , metadata(scratchArena, paths.metadata)
-        , dataTemporary(scratchArena, paths.dataTemporary)
-        , metadataTemporary(scratchArena, paths.metadataTemporary)
-        , dataBackup(MakeBackup(scratchArena, paths.data))
-        , metadataBackup(MakeBackup(scratchArena, paths.metadata))
-    {}
-};
+inline constexpr AStringView s_PublicationDiagnosticTag = "tex_conv_publication";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename ArenaT>
-b8 CheckOutputPath(const ::Path<ArenaT>& path, const b8 force, const b8 temporary){
-    const auto exists = FileExistsNoFollow(path);
-    if(!exists){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(exists.error().message()));
-        return false;
+[[nodiscard]] const ::Path<ArenaT>& FailedValidationPath(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result)noexcept{
+    if(
+        result.failureStage == StagedFilePairFailureStage::QueryWorkPath
+        || result.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists
+    ){
+        switch(result.failedIndex){
+        case 0u:
+            return paths.primaryTemporary;
+        case 1u:
+            return paths.secondaryTemporary;
+        case 2u:
+            return paths.primaryBackup;
+        default:
+            return paths.secondaryBackup;
+        }
     }
-    if(!*exists)
-        return true;
+    return result.failedIndex == 0u ? paths.primary : paths.secondary;
+}
 
-    const auto regular = IsRegularFile(path);
-    if(!regular){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), ConvertString(regular.error().message()));
-        return false;
-    }
-    if(!*regular){
+template<typename ArenaT>
+void LogValidationFailure(const StagedFilePairPaths<ArenaT>& paths, const StagedFilePairResult& result){
+    const ::Path<ArenaT>& path = FailedValidationPath(paths, result);
+    switch(result.failureStage){
+    case StagedFilePairFailureStage::QueryOutput:
+    case StagedFilePairFailureStage::QueryWorkPath:
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
+        break;
+    case StagedFilePairFailureStage::InspectOutput:
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}"), PathToString<tchar>(path), ConvertString(result.error.message()));
+        break;
+    case StagedFilePairFailureStage::NonRegularOutput:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
-        return false;
-    }
-    if(temporary){
+        break;
+    case StagedFilePairFailureStage::WorkPathAlreadyExists:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
-        return false;
-    }
-    if(!force){
+        break;
+    case StagedFilePairFailureStage::OutputAlreadyExists:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files."), PathToString<tchar>(path));
-        return false;
+        break;
+    default:
+        break;
     }
-
-    return true;
 }
 
 Expected<ScratchString> BuildMetadata(const PreparedTexture& payload, Core::Alloc::ScratchArena& scratchArena){
     const auto mipCount = TextureFormat::ComputeCompleteMipCount(payload.dimension, payload.width, payload.height, payload.depth);
     if(
-        !mipCount || *mipCount != payload.mipCount || !IsValidTexturePayloadFormat(payload.format) || !IsValidTextureAlphaMode(payload.alphaMode)
-        || (payload.dimension != TextureDimension::Texture3D && payload.depth != 1u)
-        || (payload.dimension == TextureDimension::TextureCube && payload.width != payload.height)
-        || (payload.alphaMode == TextureAlphaMode::ConstantUnorm8 && payload.alphaConstantUnorm8 > TextureFormat::s_MaxConstantAlphaUnorm8)
-        || (payload.alphaMode != TextureAlphaMode::ConstantUnorm8 && payload.alphaConstantUnorm8 != TextureFormat::s_OpaqueAlphaUnorm8)
-        || (payload.format == TexturePayloadFormat::UastcLdr4x4 && payload.alphaMode != TextureAlphaMode::Opaque && payload.alphaMode != TextureAlphaMode::EmbeddedLdr)
-        || (IsHdrTexturePayloadFormat(payload.format) && payload.alphaMode == TextureAlphaMode::EmbeddedLdr)
+        !mipCount
+        || *mipCount != payload.mipCount
+        || !TextureFormat::IsValidTextureDescriptor(payload.format, payload.dimension, payload.width, payload.height, payload.depth, payload.alphaMode, payload.alphaConstantUnorm8)
     )
         return MakeUnexpected(Failure{});
 
-    AStringView alphaMode;
-    switch(payload.alphaMode){
-    case TextureAlphaMode::Opaque:
-        alphaMode = TextureFormat::s_OpaqueAlphaMode;
-        break;
-    case TextureAlphaMode::EmbeddedLdr:
-        alphaMode = TextureFormat::s_EmbeddedLdrAlphaMode;
-        break;
-    case TextureAlphaMode::ConstantUnorm8:
-        alphaMode = TextureFormat::s_ConstantUnorm8AlphaMode;
-        break;
-    case TextureAlphaMode::SeparateUastcLdr4x4:
-        alphaMode = TextureFormat::s_SeparateUastcLdr4x4AlphaMode;
-        break;
-    default:
+    const AStringView format = TextureFormat::PayloadFormatText(payload.format);
+    const AStringView dimension = TextureFormat::DimensionText(payload.dimension);
+    const AStringView alphaMode = TextureFormat::AlphaModeText(payload.alphaMode);
+    if(format.empty() || dimension.empty() || alphaMode.empty())
         return MakeUnexpected(Failure{});
-    }
-    const AStringView format = IsHdrTexturePayloadFormat(payload.format) ? TextureFormat::s_UastcHdr4x4Format : TextureFormat::s_UastcLdr4x4Format;
-    const AStringView dimension = payload.dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeDimension : payload.dimension == TextureDimension::Texture3D ? TextureFormat::s_Texture3DDimension : TextureFormat::s_Texture2DDimension;
+
     ScratchStringStream output(s_FileOpenWrite, scratchArena);
     output
         << "// Generated by tex_conv. The same-stem .tex file contains raw linear UASTC blocks." << s_NewLine
@@ -149,11 +110,6 @@ Expected<ScratchString> BuildMetadata(const PreparedTexture& payload, Core::Allo
     return Move(output).str();
 }
 
-void CaptureCleanupFailure(const ScratchPath& path, const ErrorCode& error)noexcept{
-    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("tex_conv: publication cleanup failed for '{}', error {}", path.c_str(), error.value());
-    CaptureDiagnosticEvent("tex_conv_publication", diagnostic.view(), __FILE__, __LINE__);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -168,40 +124,37 @@ Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, const ASt
     OutputPaths paths;
     if(outputArgument.empty()){
         paths.metadata = inputPath;
-        paths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
+        paths.metadata.replaceExtension(Core::Assets::s_NwbExtension);
     }
     else{
         const ScratchPath outputBase(scratchArena, outputArgument);
-        constexpr AStringView s_NwbOutputExtensions[] = { __hidden_output::s_NwbOutputExtension };
+        static constexpr Array<AStringView, 1u> s_NwbOutputExtensions = { Core::Assets::s_NwbExtension };
         if(outputBase.extensionView().empty() || PathHasListedExtension(outputBase, s_NwbOutputExtensions))
             paths.metadata = outputBase;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return MakeUnexpected(Failure{});
         }
-        paths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
+        paths.metadata.replaceExtension(Core::Assets::s_NwbExtension);
     }
 
     paths.data = paths.metadata;
     paths.data.replaceExtension(TextureFormat::s_TextureDataExtension);
     paths.metadataTemporary = paths.metadata;
-    paths.metadataTemporary += s_TemporaryOutputSuffix;
+    paths.metadataTemporary += s_StagedFileTemporarySuffix;
     paths.dataTemporary = paths.data;
-    paths.dataTemporary += s_TemporaryOutputSuffix;
+    paths.dataTemporary += s_StagedFileTemporarySuffix;
     return paths;
 }
 
 b8 ValidateOutputPaths(const OutputPaths& outputPaths, const b8 force, Core::Alloc::ScratchArena& scratchArena){
-    const ScratchPath dataBackup = __hidden_output::PublicationPaths::MakeBackup(scratchArena, outputPaths.data);
-    const ScratchPath metadataBackup = __hidden_output::PublicationPaths::MakeBackup(scratchArena, outputPaths.metadata);
-    return
-        __hidden_output::CheckOutputPath(outputPaths.metadata, force, false)
-        && __hidden_output::CheckOutputPath(outputPaths.data, force, false)
-        && __hidden_output::CheckOutputPath(outputPaths.metadataTemporary, false, true)
-        && __hidden_output::CheckOutputPath(outputPaths.dataTemporary, false, true)
-        && __hidden_output::CheckOutputPath(dataBackup, false, true)
-        && __hidden_output::CheckOutputPath(metadataBackup, false, true)
-    ;
+    const StagedFilePairPaths paths(scratchArena, outputPaths.data, outputPaths.metadata);
+    const StagedFilePairResult validation = ValidateStagedFilePairPaths(paths, force, false);
+    if(!validation){
+        __hidden_output::LogValidationFailure(paths, validation);
+        return false;
+    }
+    return true;
 }
 
 b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, const b8 force, Core::Alloc::ScratchArena& scratchArena){
@@ -214,120 +167,64 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot describe an invalid prepared texture."));
         return false;
     }
-    if(!ValidateOutputPaths(outputPaths, force, scratchArena))
-        return false;
 
-    const __hidden_output::PublicationPaths paths(scratchArena, outputPaths);
-    const NotNull<const ScratchPath*> backups[] = { MakeNotNull(&paths.dataBackup), MakeNotNull(&paths.metadataBackup) };
-    const NotNull<const ScratchPath*> outputs[] = { MakeNotNull(&paths.data), MakeNotNull(&paths.metadata) };
-    const NotNull<const ScratchPath*> temporaries[] = { MakeNotNull(&paths.dataTemporary), MakeNotNull(&paths.metadataTemporary) };
-    b8 ownedTemporary[__hidden_output::s_OutputFileCount] = {};
-    b8 backedUp[__hidden_output::s_OutputFileCount] = {};
-    b8 published[__hidden_output::s_OutputFileCount] = {};
-    ErrorCode removalErrors[__hidden_output::s_OutputFileCount];
-    ErrorCode restorationErrors[__hidden_output::s_OutputFileCount];
-    ErrorCode temporaryErrors[__hidden_output::s_OutputFileCount];
+    const StagedFilePairPaths paths(scratchArena, outputPaths.data, outputPaths.metadata);
+    const Span<const u8> dataBytes(payload.bytes.data(), payload.bytes.size());
+    const AStringView metadataText(metadata->data(), metadata->size());
+    const StagedFilePairResult published = StageAndPublishFilePair(
+        paths,
+        dataBytes,
+        metadataText,
+        force,
+        false,
+        false,
+        __hidden_output::s_PublicationDiagnosticTag
+    );
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> outputs = { MakeNotNull(&paths.primary), MakeNotNull(&paths.secondary) };
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> temporaries = { MakeNotNull(&paths.primaryTemporary), MakeNotNull(&paths.secondaryTemporary) };
+    const Array<NotNull<const ScratchPath*>, s_StagedFilePairCount> backups = { MakeNotNull(&paths.primaryBackup), MakeNotNull(&paths.secondaryBackup) };
 
-    // Cleanup never allocates or logs through the throwing logger while an unexpected exception unwinds.
-    const auto rollback = [&]()noexcept{
-        for(u32 index = __hidden_output::s_OutputFileCount; index > 0u; --index){
-            const u32 current = index - 1u;
-            if(published[current]){
-                const auto removed = RemoveFile(*outputs[current]);
-                if(!removed){
-                    removalErrors[current] = removed.error();
-                    __hidden_output::CaptureCleanupFailure(*outputs[current], removalErrors[current]);
-                }
-            }
-            if(backedUp[current] && !removalErrors[current]){
-                const auto restored = RenamePath(*backups[current], *outputs[current]);
-                if(!restored){
-                    restorationErrors[current] = restored.error();
-                    __hidden_output::CaptureCleanupFailure(*backups[current], restorationErrors[current]);
-                }
-            }
-            if(ownedTemporary[current]){
-                const auto removed = RemoveFile(*temporaries[current]);
-                if(!removed){
-                    temporaryErrors[current] = removed.error();
-                    __hidden_output::CaptureCleanupFailure(*temporaries[current], temporaryErrors[current]);
-                }
-            }
+    if(!published){
+        switch(published.failureStage){
+        case StagedFilePairFailureStage::StagePrimary:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::StageSecondary:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::PreserveExistingOutput:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            break;
+        case StagedFilePairFailureStage::FinalizeOutput:
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));
+            break;
+        default:
+            __hidden_output::LogValidationFailure(paths, published);
+            break;
         }
-    };
-    ScopeExit restoreOnFailure(rollback);
-
-    const auto publish = [&](){
-        const auto dataStaged = StageNewBinaryFileDurable(paths.dataTemporary, payload.bytes.data(), payload.bytes.size(), ownedTemporary[0u]);
-        if(!dataStaged){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), ConvertString(dataStaged.error().message()));
-            return false;
-        }
-        const auto metadataStaged = StageNewBinaryFileDurable(paths.metadataTemporary, metadata->data(), metadata->size(), ownedTemporary[1u]);
-        if(!metadataStaged){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), ConvertString(metadataStaged.error().message()));
-            return false;
-        }
-
-        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
-            const auto present = FileExistsNoFollow(*outputs[index]);
-            if(!present){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(present.error().message()));
-                return false;
-            }
-            if(!*present)
-                continue;
-            if(!__hidden_output::CheckOutputPath(*outputs[index], force, false))
-                return false;
-            if(!__hidden_output::CheckOutputPath(*backups[index], false, true))
-                return false;
-            const auto preserved = RenamePath(*outputs[index], *backups[index]);
-            if(!preserved){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(preserved.error().message()));
-                return false;
-            }
-            backedUp[index] = true;
-        }
-        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
-            const auto finalized = RenamePath(*temporaries[index], *outputs[index]);
-            if(!finalized){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(finalized.error().message()));
-                return false;
-            }
-            published[index] = true;
-            ownedTemporary[index] = false;
-        }
-        return true;
-    };
-    if(!publish()){
-        rollback();
-        restoreOnFailure.release();
-        for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
-            if(backedUp[index] && (removalErrors[index] || restorationErrors[index])){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
-                    , PathToString<tchar>(*outputs[index])
-                    , PathToString<tchar>(*backups[index])
-                    , removalErrors[index].value()
-                    , restorationErrors[index].value()
+        for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+            if(published.backedUp[index] && (published.removalErrors[index] || published.restorationErrors[index])){
+                NWB_LOGGER_ERROR(
+                    NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})"),
+                    PathToString<tchar>(*outputs[index]),
+                    PathToString<tchar>(*backups[index]),
+                    published.removalErrors[index].value(),
+                    published.restorationErrors[index].value()
                 );
             }
-            if(!backedUp[index] && removalErrors[index]){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(removalErrors[index].message()));
+            if(!published.backedUp[index] && published.removalErrors[index]){
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}"), PathToString<tchar>(*outputs[index]), ConvertString(published.removalErrors[index].message()));
             }
-            if(temporaryErrors[index]){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(temporaryErrors[index].message()));
+            if(published.temporaryErrors[index]){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}"), PathToString<tchar>(*temporaries[index]), ConvertString(published.temporaryErrors[index].message()));
             }
         }
         return false;
     }
 
-    restoreOnFailure.release();
-    for(u32 index = 0u; index < __hidden_output::s_OutputFileCount; ++index){
-        if(!backedUp[index])
-            continue;
-        const auto removed = RemoveFile(*backups[index]);
-        if(!removed){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(removed.error().message()));
+    for(u32 index = 0u; index < s_StagedFilePairCount; ++index){
+        if(published.backupCleanupErrors[index]){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}"), PathToString<tchar>(*backups[index]), ConvertString(published.backupCleanupErrors[index].message()));
         }
     }
     return true;

@@ -4,7 +4,7 @@
 
 #include <tests/common/test_context.h>
 
-#include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
+#include <impl/ecs_render/shadow/shadow_visibility_merge_validator.h>
 
 #include <core/task/gpu/compiler_internal.h>
 
@@ -48,15 +48,15 @@ public:
 
 public:
     [[nodiscard]] b8 build(const b8 combinedUpsample, const b8 temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const b8 combinedWavelet = false, const b8 combinedTemporal = false, const b8 diagnostics = false){
-        const Name identities[] = {
+        const Array<Name, 8> identities = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
             Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
             Name("tests/shadow_packet/transparent_temporal"), Name("tests/shadow_packet/transparent_wavelet"),
             Name("tests/shadow_packet/terminal"), Name("tests/shadow_packet/diagnostics")
         };
-        constexpr AStringView s_Labels[] = { "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace", "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics" };
-        static_assert(LengthOf(s_Labels) == LengthOf(identities));
-        Core::GpuTaskId stages[LengthOf(identities)]{};
+        constexpr Array<AStringView, 8> s_Labels = { "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace", "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics" };
+        static_assert(s_Labels.size() == identities.size());
+        Array<Core::GpuTaskId, 8> stages{};
         Core::GpuTaskId previous;
         for(u32 index = 0u; index < LengthOf(identities); ++index){
             if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge) || (index == 7u && !diagnostics))
@@ -69,7 +69,7 @@ public:
                     .setIdentity(identities[index])
                     .setMarkerLabel(s_Labels[index])
                     .setScheduling(scheduling)
-                    .setDependencies(previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u),
+                    .setDependencies({ previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u }),
                 Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
             );
             if(!stageResult){
@@ -102,7 +102,7 @@ public:
         const Core::GpuTaskGraphCompiler compiler;
         Core::GpuTaskGraphCompileOptions options;
         options.allowMetadataOnlyTasks = true;
-        if(!compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, options)){
+        if(!compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, options)){
             ADD_FAILURE() << "analysis status=" << static_cast<u32>(analysis.diagnostic().status) << ", queue status=" << static_cast<u32>(assignments.diagnostic().status);
             return false;
         }
@@ -152,7 +152,7 @@ TEST(ShadowVisibilityMergeValidator, MissingStagesAndForeignGraphIdentitiesCanno
         ASSERT_TRUE(fixture.build(combined, true));
         ASSERT_TRUE(foreign.build(combined, true));
         const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
-        Core::GpuTaskId Impl::PreparedShadowVisibilityTasks::* const required[] = {
+        const Array<Core::GpuTaskId Impl::PreparedShadowVisibilityTasks::*, 4> required = {
             &Impl::PreparedShadowVisibilityTasks::terminal,
             &Impl::PreparedShadowVisibilityTasks::opaqueFirstWavelet,
             &Impl::PreparedShadowVisibilityTasks::transparentTrace,

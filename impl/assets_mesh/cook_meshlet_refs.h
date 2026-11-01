@@ -20,8 +20,6 @@ NWB_IMPL_BEGIN
 // Deduplicates a meshlet's source vertices into local deformed-position and attribute stream refs.
 class MeshletZippedRefBuilder final : NoCopy{
 public:
-    [[nodiscard]] static Expected<u16> FindMeshletPositionRef(Span<const MeshletPositionStreamRef> refs, const MeshletPositionStreamRef& ref)noexcept;
-    [[nodiscard]] static Expected<u16> FindMeshletAttributeRef(Span<const MeshletAttributeStreamRef> refs, const MeshletAttributeStreamRef& ref)noexcept;
     template<
         typename PositionRefVectorT,
         typename AttributeRefVectorT,
@@ -44,31 +42,6 @@ public:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline Expected<u16> MeshletZippedRefBuilder::FindMeshletPositionRef(const Span<const MeshletPositionStreamRef> refs, const MeshletPositionStreamRef& ref)noexcept{
-    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
-        if(refs[localIndex].position != ref.position || refs[localIndex].skin != ref.skin)
-            continue;
-
-        return static_cast<u16>(localIndex);
-    }
-
-    return MakeUnexpected(Failure{});
-}
-
-
-inline Expected<u16> MeshletZippedRefBuilder::FindMeshletAttributeRef(const Span<const MeshletAttributeStreamRef> refs, const MeshletAttributeStreamRef& ref)noexcept{
-    for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
-        const MeshletAttributeStreamRef& existing = refs[localIndex];
-        if(existing.normal != ref.normal || existing.tangent != ref.tangent || existing.uv0 != ref.uv0 || existing.color != ref.color)
-            continue;
-
-        return static_cast<u16>(localIndex);
-    }
-
-    return MakeUnexpected(Failure{});
-}
 
 
 template<
@@ -97,9 +70,8 @@ template<
         const MeshletPositionStreamRef positionRef{ source.position, s_MeshMissingStreamIndex };
         const MeshletAttributeStreamRef attributeRef{ source.normal, source.tangent, source.uv0, source.color };
 
-        const auto foundLocalPosition = FindMeshletPositionRef(outPositionRefs, positionRef);
-        u16 localPosition = foundLocalPosition ? *foundLocalPosition : 0u;
-        if(!foundLocalPosition){
+        u16 localPosition = 0u;
+        if(!TryFindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;
@@ -108,9 +80,8 @@ template<
             outPositionRefs.push_back(positionRef);
         }
 
-        const auto foundLocalAttribute = FindMeshletAttributeRef(outAttributeRefs, attributeRef);
-        u16 localAttribute = foundLocalAttribute ? *foundLocalAttribute : 0u;
-        if(!foundLocalAttribute){
+        u16 localAttribute = 0u;
+        if(!TryFindMeshletAttributeRef(outAttributeRefs, attributeRef, localAttribute)){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits"), metaKind, PathToString<tchar>(nwbFilePath));
                 return false;

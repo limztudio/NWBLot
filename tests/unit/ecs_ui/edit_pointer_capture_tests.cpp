@@ -45,7 +45,7 @@ protected:
             part.gestureReference = part.rectangle;
         // The copied router publication leaves the already accepted text geometry owned by the host.
         ++m_generation;
-        if(!m_context.input().commitTargets(targets.data(), targets.size(), m_generation))
+        if(!m_context.input().commitTargets(targets, m_generation))
             return false;
         m_host.synchronizeFocus();
         return true;

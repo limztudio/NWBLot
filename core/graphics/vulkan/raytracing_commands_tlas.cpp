@@ -158,8 +158,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* acce
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
     auto& instanceBufferImpl = *MakeNotNull(instanceBuffer);
-    constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    if(!isBufferReadyForCommandQueue(&instanceBufferImpl, s_BuildInputUsage)){
+    if(!isBufferReadyForCommandQueue(&instanceBufferImpl, VulkanDetail::s_AccelStructBuildInputUsage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is foreign or not ready"));
         return;
     }
@@ -265,7 +264,7 @@ b8 CommandList::buildTopLevelAccelStructFromInstanceData(
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
     rangeInfo.primitiveCount = primitiveCount;
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, &geometrySignature, 1u)){
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR, vkBuildFlags, Span<const AccelStructGeometryBuildSignature>(&geometrySignature, 1u))){
         rejectCommandRecording(operationName, VulkanDetail::s_RetainBuildSignatureFailedReason);
         return false;
     }

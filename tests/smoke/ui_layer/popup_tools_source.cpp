@@ -61,6 +61,16 @@ StringView UiPopupToolsSmokeSource::text(const u64 index)const noexcept{
     return rowKey == 0u ? StringView{} : __hidden_ui_popup_tools_source::s_Labels[rowKey - 1u];
 }
 
+void UiPopupToolsSmokeSource::reverse()noexcept{
+    m_reversed = !m_reversed;
+    ++m_revision;
+}
+
+void UiPopupToolsSmokeSource::replace()noexcept{
+    ++m_generation;
+    ++m_revision;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

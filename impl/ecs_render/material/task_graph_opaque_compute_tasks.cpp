@@ -5,7 +5,7 @@
 #include "task_graph_opaque_compute_tasks.h"
 
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
@@ -26,39 +26,18 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
-    Core::Alloc::GlobalArena& arena,
-    RendererMaterialSystem& materialSystemIn,
-    DeferredFrameTargets& targetsIn,
-    Core::GpuTimingSubmissionTicket*& timingTicketIn,
-    const b8& meshViewSetupReadyIn,
-    const b8& sceneShadingSetupReadyIn
-)noexcept
-    : materialSystem(materialSystemIn)
-    , targets(targetsIn)
-    , timingTicket(timingTicketIn)
-    , meshViewSetupReady(meshViewSetupReadyIn)
-    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
-    , plan(arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.plan.captured)
         return false;
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady)
         return true;
 
     // Reject corrupted streams instead of dispatching outside the imported handle set.
-    if(!payload.plan.matches(payload.plan.drawItems))
+    if(!payload.plan.matches())
         return false;
     const b8 drawResourcesReady =
         materialSystem.meshMaterialPassDrawResourcesReady(payload.plan.meshDrawItems, payload.frameBindings)
@@ -79,8 +58,7 @@ b8 OpaqueRegularComputeEmulationGraphTask::Record(const Payload& payload, Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.plan.captured)
         return false;
 
@@ -93,7 +71,7 @@ b8 OpaqueRegularSharedComputeEmulationGraphTask::Record(const Payload& payload, 
     }
 
     RendererMaterialSystem& materialSystem = payload.materialSystem;
-    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 

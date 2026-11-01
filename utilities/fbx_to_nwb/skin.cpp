@@ -62,7 +62,7 @@ SIMDMatrix ConvertJointMatrix(const SIMDMatrixDouble& matrix)noexcept{
 
 b8 NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcept{
     const SIMDVectorSingle epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
-    for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
+    for(usize rowIndex = 0u; rowIndex < Impl::s_SkeletonJointMatrixRowCount; ++rowIndex){
         if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))
             return false;
     }
@@ -72,36 +72,31 @@ b8 NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs)noexcep
 AStringView NodeDisplayName(const ufbx_node* node)noexcept{
     if(!node)
         return s_NullNodeLabel;
-    if(!node->name.data || node->name.length == 0u)
-        return s_UnnamedNodeLabel;
-    return AStringView(node->name.data, node->name.length);
+    const AStringView name = UfbxStringView(node->name);
+    return !name.empty() ? name : s_UnnamedNodeLabel;
 }
 
-Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, ufbx_skin_deformer* skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& context){
+Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const MeshInstance& instance, const ImportOptions& options, const ufbx_skin_deformer& skin, Core::Alloc::ScratchArena& scratchArena, ExportContext& inOutContext){
     ::Vector<u16, Core::Alloc::ScratchArena> outClusterJoints(scratchArena);
-    if(!skin){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
-        return MakeUnexpected(Failure{});
-    }
-    if(skin->clusters.count == 0u){
+    if(skin.clusters.count == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains no clusters"));
         return MakeUnexpected(Failure{});
     }
-    if(skin->clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
+    if(skin.clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer has too many clusters"));
         return MakeUnexpected(Failure{});
     }
-    if(skin->clusters.count > Limit<usize>::s_Max - context.joints.size()){
+    if(skin.clusters.count > Limit<usize>::s_Max - inOutContext.joints.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity"));
         return MakeUnexpected(Failure{});
     }
 
-    const usize reservedJointCount = context.joints.size() + skin->clusters.count;
-    context.joints.reserve(reservedJointCount);
-    context.bindPoseMatrices.reserve(reservedJointCount);
-    context.inverseBindMatrices.reserve(reservedJointCount);
-    outClusterJoints.reserve(skin->clusters.count);
-    const f64 inverseScale = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(s_UniformScaleNumerator), VectorDoubleReplicate(options.scale)));
+    const usize reservedJointCount = inOutContext.joints.size() + skin.clusters.count;
+    inOutContext.joints.reserve(reservedJointCount);
+    inOutContext.bindPoseMatrices.reserve(reservedJointCount);
+    inOutContext.inverseBindMatrices.reserve(reservedJointCount);
+    outClusterJoints.reserve(skin.clusters.count);
+    const f64 inverseScale = s_UniformScaleNumerator / options.scale;
     ufbx_matrix meshFromOutput = {};
     meshFromOutput.m00 = inverseScale;
     meshFromOutput.m11 = inverseScale;
@@ -110,8 +105,8 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
         meshFromOutput = ufbx_matrix_mul(&nodeMeshToWorldInverse, &meshFromOutput);
     }
-    for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
-        ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
+    for(usize clusterIndex = 0u; clusterIndex < skin.clusters.count; ++clusterIndex){
+        ufbx_skin_cluster* cluster = skin.clusters.data[clusterIndex];
         if(!cluster){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains a null cluster"));
             return MakeUnexpected(Failure{});
@@ -123,7 +118,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         }
         const ufbx_matrix inverseBind = ufbx_matrix_mul(&cluster->geometry_to_bone, &meshFromOutput);
         const SIMDMatrixDouble inverseBindDouble = LoadUfbxMatrix(inverseBind);
-        if(!FiniteUfbxMatrix(inverseBindDouble) || VectorDoubleGetX(VectorDoubleAbs(VectorDoubleReplicate(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))))) <= s_InvertibleMatrixDeterminantEpsilon){
+        if(!FiniteUfbxMatrix(inverseBindDouble) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= s_InvertibleMatrixDeterminantEpsilon){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
             return MakeUnexpected(Failure{});
         }
@@ -135,12 +130,12 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
             return MakeUnexpected(Failure{});
         }
-        auto foundJoint = context.jointLookup.find(MakeNotNull(cluster->bone_node));
-        if(foundJoint != context.jointLookup.end()){
+        auto foundJoint = inOutContext.jointLookup.find(MakeNotNull(cluster->bone_node));
+        if(foundJoint != inOutContext.jointLookup.end()){
             const usize jointIndex = static_cast<usize>(foundJoint.value());
-            NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
-            NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
-            const SIMDMatrix existingInverseBind = LoadFloat(context.inverseBindMatrices[jointIndex]);
+            NWB_ASSERT(jointIndex < inOutContext.inverseBindMatrices.size());
+            NWB_ASSERT(jointIndex < inOutContext.bindPoseMatrices.size());
+            const SIMDMatrix existingInverseBind = LoadFloat(inOutContext.inverseBindMatrices[jointIndex]);
             if(!NearlyEqualJointMatrices(existingInverseBind, inverseBindValue)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices"), ConvertString(NodeDisplayName(cluster->bone_node)));
                 return MakeUnexpected(Failure{});
@@ -149,7 +144,7 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
             continue;
         }
 
-        if(context.joints.size() >= s_MaxSkeletonJointCount){
+        if(inOutContext.joints.size() >= s_MaxSkeletonJointCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
             return MakeUnexpected(Failure{});
         }
@@ -158,11 +153,11 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
         JointMatrix storedBindPose{};
         StoreFloat(inverseBindValue, storedInverseBind);
         StoreFloat(ConvertJointMatrix(bindPoseDouble), storedBindPose);
-        const u16 joint = static_cast<u16>(context.joints.size());
-        context.joints.push_back(cluster->bone_node);
-        context.bindPoseMatrices.push_back(storedBindPose);
-        context.inverseBindMatrices.push_back(storedInverseBind);
-        const auto inserted = context.jointLookup.emplace(MakeNotNull(cluster->bone_node), joint);
+        const u16 joint = static_cast<u16>(inOutContext.joints.size());
+        inOutContext.joints.push_back(cluster->bone_node);
+        inOutContext.bindPoseMatrices.push_back(storedBindPose);
+        inOutContext.inverseBindMatrices.push_back(storedInverseBind);
+        const auto inserted = inOutContext.jointLookup.emplace(MakeNotNull(cluster->bone_node), joint);
         if(!inserted.second){
             NWB_ASSERT(false);
             return MakeUnexpected(Failure{});
@@ -173,26 +168,26 @@ Expected<::Vector<u16, Core::Alloc::ScratchArena>> BuildClusterJointMap(const Me
     return outClusterJoints;
 }
 
-Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const Span<const u16> clusterJoints, const u32 logicalVertex){
+Expected<SkinInfluenceCalculation> LoadInfluence(const ufbx_skin_deformer& skin, const Span<const u16> clusterJoints, const u32 logicalVertex){
     SkinInfluenceCalculation result{ VectorZero(), VectorZero() };
-    if(!skin || logicalVertex >= skin->vertices.count){
+    if(logicalVertex >= skin.vertices.count){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));
         return MakeUnexpected(Failure{});
     }
 
-    const ufbx_skin_vertex skinVertex = skin->vertices.data[logicalVertex];
-    if(skinVertex.weight_begin > skin->weights.count || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin){
+    const ufbx_skin_vertex skinVertex = skin.vertices.data[logicalVertex];
+    if(skinVertex.weight_begin > skin.weights.count || skinVertex.num_weights > skin.weights.count - skinVertex.weight_begin){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin vertex weight range is out of bounds"));
         return MakeUnexpected(Failure{});
     }
 
-    SIMDVectorDouble weightSum = VectorDoubleZero();
+    f64 weightSum = 0.0;
     u32 writtenInfluenceCount = 0u;
     for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
-        if(writtenInfluenceCount == static_cast<u32>(s_MeshSkinInfluenceCount))
+        if(writtenInfluenceCount == static_cast<u32>(Impl::s_SkinInfluenceJointCount))
             break;
 
-        const ufbx_skin_weight& weight = skin->weights.data[skinVertex.weight_begin + weightOffset];
+        const ufbx_skin_weight& weight = skin.weights.data[skinVertex.weight_begin + weightOffset];
         const f64 value = static_cast<f64>(weight.weight);
         if(!IsFinite(value)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin contains a non-finite weight"));
@@ -207,18 +202,16 @@ Expected<SkinInfluenceCalculation> LoadInfluence(ufbx_skin_deformer* skin, const
 
         result.joints = VectorSetIntByIndex(result.joints, clusterJoints[weight.cluster_index], writtenInfluenceCount);
         result.weights = VectorSetByIndex(result.weights, static_cast<f32>(value), writtenInfluenceCount);
-        weightSum = VectorDoubleAdd(weightSum, VectorDoubleReplicate(value));
+        weightSum += value;
         ++writtenInfluenceCount;
     }
 
-    const f64 weightSumValue = VectorDoubleGetX(weightSum);
-    if(!IsFinite(weightSumValue) || weightSumValue <= 0.0){
+    if(!IsFinite(weightSum) || weightSum <= 0.0){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights"));
         return MakeUnexpected(Failure{});
     }
 
-    const SIMDVectorDouble inverseWeightSum = VectorDoubleDivide(VectorDoubleSplatOne(), weightSum);
-    const f32 normalization = static_cast<f32>(VectorDoubleGetX(inverseWeightSum));
+    const f32 normalization = static_cast<f32>(s_UniformScaleNumerator / weightSum);
     result.weights = VectorScale(result.weights, normalization);
 
     return result;

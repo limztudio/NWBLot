@@ -86,12 +86,12 @@ TEST_F(UiEditCommandTests, NonEditingMalformedAndUnrelatedIntentsCannotMutateOrM
     ASSERT_TRUE(m_model.setSelection(1u, 5u));
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
-    const InputCommandIntent rejected[]{
+    const Array<InputCommandIntent, 8> rejected = {{
         { InputCommand::Backspace, true, false }, { InputCommand::Copy, true, false },
         { InputCommand::Accept, true, false }, { InputCommand::WordLeft, true, false },
         { InputCommand::None }, { InputCommand::Activate }, { InputCommand::ContextMenu },
         { static_cast<InputCommand::Enum>(255u), true }
-    };
+    }};
     for(const InputCommandIntent& intent : rejected){
         const EditCommandResult result = ApplyEditCommand(m_model, TranslateEditCommand(intent, false, EditTextMode::SingleLine));
         EXPECT_FALSE(result.handled);
@@ -127,7 +127,7 @@ TEST_F(UiEditCommandTests, ShiftMovementSelectsWholeGraphemesAndArrowsCollapseAt
 
 TEST_F(UiEditCommandTests, ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy){
     ASSERT_TRUE(m_model.setText("abcd"));
-    const EditCommand::Enum mutations[]{ EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
+    const Array<EditCommand::Enum, 8> mutations = { EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace, EditCommand::WordDelete, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Redo };
     for(const auto command : mutations){
         const auto result = ApplyEditCommand(m_model, { command }, true);
         EXPECT_TRUE(result.handled);
@@ -143,7 +143,7 @@ TEST_F(UiEditCommandTests, RepeatsEditTextButNeverDuplicateClipboardSubmitOrCanc
     ASSERT_TRUE(m_model.setText("abcd"));
     EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Backspace, false, true }).textChanged);
     EXPECT_EQ(m_model.text(), "abc");
-    const EditCommand::Enum oneShot[]{ EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::SelectAll, EditCommand::Submit, EditCommand::Cancel };
+    const Array<EditCommand::Enum, 6> oneShot = { EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::SelectAll, EditCommand::Submit, EditCommand::Cancel };
     for(const auto command : oneShot){
         const auto result = ApplyEditCommand(m_model, { command, false, true });
         EXPECT_TRUE(result.handled);
@@ -158,7 +158,7 @@ TEST_F(UiEditCommandTests, PreeditOwnsCommandsAndEnterWhileEscapeFirstCancelsOnl
     ASSERT_TRUE(m_model.setText("base"));
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("draft", 0u, 5u));
-    const EditCommand::Enum nativeOwned[]{ EditCommand::Backspace, EditCommand::Right, EditCommand::SelectAll, EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Submit };
+    const Array<EditCommand::Enum, 8> nativeOwned = { EditCommand::Backspace, EditCommand::Right, EditCommand::SelectAll, EditCommand::Copy, EditCommand::Cut, EditCommand::Paste, EditCommand::Undo, EditCommand::Submit };
     for(const auto command : nativeOwned){
         const auto result = ApplyEditCommand(m_model, { command });
         EXPECT_TRUE(result.handled);

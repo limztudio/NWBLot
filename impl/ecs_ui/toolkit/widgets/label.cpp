@@ -16,12 +16,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Label::Label(Core::Alloc::GlobalArena& arena)
-    : m_text(arena)
-    , m_language(s_TextDefaultLanguage, arena)
-    , m_layout(arena)
-{}
-
 TextLayoutStatus::Enum Label::setText(const ShapeRequest& request){
     if(request.text == StringView(m_text.data(), m_text.size()) && request.language == StringView(m_language.data(), m_language.size()) && request.fontSize == m_fontSize && request.scriptTag == m_scriptTag && request.direction == m_direction)
         return TextLayoutStatus::Success;

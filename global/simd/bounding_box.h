@@ -518,7 +518,18 @@ inline void BoundingDoubleBox::getCorners(PointT (&corners)[s_DoubleCornerCount]
 }
 
 [[nodiscard]] inline b8 BoundingDoubleBox::intersects(const BoundingDoubleFrustum& frustum)const noexcept{
-    return FrustumDoubleTests::IntersectsBox(LoadDouble(frustum.origin), LoadDouble(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadDouble(center), LoadDouble(extents));
+    return FrustumDoubleTests::IntersectsBox(
+        LoadDouble(frustum.origin),
+        LoadDouble(frustum.orientation),
+        frustum.rightSlope,
+        frustum.leftSlope,
+        frustum.topSlope,
+        frustum.bottomSlope,
+        frustum.nearPlane,
+        frustum.farPlane,
+        LoadDouble(center),
+        LoadDouble(extents)
+    );
 }
 
 [[nodiscard]] inline b8 NWB_SIMD_CALL BoundingDoubleBox::intersects(const SIMDVectorDouble v0, const SIMDVectorDouble v1, const SIMDVectorDouble v2)const noexcept{

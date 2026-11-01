@@ -31,33 +31,26 @@ namespace AssetsGraphicsCsgShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_EnabledImplicitDefineValue = "1";
-static constexpr AStringView s_IntervalSampleEnabledImplicitDefineValue = "1";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void InsertShaderKey(ShaderStageKeySet& outShaderKeys, const Name& shaderName, const Name& stageName){
+static void InsertShaderKey(const Name& shaderName, const Name& stageName, ShaderStageKeySet& inOutShaderKeys){
     if(!shaderName || !stageName)
         return;
     const ShaderStageKey key(shaderName, stageName);
-    if(outShaderKeys.contains(key))
+    if(inOutShaderKeys.contains(key))
         return;
-    if(!outShaderKeys.insert(key).second){
+    if(!inOutShaderKeys.insert(key).second){
         NWB_ASSERT(false);
         return;
     }
 }
 
-static void CollectMaterialMeshShaderKeys(const Span<const MaterialCookEntry> materialEntries, ShaderStageKeySet& outShaderKeys){
+static void CollectMaterialMeshShaderKeys(const Span<const MaterialCookEntry> materialEntries, ShaderStageKeySet& inOutShaderKeys){
     const Name& meshStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::MeshStage);
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundMeshShader = materialEntry.stageShaders.find(Core::ShaderType::MeshStage);
         if(foundMeshShader == materialEntry.stageShaders.end())
             continue;
 
-        InsertShaderKey(outShaderKeys, foundMeshShader.value().name(), meshStageName);
+        InsertShaderKey(foundMeshShader.value().name(), meshStageName, inOutShaderKeys);
     }
 }
 
@@ -69,7 +62,7 @@ ShaderStageKeySet CollectMaterialClipShaderKeys(const Span<const MaterialCookEnt
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundShader = materialEntry.stageShaders.find(Core::ShaderType::PixelStage);
         if(foundShader != materialEntry.stageShaders.end())
-            InsertShaderKey(shaderKeys, foundShader.value().name(), pixelStageName);
+            InsertShaderKey(foundShader.value().name(), pixelStageName, shaderKeys);
     }
 
     CollectMaterialMeshShaderKeys(materialEntries, shaderKeys);
@@ -89,19 +82,19 @@ Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(con
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitAccumulatePixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(*shaderName, pixelStageName, shaderKeys);
         }
         if(!materialEntry.avboitOccupancyPixelShaderName.empty()){
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitOccupancyPixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(*shaderName, pixelStageName, shaderKeys);
         }
         if(!materialEntry.avboitExtinctionPixelShaderName.empty()){
             const auto shaderName = Name::FromText(AStringView(materialEntry.avboitExtinctionPixelShaderName));
             if(!shaderName)
                 return MakeUnexpected(shaderName.error());
-            InsertShaderKey(shaderKeys, *shaderName, pixelStageName);
+            InsertShaderKey(*shaderName, pixelStageName, shaderKeys);
         }
     }
     return shaderKeys;
@@ -128,15 +121,14 @@ b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceVar
     return false;
 }
 
-Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo){
-    constexpr usize s_AddedDefineCount = 2u;
-    if(sourceCombo.size() > Limit<usize>::s_Max - s_AddedDefineCount){
+Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(const AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena){
+    if(sourceCombo.size() > Limit<usize>::s_Max - s_CsgClipAddedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: CSG shader define combo size overflow for entry '{}'"), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
     ShaderCook::DefineCombo combo{cookArena};
-    combo.reserve(sourceCombo.size() + s_AddedDefineCount);
+    combo.reserve(sourceCombo.size() + s_CsgClipAddedDefineCount);
     for(const auto& [defineName, defineValue] : sourceCombo){
         if(!combo.try_emplace(defineName, defineValue).second){
             NWB_ASSERT(false);
@@ -144,15 +136,15 @@ Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& co
         }
     }
 
-    if(!combo.try_emplace(s_IntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_IntervalSampleEnabledImplicitDefineName), ConvertString(entryName));
+    if(!combo.try_emplace(s_CsgIntervalSampleEnabledImplicitDefineName, s_IntervalSampleEnabledImplicitDefineValue).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_CsgIntervalSampleEnabledImplicitDefineName), ConvertString(entryName));
         return MakeUnexpected(Failure{});
     }
 
-    if(combo.try_emplace(s_ClipImplicitDefineName, s_EnabledImplicitDefineValue).second)
+    if(combo.try_emplace(s_CsgClipImplicitDefineName, s_EnabledImplicitDefineValue).second)
         return combo;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_ClipImplicitDefineName), ConvertString(entryName));
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: reserved CSG shader define '{}' already exists for entry '{}'"), ConvertString(s_CsgClipImplicitDefineName), ConvertString(entryName));
     return MakeUnexpected(Failure{});
 }
 

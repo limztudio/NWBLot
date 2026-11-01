@@ -92,7 +92,7 @@ inline constexpr int s_EntryFailure = -1;
             auto entryResult = NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena);
             if(!entryResult)
                 return false;
-            auto assetResult = NWB::Impl::BuildFontAsset(*entryResult, arena);
+            auto assetResult = NWB::Impl::BuildFontAsset(Move(*entryResult), arena);
             if(!assetResult)
                 return false;
             font = Move(*assetResult);
@@ -104,7 +104,7 @@ inline constexpr int s_EntryFailure = -1;
             auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena, scratch);
             if(!entryResult)
                 return false;
-            auto assetResult = NWB::Impl::BuildFontAtlasAsset(*entryResult, arena, scratch);
+            auto assetResult = NWB::Impl::BuildFontAtlasAsset(Move(*entryResult), arena, scratch);
             if(!assetResult)
                 return false;
             atlas = Move(*assetResult);

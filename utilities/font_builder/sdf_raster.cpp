@@ -6,8 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,10 +16,10 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
-    RasterGlyphs glyphs(font.m_bytes.get_allocator().arena());
-    FT_Face face = font.m_face;
-    const SIMDVectorSingle designPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(face->units_per_EM)), VectorReplicate(static_cast<f32>(options.ppem)));
+Expected<RasterGlyphs> Rasterize(const BakeOptions& options, FontSource& inOutFont){
+    RasterGlyphs glyphs(inOutFont.m_bytes.get_allocator().arena());
+    FT_Face face = inOutFont.m_freeType.face();
+    const f32 designPerPixel = Impl::ComputeFontAtlasUnitsPerPixel(face->units_per_EM, options.ppem);
     const u64 capacity = static_cast<u64>(options.extent) * options.extent * Impl::s_FontAtlasMaxChannelCount * options.maxGroups;
     u64 rasterBytes = 0u;
     glyphs.reserve(static_cast<usize>(face->num_glyphs));
@@ -77,16 +75,11 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
             const u32 sourceY = pitch < 0 ? bitmap.rows - 1u - y : y;
             NWB_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
         }
-        glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;
         glyph.record.height = bitmap.rows;
-        const SIMDVectorSingle origin = VectorMultiply(VectorXorInt(VectorSet(static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left), static_cast<f32>(face->glyph->bitmap_top)), s_SIMDFlipYW), designPerPixel);
-        const SIMDVectorSingle size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows), static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
-        const SIMDVectorSingle end = VectorMultiplyAddExpression(size, designPerPixel, origin);
-        glyph.record.planeLeft = VectorGetX(origin);
-        glyph.record.planeTop = VectorGetY(origin);
-        glyph.record.planeRight = VectorGetX(end);
-        glyph.record.planeBottom = VectorGetY(end);
+        glyph.record.planeLeft = static_cast<f32>(face->glyph->bitmap_left) * designPerPixel;
+        glyph.record.planeTop = -static_cast<f32>(face->glyph->bitmap_top) * designPerPixel;
+        Impl::ComputeFontAtlasGlyphPlaneBounds(designPerPixel, glyph.record);
         glyphs.push_back(Move(glyph));
     }
     return glyphs;

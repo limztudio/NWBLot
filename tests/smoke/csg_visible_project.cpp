@@ -6,6 +6,7 @@
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_scene_helpers.h"
 
 #include <loader/project_entry.h>
@@ -46,6 +47,7 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::PrepareSmokeCaptureSeries;
+using NWB::Tests::Smoke::TickSmokeWorld;
 
 using CsgVisibleMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using CsgVisibleMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -99,7 +101,7 @@ namespace CsgVisibleShapeSlot{
 
 static_assert(CsgVisibleShapeSlot::kCount == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
 
-inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
+inline constexpr Array<Name, s_CsgVisibleShapeCount> s_CsgVisibleReceiverGroups = {
     Name("project/smoke/csg_visible/plane_receiver"),
     Name("project/smoke/csg_visible/box_receiver"),
     Name("project/smoke/csg_visible/sphere_receiver"),
@@ -114,23 +116,23 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return NWB_TEXT("CsgVisibleSmokeProject");
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(NWB::Core::ECS::World& world, const Name receiverGroup, const Float4& colorTint, const Float4& position, const Float4& scale, const b8 csgReceiver, const CsgVisibleMaterialRef& material){
-    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(world, s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale);
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(const Name receiverGroup, const Float4& colorTint, const Float4& position, const Float4& scale, const b8 csgReceiver, const CsgVisibleMaterialRef& material, NWB::Core::ECS::World& world){
+    const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_CubeMesh, material, s_SmokeSurfaceMaterialInterface, colorTint, position, scale, world);
     if(!entity.valid())
         return NWB::Core::ECS::s_InvalidEntityId;
 
     if(csgReceiver)
-        AddStaticCsgMeshReceiver(world, entity, receiverGroup, true, false);
+        AddStaticCsgMeshReceiver(entity, receiverGroup, true, false, world);
 
     return entity;
 }
 
-[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const SIMDVectorSingle phase)noexcept{
+[[nodiscard]] static SIMDVectorSingle BuildCubeRotation(const f32 time, const f32 phase)noexcept{
     const SIMDVectorSingle angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
-    return QuaternionRotationRollPitchYawFromVector(VectorSelect(angles, VectorAdd(VectorReplicate(time), phase), s_SIMDMaskY));
+    return QuaternionRotationRollPitchYawFromVector(VectorSelect(angles, VectorSet(0.0f, time + phase, 0.0f, 0.0f), s_SIMDMaskY));
 }
 
-static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle rotation)noexcept{
+static void ApplyCubeRotation(const NWB::Core::ECS::EntityID entity, const SIMDVectorSingle rotation, NWB::Core::ECS::World& world)noexcept{
     auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
     if(!transform)
         return;
@@ -172,48 +174,48 @@ static void ApplyCubeRotation(NWB::Core::ECS::World& world, const NWB::Core::ECS
     }
 }
 
-static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::ECS::EntityID cutterEntity, const SIMDVectorSingle receiverCenter, const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalOffset)noexcept{
+static void ApplyCutterTransform(const NWB::Core::ECS::EntityID cutterEntity, const SIMDVectorSingle receiverCenter, const SIMDVectorSingle receiverRotation, const SIMDVectorSingle cutterLocalOffset, NWB::Core::ECS::World& world)noexcept{
     auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(cutterEntity);
     if(!cutter)
         return;
 
     const SIMDVectorSingle cutterCenter = VectorAdd(receiverCenter, Vector3Rotate(cutterLocalOffset, receiverRotation));
-    AssignCsgCutterTransform(*cutter, cutterCenter, receiverRotation);
+    AssignCsgCutterTransform(cutterCenter, receiverRotation, *cutter);
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateCutter(NWB::Core::ECS::World& world, const usize shapeSlot, const Name receiverGroup, const SIMDVectorSingle center){
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateCutter(const usize shapeSlot, const Name receiverGroup, const SIMDVectorSingle center, NWB::Core::ECS::World& world){
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>();
     cutter.receiverGroup = receiverGroup;
-    AssignCsgCutterTransform(cutter, center, QuaternionIdentity());
+    AssignCsgCutterTransform(center, QuaternionIdentity(), cutter);
 
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane:{
         cutter.shapeType = Name("engine/csg/plane");
         NWB::Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Box:{
         cutter.shapeType = Name("engine/csg/box");
         NWB::Impl::CsgBoxShapeParameters parameters;
         parameters.halfExtents = Float4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f);
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
         cutter.shapeType = Name("engine/csg/sphere");
         NWB::Impl::CsgSphereShapeParameters parameters;
         parameters.radius = Float4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f);
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
         cutter.shapeType = Name("engine/csg/capsule");
         NWB::Impl::CsgCapsuleShapeParameters parameters;
         parameters.radiusHalfHeight = Float4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f);
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         break;
     }
     default:
@@ -230,7 +232,7 @@ static void ApplyCutterTransform(NWB::Core::ECS::World& world, const NWB::Core::
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, CsgVisibleFpsLabel());
+        auto world = CreateSmokeWorldOrDie(CsgVisibleFpsLabel(), context);
 
         if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets))
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
@@ -305,7 +307,7 @@ public:
             else if(*view != "full")
                 return false;
             const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false };
-            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TemporalSampleCount, captureOptions);
+            auto captureSeries = PrepareSmokeCaptureSeries(AStringView(*output), s_TemporalSampleCount, captureOptions, m_context);
             if(!captureSeries)
                 return false;
             m_capturePaths = Move(captureSeries->paths);
@@ -339,8 +341,8 @@ public:
             StoreFloat(receiverPositionVector, receiverPosition);
             const SIMDVectorSingle cutterLocalOffset = CsgVisibleCutterLocalOffset(shapeSlot);
             const SIMDVectorSingle cutterPosition = VectorSetW(VectorAdd(receiverPositionVector, cutterLocalOffset), 0.0f);
-            m_receivers[shapeSlot] = CreateSolidCubeEntity(*m_world, s_CsgVisibleReceiverGroups[shapeSlot], CsgVisibleShapeColor(shapeSlot), receiverPosition, Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f), true, material);
-            m_cutters[shapeSlot] = CreateCutter(*m_world, shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition);
+            m_receivers[shapeSlot] = CreateSolidCubeEntity(s_CsgVisibleReceiverGroups[shapeSlot], CsgVisibleShapeColor(shapeSlot), receiverPosition, Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f), true, material, *m_world);
+            m_cutters[shapeSlot] = CreateCutter(shapeSlot, s_CsgVisibleReceiverGroups[shapeSlot], cutterPosition, *m_world);
             m_receiverCenters[shapeSlot] = receiverPosition;
         }
 
@@ -350,13 +352,13 @@ public:
             Float4 receiverPosition;
             StoreFloat(VectorAdd(CsgVisibleShapePosition(CsgVisibleShapeSlot::Plane), VectorSet(0.0f, 0.0f, s_OverlappingReceiverDepthOffset, 0.0f)), receiverPosition);
             const auto receiver = CreateSolidCubeEntity(
-                *m_world,
                 s_CsgVisibleReceiverGroups[CsgVisibleShapeSlot::Plane],
                 CsgVisibleShapeColor(CsgVisibleShapeSlot::Plane),
                 receiverPosition,
                 Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
                 true,
-                material
+                material,
+                *m_world
             );
             allEntitiesValid = allEntitiesValid && receiver.valid();
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: overlapping plane receiver created z_offset=0.125"));
@@ -375,29 +377,24 @@ public:
     }
 
     virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         if(m_temporalEnabled){
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
             const u32 posePhase = static_cast<u32>(m_context.graphics.getFrameIndex() % 240u);
-            m_animationTime = m_temporalAnimated ? VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(Min(posePhase, 240u - posePhase))), 0.3f / 120.0f)) : 0.0f;
+            m_animationTime = m_temporalAnimated ? static_cast<f32>(Min(posePhase, 240u - posePhase)) * 0.3f / 120.0f : 0.0f;
             updateTemporalCapture();
         }
         else
-            m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CubeRotationSpeed), VectorReplicate(m_animationTime)));
+            m_animationTime = Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed + m_animationTime;
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const SIMDVectorSingle rotationPhase = VectorScale(VectorReplicate(static_cast<f32>(shapeSlot)), 0.18f);
+            const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.18f;
             const SIMDVectorSingle rotation = BuildCubeRotation(m_animationTime, rotationPhase);
-            ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
-            ApplyCutterTransform(*m_world, m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot));
+            ApplyCubeRotation(m_receivers[shapeSlot], rotation, *m_world);
+            ApplyCutterTransform(m_cutters[shapeSlot], LoadFloat(m_receiverCenters[shapeSlot]), rotation, CsgVisibleCutterLocalOffset(shapeSlot), *m_world);
         }
 
-        const auto updated = m_world->tick(m_temporalEnabled ? 1.0f / 60.0f : safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        return true;
+        return TickSmokeWorld(m_temporalEnabled ? 1.0f / 60.0f : safeDelta, *m_world);
     }
 
 
@@ -462,12 +459,9 @@ private:
 
 
 private:
+    Array<Float4, s_CsgVisibleShapeCount> m_receiverCenters{};
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_receivers[s_CsgVisibleShapeCount] = {};
-    NWB::Core::ECS::EntityID m_cutters[s_CsgVisibleShapeCount] = {};
-    f32 m_animationTime = 0.0f;
-    Float4 m_receiverCenters[s_CsgVisibleShapeCount] = {};
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgVisibleFpsLabel() };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ CsgVisibleFpsLabel() };
     Vector<::Path<NWB::Core::Alloc::GlobalArena>, NWB::Core::Alloc::GlobalArena> m_capturePaths;
@@ -475,6 +469,9 @@ private:
     Timer m_temporalWarmupStart;
     u64 m_nextCaptureFrame = Limit<u64>::s_Max;
     u64 m_temporalFrameInterval = s_TemporalFrameInterval;
+    Array<NWB::Core::ECS::EntityID, s_CsgVisibleShapeCount> m_receivers{};
+    Array<NWB::Core::ECS::EntityID, s_CsgVisibleShapeCount> m_cutters{};
+    f32 m_animationTime = 0.0f;
     u32 m_temporalSample = 0u;
     b8 m_temporalEnabled = false;
     b8 m_temporalAnimated = false;

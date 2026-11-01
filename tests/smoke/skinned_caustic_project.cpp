@@ -6,6 +6,7 @@
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -61,6 +62,7 @@ using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::LoadSmokeSkeletonBindJoints;
 using NWB::Tests::Smoke::PrepareSmokeCaptureSeries;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::TickSmokeWorld;
 
 using SkinnedCausticModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using SkinnedCausticMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -102,12 +104,9 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 
 
 // Keep joint 0 at bind and oscillate child joints so shadows and caustics move each frame.
-[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const SIMDVectorSingle jointIndex, const SIMDVectorSingle timeSeconds, const SIMDVectorSingle animationSpeed)noexcept{
-    const SIMDVectorSingle phase = VectorScale(jointIndex, 0.7f);
-    const SIMDVectorSingle wavePhases = VectorMultiplyAddExpression(timeSeconds, animationSpeed, phase);
-    const SIMDVectorSingle waves = VectorSin(wavePhases);
-    const SIMDVectorSingle angle = VectorScale(waves, s_PoseAnimationAngle);
-    const SIMDVectorSingle rotationAngles = VectorMergeX(VectorScale(angle, 0.4f), angle, VectorScale(angle, 0.25f), VectorZero());
+[[nodiscard]] static SIMDMatrix BuildWaveJointMatrix(const SIMDMatrix& bindJoint, const f32 jointIndex, const f32 timeSeconds)noexcept{
+    const f32 angle = Sin(timeSeconds * s_PoseAnimationSpeed + jointIndex * 0.7f) * s_PoseAnimationAngle;
+    const SIMDVectorSingle rotationAngles = VectorScale(VectorSet(0.4f, 1.0f, 0.25f, 0.0f), angle);
 
     const SIMDMatrix rotation = MatrixRotationRollPitchYawFromVector(rotationAngles);
     const SIMDMatrix animated = MatrixMultiply(bindJoint, rotation);
@@ -124,7 +123,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName);
+        auto world = CreateSmokeSkinnedRenderWorldOrDie(s_ProjectName, {}, context);
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgTransitionEnvironment)){
             auto& renderer = *MakeNotNull(world->getSystem<NWB::Impl::RendererSystem>());
             renderer.setFrameLaggedAsyncLightingEnabled(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgLaggedEnvironment));
@@ -164,7 +163,7 @@ public:
             if(!output)
                 return false;
             const NWB::Tests::Smoke::FramebufferCaptureOptions captureOptions{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 1280u, .requiredHeight = 900u, .quitWhenReady = false };
-            auto captureSeries = PrepareSmokeCaptureSeries(m_context, AStringView(*output), s_TransitionSampleCount, captureOptions);
+            auto captureSeries = PrepareSmokeCaptureSeries(AStringView(*output), s_TransitionSampleCount, captureOptions, m_context);
             if(!captureSeries)
                 return false;
             m_capturePaths = Move(captureSeries->paths);
@@ -174,7 +173,7 @@ public:
                 , NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS") ? 0u : 1u
             );
         }
-        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_Model, s_ProjectName);
+        auto bindJoints = LoadSmokeSkeletonBindJoints(s_Model, s_ProjectName, Name(), false, m_context.objectArena, m_context.assetManager);
         if(!bindJoints)
             return false;
         m_bindJoints = Move(*bindJoints);
@@ -186,11 +185,11 @@ public:
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
             light->enableCaustics = !m_transitionEnabled || !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag(s_CsgNoPhotonsEnvironment);
 
-        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
+        m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), *m_world);
 
         m_character = createGlassCharacter();
         SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
+        const auto meshEntity = FindSpawnedModelObject(m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: closed refractor renderer is unavailable"));
@@ -198,7 +197,7 @@ public:
         }
         renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 
-        m_skeletonEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
+        m_skeletonEntity = FindSpawnedModelObject(m_character, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton, *m_world);
 
         NWB_FATAL_ASSERT_MSG(activeCamera.camera.valid() && m_groundEntity.valid() && m_character.valid() && m_skeletonEntity.valid(), NWB_TEXT("SkinnedCausticSmokeProject failed to create all scene entities"));
 
@@ -216,24 +215,21 @@ public:
     }
 
     virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         if(m_transitionEnabled){
-            const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
-            m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
+            const f64 phaseAngle = static_cast<f64>(m_context.graphics.getFrameIndex() % s_TransitionPhaseFrames) * static_cast<f64>(s_PI * 2.0f);
+            m_animationTime = phaseAngle / (static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed);
             updateTransitionState();
         }
         else{
-            const SIMDVectorSingle animationStep = VectorScale(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), s_PoseAnimationSpeed);
-            m_animationTime = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_animationTime), ConvertVectorSingleToDouble(animationStep)));
+            const f32 animationStep = Min(safeDelta, s_MaxAnimationDelta) * s_PoseAnimationSpeed;
+            m_animationTime += static_cast<f64>(animationStep);
         }
         animatePoses();
-        const auto updated = m_world->tick(m_transitionEnabled ? 1.0f / 60.0f : safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        if(!TickSmokeWorld(m_transitionEnabled ? 1.0f / 60.0f : safeDelta, *m_world))
             return false;
-        }
         if(m_transitionEnabled)
             updateTransitionCapture();
         return true;
@@ -250,10 +246,10 @@ private:
     }
 
     [[nodiscard]] b8 installTransitionCutter(){
-        const auto meshEntity = FindSpawnedModelObject(*m_world, m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
+        const auto meshEntity = FindSpawnedModelObject(m_character, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         if(!meshEntity.valid())
             return false;
-        NWB::Tests::Smoke::AddSkinnedCsgMeshReceiver(*m_world, meshEntity, s_TransitionReceiverGroup, false, true);
+        NWB::Tests::Smoke::AddSkinnedCsgMeshReceiver(meshEntity, s_TransitionReceiverGroup, false, true, *m_world);
         auto entity = m_world->createEntity();
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>();
         cutter.receiverGroup = s_TransitionReceiverGroup;
@@ -261,12 +257,12 @@ private:
         cutter.active = false;
         NWB::Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(1.0f, 0.0f, 0.0f, 0.0f);
-        NWB::Tests::Smoke::AssignCsgCutterParameters(cutter, parameters);
+        NWB::Tests::Smoke::AssignCsgCutterParameters(parameters, cutter);
         m_cutterEntity = entity.id();
         return true;
     }
 
-    void foldTransitionTiming(const Name scope, u64& lastPublication, u64 (&phaseSamples)[s_TransitionPhaseCount])noexcept{
+    void foldTransitionTiming(const Name scope, u64& lastPublication, Array<u64, s_TransitionPhaseCount>& phaseSamples)noexcept{
         const auto& stats = m_context.gpuTimingView().stats(scope);
         if(!stats.valid() || stats.publishFrameIndex == lastPublication)
             return;
@@ -356,8 +352,8 @@ private:
         }
         const u64 relativeFrame = frame - m_transitionFirstFrame;
         const u32 phase = static_cast<u32>(Min(relativeFrame / s_TransitionPhaseFrames, static_cast<u64>(s_TransitionPhaseCount - 1u)));
-        const SIMDVectorDouble phaseAngle = VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(relativeFrame % s_TransitionPhaseFrames)), static_cast<f64>(s_PI * 2.0f));
-        m_animationTime = VectorDoubleGetX(VectorDoubleDivide(phaseAngle, VectorDoubleReplicate(static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed)));
+        const f64 phaseAngle = static_cast<f64>(relativeFrame % s_TransitionPhaseFrames) * static_cast<f64>(s_PI * 2.0f);
+        m_animationTime = phaseAngle / (static_cast<f64>(s_TransitionPhaseFrames) * s_PoseAnimationSpeed);
         if(phase != m_transitionPhase){
             auto& cutter = *MakeNotNull(m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_cutterEntity));
             cutter.active = (phase & 1u) != 0u;
@@ -399,7 +395,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createGlassCharacter(){
-        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_GlassMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.86f, 1.0f, 0.42f), Float4(0.0f, s_CharacterLift, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto modelResult = CreateTintedModelEntity(s_Model, s_GlassMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.72f, 0.86f, 1.0f, 0.42f), Float4(0.0f, s_CharacterLift, 0.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), *m_world);
         const NWB::Core::ECS::EntityID entity = modelResult.entity;
         if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
@@ -412,14 +408,13 @@ private:
         if(!pose)
             return;
 
-        const SIMDVectorSingle timeSeconds = VectorSet(static_cast<f32>(m_animationTime), 0.0f, 0.0f, 0.0f);
-        const SIMDVectorSingle animationSpeed = VectorReplicate(s_PoseAnimationSpeed);
+        const f32 timeSeconds = static_cast<f32>(m_animationTime);
         for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < m_bindJoints.size(); ++jointIndex){
             if(jointIndex == 0u){
                 pose->localJoints[jointIndex] = m_bindJoints[jointIndex];
                 continue;
             }
-            const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), VectorSet(static_cast<f32>(jointIndex), 0.0f, 0.0f, 0.0f), timeSeconds, animationSpeed);
+            const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), static_cast<f32>(jointIndex), timeSeconds);
             StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
         }
     }
@@ -429,10 +424,6 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_cutterEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
     f64 m_animationTime = 0.0;
@@ -443,11 +434,15 @@ private:
     u64 m_nextCaptureFrame = 0u;
     u64 m_lastPhotonPublication = 0u;
     u64 m_lastSkinningPublication = 0u;
-    u64 m_phasePhotonSamples[s_TransitionPhaseCount] = {};
-    u64 m_phaseSkinningSamples[s_TransitionPhaseCount] = {};
+    Array<u64, s_TransitionPhaseCount> m_phasePhotonSamples{};
+    Array<u64, s_TransitionPhaseCount> m_phaseSkinningSamples{};
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_cutterEntity = NWB::Core::ECS::s_InvalidEntityId;
     u32 m_transitionPhase = Limit<u32>::s_Max;
     u32 m_transitionSample = 0u;
-    b8 m_phaseRouteRecorded[s_TransitionPhaseCount] = {};
+    Array<b8, s_TransitionPhaseCount> m_phaseRouteRecorded{};
     b8 m_transitionEnabled = false;
     b8 m_transitionLagged = false;
     b8 m_transitionPhotonsEnabled = false;

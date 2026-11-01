@@ -66,3 +66,4 @@ Add `asset.toolkit_contract = "widgets";` to a complete skin's metadata to rejec
 All consumers must retain the selected skin and texture version for the lifetime of their frame snapshot and GPU work. This module stores asset identity and immutable decoded metadata; GPU residency and frame retirement belong to the UI rendering adapter.
 
 Metadata schema reading lives in `cook_metadata.cpp`; cooked asset construction and binary encoding live in `cook.cpp`. Runtime decoding and generic validation stay in `runtime.cpp`, and the build-pipeline registrar stays in `volume_entry.cpp`.
+

@@ -75,11 +75,11 @@ inline constexpr AStringView s_VolumeDetailSegmentCapacityOverflow = "segment ca
 inline constexpr AStringView s_VolumeDetailMetadataByteOverflow = "metadata byte overflow";
 inline constexpr AStringView s_VolumeDetailNextFreeInsideMetadata = "next free offset points inside metadata area";
 inline constexpr AStringView s_VolumeDetailNextFreeExceedsVolumeCapacity = "next free offset exceeds volume capacity";
-inline constexpr char s_VolumeMagic[] = "NWBVOL1";
-inline constexpr usize s_VolumeMagicByteCount = sizeof(s_VolumeMagic);
+inline constexpr Array<char, 8> s_VolumeMagic = {{ 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' }};
+inline constexpr usize s_VolumeMagicByteCount = s_VolumeMagic.size();
 
 struct VolumeHeaderDisk{
-    char magic[s_VolumeMagicByteCount];
+    Array<char, s_VolumeMagicByteCount> magic{};
     u64 segmentSize;
     u64 metadataBytes;
     u64 fileCount;

@@ -96,7 +96,7 @@ b8 GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
         )
             return false;
     }
-    discardPacketTasksWithinLock(packetPlan, tasks);
+    discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount));
     return true;
 }
 

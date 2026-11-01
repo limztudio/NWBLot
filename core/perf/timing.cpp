@@ -5,8 +5,6 @@
 #include "timing.h"
 #include "named_registry.h"
 
-#include <global/simd/vector.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,7 +45,7 @@ void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex)noe
             m_currentStats.maxSeconds = seconds;
     }
     m_currentStats.lastSeconds = seconds;
-    m_currentStats.seconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_currentStats.seconds), VectorDoubleReplicate(seconds)));
+    m_currentStats.seconds += seconds;
     ++m_currentStats.sampleCount;
 }
 
@@ -174,18 +172,6 @@ const TimingStats& TimingView::stats(const Name& scopeName)const noexcept{
 const TimingStats& TimingView::stats(const TimingScopeId scope)const noexcept{
     static const TimingStats s_EmptyStats;
     return m_recorder ? m_recorder->stats(scope) : s_EmptyStats;
-}
-
-usize TimingView::scopeCount()const noexcept{
-    return m_recorder ? m_recorder->scopeCount() : 0u;
-}
-
-TimingScopeId TimingView::scopeAt(const usize index)const noexcept{
-    return m_recorder ? m_recorder->scopeAt(index) : TimingScopeId{};
-}
-
-Name TimingView::scopeNameAt(const usize index)const noexcept{
-    return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
 const TimingStats& TimingView::statsAt(const usize index)const noexcept{

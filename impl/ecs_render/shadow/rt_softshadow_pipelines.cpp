@@ -1,0 +1,358 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_softshadow_pipelines{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 EnsureResolveChannel(
+    const Core::BindingLayoutHandle& bindingLayout,
+    const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* member,
+    RendererShaderSystem& shaderSystem,
+    Core::GraphicsBackend::Device& device,
+    SoftShadowResolveChannelState& channel
+){
+    struct StageRequest{
+        AStringView m_variant;
+        SoftShadowResolveStageState& m_state;
+    };
+    const Array<StageRequest, 2u> stages = {{
+        { s_ShadowResolveWaveletVariant, channel.m_wavelet },
+        { s_ShadowResolveUpsampleVariant, channel.m_upsample },
+    }};
+    static_assert(NWB_SHADOW_RESOLVE_STAGE_WAVELET == 1u && NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE == 2u);
+    auto& heap = device.getDescriptorHeap();
+    for(const StageRequest& stage : stages){
+        if(stage.m_state.m_pipeline)
+            continue;
+        if(!shaderSystem.loadShader<ComputeShader>(member, stage.m_variant, "ECSRender_SoftShadowResolve", stage.m_state.m_shader)){
+            channel.m_failed = true;
+            return false;
+        }
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc.setComputeShader(stage.m_state.m_shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        auto pipelineResult = device.createComputePipeline(pipelineDesc);
+        if(pipelineResult)
+            stage.m_state.m_pipeline = Move(*pipelineResult);
+        else
+            stage.m_state.m_pipeline.reset();
+        if(!pipelineResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
+            channel.m_failed = true;
+            return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept{
+    if(!m_rayTracingState.m_softShadowTemporalHistoryAdvancePending)
+        return;
+
+    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    swapSoftShadowTemporalHistory(targets);
+}
+
+void RendererRayTracingSystem::discardSoftShadowTemporalHistory()noexcept{
+    m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
+}
+
+b8 RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
+    auto& resolve = m_rayTracingState.m_softShadowResolve;
+    if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
+        return true;
+    if(resolve.m_scalar.m_failed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    if(!device.getDescriptorHeap().isInitialized())
+        return false;
+    if(!resolve.m_bindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
+        auto bindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(bindingLayoutResult)
+            resolve.m_bindingLayout = Move(*bindingLayoutResult);
+        else
+            resolve.m_bindingLayout.reset();
+        if(!bindingLayoutResult){
+            resolve.m_scalar.m_failed = true;
+            return false;
+        }
+    }
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveCs, m_shaderSystem, device, resolve.m_scalar);
+}
+
+b8 RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
+    if(m_rayTracingState.m_shadowGeometryDownsamplePipeline)
+        return true;
+    if(m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+    if(!m_rayTracingState.m_shadowGeometryDownsampleBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
+        auto shadowGeometryDownsampleBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(shadowGeometryDownsampleBindingLayoutResult)
+            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout = Move(*shadowGeometryDownsampleBindingLayoutResult);
+        else
+            m_rayTracingState.m_shadowGeometryDownsampleBindingLayout.reset();
+        if(!shadowGeometryDownsampleBindingLayoutResult){
+            m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
+            return false;
+        }
+    }
+    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowGeometryDownsampleCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowGeometryDownsample", m_rayTracingState.m_shadowGeometryDownsampleShader)){
+        m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowGeometryDownsampleShader).addBindingLayout(m_rayTracingState.m_shadowGeometryDownsampleBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    auto shadowGeometryDownsamplePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowGeometryDownsamplePipelineResult)
+        m_rayTracingState.m_shadowGeometryDownsamplePipeline = Move(*shadowGeometryDownsamplePipelineResult);
+    else
+        m_rayTracingState.m_shadowGeometryDownsamplePipeline.reset();
+    if(!shadowGeometryDownsamplePipelineResult){
+        m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
+    auto& resolve = m_rayTracingState.m_softShadowResolve;
+    if(resolve.m_rgb.m_wavelet.m_pipeline && resolve.m_rgb.m_upsample.m_pipeline)
+        return true;
+    if(resolve.m_rgb.m_failed || !resolve.m_bindingLayout)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    if(!device.getDescriptorHeap().isInitialized())
+        return false;
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(resolve.m_bindingLayout, &ShadowSubsystem::shadowResolveRgbCs, m_shaderSystem, device, resolve.m_rgb);
+}
+
+// Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
+void RendererRayTracingSystem::prepareSoftCombinedResolvePipelines(){
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady)
+        return;
+    if(!ensureSoftCombinedUpsamplePipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
+    if(!ensureSoftCombinedWaveletPipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
+    if(!ensureSoftCombinedTemporalPipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedTemporalFailed = true;
+}
+
+void RendererRayTracingSystem::dispatchSoftShadowResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const DeferredLightingGraphResources& deferredLightingResources,
+    const u32 slotStart,
+    const u32 slotCount,
+    const SoftShadowResolveDispatch& dispatch,
+    const b8 dispatchFirstWavelet,
+    const b8 dispatchTail
+){
+    NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
+    NWB_ASSERT(dispatch.visibilityTexture);
+    const u32 halfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 halfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
+    const DeferredBindlessFrameResources& bindless = targets.bindless;
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+
+    const auto runPass = [&](
+        const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const b8 graphOwnsInputColorState = false, const b8 graphOwnsOutputState = false
+    ){
+        NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
+        switch(stage){
+            case ShadowResolveStage::Wavelet:
+                if(!dispatch.graphOwnsWaveletGeometryEntryState)
+                    commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                if(!graphOwnsInputColorState)
+                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                if(dispatch.temporalMomentsValid && !dispatch.graphOwnsWaveletMomentsEntryState)
+                    commandList.setTextureState(resources.momentsTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                if(!graphOwnsOutputState)
+                    commandList.setTextureState(resources.outputTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                commandList.setEnableUavBarriersForTexture(resources.outputTexture, true);
+                break;
+            case ShadowResolveStage::Upsample:
+                if(!dispatch.graphOwnsUpsampleStaticEntryStates){
+                    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                }
+                if(!graphOwnsInputColorState)
+                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                if(!graphOwnsOutputState)
+                    commandList.setTextureState(dispatch.visibilityTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                commandList.setEnableUavBarriersForTexture(dispatch.visibilityTexture, true);
+                break;
+        }
+        commandList.commitBarriers();
+
+        ShadowResolvePushConstants push;
+        push.receiverFactor = targets.shadowReceiverFactor;
+        push.width = targets.width;
+        push.height = targets.height;
+        push.halfWidth = halfWidth;
+        push.halfHeight = halfHeight;
+        push.stepWidth = stepWidth;
+        push.stage = static_cast<u32>(stage);
+        push.lightSlotStart = slotStart;
+        push.lightSlotCount = slotCount;
+        push.momentsValid = dispatch.temporalMomentsValid ? 1u : 0u;
+        push.upsampleFold = static_cast<u32>(dispatch.fold);
+        push.geometrySlot = bindless.shadowSoftGeometry.slot();
+        push.depthSlot = bindless.gbufferDepth.slot();
+        push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
+        push.normalSlot = bindless.gbufferNormal.slot();
+        push.softHalfSlot = resources.softHalf;
+        push.inputColorSlot = resources.inputColor;
+        push.momentsSlot = resources.moments;
+        push.outputStorageSlot = resources.outputStorage;
+        push.visibilityStorageSlot = dispatch.visibilityStorage;
+        push.sceneShadingSlot = dispatch.sceneShading;
+
+        Core::ComputePipeline& pipeline = stage == ShadowResolveStage::Upsample ? *dispatch.upsamplePipeline : *dispatch.waveletPipeline;
+        Core::ComputeState state;
+        state.setPipeline(&pipeline);
+        commandList.setComputeState(state);
+        heap.bindCompute(commandList, pipeline);
+        commandList.setPushConstants(&push, sizeof(push));
+        commandList.dispatch(groupsX, groupsY, 1u);
+    };
+
+    static_assert((NWB_SHADOW_RESOLVE_PASS_COUNT % 2) == 1, "opaque resolve pass count must be odd");
+    static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be odd");
+    NWB_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
+    NWB_ASSERT(dispatchFirstWavelet || dispatchTail);
+
+    if(dispatchFirstWavelet){
+        runPass(dispatch.firstWaveletResources, 1u, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY, dispatch.graphOwnsFirstWaveletInputState, dispatch.graphOwnsFirstWaveletOutputState);
+    }
+    if(!dispatchTail)
+        return;
+
+    b8 sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
+    for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){
+        const SoftShadowResolvePassResources& nextWaveletResources = sourceIsHalfA ? dispatch.outputHalfBResources : dispatch.outputHalfAResources;
+        runPass(nextWaveletResources, 1u << pass, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+        sourceIsHalfA = !sourceIsHalfA;
+    }
+    NWB_ASSERT(dispatch.upsampleResources.inputColorTexture == (dispatch.waveletPassCount == 1u ? dispatch.firstWaveletResources : (sourceIsHalfA ? dispatch.outputHalfAResources : dispatch.outputHalfBResources)).outputTexture);
+    runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY, dispatch.graphOwnsUpsampleInputColorEntryState, dispatch.graphOwnsUpsampleVisibilityOutputState);
+}
+
+b8 RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
+    if(m_rayTracingState.m_shadowReprojectMergePipeline)
+        return true;
+    if(m_rayTracingState.m_shadowReprojectMergePipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+    if(!m_rayTracingState.m_shadowReprojectMergeBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
+        auto shadowReprojectMergeBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(shadowReprojectMergeBindingLayoutResult)
+            m_rayTracingState.m_shadowReprojectMergeBindingLayout = Move(*shadowReprojectMergeBindingLayoutResult);
+        else
+            m_rayTracingState.m_shadowReprojectMergeBindingLayout.reset();
+        if(!shadowReprojectMergeBindingLayoutResult){
+            m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
+            return false;
+        }
+    }
+    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowReprojectMergeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_SoftShadowReprojectMerge", m_rayTracingState.m_shadowReprojectMergeShader)){
+        m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
+        return false;
+    }
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowReprojectMergeShader).addBindingLayout(m_rayTracingState.m_shadowReprojectMergeBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    auto shadowReprojectMergePipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowReprojectMergePipelineResult)
+        m_rayTracingState.m_shadowReprojectMergePipeline = Move(*shadowReprojectMergePipelineResult);
+    else
+        m_rayTracingState.m_shadowReprojectMergePipeline.reset();
+    if(!shadowReprojectMergePipelineResult){
+        m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTargets& targets)noexcept{
+    if(!m_rayTracingState.m_softShadowTemporalReady)
+        return;
+
+    const auto acceptedWorldToClip = m_meshSystem.snapshotAcceptedMeshViewWorldToClip();
+    if(acceptedWorldToClip){
+        m_rayTracingState.m_prevWorldToClip = *acceptedWorldToClip;
+        m_rayTracingState.m_prevWorldToClipValid = true;
+    }
+    if(m_rayTracingState.m_softTransparentTemporalReady && !hardwareTransparentShadowReady())
+        m_rayTracingState.m_softwareTransparentSampling.m_history.accept();
+    else
+        m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
+    m_rayTracingState.m_transparentShadowSamplingHistory.accept();
+    m_rayTracingState.m_softShadowTemporalSeeded = true;
+    Swap(targets.shadowSoftGeometry, targets.shadowSoftGeometryPrev);
+    Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);
+    Swap(targets.bindless.shadowSoftGeometryStorage, targets.bindless.shadowSoftGeometryPrevStorage);
+    m_rayTracingState.m_softShadowHistoryFrontIsA ^= 1u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -44,7 +44,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;
 
     const DeferredGraphResourceImportResult& resources = inputs.resources;
-    const Core::GpuTaskResourceUse generateResourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 4u> generateResourceUses = {
         ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer),
         ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange),
         ReadBufferUse(resources.materialTyped, inputs.materialTypedRange),
@@ -57,14 +57,14 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     rasterResourceUses.push_back(ReadUse(resources.meshView, Core::ResourceStates::ConstantBuffer));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialInstances, inputs.materialInstanceRange));
     rasterResourceUses.push_back(ReadBufferUse(resources.materialTyped, inputs.materialTypedRange));
-    rasterResourceUses.push_back(ReadUse(inputs.sharedOutput, ECSRenderDetail::s_GeneratedGeometryRasterState));
+    rasterResourceUses.push_back(ReadUse(inputs.sharedOutput, ECSRenderDetail::s_ObjectGeometryRasterState));
     rasterResourceUses.push_back(ReadWriteUse(resources.albedo, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.normal, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.worldPosition, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.specularRoughness, Core::ResourceStates::RenderTarget));
     rasterResourceUses.push_back(ReadWriteUse(resources.depth, Core::ResourceStates::DepthWrite));
 
-    Core::GpuTaskResourceSetUse resourceSetUses[s_ResourceSetUseCapacity] = {};
+    Array<Core::GpuTaskResourceSetUse, s_ResourceSetUseCapacity> resourceSetUses = {};
     usize resourceSetUseCount = 0u;
     resourceSetUses[resourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid())
@@ -78,7 +78,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
     // Each phase chains explicitly. Keep that serial chain in the primary-Graphics packet under FrontierSafe.
     scheduling.allowMergeAcrossConsumerFrontier = true;
 
-    const Name phaseIdentities[] = {
+    const Array<Name, 10u> phaseIdentities = {
         Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_a"),
         Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_a"),
         Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_b"),
@@ -90,7 +90,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_e"),
         Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_e"),
     };
-    const AStringView phaseMarkers[] = {
+    const Array<AStringView, 10u> phaseMarkers = {
         "Opaque Shared Compute Emulation Generate A",
         "Opaque Shared Compute Emulation Raster A",
         "Opaque Shared Compute Emulation Generate B",
@@ -108,7 +108,7 @@ Expected<OpaqueSharedComputeEmulationChainResult> OpaqueSharedComputeEmulationCh
         return MakeUnexpected(Failure{});
     }
     Core::GpuTaskId dependency = inputs.gbufferTask;
-    const Span<const Core::GpuTaskResourceSetUse> resourceSetUseSpan(resourceSetUses, resourceSetUseCount);
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUseSpan(resourceSetUses.data(), resourceSetUseCount);
     for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
         const b8 isRasterPhase = phaseIndex % s_SharedComputeEmulationPhasesPerDraw != 0u;
         const auto phaseTask = declarePhase(
@@ -152,9 +152,9 @@ Expected<Core::GpuTaskId> OpaqueSharedComputeEmulationChainBuilder::declarePhase
         .setIdentity(identity)
         .setMarkerLabel(markerLabel)
         .setScheduling(scheduling)
-        .setDependencies(&dependency, 1u)
-        .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size())
+        .setDependencies({ &dependency, 1u })
+        .setResourceUses(resourceUses)
+        .setResourceSetUses({ resourceSetUses.empty() ? nullptr : resourceSetUses.data(), resourceSetUses.size() })
     ;
     ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Payload payload{
         m_materialSystem,

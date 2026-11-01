@@ -3,6 +3,9 @@
 
 
 #include "asset_writer_skeleton.h"
+#include "source_mesh_streams.h"
+
+#include <impl/assets_mesh/cook_source_streams.h>
 
 #include <core/common/log.h>
 
@@ -26,64 +29,7 @@ namespace AssetWriterSkeletonDetail{
 
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
-inline constexpr StringView s_PositionStreamLabel = "position";
-inline constexpr StringView s_NormalStreamLabel = "normal";
-inline constexpr StringView s_TangentStreamLabel = "tangent";
-inline constexpr StringView s_Uv0StreamLabel = "uv0";
-inline constexpr StringView s_ColorsStreamLabel = "color";
 inline constexpr AStringView s_JointFallbackNamePrefix = "joint_";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context){
-    if(index < count)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{}: vertex_ref {} index is out of range"), ConvertString(context), ConvertString(fieldName));
-    return false;
-}
-
-b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context){
-    if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh payload is incomplete"), ConvertString(context));
-        return false;
-    }
-    if(mesh.tangents.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh tangent stream is required"), ConvertString(context));
-        return false;
-    }
-    if((mesh.indices.size() % s_TriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh index stream must contain whole triangles"), ConvertString(context));
-        return false;
-    }
-
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.position, mesh.positions.size(), s_PositionStreamLabel, context))
-            return false;
-        if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), s_NormalStreamLabel, context))
-            return false;
-        if(ref.tangent == s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), ConvertString(context));
-            return false;
-        }
-        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), s_TangentStreamLabel, context))
-            return false;
-        if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), s_Uv0StreamLabel, context))
-            return false;
-        if(!ValidateStreamIndex(ref.color, mesh.colors.size(), s_ColorsStreamLabel, context))
-            return false;
-    }
-
-    for(const u32 index : mesh.indices){
-        if(index >= mesh.vertexRefs.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh triangle index references an out-of-range vertex_ref"), ConvertString(context));
-            return false;
-        }
-    }
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,6 +57,25 @@ Expected<SIMDMatrix> BuildLocalBindPoseMatrix(const SIMDMatrix& globalBindPose, 
     return localBindPose;
 }
 
+u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
+    return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
+}
+
+b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
+    static constexpr AStringView s_Context = "Failed to write NWB model";
+    if(!FbxSourceMeshStreams::ValidateMeshGeometry(mesh, s_Context))
+        return false;
+    if(mesh.skin.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
+        return false;
+    }
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        if(!Impl::MeshCookSourceStreams::ValidateSourceStreamIndexWithContext(s_Context, s_SkinStreamLabel, ref.skin, mesh.skin.size()))
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -136,12 +101,11 @@ b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, const Span<ufbx_node* 
 }
 
 ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena){
-    ScratchString name(scratchArena);
-    if(node && node->name.data && node->name.length != 0u)
-        name.assign(node->name.data, node->name.length);
-    if(!name.empty())
-        return name;
+    const AStringView nodeName = node ? UfbxStringView(node->name) : AStringView{};
+    if(!nodeName.empty())
+        return ScratchString(nodeName, scratchArena);
 
+    ScratchString name(scratchArena);
     StringAppendFormat(name, "{}{}", s_JointFallbackNamePrefix, fallbackIndex);
     return name;
 }
@@ -175,7 +139,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     }
 
     UtilityScratchVector<u32> parentIndices(scratchArena);
-    parentIndices.resize(joints.size(), s_MissingSourceStreamIndex);
+    parentIndices.resize(joints.size(), Impl::s_MeshMissingStreamIndex);
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         const ufbx_node* parent = joints[jointIndex]->parent;
         if(!parent)
@@ -191,7 +155,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         u32 depth = 0u;
         u32 parentIndex = parentIndices[jointIndex];
-        for(usize guard = 0u; parentIndex != s_MissingSourceStreamIndex; ++guard){
+        for(usize guard = 0u; parentIndex != Impl::s_MeshMissingStreamIndex; ++guard){
             if(guard >= joints.size()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton hierarchy contains a cycle"));
                 return MakeUnexpected(Failure{});
@@ -221,7 +185,7 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
 
     for(const usize oldJointIndex : sortedJointIndices){
         const u32 parentIndex = parentIndices[oldJointIndex];
-        const JointMatrix* parentGlobalBindPose = parentIndex != s_MissingSourceStreamIndex ? &bindPoseMatrices[parentIndex] : nullptr;
+        const JointMatrix* parentGlobalBindPose = parentIndex != Impl::s_MeshMissingStreamIndex ? &bindPoseMatrices[parentIndex] : nullptr;
         const SIMDMatrix globalBindPoseMatrix = LoadFloat(bindPoseMatrices[oldJointIndex]);
 
         SIMDMatrix parentGlobalBindPoseMatrix{};
@@ -248,9 +212,9 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(const Span<ufbx_node* const
     return outData;
 }
 
-b8 RemapSkinInfluences(const Span<MeshSkinInfluence> inOutInfluences, const Span<const u16> oldToNewJointIndices){
+b8 RemapSkinInfluences(const Span<const u16> oldToNewJointIndices, const Span<MeshSkinInfluence> inOutInfluences){
     for(MeshSkinInfluence& influence : inOutInfluences){
-        for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot){
+        for(usize slot = 0u; slot < Impl::s_SkinInfluenceJointCount; ++slot){
             const u16 oldJointIndex = influence.joint[slot];
             if(oldJointIndex >= oldToNewJointIndices.size()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: skin influence references out-of-range joint {}"), oldJointIndex);
@@ -258,25 +222,6 @@ b8 RemapSkinInfluences(const Span<MeshSkinInfluence> inOutInfluences, const Span
             }
             influence.joint[slot] = oldToNewJointIndices[oldJointIndex];
         }
-    }
-    return true;
-}
-
-u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
-    return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
-}
-
-b8 ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
-    static constexpr AStringView s_Context = "Failed to write NWB model";
-    if(!ValidateMeshGeometry(mesh, s_Context))
-        return false;
-    if(mesh.skin.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: skinned model source mesh requires skin influences"));
-        return false;
-    }
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), s_SkinStreamLabel, s_Context))
-            return false;
     }
     return true;
 }
@@ -324,7 +269,7 @@ Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const Sourc
 
         SourceVertexRef ref = sourceRef;
         ref.position = positionIndex;
-        ref.skin = s_MissingSourceStreamIndex;
+        ref.skin = Impl::s_MeshMissingStreamIndex;
         outMesh.vertexRefs.push_back(ref);
     }
 

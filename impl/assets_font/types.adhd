@@ -18,7 +18,70 @@ const u32 s_FontSfntMaxpTag = 0x6d617870u;
 const usize s_FontSfntHeadUnitsPerEmOffset = 18u;
 const usize s_FontSfntMaxpGlyphCountOffset = 4u;
 
+const u32 s_TrueTypeSignature = 0x00010000u;
+const u32 s_CffSignature = 0x4f54544fu; // OTTO
+const u32 s_FvarTag = 0x66766172u; // fvar
+const u32 s_Cff2Tag = 0x43464632u; // CFF2
+const u32 s_CmapTag = 0x636d6170u; // cmap
+const u32 s_HheaTag = 0x68686561u; // hhea
+const u32 s_HmtxTag = 0x686d7478u; // hmtx
+const u32 s_GlyfTag = 0x676c7966u; // glyf
+const u32 s_LocaTag = 0x6c6f6361u; // loca
+const u32 s_CffTableTag = 0x43464620u; // "CFF " with a trailing space
+const usize s_HeadMinBytes = 54u;
+const usize s_CmapMinBytes = 4u;
+const usize s_MaxpMinBytes = 6u;
+const usize s_HheaMinBytes = 36u;
+const usize s_HmtxMinBytes = 4u;
+const StringView s_WarningEventName = "warning";
+const StringView s_NativeValidationCategory = "font_native_validation";
+const StringView s_NativeCleanupFailedFormat = "Font native cleanup failed: native_domain=FreeType native_code={}";
+const StringView s_FontOpFtDoneFace = "FT_Done_Face";
+const StringView s_FontOpFtDoneLibrary = "FT_Done_Library";
+const StringView s_FontOpFtNewLibrary = "FT_New_Library";
+const StringView s_FontOpFtNewMemoryFace = "FT_New_Memory_Face";
+const StringView s_FontOpAdmitStaticScalableFace = "admit_static_scalable_face";
+const StringView s_FontOpFtSelectCharmap = "FT_Select_Charmap";
+
+const StringView s_FontMetaDiagnosticPrefix = "Font meta";
 const StringView s_PreparedFontExtension = ".font";
+const StringView s_PreparedFontInvalidSerializeInputReason = "invalid font bytes, face index, or image group count";
+const StringView s_PreparedFontInvalidSerializeGroupReason = "image dimensions, channels, or pixel bytes are invalid";
+const StringView s_PreparedFontOpenFailedReason = "could not open paired .font source";
+const StringView s_PreparedFontLengthOutOfBoundsReason = "file length is outside prepared-source limits";
+const StringView s_PreparedFontSeekFailedReason = "could not seek prepared-source header";
+const StringView s_PreparedFontHeaderTruncatedReason = "prepared-source header is truncated";
+const StringView s_PreparedFontUnsupportedHeaderReason = "unsupported prepared-source magic, version, face index, or flags; rebuild required";
+const StringView s_PreparedFontCountsOutOfBoundsReason = "font size or image group count is outside prepared-source limits";
+const StringView s_PreparedFontImageDirectoryTruncatedReason = "image directory is truncated";
+const StringView s_PreparedFontInvalidImageGroupReason = "image dimensions, channels, or byte count are invalid";
+const StringView s_PreparedFontLayoutMismatchReason = "prepared-source layout is truncated or has trailing bytes";
+const StringView s_PreparedFontSfntBytesTruncatedReason = "prepared SFNT bytes are truncated";
+const StringView s_PreparedFontSfntHashMismatchReason = "prepared SFNT content hash differs from its directory";
+const StringView s_PreparedFontImageBytesTruncatedReason = "prepared image bytes are truncated";
+const StringView s_PreparedFontImageHashMismatchReason = "prepared image content hash differs from its directory";
+const StringView s_PreparedFontLengthChangedReason = "prepared source changed length during read";
+const StringView s_PreparedFontChangedDuringReadReason = "prepared source changed during read";
+
+const u32 s_PreparedFontMagic = 0x324e4f46u; // FON2 in little-endian wire order.
+const u32 s_PreparedFontVersion = 1u;
+const usize s_PreparedFontHeaderBytes = 56u;
+const usize s_PreparedFontGroupHeaderBytes = 48u;
+const u32 s_PreparedFontMaxGroupCount = 8u;
+const u32 s_PreparedFontMaxSide = 2048u;
+const u32 s_PreparedFontMaxChannelCount = 4u;
+const usize s_PreparedFontHeaderVersionOffset = 4u;
+const usize s_PreparedFontHeaderFaceIndexOffset = 8u;
+const usize s_PreparedFontHeaderFontByteCountOffset = 12u;
+const usize s_PreparedFontHeaderGroupCountOffset = 16u;
+const usize s_PreparedFontHeaderFlagsOffset = 20u;
+const usize s_PreparedFontHeaderFontSha256Offset = 24u;
+const usize s_PreparedFontGroupHeightOffset = 4u;
+const usize s_PreparedFontGroupChannelCountOffset = 8u;
+const usize s_PreparedFontGroupByteCountOffset = 12u;
+const usize s_PreparedFontGroupSha256Offset = 16u;
+const u64 s_PreparedFontMaxPixelBytes = 128ul * 1024ul * 1024ul;
+const u64 s_PreparedFontMaxFileBytes = cast<u64>(s_PreparedFontHeaderBytes) + cast<u64>(s_PreparedFontMaxGroupCount) * cast<u64>(s_PreparedFontGroupHeaderBytes) + cast<u64>(s_FontMaxSourceBytes) + s_PreparedFontMaxPixelBytes;
 
 const u32 s_FontBinaryMagic = 0x464f4e31u; // FON1
 const u32 s_FontBinaryVersion = 1u;
@@ -33,6 +96,11 @@ class FontBinaryHeader{
 }
 
 class PreparedFontImageView{
+    public u32 width;
+    public u32 height;
+    public u32 channelCount;
+    public Span<u8> pixels;
+
     public PreparedFontImageView(){
         this.width = 0u;
         this.height = 0u;
@@ -46,17 +114,18 @@ class PreparedFontImageView{
         this.channelCount = c;
         this.pixels = p;
     }
-
-    public u32 width;
-    public u32 height;
-    public u32 channelCount;
-    public Span<u8> pixels;
 }
 
 class FontSfntTable{
     public u32 tag = 0u;
     public u32 offset = 0u;
     public Span<u8> bytes;
+}
+
+class NativeFontFailure{
+    public StringView operation = "";
+    public i32 nativeError = 0;
+    public b8 hasNativeError = false;
 }
 
 u16 ReadFontSfntU16BigEndian(in Span<u8> bytes, in usize offset){
@@ -73,6 +142,9 @@ u32 ReadFontSfntU32BigEndian(in Span<u8> bytes, in usize offset){
 
 // Borrows the source buffer; the caller keeps it alive and unchanged while reading the directory or its tables.
 class FontSfntDirectory{
+    private Span<u8> m_bytes;
+    private u16 m_tableCount = 0u;
+
     public void assign(in Span<u8> bytes, in u16 tableCount){
         this.m_bytes = bytes;
         this.m_tableCount = tableCount;
@@ -118,9 +190,6 @@ class FontSfntDirectory{
         outRecord = this.m_bytes.subspan(s_FontSfntHeaderBytes + index * s_FontSfntTableRecordBytes, s_FontSfntTableRecordBytes);
         return true;
     }
-
-    private Span<u8> m_bytes;
-    private u16 m_tableCount = 0u;
 }
 
 b8 ReadFontSfntDirectory(in Span<u8> bytes, mut FontSfntDirectory outDirectory){
@@ -131,6 +200,79 @@ b8 ReadFontSfntDirectory(in Span<u8> bytes, mut FontSfntDirectory outDirectory){
         return false;
     outDirectory.assign(bytes, tableCount);
     return true;
+}
+
+b8 TryComputePreparedFontImageByteCount(in u32 width, in u32 height, in u32 channels, mut u32 outByteCount){
+    if(width == 0u || width > s_PreparedFontMaxSide || height == 0u || height > s_PreparedFontMaxSide || channels == 0u || channels > s_PreparedFontMaxChannelCount)
+        return false;
+    outByteCount = width * height * channels;
+    return true;
+}
+
+b8 ValidateFontSfntRequiredTables(in Span<u8> bytes){
+    FontSfntDirectory directory;
+    if(!ReadFontSfntDirectory(bytes, directory))
+        return false;
+    const u32 signature = directory.signature();
+    if(signature != s_TrueTypeSignature && signature != s_CffSignature)
+        return false;
+
+    Array<u32, 256> tags;
+    b8 hasHead = false;
+    b8 hasCmap = false;
+    b8 hasMaxp = false;
+    b8 hasHhea = false;
+    b8 hasHmtx = false;
+    b8 hasGlyf = false;
+    b8 hasLoca = false;
+    b8 hasCff = false;
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        FontSfntTable tableResult;
+        if(!directory.table(cast<usize>(index), tableResult) || cast<usize>(tableResult.offset) < directory.directoryBytes())
+            return false;
+        const u32 tag = tableResult.tag;
+        const usize length = tableResult.bytes.size();
+        if(tag == s_FvarTag || tag == s_Cff2Tag)
+            return false;
+        for(u16 prev = 0u; prev < index; ++prev){
+            if(tags[cast<usize>(prev)] == tag)
+                return false;
+        }
+        tags[cast<usize>(index)] = tag;
+        switch(tag){
+        case s_FontSfntHeadTag:
+            hasHead = length >= s_HeadMinBytes;
+            break;
+        case s_CmapTag:
+            hasCmap = length >= s_CmapMinBytes;
+            break;
+        case s_FontSfntMaxpTag:
+            hasMaxp = length >= s_MaxpMinBytes;
+            break;
+        case s_HheaTag:
+            hasHhea = length >= s_HheaMinBytes;
+            break;
+        case s_HmtxTag:
+            hasHmtx = length >= s_HmtxMinBytes;
+            break;
+        case s_GlyfTag:
+            hasGlyf = length > 0u;
+            break;
+        case s_LocaTag:
+            hasLoca = length > 0u;
+            break;
+        case s_CffTableTag:
+            hasCff = length > 0u;
+            break;
+        default:
+            break;
+        }
+    }
+    if(!hasHead || !hasCmap || !hasMaxp || !hasHhea || !hasHmtx)
+        return false;
+    if(signature == s_TrueTypeSignature)
+        return hasGlyf && hasLoca;
+    return hasCff;
 }
 
 

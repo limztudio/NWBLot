@@ -5,6 +5,7 @@
 #include "scheduler.h"
 #include "compiler_internal.h"
 #include "packet_runtime_internal.h"
+#include "scheduler_callback_bindings.h"
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -162,13 +163,89 @@ b8 GpuTaskScheduler::compileGraph(
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(analysis, assignments, compiledGraph, scratchArena, declarations, topology, resolvedOptions))
+    if(!compiler.compile(declarations, topology, scratchArena, analysis, assignments, compiledGraph, resolvedOptions))
         return false;
 
     recordedGraph.reset(compiledGraph);
     transaction.reset(compiledGraph);
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace GpuTaskSubmissionDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename TaskCallback>
+b8 TaskCallbackBindings<TaskCallback>::resolve(
+    const GpuTaskGraph::DeclarationReadView& declarations,
+    const GpuCompiledGraph::ReadView& plan,
+    const GpuSubmissionPacketRange& range,
+    const Span<const TaskCallback> callbacks
+){
+    m_callbacks = {};
+    m_generation = 0u;
+    m_indices.reset();
+    const usize callbackCount = callbacks.size();
+    if((callbackCount != 0u && !callbacks.data()) || !plan.validFor(declarations) || !plan.validPacketRange(range) || callbackCount > declarations.taskCount())
+        return false;
+    if(callbackCount > s_InlineCallbackCount)
+        m_indices.emplace(AddSize(callbackCount, callbackCount), m_scratchArena);
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
+        const TaskCallback& callback = callbacks[callbackIndex];
+        if(!callback.invoke || !declarations.validTask(callback.task))
+            return false;
+        const GpuCompiledTaskView task = plan.findTask(callback.task);
+        if(!task.valid())
+            return false;
+        const GpuSubmissionPacketId packet = task.plan->packet;
+        if(!packet.valid() || packet.index < range.first.index || static_cast<usize>(packet.index) >= rangeEnd)
+            return false;
+        if(m_indices){
+            if(!m_indices->try_emplace(callback.task.index, callbackIndex).second)
+                return false;
+        }
+        else{
+            for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
+                if(callbacks[previousIndex].task == callback.task)
+                    return false;
+            }
+        }
+    }
+    m_callbacks = callbacks;
+    m_generation = declarations.generation();
+    return true;
+}
+
+template<typename TaskCallback>
+const TaskCallback* TaskCallbackBindings<TaskCallback>::find(const GpuTaskId task)const noexcept{
+    if(m_callbacks.empty() || !task.valid() || task.generation != m_generation)
+        return nullptr;
+    if(m_indices){
+        const auto found = m_indices->find(task.index);
+        return found == m_indices->end() ? nullptr : &m_callbacks[found.value()];
+    }
+    for(const TaskCallback& callback : m_callbacks){
+        if(callback.task == task)
+            return &callback;
+    }
+    return nullptr;
+}
+
+template class TaskCallbackBindings<GpuTaskGraphTaskRecordedCallback>;
+template class TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

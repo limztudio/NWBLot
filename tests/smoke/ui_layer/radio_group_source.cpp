@@ -78,7 +78,7 @@ Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const b8 rev
 StringView UiRadioGroupSmokeSource::text(const u64 index)const noexcept{
     invalidateText();
     ++m_labelReads;
-    constexpr StringView s_Labels[]{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Epsilon" };
+    constexpr Array<StringView, 5> s_Labels = { "Alpha", "Beta", "Gamma (disabled)", "Delta", "Epsilon" };
     const u64 choice = rawKey(index);
     if(choice == 0u)
         return {};

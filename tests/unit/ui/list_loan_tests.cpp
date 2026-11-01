@@ -136,7 +136,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId firstRow()const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(id(s_ListKey, s_PanelKey), "rows")), 1u));
+        return UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(id(s_ListKey, s_PanelKey), "rows"), 1u);
     }
 
     [[nodiscard]] AcceptedState accepted()const noexcept{ return UiWidgetTests::CaptureAcceptedInput<16u>(m_context.input()); }

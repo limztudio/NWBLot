@@ -55,7 +55,7 @@ struct NameSymbolResolverState{
     return s_InProgress;
 }
 
-class ScopedSymbolCallbackFlag final{
+class ScopedSymbolCallbackFlag final : NoCopy{
 public:
     explicit ScopedSymbolCallbackFlag(b8& flag)noexcept
         : m_flag(flag)
@@ -65,11 +65,6 @@ public:
     ~ScopedSymbolCallbackFlag()noexcept{
         m_flag = false;
     }
-    ScopedSymbolCallbackFlag(const ScopedSymbolCallbackFlag&) = delete;
-
-
-public:
-    ScopedSymbolCallbackFlag& operator=(const ScopedSymbolCallbackFlag&) = delete;
 
 
 private:
@@ -84,8 +79,8 @@ inline constexpr usize s_SymbolTextBufferCount = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline auto NextSymbolTextBuffer()noexcept -> char(&)[s_SymbolTextBufferLength]{
-    thread_local static char s_Buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
+[[nodiscard]] inline Array<char, s_SymbolTextBufferLength>& NextSymbolTextBuffer()noexcept{
+    thread_local static Array<Array<char, s_SymbolTextBufferLength>, s_SymbolTextBufferCount> s_Buffers = {};
     thread_local static usize s_Next = 0u;
     auto& buffer = s_Buffers[s_Next];
     s_Next = (s_Next + 1u) % s_SymbolTextBufferCount;
@@ -141,17 +136,17 @@ inline void RecordNameSymbolText(const NameHash& hash, const BasicStringView<Cha
     }
     else{
         // Wide->narrow by byte truncation, not UTF-8, so recorded text round-trips to the hash.
-        char narrowText[s_SymbolTextBufferLength];
+        Array<char, s_SymbolTextBufferLength> narrowText = {};
         usize copiedCount = 0u;
         for(const CharT ch : text){
             if(ch == CharT{})
                 return;
-            if((copiedCount + 1u) < sizeof(narrowText)){
+            if((copiedCount + 1u) < narrowText.size()){
                 narrowText[copiedCount] = static_cast<char>(ch);
                 ++copiedCount;
             }
         }
-        state.callback(hash, AStringView(narrowText, copiedCount), state.userData);
+        state.callback(hash, AStringView(narrowText.data(), copiedCount), state.userData);
     }
 }
 

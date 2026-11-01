@@ -66,7 +66,7 @@ b8 UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     ui.listStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
     Rect panel = __hidden_ui_combo_smoke::s_Panel;
     if(m_bottom)
-        panel.y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(192.0f)));
+        panel.y = context.display.logicalHeight - 192.0f;
     if(!ui.beginPanel("combo_fixture", panel))
         return false;
     const WidgetOptions title{ {}, { LayoutSizePolicy::Fixed, 24.0f } };
@@ -99,13 +99,11 @@ b8 UiComboSmokeScene::paint(Impl::UiPaintContext& context){
     if(!ui.endPanel())
         return false;
     observeState();
-    PaintKeyedSmokeValueMarkers<16u, 12u>(context, values(), m_sequence);
+    PaintKeyedSmokeValueMarkers<16u, 12u>(values(), m_sequence, context);
     return true;
 }
 
-b8 UiComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiComboSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key < Core::Key::F4 || key > Core::Key::F12)
         return false;
     if(action != Core::InputAction::Press)

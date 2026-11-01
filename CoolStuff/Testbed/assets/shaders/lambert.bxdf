@@ -65,7 +65,7 @@ half3 nwbTestbedLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 n
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
-half3 nwbTestbedLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normalVector = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(float3(0.0, 0.0, 0.0), normalVector);
     const float3 bitangentVector = nwbSafeNormalize(cross(normalVector, tangentVector), cross(normalVector, nwbFrameFallbackTangent(normalVector)));
@@ -81,10 +81,6 @@ half3 nwbTestbedLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
 
     litColor += nwbBxdfCausticIrradiance(pixel) * surface.baseColor;
     return nwbBxdfRequiresLinearOutput() ? max(litColor, half3(0.0h)) : nwbTestbedLambertTonemap(litColor);
-}
-
-half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
-    return nwbTestbedLambertShadeSurface(surface, pixel);
 }
 
 

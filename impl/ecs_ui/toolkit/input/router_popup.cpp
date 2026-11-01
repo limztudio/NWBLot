@@ -3,36 +3,12 @@
 
 
 #include "router.h"
-#include "../rect_math.h"
-
-#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_router_popup{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 Focusable(const SIMDVectorSingle rectangle, const SIMDVectorSingle clip)noexcept{
-    const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(rectangle, clip);
-    return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,22 +48,18 @@ b8 InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ances
     return false;
 }
 
-b8 InputRouter::stagePopups(const PopupScope* scopes, const usize count){
-    if(count > s_InputMaxPopups || (count != 0u && !scopes))
+b8 InputRouter::stagePopups(const Span<const PopupScope> scopes){
+    const usize count = scopes.size();
+    if(count > s_InputMaxPopups)
         return false;
     m_stagedPopups.clear();
     for(usize index = 0u; index < count; ++index){
         const PopupScope& scope = scopes[index];
         if(
-            !scope.token.valid() || !HasUiRectArea(scope.bounds) || !HasUiRectArea(scope.viewport)
+            !scope.token.valid() || !HasValidPopupScopeGeometry(scope)
             || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
             || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
-            || scope.bounds.x < scope.viewport.x || scope.bounds.y < scope.viewport.y
         )
-            return false;
-        // Lanes are bounds right, bounds bottom, viewport right, viewport bottom. Area already proved these sums finite.
-        const SIMDVectorSingle end = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y), VectorSet(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height));
-        if(VectorGetX(end) > VectorGetZ(end) || VectorGetY(end) > VectorGetW(end))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
             if(scopes[previous].token.widget == scope.token.widget)
@@ -136,7 +108,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
         const HitTarget* target = findTarget(id, declaration);
         return
             target && target->enabled && target->focusable
-            && __hidden_ui_router_popup::Focusable(VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height))
+            && HasVisibleBounds(*target)
             && target->popup == scope
         ;
     };
@@ -194,7 +166,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
             for(const auto& target : m_targets){
                 if(
                     target.popup == candidatePopup && target.enabled && target.focusable
-                    && __hidden_ui_router_popup::Focusable(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height))
+                    && HasVisibleBounds(target)
                 ){
                     candidateFocus = target.id;
                     candidateDeclaration = target.declarationGeneration;

@@ -27,19 +27,18 @@ inline constexpr StringView s_PackageErrorCategory = "crash_package_error";
 
 struct CrashUploadSnapshot{
     CrashSpoolRetentionConfig spoolRetention;
-    char spoolDirectory[s_MaxPathText] = {};
-    char logServerUrl[s_MaxUrlText] = {};
-    char crashUploadToken[s_MaxMediumText] = {};
-    char protectedPendingPackageName[s_MaxShortText] = {};
+    Array<char, s_MaxPathText> spoolDirectory = {};
+    Array<char, s_MaxUrlText> logServerUrl = {};
+    Array<char, s_MaxMediumText> crashUploadToken = {};
+    Array<char, s_MaxShortText> protectedPendingPackageName = {};
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 WriteCrashPackage(const CrashRequest& request);
-[[nodiscard]] b8 FlushCrashReportsForRequest(const CrashRequest& request);
 void CaptureCrashPackageFilesystemFailure(AStringView operation, const ErrorCode& error)noexcept;
+[[nodiscard]] b8 WriteCrashPackage(const CrashRequest& request);
 
 template<typename ArenaT, typename PathArenaT>
 [[nodiscard]] Expected<CrashBytesT<ArenaT>, ErrorCode> BuildPackageArchive(ArenaT& arena, Alloc::ScratchArena& scratchArena, const ::Path<PathArenaT>& packageDirectory);
@@ -47,6 +46,7 @@ template<typename ArenaT>
 [[nodiscard]] Expected<void, ErrorCode> ApplyCrashSpoolRetention(Alloc::ScratchArena& scratchArena, const ::Path<ArenaT>& spoolDirectory, const CrashSpoolRetentionConfig& retention, AStringView protectedPendingPackageName = AStringView());
 template<typename ArenaT>
 [[nodiscard]] b8 FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snapshot);
+[[nodiscard]] b8 FlushCrashReportsForRequest(const CrashRequest& request);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

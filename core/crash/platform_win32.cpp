@@ -8,7 +8,6 @@
 #include <global/scope_exit.h>
 #include <global/termination.h>
 
-#include <cstring>
 #include <windows.h>
 
 
@@ -27,7 +26,6 @@ namespace __hidden_crash_win32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 
 
@@ -57,7 +55,7 @@ static void CleanupOwnedHandle(HANDLE& handle, CrashDetail::PlatformCleanupObser
 static void WaitForOwnedProcess(const HANDLE process, const b8 terminateImmediately, CrashDetail::PlatformCleanupObservations& observations)noexcept{
     if(!process || process == INVALID_HANDLE_VALUE)
         return;
-    DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : s_HandlerExitWaitMilliseconds);
+    DWORD waited = WaitForSingleObject(process, terminateImmediately ? 0u : CrashDetail::s_HandlerExitWaitMilliseconds);
     b8 terminated = false;
     if(!terminateImmediately && waited != WAIT_OBJECT_0){
         // Preserve detached upload completion after the existing bounded normal shutdown wait.
@@ -75,7 +73,7 @@ static void WaitForOwnedProcess(const HANDLE process, const b8 terminateImmediat
         }
         else{
             terminated = true;
-            waited = WaitForSingleObject(process, s_HandlerExitWaitMilliseconds);
+            waited = WaitForSingleObject(process, CrashDetail::s_HandlerExitWaitMilliseconds);
         }
         if(waited != WAIT_OBJECT_0){
             observations.record(NativeFailure(CrashDetail::PlatformOperation::WaitProcess, waited == WAIT_FAILED ? GetLastError() : ERROR_TIMEOUT));
@@ -197,8 +195,8 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 
     // Capture in-process (all modules loaded); server only resolves symbols, never unwinds (no .pdata needed).
     // Leading capture frames dropped via options.callstackFramesToSkip.
-    void* backTrace[s_MaxCallstackFrames];
-    const USHORT capturedFrames = RtlCaptureStackBackTrace(0u, static_cast<ULONG>(s_MaxCallstackFrames), backTrace, nullptr);
+    Array<void*, s_MaxCallstackFrames> backTrace;
+    const USHORT capturedFrames = RtlCaptureStackBackTrace(0u, static_cast<ULONG>(s_MaxCallstackFrames), backTrace.data(), nullptr);
     outOptions.callstackFrameCount = 0u;
     for(USHORT i = 0u; i < capturedFrames; ++i){
         const u64 address = static_cast<u64>(reinterpret_cast<usize>(backTrace[i]));
@@ -244,9 +242,9 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
         // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full timeout.
         // Falls back to a single-object wait if the handler process handle is unavailable.
-        HANDLE waitHandles[__hidden_crash_win32::s_CrashWaitHandleCount] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
+        Array<HANDLE, __hidden_crash_win32::s_CrashWaitHandleCount> waitHandles = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
         const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? __hidden_crash_win32::s_CrashWaitHandleCount : 1u;
-        const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
+        const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles.data(), FALSE, waitMilliseconds);
         if(waitResult == WAIT_OBJECT_0){
             CrashAck ack;
             if(!ReadAllWin32Handle(g_State.ackReadHandle, &ack, sizeof(ack))){
@@ -337,9 +335,9 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
             commandLine[cursor++] = value;
     };
     const auto appendHandle = [&](const HANDLE handle)noexcept{
-        char text[s_HandlerArgumentTextCapacity] = {};
+        Array<char, s_HandlerArgumentTextCapacity> text = {};
         AppendUnsignedToFixedBuffer(text, static_cast<u64>(reinterpret_cast<usize>(handle)));
-        for(const char value : AStringView(text))
+        for(const char value : FixedBufferView(text))
             commandLine[cursor++] = static_cast<tchar>(value);
     };
     append(NWB_TEXT("\""));
@@ -358,8 +356,8 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
     appendHandle(ackEvent);
     commandLine[cursor] = 0;
 
-    HANDLE inheritedHandles[] = { requestReadHandle, ackWriteHandle, ackEvent };
-    if(!UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles, sizeof(inheritedHandles), nullptr, nullptr))
+    Array<HANDLE, 3u> inheritedHandles = { requestReadHandle, ackWriteHandle, ackEvent };
+    if(!UpdateProcThreadAttribute(attributeList, 0u, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritedHandles.data(), sizeof(inheritedHandles), nullptr, nullptr))
         return MakeUnexpected(__hidden_crash_win32::NativeFailure(PlatformOperation::PrepareAttributes, GetLastError()));
     STARTUPINFOEX startupInfo = {};
     startupInfo.StartupInfo.cb = sizeof(startupInfo);

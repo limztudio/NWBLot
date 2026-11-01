@@ -39,7 +39,6 @@ constexpr AStringView s_SourceFilename = "source.txt";
 
 using AString = NWB::Tests::TestAString;
 #if defined(NWB_PLATFORM_LINUX)
-constexpr u32 s_ExpectedDualCount = 2u;
 #endif
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 static constexpr AStringView s_BinSh = "/bin/sh";
@@ -86,14 +85,14 @@ TEST(Global, EnvironmentVariableNamesSupportSlicesAndRejectEmbeddedNull){
     const auto hasValue = HasEnvironmentValue(testArena.arena, s_PathEnvironment);
     ASSERT_TRUE(hasValue);
     EXPECT_EQ(*hasValue, !(**expected).empty());
-    const char invalidName[]{ 'P', 'A', 'T', 'H', '\0', 'X' };
-    const auto invalid = ReadEnvironmentVariable(testArena.arena, AStringView(invalidName, LengthOf(invalidName)));
+    const Array<char, 6u> invalidName = { 'P', 'A', 'T', 'H', '\0', 'X' };
+    const auto invalid = ReadEnvironmentVariable(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error(), MakeErrorCode(ErrorCondition::invalid_argument));
-    const auto invalidEquals = EnvironmentVariableEquals(testArena.arena, AStringView(invalidName, LengthOf(invalidName)), "unused");
+    const auto invalidEquals = EnvironmentVariableEquals(testArena.arena, AStringView(invalidName.data(), invalidName.size()), "unused");
     ASSERT_FALSE(invalidEquals);
     EXPECT_EQ(invalidEquals.error(), invalid.error());
-    const auto invalidHasValue = HasEnvironmentValue(testArena.arena, AStringView(invalidName, LengthOf(invalidName)));
+    const auto invalidHasValue = HasEnvironmentValue(testArena.arena, AStringView(invalidName.data(), invalidName.size()));
     ASSERT_FALSE(invalidHasValue);
     EXPECT_EQ(invalidHasValue.error(), invalid.error());
 }
@@ -156,7 +155,7 @@ TEST(Global, DirectoryCreationRejectsExistingFileWithoutChangingIt){
 TEST(Global, FileWritesRejectBufferedDeviceFailure){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> fullDevice(testArena.arena, "/dev/full");
-    const u8 payload[]{ 1u, 2u, 3u };
+    const Array<u8, 3u> payload = { 1u, 2u, 3u };
     EXPECT_FALSE(WriteTextFile(fullDevice, "buffered output"));
     EXPECT_FALSE(WriteBinaryFile(fullDevice, Span<const u8>(payload)));
 }
@@ -170,8 +169,8 @@ TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("retained")));
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
 
-    const char invalidArgument[]{ 'a', '\0', 'b' };
-    const AStringView arguments[]{ "unused_program", AStringView(invalidArgument, LengthOf(invalidArgument)) };
+    const Array<char, 3u> invalidArgument = { 'a', '\0', 'b' };
+    const Array<AStringView, 2u> arguments = { "unused_program", AStringView(invalidArgument.data(), invalidArgument.size()) };
     EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)));
     EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)));
     AString output(testArena.arena);
@@ -206,7 +205,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     const usize executableLength = executableText.size();
     outputPathText += s_TrailingSuffix;
     executableText += s_TrailingSuffix;
-    const AStringView arguments[]{ AStringView(executableText).substr(0u, executableLength), "/c", "echo stdout&echo stderr 1>&2&exit /b 23" };
+    const Array<AStringView, 3u> arguments = { AStringView(executableText).substr(0u, executableLength), "/c", "echo stdout&echo stderr 1>&2&exit /b 23" };
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText).substr(0u, outputPathLength));
     ASSERT_TRUE(exitCode);
     EXPECT_EQ(*exitCode, 23);
@@ -227,8 +226,8 @@ TEST(Global, SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols){
     ASSERT_TRUE(currentProcessId);
     EXPECT_EQ((*currentProcessId)(), ::GetCurrentProcessId());
 
-    const char invalidSymbol[]{ 'G', '\0', 'e' };
-    const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol, LengthOf(invalidSymbol)));
+    const Array<char, 3u> invalidSymbol = { 'G', '\0', 'e' };
+    const auto invalid = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol.data(), invalidSymbol.size()));
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().code, MakeErrorCode(ErrorCondition::invalid_argument));
     const auto missing = library.resolve<CurrentProcessIdFn>(testArena.arena, "nwb_missing_symbol_bec2119d19ec4c48");
@@ -258,10 +257,10 @@ TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance)
     NWB::Tests::TestArena<> testArena;
 #if defined(NWB_PLATFORM_WINDOWS)
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./í•œê¸€/File.TXT/");
-    constexpr TStringView s_Expected[]{ NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+    constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
 #else
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./í•œê¸€/File.TXT/");
-    constexpr TStringView s_Expected[]{ NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
+    constexpr Array<TStringView, 5u> s_Expected = { NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
 #endif
     auto componentIt = path.begin();
     const TStringView first = componentIt.nativeComponent();
@@ -361,10 +360,10 @@ TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error().kind, ProcessCaptureFailureKind::InvalidArguments);
     EXPECT_EQ(invalid.error().nativeError, ErrorCondition::invalid_argument);
-    const AStringView emptyArguments[]{ s_BinSh, s_C, "exit 0" };
+    const Array<AStringView, 3u> emptyArguments = { s_BinSh, s_C, "exit 0" };
     ASSERT_TRUE(CaptureProcessOutput(output, testArena.arena, emptyArguments));
     EXPECT_TRUE(output.empty());
-    const AStringView failedArguments[]{ s_BinSh, s_C, "printf retained; exit 23" };
+    const Array<AStringView, 3u> failedArguments = { s_BinSh, s_C, "printf retained; exit 23" };
     const auto failed = CaptureProcessOutput(output, testArena.arena, failedArguments);
     ASSERT_FALSE(failed);
     EXPECT_EQ(failed.error().kind, ProcessCaptureFailureKind::ChildExitedUnsuccessfully);
@@ -373,7 +372,7 @@ TEST(Global, CaptureProcessOutputAdmitsEmptySuccessAndPreservesExitFailure){
 }
 
 TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwinding){
-    const AStringView argv[] = { s_BinSh, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
+    const Array<AStringView, 3u> argv = { s_BinSh, s_C, "printf '%s\\n' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     ThrowingCaptureOutput output;
     constexpr u32 s_CaptureTimeoutMS = 250u;
@@ -390,7 +389,7 @@ TEST(Global, CaptureProcessOutputAppendFailureClosesPipeAndReapsChildBeforeUnwin
 }
 
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
-    const AStringView argv[] = { s_BinSh, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
+    const Array<AStringView, 3u> argv = { s_BinSh, s_C, "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     constexpr u32 s_CaptureTimeoutMS = 250u;
@@ -419,7 +418,7 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
 }
 
 TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
-    const AStringView argv[] = { s_BinSh, s_C, "while :; do printf x; done" };
+    const Array<AStringView, 3u> argv = { s_BinSh, s_C, "while :; do printf x; done" };
     NWB::Tests::TestArena<> testArena;
     AString output(testArena.arena);
     const auto startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
@@ -444,7 +443,7 @@ TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
     ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
-    const AStringView argv[] = { s_BinSh, s_C, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
+    const Array<AStringView, 3u> argv = { s_BinSh, s_C, AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u) };
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
     const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
     ASSERT_TRUE(exitCode);
@@ -507,7 +506,7 @@ TEST(Global, PathViewAccessorsAndSelfAliasingMutationsPreserveBoundariesWithoutE
     EXPECT_EQ(multiDotPath.stemView(), TStringView(NWB_TEXT("archive.tar")));
     EXPECT_EQ(multiDotPath.extensionView(), TStringView(NWB_TEXT(".NWB")));
 
-    constexpr AStringView s_AllowedExtensions[] = { ".nwb", ".slang" };
+    constexpr Array<AStringView, 2u> s_AllowedExtensions = { ".nwb", ".slang" };
     EXPECT_TRUE(PathHasListedExtension(multiDotPath, s_AllowedExtensions));
     EXPECT_FALSE(PathHasListedExtension(hiddenPath, s_AllowedExtensions));
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, baselineUsedBytes);
@@ -550,7 +549,7 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
         EXPECT_FALSE(entry.path().empty());
         ++entryCount;
     }
-    EXPECT_EQ(entryCount, s_ExpectedDualCount);
+    EXPECT_EQ(entryCount, 2u);
 
     EXPECT_TRUE(RemoveAllIfExists(root));
 }

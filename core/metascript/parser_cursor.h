@@ -39,12 +39,7 @@ public:
 
 public:
     [[nodiscard]] Checkpoint save()const noexcept{ return Checkpoint{m_lexer, m_current, m_errors.size()}; }
-    void restore(const Checkpoint& checkpoint)noexcept{
-        m_lexer = checkpoint.lexer;
-        m_current = checkpoint.current;
-        while(m_errors.size() > checkpoint.errorCount)
-            m_errors.pop_back();
-    }
+    void restore(const Checkpoint& checkpoint)noexcept;
 
     [[nodiscard]] b8 failed()const noexcept{ return !m_errors.empty(); }
     [[nodiscard]] const Token& current()const noexcept{ return m_current; }

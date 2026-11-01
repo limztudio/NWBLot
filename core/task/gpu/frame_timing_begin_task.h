@@ -7,6 +7,7 @@
 
 #include "task_graph.h"
 
+#include <core/common/log.h>
 #include <core/graphics/gpu_timing.h>
 
 
@@ -31,8 +32,16 @@ struct FrameTimingBeginGraphTask{
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token);
+    [[nodiscard]] static b8 Record(const Payload& payload, CommandList& commandList, [[maybe_unused]] const GpuTaskRecordContext& context){
+        return payload.frameTimingTransaction.begin(payload.scopeDefinition, payload.device, commandList);
+    }
+
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(!payload.frameTimingTransaction.confirmBeginSubmission(token)){
+            NWB_LOGGER_WARNING(NWB_TEXT("GPU task graph: failed to confirm accepted frame timing begin; discarding timing reservation"));
+            payload.frameTimingTransaction.discard();
+        }
+    }
 };
 
 

@@ -23,6 +23,22 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VkClusterAccelerationStructureInputInfoNV ClusterOperationInput::nativeInfo()noexcept{
+    auto native = info;
+    switch(info.opType){
+    case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV:
+        native.opInput.pMoveObjects = &move;
+        break;
+    case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV:
+        native.opInput.pClustersBottomLevel = &blas;
+        break;
+    default:
+        native.opInput.pTriangleClusters = &cluster;
+        break;
+    }
+    return native;
+}
+
 Expected<ClusterOperationInput> BuildClusterOperationInputInfo(const RayTracingClusterOperationParams& params, TStringView operationName){
     ClusterOperationInput input;
     VkClusterAccelerationStructureOpTypeNV opType;
@@ -272,13 +288,9 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
         const usize geometryCount = desc.bottomLevelGeometries.size();
         blasScratch.resizeForSizeQuery(geometryCount);
 
-        using OpacityMicromapGeometryVector = Vector<VkAccelerationStructureTrianglesOpacityMicromapEXT, Alloc::ScratchArena>;
-        using OpacityMicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
-        using OpacityMicromapUsageOffsetVector = Vector<usize, Alloc::ScratchArena>;
-
-        OpacityMicromapGeometryVector opacityMicromapGeometries(geometryCount, scratchArena);
-        OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(geometryCount, scratchArena);
-        OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
+        VulkanDetail::OpacityMicromapGeometryVector opacityMicromapGeometries(geometryCount, scratchArena);
+        VulkanDetail::OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(geometryCount, scratchArena);
+        VulkanDetail::OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
 
         usize totalOpacityMicromapUsageCount = 0u;
         for(usize i = 0u; i < geometryCount; ++i){
@@ -312,9 +324,8 @@ Expected<RayTracingAccelStructHandle> Device::createAccelStruct(const RayTracing
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap belongs to another device"));
                 return MakeUnexpected(Failure{});
             }
-            constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
             Buffer* const micromapStorage = opacityMicromap->m_dataBuffer.get();
-            if(!isBufferReadyForGpuUse(micromapStorage, s_MicromapStorageUsage)){
+            if(!isBufferReadyForGpuUse(micromapStorage, VulkanDetail::s_MicromapStorageUsage)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create BLAS: triangle opacity micromap storage is not ready"));
                 return MakeUnexpected(Failure{});
             }
@@ -503,7 +514,6 @@ Expected<MemoryRequirements> Device::getAccelStructMemoryRequirements(RayTracing
 Expected<RayTracingClusterOperationSizeInfo> Device::getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params){
     if(!m_context.extensions.nvClusterAccelerationStructure || !m_context.clusterAccelerationStructureFeatureEnabled || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV)
         return MakeUnexpected(Failure{});
-    constexpr u32 s_MaxPositionTruncateBitCount = 32u;
     constexpr u32 s_SupportedOperationFlags =
         static_cast<u32>(RayTracingClusterOperationFlags::FastTrace)
         | static_cast<u32>(RayTracingClusterOperationFlags::FastBuild)
@@ -531,7 +541,7 @@ Expected<RayTracingClusterOperationSizeInfo> Device::getClusterOperationSizeInfo
             params.clas.maxTriangleCount > properties.maxTrianglesPerCluster
             || params.clas.maxVertexCount > properties.maxVerticesPerCluster
             || params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
-            || params.clas.minPositionTruncateBitCount > s_MaxPositionTruncateBitCount
+            || params.clas.minPositionTruncateBitCount > VulkanDetail::s_MaxPositionTruncateBitCount
         )
             return MakeUnexpected(Failure{});
 

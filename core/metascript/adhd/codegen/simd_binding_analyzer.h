@@ -18,17 +18,11 @@ NWB_ADHD_BEGIN
 
 
 struct SimdVarBinding{
-public:
-    explicit SimdVarBinding(MetaArena& arena)noexcept
-        : regName(arena)
-    {}
-
-
-public:
     b8 isThisMember = false;
     b8 isLocalDecl = false;
     b8 isLoopElement = false;
     b8 readBeforeWrite = false;
+    b8 readAsRegister = false;
     b8 written = false;
     b8 unconditionallyWrittenFirst = false;
     b8 needsStorageSync = false;
@@ -36,6 +30,12 @@ public:
     MStringView name;
     MStringView simdType;
     MString regName;
+
+
+public:
+    explicit SimdVarBinding(MetaArena& arena)noexcept
+        : regName(arena)
+    {}
 };
 
 

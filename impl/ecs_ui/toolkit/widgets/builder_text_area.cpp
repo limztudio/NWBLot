@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
 #include "text_area_navigation.h"
+
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -64,11 +65,7 @@ private:
 
 
 EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
-    if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
-        || !IsFinite(options.wheelLines) || options.wheelLines <= 0.0f
-        || model.textMode() != EditTextMode::Multiline || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
-    ){
+    if(itemDeclarationBlocked() || !IsFinite(options.wheelLines) || options.wheelLines <= 0.0f || model.textMode() != EditTextMode::Multiline){
         m_context.fail();
         return {};
     }
@@ -97,7 +94,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     if(m_editHost){
         TextAreaNavigationResolver navigation(m_arena, m_text, m_context, state, m_style.fontSize, m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()));
         __hidden_builder_text_area::TextAreaActions actions(model, state, m_context);
-        result = m_editHost->editNavigated(**widget, model, editOptions, m_context.popupToken(), state.m_navigation, navigation, actions);
+        result = m_editHost->editNavigated(**widget, editOptions, m_context.popupToken(), model, state.m_navigation, navigation, actions);
     }
     if(!result.valid || m_context.failed() || state.revision() != stateRevision || model.instanceGeneration() != modelGeneration){
         result.valid = false;
@@ -134,7 +131,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     item.scrollbarStyle = m_scrollbarStyle;
     item.state = **widget;
     item.editOptions = editOptions;
-    if(!prepareEditBox(item, model, state.m_visual, result) || !textAreaMatches(frame)){
+    if(!prepareEditBox(result, model, state.m_visual, item) || !textAreaMatches(frame)){
         result.valid = false;
         m_context.fail();
         return result;
@@ -145,20 +142,14 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     }
     state.m_compositionGeneration = model.compositionGeneration();
     item.textArea = static_cast<u32>(m_scope->m_textAreas.size());
-    const SIMDVectorSingle minimum = loadEditMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle textSize = VectorAdd(VectorAdd(VectorSelect(VectorSelect(VectorZero(), minimum, s_SIMDMaskX), VectorReplicate(item.editView.visualBounds().height), s_SIMDMaskY), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle intrinsic = VectorMax(VectorSelect(VectorZero(), minimum, s_SIMDMaskXY), textSize);
-    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    resolveEditIntrinsicSize(item, description.intrinsicSize);
+    if(!addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    item.node = *admittedNode;
     frame.item = static_cast<u32>(m_scope->m_items.size());
     m_scope->m_items.push_back(Move(item));
     m_scope->m_textAreas.push_back(frame);

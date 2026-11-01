@@ -43,7 +43,7 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     m_resolver.records.clear();
     m_actions.records.clear();
 
-    const Core::Key::Enum keys[]{ Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown };
+    const Array<Core::Key::Enum, 4u> keys = { Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown };
     for(const auto value : keys)
         ASSERT_TRUE(key(value));
     ASSERT_TRUE(navigationFrame());
@@ -95,7 +95,7 @@ TEST_F(UiEditNavigationLifetimeTests, DisableDiscardsQueuedNavigationAndResetsOn
     ASSERT_EQ(m_actions.records.size(), 1u);
     EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(navigationFrame(disabled));
     EXPECT_FALSE(m_result.abandoned);
     EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
@@ -196,7 +196,7 @@ TEST_F(UiEditNavigationLifetimeTests, OrdinaryCancelRetiresPreferredColumnWhileP
     ASSERT_EQ(m_actions.records.size(), 1u);
     EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 
@@ -231,7 +231,7 @@ TEST_F(UiEditNavigationLifetimeTests, OldEpochCancelPreservesDraftAndLaterRefocu
     EXPECT_FLOAT_EQ(m_navigation.preferredX(), 10.0f);
     EXPECT_TRUE(m_textInput.activeSession().valid());
     EXPECT_NE(m_textInput.activeSession(), oldSession);
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditNavigationLifetimeTests, OmissionLeavesCallerStateExactUntilRedeclarationAbandonsOwnership){
@@ -258,7 +258,7 @@ TEST_F(UiEditNavigationLifetimeTests, OmissionLeavesCallerStateExactUntilRedecla
     EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
     ASSERT_EQ(m_actions.records.size(), 1u);
     EXPECT_EQ(m_actions.records[0u].text, "abcdef\nx\nabcdef");
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(navigationFrame());
     EXPECT_FALSE(m_result.abandoned);
     EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
@@ -283,7 +283,7 @@ TEST_F(UiEditNavigationLifetimeTests, HostResetCannotTouchUnlentDraftOrPreferred
     EXPECT_FALSE(m_navigation.hasPreferredX());
     EXPECT_FALSE(m_navigation.matches(preferred));
     EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNavigationOwnership){

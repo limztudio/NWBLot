@@ -19,3 +19,4 @@ target_link_libraries(nwb_loader PRIVATE nwb_assets nwb_common nwb_crash nwb_all
 if(TARGET nwb_crash_handler)
     add_dependencies(nwb_loader nwb_crash_handler)
 endif()
+

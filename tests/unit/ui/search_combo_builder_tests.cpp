@@ -52,7 +52,7 @@ TEST_F(UiSearchComboBuilderTests, TabMovesFromQueryToResultsThenExitsWithoutComm
     EXPECT_FALSE(m_searchResult.combo.committed);
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 1u);
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
 }
 
 TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCommittedValue){
@@ -72,7 +72,7 @@ TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCo
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
     EXPECT_FALSE(m_search.query().composition().active);
     EXPECT_TRUE(m_search.query().text().empty());
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
 }
 
 TEST_F(UiSearchComboBuilderTests, ClosedArrowOpensUsingTheFilteredLifetimeAndKeepsTheCommittedKey){
@@ -245,7 +245,7 @@ TEST_F(UiSearchComboBuilderTests, DeferredQueryTextOrSelectionChangesRejectTheCa
     EXPECT_EQ(m_search.query().anchor(), 1u);
     EXPECT_EQ(m_search.query().caret(), 1u);
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
-    ExpectRect(target(query())->rectangle, displayed);
+    UiPaintAssertions::ExpectRect(target(query())->rectangle, displayed);
 }
 
 TEST_F(UiSearchComboBuilderTests, BeginningPreeditAfterDeclarationCannotPublishAnUncomposedView){
@@ -306,7 +306,7 @@ TEST_F(UiSearchComboBuilderTests, PublishingQueryMutationCannotReplaceTheAccepte
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_search.query().text(), "published");
-    ExpectRect(target(query())->rectangle, displayed);
+    UiPaintAssertions::ExpectRect(target(query())->rectangle, displayed);
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
 }
 
@@ -404,14 +404,14 @@ TEST_F(UiSearchComboBuilderTests, PlainToSearchSwitchRetiresTheOldPopupAndReopen
     ASSERT_NE(target(list()), nullptr);
     EXPECT_EQ(m_context.input().focus(), list());
     const PopupToken oldPopup = target(popup())->popup;
-    const u64 oldDeclaration = target(host())->declarationGeneration;
+    const u64 oldDeclaration = target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration;
     press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(2u));
     EXPECT_TRUE(m_searchResult.combo.closed);
     EXPECT_FALSE(m_searchResult.combo.committed);
     EXPECT_FALSE(m_search.combo().isOpen());
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
-    EXPECT_NE(target(host())->declarationGeneration, oldDeclaration);
+    EXPECT_NE(target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration, oldDeclaration);
     EXPECT_EQ(target(popup()), nullptr);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(openSearch(3u));
@@ -443,7 +443,7 @@ TEST_F(UiSearchComboBuilderTests, SearchToPlainSwitchRetiresTheEditorAndCannotRe
     EXPECT_EQ(target(query()), nullptr);
     EXPECT_EQ(target(popup()), nullptr);
     EXPECT_TRUE(m_context.input().controlActions().empty());
-    click(Center(target(host())->rectangle));
+    click(Center(target(id(s_ComboKey, s_ComboPanelKey))->rectangle));
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));
     const ComboResult reopened = m_builder.comboBox(s_ComboKey, m_searchSource, m_search.combo(), Options().combo);

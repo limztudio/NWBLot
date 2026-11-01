@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../paint.h"
+#include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
@@ -34,7 +34,6 @@ public:
         const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
         const Point& titleSize, f32 density
     )noexcept;
-    [[nodiscard]] static Rect Visible(const WindowState& state, const WindowMetrics& metrics)noexcept;
     [[nodiscard]] static Rect Content(const WindowState& state, const WindowMetrics& metrics)noexcept;
     [[nodiscard]] static Rect Collapse(const WindowState& state, const WindowMetrics& metrics)noexcept;
     [[nodiscard]] static Rect Resize(const WindowState& state, const WindowMetrics& metrics)noexcept;

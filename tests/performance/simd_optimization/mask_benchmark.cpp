@@ -2,14 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/floating_point_environment.h>
-#include <global/simdmath.h>
-#include <global/timer.h>
-#include <global/text_utils.h>
-#include <global/scope_exit.h>
-
-#include <cerrno>
-#include <cstdlib>
+#include "benchmark_support.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,13 +14,15 @@ namespace __hidden_mask_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using SimdOptimizationBenchmark::NextSeed;
+
 namespace Operation{
 enum Enum : u32{ Move, EqualFloat, EqualDouble, EqualDoubleXYZ };
 };
 
 struct Dataset{
-    UInt64x4 left[64];
-    UInt64x4 right[64];
+    Array<UInt64x4, 64> left = {};
+    Array<UInt64x4, 64> right = {};
 };
 
 
@@ -95,36 +90,26 @@ NWB_NOINLINE u32 Qualify()noexcept{
     const auto originalEnvironment = HoldFloatingPointExceptions();
     if(!originalEnvironment)
         return 2u;
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
     constexpr u64 s_QualifyInitialState = 0x7462825482129431ull;
-    constexpr u32 s_XorShift1 = 13u;
-    constexpr u32 s_XorShift2 = 7u;
-    constexpr u32 s_XorShift3 = 17u;
     constexpr usize s_RandomQualificationSampleCount = 1000000u;
     u64 state = s_QualifyInitialState;
-    const auto next = [&]()noexcept{
-        state ^= state << s_XorShift1;
-        state ^= state >> s_XorShift2;
-        state ^= state << s_XorShift3;
-        return state;
-    };
     for(usize sample = 0u; sample < s_RandomQualificationSampleCount; ++sample){
-        const SIMDVectorDouble value = VectorDoubleSetInt(next(), next(), next(), next());
+        const SIMDVectorDouble value = VectorDoubleSetInt(NextSeed(state), NextSeed(state), NextSeed(state), NextSeed(state));
         if(MoveDouble<false>(value) != MoveDouble<true>(value))
             return 1u;
     }
-    constexpr u64 s_Edges[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
-        0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8123412341234ull, 0x7FF0234523452345ull, 0x7FC012347FC01234ull, 0x7F8012347F801234ull };
-    constexpr int s_Modes[]{ FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
+    constexpr Array<u64, 14> s_Edges = {
+        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3FF0000000000000ull, 0xBFF0000000000000ull,
+        0x7FEFFFFFFFFFFFFFull, 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8123412341234ull, 0x7FF0234523452345ull, 0x7FC012347FC01234ull, 0x7F8012347F801234ull,
+    };
+    constexpr Array<int, 4> s_Modes = { FE_TONEAREST, FE_UPWARD, FE_DOWNWARD, FE_TOWARDZERO };
     for(const int mode : s_Modes){
         if(!SetFloatingPointRoundingMode(mode))
             return 2u;
         for(usize sample = 0u; sample < 2048u; ++sample){
-            const SIMDVectorDouble a = VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
-            const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)], s_Edges[next() % LengthOf(s_Edges)]);
+            const SIMDVectorDouble a = VectorDoubleSetInt(s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()]);
+            const SIMDVectorDouble b = sample % 2u ? a : VectorDoubleSetInt(s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()], s_Edges[NextSeed(state) % s_Edges.size()]);
 #define NWB_AUDIT_COMPARE(kind) \
             if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT)) \
                 return 3u; \
@@ -151,8 +136,7 @@ NWB_NOINLINE u32 Qualify()noexcept{
 NWB_NOINLINE void InitializeDataset(Dataset& dataset)noexcept{
     u64 state = 0x5629842965734193ull;
     for(usize i = 0u; i < 64u; ++i){
-        const auto next = [&]()noexcept{ state ^= state << 13u; state ^= state >> 7u; state ^= state << 17u; return state; };
-        const SIMDVectorDouble left = VectorDoubleSetInt(next(), next(), next(), next());
+        const SIMDVectorDouble left = VectorDoubleSetInt(NextSeed(state), NextSeed(state), NextSeed(state), NextSeed(state));
         const u64 differing = i % 3u == 0u ? 1u : 0u;
         StoreDoubleInt(left, dataset.left[i]);
         StoreDoubleInt(VectorDoubleSetInt(VectorDoubleGetIntX(left) ^ differing, VectorDoubleGetIntY(left), VectorDoubleGetIntZ(left), VectorDoubleGetIntW(left)), dataset.right[i]);
@@ -173,7 +157,7 @@ NWB_INLINE u32 Apply(const SIMDVectorDouble a, const SIMDVectorDouble b)noexcept
 
 template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE u64 Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
-    u64 results[8]{};
+    Array<u64, 8> results = {};
     if(latency){
         usize index = 1u;
         for(usize i = 0u; i < iterations; ++i){
@@ -201,7 +185,7 @@ void Measure(const Dataset& data, const usize iterations, const b8 latency){
     const u64 checksum = Workload<Kind, Candidate>(data, iterations, latency);
     const f64 nanoseconds = DurationInNS<f64>(TimerNow(), start);
     const usize operations = latency ? iterations : iterations * 8u;
-    const f64 nanosecondsPerOperation = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(nanoseconds), VectorDoubleReplicate(static_cast<f64>(operations))));
+    const f64 nanosecondsPerOperation = nanoseconds / static_cast<f64>(operations);
     NWB_COUT
         << "{\"operation\":" << Kind << ",\"variant\":\"" << (Candidate ? "candidate" : "baseline") << "\",\"workload\":\"" << (latency ? "latency" : "throughput")
         << "\",\"operations\":" << operations << ",\"nanoseconds\":" << nanoseconds << ",\"ns_per_operation\":" << nanosecondsPerOperation << ",\"checksum\":" << checksum << "}\n"
@@ -236,13 +220,12 @@ int main(const int argc, const char* const* argv){
     }
     if(argc != 6 || StringView(argv[1]) != "--measure")
         return 2;
-    const b8 candidate = StringView(argv[3]) == "candidate", latency = StringView(argv[5]) == "latency";
-    if((!candidate && StringView(argv[3]) != "baseline") || (!latency && StringView(argv[5]) != "throughput"))
+    const b8 latency = StringView(argv[5]) == "latency";
+    const auto options = SimdOptimizationBenchmark::ParseMeasureOptions(argv, Limit<usize>::s_Max / (latency ? 1u : 8u), true);
+    if(!options)
         return 2;
-    const auto parsedIterations = ParseU64(AStringView(argv[4]));
-    if(!parsedIterations || *parsedIterations == 0u || *parsedIterations > Limit<usize>::s_Max / (latency ? 1u : 8u))
-        return 2;
-    const usize iterations = static_cast<usize>(*parsedIterations);
+    const b8 candidate = options->candidate;
+    const usize iterations = options->iterations;
     Dataset data{};
     InitializeDataset(data);
     if(StringView(argv[2]) == "move")

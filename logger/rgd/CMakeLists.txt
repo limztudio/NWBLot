@@ -14,3 +14,4 @@ target_sources(nwb_logrgd PRIVATE
 )
 target_include_directories(nwb_logrgd SYSTEM PRIVATE "${PROJECT_SOURCE_DIR}/3rd_parties")
 target_link_libraries(nwb_logrgd PUBLIC nwb_common nwb_alloc PRIVATE nwb::rgd_backend)
+

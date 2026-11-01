@@ -48,7 +48,7 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
     beginPaint(reference);
     const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
     for(const auto builder : builders){
-        ASSERT_TRUE(builder->prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
+        ASSERT_TRUE(builder->prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
         builder->fillRect({ 2.0f, 3.0f, 4.0f, 5.0f }, { 0.8f, 0.4f, 0.2f, 0.5f });
         ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
         ASSERT_TRUE(builder->drawSdfGlyph(sdf, 3u, { 22.0f, 3.0f, 4.0f, 5.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
@@ -59,8 +59,8 @@ TEST_F(PaintImageFixture, ThreeKindsShareSixtyFourSlotsWhileCopiesDeduplicateAnd
     const Array<SharedGlyphPage, 3u> glyphCopies{ glyphs[0u], glyphs[1u], glyphs[0u] };
     const Array<SharedSdfAtlasPage, 2u> sdfCopies{ sdf, sdf };
     const Array<SharedImageSource, 3u> imageCopies{ image, imageCopy, image };
-    ASSERT_TRUE(m_builder.prepareImages(glyphCopies.data(), glyphCopies.size(), sdfCopies.data(), sdfCopies.size(), imageCopies.data(), imageCopies.size()));
-    EXPECT_FALSE(m_builder.prepareTextureImages(&overflow, 1u));
+    ASSERT_TRUE(m_builder.prepareImages(glyphCopies, sdfCopies, imageCopies));
+    EXPECT_FALSE(m_builder.prepareTextureImages(Span(&overflow, 1u)));
     EXPECT_FALSE(m_builder.drawImage(overflow, { 48.0f, 3.0f, 8.0f, 4.0f }));
     const DrawSnapshot actual = m_builder.freeze();
     ASSERT_EQ(actual.glyphPages().size(), 62u);
@@ -99,7 +99,7 @@ TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersio
     beginPaint(reference);
     const Array<NotNull<PaintBuilder*>, 2u> builders{ MakeNotNull(&m_builder), MakeNotNull(&reference) };
     for(const auto builder : builders){
-        ASSERT_TRUE(builder->prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
+        ASSERT_TRUE(builder->prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
         builder->fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
         ASSERT_TRUE(builder->drawGlyph(glyphs[0u], { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
         ASSERT_TRUE(builder->beginOverlay(2u));
@@ -110,7 +110,7 @@ TEST_F(PaintImageFixture, MixedOverflowPreservesCoverageGenerationSdfImageVersio
         ASSERT_TRUE(builder->endOverlay());
     }
     const DrawSnapshot expected = reference.freeze();
-    EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &newSdf, 1u, &newImage, 1u));
+    EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&newSdf, 1u), Span(&newImage, 1u)));
     const DrawSnapshot actual = m_builder.freeze();
     ExpectSameImagePaint(actual, expected);
     ASSERT_EQ(actual.glyphPages().size(), 62u);
@@ -149,15 +149,15 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
         beginPaint(m_builder, pass + 1u);
         beginPaint(reference, pass + 1u);
         for(const auto builder : builders){
-            ASSERT_TRUE(builder->prepareImages(&glyph, 1u, nullptr, 0u, &image, 1u));
+            ASSERT_TRUE(builder->prepareImages(Span(&glyph, 1u), {}, Span(&image, 1u)));
             ASSERT_TRUE(builder->drawGlyph(glyph, { 2.0f, 3.0f, 4.0f, 5.0f }, { 0.125f, 0.25f, 0.5f, 0.5f }));
             ASSERT_TRUE(builder->drawImage(image, { 12.0f, 3.0f, 8.0f, 4.0f }));
         }
-        EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &sdf, 1u, invalidImages.data(), invalidImages.size()));
+        EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&sdf, 1u), invalidImages));
         // Retry image admission in a second builder before either builder finishes.
         if(pass != 0u){
             for(const auto builder : builders){
-                ASSERT_TRUE(builder->prepareImages(&upgrade, 1u, &sdf, 1u, &addition, 1u));
+                ASSERT_TRUE(builder->prepareImages(Span(&upgrade, 1u), Span(&sdf, 1u), Span(&addition, 1u)));
                 ASSERT_TRUE(builder->drawSdfGlyph(sdf, 1u, { 22.0f, 3.0f, 4.0f, 5.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
                 ASSERT_TRUE(builder->drawImage(addition, { 32.0f, 3.0f, 8.0f, 4.0f }));
             }
@@ -190,8 +190,8 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     const auto firstPointer = MakeNotNull(first.get());
     const auto secondPointer = MakeNotNull(second.get());
     Array<SharedImageSource, 4u> candidates{ first, copy, second, first };
-    ASSERT_TRUE(m_builder.prepareTextureImages(candidates.data(), candidates.size()));
-    ASSERT_TRUE(m_builder.prepareTextureImages(&copy, 1u));
+    ASSERT_TRUE(m_builder.prepareTextureImages(candidates));
+    ASSERT_TRUE(m_builder.prepareTextureImages(Span(&copy, 1u)));
     for(SharedImageSource& candidate : candidates)
         candidate.reset();
     first.reset();

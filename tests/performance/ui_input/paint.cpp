@@ -97,11 +97,12 @@ private:
 
 
 b8 RunPaintBenchmarks(){
-    constexpr u32 s_Counts[]{ 64u, 256u, 1024u };
-    constexpr AStringView s_MonotonicNames[]{ "paint.monotonic.64", "paint.monotonic.256", "paint.monotonic.1024" };
-    constexpr AStringView s_DescendingNames[]{ "paint.descending.64", "paint.descending.256", "paint.descending.1024" };
-    for(usize index = 0u; index < 3u; ++index){
-        for(const b8 descending : { false, true }){
+    constexpr Array<u32, 3> s_Counts{ 64u, 256u, 1024u };
+    constexpr Array<AStringView, 3> s_MonotonicNames{ "paint.monotonic.64", "paint.monotonic.256", "paint.monotonic.1024" };
+    constexpr Array<AStringView, 3> s_DescendingNames{ "paint.descending.64", "paint.descending.256", "paint.descending.1024" };
+    constexpr Array<b8, 2> s_DescendingFlags{ false, true };
+    for(usize index = 0u; index < s_Counts.size(); ++index){
+        for(const b8 descending : s_DescendingFlags){
             __hidden_ui_paint_benchmark::PaintCase benchmark(s_Counts[index], descending);
             if(!benchmark.operation() || !benchmark.checksum())
                 return false;

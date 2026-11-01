@@ -14,6 +14,11 @@
 
 
 using ErrorCondition = std::errc;
+using ErrorCategory = std::error_category;
+
+[[nodiscard]] inline const ErrorCategory& SystemCategory()noexcept{
+    return std::system_category();
+}
 
 [[nodiscard]] inline ErrorCode MakeErrorCode(const ErrorCondition condition)noexcept{
     return std::make_error_code(condition);

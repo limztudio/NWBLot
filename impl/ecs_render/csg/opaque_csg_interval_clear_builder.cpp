@@ -1,0 +1,80 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "opaque_csg_interval_clear_builder.h"
+
+#include <impl/ecs_render/csg/renderer_csg_types.h>
+
+#include <core/graphics/backend_selection/backend.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(const OpaqueCsgIntervalClearInputs& inputs, GraphClearTimingRecordState& clearTimingState){
+    OpaqueCsgIntervalClearResult result{};
+    if(!inputs.dependencyTask.valid())
+        return MakeUnexpected(Failure{});
+    if(!inputs.hasOpaqueCsgFrameWork)
+        return result;
+    if(!inputs.csgIntervalId.valid() || !inputs.csgReceiverEventCount.valid())
+        return MakeUnexpected(Failure{});
+
+    Core::GpuTaskSchedulingHint csgIntervalClearScheduling;
+    csgIntervalClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    csgIntervalClearScheduling.forceSubmissionBoundary = false;
+    csgIntervalClearScheduling.allowPacketMerge = true;
+    csgIntervalClearScheduling.mergeWithPrevious = true;
+    const auto makeCsgIntervalClearTaskDesc = [&csgIntervalClearScheduling](const Name identity, const AStringView markerLabel, const Core::GpuTaskId& dependency)noexcept{
+        Core::GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(identity).setMarkerLabel(markerLabel).setScheduling(csgIntervalClearScheduling).setDependencies({ &dependency, 1u });
+        return clearDesc;
+    };
+    const Core::Rect csgClearRect = ToCoreRect(inputs.csgFrameData.workRegion.resolveRect(inputs.targets.width, inputs.targets.height));
+    const Core::GpuClearTextureTaskRecordHooks csgIntervalClearBeginHooks{ .context = &clearTimingState, .beforeClear = &BeginGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
+    const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{ .context = &clearTimingState, .afterClear = &EndGraphClearTimingRecord, .discarded = &DiscardGraphClearTimingRecord, };
+    auto clearTaskResult = m_graph.addClearTextureRectUIntTask(
+        makeCsgIntervalClearTaskDesc(Name("render.graphics_prefix.csg_interval_clear"), "CSG Interval Id Clear", inputs.dependencyTask),
+        Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgIntervalId, .subresources = inputs.csgPeelSubresources, .rect = csgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearBeginHooks, }
+    );
+    if(!clearTaskResult){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
+        return MakeUnexpected(Failure{});
+    }
+    Core::GpuTaskId clearTask = *clearTaskResult;
+    result.clearFirstTask = clearTask;
+    Core::GpuTaskSchedulingHint csgIntervalClearTailScheduling = csgIntervalClearScheduling;
+    // The endpoint stays in the first clear's Graphics packet even when another queue observes the interval id.
+    csgIntervalClearTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    Core::GpuTaskDesc csgIntervalClearTailDesc;
+    csgIntervalClearTailDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_event_count_clear")).setMarkerLabel("CSG Receiver Event Count Clear").setScheduling(csgIntervalClearTailScheduling).setDependencies({ &clearTask, 1u });
+    const auto clearTaskResult2 = m_graph.addClearTextureRectUIntTask(
+        csgIntervalClearTailDesc,
+        Core::GpuClearTextureRectUIntTaskDesc{ .destination = inputs.csgReceiverEventCount, .subresources = inputs.csgReceiverEventCountSubresources, .rect = csgClearRect, .uintValue = Core::UIntColor(0u), .recordHooks = csgIntervalClearEndHooks, }
+    );
+    if(!clearTaskResult2){
+        clearTask = {};
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
+        return MakeUnexpected(Failure{});
+    }
+    clearTask = *clearTaskResult2;
+    result.clearTask = clearTask;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

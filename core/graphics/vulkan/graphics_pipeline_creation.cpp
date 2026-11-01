@@ -190,7 +190,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
     const RasterState& rasterState = desc.renderState.rasterState;
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(rasterState, VulkanDetail::ConvertFillMode(rasterState.fillMode), rasterState.depthClipEnable ? VK_FALSE : VK_TRUE);
 
-    VkDynamicState dynamicStates[] = {
+    const Array<VkDynamicState, 9> dynamicStates = {{
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,
         VK_DYNAMIC_STATE_LINE_WIDTH,
@@ -200,7 +200,7 @@ Expected<GraphicsPipelineHandle> Device::createGraphicsPipeline(const GraphicsPi
         VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
-    };
+    }};
     const auto fixedState = VulkanDetail::BuildGraphicsPipelineFixedState(fbinfo, desc.renderState, VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces, dynamicStates, s_OperationName, scratchArena);
     if(!fixedState)
         return MakeUnexpected(Failure{});

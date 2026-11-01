@@ -31,7 +31,7 @@ namespace __hidden_container_adaptor{
 constexpr usize s_DefaultCachelineSize = 64u;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-struct ProcessorInformationStorage final{
+struct ProcessorInformationStorage final : NoCopy{
     HANDLE m_heap;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION* m_data;
 
@@ -45,11 +45,6 @@ public:
         if(m_data && !HeapFree(m_heap, 0u, m_data))
             TerminateInvariant();
     }
-    ProcessorInformationStorage(const ProcessorInformationStorage&) = delete;
-
-
-public:
-    ProcessorInformationStorage& operator=(const ProcessorInformationStorage&) = delete;
 };
 #endif
 
@@ -83,7 +78,7 @@ public:
                 m_size = cur;
         }
 #elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-        const isize lineSizes[] = {
+        const Array<isize, 3u> lineSizes = {
             static_cast<isize>(sysconf(_SC_LEVEL1_DCACHE_LINESIZE)),
 #if defined(_SC_LEVEL2_DCACHE_LINESIZE)
             static_cast<isize>(sysconf(_SC_LEVEL2_DCACHE_LINESIZE)),

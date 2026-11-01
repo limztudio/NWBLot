@@ -54,11 +54,11 @@ TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeo
     ASSERT_TRUE(full);
     const auto clipped = SliderLayout::Place(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, *metrics, 0.25);
     ASSERT_TRUE(clipped);
-    UiWidgetTests::ExpectRect(clipped->clip, { 50.0f, 25.0f, 100.0f, 10.0f });
-    UiWidgetTests::ExpectRect(clipped->travelBounds, full->travelBounds);
-    UiWidgetTests::ExpectRect(clipped->centerTravel, full->centerTravel);
-    UiWidgetTests::ExpectRect(clipped->track, full->track);
-    UiWidgetTests::ExpectRect(clipped->thumb, full->thumb);
+    UiPaintAssertions::ExpectRect(clipped->clip, { 50.0f, 25.0f, 100.0f, 10.0f });
+    UiPaintAssertions::ExpectRect(clipped->travelBounds, full->travelBounds);
+    UiPaintAssertions::ExpectRect(clipped->centerTravel, full->centerTravel);
+    UiPaintAssertions::ExpectRect(clipped->track, full->track);
+    UiPaintAssertions::ExpectRect(clipped->thumb, full->thumb);
 }
 
 TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely){
@@ -67,8 +67,8 @@ TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafel
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 12.0f };
     const auto placement = SliderLayout::Place(bounds, bounds, *metrics, 0.5);
     ASSERT_TRUE(placement);
-    UiWidgetTests::ExpectRect(placement->travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
-    UiWidgetTests::ExpectRect(placement->thumb, placement->travelBounds);
+    UiPaintAssertions::ExpectRect(placement->travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
+    UiPaintAssertions::ExpectRect(placement->thumb, placement->travelBounds);
     EXPECT_FLOAT_EQ(placement->thumbExtent.x, 12.0f);
     EXPECT_FLOAT_EQ(placement->thumbExtent.y, 4.0f);
     EXPECT_FLOAT_EQ(placement->centerTravel.width, 0.0f);

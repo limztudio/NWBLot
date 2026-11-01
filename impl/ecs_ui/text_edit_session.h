@@ -7,8 +7,6 @@
 
 #include <impl/global.h>
 #include <impl/ecs_ui/components.adhd.h>
-#include <impl/ecs_ui/toolkit/id.h>
-#include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 #include <impl/ecs_ui/toolkit/edit/model_snapshot.h>
 
 #include <core/os/text_input.h>
@@ -34,29 +32,34 @@ NWB_IMPL_BEGIN
 // End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
 class UiTextEditSession final : NoCopy{
 public:
-    UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept;
+    UiTextEditSession(Core::Alloc::GlobalArena& arena, Core::ITextInputService& service)noexcept
+        : m_service(service)
+        , m_event(arena)
+        , m_expectedModel(arena)
+        , m_publishedText(arena)
+    {}
     ~UiTextEditSession()noexcept;
 
 
 public:
-    [[nodiscard]] Core::TextInputAdmission::Enum begin(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, Core::TextInputRect caret);
+    [[nodiscard]] Core::TextInputAdmission::Enum begin(const UiTextEditOwner& owner, Core::TextInputRect caret, Ui::EditModel& model);
     // Only a model matching the last applied event can refresh the native snapshot; external edits require a new session.
-    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret);
-    [[nodiscard]] UiTextEditResult drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model);
+    [[nodiscard]] Core::TextInputAdmission::Enum refresh(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret);
+    [[nodiscard]] UiTextEditResult drain(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
     [[nodiscard]] Core::TextInputPollResult::Enum pollOwned(Core::TextInputEvent& event);
     // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
-    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other);
-    [[nodiscard]] b8 end(const Ui::UiTextEditOwner& owner, Ui::EditModel& model);
+    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other);
+    [[nodiscard]] b8 end(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     [[nodiscard]] b8 cancel();
     [[nodiscard]] Core::TextInputSessionToken token()const noexcept{ return m_token; }
 
-    [[nodiscard]] const Ui::UiTextEditOwner& owner()const noexcept{ return m_owner; }
+    [[nodiscard]] const UiTextEditOwner& owner()const noexcept{ return m_owner; }
 
     [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_token.valid() ? m_surroundingRevision : 0u; }
 
-    [[nodiscard]] b8 matchesPublished(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
+    [[nodiscard]] b8 matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
         return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && matchesPublishedModel(model);
     }
 
@@ -64,7 +67,6 @@ public:
 private:
     [[nodiscard]] b8 matchesPublishedModel(const Ui::EditModel& model)const noexcept;
     [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod);
-    [[nodiscard]] b8 release();
 
 
 private:
@@ -72,7 +74,7 @@ private:
     Core::TextInputEvent m_event;
     Ui::EditModelSnapshot m_expectedModel;
     AString<Core::Alloc::GlobalArena> m_publishedText;
-    Ui::UiTextEditOwner m_owner;
+    UiTextEditOwner m_owner;
     Core::TextInputSessionToken m_token;
     usize m_publishedAnchor = 0u;
     usize m_publishedCaret = 0u;

@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -35,25 +37,22 @@ PopupScope Popup(const HitTarget& owner, u64 openGeneration = 7u)noexcept;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class HorizontalNavigationFixture : public testing::Test{
+class HorizontalNavigationFixture : public UiTestSupport::RouterTestFixture{
 public:
     HorizontalNavigationFixture();
 
 
 protected:
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event);
     [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, b8 repeat = false);
     [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
     void press(Core::Key::Enum key);
     void focusTarget(usize index = 0u);
-    [[nodiscard]] b8 publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
+    [[nodiscard]] b8 publish(usize count = 2u, Span<const PopupScope> popups = {});
     [[nodiscard]] Expected<ControlAction> take(usize index = 0u)noexcept;
     void bindEditor(usize hostIndex = 0u)noexcept;
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Array<HitTarget, 3u> m_targets;
     u64 m_generation = 0u;
 };

@@ -17,7 +17,7 @@
 
 struct NwbUiPushConstants{
 #define NWB_UI_SHADER_FLOAT2_FIELD(name) float2 name;
-#define NWB_UI_SHADER_UINT_FIELD(name, defaultValue) uint name;
+#define NWB_UI_SHADER_UINT_FIELD(name) uint name;
     NWB_UI_PUSH_CONSTANTS_FIELDS(NWB_UI_SHADER_FLOAT2_FIELD, NWB_UI_SHADER_UINT_FIELD)
 #undef NWB_UI_SHADER_FLOAT2_FIELD
 #undef NWB_UI_SHADER_UINT_FIELD

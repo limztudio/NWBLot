@@ -28,34 +28,30 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AtlasPlacement{
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 rowHeight = 0u;
 };
 
-[[nodiscard]] static Expected<AtlasPlacement> Place(const AtlasPage& page, const u32 width, const u32 height)noexcept{
-    AtlasPlacement placement{ page.cursorX, page.cursorY, page.rowHeight };
-    if(placement.x + width > s_GlyphAtlasPageExtent){
-        placement.x = 0u;
-        placement.y += placement.rowHeight;
-        placement.rowHeight = 0u;
-    }
-    if(placement.y + height > s_GlyphAtlasPageExtent)
-        return MakeUnexpected(Failure{});
-    placement.rowHeight = Max(placement.rowHeight, height);
-    return placement;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AtlasPage::AtlasPage(Core::Alloc::GlobalArena& arena, const SharedFontFace& font)
+    : face(font)
+    , pixels(arena)
+{
+    pixels.resize(static_cast<usize>(s_GlyphAtlasPageExtent) * s_GlyphAtlasPageExtent, 0u);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+usize GlyphAtlas::GlyphKeyHasher::operator()(const GlyphKey& key)const noexcept{
+    usize seed = 0u;
+    ::HashCombine(seed, key.face);
+    ::HashCombine(seed, key.glyphId);
+    ::HashCombine(seed, key.pixelSize);
+    return seed;
+}
 
 GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
     : m_arena(arena)
@@ -97,17 +93,12 @@ b8 GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize){
         return false;
     const u32 paddedWidth = m_bitmap.width + s_GlyphAtlasGlyphGutter;
     const u32 paddedHeight = m_bitmap.height + s_GlyphAtlasGlyphGutter;
-    __hidden_ui_text_atlas::AtlasPlacement placement;
+    GlyphAtlasPlacement placement;
     usize pageIndex = 0u;
     while(pageIndex < m_pages.size()){
         const AtlasPage& page = m_pages[pageIndex];
-        if(page.face.get() == face.get()){
-            const auto prospective = __hidden_ui_text_atlas::Place(page, paddedWidth, paddedHeight);
-            if(prospective){
-                placement = *prospective;
-                break;
-            }
-        }
+        if(page.face.get() == face.get() && TryPlaceGlyphInAtlasPage(page.cursorX, page.cursorY, page.rowHeight, paddedWidth, paddedHeight, placement))
+            break;
         ++pageIndex;
     }
     if(pageIndex == m_pages.size()){

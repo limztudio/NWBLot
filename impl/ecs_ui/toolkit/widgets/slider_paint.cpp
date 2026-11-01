@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/bit.h>
 
@@ -25,7 +25,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     auto normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
     if(!normalized)
         return false;
-    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
+    const Rect clip = visibleClip(box.clip);
     auto placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement || !SliderBehavior::Admit(frame.m_state, frame.m_options, *placement))
         return false;
@@ -50,14 +50,12 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
-    const auto trackIdResult = MakeWidgetId(item.state.id, s_WidgetPartTrack);
-    if(!trackIdResult)
+    WidgetId trackId;
+    if(!TryMakeWidgetId(item.state.id, s_WidgetPartTrack, trackId))
         return false;
-    const WidgetId trackId = *trackIdResult;
-    const auto thumbIdResult = MakeWidgetId(item.state.id, s_WidgetPartThumb);
-    if(!thumbIdResult)
+    WidgetId thumbId;
+    if(!TryMakeWidgetId(item.state.id, s_WidgetPartThumb, thumbId))
         return false;
-    const WidgetId thumbId = *thumbIdResult;
     const b8 hover = interactive && input.hover() == thumbId;
     const b8 pressed = interactive && input.primaryDown() && (input.capture() == trackId || input.capture() == thumbId);
     const UiSkinRegion* track = region(frame.m_style.track, frame.m_style.trackFallback);

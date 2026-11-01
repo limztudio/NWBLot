@@ -39,14 +39,7 @@ public:
 // Ranges must share one calibrated logical-device epoch and exact tick period.
 // Comparable disjoint ranges return zero overlap.
 // Integer intersection preserves precision beyond f64's exact range.
-[[nodiscard]] inline Expected<u64> TryComputeGpuTimestampOverlap(const GpuComparableTimestampRange& first, const GpuComparableTimestampRange& second)noexcept{
-    if(!first.valid() || !second.valid() || first.physicalQueue.deviceGeneration != second.physicalQueue.deviceGeneration || first.secondsPerTick != second.secondsPerTick)
-        return MakeUnexpected(Failure{});
-
-    const u64 overlapBegin = Max(first.beginTicks, second.beginTicks);
-    const u64 overlapEnd = Min(first.endTicks, second.endTicks);
-    return overlapEnd > overlapBegin ? overlapEnd - overlapBegin : 0u;
-}
+[[nodiscard]] Expected<u64> TryComputeGpuTimestampOverlap(const GpuComparableTimestampRange& first, const GpuComparableTimestampRange& second)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,7 +62,7 @@ using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics
 // Aggregates half-open packet envelopes in raw ticks (same device generation + tick period).
 // Same-queue unioned before gap/concurrency measure.
 // False resets outputs; caller allocator kept, scratch is temporary.
-[[nodiscard]] Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const GpuComparableTimestampRange* packetEnvelopes, usize packetEnvelopeCount, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics);
+[[nodiscard]] Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(Span<const GpuComparableTimestampRange> packetEnvelopes, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

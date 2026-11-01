@@ -53,23 +53,19 @@ public:
 };
 
 class TextShaper final : public ITextShaper{
-private:
-    struct FontSpan{
-        usize fontIndex = 0u;
-        usize glyphBegin = 0u;
-        usize glyphEnd = 0u;
-        u32 byteBegin = 0u;
-        u32 byteEnd = 0u;
-    };
-
-
 public:
-    explicit TextShaper(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit TextShaper(Core::Alloc::GlobalArena& arena)noexcept
+        : m_arena(arena)
+        , m_fonts(arena)
+        , m_primary(arena)
+        , m_fallback(arena)
+        , m_spans(arena)
+    {}
     virtual ~TextShaper()noexcept override = default;
 
 
 public:
-    [[nodiscard]] b8 setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count);
+    [[nodiscard]] b8 setFonts(Core::Alloc::ScratchArena& scratchArena, Span<const FontSource> sources);
     [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
 
 
@@ -78,7 +74,7 @@ private:
     PaintVector<SharedFontFace> m_fonts;
     PaintVector<RawShapedGlyph> m_primary;
     PaintVector<RawShapedGlyph> m_fallback;
-    PaintVector<FontSpan> m_spans;
+    PaintVector<TextFontSpan> m_spans;
 };
 
 

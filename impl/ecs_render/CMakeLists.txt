@@ -1,5 +1,6 @@
 nwb_declare_static_library(nwb_ecs_render_components)
 target_sources(nwb_ecs_render_components PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
 )
 nwb_target_adhd_sources(nwb_ecs_render_components
@@ -8,7 +9,7 @@ nwb_target_adhd_sources(nwb_ecs_render_components
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/*/*.adhd"
 )
-target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material nwb_ecs)
+target_link_libraries(nwb_ecs_render_components PUBLIC nwb_assets nwb_assets_material_types nwb_assets_mesh_types nwb_ecs nwb_ecs_csg nwb_ecs_scene)
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
@@ -35,5 +36,13 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*/*.ipp"
     "${CMAKE_CURRENT_LIST_DIR}/*/*.ixx"
 )
+get_target_property(_nwb_ecs_render_sources nwb_ecs_render SOURCES)
+list(REMOVE_ITEM _nwb_ecs_render_sources
+    "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material/material_instance.h"
+)
+set_property(TARGET nwb_ecs_render PROPERTY SOURCES ${_nwb_ecs_render_sources})
+unset(_nwb_ecs_render_sources)
 target_link_libraries(nwb_ecs_render PUBLIC nwb_ecs_render_components nwb_ecs nwb_ecs_mesh nwb_graphics nwb_assets_material nwb_ecs_csg nwb_ecs_scene nwb_assets_scene nwb_assets_graphics_types)
-target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_mesh nwb_assets_shader_loader nwb_assets_texture_loader nwb_assets_sampler_loader)
+target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_mesh nwb_assets_shader_loader nwb_assets_texture_loader nwb_assets_texture nwb_assets_sampler_loader)
+

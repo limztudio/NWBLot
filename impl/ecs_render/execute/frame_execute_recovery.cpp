@@ -4,8 +4,8 @@
 
 #include "frame_execute_recovery.h"
 
+#include <impl/ecs_render/execute/frame_execute_cpu_restore.h>
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/kernel/arena_names.h>
 
 #include <core/task/gpu/scheduler.h>
 
@@ -14,6 +14,34 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void FrameExecuteCpuRestore::RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem)noexcept{
+    // Rejected recording invalidates upload mirrors.
+    meshSystem.invalidateMeshViewBufferUploadMirror();
+    deferredSystem.invalidateSceneLightingUploadMirrors();
+}
+
+void FrameExecuteCpuRestore::RestorePostGbufferPacketCpuState(
+    const Snapshot& snapshot,
+    const b8 restoreBindlessSlots,
+    RendererMeshSystem& meshSystem,
+    RendererDeferredSystem& deferredSystem,
+    RendererRayTracingState& rayTracingState,
+    RendererAvboitSystem& avboitSystem,
+    DeferredFrameTargets& targets
+)noexcept{
+    if(restoreBindlessSlots)
+        targets.bindless.slotsUploaded = snapshot.deferredBindlessSlotsUploaded;
+    RestorePrefixCpuState(meshSystem, deferredSystem);
+    rayTracingState.restoreShadowPacketCpuState(snapshot.rayTracing);
+    rayTracingState.restoreCausticPacketCpuState(snapshot.rayTracing);
+    rayTracingState.restoreSurfelGiPacketCpuState(snapshot.rayTracing);
+    avboitSystem.restoreTargetClearState(snapshot.avboitTargetsNeedClear);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,12 +78,11 @@ b8 FrameExecuteRecovery::executeFrameRecoveryTask(){
     }
     renderer.m_deferredFrameRecoveryArmed = true;
     renderer.m_deferredFrameRecoveryRetiresTiming = retireTiming;
-    Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskScheduler& scheduler = renderer.m_graphics.gpuTasks();
     const b8 recoveryAccepted = scheduler.executeAcceptedFrontierTask(
         renderer.m_deferredLightingCompiledGraph,
         renderer.m_deferredFrameRecoveryTask,
-        recoveryScratchArena,
+        m_scratchArena,
         renderer.m_deferredLightingTaskGraph,
         renderer.m_deferredLightingRecordedGraph,
         renderer.m_deferredLightingSubmissionTransaction,

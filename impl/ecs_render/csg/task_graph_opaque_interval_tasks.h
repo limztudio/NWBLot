@@ -120,21 +120,12 @@ public:
 struct CsgIntervalSampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
+
+public:
     // All bindings required: interval sample rasterizes this frame's CSG pass.
     // The compute-emulation timing stays optional: it is bound only when the emulation output is graph-owned.
-    struct Payload{
+    struct Payload : CsgOpaqueIntervalRecordInputs{
         Core::GraphicsRuntime& graphics;
-        RendererMaterialSystem& materialSystem;
-        RendererCsgSystem& csgSystem;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket*& timingTicket;
-        const b8& meshViewSetupReady;
-        const b8& sceneShadingSetupReady;
-        MeshFrameBindingSnapshot frameBindings;
-        CsgGraphResourceSnapshot csgResources;
-        OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-        b8 materialDrawBuffersUploaded = false;
-        b8 csgFrameBuffersUploaded = false;
         b8 materialFrameStatesGraphOwned = false;
         b8 materialGeometryStatesGraphOwned = false;
         // Keep CSG compute draws raster-only so the compiler supplies the UAV boundary.
@@ -152,14 +143,17 @@ struct CsgIntervalSampleGraphTask{
             Core::GpuTimingSubmissionTicket*& timingTicketIn,
             const b8& meshViewSetupReadyIn,
             const b8& sceneShadingSetupReadyIn
-        )noexcept;
+        )noexcept
+            : CsgOpaqueIntervalRecordInputs(arena, materialSystemIn, csgSystemIn, targetsIn, timingTicketIn, meshViewSetupReadyIn, sceneShadingSetupReadyIn)
+            , graphics(graphicsIn)
+        {}
     };
 
 
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         Core::DiscardGpuTimingMeasure(payload.opaqueCsgComputeEmulationTiming);
     }
 };

@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -24,7 +23,7 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     RadioGroupFrame& frame = m_scope->m_radioGroups[item.radioGroup];
     if(!radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count)
         return false;
-    const auto placement = RadioGroupLayout::Place(box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), frame.m_choices, frame.m_metrics);
+    const auto placement = RadioGroupLayout::Place(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics);
     if(!placement)
         return false;
     HitTarget host;
@@ -39,17 +38,15 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     host.focusOnCommit = frame.m_focusOnCommit;
     if(!m_context.addTarget(item.state, host))
         return false;
-    const auto choicesResult = MakeWidgetId(item.state.id, "choices");
-    if(!choicesResult)
+    WidgetId choices;
+    if(!TryMakeWidgetId(item.state.id, s_WidgetPartChoices, choices))
         return false;
-    const WidgetId choices = *choicesResult;
     const UiSkinRegion* mark = placement->count != 0u ? region(frame.m_style.mark, frame.m_style.markFallback) : nullptr;
     for(u32 index = 0u; index < placement->count; ++index){
         const RadioGroupChoicePlacement& row = placement->rows[index];
-        const auto partResult = MakeWidgetPartId(choices, row.key);
-        if(!partResult)
+        WidgetId part;
+        if(!TryMakeWidgetPartId(choices, row.key, part))
             return false;
-        const WidgetId part = *partResult;
         const InputRouter& input = m_context.input();
         const b8 enabled = frame.m_options.enabled && row.enabled;
         const b8 checked = frame.m_snapshot.selectedKey == row.key;
@@ -72,10 +69,9 @@ b8 Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
         if(painted && focused && m_skin->findRegion(frame.m_style.focus))
             painted = m_paint.drawRegion(frame.m_style.focus, row.rectangle);
         const TextLayout& label = frame.m_labels[index].text;
-        const SIMDVectorSingle labelOffsets = VectorAdd(VectorSet(row.indicator.width, 0.0f, 0.0f, 0.0f), VectorSet(frame.m_metrics.gap, 0.0f, 0.0f, 0.0f));
-        const SIMDVectorSingle horizontalOffset = VectorMin(VectorSet(row.rectangle.width, 0.0f, 0.0f, 0.0f), labelOffsets);
-        const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(0.0f, row.rectangle.height, 0.0f, 0.0f), VectorSet(0.0f, textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
-        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f), VectorSelect(horizontalOffset, verticalOffset, s_SIMDMaskY));
+        const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + frame.m_metrics.gap);
+        const f32 verticalOffset = Max(0.0f, (row.rectangle.height - textBounds.height) * s_RectCenterFraction);
+        const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(row.rectangle.x, row.rectangle.y, 0.0f, 0.0f), VectorSet(horizontalOffset, verticalOffset, 0.0f, 0.0f));
         const SIMDVectorSingle alignedOrigin = VectorSubtract(textOrigin, VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
         const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
         m_paint.pushClip(row.textClip);

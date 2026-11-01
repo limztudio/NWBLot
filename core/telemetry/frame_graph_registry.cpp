@@ -64,15 +64,6 @@ static void ResolvePendingNameEdges(Alloc::ScratchArena& scratchArena, const Spa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphRegistry::FrameGraphRegistry(Alloc::GlobalArena& arena)
-    : m_contributors(arena)
-    , m_nodes(arena)
-    , m_edges(arena)
-    , m_pendingNameEdges(arena)
-    , m_physicalQueueRuntimeStatistics(arena)
-    , m_packetSubmissionStatistics(arena)
-{}
-
 void FrameGraphRegistry::registerContributor(IFrameGraphContributor& contributor){
     for(const auto existing : m_contributors){
         if(existing.get() == &contributor)

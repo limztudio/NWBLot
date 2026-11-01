@@ -40,21 +40,15 @@ InputEvent PointerEvent(const InputEventType::Enum type, const Point& position =
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiPointerGestureTests : public testing::Test{
+class UiPointerGestureTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerGestureTests()
-        : m_arena(Name("tests/ui/pointer_gesture"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/pointer_gesture"))
         , m_context(m_arena)
     {}
 
 
 protected:
-    InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-        return m_router.process();
-    }
-
     InputRoutingResult sendToContext(const InputEvent& event){
         EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
         return m_context.input().process();
@@ -84,8 +78,6 @@ protected:
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Context m_context;
 };
 
@@ -96,7 +88,7 @@ protected:
 TEST_F(UiPointerGestureTests, BarrierCaptureDoesNotImplicitlyCreateAGesture){
     HitTarget target = GestureTarget();
     target.pointerGesture = false;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete();
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
     EXPECT_TRUE(m_router.actions().empty());
@@ -106,7 +98,7 @@ TEST_F(UiPointerGestureTests, BarrierCaptureDoesNotImplicitlyCreateAGesture){
 TEST_F(UiPointerGestureTests, QuickPressMoveReleaseRetainsCommittedBaselineAndFinalDelta){
     HitTarget target = GestureTarget();
     target.declarationGeneration = 13u;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PrimaryDown))));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PointerMove, { 90.0f, 80.0f }))));
     ASSERT_TRUE(m_router.queue(UiTestSupport::NativeInput(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f }))));
@@ -127,7 +119,7 @@ TEST_F(UiPointerGestureTests, QuickPressMoveReleaseRetainsCommittedBaselineAndFi
 
 TEST_F(UiPointerGestureTests, ActiveUpdateConsumesOnceAndPreservesProgressAcrossCoalescedMoves){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
@@ -161,7 +153,7 @@ TEST_F(UiPointerGestureTests, ActiveUpdateConsumesOnceAndPreservesProgressAcross
 
 TEST_F(UiPointerGestureTests, SeveralPressSequencesRemainOrderedWithSeparateOrigins){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete({ 30.0f, 40.0f });
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown, { 25.0f, 35.0f })).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 60.0f, 70.0f })).pointerConsumed);
@@ -197,10 +189,10 @@ TEST_F(UiPointerGestureTests, SeveralPressSequencesRemainOrderedWithSeparateOrig
 
 TEST_F(UiPointerGestureTests, ActiveGestureKeepsOriginalLayoutWhenNewGeometryIsPublished){
     HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     target.rectangle = { 80.0f, 120.0f, 100.0f, 40.0f };
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 9u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 9u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
@@ -221,7 +213,7 @@ TEST_F(UiPointerGestureTests, ActiveGestureKeepsOriginalLayoutWhenNewGeometryIsP
 TEST_F(UiPointerGestureTests, FullReferenceGeometryIsCopiedAtPressAndRemainsImmutableAfterLayoutChanges){
     HitTarget target = GestureTarget();
     target.gestureReference = { 10.0f, 20.0f, 80.0f, 130.0f };
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
@@ -238,7 +230,7 @@ TEST_F(UiPointerGestureTests, FullReferenceGeometryIsCopiedAtPressAndRemainsImmu
     gesture = *gestureResult2;
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 9u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 9u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
     const auto gestureResult3 = m_router.consumePointerGesture(target.id, 1u);
     ASSERT_TRUE(gestureResult3);
@@ -265,21 +257,21 @@ TEST_F(UiPointerGestureTests, FullReferenceGeometryIsCopiedAtPressAndRemainsImmu
 TEST_F(UiPointerGestureTests, MalformedReferenceRejectsPublicationAtomicallyAndEmptyReferenceFallsBack){
     HitTarget target = GestureTarget();
     target.gestureReference = { 10.0f, 20.0f, 80.0f, 130.0f };
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    const Rect invalidReferences[]{
-        { 0.0f, 0.0f, -1.0f, 1.0f },
-        { 0.0f, 0.0f, 1.0f, -1.0f },
-        { 0.0f, 0.0f, 0.0f, 1.0f },
-        { 0.0f, 0.0f, 1.0f, 0.0f },
-        { Limit<f32>::s_QuietNaN, 0.0f, 0.0f, 0.0f },
-        { 0.0f, 0.0f, 1.0f, Limit<f32>::s_Infinity },
-        { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
+    const Array<Rect, 7> invalidReferences{
+        Rect{ 0.0f, 0.0f, -1.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, -1.0f },
+        Rect{ 0.0f, 0.0f, 0.0f, 1.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, 0.0f },
+        Rect{ Limit<f32>::s_QuietNaN, 0.0f, 0.0f, 0.0f },
+        Rect{ 0.0f, 0.0f, 1.0f, Limit<f32>::s_Infinity },
+        Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
     };
     for(const Rect& reference : invalidReferences){
         HitTarget invalid = target;
         invalid.gestureReference = reference;
-        EXPECT_FALSE(m_router.commitTargets(&invalid, 1u, 2u));
+        EXPECT_FALSE(m_router.commitTargets(Span(&invalid, 1u), 2u));
         EXPECT_EQ(m_router.layoutGeneration(), 1u);
         EXPECT_EQ(m_router.capture(), target.id);
         EXPECT_TRUE(m_router.primaryDown());
@@ -292,7 +284,7 @@ TEST_F(UiPointerGestureTests, MalformedReferenceRejectsPublicationAtomicallyAndE
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
     target.gestureReference = { 42.0f, 44.0f, 0.0f, 0.0f };
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
     ASSERT_TRUE(gestureResult2);
@@ -305,7 +297,7 @@ TEST_F(UiPointerGestureTests, MalformedReferenceRejectsPublicationAtomicallyAndE
 
 TEST_F(UiPointerGestureTests, LifetimeRemovalCancelsGestureWhileReleaseOwnershipRemains){
     HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
@@ -318,7 +310,7 @@ TEST_F(UiPointerGestureTests, LifetimeRemovalCancelsGestureWhileReleaseOwnership
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 110.0f, 120.0f })).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
     target.declarationGeneration = 2u;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     complete();
@@ -331,30 +323,30 @@ TEST_F(UiPointerGestureTests, LifetimeRemovalCancelsGestureWhileReleaseOwnership
 
 TEST_F(UiPointerGestureTests, NewLifetimeDisabledAndNonGestureDeclarationsDiscardOldRecords){
     HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete();
     target.declarationGeneration = 2u;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     complete();
     target.pointerGesture = false;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 3u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 3u));
     target.pointerGesture = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 4u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 4u));
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     target.enabled = false;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 5u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 5u));
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
     target.enabled = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 6u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 6u));
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
 }
 
 TEST_F(UiPointerGestureTests, PointerLeaveRetainsCaptureAndFinalOutsideRelease){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     const InputRoutingResult left = send({ .position = {} , .type = InputEventType::PointerLeave});
     EXPECT_TRUE(left.pointerConsumed);
@@ -374,7 +366,7 @@ TEST_F(UiPointerGestureTests, PointerLeaveRetainsCaptureAndFinalOutsideRelease){
 TEST_F(UiPointerGestureTests, NativeFocusTerminationCancelsActiveAndCompletedGesturesWithoutReusingSequences){
     HitTarget target = GestureTarget();
     target.focusable = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete();
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
@@ -399,7 +391,7 @@ TEST_F(UiPointerGestureTests, NativeFocusTerminationCancelsActiveAndCompletedGes
     gesture = *gestureResult2;
     EXPECT_GT(gesture.id.sequence, firstSequence);
     m_router.reset();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete();
     PointerGesture afterReset;
     const auto afterResetResult = m_router.consumePointerGesture(target.id, 1u);
@@ -412,7 +404,7 @@ TEST_F(UiPointerGestureTests, EscapeCancelsOnlyTheActiveGestureAndRetainsHeldRel
     HitTarget target = GestureTarget();
     target.focusable = true;
     target.activatable = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete({ 40.0f, 40.0f });
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     const InputRoutingResult escaped = send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown});
@@ -440,7 +432,7 @@ TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActions
     HitTarget target = GestureTarget();
     target.focusable = true;
     target.activatable = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete({ 40.0f, 40.0f });
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
@@ -474,7 +466,7 @@ TEST_F(UiPointerGestureTests, CaptureLossAfterOrdinaryReleaseCannotEraseAComplet
     HitTarget target = GestureTarget();
     target.focusable = true;
     target.activatable = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     complete({ 40.0f, 40.0f });
     const InputRoutingResult lost = send({ .position = {} , .type = InputEventType::PointerCaptureLost});
     EXPECT_FALSE(lost.pointerConsumed);
@@ -491,7 +483,7 @@ TEST_F(UiPointerGestureTests, CaptureLossAfterOrdinaryReleaseCannotEraseAComplet
 
 TEST_F(UiPointerGestureTests, LargeMoveBurstCoalescesWithoutExhaustingGestureCapacity){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryDown)).gestureOverflow);
     for(usize index = 0u; index < s_InputMaxPointerGestures * 4u; ++index){
         const Point position{ static_cast<f32>(index), static_cast<f32>(index * 2u) };
@@ -513,7 +505,7 @@ TEST_F(UiPointerGestureTests, LargeMoveBurstCoalescesWithoutExhaustingGestureCap
 
 TEST_F(UiPointerGestureTests, FullGestureQueueDropsNewPressAndReportsOverflowWithoutReplayingIt){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     for(usize index = 0u; index < s_InputMaxPointerGestures; ++index){
         EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryDown)).gestureOverflow);
         EXPECT_FALSE(send(PointerEvent(InputEventType::PrimaryUp)).gestureOverflow);
@@ -544,10 +536,10 @@ TEST_F(UiPointerGestureTests, FullGestureQueueDropsNewPressAndReportsOverflowWit
 }
 
 TEST_F(UiPointerGestureTests, GestureAdmissionUsesTheTopClippedTargetAndLifetimeConsumptionIsExact){
-    HitTarget targets[]{ GestureTarget(1u), GestureTarget(2u) };
+    Array<HitTarget, 2> targets{ GestureTarget(1u), GestureTarget(2u) };
     targets[1].paintOrder = 1u;
     targets[1].clip = { 10.0f, 20.0f, 10.0f, 10.0f };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     complete();
     PointerGesture gesture;
     EXPECT_FALSE(m_router.consumePointerGesture(targets[0].id, 1u));
@@ -567,11 +559,11 @@ TEST_F(UiPointerGestureTests, GestureAdmissionUsesTheTopClippedTargetAndLifetime
 
 TEST_F(UiPointerGestureTests, InvalidLayoutPublicationPreservesTheActiveGesture){
     const HitTarget target = GestureTarget();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 7u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    HitTarget invalid[]{ GestureTarget(2u), GestureTarget(2u) };
-    EXPECT_FALSE(m_router.commitTargets(invalid, 2u, 8u));
-    EXPECT_FALSE(m_router.commitTargets(&target, 1u, 7u));
+    Array<HitTarget, 2> invalid{ GestureTarget(2u), GestureTarget(2u) };
+    EXPECT_FALSE(m_router.commitTargets(Span(invalid.data(), 2u), 8u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&target, 1u), 7u));
     EXPECT_EQ(m_router.capture(), target.id);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
     PointerGesture gesture;
@@ -677,7 +669,7 @@ TEST_F(UiPointerGestureTests, ContextRootRetirementCancelsPendingGestureAndRepla
     ASSERT_TRUE(m_context.commitFrame(1u));
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
-    m_context.retainRoots(nullptr, 0u);
+    m_context.retainRoots({});
     EXPECT_TRUE(m_context.states().entries().empty());
     const auto replacementResult = prepare(2u);
     ASSERT_TRUE(replacementResult);

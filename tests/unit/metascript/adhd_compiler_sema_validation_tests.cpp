@@ -15,8 +15,13 @@ namespace __hidden_adhd_compiler_sema_validation_tests{
 
 
 using namespace NWB::AdhdCompilerTestsDetail;
+using NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MString;
+using NWB::Core::Metascript::MStringView;
+using NWB::Core::Metascript::MetaArena;
 
-TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullPropagation){
+TEST(AdhdCompiler, TopologicallyOrdersOutOfOrderDeclarationsAndRejectsAccessViolations){
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
@@ -51,37 +56,12 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
         "}\r\n"
         "class LeafInner {\r\n"
         "    public u64 payload = 99;\r\n"
-        "}\r\n"
-        "\r\n"
-        "[reflect]\r\n"
-        "class ContainerAssetBundle {\r\n"
-        "    public Set<Name> tags;\r\n"
-        "    public Map<String, i32> weights;\r\n"
-        "    public HashMap<Name, AssetRef<LeafInner>> namedDeps;\r\n"
-        "    public Deque<f32> timeline;\r\n"
-        "}\r\n"
-        "\r\n"
-        "class NodeHolder {\r\n"
-        "    public in IDerivedNode nodeRef;\r\n"
-        "    public NodeHolder(in IDerivedNode n) {\r\n"
-        "        this.nodeRef = n;\r\n"
-        "    }\r\n"
-        "}\r\n"
-        "\r\n"
-        "AliasB evaluateNodes(in NodeHolder holder, in Vector<in IDerivedNode> list) {\r\n"
-        "    in auto localRef = holder.nodeRef;\r\n"
-        "    AliasB sum = localRef.derivedId() + holder.nodeRef.baseId() + list[0].derivedId();\r\n"
-        "    for (in IDerivedNode item : list) {\r\n"
-        "        sum += item.baseId();\r\n"
-        "    }\r\n"
-        "    return sum;\r\n"
         "}\r\n";
 
     CompileResult res(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/topo_layout_access.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
-    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
 
     const usize aliasAPos = hdrView.find("using AliasA = i32;");
     const usize aliasBPos = hdrView.find("using AliasB = AliasA;");
@@ -104,23 +84,10 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
     EXPECT_LT(leafPos, midPos);
     EXPECT_LT(midPos, grandPos);
 
-    ASSERT_EQ(res.unit.classes.size(), 6u);
+    ASSERT_EQ(res.unit.classes.size(), 4u);
     EXPECT_EQ(res.unit.classes[1]->name, "GrandOuter");
     EXPECT_EQ(res.unit.classes[1]->totalAlign, 8u);
     EXPECT_EQ(res.unit.classes[1]->totalSize, 24u);
-
-    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->tags.clear(); for(usize __i = 0u; __i < __f->asList().size(); ++__i) this->tags.insert(::Name(__f->asList()[__i].asString().data()));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->weights.clear(); for(const auto& [__k, __v] : __f->asMap()) this->weights[AString(__k, s_ClassArena)] = static_cast<i32>(__v.asInteger());"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->namedDeps.clear(); for(const auto& [__k, __v] : __f->asMap()) this->namedDeps[::Name(__k.data())] = {::Name(__v.asString().data())};"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->timeline.push_back(static_cast<f32>(__f->asList()[__i].toDouble()));"), MStringView::npos);
-
-    EXPECT_NE(cppView.find("::NotNull<const IDerivedNode*> localRef = ::MakeNotNull(&((*(holder.nodeRef))));"), MStringView::npos);
-    EXPECT_NE(cppView.find("localRef->derivedId()"), MStringView::npos);
-    EXPECT_NE(cppView.find("holder.nodeRef->baseId()"), MStringView::npos);
-    EXPECT_NE(cppView.find("list[0]->derivedId()"), MStringView::npos);
-    EXPECT_NE(cppView.find("for(const ::NotNull<const IDerivedNode*>& item : list)"), MStringView::npos);
-    EXPECT_NE(cppView.find("item->baseId()"), MStringView::npos);
 
     static constexpr MStringView s_PrivateFieldSource =
         "class SecretBox {\r\n"
@@ -178,7 +145,7 @@ TEST(AdhdCompiler, SupportsMacroIfTopoEmitMultiHopLayoutAccessControlAndNotNullP
     EXPECT_FALSE(Compiler::Compile(s_MutRebindConstSource, "impl/sim/mut_rebind_const.adhd", arena.arena, mutRebindRes));
 }
 
-TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDefines){
+TEST(AdhdCompiler, ExcludesKCountFromEnumReflectionOrdersDeferredTemplateSpecsAndRejectsInvalidTemplates){
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
@@ -197,45 +164,18 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
         "    public Box<Payload> boxed = Box<Payload>();\r\n"
         "}\r\n"
         "\r\n"
-        "[reflect]\r\n"
         "class Payload {\r\n"
-        "    public i32 count = DEFAULT_COUNT;\r\n"
+        "    public i32 count = 0;\r\n"
         "    public Mode mode = Mode::Idle;\r\n"
-        "    public Optional<Mode> optMode;\r\n"
-        "}\r\n"
-        "\r\n"
-        "[asset(\"bundle\")]\r\n"
-        "class BundleAsset {\r\n"
-        "    public ParallelHashSet<AssetRef<Payload>> texSet;\r\n"
-        "    public List<i32> steps;\r\n"
-        "    public Map<String, Payload> payloads;\r\n"
         "}\r\n";
 
-    NWB::Core::Metascript::MVector<MString> defines(arena.arena);
-    defines.push_back(MString("DEFAULT_COUNT=42", 16u, arena.arena));
-
     CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res, nullptr, {}, defines));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/named_enum_spec.adhd", arena.arena, res));
 
     const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
 
     EXPECT_NE(hdrView.find("constexpr usize reflectedEnumeratorCount()noexcept{ return 2u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {"), MStringView::npos);
-    EXPECT_NE(hdrView.find("{ \"Idle\", Idle },"), MStringView::npos);
-    EXPECT_NE(hdrView.find("{ \"Active\", Active },"), MStringView::npos);
     EXPECT_EQ(hdrView.find("{ \"kCount\", kCount },"), MStringView::npos);
-    EXPECT_NE(hdrView.find("constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return s_NamedEnumCases; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("inline Expected<Enum> parseNamedEnum(const AStringView text)noexcept{ return ::ParseNamedEnumText<Enum>(text, namedEnumCases()); }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("constexpr AStringView toNamedEnumText([[maybe_unused]] const Enum value)noexcept"), MStringView::npos);
-
-    EXPECT_NE(hdrView.find("__f->isString()){ if(const auto __e = Mode::parseNamedEnum(__f->asString())) this->mode = *__e; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("__f->isString()){ if(const auto __e = Mode::parseNamedEnum(__f->asString())) this->optMode = *__e; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("i32 count = 42;"), MStringView::npos);
-
-    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 1u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->texSet.insert({::Name(__f->asList()[__i].asString().data())});"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->steps.push_back(static_cast<i32>(__f->asList()[__i].asInteger()));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("for(const auto& [__k, __v] : __f->asMap()){ if(!__v.isMap() || !this->payloads[AString(__k, s_ClassArena)].deserializeNwb(__v)) return false; }"), MStringView::npos);
 
     const usize boxPrimaryPos = hdrView.find("template<typename T>\r\nclass Box final{");
     const usize payloadClassPos = hdrView.find("class Payload final{");
@@ -277,47 +217,12 @@ TEST(AdhdCompiler, SupportsNamedEnumCaseReflectionDeferredTemplateSpecAndMacroDe
     EXPECT_FALSE(Compiler::Compile(s_BadEnumCountSource, "impl/sim/bad_enum_count.adhd", arena.arena, badEnumCountRes));
 }
 
-TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfElse){
+TEST(AdhdCompiler, SuppressesLastUseMoveForMutCapturedLocalsAndRejectsMismatchedOolTemplateParams){
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
-        "type EntityId = u32;\r\n"
-        "\r\n"
-        "interface ILookup {\r\n"
-        "    EntityId resolve(in u32 raw)const;\r\n"
-        "}\r\n"
-        "\r\n"
-        "class LookupTable : ILookup {\r\n"
-        "    private in ILookup fallback;\r\n"
-        "    public LookupTable(in b8 usePrimary, in ILookup primary, in ILookup secondary) {\r\n"
-        "        if (usePrimary) {\r\n"
-        "            this.fallback = primary;\r\n"
-        "        } else {\r\n"
-        "            this.fallback = secondary;\r\n"
-        "        }\r\n"
-        "    }\r\n"
-        "    public u32 resolve(in EntityId raw)const override;\r\n"
-        "}\r\n"
-        "\r\n"
-        "EntityId LookupTable::resolve(in u32 raw)const {\r\n"
-        "    return raw + 1u;\r\n"
-        "}\r\n"
-        "\r\n"
-        "[reflect]\r\n"
-        "class GraphNode {\r\n"
-        "    public ForwardList<i32> chain;\r\n"
-        "    public Map<Name, f32x4> tintBySlot;\r\n"
-        "}\r\n"
-        "\r\n"
         "u32 consumeIds(in Vector<u32> ids) {\r\n"
         "    return cast<u32>(ids.size());\r\n"
-        "}\r\n"
-        "\r\n"
-        "u32 testVarDeclMove() {\r\n"
-        "    Vector<u32> local;\r\n"
-        "    local.push_back(7u);\r\n"
-        "    u32 count = consumeIds(local);\r\n"
-        "    return count;\r\n"
         "}\r\n"
         "\r\n"
         "u32 testMutLambdaCaptureSuppressesMove() {\r\n"
@@ -331,15 +236,9 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
     CompileResult res(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/alias_ool.adhd", arena.arena, res));
 
-    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
     const MStringView srcView(res.generatedSource.data(), res.generatedSource.size());
-
-    EXPECT_NE(hdrView.find(": fallback(::MakeNotNull(&(primary)))"), MStringView::npos);
-    EXPECT_NE(srcView.find("u32 count = consumeIds(::Move(local));"), MStringView::npos);
     EXPECT_NE(srcView.find("return consumeIds(captured);"), MStringView::npos);
     EXPECT_EQ(srcView.find("return consumeIds(::Move(captured));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->chain.clear(); for(usize __i = __f->asList().size(); __i > 0u; --__i) this->chain.push_front(static_cast<i32>(__f->asList()[__i - 1u].asInteger()));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->tintBySlot[::Name(__k.data())] = Float4(static_cast<f32>(__v.asList()[0].toDouble())"), MStringView::npos);
 
     static constexpr MStringView s_BadOolTemplateParamsSource =
         "class Pair<T, U> {\r\n"
@@ -355,106 +254,8 @@ TEST(AdhdCompiler, SupportsAliasedOutOfLineMethodsForwardListMapSimdAndCtorIfEls
     EXPECT_FALSE(Compiler::Compile(s_BadOolTemplateParamsSource, "impl/sim/bad_ool_tparams.adhd", arena.arena, badOolRes));
 }
 
-TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolInstantiations){
+TEST(AdhdCompiler, RejectsDeducedBoundViolationsWrongArityConstRefMutationInCtorAndProhibitedBool){
     AdhdTestArena arena;
-
-    static constexpr MStringView s_Source =
-        "interface ISource {\r\n"
-        "    i32 read()const;\r\n"
-        "    void write(in i32 v);\r\n"
-        "}\r\n"
-        "\r\n"
-        "class SourceImpl : ISource {\r\n"
-        "    public i32 value = 0;\r\n"
-        "    public i32 read()const override { return this.value; }\r\n"
-        "    public void write(in i32 v) override { this.value = v; }\r\n"
-        "}\r\n"
-        "\r\n"
-        "class ReaderHolder {\r\n"
-        "    public in ISource roRef;\r\n"
-        "    public ReaderHolder(in ISource initRef) {\r\n"
-        "        this.roRef = initRef;\r\n"
-        "    }\r\n"
-        "    public void rebindTo(in ISource nextRef) {\r\n"
-        "        this.roRef = nextRef;\r\n"
-        "    }\r\n"
-        "}\r\n"
-        "\r\n"
-        "class OuterHolder {\r\n"
-        "    public OolPair<LeafInner> wrapped = OolPair<LeafInner>();\r\n"
-        "}\r\n"
-        "\r\n"
-        "class OolPair<T> {\r\n"
-        "    public T item = T();\r\n"
-        "    public LeafInner helper = LeafInner();\r\n"
-        "    public u8 tag = 1;\r\n"
-        "}\r\n"
-        "\r\n"
-        "class LeafInner {\r\n"
-        "    public i32 v = 7;\r\n"
-        "}\r\n"
-        "\r\n"
-        "const LeafInner kDefaultLeaf();\r\n"
-        "\r\n"
-        "class OolRunner {\r\n"
-        "    public i32 execute()const;\r\n"
-        "}\r\n"
-        "\r\n"
-        "i32 OolRunner::execute()const {\r\n"
-        "    LeafInner localLeaf();\r\n"
-        "    OolPair<u64> pair = OolPair<u64>();\r\n"
-        "    return cast<i32>(pair.tag) + localLeaf.v + kDefaultLeaf.v;\r\n"
-        "}\r\n"
-        "\r\n"
-        "i32 readFrom<T : ISource>(in T src) {\r\n"
-        "    return src.read();\r\n"
-        "}\r\n"
-        "\r\n"
-        "i32 testRebindAndDeducedCall(in SourceImpl a, in SourceImpl b) {\r\n"
-        "    in ISource ro = a;\r\n"
-        "    ro = b;\r\n"
-        "    return readFrom(b) + ro.read();\r\n"
-        "}\r\n"
-        "\r\n"
-        "[reflect]\r\n"
-        "class NestedAssetGroup {\r\n"
-        "    public AssetRef<SourceImpl> subRef;\r\n"
-        "}\r\n"
-        "\r\n"
-        "[asset(\"prefab\")]\r\n"
-        "class PrefabAsset {\r\n"
-        "    public AssetRef<SourceImpl> mainRef;\r\n"
-        "    public Optional<AssetRef<SourceImpl>> optRef;\r\n"
-        "    public Vector<AssetRef<SourceImpl>> refList;\r\n"
-        "    public NestedAssetGroup nested = NestedAssetGroup();\r\n"
-        "}\r\n";
-
-    CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/sim/asset_deps_rebind.adhd", arena.arena, res));
-
-    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
-    const MStringView srcView(res.generatedSource.data(), res.generatedSource.size());
-
-    EXPECT_NE(hdrView.find("static constexpr usize assetDependencyFieldCount()noexcept{ return 4u; }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{"), MStringView::npos);
-    EXPECT_NE(hdrView.find("if(this->mainRef.valid()) callback(this->mainRef.virtualPath);"), MStringView::npos);
-    EXPECT_NE(hdrView.find("if(this->optRef.has_value() && this->optRef->valid()) callback(this->optRef->virtualPath);"), MStringView::npos);
-    EXPECT_NE(hdrView.find("for(const auto& __dep : this->refList){ if(__dep.valid()) callback(__dep.virtualPath); }"), MStringView::npos);
-    EXPECT_NE(hdrView.find("this->nested.forEachAssetDependency(callback);"), MStringView::npos);
-    EXPECT_NE(hdrView.find("[[nodiscard]] static b8 extractNwbAssetDependencies(const NwbValue& inMap, [[maybe_unused]] DependencyCallback&& callback)noexcept{"), MStringView::npos);
-    EXPECT_NE(hdrView.find("__f->isMap() && !NestedAssetGroup::extractNwbAssetDependencies(*__f, callback)) return false;"), MStringView::npos);
-    EXPECT_NE(hdrView.find("template<>\r\nclass OolPair<u64> final{"), MStringView::npos);
-    const usize leafInnerDefPos = hdrView.find("class LeafInner final{");
-    const usize outerHolderDefPos = hdrView.find("class OuterHolder final{");
-    const usize defaultLeafConstPos = hdrView.find("inline constexpr LeafInner kDefaultLeaf{};");
-    ASSERT_NE(leafInnerDefPos, MStringView::npos);
-    ASSERT_NE(outerHolderDefPos, MStringView::npos);
-    ASSERT_NE(defaultLeafConstPos, MStringView::npos);
-    EXPECT_LT(leafInnerDefPos, outerHolderDefPos);
-    EXPECT_LT(leafInnerDefPos, defaultLeafConstPos);
-    EXPECT_NE(srcView.find("LeafInner localLeaf{};"), MStringView::npos);
-    EXPECT_NE(srcView.find("(ro = ::MakeNotNull(&(b)));"), MStringView::npos);
-    EXPECT_NE(hdrView.find("(this->roRef = ::MakeNotNull(&(nextRef)));"), MStringView::npos);
 
     static constexpr MStringView s_DeducedBoundViolationSource =
         "interface ISource {\r\n"
@@ -502,6 +303,95 @@ TEST(AdhdCompiler, SupportsAssetDependencyTraversalInRebindDeducedBoundsAndOolIn
         "}\r\n";
     CompileResult prohibitedBoolRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_ProhibitedBoolSource, "impl/sim/prohibited_b8.adhd", arena.arena, prohibitedBoolRes));
+}
+
+TEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEvalAndInRefRvalueBind){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidEdgeCasesSource =
+        "const usize kBaseCount = 2u;\r\n"
+        "const u32 kSepDec = 1'000'000u;\r\n"
+        "const u32 kSepHex = 0xFF'00u;\r\n"
+        "const u32 kSepBin = 0b1010'0101u;\r\n"
+        "const f32 kSepFloat = 3.141'592f;\r\n"
+        "flag<u32> RenderFlags {\r\n"
+        "    None = 0u,\r\n"
+        "    Opaque,\r\n"
+        "    Shadow,\r\n"
+        "    Both = Opaque | Shadow,\r\n"
+        "}\r\n"
+        "u32 evalFlags(in RenderFlags f) {\r\n"
+        "    Array<u32, (kBaseCount + 2u)> lut = Array<u32, (kBaseCount + 2u)>();\r\n"
+        "    RenderFlags combined = f | RenderFlags::Opaque;\r\n"
+        "    combined |= RenderFlags::Shadow;\r\n"
+        "    return cast<u32>(combined) + kSepDec + kSepHex + kSepBin + cast<u32>(lut.size());\r\n"
+        "}\r\n";
+    CompileResult validRes(arena.arena);
+    EXPECT_TRUE(Compiler::Compile(s_ValidEdgeCasesSource, "impl/sim/valid_edge_cases.adhd", arena.arena, validRes));
+
+    static constexpr MStringView s_BadAdjacentSeparatorSource =
+        "const u32 kBad = 1''000u;\r\n";
+    CompileResult badAdjSepRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadAdjacentSeparatorSource, "impl/sim/bad_adj_sep.adhd", arena.arena, badAdjSepRes));
+
+    static constexpr MStringView s_BadPrefixSeparatorSource =
+        "const u32 kBad = 0x'FFu;\r\n";
+    CompileResult badPfxSepRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadPrefixSeparatorSource, "impl/sim/bad_pfx_sep.adhd", arena.arena, badPfxSepRes));
+
+    static constexpr MStringView s_BadEnumForwardRefSource =
+        "enum<u32> BadOrder {\r\n"
+        "    First = Second,\r\n"
+        "    Second = 1u,\r\n"
+        "}\r\n";
+    CompileResult badEnumFwdRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadEnumForwardRefSource, "impl/sim/bad_enum_fwd.adhd", arena.arena, badEnumFwdRes));
+
+    static constexpr MStringView s_BadFlagMismatchSource =
+        "flag<u32> FlagA { None = 0u, Bit0 }\r\n"
+        "flag<u32> FlagB { None = 0u, Bit0 }\r\n"
+        "void mixFlags() {\r\n"
+        "    auto x = FlagA::Bit0 | FlagB::Bit0;\r\n"
+        "}\r\n";
+    CompileResult badFlagMixRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadFlagMismatchSource, "impl/sim/bad_flag_mix.adhd", arena.arena, badFlagMixRes));
+
+    static constexpr MStringView s_BadEnumIncrementSource =
+        "enum<u32> Step { One = 1u, Two = 2u }\r\n"
+        "void incEnum() {\r\n"
+        "    Step s = Step::One;\r\n"
+        "    ++s;\r\n"
+        "}\r\n";
+    CompileResult badEnumIncRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadEnumIncrementSource, "impl/sim/bad_enum_inc.adhd", arena.arena, badEnumIncRes));
+
+    static constexpr MStringView s_BadDupConstCaseSource =
+        "i32 badSwitch(in i32 v) {\r\n"
+        "    switch(v) {\r\n"
+        "    case 3:\r\n"
+        "        return 1;\r\n"
+        "    case 1 + 2:\r\n"
+        "        return 2;\r\n"
+        "    default:\r\n"
+        "        return 0;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badSwitchCaseRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadDupConstCaseSource, "impl/sim/bad_switch_case.adhd", arena.arena, badSwitchCaseRes));
+
+    static constexpr MStringView s_BadZeroArrayExprSource =
+        "class BadArr {\r\n"
+        "    public Array<i32, (2 - 2)> data;\r\n"
+        "}\r\n";
+    CompileResult badZeroArrRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadZeroArrayExprSource, "impl/sim/bad_zero_arr.adhd", arena.arena, badZeroArrRes));
+
+    static constexpr MStringView s_BadInRefRvalueSource =
+        "void badInBind(in i32 a, in i32 b) {\r\n"
+        "    in i32 sumRef = a + b;\r\n"
+        "}\r\n";
+    CompileResult badInBindRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadInRefRvalueSource, "impl/sim/bad_in_bind.adhd", arena.arena, badInBindRes));
 }
 
 

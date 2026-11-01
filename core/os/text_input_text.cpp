@@ -32,7 +32,7 @@ b8 IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
     return __builtin_reduce_and(origin <= maximum - extent);
 }
 
-Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, char (&bytes)[s_Utf8MaxSequenceBytes])noexcept{
+Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, Array<char, s_Utf8MaxSequenceBytes>& bytes)noexcept{
     if(codePoint == 0u)
         return MakeUnexpected(TextInputAdmission::InvalidText);
     const auto encoded = EncodeUtf8CodePoint(codePoint, bytes);

@@ -7,15 +7,8 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/avboit/compute_effect_record_inputs.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/avboit/compute_emulation_record.h>
 
-#include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_graph.h>
 
 
@@ -28,141 +21,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMaterialSystem;
-class RendererAvboitSystem;
-struct DeferredFrameTargets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace RendererTaskGraphDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AvboitExtinctionComputeEmulationGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-    // All bindings required: compute emulation always generates against this frame's bindings.
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        RendererMaterialSystem& materialSystem;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& extinctionTiming;
-        ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
-        ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
-        usize instanceCount = 0u;
-        usize materialTypedByteCount = 0u;
-        b8 materialDrawBuffersUploaded = false;
-        b8 csgFrameBuffersUploaded = false;
-        b8 materialFrameStatesGraphOwned = false;
-        b8 materialGeometryStatesGraphOwned = false;
-        b8 conservativeGeometryScissor = false;
-
-
-    public:
-        explicit Payload(
-            Core::Alloc::GlobalArena& arena,
-            Core::GraphicsRuntime& graphicsIn,
-            RendererMaterialSystem& materialSystemIn,
-            DeferredFrameTargets& targetsIn,
-            Core::GpuTimingSubmissionTicket& timingTicketIn,
-            Optional<Core::GpuTimingMeasure>& extinctionTimingIn
-        )noexcept
-            : graphics(graphicsIn)
-            , materialSystem(materialSystemIn)
-            , targets(targetsIn)
-            , timingTicket(timingTicketIn)
-            , extinctionTiming(extinctionTimingIn)
-            , plan(arena)
-            , csgPlan(arena)
-        {}
-    };
-
-
+struct AvboitExtinctionComputeEmulationGraphTask : public AvboitComputeEmulationGraphTaskBase{
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
-    }
 };
 
 // Shared-buffer extinction draws keep native D/R order; phases stay graph-visible.
-struct AvboitExtinctionSharedComputeEmulationGraphTask{
-    // All bindings required: shared emulation always generates against this frame's bindings.
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        RendererMaterialSystem& materialSystem;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        Optional<Core::GpuTimingMeasure>& extinctionTiming;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
-        usize drawIndex = 0u;
-        usize instanceCount = 0u;
-        usize materialTypedByteCount = 0u;
-        b8 materialDrawBuffersUploaded = false;
-        b8 materialFrameStatesGraphOwned = false;
-        b8 materialGeometryStatesGraphOwned = false;
-        b8 beginTiming = false;
-        b8 finishTiming = false;
-        AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
-    };
-
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return { payload.phase == AvboitSharedComputeEmulationPhase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
-    }
-
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(&payload.extinctionTiming);
-    }
-};
-
-struct AvboitExtinctionGraphTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
-
-    // The avboit system, the frame targets, and the timing ticket are required: extinction always records against this frame's bindings.
-    struct Payload{
-        RendererAvboitSystem& avboitSystem;
-        DeferredFrameTargets& targets;
-        Core::GpuTimingSubmissionTicket& timingTicket;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
-        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
-        b8 extinctionPhasePrepared = false;
-        b8 extinctionMaterialFrameStatesGraphOwned = false;
-        b8 extinctionMaterialGeometryStatesGraphOwned = false;
-        b8 extinctionComputeEmulationOutputStatesGraphOwned = false;
-        b8 extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
-        b8 generatedGeometryReused = false;
-        b8 hasTransparentRenderers = false;
-
-
-    public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererAvboitSystem& avboitSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket& timingTicketIn)noexcept
-            : avboitSystem(avboitSystemIn)
-            , targets(targetsIn)
-            , timingTicket(timingTicketIn)
-            , extinctionSnapshot(arena)
-        {}
-    };
-
-
+struct AvboitExtinctionSharedComputeEmulationGraphTask : public AvboitSharedComputeEmulationGraphTaskBase{
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+};
 
-    static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(payload.extinctionComputeEmulationTiming);
-    }
+struct AvboitExtinctionGraphTask : public AvboitRasterPassGraphTaskBase{
+public:
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
 struct AvboitIntegrationGraphTask{
@@ -177,8 +55,14 @@ public:
 
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept;
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        AcceptAvboitComputeEffect(payload, token);
+    }
+
+    static void Discarded(Payload& payload)noexcept{
+        DiscardAvboitComputeEffect(payload);
+    }
 };
 
 

@@ -103,7 +103,7 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     const u64 selection = m_model.selectionGeneration();
     const u64 stateRevision = m_state.revision();
     TextAreaOptions compact = SmallOptions();
-    compact.height.value = VectorGetX(VectorAdd(VectorReplicate(compact.height.value), VectorReplicate(m_builder.scrollbarStyle().thickness)));
+    compact.height.value = compact.height.value + m_builder.scrollbarStyle().thickness;
     ASSERT_TRUE(frameArea(2u, compact));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
@@ -248,7 +248,7 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const Rect visual = reference.visualBounds();
     const Point logical = reference.layout().measure();
     ASSERT_LT(visual.y, 0.0f);
-    ASSERT_GT(VectorGetX(VectorAdd(VectorReplicate(visual.y), VectorReplicate(visual.height))), logical.y);
+    ASSERT_GT(visual.y + visual.height, logical.y);
     b8 sawLatin = false;
     b8 sawKorean = false;
     for(const PlacedGlyph& glyph : reference.layout().glyphs()){
@@ -282,32 +282,32 @@ TEST_F(UiTextAreaScrollTests, DocumentEdgesRevealCombiningMarksAndFallbackInkBey
     const SIMDVectorSingle lastTextOrigin = VectorSet(last.textOrigin.x, last.textOrigin.y, 0.0f, 0.0f);
     const SIMDVectorSingle lastInkEnd = VectorAdd(VectorAdd(lastTextOrigin, VectorSet(visual.x, visual.y, 0.0f, 0.0f)), VectorSet(visual.width, visual.height, 0.0f, 0.0f));
     const SIMDVectorSingle lastContentEnd = VectorAdd(VectorSet(last.content.x, last.content.y, 0.0f, 0.0f), VectorSet(last.content.width, last.content.height, 0.0f, 0.0f));
-    EXPECT_NEAR(VectorGetX(VectorAdd(lastInkEnd, VectorReplicate(last.caret.width))), VectorGetX(lastContentEnd), 0.001f);
+    EXPECT_NEAR(VectorGetX(lastInkEnd) + last.caret.width, VectorGetX(lastContentEnd), 0.001f);
     EXPECT_NEAR(VectorGetY(lastInkEnd), VectorGetY(lastContentEnd), 0.001f);
     const auto endCaret = reference.caretGeometry().caretRect(text.size());
     ASSERT_TRUE(endCaret);
     const SIMDVectorSingle endCaretOrigin = VectorAdd(lastTextOrigin, VectorSet(endCaret->x, endCaret->y, 0.0f, 0.0f));
     EXPECT_FLOAT_EQ(last.caret.x, VectorGetX(endCaretOrigin));
     EXPECT_FLOAT_EQ(last.caret.y, VectorGetY(endCaretOrigin));
-    const auto hit = reference.hitTest({ last.caret.x, VectorGetX(VectorMultiplyAddExpression(VectorReplicate(last.caret.height), VectorReplicate(0.5f), VectorReplicate(last.caret.y))) }, last);
+    const auto hit = reference.hitTest({ last.caret.x, last.caret.height * 0.5f + last.caret.y }, last);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, text.size());
     ASSERT_EQ(m_host.publications.size(), 2u);
-    ExpectRect(m_host.publications.back().placement.caret, last.caret);
+    UiPaintAssertions::ExpectRect(m_host.publications.back().placement.caret, last.caret);
     m_host.key(Core::Key::Home, true);
     ASSERT_TRUE(frameArea(3u, options));
     EXPECT_EQ(m_model.caret(), 0u);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_NEAR(VectorGetX(VectorAdd(VectorReplicate(m_state.placement().textOrigin.y), VectorReplicate(visual.y))), m_state.placement().content.y, 0.001f);
+    EXPECT_NEAR(m_state.placement().textOrigin.y + visual.y, m_state.placement().content.y, 0.001f);
     ASSERT_TRUE(m_state.scrollTo({ 10000.0f, 10000.0f }));
     ASSERT_TRUE(frameArea(4u, options));
     EXPECT_EQ(m_model.caret(), 0u);
     EXPECT_NEAR(m_state.scroll().x, last.scroll, 0.001f);
     EXPECT_NEAR(m_state.scroll().y, last.scrollY, 0.001f);
     const EditBoxPlacement& scrolled = m_state.placement();
-    const SIMDVectorSingle scrolledInkBottom = VectorAdd(VectorAdd(VectorReplicate(scrolled.textOrigin.y), VectorReplicate(visual.y)), VectorReplicate(visual.height));
-    EXPECT_NEAR(VectorGetX(scrolledInkBottom), VectorGetX(VectorAdd(VectorReplicate(scrolled.content.y), VectorReplicate(scrolled.content.height))), 0.001f);
+    const f32 scrolledInkBottom = scrolled.textOrigin.y + visual.y + visual.height;
+    EXPECT_NEAR(scrolledInkBottom, scrolled.content.y + scrolled.content.height, 0.001f);
 }
 
 TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTextChangesWithoutMovingCaretStops){
@@ -317,7 +317,7 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
     ASSERT_TRUE(view.snapshot(model));
     ASSERT_EQ(view.shape(m_text, { .text = {}, .fontSize = 17.3f }), TextLayoutStatus::Success);
     const Point logical = view.layout().measure();
-    ExpectRect(view.visualBounds(), { 0.0f, 0.0f, logical.x, logical.y });
+    UiPaintAssertions::ExpectRect(view.visualBounds(), { 0.0f, 0.0f, logical.x, logical.y });
     const auto logicalCaret = view.caretGeometry().caretRect(view.displayCaret());
     ASSERT_TRUE(logicalCaret);
     Rect previous;
@@ -327,22 +327,22 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
         const auto expected = m_text.measure(view.layout(), display);
         ASSERT_TRUE(expected);
         ASSERT_TRUE(view.measure(m_text, display));
-        ExpectRect(view.visualBounds(), *expected);
+        UiPaintAssertions::ExpectRect(view.visualBounds(), *expected);
         EXPECT_FLOAT_EQ(view.layout().measure().x, logical.x);
         EXPECT_FLOAT_EQ(view.layout().measure().y, logical.y);
         const auto caret = view.caretGeometry().caretRect(view.displayCaret());
         ASSERT_TRUE(caret);
-        ExpectRect(*caret, *logicalCaret);
-        const SIMDVectorSingle caretWidth = VectorDivide(VectorSplatOne(), VectorReplicate(scale));
-        const Rect bounds{ 20.25f, 30.75f, VectorGetX(VectorAdd(VectorReplicate(expected->width), caretWidth)), expected->height };
-        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, VectorGetX(caretWidth));
+        UiPaintAssertions::ExpectRect(*caret, *logicalCaret);
+        const f32 caretWidth = 1.0f / scale;
+        const Rect bounds{ 20.25f, 30.75f, expected->width + caretWidth, expected->height };
+        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 800.0f, 600.0f }, {}, caretWidth);
         ASSERT_TRUE(placement);
         const SIMDVectorSingle textOrigin = VectorSet(placement->textOrigin.x, placement->textOrigin.y, 0.0f, 0.0f);
         const SIMDVectorSingle inkOrigin = VectorAdd(textOrigin, VectorSet(expected->x, expected->y, 0.0f, 0.0f));
         const SIMDVectorSingle caretOrigin = VectorAdd(textOrigin, VectorSet(logicalCaret->x, logicalCaret->y, 0.0f, 0.0f));
         EXPECT_NEAR(VectorGetX(inkOrigin), bounds.x, 0.001f);
         EXPECT_NEAR(VectorGetY(inkOrigin), bounds.y, 0.001f);
-        EXPECT_NEAR(VectorGetY(VectorAdd(inkOrigin, VectorReplicate(expected->height))), VectorGetX(VectorAdd(VectorReplicate(bounds.y), VectorReplicate(bounds.height))), 0.001f);
+        EXPECT_NEAR(VectorGetY(inkOrigin) + expected->height, bounds.y + bounds.height, 0.001f);
         EXPECT_FLOAT_EQ(placement->caret.x, VectorGetX(caretOrigin));
         EXPECT_FLOAT_EQ(placement->caret.y, VectorGetY(caretOrigin));
         if(scale != 1.0f)
@@ -351,17 +351,17 @@ TEST_F(UiTextAreaScrollTests, SingleLineVisualMeasurementRefreshesAcrossDpiAndTe
     }
     EXPECT_TRUE(changedWithScale);
     EXPECT_FALSE(view.measure(m_text, { 800.0f, 600.0f, 0.0f, 1.0f }));
-    ExpectRect(view.visualBounds(), previous);
+    UiPaintAssertions::ExpectRect(view.visualBounds(), previous);
     ASSERT_TRUE(model.setText("x"));
     ASSERT_TRUE(view.snapshot(model));
     EXPECT_FALSE(view.ready());
     ASSERT_EQ(view.shape(m_text, { .text = {}, .fontSize = 17.3f }), TextLayoutStatus::Success);
     const Point replacementLogical = view.layout().measure();
-    ExpectRect(view.visualBounds(), { 0.0f, 0.0f, replacementLogical.x, replacementLogical.y });
+    UiPaintAssertions::ExpectRect(view.visualBounds(), { 0.0f, 0.0f, replacementLogical.x, replacementLogical.y });
     ASSERT_TRUE(view.measure(m_text, { 800.0f, 600.0f, 1.0f, 1.0f }));
     const auto replacement = m_text.measure(view.layout(), { 800.0f, 600.0f, 1.0f, 1.0f });
     ASSERT_TRUE(replacement);
-    ExpectRect(view.visualBounds(), *replacement);
+    UiPaintAssertions::ExpectRect(view.visualBounds(), *replacement);
     EXPECT_LT(view.visualBounds().height, previous.height);
 }
 

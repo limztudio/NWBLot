@@ -70,14 +70,11 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
     blasScratch.resizeForBuild(numGeometries);
 
-    using OpacityMicromapGeometryVector = Vector<VkAccelerationStructureTrianglesOpacityMicromapEXT, Alloc::ScratchArena>;
-    using OpacityMicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
-    using OpacityMicromapUsageOffsetVector = Vector<usize, Alloc::ScratchArena>;
     using AccelStructGeometryBuildSignatureVector = Vector<AccelStructGeometryBuildSignature, Alloc::ScratchArena>;
 
-    OpacityMicromapGeometryVector opacityMicromapGeometries(numGeometries, scratchArena);
-    OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(numGeometries, scratchArena);
-    OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
+    VulkanDetail::OpacityMicromapGeometryVector opacityMicromapGeometries(numGeometries, scratchArena);
+    VulkanDetail::OpacityMicromapUsageOffsetVector opacityMicromapUsageOffsets(numGeometries, scratchArena);
+    VulkanDetail::OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
     AccelStructGeometryBuildSignatureVector geometrySignatures(numGeometries, scratchArena);
 
     usize totalOpacityMicromapUsageCount = 0u;
@@ -114,11 +111,10 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     }
     opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
 
-    constexpr VkBufferUsageFlags s_BuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> b8{
         if(!buffer)
             return true;
-        if(isBufferReadyForCommandQueue(buffer, s_BuildInputUsage))
+        if(isBufferReadyForCommandQueue(buffer, VulkanDetail::s_AccelStructBuildInputUsage))
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: {} buffer is foreign or not ready"), resourceName);
@@ -172,9 +168,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 return;
             }
 
-            constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
             Buffer* const micromapStorage = opacityMicromap->m_dataBuffer.get();
-            if(!isBufferReadyForCommandQueue(micromapStorage, s_MicromapStorageUsage)){
+            if(!isBufferReadyForCommandQueue(micromapStorage, VulkanDetail::s_MicromapStorageUsage)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: triangle opacity micromap storage is not ready"));
                 return;
             }
@@ -448,7 +443,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
-    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures.data(), geometrySignatures.size())){
+    if(!m_currentCmdBuf->appendPendingAccelStructBuildCommit(as, VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, vkBuildFlags, geometrySignatures)){
         rejectCommandRecording(s_BuildBottomLevelAccelStructOperation, VulkanDetail::s_RetainBuildSignatureFailedReason);
         return;
     }

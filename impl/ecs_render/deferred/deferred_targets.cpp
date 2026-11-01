@@ -5,6 +5,7 @@
 #include "deferred_system.h"
 
 #include <impl/ecs_render/csg/format_private.h>
+#include <impl/ecs_render/csg/types.adhd.h>
 #include <impl/ecs_render/deferred/format_private.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
@@ -23,27 +24,261 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept{
+    constexpr Array<Core::Format::Enum, 1> s_Candidates = { Core::Format::RGBA16_FLOAT };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
+}
+
+Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept{
+    constexpr Array<Core::Format::Enum, 1> s_Candidates = { Core::Format::RGBA16_FLOAT };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
+
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
+}
+
+Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept{
+    constexpr Array<Core::Format::Enum, 3> s_Candidates = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16 };
+    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::DepthStencil;
+
+    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererDeferredState::invalidateResources()noexcept{
+    m_lightingBindingLayout.reset();
+    m_sceneShadingBuffer.reset();
+    m_lightBuffer.reset();
+    m_lightingComputeShader.reset();
+    m_lightingPipeline.reset();
+    m_compositeComputeBindingLayout.reset();
+    m_compositeComputeShader.reset();
+    m_compositeComputePipeline.reset();
+    m_presentBindingLayout.reset();
+    m_sampler.reset();
+    m_presentPixelShader.reset();
+    m_presentPipeline.reset();
+    m_sceneShadingGpuDataValid = false;
+    m_lightGpuDataCount = 0u;
+    m_lightGpuDataValid = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeferredBindlessFrameResources::valid()const noexcept{
+    return
+        slotsBuffer != nullptr
+        && slotsBufferDescriptor.valid()
+        && gbufferBaseColor.valid()
+        && gbufferNormal.valid()
+        && gbufferWorldPosition.valid()
+        && gbufferSpecularRoughness.valid()
+        && gbufferDepth.valid()
+        && shadowVisibility.valid()
+        && shadowVisibilityStorage.valid()
+        && causticIrradiance.valid()
+        && causticIrradianceStorage.valid()
+        && surfelIrradiance.valid()
+        && surfelIrradianceStorage.valid()
+        && surfelIrradianceHalf.valid()
+        && surfelIrradianceHalfStorage.valid()
+        && sampler.valid()
+        && opaqueColor.valid()
+        && opaqueColorStorage.valid()
+        && compositeColor.valid()
+        && compositeColorStorage.valid()
+        && avboitAccumColor.valid()
+        && avboitAccumExtinction.valid()
+        && avboitTransmittance.valid()
+        && avboitLinearSampler.valid()
+        && sceneShading.valid()
+        && lightList.valid()
+        && causticAccumulator.valid()
+        && causticAccumulatorStorage.valid()
+        && causticHistory.valid()
+        && causticHistoryStorage.valid()
+        && causticResolveHalf.valid()
+        && causticResolveHalfStorage.valid()
+        && causticResolveGeometry.valid()
+        && causticResolveGeometryStorage.valid()
+        && shadowCoarseTransmittanceStorage.valid()
+        && shadowSoftGeometry.valid()
+        && shadowSoftGeometryStorage.valid()
+        && shadowSoftGeometryPrev.valid()
+        && shadowSoftGeometryPrevStorage.valid()
+        && shadowSoftHalfA.valid()
+        && shadowSoftHalfAStorage.valid()
+        && shadowSoftHalfB.valid()
+        && shadowSoftHalfBStorage.valid()
+        && shadowHistA.valid()
+        && shadowHistAStorage.valid()
+        && shadowHistB.valid()
+        && shadowHistBStorage.valid()
+        && shadowMomentsA.valid()
+        && shadowMomentsAStorage.valid()
+        && shadowMomentsB.valid()
+        && shadowMomentsBStorage.valid()
+        && transparentSoftHalf.valid()
+        && transparentSoftHalfStorage.valid()
+        && transparentHistA.valid()
+        && transparentHistAStorage.valid()
+        && transparentHistB.valid()
+        && transparentHistBStorage.valid()
+        && transparentMomentsA.valid()
+        && transparentMomentsAStorage.valid()
+        && transparentMomentsB.valid()
+        && transparentMomentsBStorage.valid()
+        && csgCapBackNormal.valid()
+        && csgIntervalDepth.valid()
+        && csgIntervalId.valid()
+        && csgReceiverEventData.valid()
+        && csgReceiverEventCount.valid()
+        && csgReceiverSpanData.valid()
+        && csgReceiverSpanCount.valid()
+        && csgRemovedIntervalDepth.valid()
+        && csgRemovedIntervalCapNormal.valid()
+        && csgRemovedIntervalData.valid()
+        && csgRemovedIntervalCount.valid()
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeferredLaggedLightingHistoryResources::valid()const noexcept{
+    return
+        shadowVisibility != nullptr
+        && causticIrradiance != nullptr
+        && surfelIrradiance != nullptr
+        && slotsBuffer != nullptr
+        && slotsBufferDescriptor.valid()
+        && shadowVisibilityDescriptor.valid()
+        && causticIrradianceDescriptor.valid()
+        && surfelIrradianceDescriptor.valid()
+        && generation != 0u
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 DeferredFrameTargets::csgIntervalTargetsValid()const noexcept{
+    return
+        csgCapNormalFormat != Core::Format::UNKNOWN
+        && csgIntervalDepthFormat != Core::Format::UNKNOWN
+        && csgIntervalIdFormat != Core::Format::UNKNOWN
+        && csgReceiverEventDataFormat != Core::Format::UNKNOWN
+        && csgReceiverEventCountFormat != Core::Format::UNKNOWN
+        && csgReceiverSpanDataFormat != Core::Format::UNKNOWN
+        && csgReceiverSpanCountFormat != Core::Format::UNKNOWN
+        && csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN
+        && csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN
+        && csgRemovedIntervalDataFormat != Core::Format::UNKNOWN
+        && csgRemovedIntervalCountFormat != Core::Format::UNKNOWN
+        && csgPeelLayerCount > 0u
+        && csgReceiverEventLayerCount > 0u
+        && csgReceiverSpanLayerCount > 0u
+        && csgRemovedIntervalLayerCount > 0u
+        && csgCapBackNormal != nullptr
+        && csgIntervalDepth != nullptr
+        && csgIntervalId != nullptr
+        && csgReceiverEventData != nullptr
+        && csgReceiverEventCount != nullptr
+        && csgReceiverSpanData != nullptr
+        && csgReceiverSpanCount != nullptr
+        && csgRemovedIntervalDepth != nullptr
+        && csgRemovedIntervalCapNormal != nullptr
+        && csgRemovedIntervalData != nullptr
+        && csgRemovedIntervalCount != nullptr
+    ;
+}
+
+b8 DeferredFrameTargets::valid()const noexcept{
+#if defined(NWB_DEBUG)
+    return
+        width > 0
+        && height > 0
+        && albedoFormat != Core::Format::UNKNOWN
+        && normalFormat != Core::Format::UNKNOWN
+        && worldPositionFormat != Core::Format::UNKNOWN
+        && specularRoughnessFormat != Core::Format::UNKNOWN
+        && opaqueColorFormat != Core::Format::UNKNOWN
+        && compositeColorFormat != Core::Format::UNKNOWN
+        && depthFormat != Core::Format::UNKNOWN
+        && csgIntervalTargetsValid()
+        && albedo != nullptr
+        && normal != nullptr
+        && worldPosition != nullptr
+        && specularRoughness != nullptr
+        && opaqueColor != nullptr
+        && compositeColor != nullptr
+        && depth != nullptr
+        && framebuffer != nullptr
+        && bindless.valid()
+        && avboit.valid()
+    ;
+#else
+    return framebuffer != nullptr;
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererDeferredSystem::invalidateSceneLightingUploadMirrors()noexcept{
+    m_deferredState.m_sceneShadingGpuDataValid = false;
+    m_deferredState.m_lightGpuDataValid = false;
+}
+
+b8 RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings)noexcept{
+    if(!ValidatePresentationSettings(settings))
+        return false;
+    m_deferredState.m_presentationSettings = settings;
+    return true;
+}
+
 Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0)
         return MakeUnexpected(Failure{});
 
     auto& device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
-    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
-    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
+    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectDeferredOpaqueColorFormat(device);
     const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(device);
-    const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(device);
-    const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(device);
-    const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgIntervalIdFormat(device);
-    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgReceiverEventDataFormat(device);
-    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgReceiverEventCountFormat(device);
-    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgReceiverSpanDataFormat(device);
-    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgReceiverSpanCountFormat(device);
-    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgRemovedIntervalDepthFormat(device);
-    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgRemovedIntervalCapNormalFormat(device);
-    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgRemovedIntervalDataFormat(device);
-    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgRemovedIntervalCountFormat(device);
+    const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_CAP_NORMAL_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_INTERVAL_DEPTH_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_INTERVAL_ID_CORE_FORMAT, ECSRenderDetail::s_CsgPeelFormatSupport, device);
+    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_EVENT_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_RECEIVER_SPAN_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DEPTH_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_CAP_NORMAL_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_DATA_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
+    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgFormat(NWB_CSG_REMOVED_INTERVAL_COUNT_CORE_FORMAT, ECSRenderDetail::s_CsgStorageFormatSupport, device);
     if(
         albedoFormat == Core::Format::UNKNOWN
         || normalFormat == Core::Format::UNKNOWN
@@ -95,10 +330,10 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     createdTargets.csgRemovedIntervalCapNormalFormat = csgRemovedIntervalCapNormalFormat;
     createdTargets.csgRemovedIntervalDataFormat = csgRemovedIntervalDataFormat;
     createdTargets.csgRemovedIntervalCountFormat = csgRemovedIntervalCountFormat;
-    createdTargets.csgPeelLayerCount = ECSRenderDetail::s_CsgPeelLayerCount;
-    createdTargets.csgReceiverEventLayerCount = ECSRenderDetail::s_CsgReceiverEventLayerCount;
-    createdTargets.csgReceiverSpanLayerCount = ECSRenderDetail::s_CsgReceiverSpanLayerCount;
-    createdTargets.csgRemovedIntervalLayerCount = ECSRenderDetail::s_CsgRemovedIntervalLayerCount;
+    createdTargets.csgPeelLayerCount = s_CsgPeelLayerCount;
+    createdTargets.csgReceiverEventLayerCount = s_CsgReceiverEventLayerCount;
+    createdTargets.csgReceiverSpanLayerCount = s_CsgReceiverSpanLayerCount;
+    createdTargets.csgRemovedIntervalLayerCount = s_CsgRemovedIntervalLayerCount;
 
     Core::TextureDesc albedoDesc;
     albedoDesc
@@ -235,7 +470,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         return MakeUnexpected(Failure{});
     }
 
-    Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
+    Array<Core::FramebufferAttachment, NWB_MESH_GBUFFER_TARGET_COUNT> gbufferAttachments = {};
     gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION].setTexture(createdTargets.albedo.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
     gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION].setTexture(createdTargets.normal.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
     gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION].setTexture(createdTargets.worldPosition.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);

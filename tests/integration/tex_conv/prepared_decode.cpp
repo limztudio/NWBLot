@@ -79,7 +79,7 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
     Vector<u8, NWB::Core::Alloc::ScratchArena> output(scratchArena);
     output.resize(s_ChannelCount * sizeof(u32) + componentCount * sizeof(f32));
     usize offset = 0u;
-    const u32 dimensions[] = { mip.width, mip.height, mip.sliceCount, s_ChannelCount };
+    const Array<u32, 4u> dimensions = { mip.width, mip.height, mip.sliceCount, s_ChannelCount };
     for(const u32 value : dimensions){
         for(u32 byte = 0u; byte < sizeof(u32); ++byte)
             output[offset++] = static_cast<u8>(value >> (byte * s_BitsPerByte));
@@ -93,7 +93,7 @@ inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv_prepared_decod
         }
         else{
             constexpr f32 s_Unorm8MaxF32 = 255.0f;
-            value = VectorGetX(VectorDivide(VectorReplicate(static_cast<f32>(decoded->bytes[index])), VectorReplicate(s_Unorm8MaxF32)));
+            value = static_cast<f32>(decoded->bytes[index]) / s_Unorm8MaxF32;
         }
         const u32 bits = BitCast<u32>(value);
         for(u32 byte = 0u; byte < sizeof(u32); ++byte)

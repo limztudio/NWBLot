@@ -8,7 +8,7 @@
 #include "filesystem.h"
 
 #include <core/alloc/scratch.h>
-#include <core/common/log.h>
+#include <core/filesystem/volume_naming.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +43,12 @@ private:
 
 
 public:
-    explicit VolumeFileSystem(Alloc::GlobalArena& arena);
+    explicit VolumeFileSystem(Alloc::GlobalArena& arena)
+        : m_mountDirectory(arena)
+        , m_arena(arena)
+        , m_segmentPaths(m_arena)
+        , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
+    {}
     virtual ~VolumeFileSystem()noexcept override = default;
 
 
@@ -68,7 +73,7 @@ public:
 public:
     virtual b8 writeFile(const Name& virtualPath, const void* data, usize bytes)override;
     virtual b8 writeFileDeferred(const Name& virtualPath, const void* data, usize bytes)override;
-    virtual b8 flush()override;
+    virtual b8 flush()override{ return compact(true); }
     virtual void reserveFileCapacity(usize fileCount)override;
 
     [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
@@ -88,7 +93,7 @@ private:
     Expected<u64> computeLogicalCapacityLocked()const noexcept;
 
     b8 loadMetadataLocked(Alloc::ScratchArena& scratchArena);
-    b8 flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name* excludedPath = nullptr);
+    b8 flushMetadataLocked(Alloc::ScratchArena& scratchArena, const Name& excludedPath = s_NameNone);
     b8 canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
     [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const noexcept(!NWB_OCCUR_WARNING);
     Expected<u64, ErrorCode> computePhysicalCapacityLocked()const noexcept(!NWB_OCCUR_WARNING);
@@ -98,7 +103,9 @@ private:
     b8 trimSegmentsForNextFreeOffsetLocked();
 
     void unmountLocked()noexcept;
-    Path segmentPath(usize segmentIndex)const;
+    Path segmentPath(const usize segmentIndex)const{
+        return MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
+    }
 
 
 private:

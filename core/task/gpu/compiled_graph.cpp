@@ -43,6 +43,49 @@ namespace __hidden_gpu_compiled_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 GpuCompiledOwnershipTransfer::valid()const noexcept{
+    if(
+        !resource.valid()
+        || resourceIdentity == s_NameNone
+        || resourceType >= GpuGraphResourceType::HazardDomain
+        || route >= GpuOwnershipTransferRoute::Count
+        || !sourceQueue.valid()
+        || !destinationQueue.valid()
+        || sourceQueue == destinationQueue
+        || sourceQueue.deviceGeneration != destinationQueue.deviceGeneration
+        || sourceQueueFamilyIndex == Limit<u32>::s_Max
+        || destinationQueueFamilyIndex == Limit<u32>::s_Max
+        || sourceQueueFamilyIndex == destinationQueueFamilyIndex
+        || !ResourceQueueSharing::IsValid(declaredQueueSharing)
+    )
+        return false;
+
+    switch(route){
+    case GpuOwnershipTransferRoute::Internal:
+        return
+            sourceTask.valid()
+            && destinationTask.valid()
+            && sourceTask != destinationTask
+            && sourceTask.generation == resource.generation
+            && destinationTask.generation == resource.generation
+            && sourcePacket.valid()
+            && destinationPacket.valid()
+            && sourcePacket != destinationPacket
+            && sourcePacket.generation == destinationPacket.generation
+        ;
+    case GpuOwnershipTransferRoute::ExternalImport:
+        return !sourceTask.valid() && destinationTask.valid() && destinationTask.generation == resource.generation && !sourcePacket.valid() && destinationPacket.valid();
+    case GpuOwnershipTransferRoute::ExternalExport:
+        return sourceTask.valid() && sourceTask.generation == resource.generation && !destinationTask.valid() && sourcePacket.valid() && !destinationPacket.valid();
+    default:
+        return false;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuCompiledGraph::CompilationScope::CompilationScope(GpuCompiledGraph& graph)noexcept{
     {
         NothrowScopedLock lock(graph.m_attemptBindingMutex);
@@ -77,62 +120,6 @@ void GpuCompiledGraph::CompilationScope::publish()noexcept{
 
     m_graph->m_valid = true;
     m_published = true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void GpuCompiledGraph::clearAttemptBindingWithinLock()noexcept{
-    m_attemptGraph = nullptr;
-    m_attemptPlanGeneration = 0u;
-    m_attemptRecordingGeneration = 0u;
-    m_attemptTransactionIdentity = 0u;
-    m_attemptTransactionResetGeneration = 0u;
-    m_attemptBindingState = AttemptBindingState::None;
-}
-
-
-void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
-    static_assert(noexcept(m_tasks.clear()));
-    static_assert(noexcept(m_compiledTaskIndexByTask.clear()));
-    static_assert(noexcept(m_packets.clear()));
-    static_assert(noexcept(m_packetTasks.clear()));
-    static_assert(noexcept(m_packetDependencies.clear()));
-    static_assert(noexcept(m_packetExternalDependencies.clear()));
-    static_assert(noexcept(m_prologueStateSeeds.clear()));
-    static_assert(noexcept(m_prologueBarriers.clear()));
-    static_assert(noexcept(m_epilogueBarriers.clear()));
-    static_assert(noexcept(m_ownershipTransfers.clear()));
-    static_assert(noexcept(m_externalResourceExports.clear()));
-    static_assert(noexcept(m_externalResourceExportSources.clear()));
-    static_assert(noexcept(m_queueTopology.clear()));
-    static_assert(noexcept(m_physicalQueueCompileStatistics.clear()));
-
-    m_tasks.clear();
-    m_compiledTaskIndexByTask.clear();
-    m_packets.clear();
-    m_packetTasks.clear();
-    m_packetDependencies.clear();
-    m_packetExternalDependencies.clear();
-    m_prologueStateSeeds.clear();
-    m_prologueBarriers.clear();
-    m_epilogueBarriers.clear();
-    m_ownershipTransfers.clear();
-    m_externalResourceExports.clear();
-    m_externalResourceExportSources.clear();
-    m_queueTopology.clear();
-    m_physicalQueueCompileStatistics.clear();
-    m_presentEndpoint = {};
-    m_packetTimingEnvelopeRange = {};
-    m_generation = 0u;
-    m_declarationRevision = 0u;
-    m_planGeneration = 0u;
-    m_deviceGeneration = 0u;
-    m_graphTaskCount = 0u;
-    m_compileStatistics = {};
-    m_hasPresentEndpoint = false;
-    m_valid = false;
 }
 
 
@@ -191,6 +178,57 @@ void GpuCompiledGraph::reset()noexcept{
         return;
 
     NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
+}
+
+void GpuCompiledGraph::clearAttemptBindingWithinLock()noexcept{
+    m_attemptGraph = nullptr;
+    m_attemptPlanGeneration = 0u;
+    m_attemptRecordingGeneration = 0u;
+    m_attemptTransactionIdentity = 0u;
+    m_attemptTransactionResetGeneration = 0u;
+    m_attemptBindingState = AttemptBindingState::None;
+}
+
+void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
+    static_assert(noexcept(m_tasks.clear()));
+    static_assert(noexcept(m_compiledTaskIndexByTask.clear()));
+    static_assert(noexcept(m_packets.clear()));
+    static_assert(noexcept(m_packetTasks.clear()));
+    static_assert(noexcept(m_packetDependencies.clear()));
+    static_assert(noexcept(m_packetExternalDependencies.clear()));
+    static_assert(noexcept(m_prologueStateSeeds.clear()));
+    static_assert(noexcept(m_prologueBarriers.clear()));
+    static_assert(noexcept(m_epilogueBarriers.clear()));
+    static_assert(noexcept(m_ownershipTransfers.clear()));
+    static_assert(noexcept(m_externalResourceExports.clear()));
+    static_assert(noexcept(m_externalResourceExportSources.clear()));
+    static_assert(noexcept(m_queueTopology.clear()));
+    static_assert(noexcept(m_physicalQueueCompileStatistics.clear()));
+
+    m_tasks.clear();
+    m_compiledTaskIndexByTask.clear();
+    m_packets.clear();
+    m_packetTasks.clear();
+    m_packetDependencies.clear();
+    m_packetExternalDependencies.clear();
+    m_prologueStateSeeds.clear();
+    m_prologueBarriers.clear();
+    m_epilogueBarriers.clear();
+    m_ownershipTransfers.clear();
+    m_externalResourceExports.clear();
+    m_externalResourceExportSources.clear();
+    m_queueTopology.clear();
+    m_physicalQueueCompileStatistics.clear();
+    m_presentEndpoint = {};
+    m_packetTimingEnvelopeRange = {};
+    m_generation = 0u;
+    m_declarationRevision = 0u;
+    m_planGeneration = 0u;
+    m_deviceGeneration = 0u;
+    m_graphTaskCount = 0u;
+    m_compileStatistics = {};
+    m_hasPresentEndpoint = false;
+    m_valid = false;
 }
 
 b8 GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
@@ -275,8 +313,9 @@ b8 GpuCompiledGraph::taskPrecedesInSamePacket(const GpuTaskId& first, const GpuT
     return firstTaskIndex < secondTaskIndex;
 }
 
-b8 GpuCompiledGraph::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
-    if(!tasks || taskCount == 0u)
+b8 GpuCompiledGraph::tasksFormContiguousPacketSequence(const Span<const GpuTaskId> tasks)const noexcept{
+    const usize taskCount = tasks.size();
+    if(!tasks.data() || taskCount == 0u)
         return false;
     const GpuCompiledTask* const firstTask = findTask(tasks[0u]);
     if(!firstTask)

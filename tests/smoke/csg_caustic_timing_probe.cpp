@@ -21,7 +21,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::GpuTimingScopeDefinition s_CausticGpuTimingScopes[] = {
+static constexpr Array<Core::GpuTimingScopeDefinition, 6> s_CausticGpuTimingScopes = {
     Impl::RendererGpuTimingScope::s_Frame,
     Impl::RendererGpuTimingScope::s_CausticPhotons,
     Impl::RendererGpuTimingScope::s_CausticResolve,
@@ -30,7 +30,7 @@ static constexpr Core::GpuTimingScopeDefinition s_CausticGpuTimingScopes[] = {
     Impl::RendererGpuTimingScope::s_DeferredPresent,
 };
 
-static constexpr Name s_CausticCpuTimingScopes[] = {
+static constexpr Array<Name, 5> s_CausticCpuTimingScopes = {
     Name("graphics.frame"),
     Name("graphics.prepare_resources"),
     Name("graphics.render_passes"),
@@ -44,13 +44,13 @@ static constexpr Name s_CausticCpuTimingScopes[] = {
 
 CsgCausticTimingProbe::CsgCausticTimingProbe(ProjectRuntimeContext& context)noexcept
     : IRenderPass(context.graphics)
-    , m_context(context)
     , m_cpu(NWB_TEXT("csg_caustic"), context.objectArena)
+    , m_startPath(context.objectArena)
     , m_records(context.objectArena)
     , m_native(context.objectArena)
     , m_intervals(context.objectArena)
     , m_output(context.objectArena)
-    , m_startPath(context.objectArena)
+    , m_context(context)
 {}
 
 b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8 hardware, const AStringView outputPath, const AStringView cpuOutputPath, const AStringView startPath){
@@ -58,8 +58,8 @@ b8 CsgCausticTimingProbe::initialize(const b8 diagnostic, const b8 csg, const b8
         NWB_LOGGER_ERROR(NWB_TEXT("CsgCausticTiming: explicit outputs, focus gate and quit callback are required"));
         return false;
     }
-    static_assert(LengthOf(s_CausticGpuTimingScopes) == s_GpuScopeCount);
-    static_assert(LengthOf(s_CausticCpuTimingScopes) == s_CpuScopeCount);
+    static_assert(s_CausticGpuTimingScopes.size() == s_GpuScopeCount);
+    static_assert(s_CausticCpuTimingScopes.size() == s_CpuScopeCount);
     m_diagnostic = diagnostic;
     m_output.assign(outputPath.data(), outputPath.size());
     m_startPath = startPath;
@@ -247,7 +247,7 @@ Expected<b8> CsgCausticTimingProbe::selectCommonWindow(){
     usize begin = m_commonBegin;
     u32 positiveMask = 0u;
     m_positiveIntervals = 0u;
-    u32 positiveScopeIntervals[s_ScopeCount] = {};
+    Array<u32, s_ScopeCount> positiveScopeIntervals{};
     for(usize frame = begin + 1u; frame <= end; ++frame){
         positiveMask |= m_native[frame - 1u].positiveMask;
         if(DurationInSeconds<f64>(m_native[frame].timestamp, m_native[begin].timestamp) < s_ReportIntervalSeconds && frame != end)

@@ -74,6 +74,8 @@ class InputSource{
     public u64 control = 0u;
 }
 
+const InputSource s_NativePointerSource = InputSource(0u, 1u);
+
 class InputCommandIntent{
     public InputCommand command = InputCommand::None;
     public b8 extend = false;

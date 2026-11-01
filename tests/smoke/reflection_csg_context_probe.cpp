@@ -29,7 +29,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, const u32 rayCapacity, const u64 sourceFrame, const b8 csg){
+void ReportReflectionSlicePackets(const u32 rayCapacity, const u64 sourceFrame, const b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer){
     NWB::Core::Telemetry::FrameGraphNodeDescs nodes(context.objectArena);
     NWB::Core::Telemetry::FrameGraphEdgeDescs edges(context.objectArena);
     NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(context.objectArena);
@@ -131,11 +131,11 @@ b8 ReflectionCsgContextProbe::ShouldCapture(void* owner, const u64 sourceFrame)n
     return sourceFrame == MakeNotNull(static_cast<ReflectionCsgContextProbe*>(owner))->m_targetSource;
 }
 
-ReflectionCsgContextProbe::ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, const u32 rayCapacity)noexcept
-    : m_context(context)
+ReflectionCsgContextProbe::ReflectionCsgContextProbe(const u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept
+    : m_capturePaths(context.objectArena)
+    , m_context(context)
     , m_world(world)
     , m_renderer(renderer)
-    , m_capturePaths(context.objectArena)
     , m_rayCapacity(rayCapacity)
 {}
 
@@ -148,15 +148,12 @@ b8 ReflectionCsgContextProbe::create(Core::Alloc::ScratchArena& scratchArena){
     const auto scene = CreateReflectionCsgContextScene(m_world);
     if(!scene)
         return false;
-    m_capturePaths.reserve(5u);
-    for(u32 phase = 0u; phase < 5u; ++phase){
-        const auto path = phase == 4u ? SmokeEnvironmentString(*output, m_context.objectArena) : StringFormat(m_context.objectArena, "{}.{}.bmp", *output, phase);
-        m_capturePaths.emplace_back(m_context.objectArena, AStringView(path));
-    }
     const FramebufferCaptureOptions options{ .shouldCapture = ShouldCapture, .predicateContext = this, .requiredWidth = 960u, .requiredHeight = 720u, .quitWhenReady = false, };
-    m_capture = MakeUnique<FramebufferCapture>(m_context, Move(m_capturePaths.front()), 1u, options);
-    if(!m_capture || !m_capture->start())
+    auto series = PrepareSmokeCaptureSeries(*output, 5u, options, m_context);
+    if(!series)
         return false;
+    m_capturePaths = Move(series->paths);
+    m_capture = Move(series->capture);
     m_entities = *scene;
     return beginPhase();
 }
@@ -172,7 +169,7 @@ b8 ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStat
     const u64 frame = m_context.graphics.getFrameIndex();
     if(frame > 0u && frame - 1u != m_packetSource){
         m_packetSource = frame - 1u;
-        ReportReflectionSlicePackets(m_context, m_renderer, m_rayCapacity, m_packetSource, m_phase != 2u);
+        ReportReflectionSlicePackets(m_rayCapacity, m_packetSource, m_phase != 2u, m_context, m_renderer);
     }
     if(statistics.sequence != m_lastSequence || statistics.generation != m_lastGeneration){
         m_lastSequence = statistics.sequence;

@@ -9,12 +9,6 @@
 
 #include <gtest/gtest.h>
 
-#include <cerrno>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <float.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,10 +24,10 @@ using PowerEvaluate = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSingle)noe
 
 struct alignas(SIMDVectorSingle) PowerObservation{
     SIMDVectorSingle value;
+    u64 rawNativeStatus;
     i32 flags;
     i32 error;
     u32 nativeStatus;
-    u64 rawNativeStatus;
 };
 static_assert(alignof(Expected<PowerObservation>) >= alignof(PowerObservation));
 
@@ -45,13 +39,11 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
     return VectorPow(x, y);
 }
 
-[[nodiscard]] Expected<PowerObservation> ObservePower(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, const u64 initialNativeFlags)noexcept{
+[[nodiscard]] Expected<PowerObservation> ObservePower(const NotNull<PowerEvaluate> evaluate, const SIMDVectorSingle x, const SIMDVectorSingle y, const i32 initialFlags, [[maybe_unused]] const u64 initialNativeFlags)noexcept{
 #pragma STDC FENV_ACCESS ON
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     const u64 clearNativeStatus = 0u;
     __asm__ __volatile__("msr fpsr, %0" : : "r"(clearNativeStatus));
-#else
-    static_cast<void>(initialNativeFlags);
 #endif
 #if defined(NWB_PLATFORM_WINDOWS)
     _clearfp();
@@ -76,7 +68,7 @@ NWB_NOINLINE SIMDVectorSingle CurrentPower(const SIMDVectorSingle x, const SIMDV
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
     __asm__ __volatile__("mrs %0, fpsr" : "=r"(rawNativeStatus));
 #endif
-    return PowerObservation{ value, flags, error, nativeStatus, rawNativeStatus };
+    return PowerObservation{ value, rawNativeStatus, flags, error, nativeStatus };
 }
 
 
@@ -102,7 +94,7 @@ TEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededSta
     });
 
     struct PowerCase{ PowerWords x, y; };
-    constexpr PowerCase s_Cases[]{
+    constexpr Array<PowerCase, 8> s_Cases = {{
         { { 1u, 0x80000001u, 0x007fffffu, 0x3f800000u }, { 0x3f800000u, 0x3f800000u, 0x3f800000u, 0x4019999au } },
         { { 0u, 0x3f800000u, 0x3e800000u, 0x3f000000u }, { 0x3ed55555u, 0xc0800000u, 0x80000000u, 0x3f800000u } },
         { { 0x37800000u, 0x47800000u, 0u, 0x3f800000u }, { 0xc0800000u, 0x40800000u, 0x40400000u, 0u } },
@@ -111,18 +103,18 @@ TEST(Math, VectorPowerPreservesMixedSpecialsAndAdjacentSrgbRoundingWithSeededSta
         { { 1u, 0x007fffffu, 0x00800000u, 0xff800000u }, { 0x40000000u, 0x3f000000u, 0x40200000u, 0xc0400000u } },
         { { 0x3d32b0b2u, 0x3d32b0b3u, 0x3d32b0b4u, 0x3eb048afu }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0x3ed55555u } },
         { { 0x3eb048aeu, 0x3eb048afu, 0x3eb048b0u, 0x3d2dc666u }, { 0x3ed55555u, 0x3ed55555u, 0x3ed55555u, 0xc13fc46au } }
-    };
-    constexpr i32 s_Modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    constexpr i32 s_InitialFlags[]{ 0, FE_INEXACT };
+    }};
+    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr u32 s_DenormalModes[]{ _DN_SAVE, _DN_FLUSH };
+    constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
 #else
-    constexpr u32 s_DenormalModes[]{ 0u };
+    constexpr Array<u32, 1> s_DenormalModes = { 0u };
 #endif
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
-    constexpr u64 s_NativeSeeds[]{ 0u, 0x80u, 0x08000000u, 0x08000080u };
+    constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
 #else
-    constexpr u64 s_NativeSeeds[]{ 0u };
+    constexpr Array<u64, 1> s_NativeSeeds = { 0u };
 #endif
     for(const u32 denormalMode : s_DenormalModes){
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64) && !defined(_M_ARM64EC)
@@ -168,12 +160,12 @@ TEST(Math, VectorPowerKeepsDenormalInputStatusWithInvalidTrapEnabled){
         errno = originalError;
     });
 
-    constexpr u32 s_DenormalModes[]{ _DN_SAVE, _DN_FLUSH };
-    constexpr i32 s_Modes[]{ FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
-    constexpr i32 s_InitialFlags[]{ 0, FE_INEXACT };
+    constexpr Array<u32, 2> s_DenormalModes = { _DN_SAVE, _DN_FLUSH };
+    constexpr Array<i32, 4> s_Modes = { FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO };
+    constexpr Array<i32, 2> s_InitialFlags = { 0, FE_INEXACT };
     const SIMDVectorSingle x = VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u);
     const SIMDVectorSingle y = VectorSet(2.0f, 1.0f, 1.0f, 1.0f);
-    constexpr u64 s_NativeSeeds[]{ 0u, 0x80u, 0x08000000u, 0x08000080u };
+    constexpr Array<u64, 4> s_NativeSeeds = { 0u, 0x80u, 0x08000000u, 0x08000080u };
     for(const u32 denormalMode : s_DenormalModes){
         u32 control{};
         ASSERT_EQ(_controlfp_s(&control, denormalMode, _MCW_DN), 0);

@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include "../id.h"
-#include "../paint.h"
+#include <impl/ecs_ui/toolkit/paint.h>
+
+#include <impl/ecs_ui/toolkit/id.adhd.h>
 
 #include <global/containers.h>
 
@@ -24,10 +25,6 @@ NWB_IMPL_UI_BEGIN
 class WidgetStateStore final : NoCopy{
 private:
     using StateIndex = HashMap<u64, usize, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
-
-
-private:
-    static constexpr usize s_RetainedCapacity = s_WidgetMaxStates * 2u;
 
 
 public:

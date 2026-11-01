@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cpu_task_scheduler_test_support.h"
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/termination.h>
@@ -20,33 +22,14 @@ namespace __hidden_cpu_task_wait_tests{
 
 
 constexpr u32 s_WatchdogTimeoutMS = 10000u;
-constexpr u32 s_PollIntervalMS = 1u;
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 using namespace NWB::Core;
-
-class WaitDeadline final{
-public:
-    WaitDeadline()
-        : m_watchdog([](const StopToken& stop)noexcept{
-            const Timer begin = TimerNow();
-            while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= __hidden_cpu_task_wait_tests::s_WatchdogTimeoutMS)
-                    TerminateInvariant();
-                SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
-            }
-        }
-        )
-    {}
-
-
-private:
-    JoiningThread m_watchdog;
-};
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +43,7 @@ private:
 
 TEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 callbacks = 0u;
@@ -80,7 +63,7 @@ TEST(CpuTaskWaitTests, ScopeRejectsAnIndependentTaskDependingOnTheCaller){
 
 TEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     const auto cpuTaskAdmission = scheduler.submit([&](){
@@ -107,7 +90,7 @@ TEST(CpuTaskWaitTests, ScopeRejectsTransitiveDependentsOfTheCallersAncestor){
 
 TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 callbacks = 0u;
@@ -134,12 +117,12 @@ TEST(CpuTaskWaitTests, ScopeRechecksDependenciesPublishedByCooperativeWork){
 
 TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     u32 sequence = 0u;
     u32 unrelated = 0u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
-    const auto prerequisiteTaskAdmission = scheduler.submit([&](){ EXPECT_EQ(++sequence, s_ExpectedDualCount); });
+    const auto prerequisiteTaskAdmission = scheduler.submit([&](){ EXPECT_EQ(++sequence, 2u); });
     ASSERT_TRUE(prerequisiteTaskAdmission);
     const auto prerequisite = *prerequisiteTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
@@ -166,7 +149,7 @@ TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
 
 TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
@@ -188,13 +171,13 @@ TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
     if(cpuTaskAdmission)
         ASSERT_TRUE(cpuTaskAdmission->valid());
     scope.wait();
-    EXPECT_EQ(callbacks, s_ExpectedDualCount);
+    EXPECT_EQ(callbacks, 2u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
 TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     u32 innerCallbacks = 0u;
     u32 unrelatedCallbacks = 0u;
     CpuTaskScheduler scheduler(0u);
@@ -215,7 +198,7 @@ TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
     const auto thirdCpuTaskAdmission = outer.submit([&](){
         EXPECT_EQ(innerCallbacks, 0u);
         inner.wait();
-        EXPECT_EQ(innerCallbacks, s_ExpectedDualCount);
+        EXPECT_EQ(innerCallbacks, 2u);
     });
     ASSERT_TRUE(thirdCpuTaskAdmission);
     if(thirdCpuTaskAdmission)
@@ -228,13 +211,13 @@ TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
 
 TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     Atomic<u32> entered{ 0u };
     Atomic<b8> start{ false };
     Atomic<u32> visitsA{ 0u };
     Atomic<u32> visitsB{ 0u };
     CpuTaskSchedulerConfig config;
-    config.workerCount = s_ExpectedDualCount;
+    config.workerCount = 2u;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scopeA(scheduler);
@@ -242,7 +225,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     const auto cpuTaskAdmission = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
         scopeA.wait();
     });
     ASSERT_TRUE(cpuTaskAdmission);
@@ -250,15 +233,15 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     const auto secondCpuTaskAdmission = scheduler.submit([&](){
         entered.fetch_add(1u, MemoryOrder::release);
         while(!start.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
         scopeB.wait();
     });
     ASSERT_TRUE(secondCpuTaskAdmission);
     const auto waiterB = *secondCpuTaskAdmission;
     ASSERT_TRUE(waiterA.valid());
     ASSERT_TRUE(waiterB.valid());
-    while(entered.load(MemoryOrder::acquire) != s_ExpectedDualCount)
-        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+    while(entered.load(MemoryOrder::acquire) != 2u)
+        SleepMS(s_PollIntervalMS);
     for(u32 index = 0u; index < 32u; ++index){
         const auto prerequisiteBTaskAdmission = scheduler.submit([]()noexcept{});
         ASSERT_TRUE(prerequisiteBTaskAdmission);
@@ -287,7 +270,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
 
 TEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     constexpr u32 s_UnrelatedTasks = 1024u;
     constexpr u32 s_ScopedTasks = 128u;
     constexpr u32 s_Priorities = 3u;
@@ -320,7 +303,7 @@ TEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues){
 
 TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
@@ -347,16 +330,16 @@ TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication
     if(thirdCpuTaskAdmission)
         ASSERT_TRUE(thirdCpuTaskAdmission->valid());
     scope.wait();
-    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(joined, 2u);
     EXPECT_EQ(unrelated, 1u);
     scheduler.wait();
-    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 2u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
 TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     Atomic<b8> waiterEntered{ false };
     Atomic<b8> blockerEntered{ false };
     Atomic<b8> startWaiter{ false };
@@ -366,7 +349,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     Atomic<u32> joined{ 0u };
     Atomic<u32> unrelated{ 0u };
     CpuTaskSchedulerConfig config;
-    config.workerCount = s_ExpectedDualCount;
+    config.workerCount = 2u;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
@@ -378,28 +361,28 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     const auto cpuTaskAdmission = scheduler.submit([&](){
         waiterEntered.store(true, MemoryOrder::release);
         while(!startWaiter.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
         scope.wait();
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto waiter = *cpuTaskAdmission;
     ASSERT_TRUE(waiter.valid());
     while(!waiterEntered.load(MemoryOrder::acquire))
-        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+        SleepMS(s_PollIntervalMS);
     const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
         blockerEntered.store(true, MemoryOrder::release);
         while(!releaseBlocker.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
     });
     ASSERT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         ASSERT_TRUE(secondCpuTaskAdmission->valid());
     while(!blockerEntered.load(MemoryOrder::acquire))
-        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+        SleepMS(s_PollIntervalMS);
     const auto thirdCpuTaskAdmission = scheduler.submit([&]()noexcept{
         anchorEntered.store(true, MemoryOrder::release);
         while(!releaseAnchor.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
     });
     ASSERT_TRUE(thirdCpuTaskAdmission);
     if(thirdCpuTaskAdmission)
@@ -407,7 +390,7 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     const auto fourthCpuTaskAdmission = scope.submit([&]()noexcept{
         releaseBlocker.store(true, MemoryOrder::release);
         while(!anchorEntered.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
         joined.fetch_add(1u, MemoryOrder::relaxed);
     });
     ASSERT_TRUE(fourthCpuTaskAdmission);
@@ -428,14 +411,14 @@ TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecutio
     startWaiter.store(true, MemoryOrder::release);
     scheduler.wait(waiter);
     scheduler.wait();
-    EXPECT_EQ(joined.load(MemoryOrder::acquire), s_ExpectedDualCount);
+    EXPECT_EQ(joined.load(MemoryOrder::acquire), 2u);
     EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 1u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
 TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     Atomic<b8> entered{ false };
     Atomic<b8> release{ false };
     CpuTaskScheduler scheduler(1u);
@@ -444,13 +427,13 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         entered.store(true, MemoryOrder::release);
         while(!release.load(MemoryOrder::acquire))
-            SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+            SleepMS(s_PollIntervalMS);
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto prerequisite = *cpuTaskAdmission;
     ASSERT_TRUE(prerequisite.valid());
     while(!entered.load(MemoryOrder::acquire))
-        SleepMS(__hidden_cpu_task_wait_tests::s_PollIntervalMS);
+        SleepMS(s_PollIntervalMS);
     CpuTaskOptions mainThread;
     mainThread.target = CpuTaskTarget::MainThread;
     u32 unrelated = 0u;
@@ -472,7 +455,7 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
     if(fourthCpuTaskAdmission)
         ASSERT_TRUE(fourthCpuTaskAdmission->valid());
     scope.wait();
-    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(joined, 2u);
     EXPECT_EQ(unrelated, 0u);
     scheduler.wait();
     EXPECT_EQ(unrelated, 1u);
@@ -481,7 +464,7 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
 
 TEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 prerequisites = 0u;
@@ -508,16 +491,16 @@ TEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches
     if(secondCpuTaskAdmission)
         ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
-    EXPECT_EQ(prerequisites, s_ExpectedDualCount);
+    EXPECT_EQ(prerequisites, 2u);
     EXPECT_EQ(joined, 1u);
     EXPECT_EQ(unrelated, 0u);
     scheduler.wait();
-    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 2u);
 }
 
 TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 unrelatedTail = 0u;
@@ -553,7 +536,7 @@ TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
         ASSERT_TRUE(secondCpuTaskAdmission->valid());
     scope.wait();
     EXPECT_EQ(prerequisite, 1u);
-    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(joined, 2u);
     EXPECT_EQ(unrelatedTail, 0u);
     scheduler.wait();
     EXPECT_EQ(unrelatedTail, 1u);
@@ -562,7 +545,7 @@ TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
 
 TEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
@@ -587,12 +570,12 @@ TEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontier
     EXPECT_EQ(joined, 1u);
     EXPECT_EQ(unrelated, 0u);
     scheduler.wait();
-    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 2u);
 }
 
 TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     u32 unrelated = 0u;
@@ -627,7 +610,7 @@ TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
     if(cpuTaskAdmission)
         ASSERT_TRUE(cpuTaskAdmission->valid());
     scope.wait();
-    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(joined, 2u);
     EXPECT_EQ(unrelated, 0u);
     scheduler.wait();
     EXPECT_EQ(unrelated, 1u);
@@ -635,7 +618,7 @@ TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork)
 
 TEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetires){
     using namespace __hidden_cpu_task_wait_tests;
-    WaitDeadline deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     constexpr u32 s_Children = 64u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);

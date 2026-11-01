@@ -26,7 +26,9 @@ public:
 
 
 public:
-    [[nodiscard]] b8 loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems);
+    [[nodiscard]] b8 loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+        return m_widgets.loadAssets(arena, assets, sceneSubsystems);
+    }
     [[nodiscard]] Expected<NWB::Impl::Ui::Rect> galleryBounds(NWB::Impl::UiPaintContext& context);
     void paint(NWB::Impl::UiPaintContext& context);
 
@@ -41,6 +43,9 @@ private:
     NWB::Impl::Ui::Label m_korean;
     UiWidgetGallery m_widgets;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

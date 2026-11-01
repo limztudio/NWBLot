@@ -49,7 +49,7 @@ public:
 
 protected:
     [[nodiscard]] Expected<NotNull<WidgetState*>> declareIndex(const usize index){
-        char key[32u];
+        Array<char, 32u> key;
         const AStringView formatted = FormatDecimal(index, key);
         if(formatted.empty())
             return MakeUnexpected(Failure{});
@@ -90,23 +90,24 @@ protected:
 
 TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAreRejected){
     const WidgetRoot root{ 7u, 3u };
-    const auto rootId = MakeRootId(root);
-    ASSERT_TRUE(rootId);
-    const auto embedded = MakeWidgetId(*rootId, AStringView("a\0b", 3u));
-    const auto simple = MakeWidgetId(*rootId, "a");
-    const auto combined = MakeWidgetId(*rootId, "ab");
-    ASSERT_TRUE(embedded);
-    ASSERT_TRUE(simple);
-    ASSERT_TRUE(combined);
-    EXPECT_NE(*embedded, *simple);
-    const auto first = MakeWidgetId(*simple, "bc");
-    const auto second = MakeWidgetId(*combined, "c");
-    ASSERT_TRUE(first);
-    ASSERT_TRUE(second);
-    EXPECT_NE(*first, *second);
-    EXPECT_FALSE(MakeRootId({ 7u, 0u }));
-    EXPECT_FALSE(MakeWidgetId({}, s_ActionKey));
-    EXPECT_FALSE(MakeWidgetId(*rootId, ""));
+    WidgetId rootId{};
+    ASSERT_TRUE(TryMakeRootId(root, rootId));
+    WidgetId embedded{};
+    WidgetId simple{};
+    WidgetId combined{};
+    ASSERT_TRUE(TryMakeWidgetId(rootId, AStringView("a\0b", 3u), embedded));
+    ASSERT_TRUE(TryMakeWidgetId(rootId, "a", simple));
+    ASSERT_TRUE(TryMakeWidgetId(rootId, "ab", combined));
+    EXPECT_NE(embedded, simple);
+    WidgetId first{};
+    WidgetId second{};
+    ASSERT_TRUE(TryMakeWidgetId(simple, "bc", first));
+    ASSERT_TRUE(TryMakeWidgetId(combined, "c", second));
+    EXPECT_NE(first, second);
+    WidgetId rejected{};
+    EXPECT_FALSE(TryMakeRootId({ 7u, 0u }, rejected));
+    EXPECT_FALSE(TryMakeWidgetId({}, s_ActionKey, rejected));
+    EXPECT_FALSE(TryMakeWidgetId(rootId, "", rejected));
 }
 
 TEST_F(UiContextTests, ReorderedDeclarationsAndScopedKeysRetainTheirExactIdentityAndLifetime){
@@ -280,7 +281,7 @@ TEST_F(UiContextTests, HiddenRootsRetireCaptureWhileTheHeldPointerSequenceStillO
     EXPECT_TRUE(m_context.input().primaryDown());
     ASSERT_TRUE(prepare(2u, original.root));
     ASSERT_TRUE(m_context.ready());
-    m_context.retainRoots(nullptr, 0u);
+    m_context.retainRoots({});
     EXPECT_TRUE(m_context.states().entries().empty());
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
@@ -369,8 +370,8 @@ TEST_F(UiContextTests, RootRetentionMatchesLifetimeGenerationAndKeepsOtherRootsA
     ASSERT_TRUE(m_context.endRoot());
     ASSERT_TRUE(m_context.finishFrame());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetRoot retained[]{ { firstRoot.value, firstRoot.generation + 1u }, secondRoot };
-    m_context.retainRoots(retained, 2u);
+    const Array<WidgetRoot, 2> retained = {{ { firstRoot.value, firstRoot.generation + 1u }, secondRoot }};
+    m_context.retainRoots(Span(retained.data(), 2u));
     ASSERT_EQ(m_context.states().entries().size(), 1u);
     EXPECT_EQ(m_context.states().entries()[0u].id, secondState.id);
     EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 25.0f }).valid());

@@ -18,7 +18,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetGatherMergeFunction = b8 (*)(const Name& virtualPath, const void* incomingPayload, usize incomingSize, Alloc::ScratchArena& scratchArena, AssetBytes& existingPayload);
+using AssetGatherMergeFunction = b8 (*)(const Name& virtualPath, Span<const u8> incomingPayload, Alloc::ScratchArena& scratchArena, AssetBytes& existingPayload);
 
 class AssetGatherMergeAutoRegistrar final{
 public:

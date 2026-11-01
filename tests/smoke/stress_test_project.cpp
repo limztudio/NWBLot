@@ -5,6 +5,7 @@
 #include "arrow_yaw_input_handler.h"
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_cpu_gpu_timing_probe.h"
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #include "stress_frame_graph_snapshot.h"
@@ -12,7 +13,7 @@
 #include "stress_csg_scene.h"
 #include "presentation_fps_probe.h"
 #include "presentation_pacing_ring.h"
-#include "reflection_quality_settings.h"
+#include "render_quality_settings.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -63,9 +64,11 @@ using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
-using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
+using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::TickSmokeWorld;
+using NWB::Tests::Smoke::s_SmokeTwoPi;
 
 using StressModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using StressMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -114,7 +117,6 @@ static constexpr f32 s_PointLightRange = 16.0f;
 
 static constexpr f32 s_SpinSpeed = 0.8f;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
-static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
@@ -123,14 +125,14 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 // Cycle the five-color palette across each material row.
 [[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const b8 transparent)noexcept{
-    static const Float4 s_TransparentTints[s_CharacterTintCount] = {
+    static const Array<Float4, s_CharacterTintCount> s_TransparentTints = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
         Float4(0.60f, 1.00f, 0.85f, 0.42f),
         Float4(1.00f, 0.82f, 0.88f, 0.44f),
         Float4(0.86f, 0.80f, 1.00f, 0.45f),
         Float4(0.70f, 0.96f, 1.00f, 0.40f),
     };
-    static const Float4 s_OpaqueTints[s_CharacterTintCount] = {
+    static const Array<Float4, s_CharacterTintCount> s_OpaqueTints = {
         Float4(0.90f, 0.52f, 0.42f, 1.0f),
         Float4(0.52f, 0.70f, 0.90f, 1.0f),
         Float4(0.62f, 0.82f, 0.52f, 1.0f),
@@ -147,13 +149,18 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class StressTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static b8 TimingEnabled(){
+        static const b8 s_Enabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+        return s_Enabled;
+    }
+
     [[nodiscard]] static u32 M4PixelCaptureFreezeFrame(){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
         static const u32 s_CaptureFrame = [](){
             const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
             if(!configuredFrame || !IsFinite(*configuredFrame) || *configuredFrame < 1.0f)
                 return 0u;
-            return static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(*configuredFrame), VectorReplicate(1000000.0f))));
+            return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
         }();
         return s_CaptureFrame;
 #else
@@ -191,7 +198,7 @@ private:
     }
 
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, s_ProjectName);
+        auto world = CreateSmokeWorldOrDie(s_ProjectName, context);
 
         NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
         settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
@@ -207,8 +214,7 @@ private:
 
     // Spin bodies with staggered Y phases unless NWB_STRESS_TEST_SPIN_ANGLE pins yaw.
     static f32 FrozenYaw(){
-        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
-        return s_Yaw;
+        return ReadSmokeFrozenYawCached("NWB_STRESS_TEST_SPIN_ANGLE");
     }
 
 
@@ -296,7 +302,7 @@ public:
         m_charactersPerClass = *charactersPerClass;
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
-        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(m_renderer, reflectionSettings, scratchArena))
+        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(reflectionSettings, m_renderer, scratchArena))
             return false;
         if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
@@ -338,7 +344,7 @@ public:
         const f32 cameraHeight = comparison ? s_ComparisonCameraHeight : s_CameraHeight;
         const f32 cameraDistance = comparison ? s_ComparisonCameraDistance : s_CameraDistance;
         const f32 cameraPitch = comparison ? s_ComparisonCameraPitch : s_CameraPitch;
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, cameraHeight, cameraDistance, cameraPitch);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(cameraHeight, cameraDistance, cameraPitch, *m_world);
         const auto* const camera = m_world->tryGetComponent<NWB::Impl::Scene::CameraComponent>(activeCamera);
         if(!camera){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: workload camera is unavailable"));
@@ -353,7 +359,7 @@ public:
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
 
-        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
+        m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, s_GroundMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), *m_world);
 
         // Lanes are side-wall extent and back-wall extent.
         const SIMDVectorSingle wallSpans = VectorMultiply(VectorReplicate(2.0f), VectorSet(s_BoxHalf.y, s_BoxHalf.x, 0.0f, 0.0f));
@@ -371,7 +377,7 @@ public:
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             if(HardwareShadowOpaqueBaseline() || index % 2u != 0u)
                 continue;
-            const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(*m_world, m_characterOwners[index], Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh);
+            const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_characterOwners[index], Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
             auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
             if(!renderer){
                 NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: closed refractor renderer is unavailable (index {})"), index);
@@ -379,7 +385,7 @@ public:
             }
             renderer->opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
         }
-        if(!m_csgScene.initialize(*m_world, scratchArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()))
+        if(!m_csgScene.initialize(m_characterOwners, HardwareShadowOpaqueBaseline(), *m_world, scratchArena))
             return false;
 
         b8 allCharactersValid = m_characterOwners.size() == characterCount;
@@ -427,7 +433,7 @@ public:
             , s_TransparentRowZ
             , s_OpaqueRowZ
             , cameraHeight
-            , VectorGetX(VectorNegate(VectorReplicate(cameraDistance)))
+            , -cameraDistance
             , cameraPitch
             , cameraVerticalFov
             , cameraNearPlane
@@ -452,7 +458,7 @@ public:
         if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
             if(!m_m4PixelCapturePaused){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-                if(!m_frameGraphSnapshotPath.empty() && !NWB::Tests::Smoke::CaptureStressFrameGraphSnapshot(m_context, m_frameGraphSnapshotPath, m_m4RenderedFrameCount))
+                if(!m_frameGraphSnapshotPath.empty() && !NWB::Tests::Smoke::CaptureStressFrameGraphSnapshot(m_frameGraphSnapshotPath, m_m4RenderedFrameCount, m_context))
                     return false;
 #endif
                 // Suspend rendering before logging the held-frame marker so temporal history stops advancing.
@@ -475,7 +481,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         if(!samplePresentationFps())
             return false;
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -483,14 +489,11 @@ public:
         const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
-        if(!m_csgScene.update(*m_world, m_yaw.yaw()))
+        if(!m_csgScene.update(m_yaw.yaw(), *m_world))
             return false;
-        SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_SmokeTwoPi, m_context);
+        if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
-        }
         reportReflectionStatistics();
         ++m_m4RenderedFrameCount;
         return true;
@@ -510,19 +513,18 @@ private:
         const b8 comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
         const f32 slot = static_cast<f32>(comparison ? index : classIndex);
         const f32 lastSlot = static_cast<f32>(comparison ? m_charactersPerClass * 2u - 1u : m_charactersPerClass - 1u);
-        const SIMDVectorSingle spacing = VectorReplicate(s_CharacterSpacingX);
-        const SIMDVectorSingle slotOffset = VectorNegativeMultiplySubtractExpression(VectorReplicate(lastSlot), VectorReplicate(0.5f), VectorReplicate(slot));
-        const f32 x = comparison ? VectorGetX(VectorMultiply(slotOffset, spacing)) : VectorGetX(VectorMultiplyAddExpression(slotOffset, spacing, VectorMultiply(VectorReplicate(transparentMaterialClass ? -0.25f : 0.25f), spacing)));
+        const f32 slotOffset = slot - lastSlot * 0.5f;
+        const f32 x = comparison ? slotOffset * s_CharacterSpacingX : slotOffset * s_CharacterSpacingX + (transparentMaterialClass ? -0.25f : 0.25f) * s_CharacterSpacingX;
         const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
 
         const auto modelResult = CreateTintedModelEntity(
-            *m_world,
             transparentMaterialClass ? s_CausticModel : s_Model,
             transparent ? s_TransparentMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             CharacterTint(classIndex, transparent),
             Float4(x, s_CharacterLift, z, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f)
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            *m_world
         );
         const NWB::Core::ECS::EntityID entity = modelResult.entity;
         if(!modelResult.tintApplied)
@@ -538,7 +540,7 @@ private:
         // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
         const SIMDVectorSingle wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
 
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f));
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(spanScale, 1.0f, s_BoxHeight, 0.0f), *m_world);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(wallRotation, transform->rotation);
@@ -551,7 +553,7 @@ private:
         const SIMDVectorSingle ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
         Float4 ceilingScale;
         StoreFloat(VectorMultiply(VectorSet(2.0f, 1.0f, 2.0f, 0.0f), VectorSet(s_BoxHalf.x, 1.0f, s_BoxHalf.y, 0.0f)), ceilingScale);
-        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale);
+        const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, colorTint, Float4(0.0f, s_BoxHeight, 0.0f, 0.0f), ceilingScale, *m_world);
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
                 StoreFloat(ceilingRotation, transform->rotation);
@@ -560,15 +562,15 @@ private:
     }
 
     void spinCharacters()noexcept{
-        const SIMDVectorSingle yawBase = VectorReplicate(m_yaw.yaw());
-        const SIMDVectorSingle phaseStep = VectorDivide(VectorReplicate(s_TwoPi), VectorReplicate(static_cast<f32>(m_charactersPerClass * 2u)));
+        const f32 yawBase = m_yaw.yaw();
+        const f32 phaseStep = s_SmokeTwoPi / static_cast<f32>(m_charactersPerClass * 2u);
         for(usize index = 0u; index < m_characterOwners.size(); ++index){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(m_characterOwners[index]);
             if(!transform)
                 continue;
 
-            const SIMDVectorSingle yaw = VectorAdd(yawBase, VectorMultiply(VectorReplicate(static_cast<f32>(index)), phaseStep));
-            StoreFloat(QuaternionRotationRollPitchYawFromVector(VectorSelect(VectorZero(), yaw, s_SIMDMaskY)), transform->rotation);
+            const f32 yaw = yawBase + static_cast<f32>(index) * phaseStep;
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yaw, 0.0f), transform->rotation);
         }
     }
 
@@ -661,31 +663,31 @@ private:
     NWB::Impl::RendererSystem& m_renderer;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_characterOwners;
     NWB::Tests::Smoke::StressCsgScene m_csgScene;
+    NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
+    NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ TimingEnabled() ? 5.0 : 0.25, TimingEnabled() ? 30.0 : 0.0 };
+    NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
+    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
+    ArrowYawInputHandler m_arrowYawInput;
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+    NWB::Tests::Smoke::SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
+#endif
+    u64 m_reflectionStatisticsSequence = 0u;
+    u64 m_reflectionStatisticsGeneration = 0u;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Tests::Smoke::YawSpinController m_yaw;
     u32 m_charactersPerClass = s_DefaultCharactersPerClass;
-    const b8 m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+    u32 m_m4RenderedFrameCount = 0u;
+    const b8 m_timingEnabled = TimingEnabled();
     const b8 m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
     const b8 m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
-    u64 m_reflectionStatisticsSequence = 0u;
-    u64 m_reflectionStatisticsGeneration = 0u;
-    NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
-    NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
-    NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
-    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
-    NWB::Tests::Smoke::YawSpinController m_yaw;
-    ArrowYawInputHandler m_arrowYawInput;
-    u32 m_m4RenderedFrameCount = 0u;
     b8 m_timingComplete = false;
     b8 m_m4PixelCapturePaused = false;
     b8 m_rendererBaselineCapturePaused = false;
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-    NWB::Tests::Smoke::SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
-#endif
 };
 
 

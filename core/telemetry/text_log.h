@@ -52,13 +52,16 @@ struct TextLogPayload{
 
 
 [[nodiscard]] b8 IsValidTextLogType(Common::LogType::Enum type)noexcept;
-[[nodiscard]] b8 BuildTextLogPayload(Alloc::ScratchArena& scratchArena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
+[[nodiscard]] b8 BuildTextLogPayload(Common::LogType::Enum type, TStringView message, Alloc::ScratchArena& scratchArena, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(const void* payload, usize payloadBytes)noexcept;
 [[nodiscard]] b8 RecordTextLog(Recorder& recorder, Common::LogType::Enum type, TStringView message, u64 frameIndex = 0u, u32 streamId = 0u);
 
 class TextLogCaptureLogger final : public Common::ILogger{
 public:
-    explicit TextLogCaptureLogger(Recorder& recorder, Common::ILogger* forwardLogger = nullptr)noexcept;
+    explicit TextLogCaptureLogger(Recorder& recorder, Common::ILogger* const forwardLogger = nullptr)noexcept
+        : m_recorder(recorder)
+        , m_forwardLogger(forwardLogger)
+    {}
     virtual ~TextLogCaptureLogger()noexcept override = default;
 
 
@@ -77,7 +80,9 @@ public:
 
     [[nodiscard]] Common::ILogger* forwardLogger()const noexcept{ return m_forwardLogger; }
 
-    virtual Common::LogArena& arena()override;
+    virtual Common::LogArena& arena()override{
+        return m_forwardLogger ? m_forwardLogger->arena() : m_recorder.arena();
+    }
     virtual void enqueue(Common::LogString&& str, Common::LogType::Enum type = Common::LogType::Info)override;
     virtual void enqueue(const Common::LogString& str, Common::LogType::Enum type = Common::LogType::Info)override;
 

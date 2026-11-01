@@ -3,6 +3,7 @@
 
 
 #include <tests/common/arena_owner_fixture.h>
+#include <tests/common/test_context.h>
 
 #include <core/alloc/module.h>
 
@@ -10,10 +11,6 @@
 #include <global/thread.h>
 #include <global/timer.h>
 #include <global/text_utils.h>
-
-#include <cerrno>
-
-#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 #include <tbb/scalable_allocator.h>
@@ -23,12 +20,6 @@
 
 
 namespace __hidden_allocator_owner_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,8 +100,8 @@ TEST(AllocationOwners, SharedNameAggregatesBytesAndRetainsIndividualHighwater){
     const ArenaMemoryStats after = OwnerStats(s_Owner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, s_ExpectedDualCount);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(after.allocationCount - before.allocationCount, 2u);
+    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 2u);
     EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, largestArenaBytes));
 }
 
@@ -192,8 +183,8 @@ TEST(AllocationOwners, ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce
         EXPECT_EQ(tracker.snapshot().peakUsedBytes, 0u);
         EXPECT_EQ(resetOwner.reservedBytes, before.reservedBytes + 256u);
         EXPECT_EQ(resetOwner.usedBytes, before.usedBytes);
-        EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, s_ExpectedDualCount);
-        EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, s_ExpectedDualCount);
+        EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, 2u);
+        EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, 2u);
         EXPECT_EQ(resetOwner.peakUsedBytes, Max(before.peakUsedBytes, u64{ 192u }));
         tracker.recordAllocation(16u);
         tracker.reset();
@@ -316,7 +307,7 @@ TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     Latch startGate(s_ThreadCount + 1u);
     Atomic<b8> failed{ false };
-    Thread workers[s_ThreadCount];
+    Array<Thread, s_ThreadCount> workers;
     for(Thread& worker : workers){
         worker = Thread([&startGate, &failed, &s_Owner](){
             GlobalArena arena(s_Owner);

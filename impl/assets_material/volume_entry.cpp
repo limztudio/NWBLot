@@ -43,10 +43,6 @@ inline constexpr TStringView s_MaterialAssetKindLabel = NWB_TEXT("material");
     return Core::Assets::HasReservedAssetVirtualRoot(trimmed, scratchArena);
 }
 
-static Expected<MaterialCookEntry> ParseMaterialDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseMaterialCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
 static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     if(!context.document)
         return false;
@@ -74,8 +70,7 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
 
     Vector<AStringView, Core::Alloc::ScratchArena> resourceParameterValues(context.scratchArena);
     resourceParameterValues.reserve(materialEntry->parameters.size());
-    for(const auto& [paramKey, paramValue] : materialEntry->parameters){
-        static_cast<void>(paramKey);
+    for([[maybe_unused]] const auto& [paramKey, paramValue] : materialEntry->parameters){
         const AStringView valueView = TrimView(paramValue);
         if(IsMaterialResourceParameterValue(valueView, context.scratchArena))
             resourceParameterValues.push_back(valueView);
@@ -92,11 +87,14 @@ static b8 ExtractMaterialDependencies(const Core::Assets::CookDependencyItemCont
 }
 
 static b8 RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
-        registry,
+    return Core::Assets::RegisterDocumentValueCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
         s_MaterialAssetKindLabel,
-        &ParseMaterialDocument,
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseMaterialCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+        },
+        nullptr,
         [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildMaterialAsset(entry, arena); },
+        registry,
         false
     );
 }

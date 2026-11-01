@@ -16,13 +16,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxView::EditBoxView(Core::Alloc::GlobalArena& arena)noexcept
-    : m_arena(&arena)
-    , m_display(arena)
-    , m_mapping(arena)
-    , m_geometry(arena)
-{}
-
 b8 EditBoxView::snapshot(const EditModel& model){
     const AStringView committed = model.text();
     const EditCompositionView composition = model.composition();

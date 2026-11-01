@@ -108,8 +108,6 @@ u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)c
 }
 
 void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology){
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
     m_assignedQueueLoads.resize(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         m_assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
@@ -167,8 +165,6 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(const Span<const GpuTaskQue
 }
 
 void GpuTaskQueueScoringData::updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept{
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
     if(previousQueue == selectedQueue)
         return;
     const u64 cost = m_taskCosts[task.index];
@@ -212,12 +208,12 @@ u64 GpuTaskQueueScoringData::assignedQueueLoad(const GpuPhysicalQueueId& queue)c
 }
 
 
-u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, const NotNull<const GpuTaskQueueAssignment*> members, const usize memberCount)const noexcept{
-    if(!reachability.m_valid || reachability.m_totalOrder || memberCount == 0u)
+u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, const Span<const GpuTaskQueueAssignment> members)const noexcept{
+    if(!reachability.m_valid || reachability.m_totalOrder || members.empty() || !members.data())
         return 0u;
 #if defined(NWB_DEBUG)
-    for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
-        const GpuTaskId task = members.get()[memberIndex].task;
+    for(const GpuTaskQueueAssignment& member : members){
+        const GpuTaskId task = member.task;
         NWB_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
     }
 #endif
@@ -230,8 +226,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
     if(independentCost == 0u)
         return 0u;
     if(reachability.m_words.empty()){
-        for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
-            const GpuTaskQueueAssignment& member = members.get()[memberIndex];
+        for(const GpuTaskQueueAssignment& member : members){
             if(member.queue != queue)
                 independentCost -= m_taskCosts[member.task.index];
         }
@@ -240,8 +235,8 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
     NWB_ASSERT(m_costWordsPerGroup == reachability.m_wordsPerRow);
     usize firstWord = m_costWordsPerGroup;
     usize lastWord = 0u;
-    for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
-        const auto& range = reachability.m_relatedWordRanges[members.get()[memberIndex].task.index];
+    for(const GpuTaskQueueAssignment& member : members){
+        const auto& range = reachability.m_relatedWordRanges[member.task.index];
         firstWord = Min(firstWord, range.m_begin);
         lastWord = Max(lastWord, range.m_end);
     }
@@ -249,12 +244,12 @@ u64 GpuTaskQueueScoringData::independentQueueCost(const GpuTaskSchedulingReachab
     for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
         u64 related = 0u;
         if(reachability.m_rowOffsets.empty()){
-            for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex)
-                related |= reachability.m_words[members.get()[memberIndex].task.index * m_costWordsPerGroup + wordIndex];
+            for(const GpuTaskQueueAssignment& member : members)
+                related |= reachability.m_words[member.task.index * m_costWordsPerGroup + wordIndex];
         }
         else{
-            for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
-                const usize taskIndex = members.get()[memberIndex].task.index;
+            for(const GpuTaskQueueAssignment& member : members){
+                const usize taskIndex = member.task.index;
                 const auto& range = reachability.m_relatedWordRanges[taskIndex];
                 if(wordIndex >= range.m_begin && wordIndex < range.m_end)
                     related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.m_begin];

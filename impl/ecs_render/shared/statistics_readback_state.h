@@ -19,6 +19,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_BEGIN
 
 
@@ -39,10 +57,6 @@ protected:
         b8 reserved = false;
         b8 inFlight = false;
     };
-
-
-public:
-    static constexpr u32 s_SlotCount = 3u;
 
 
 public:
@@ -68,7 +82,7 @@ public:
 
         if(m_deviceGeneration == 0u || m_generation == 0u || m_nextSequence == Limit<u64>::s_Max)
             return {};
-        for(u32 index = 0u; index < s_SlotCount; ++index){
+        for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index){
             Slot& slot = m_slots[index];
             if(slot.reserved || slot.inFlight)
                 continue;
@@ -94,7 +108,7 @@ public:
     [[nodiscard]] Expected<StatisticsPendingReadback> pending(const u32 index)const noexcept{
         NothrowScopedLock lock(m_mutex);
 
-        if(index >= s_SlotCount)
+        if(index >= s_StatisticsReadbackSlotCount)
             return MakeUnexpected(Failure{});
         const Slot& slot = m_slots[index];
         const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
@@ -114,10 +128,21 @@ public:
 
 protected:
     [[nodiscard]] Slot* matchingSlot(const StatisticsReservationKey& key)noexcept{
-        if(!key.valid() || key.generation != m_generation || key.slot >= s_SlotCount)
+        if(!key.valid() || key.generation != m_generation || key.slot >= s_StatisticsReadbackSlotCount)
             return nullptr;
         Slot& slot = m_slots[key.slot];
         return slot.metadata.sequence == key.sequence && slot.metadata.generation == key.generation ? &slot : nullptr;
+    }
+
+    [[nodiscard]] Slot* beginAcceptWithinLock(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
+        Slot* slot = matchingSlot(key);
+        if(!slot || !slot->reserved || slot->inFlight)
+            return nullptr;
+        slot->reserved = false;
+        slot->inFlight = true;
+        slot->metadata.acceptedToken = token;
+        slot->metadata.hardwareReady = hardwareReady;
+        return slot;
     }
 
     [[nodiscard]] Slot* beginCompleteWithinLock(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token)noexcept{
@@ -130,15 +155,32 @@ protected:
         return slot;
     }
 
+    template<usize RequiredCounterCount, typename ApplyFn>
+    void completeSlot(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters, ApplyFn&& applyCounters)noexcept{
+        NothrowScopedLock lock(m_mutex);
+
+        Slot* slot = beginCompleteWithinLock(key, token);
+        if(!slot)
+            return;
+        if(counters.size() >= RequiredCounterCount && slot->metadata.sequence > m_latest.sequence){
+            m_latest = slot->metadata;
+            applyCounters(m_latest, slot->metadata, counters);
+        }
+        *slot = {};
+    }
+
 
 protected:
-    Slot m_slots[s_SlotCount];
+    Array<Slot, s_StatisticsReadbackSlotCount> m_slots{};
     StatisticsT m_latest;
     u64 m_generation = 1u;
     u64 m_nextSequence = 1u;
     mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
 };
+
+template<typename StateT>
+using StatisticsControlHandle = RefCountPtr< RefCounter<StateT>, ArenaRefDeleter<RefCounter<StateT>, Core::Alloc::GlobalArena> >;
 
 template<typename ControlT>
 [[nodiscard]] inline Expected<RefCountPtr<ControlT, ArenaRefDeleter<ControlT, Core::Alloc::GlobalArena>>> CreateStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
@@ -194,10 +236,64 @@ public:
         m_control = nullptr;
     }
 
+    template<typename... AcceptArgs>
+    void acceptReservation(const Core::QueueSubmissionToken& token, const b8 hardwareReady, AcceptArgs&&... args)noexcept{
+        if(m_control && m_key.valid())
+            m_control->accept(m_key, token, hardwareReady, Forward<AcceptArgs>(args)...);
+        m_key = {};
+        m_control = nullptr;
+    }
+
 
 protected:
     ControlHandleT m_control;
     StatisticsReservationKey m_key;
+};
+
+template<typename StateT, typename StatisticsT>
+class StatisticsReadbackBase : NoCopy{
+public:
+    using Control = RefCounter<StateT>;
+    using ControlHandle = StatisticsControlHandle<StateT>;
+
+
+public:
+    StatisticsReadbackBase(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+    {}
+
+
+public:
+    void resetReadbackBuffers()noexcept{
+        if(m_control)
+            m_control->reset(0u);
+        for(Core::BufferHandle& buffer : m_buffers)
+            buffer = nullptr;
+    }
+
+    [[nodiscard]] Expected<StatisticsT> latestStatistics()const noexcept{
+        if(!m_control)
+            return MakeUnexpected(Failure{});
+        return m_control->tryGetLatestStatistics();
+    }
+
+
+protected:
+    template<typename SnapshotT>
+    void populateSnapshot(const StatisticsT& metadata, SnapshotT& outSnapshot)const noexcept{
+        outSnapshot.control = m_control;
+        outSnapshot.metadata = metadata;
+        for(u32 index = 0u; index < s_StatisticsReadbackSlotCount; ++index)
+            outSnapshot.buffers[index] = m_buffers[index];
+    }
+
+
+protected:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    ControlHandle m_control;
+    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> m_buffers{};
 };
 
 

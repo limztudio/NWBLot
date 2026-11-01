@@ -27,7 +27,6 @@ NWB_IMPL_BEGIN
 
 
 struct FontCookEntry{
-    Core::Assets::AssetArena& arena;
     Core::Assets::AssetBytes fontBytes;
     Name virtualPath = s_NameNone;
     u32 faceIndex = 0u;
@@ -35,8 +34,7 @@ struct FontCookEntry{
 
 public:
     explicit FontCookEntry(Core::Assets::AssetArena& memoryArena)noexcept
-        : arena(memoryArena)
-        , fontBytes(memoryArena)
+        : fontBytes(memoryArena)
     {}
 };
 
@@ -47,6 +45,7 @@ public:
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena);
 [[nodiscard]] Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena);
+[[nodiscard]] Expected<Font> BuildFontAsset(FontCookEntry&& entry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

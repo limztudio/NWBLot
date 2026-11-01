@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_csg/shape_id.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const usize s_CsgShapeInlineParameterFloat4Count = 2u;
 const usize s_CsgShapeInlineParameterMaxBytes = 16u * s_CsgShapeInlineParameterFloat4Count;
 const f32 s_CsgShapeBoundsW = 0.0f;
@@ -32,6 +38,32 @@ class CsgSphereShapeParameters{
 [reflect]
 class CsgCapsuleShapeParameters{
     public f32x4 radiusHalfHeight = s_CsgCapsuleDefaultRadiusHalfHeight;
+}
+
+b8 ValidCsgShapeTypeId(in CsgShapeTypeId id){
+    return id != s_InvalidCsgShapeTypeId;
+}
+
+b8 ValidCsgShaderModuleIncludeText(in StringView includeText){
+    if(includeText.empty())
+        return false;
+    b8 valid = true;
+    native(in includeText, mut valid){
+        for(const char ch : includeText){
+            if(ch == '"' || ch == ';' || ch == '=' || ch == '\0' || ch == '\r' || ch == '\n'){
+                valid = false;
+                break;
+            }
+        }
+    }
+    return valid;
+}
+
+b8 ValidCsgShapeParameterByteCounts(in u32 parameterByteSize, in usize defaultParameterByteCount){
+    const usize requiredByteCount = cast<usize>(parameterByteSize);
+    if(requiredByteCount > s_CsgShapeInlineParameterMaxBytes)
+        return false;
+    return defaultParameterByteCount == 0u || defaultParameterByteCount == requiredByteCount;
 }
 
 

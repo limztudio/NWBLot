@@ -49,66 +49,9 @@ public:
 
 
 public:
-    void reset()noexcept{
-        m_count = 0u;
-        m_head = 0u;
-        m_previousCount = 0u;
-        m_previousObservationTime = {};
-        m_previousPresentationTime = {};
-        m_started = false;
-        m_pendingStallCounted = false;
-        m_stalls = 0u;
-    }
-
-    void record(u64 successfulPresentations, Timer now)noexcept{
-        if(!m_started){
-            m_started = true;
-            m_previousCount = successfulPresentations;
-            m_previousObservationTime = now;
-            m_previousPresentationTime = now;
-            return;
-        }
-        if(now < m_previousObservationTime || successfulPresentations < m_previousCount){
-            reset();
-            return;
-        }
-        m_previousObservationTime = now;
-        const SIMDVectorDouble wallIntervalMs = VectorDoubleScale(VectorDoubleReplicate(DurationInSeconds<f64>(now, m_previousPresentationTime)), s_MsPerSecond);
-        const u64 advanced = successfulPresentations - m_previousCount;
-        if(advanced == 0u){
-            if(!m_pendingStallCounted && VectorDoubleGetX(wallIntervalMs) >= s_StallThresholdMs){
-                ++m_stalls;
-                m_pendingStallCounted = true;
-            }
-            return;
-        }
-        const f64 wallMs = VectorDoubleGetX(VectorDoubleDivide(wallIntervalMs, VectorDoubleReplicate(static_cast<f64>(advanced))));
-        if(!m_pendingStallCounted && wallMs >= s_StallThresholdMs)
-            ++m_stalls;
-        m_samples[m_head] = PresentationPacingSample{ wallMs, advanced };
-        m_head = (m_head + 1u) % s_Capacity;
-        if(m_count < s_Capacity)
-            ++m_count;
-        m_previousCount = successfulPresentations;
-        m_previousPresentationTime = now;
-        m_pendingStallCounted = false;
-    }
-
-    [[nodiscard]] PresentationPacingSummary summarize()const{
-        PresentationPacingSummary summary{};
-        summary.stallsOver50Ms = m_stalls;
-        if(m_count == 0u)
-            return summary;
-        f64 sorted[s_Capacity];
-        for(usize i = 0u; i < m_count; ++i)
-            sorted[i] = m_samples[(m_head + s_Capacity - m_count + i) % s_Capacity].wallMsPerPresentation;
-        Sort(sorted, sorted + m_count);
-        summary.samples = m_count;
-        summary.p50Ms = sorted[(m_count * 50u) / 100u >= m_count ? m_count - 1u : (m_count * 50u) / 100u];
-        summary.p95Ms = sorted[(m_count * 95u) / 100u >= m_count ? m_count - 1u : (m_count * 95u) / 100u];
-        summary.maxMs = sorted[m_count - 1u];
-        return summary;
-    }
+    void reset()noexcept;
+    void record(u64 successfulPresentations, Timer now)noexcept;
+    [[nodiscard]] PresentationPacingSummary summarize()const;
 
     [[nodiscard]] usize sampleCount()const noexcept{ return m_count; }
 
@@ -116,15 +59,15 @@ public:
 
 
 private:
-    PresentationPacingSample m_samples[s_Capacity] = {};
+    Array<PresentationPacingSample, s_Capacity> m_samples{};
     usize m_count = 0u;
     usize m_head = 0u;
     u64 m_previousCount = 0u;
+    u64 m_stalls = 0u;
     Timer m_previousObservationTime = {};
     Timer m_previousPresentationTime = {};
     b8 m_started = false;
     b8 m_pendingStallCounted = false;
-    u64 m_stalls = 0u;
 };
 
 

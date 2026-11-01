@@ -74,14 +74,14 @@ namespace SdfDoubleTests{
 [[nodiscard]] NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL SdfTests::Box(const SIMDVectorSingle position, const SIMDVectorSingle halfExtents)noexcept{
     const SIMDVectorSingle q = VectorSubtract(VectorAbs(position), halfExtents);
     const SIMDVectorSingle outside = VectorMax(q, VectorZero());
-    const SIMDVectorSingle insideDistance = VectorMin(CollisionDetail::Vector3MaxComponent(q), VectorZero());
+    const SIMDVectorSingle insideDistance = VectorMin(Vector3MaxComponent(q), VectorZero());
     return VectorAdd(Vector3Length(outside), insideDistance);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL SdfDoubleTests::Box(const SIMDVectorDouble position, const SIMDVectorDouble halfExtents)noexcept{
     const SIMDVectorDouble q = VectorDoubleSubtract(VectorDoubleAbs(position), halfExtents);
     const SIMDVectorDouble outside = VectorDoubleMax(q, VectorDoubleZero());
-    const SIMDVectorDouble insideDistance = VectorDoubleMin(CollisionDoubleDetail::VectorDouble3MaxComponent(q), VectorDoubleZero());
+    const SIMDVectorDouble insideDistance = VectorDoubleMin(VectorDouble3MaxComponent(q), VectorDoubleZero());
     return VectorDoubleAdd(VectorDouble3Length(outside), insideDistance);
 }
 

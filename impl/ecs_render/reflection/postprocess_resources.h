@@ -8,7 +8,7 @@
 #include "history.h"
 
 #include <impl/assets/graphics/reflection/spatial_constants.h>
-#include <impl/assets_graphics/reflection/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -65,8 +65,16 @@ struct ReflectionPostprocessSnapshot{
 
 // Only the extra opaque history bank and spatial destination live here.
 class RendererReflectionPostprocess final : NoCopy{
+private:
+    static constexpr usize s_PostprocessDescriptorCount = 4u;
+
+
 public:
-    RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept;
+    RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_shaders(shaders)
+    {}
 
 
 public:
@@ -74,9 +82,10 @@ public:
     [[nodiscard]] b8 prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
     [[nodiscard]] ReflectionPostprocessSnapshot snapshot(const ReflectionRadianceBinding& base, const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, u64 graphicsFrameIndex)const noexcept;
 
+
 private:
     void releaseTargets();
-    [[nodiscard]] b8 preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant);
+    [[nodiscard]] b8 preparePipeline(const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember, AStringView variant, Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader);
     [[nodiscard]] b8 prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
 
 
@@ -89,12 +98,10 @@ private:
     ReflectionRadianceBinding m_spatial;
     Core::BindingLayoutHandle m_layout;
     Core::ComputePipelineHandle m_temporalPipeline;
-    Core::ComputePipelineHandle m_spatialPipelines[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
+    Array<Core::ComputePipelineHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialPipelines{};
     Core::ShaderHandle m_temporalShader;
-    static constexpr usize s_PostprocessDescriptorCount = 4u;
-
-    Core::ShaderHandle m_spatialShaders[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
-    Core::GpuDescriptorHandle m_descriptors[s_PostprocessDescriptorCount];
+    Array<Core::ShaderHandle, NWB_REFLECTION_SPATIAL_MAX_RADIUS> m_spatialShaders{};
+    Array<Core::GpuDescriptorHandle, s_PostprocessDescriptorCount> m_descriptors{};
     u32 m_width = 0u;
     u32 m_height = 0u;
 };

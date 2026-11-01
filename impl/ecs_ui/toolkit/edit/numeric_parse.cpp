@@ -23,48 +23,22 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static usize SkipSign(const AStringView text)noexcept{
-    return !text.empty() && (text.front() == '+' || text.front() == '-') ? 1u : 0u;
-}
-
-[[nodiscard]] static NumericParseStatus::Enum IntegerGrammar(const AStringView text)noexcept{
-    const usize begin = SkipSign(text);
-    if(begin == text.size())
-        return NumericParseStatus::Incomplete;
-    for(usize index = begin; index < text.size(); ++index){
-        if(!IsAsciiDigit(text[index]))
-            return NumericParseStatus::Invalid;
-    }
-    return NumericParseStatus::Complete;
-}
-
-[[nodiscard]] static NumericParseStatus::Enum FloatGrammar(const AStringView text)noexcept{
-    usize index = SkipSign(text);
-    b8 digits = false;
-    while(index < text.size() && IsAsciiDigit(text[index])){
-        digits = true;
-        ++index;
-    }
-    if(index < text.size() && text[index] == '.'){
-        ++index;
-        while(index < text.size() && IsAsciiDigit(text[index])){
-            digits = true;
-            ++index;
-        }
-    }
-    if(!digits)
-        return index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
-    if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
-        ++index;
-        if(index < text.size() && (text[index] == '+' || text[index] == '-'))
-            ++index;
-        const usize exponent = index;
-        while(index < text.size() && IsAsciiDigit(text[index]))
-            ++index;
-        if(exponent == index)
-            return index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
-    }
-    return index == text.size() ? NumericParseStatus::Complete : NumericParseStatus::Invalid;
+template<typename Value, typename ValidateGrammar, typename ParseValue, typename AcceptValue>
+[[nodiscard]] static Expected<Value, NumericParseStatus::Enum> ParseNumericDraft(
+    const AStringView text,
+    ValidateGrammar validateGrammar,
+    ParseValue parseValue,
+    AcceptValue acceptValue
+)noexcept{
+    const AStringView trimmed = TrimView(text);
+    const NumericParseStatus::Enum status = validateGrammar(trimmed);
+    if(status != NumericParseStatus::Complete)
+        return MakeUnexpected(status);
+    const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
+    const auto value = parseValue(number);
+    if(!value || !acceptValue(*value))
+        return MakeUnexpected(NumericParseStatus::OutOfRange);
+    return *value;
 }
 
 
@@ -78,27 +52,21 @@ namespace __hidden_ui_numeric_parse{
 
 
 Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(const AStringView text)noexcept{
-    const AStringView trimmed = TrimView(text);
-    const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::IntegerGrammar(trimmed);
-    if(status != NumericParseStatus::Complete)
-        return MakeUnexpected(status);
-    const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
-    const auto value = ParseI64(number);
-    if(!value)
-        return MakeUnexpected(NumericParseStatus::OutOfRange);
-    return *value;
+    return __hidden_ui_numeric_parse::ParseNumericDraft<i64>(
+        text,
+        ValidateIntegerGrammar,
+        [](const AStringView number)noexcept{ return ParseI64(number); },
+        [](const i64)noexcept{ return true; }
+    );
 }
 
 Expected<f64, NumericParseStatus::Enum> ParseFloatDraft(const AStringView text)noexcept{
-    const AStringView trimmed = TrimView(text);
-    const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::FloatGrammar(trimmed);
-    if(status != NumericParseStatus::Complete)
-        return MakeUnexpected(status);
-    const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
-    const auto value = ParseF64FromChars(number);
-    if(!value || !IsFinite(*value))
-        return MakeUnexpected(NumericParseStatus::OutOfRange);
-    return *value;
+    return __hidden_ui_numeric_parse::ParseNumericDraft<f64>(
+        text,
+        ValidateFloatGrammar,
+        [](const AStringView number)noexcept{ return ParseF64FromChars(number); },
+        [](const f64 value)noexcept{ return IsFinite(value); }
+    );
 }
 
 

@@ -16,26 +16,12 @@ NWB_IMPL_UI_BEGIN
 
 b8 InputRouter::validCommandOwners()const noexcept{
     for(const HitTarget& source : m_stagedTargets){
-        if(!source.commandOwner.valid()){
-            if(source.commandOwnerDeclarationGeneration != 0u || !source.commandControl.empty())
-                return false;
+        if(!HasValidHitTargetCommandOwnerProperties(source))
+            return false;
+        if(!source.commandOwner.valid())
             continue;
-        }
-        if(!source.enabled || !source.focusable || !source.textEditable || source.owner.valid() || source.navigable || source.scrollable || source.commandOwner == source.id || source.commandOwnerDeclarationGeneration == 0u || !source.commandControl.valid())
-            return false;
-        usize begin = 0u;
-        usize end = m_stagedLookup.size();
-        while(begin < end){
-            const usize middle = begin + (end - begin) / 2u;
-            if(m_stagedLookup[middle].value < source.commandOwner.value)
-                begin = middle + 1u;
-            else
-                end = middle;
-        }
-        if(begin == m_stagedLookup.size() || m_stagedLookup[begin].value != source.commandOwner.value)
-            return false;
-        const HitTarget& host = m_stagedTargets[m_stagedLookup[begin].index];
-        if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.declarationGeneration != source.commandOwnerDeclarationGeneration || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
+        const HitTarget* host = FindTargetInTable(m_stagedTargets, m_stagedLookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
+        if(!host || !host->enabled || !host->focusable || !host->navigable || host->owner.valid() || host->control != source.commandControl || host->popup != source.popup || host->layer != source.layer)
             return false;
     }
     return true;

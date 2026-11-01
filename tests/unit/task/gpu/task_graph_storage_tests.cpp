@@ -48,7 +48,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_TaskCount);
     for(usize index = 0u; index < s_TaskCount; ++index){
-        char indexText[32u] = {};
+        Array<char, 32u> indexText = {};
         const auto derivedNameResult = DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText));
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
@@ -76,7 +76,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         const ArenaMemoryStats memoryBefore = testArena.arena.memoryStats();
         for(usize index = 0u; index < s_TaskCount; ++index){
             Core::GpuTaskDesc desc;
-            desc.setIdentity(identities[index]).setMarkerLabel("Storage Chain Task").setDependencies(&previousTask, index == 0u ? 0u : 1u).setExternalDependencies(&completion, 1u).setResourceUses(&use, 1u);
+            desc.setIdentity(identities[index]).setMarkerLabel("Storage Chain Task").setDependencies(Span(&previousTask, index == 0u ? 0u : 1u)).setExternalDependencies(Span(&completion, 1u)).setResourceUses(Span(&use, 1u));
             const auto previousTaskAdmission = graph.addTask(desc);
             ASSERT_TRUE(previousTaskAdmission);
             previousTask = *previousTaskAdmission;
@@ -121,7 +121,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_RecordCount);
     for(usize index = 0u; index < s_RecordCount; ++index){
-        char indexText[32u] = {};
+        Array<char, 32u> indexText = {};
         const auto derivedNameResult = DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText));
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
@@ -134,7 +134,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
         const auto resourceResult = graph.importResource(Core::GpuGraphResourceDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource").setType(Core::GpuGraphResourceType::Buffer));
         ASSERT_TRUE(resourceResult);
         const Core::GpuGraphResourceId resource = *resourceResult;
-        const auto resourceSetResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource Set").setMembers(&resource, 1u));
+        const auto resourceSetResult = graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Resource Set").setMembers(Span(&resource, 1u)));
         ASSERT_TRUE(resourceSetResult);
         const Core::GpuGraphResourceSetId resourceSet = *resourceSetResult;
         const auto pipelineResult = graph.importPipeline(Core::GpuGraphPipelineDesc{}.setIdentity(identities[index]).setMarkerLabel("Storage Pipeline").setType(Core::GpuGraphPipelineType::Compute));
@@ -143,8 +143,8 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
         const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(identities[index]).setMarkerLabel(s_CompletionLabel));
         ASSERT_TRUE(completionResult);
         const Core::GpuExternalCompletionId completion = *completionResult;
-        const u64 bytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };
-        const auto uploadResult = graph.copyUploadData(bytes, sizeof(bytes), alignof(u64));
+        const Array<u64, 2u> bytes = { static_cast<u64>(index), ~static_cast<u64>(index) };
+        const auto uploadResult = graph.copyUploadData(bytes.data(), sizeof(bytes), alignof(u64));
         ASSERT_TRUE(uploadResult);
         const Core::GpuUploadBlobId upload = *uploadResult;
         uploads.push_back(upload);
@@ -172,10 +172,10 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
             EXPECT_EQ(pipeline.identity, identities[index]);
             EXPECT_EQ(completion.identity, identities[index]);
             const auto storedBytes = declarations.uploadBlobData(uploads[index]);
-            const u64 expectedBytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };
+            const Array<u64, 2u> expectedBytes = { static_cast<u64>(index), ~static_cast<u64>(index) };
             ASSERT_TRUE(storedBytes);
             ASSERT_EQ(storedBytes->size(), sizeof(expectedBytes));
-            EXPECT_EQ(NWB_MEMCMP(storedBytes->data(), expectedBytes, sizeof(expectedBytes)), 0);
+            EXPECT_EQ(NWB_MEMCMP(storedBytes->data(), expectedBytes.data(), sizeof(expectedBytes)), 0);
         }
     }
     graph.reset();

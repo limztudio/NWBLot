@@ -8,8 +8,6 @@
 #include <dbghelp.h>
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-#include <errno.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -26,6 +24,10 @@ namespace __hidden_crash_handler_tests{
 
 
 using namespace CrashTestSupport;
+using namespace NWB::Tests;
+using CrashTestSupport::TestArena;
+using namespace NWB::Tests::CrashTestPaths;
+namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -86,7 +88,7 @@ TEST(Crash, ManualContextTimeoutRetainsOwnedDumpAndReusableHandlerAfterSourceSto
     resume.release();
     ASSERT_EQ(WaitForSingleObject(NWB::Core::Crash::CrashDetail::g_State.crashHandledEvent, NWB::Core::Crash::CrashDetail::s_ManualCrashDumpWaitMilliseconds), WAIT_OBJECT_0);
 
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(request.crashId));
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(request.crashId.data()));
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_SymbolicationFileName, AStringView("minidump captured;")));
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"has_exception_context\": true")));
     Vector<u8, NWB::Core::Alloc::ScratchArena> dumpBytes(scratchArena);
@@ -217,10 +219,10 @@ TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::CrashDetail::RequestCrashDump(NWB::Core::Crash::CrashDetail::CrashReasonKind::ManualDump, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
-    char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
-    BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
+    Array<char, NWB::Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
+    BuildCrashIdForProcess(CurrentProcessId(), 1u, crashId);
 
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
     {
         const auto directoryReady = WaitForDirectory(packageDirectory, s_PackageReadyTimeoutMS);
         ASSERT_TRUE(directoryReady);
@@ -270,10 +272,10 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::CrashDetail::RequestCrashDump(NWB::Core::Crash::CrashDetail::CrashReasonKind::GpuCrash, 0u, options);
     EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
 
-    char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
-    BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
+    Array<char, NWB::Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
+    BuildCrashIdForProcess(CurrentProcessId(), 1u, crashId);
 
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
     {
         const auto directoryReady = WaitForDirectory(packageDirectory, s_PackageReadyTimeoutMS);
         ASSERT_TRUE(directoryReady);
@@ -342,10 +344,10 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
         EXPECT_TRUE(WIFSIGNALED(status));
         EXPECT_EQ(WTERMSIG(status), SIGSEGV);
 
-        char crashId[NWB::Core::Crash::CrashDetail::s_MaxShortText] = {};
-        BuildCrashIdForProcess(crashId, static_cast<u32>(childPid), 1u);
+        Array<char, NWB::Core::Crash::CrashDetail::s_MaxShortText> crashId = {};
+        BuildCrashIdForProcess(static_cast<u32>(childPid), 1u, crashId);
 
-        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
+        const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, FixedBufferView(crashId));
         {
             constexpr u32 s_MissingPackageReadyTimeoutMS = 1000u;
             const auto directoryReady = WaitForDirectory(packageDirectory, s_MissingPackageReadyTimeoutMS);

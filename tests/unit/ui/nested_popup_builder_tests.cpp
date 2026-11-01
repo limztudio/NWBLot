@@ -114,9 +114,9 @@ TEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestore
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
 
-    const HitTarget* before = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_BeforeKey)));
-    const HitTarget* after = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey)));
-    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ApplyKey)));
+    const HitTarget* before = target(UiTestSupport::RequireWidgetId(parentId(), s_BeforeKey));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
     ASSERT_NE(before, nullptr);
     ASSERT_NE(after, nullptr);
     ASSERT_NE(apply, nullptr);
@@ -124,8 +124,8 @@ TEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestore
     EXPECT_EQ(after->popup, parent);
     EXPECT_EQ(apply->popup, child);
     EXPECT_FLOAT_EQ(after->rectangle.x, before->rectangle.x);
-    EXPECT_FLOAT_EQ(after->rectangle.y, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(before->rectangle.y), VectorReplicate(before->rectangle.height)), VectorReplicate(m_builder.style().gap))));
-    EXPECT_GT(apply->rectangle.x, VectorGetX(VectorAdd(VectorReplicate(m_parent.placement().bounds.x), VectorReplicate(m_parent.placement().bounds.width))));
+    EXPECT_FLOAT_EQ(after->rectangle.y, before->rectangle.y + before->rectangle.height + m_builder.style().gap);
+    EXPECT_GT(apply->rectangle.x, m_parent.placement().bounds.x + m_parent.placement().bounds.width);
     EXPECT_EQ(m_context.input().focus(), apply->id);
 }
 
@@ -136,7 +136,7 @@ TEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentCont
     rowOptions.height = { LayoutSizePolicy::Fixed, 30.0f };
     rowOptions.gap = 5.0f;
     ASSERT_TRUE(m_builder.beginRow("row", rowOptions));
-    const WidgetId row = UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), "row"));
+    const WidgetId row = UiTestSupport::RequireWidgetId(parentId(), "row");
     EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control(100.0f)));
     ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
     EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
@@ -148,13 +148,13 @@ TEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentCont
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
 
-    const HitTarget* before = target(UiTestSupport::RequireWidgetId(MakeWidgetId(row, s_BeforeKey)));
-    const HitTarget* after = target(UiTestSupport::RequireWidgetId(MakeWidgetId(row, s_AfterKey)));
-    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(row, s_ChildPopupKey)), s_ApplyKey)));
+    const HitTarget* before = target(UiTestSupport::RequireWidgetId(row, s_BeforeKey));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(row, s_AfterKey));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(row, s_ChildPopupKey), s_ApplyKey));
     ASSERT_NE(before, nullptr);
     ASSERT_NE(after, nullptr);
     ASSERT_NE(apply, nullptr);
-    EXPECT_FLOAT_EQ(after->rectangle.x, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(before->rectangle.x), VectorReplicate(before->rectangle.width)), VectorReplicate(rowOptions.gap))));
+    EXPECT_FLOAT_EQ(after->rectangle.x, before->rectangle.x + before->rectangle.width + rowOptions.gap);
     EXPECT_FLOAT_EQ(after->rectangle.y, before->rectangle.y);
     EXPECT_EQ(before->popup, after->popup);
     EXPECT_NE(apply->popup, before->popup);
@@ -173,9 +173,9 @@ TEST_F(UiNestedPopupBuilderTests, ClosedChildBeginLeavesParentScopeAndFollowingC
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey))), nullptr);
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey)), nullptr);
     EXPECT_EQ(target(childId()), nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey)))->popup, parent);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey))->popup, parent);
 }
 
 TEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrdered){
@@ -183,17 +183,17 @@ TEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrde
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_FALSE(snapshot.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ApplyKey)));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
     ASSERT_NE(apply, nullptr);
-    EXPECT_GT(apply->clip.x, VectorGetX(VectorAdd(VectorReplicate(m_parent.placement().bounds.x), VectorReplicate(m_parent.placement().bounds.width))));
+    EXPECT_GT(apply->clip.x, m_parent.placement().bounds.x + m_parent.placement().bounds.width);
     EXPECT_LE(apply->clip.x, apply->rectangle.x);
     EXPECT_LE(apply->clip.y, apply->rectangle.y);
     // Lanes are clip right, clip bottom, rectangle right, rectangle bottom.
     const SIMDVectorSingle edges = VectorAdd(VectorSet(apply->clip.x, apply->clip.y, apply->rectangle.x, apply->rectangle.y), VectorSet(apply->clip.width, apply->clip.height, apply->rectangle.width, apply->rectangle.height));
     EXPECT_GE(VectorGetX(edges), VectorGetZ(edges));
     EXPECT_GE(VectorGetY(edges), VectorGetW(edges));
-    ASSERT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey))), nullptr);
-    EXPECT_GT(apply->layer, target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey)))->layer);
+    ASSERT_NE(target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey)), nullptr);
+    EXPECT_GT(apply->layer, target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey))->layer);
     const Point applyCenter = Center(apply->rectangle);
     EXPECT_EQ(m_context.input().hitTest(applyCenter), apply->id);
     u32 previousLayer = 0u;
@@ -208,7 +208,7 @@ TEST_F(UiNestedPopupBuilderTests, ChildPaintEscapesParentClipAndLayersRemainOrde
 
 TEST_F(UiNestedPopupBuilderTests, ChildActionLeavesBothParentControlsAvailableOnLaterDeclarations){
     ASSERT_TRUE(acceptButtons(1u));
-    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ApplyKey)));
+    const HitTarget* apply = target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey));
     ASSERT_NE(apply, nullptr);
     const Point applyCenter = Center(apply->rectangle);
     click(applyCenter);
@@ -218,9 +218,9 @@ TEST_F(UiNestedPopupBuilderTests, ChildActionLeavesBothParentControlsAvailableOn
     EXPECT_FALSE(m_afterActivated);
     m_child.close();
     ASSERT_TRUE(acceptButtons(3u));
-    const HitTarget* after = target(UiTestSupport::RequireWidgetId(MakeWidgetId(parentId(), s_AfterKey)));
+    const HitTarget* after = target(UiTestSupport::RequireWidgetId(parentId(), s_AfterKey));
     ASSERT_NE(after, nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(childId(), s_ApplyKey))), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(childId(), s_ApplyKey)), nullptr);
     const Point afterCenter = Center(after->rectangle);
     click(afterCenter);
     ASSERT_TRUE(acceptButtons(4u));

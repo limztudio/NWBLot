@@ -9,15 +9,15 @@
 
 
 #include "skin_cook.h"
+#include "cook_metadata.h"
+#include "cook_source_streams.h"
 
 #include <impl/assets_skeleton/cook_matrix.h>
 
 #include <core/assets/binary_payload_io.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
-#include <core/common/log.h>
-#include <core/metascript/parser.h>
 
-#include <global/binary.h>
 #include <global/simd/vector.h>
 
 
@@ -53,8 +53,8 @@ b8 SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, skin.influences(), s_SkinSerializeContext, s_SkinInfluencesPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, skin.inverseBindMatrices(), s_SkinSerializeContext, s_SkinInverseBindMatricesPayloadLabel)
+        Core::Assets::AppendVectorPayload(skin.influences(), s_SkinSerializeContext, s_SkinInfluencesPayloadLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(skin.inverseBindMatrices(), s_SkinSerializeContext, s_SkinInverseBindMatricesPayloadLabel, outBinary)
     ;
 }
 
@@ -70,175 +70,28 @@ namespace __hidden_skin_cook{
 
 using namespace Core::Metascript;
 
-static constexpr AStringView s_InfluencesField = "influences";
-static constexpr AStringView s_InverseBindMatricesField = "inverse_bind_matrices";
-static constexpr AStringView s_JointsField = "joints";
-static constexpr AStringView s_WeightsField = "weights";
-static constexpr AStringView s_SkinMetaKind = "Skin";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_SkinMetaMeshField, s_SkinMetaSkeletonField, s_InfluencesField, s_InverseBindMatricesField });
-}
-
-[[nodiscard]] b8 ValidateSkinInfluenceFields(const Path& nwbFilePath, const Value& influence){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, influence, "Skin influence", { s_JointsField, s_WeightsField });
-}
-
-template<usize ComponentCount>
-[[nodiscard]] Expected<Array<f64, ComponentCount>> ReadNumericTuple(const Path& nwbFilePath, const Value& value, const AStringView label, const AStringView listValueKind){
-    Array<f64, ComponentCount> values{};
-    if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list"), PathToString<tchar>(nwbFilePath), ConvertString(label), ComponentCount, ConvertString(listValueKind));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto& list = value.asList();
-    for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-        const Value& component = list[componentIndex];
-        if(!component.isNumeric()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
-            return MakeUnexpected(Failure{});
-        }
-
-        values[componentIndex] = component.toDouble();
-    }
-    return values;
-}
-
-template<usize ComponentCount>
-[[nodiscard]] Expected<Array<u16, ComponentCount>> ParseU16Tuple(const Path& nwbFilePath, const Value& value, const AStringView label){
-    Array<u16, ComponentCount> values{};
-    const auto numericValues = ReadNumericTuple<ComponentCount>(nwbFilePath, value, label, "integer");
-    if(!numericValues)
-        return MakeUnexpected(Failure{});
-
-    for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-        const f64 numericValue = (*numericValues)[componentIndex];
-        if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleGetX(VectorDoubleFloor(VectorDoubleReplicate(numericValue))) || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
-            return MakeUnexpected(Failure{});
-        }
-
-        values[componentIndex] = static_cast<u16>(numericValue);
-    }
-    return values;
-}
-
-template<usize ComponentCount>
-[[nodiscard]] Expected<Array<f32, ComponentCount>> ParseF32Tuple(const Path& nwbFilePath, const Value& value, const AStringView label){
-    Array<f32, ComponentCount> values{};
-    const auto numericValues = ReadNumericTuple<ComponentCount>(nwbFilePath, value, label, "numeric");
-    if(!numericValues)
-        return MakeUnexpected(Failure{});
-
-    for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-        const f64 numericValue = (*numericValues)[componentIndex];
-        if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range"), PathToString<tchar>(nwbFilePath), ConvertString(label), componentIndex);
-            return MakeUnexpected(Failure{});
-        }
-
-        values[componentIndex] = static_cast<f32>(numericValue);
-    }
-    return values;
-}
-
-[[nodiscard]] Expected<SIMDVectorSingleResult> NormalizeSkinInfluenceWeights(const Path& nwbFilePath, const usize influenceIndex, const SIMDVectorSingle weights){
-    if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative"), PathToString<tchar>(nwbFilePath), influenceIndex);
-        return MakeUnexpected(Failure{});
-    }
-
-    const SIMDVectorSingle weightSum = Vector4Dot(weights, s_SIMDOne);
-    if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(s_SkinValidationEpsilon))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total"), PathToString<tchar>(nwbFilePath), influenceIndex);
-        return MakeUnexpected(Failure{});
-    }
-
-    const SIMDVectorSingle normalizedWeights = VectorDivide(weights, weightSum);
-    Float4U storedWeights;
-    StoreFloat(normalizedWeights, storedWeights);
-    if(!ValidSkinInfluenceWeights(storedWeights))
-        return MakeUnexpected(Failure{});
-    return SIMDVectorSingleResult{ normalizedWeights };
-}
-
-[[nodiscard]] Expected<SkinInfluence4> ParseSkinInfluence(const Path& nwbFilePath, const Value& influenceValue, const usize influenceIndex){
-    SkinInfluence4 influence{};
-
-    if(!ValidateSkinInfluenceFields(nwbFilePath, influenceValue))
-        return MakeUnexpected(Failure{});
-
-    const Value* joints = influenceValue.findField(s_JointsField);
-    const Value* weights = influenceValue.findField(s_WeightsField);
-    if(!joints || !weights){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'"), PathToString<tchar>(nwbFilePath), influenceIndex);
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto parsedJoints = ParseU16Tuple<s_SkinInfluenceJointCount>(nwbFilePath, *joints, s_JointsField);
-    if(!parsedJoints)
-        return MakeUnexpected(Failure{});
-    const auto weightValues = ParseF32Tuple<s_SkinInfluenceJointCount>(nwbFilePath, *weights, s_WeightsField);
-    if(!weightValues)
-        return MakeUnexpected(Failure{});
-    Float4U parsedWeights;
-    for(usize component = 0u; component < s_SkinInfluenceJointCount; ++component){
-        influence.joint[component] = (*parsedJoints)[component];
-        parsedWeights.raw[component] = (*weightValues)[component];
-    }
-    const auto normalizedWeights = NormalizeSkinInfluenceWeights(nwbFilePath, influenceIndex, LoadFloat(parsedWeights));
-    if(!normalizedWeights)
-        return MakeUnexpected(Failure{});
-
-    StoreFloat(normalizedWeights->value, influence.weight);
-    return influence;
-}
-
 [[nodiscard]] Expected<Core::Assets::AssetVector<SkinInfluence4>> ParseSkinInfluences(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkinInfluence4> values(arena);
-
-    const auto influences = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_InfluencesField);
-    if(!influences)
-        return MakeUnexpected(influences.error());
-
-    const auto& influenceList = (*influences)->asList();
-    values.reserve(influenceList.size());
-    for(usize influenceIndex = 0u; influenceIndex < influenceList.size(); ++influenceIndex){
-        const Value& influenceValue = influenceList[influenceIndex];
-        if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] must be a map"), PathToString<tchar>(nwbFilePath), influenceIndex);
-            return MakeUnexpected(Failure{});
-        }
-
-        const auto influence = ParseSkinInfluence(nwbFilePath, influenceValue, influenceIndex);
-        if(!influence)
-            return MakeUnexpected(Failure{});
-        values.push_back(*influence);
-    }
-
-    if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_InfluencesField));
+    if(!MeshCookSourceStreams::ParseSourceSkinInfluencesInto(nwbFilePath, asset, NWB_TEXT("Skin"), {}, true, values))
         return MakeUnexpected(Failure{});
-    }
     return values;
 }
 
 [[nodiscard]] Expected<Core::Assets::AssetVector<SkeletonJointMatrix>> ParseInverseBindMatrices(const Path& nwbFilePath, const Value& asset, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<SkeletonJointMatrix> values(arena);
 
-    const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_InverseBindMatricesField);
+    const auto matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinInverseBindMatricesField);
     if(!matrices)
         return MakeUnexpected(matrices.error());
 
     const auto& matrixList = (*matrices)->asList();
     values.reserve(matrixList.size());
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
-        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_InverseBindMatricesField);
+        const auto matrix = AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, matrixList[matrixIndex], s_SkinMetaKind, s_SkinInverseBindMatricesField);
         if(!matrix)
             return MakeUnexpected(Failure{});
 
@@ -250,7 +103,7 @@ template<usize ComponentCount>
     }
 
     if(values.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_InverseBindMatricesField));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty"), PathToString<tchar>(nwbFilePath), ConvertString(s_SkinInverseBindMatricesField));
         return MakeUnexpected(Failure{});
     }
     return values;
@@ -286,6 +139,20 @@ template<usize ComponentCount>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    return Core::Assets::ParseCookMetadataDocument<SkinCookEntry>(
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        doc,
+        s_SkinMetaDiagnosticPrefix,
+        [&nwbFilePath, &arena](const Name virtualPath, const Core::Metascript::Value& asset){
+            return ParseSkinCookMetadata(virtualPath, nwbFilePath, asset, arena);
+        },
+        scratchArena
+    );
+}
+
 Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena){
     using namespace __hidden_skin_cook;
 
@@ -294,9 +161,9 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_SkinMetaDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_SkinMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!ValidateSkinAssetFields(nwbFilePath, asset))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, { s_SkinMetaMeshField, s_SkinMetaSkeletonField, s_SkinInfluencesField, s_SkinInverseBindMatricesField }))
         return MakeUnexpected(Failure{});
     auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkinMetaMeshField, true);
     if(!meshResult)
@@ -318,18 +185,6 @@ Expected<SkinCookEntry> ParseSkinCookMetadata(const Name virtualPath, const Path
         return MakeUnexpected(Failure{});
 
     return entry;
-}
-
-Expected<SkinCookEntry> ParseSkinCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_SkinMetaDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseSkinCookMetadata(virtualPath, nwbFilePath, **asset, arena);
 }
 
 Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena){

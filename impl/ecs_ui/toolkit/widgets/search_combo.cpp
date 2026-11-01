@@ -20,35 +20,7 @@ namespace __hidden_ui_search_combo{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SourceSnapshot{
-    u64 generation = 0u;
-    u64 revision = 0u;
-    u64 count = 0u;
-};
-
-struct QuerySnapshot{
-    u64 generation = 0u;
-    u64 externalRevision = 0u;
-    u64 revision = 0u;
-    u64 compositionGeneration = 0u;
-    u64 selectionGeneration = 0u;
-    usize anchor = 0u;
-    usize caret = 0u;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static SourceSnapshot Snapshot(const IListDataSource& source){
-    return { source.instanceGeneration(), source.revision(), source.rowCount() };
-}
-
-[[nodiscard]] static b8 Matches(const IListDataSource& source, const SourceSnapshot& snapshot){
-    return snapshot.generation != 0u && snapshot.revision != 0u && source.instanceGeneration() == snapshot.generation && source.revision() == snapshot.revision && source.rowCount() == snapshot.count;
-}
-
-[[nodiscard]] static b8 Matches(const SearchComboState& state, const QuerySnapshot& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
+[[nodiscard]] static b8 Matches(const SearchComboState& state, const SearchComboQuerySnapshot& query, const u64 comboGeneration, const u64 previewGeneration)noexcept{
     return
         state.query().instanceGeneration() == query.generation && state.query().externalRevision() == query.externalRevision
         && state.query().revision() == query.revision && state.query().compositionGeneration() == query.compositionGeneration
@@ -69,24 +41,14 @@ struct QuerySnapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SearchComboState::SearchComboState(Core::Alloc::GlobalArena& arena)
-    : m_arena(arena)
-    , m_query(arena)
-    , m_filteredQuery(arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSource& source){
     using namespace __hidden_ui_search_combo;
-    const QuerySnapshot query{ state.m_query.instanceGeneration(), state.m_query.externalRevision(), state.m_query.revision(), state.m_query.compositionGeneration(), state.m_query.selectionGeneration(), state.m_query.anchor(), state.m_query.caret() };
+    const SearchComboQuerySnapshot query(state.m_query.instanceGeneration(), state.m_query.externalRevision(), state.m_query.revision(), state.m_query.compositionGeneration(), state.m_query.selectionGeneration(), state.m_query.anchor(), state.m_query.caret());
     const u64 comboGeneration = state.m_combo.inputGeneration();
     const u64 previewGeneration = state.m_combo.listState().inputGeneration();
-    const SourceSnapshot full = Snapshot(source);
+    const SearchComboSourceSnapshot full(source.instanceGeneration(), source.revision(), source.rowCount());
     const IListDataSource& previousView = source.filtered();
-    const SourceSnapshot previous = Snapshot(previousView);
+    const SearchComboSourceSnapshot previous(previousView.instanceGeneration(), previousView.revision(), previousView.rowCount());
     if(full.generation == 0u || full.revision == 0u || !Matches(state, query, comboGeneration, previewGeneration))
         return false;
     const b8 fullChanged = !state.m_filterValid || state.m_sourceGeneration != full.generation || state.m_sourceRevision != full.revision || state.m_sourceCount != full.count;
@@ -103,15 +65,19 @@ b8 SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSourc
             return false;
     }
     const IListDataSource& view = source.filtered();
-    const SourceSnapshot filtered = Snapshot(view);
-    if(filtered.generation == 0u || filtered.revision == 0u || filtered.count > full.count || !Matches(view, filtered) || !Matches(source, full) || !Matches(state, query, comboGeneration, previewGeneration))
+    const SearchComboSourceSnapshot filtered(view.instanceGeneration(), view.revision(), view.rowCount());
+    if(
+        filtered.generation == 0u || filtered.revision == 0u || filtered.count > full.count
+        || !ListBehavior::SourceMatches(view, filtered.generation, filtered.revision, filtered.count)
+        || !ListBehavior::SourceMatches(source, full.generation, full.revision, full.count)
+        || !Matches(state, query, comboGeneration, previewGeneration)
+    )
         return false;
     const b8 externalQueryChange = state.m_filterValid && (state.m_queryGeneration != query.generation || state.m_queryExternalRevision != query.externalRevision);
     if(rebuild || externalQueryChange){
-        ListState& preview = ComboBehavior::Preview(state.m_combo);
-        if(!preview.scrollTo(0.0))
+        if(!state.m_combo.m_list.scrollTo(0.0))
             return false;
-        preview.select(state.m_combo.selectedKey());
+        state.m_combo.m_list.select(state.m_combo.selectedKey());
     }
     if(rebuild)
         state.m_filteredQuery = Move(candidate);

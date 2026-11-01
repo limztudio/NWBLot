@@ -95,7 +95,7 @@ b8 GpuTimingFrameTransaction::begin(const GpuTimingScopeDefinition& scopeDefinit
         m_state = State::Inactive;
         return true;
     }
-    const auto scope = m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution);
+    const auto scope = m_recorder.beginDeferredScope(scopeDefinition.identity, attribution, device, commandList);
     if(!scope){
         m_scope = {};
         m_state = State::Resolved;
@@ -176,10 +176,6 @@ b8 GpuTimingFrameTransaction::confirmEndSubmission(const QueueSubmissionToken& t
     return true;
 }
 
-b8 GpuTimingFrameTransaction::needsRetirement()const noexcept{
-    return m_beginSubmission.valid() && m_scope.valid();
-}
-
 b8 GpuTimingFrameTransaction::prepareForRecovery()noexcept{
     if(!needsRetirement())
         return true;
@@ -244,7 +240,7 @@ GpuTimingMeasure::GpuTimingMeasure(GpuTimingRecorder& recorder, const GpuTimingS
 
     __hidden_gpu_timing_frame_transaction::GpuTimingMeasureConstructionUnwindScope constructionUnwind(*this);
     m_marker = m_commandList.beginMarkerLease(scopeDefinition.markerLabel);
-    const auto scope = m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, false);
+    const auto scope = m_recorder.beginScope(scopeDefinition.identity, attribution, false, device, commandList);
     m_scope = scope ? *scope : GpuTimingScope{};
     constructionUnwind.release();
 }
@@ -282,14 +278,6 @@ void GpuTimingMeasure::finishTiming(CommandList& commandList){
 
     m_recorder.endScope(commandList, m_scope);
     finishUnwind.release();
-}
-
-void GpuTimingMeasure::discardTiming(){
-    m_recorder.discardScope(m_scope);
-}
-
-void GpuTimingMeasure::abandonTimingWithoutCallbacks()noexcept{
-    m_recorder.abandonScopeWithoutCallbacks(m_scope);
 }
 
 

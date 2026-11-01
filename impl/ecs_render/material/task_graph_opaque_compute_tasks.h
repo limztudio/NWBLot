@@ -5,7 +5,9 @@
 #pragma once
 
 
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
+#include <impl/ecs_render/material/pipeline_types.adhd.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 
@@ -38,6 +40,8 @@ namespace ECSRenderDetail{
 struct OpaqueRegularComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     // All bindings required: compute emulation always generates against this frame's bindings.
     struct Payload{
         RendererMaterialSystem& materialSystem;
@@ -55,7 +59,14 @@ struct OpaqueRegularComputeEmulationGraphTask{
 
 
     public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const b8& meshViewSetupReadyIn, const b8& sceneShadingSetupReadyIn)noexcept;
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const b8& meshViewSetupReadyIn, const b8& sceneShadingSetupReadyIn)noexcept
+            : materialSystem(materialSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , meshViewSetupReady(meshViewSetupReadyIn)
+            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+            , plan(arena)
+        {}
     };
 
 
@@ -67,12 +78,16 @@ public:
 // Shared outputs interleave generation and rasterization; each instance records one phase.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
     struct Phase{
-        enum Enum : u8{
-            Generate,
-            Raster,
-        };
+        static constexpr SharedComputeEmulationPhase::Enum Generate = SharedComputeEmulationPhase::Generate;
+        static constexpr SharedComputeEmulationPhase::Enum Raster = SharedComputeEmulationPhase::Raster;
+
+
+    public:
+        using Enum = SharedComputeEmulationPhase::Enum;
     };
 
+
+public:
     // All bindings required: shared emulation always brackets its phase with the frame timing.
     struct Payload{
         RendererMaterialSystem& materialSystem;
@@ -93,13 +108,15 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         Phase::Enum phase = Phase::Generate;
     };
 
+
+public:
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+        return RendererTaskGraphDetail::SharedComputeEmulationCommandRequirements(payload.phase);
     }
 
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         Core::DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
     }
 };

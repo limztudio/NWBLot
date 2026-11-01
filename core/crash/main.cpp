@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/module.h>
 #include <core/crash/handler.h>
 
 
@@ -10,8 +9,7 @@
 
 
 template<typename CharT>
-static int EntryPoint(isize argc, CharT** argv, void* inst){
-    static_cast<void>(inst);
+static int EntryPoint(isize argc, CharT** argv, [[maybe_unused]] void* inst){
     return NWB::Core::Crash::RunCrashHandlerProcess(argc, argv);
 }
 

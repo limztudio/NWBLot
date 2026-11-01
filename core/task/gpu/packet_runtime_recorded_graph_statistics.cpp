@@ -29,16 +29,16 @@ namespace __hidden_gpu_packet_runtime_recorded_graph_statistics{
 inline constexpr usize s_MinOverlapPacketCount = 2u;
 
 template<typename StatisticsT>
-static void AccumulatePacketRecordingCounts(StatisticsT& statistics, SIMDVectorDouble& inOutRecordingSeconds, const GpuRecordedPacket& recordedPacket, const b8 overlaps)noexcept{
-    ++statistics.packetCount;
-    statistics.taskCount += recordedPacket.taskCount;
-    statistics.commandListCount += recordedPacket.commandListCount;
-    statistics.barrierCount += recordedPacket.barrierCount;
+static void AccumulatePacketRecordingCounts(const GpuRecordedPacket& recordedPacket, const b8 overlaps, StatisticsT& inOutStatistics, SIMDVectorDouble& inOutRecordingSeconds)noexcept{
+    ++inOutStatistics.packetCount;
+    inOutStatistics.taskCount += recordedPacket.taskCount;
+    inOutStatistics.commandListCount += recordedPacket.commandListCount;
+    inOutStatistics.barrierCount += recordedPacket.barrierCount;
     if(recordedPacket.recordingWorkerIndex != 0u)
-        ++statistics.workerRoutedPacketCount;
+        ++inOutStatistics.workerRoutedPacketCount;
     // Overlap is graph-wide even when accumulating only one physical queue.
     if(overlaps)
-        ++statistics.parallelPacketCount;
+        ++inOutStatistics.parallelPacketCount;
     inOutRecordingSeconds = VectorDoubleAdd(inOutRecordingSeconds, VectorDoubleSet(recordedPacket.commandListAcquisitionSeconds, recordedPacket.graphBarrierRecordingSeconds, recordedPacket.taskRecordSeconds, recordedPacket.recordingSeconds));
 }
 
@@ -95,7 +95,7 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(const GpuC
         if(recordedPacket.commandListCount == 0u || recordedPacket.packet != planAccess.packetIdAt(packetIndex))
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u, statistics, recordingSeconds);
     }
     __hidden_gpu_packet_runtime_recorded_graph_statistics::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
@@ -137,7 +137,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         if(packetPlan.queue != queue)
             continue;
 
-        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(statistics, recordingSeconds, recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u);
+        __hidden_gpu_packet_runtime_recorded_graph_statistics::AccumulatePacketRecordingCounts(recordedPacket, storage.packetRecordingOverlaps[packetIndex] != 0u, statistics, recordingSeconds);
     }
     __hidden_gpu_packet_runtime_recorded_graph_statistics::StorePacketRecordingSeconds(statistics, recordingSeconds);
     return statistics;
@@ -145,7 +145,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
 
 void GpuRecordedGraph::addRecordingElapsedSeconds(const f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept{
     if(artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid)
-        m_activeStorage->recordingElapsedSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_activeStorage->recordingElapsedSeconds), VectorDoubleReplicate(elapsedSeconds)));
+        m_activeStorage->recordingElapsedSeconds += elapsedSeconds;
 }
 
 void GpuRecordedGraph::addReadyFrontierStatistics(const f64 elapsedSeconds, const f64 workerBusySeconds, const f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept{
@@ -162,8 +162,8 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
     const Span<const u32> packetIndices,
-    Alloc::ScratchArena& scratchArena,
-    const ArtifactOperation& artifactAccess
+    const ArtifactOperation& artifactAccess,
+    Alloc::ScratchArena& scratchArena
 ){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph_statistics::PacketRecordingIntervalEntry;
     const b8 artifactAccessValid = planAccess.validFor(compiledGraph) && artifactAccess.exclusiveFor(*this) && m_activeStorage && m_activeStorage->valid;

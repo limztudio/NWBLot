@@ -6,11 +6,7 @@
 
 
 #include <impl/global.h>
-
-#include <core/assets/ref.h>
-#include <core/ecs/entity_id.h>
-
-#include <global/span.h>
+#include <impl/ecs_render/components.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,25 +36,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Material;
-class Mesh;
 class RendererMaterialSystem;
-
-// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
-struct CoincidentOpticalVolumeCandidate{
-    Core::Assets::AssetRef<Mesh> mesh;
-    Core::Assets::AssetRef<Material> material;
-    Float3U position = Float3U(0.f, 0.f, 0.f);
-    Float4U rotation = Float4U(0.f, 0.f, 0.f, 1.f);
-    Float3U scale = Float3U(1.f, 1.f, 1.f);
-    Span<const u8> mutableTypedBytes{};
-    Name group = s_NameNone;
-    Core::ECS::EntityID entity;
-    i32 priority = 0;
-    // Identical-material grouping also requires the same authored medium semantics.
-    u32 boundaryMode = 0u;
-    i32 mediumPriority = 0;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,15 +45,19 @@ struct CoincidentOpticalVolumeCandidate{
 // Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
 class RendererOpticalVolumeSelection final : NoCopy{
 public:
-    explicit RendererOpticalVolumeSelection(Core::Alloc::GlobalArena& arena);
+    explicit RendererOpticalVolumeSelection(Core::Alloc::GlobalArena& arena)
+        : m_suppressed(0u, Hasher<Core::ECS::EntityID>{}, EqualTo<Core::ECS::EntityID>{}, arena)
+    {}
 
 
 public:
     void prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena);
     // Candidates must contain each entity at most once.
     void select(Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena);
-    void reset()noexcept;
-    [[nodiscard]] b8 isSuppressed(Core::ECS::EntityID entity)const noexcept;
+    void reset()noexcept{ m_suppressed.clear(); }
+    [[nodiscard]] b8 isSuppressed(const Core::ECS::EntityID entity)const noexcept{
+        return !m_suppressed.empty() && m_suppressed.contains(entity);
+    }
 
 
 private:

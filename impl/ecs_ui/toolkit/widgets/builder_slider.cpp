@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 
@@ -18,32 +18,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_builder_slider{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<SIMDVectorSingleResult> LoadMinimumSize(const UiSkinRegion& region, const SIMDVectorDouble density)noexcept{
-    return LoadUiSkinMinimumSize(
-        region,
-        VectorDoubleSet(static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom), 0.0, 0.0),
-        density
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Builder::slider(const AStringView stableKey, SliderState& state, const SliderOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked() || !m_skin){
         m_context.fail();
         return false;
     }
@@ -61,7 +37,7 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
     frame.m_style = m_sliderStyle;
     frame.m_snapshot = state.snapshot();
     frame.m_widget = **widget;
-    if(!SliderBehavior::Validate(options)){
+    if(!IsValidSliderOptions(options)){
         m_context.fail();
         return false;
     }
@@ -82,12 +58,8 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
     LayoutNodeDesc description;
     description.width = options.width;
     description.intrinsicSize = frame.m_metrics.contentSize;
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    if(!addItemNode(description, item))
         return false;
-    }
-    item.node = *admittedNode;
     m_scope->m_sliders.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return true;
@@ -100,15 +72,15 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !normal)
         return false;
-    const auto trackMinimum = __hidden_builder_slider::LoadMinimumSize(*track, VectorDoubleReplicate(m_skin->referenceDensity()));
+    const auto trackMinimum = LoadUiSkinMinimumSize(*track, VectorDoubleReplicate(m_skin->referenceDensity()));
     if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = VectorGetY(VectorMax(VectorSelect(trackMinimum->value, VectorReplicate(frame.m_style.trackHeight), s_SIMDMaskY), trackMinimum->value));
-    const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
+    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, VectorGetY(trackMinimum->value));
+    const Array<const UiSkinRegion*, 4> thumbs{ normal, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
-        const auto minimum = __hidden_builder_slider::LoadMinimumSize(*thumb, VectorDoubleReplicate(m_skin->referenceDensity()));
+        const auto minimum = LoadUiSkinMinimumSize(*thumb, VectorDoubleReplicate(m_skin->referenceDensity()));
         if(!minimum)
             return false;
         const SIMDVectorSingle currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y, frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
@@ -120,19 +92,34 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;
-    const SIMDVectorDouble paddedSize = VectorDoubleAdd(
-        VectorDoubleAdd(
-            VectorDoubleAdd(VectorDoubleSet(frame.m_metrics.padding.left, frame.m_metrics.padding.top, 0.0, 0.0), VectorDoubleSet(frame.m_metrics.padding.right, frame.m_metrics.padding.bottom, 0.0, 0.0)),
-            VectorDoubleSet(frame.m_metrics.thumbExtent.x, frame.m_metrics.thumbExtent.y, 0.0, 0.0)
-        ),
-        VectorDoubleAndInt(ConvertVectorSingleToDouble(trackMinimum->value), s_DoubleSIMDMaskX)
-    );
-    const f64 width = VectorDoubleGetX(paddedSize);
+    const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + static_cast<f64>(frame.m_metrics.padding.right) + static_cast<f64>(frame.m_metrics.thumbExtent.x) + static_cast<f64>(VectorGetX(trackMinimum->value));
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
-    const SIMDVectorSingle contentSize = VectorMax(VectorSet(frame.m_metrics.contentSize.x, frame.m_metrics.contentSize.y, 0.0f, 0.0f), VectorSet(static_cast<f32>(width), frame.m_metrics.contentSize.y, 0.0f, 0.0f));
-    frame.m_metrics.contentSize = { VectorGetX(contentSize), VectorGetY(contentSize) };
+    frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));
     return sliderMatches(frame);
+}
+
+void Builder::publishSliderResults(const b8 valid)noexcept{
+    const InputRouter& input = m_context.input();
+    for(const auto& frame : m_scope->m_sliders){
+        SliderResult result;
+        if(valid && frame.m_result.valid && sliderMatches(frame)){
+            result = frame.m_result;
+            result.focused = frame.m_interactive && input.focus() == frame.m_widget.id;
+            result.dragging = false;
+            if(frame.m_interactive && input.primaryDown()){
+                WidgetId track;
+                WidgetId thumb;
+                if(!TryMakeWidgetId(frame.m_widget.id, s_WidgetPartTrack, track) || !TryMakeWidgetId(frame.m_widget.id, s_WidgetPartThumb, thumb)){
+                    m_context.fail();
+                    frame.m_state.m_result = {};
+                    continue;
+                }
+                result.dragging = input.capture() == track || input.capture() == thumb;
+            }
+        }
+        frame.m_state.m_result = result;
+    }
 }
 
 

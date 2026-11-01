@@ -137,7 +137,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         || record.finalState == ResourceStates::Unknown
         || !resolvedAspect
         || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(description, view.initialState, view.externalFinalState, record.finalState)
-        || !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(description, slice.arraySlice, slice.mipLevel, static_cast<usize>(record.rowPitch), static_cast<usize>(record.depthPitch), record.uploadAspect))
+        || !(requiredBytes = ComputeTextureUploadByteSize(description, slice.arraySlice, slice.mipLevel, static_cast<usize>(record.rowPitch), static_cast<usize>(record.depthPitch), record.uploadAspect))
         || *requiredBytes != record.blobSizeBytes
     )
         return GpuCommandIrReplayError::InvalidTextureUpload;

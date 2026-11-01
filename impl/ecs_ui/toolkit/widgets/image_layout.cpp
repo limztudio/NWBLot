@@ -20,33 +20,10 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_image_layout{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 ValidSize(const LayoutSize& size)noexcept{
-    return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const UiSkinRegion& region, const f32 density)noexcept{
-    using namespace __hidden_ui_image_layout;
     if(
-        !ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint)
+        !IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint)
         || !IsFinite(density) || density <= 0.0f
-        || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
-        || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
     )
         return MakeUnexpected(Failure{});
     const auto sliceExtents = LoadUiSkinSliceExtents(region);
@@ -55,20 +32,15 @@ Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const U
     const SIMDVectorDouble geometryPair0Operand0 = VectorDoubleSet(static_cast<f64>(region.rectangle.width), static_cast<f64>(region.rectangle.height), 0.0, 0.0);
     const SIMDVectorDouble geometryPair0Operand1 = sliceExtents->value;
     const SIMDVectorDouble pixelWidthPixelHeightValue = VectorDoubleSelect(geometryPair0Operand1, geometryPair0Operand0, VectorDoubleGreater(geometryPair0Operand0, geometryPair0Operand1));
-    const SIMDVectorDouble geometryPair1Operand0 = VectorDoubleSet(static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight), 0.0, 0.0);
-    const SIMDVectorDouble geometryPair1Operand1 = VectorDoubleDivide(VectorDoubleSelect(VectorDoubleZero(), pixelWidthPixelHeightValue, s_DoubleSIMDMaskXY), VectorDoubleReplicate(density));
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSelect(geometryPair1Operand1, geometryPair1Operand0, VectorDoubleGreater(geometryPair1Operand0, geometryPair1Operand1));
-    const f64 width = VectorDoubleGetX(widthHeightValue);
-    const f64 height = VectorDoubleGetY(widthHeightValue);
-    if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
+    const auto minimum = LoadUiSkinMinimumSize(region, pixelWidthPixelHeightValue, VectorDoubleReplicate(density));
+    if(!minimum)
         return MakeUnexpected(Failure{});
-    const ImageMetrics candidate{ { static_cast<f32>(width), static_cast<f32>(height) } };
+    const ImageMetrics candidate{ { VectorGetX(minimum->value), VectorGetY(minimum->value) } };
     return candidate;
 }
 
 Expected<ImageMetrics> ImageLayout::Measure(const ImageOptions& options, const ImageSource& source)noexcept{
-    using namespace __hidden_ui_image_layout;
-    if(!ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint))
+    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
         return MakeUnexpected(Failure{});
     const Texture& texture = source.texture();
     // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.

@@ -6,6 +6,32 @@ const u32 s_SamplerBinaryMagic = 0x53414D31u; // SAM1
 const u32 s_SamplerBinaryVersion = 1u;
 const usize s_SamplerHeaderBinaryByteSize = 64u;
 const usize s_SamplerPackedAlignBytes = 1u;
+const u32 s_SamplerMaxFilterFlag = 1u;
+const u32 s_SamplerMaxAddressMode = 4u;
+const u32 s_SamplerMaxReductionType = 1u;
+
+const StringView s_SamplerMetaDiagnosticPrefix = "Sampler meta";
+const StringView s_SamplerMinFilterField = "min_filter";
+const StringView s_SamplerMagFilterField = "mag_filter";
+const StringView s_SamplerMipFilterField = "mip_filter";
+const StringView s_SamplerAddressUField = "address_u";
+const StringView s_SamplerAddressVField = "address_v";
+const StringView s_SamplerAddressWField = "address_w";
+const StringView s_SamplerReductionField = "reduction";
+const StringView s_SamplerMaxAnisotropyField = "max_anisotropy";
+const StringView s_SamplerMipBiasField = "mip_bias";
+const StringView s_SamplerFilterNearest = "nearest";
+const StringView s_SamplerFilterLinear = "linear";
+const StringView s_SamplerFilterHint = "must be 'nearest' or 'linear'";
+const StringView s_SamplerAddressClamp = "clamp";
+const StringView s_SamplerAddressWrap = "wrap";
+const StringView s_SamplerAddressBorder = "border";
+const StringView s_SamplerAddressMirror = "mirror";
+const StringView s_SamplerAddressMirrorOnce = "mirror_once";
+const StringView s_SamplerAddressModeHint = "has an unsupported address mode";
+const StringView s_SamplerReductionStandard = "standard";
+const StringView s_SamplerReductionComparison = "comparison";
+const StringView s_SamplerReductionTypeHint = "has an unsupported reduction type";
 
 [serialize]
 class SamplerBinaryHeader{
@@ -25,6 +51,60 @@ class SamplerBinaryHeader{
     public u32 addressW = 0u;
     public u32 reductionType = 0u;
     public u32 reserved = 0u;
+}
+
+SamplerBinaryHeader BuildSamplerBinaryHeader(
+    in f32 borderColorR,
+    in f32 borderColorG,
+    in f32 borderColorB,
+    in f32 borderColorA,
+    in f32 maxAnisotropy,
+    in f32 mipBias,
+    in b8 minFilter,
+    in b8 magFilter,
+    in b8 mipFilter,
+    in u32 addressU,
+    in u32 addressV,
+    in u32 addressW,
+    in u32 reductionType
+){
+    SamplerBinaryHeader header;
+    header.borderColorR = borderColorR;
+    header.borderColorG = borderColorG;
+    header.borderColorB = borderColorB;
+    header.borderColorA = borderColorA;
+    header.maxAnisotropy = maxAnisotropy;
+    header.mipBias = mipBias;
+    if(minFilter)
+        header.minFilter = 1u;
+    else
+        header.minFilter = 0u;
+    if(magFilter)
+        header.magFilter = 1u;
+    else
+        header.magFilter = 0u;
+    if(mipFilter)
+        header.mipFilter = 1u;
+    else
+        header.mipFilter = 0u;
+    header.addressU = addressU;
+    header.addressV = addressV;
+    header.addressW = addressW;
+    header.reductionType = reductionType;
+    return header;
+}
+
+b8 IsValidSamplerBinaryHeader(in SamplerBinaryHeader header){
+    return
+        header.reserved == 0u
+        && header.minFilter <= s_SamplerMaxFilterFlag
+        && header.magFilter <= s_SamplerMaxFilterFlag
+        && header.mipFilter <= s_SamplerMaxFilterFlag
+        && header.addressU <= s_SamplerMaxAddressMode
+        && header.addressV <= s_SamplerMaxAddressMode
+        && header.addressW <= s_SamplerMaxAddressMode
+        && header.reductionType <= s_SamplerMaxReductionType
+    ;
 }
 
 

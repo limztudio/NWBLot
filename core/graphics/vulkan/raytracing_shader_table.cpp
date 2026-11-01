@@ -339,7 +339,10 @@ Expected<u32> ShaderTable::appendShaderRecord(
             && m_pipeline->m_shaderGroups[groupIndex].kind == expectedKind
             && static_cast<usize>(groupIndex) <= Limit<usize>::s_Max / static_cast<usize>(preflight->handleSize)
         );
-        NWB_ASSERT(static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size() && static_cast<usize>(groupIndex) * static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size() - static_cast<usize>(preflight->handleSize));
+        NWB_ASSERT(
+            static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size()
+            && static_cast<usize>(groupIndex) * static_cast<usize>(preflight->handleSize) <= m_pipeline->m_shaderGroupHandles.size() - static_cast<usize>(preflight->handleSize)
+        );
         candidateGroupIndices.push_back(groupIndex);
     }
     candidateGroupIndices.push_back(preflight->groupIndex);

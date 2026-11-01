@@ -81,6 +81,11 @@ public:
     mutable u64 m_textCalls = 0u;
     mutable u64 m_mutations = 0u;
     mutable u64 m_callbacksAfterMutation = 0u;
+    b8 m_reverse = false;
+    b8 m_duplicate = false;
+    b8 m_allDisabled = false;
+    mutable b8 m_beginAccepted = false;
+    mutable b8 m_endAccepted = false;
 
 
 private:
@@ -91,14 +96,6 @@ private:
     mutable RadioCallbackSite::Enum m_site = RadioCallbackSite::None;
     RadioMutation::Enum m_mutation = RadioMutation::None;
     mutable Array<char, 4u> m_label{};
-
-
-public:
-    b8 m_reverse = false;
-    b8 m_duplicate = false;
-    b8 m_allDisabled = false;
-    mutable b8 m_beginAccepted = false;
-    mutable b8 m_endAccepted = false;
 };
 
 struct RadioAcceptedFrame{

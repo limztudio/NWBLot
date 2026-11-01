@@ -4,8 +4,6 @@
 
 #include "runtime_mesh_liveness.h"
 
-#include "resource_names.h"
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +30,7 @@ Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(const Cor
     const auto meshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
     if(!meshKey)
         return MakeUnexpected(Failure{});
-    identity.meshKey = *meshKey;
+    identity.meshKey = meshKey;
     identity.version = instance->editRevision;
     NWB_ASSERT(identity.meshKey);
     return identity;

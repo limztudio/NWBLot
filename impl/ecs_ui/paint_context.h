@@ -5,10 +5,10 @@
 #pragma once
 
 
-#include "../global.h"
-#include "toolkit/paint.h"
-#include "toolkit/builder.h"
-#include "toolkit/text/service.h"
+#include <impl/global.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <core/ecs/entity_id.h>
 #include <core/os/clipboard.h>

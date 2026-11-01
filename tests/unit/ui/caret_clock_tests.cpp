@@ -31,7 +31,7 @@ TEST(UiCaretClockTests, FiniteLongDeltaPreservesWholeCycleRemainder){
 }
 
 TEST(UiCaretClockTests, InvalidAndNonpositiveDeltasKeepCurrentPhase){
-    const f64 invalid[]{ 0.0, -0.25, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
+    const Array<f64, 5> invalid = { 0.0, -0.25, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
     for(const f64 delta : invalid)
         EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, delta), 0.375);
 }

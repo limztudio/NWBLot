@@ -8,6 +8,10 @@ const usize s_MaterialTypedLayoutBlockBytes = 80u;
 const usize s_MaterialTypedLayoutFieldBytes = 88u;
 const usize s_MaterialResourceReferenceBytes = 200u;
 
+const u32 s_MaterialTypedWordBytes = 4u;
+const u32 s_MaterialTypedValueComponentCount = 4u;
+const u32 s_MaterialTypedValueRecordWordCount = 8u;
+
 const StringView s_MaterialAvboitAccumulatePassLabel = "accumulate";
 const StringView s_MaterialAvboitOccupancyPassLabel = "occupancy";
 const StringView s_MaterialAvboitExtinctionPassLabel = "extinction";
@@ -16,32 +20,14 @@ const StringView s_MeshComputeArchiveStageText = "mesh_compute";
 const StringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
 const Name s_MeshComputeArchiveStageName = "mesh_compute";
 
-const StringView s_MaterialMetaInterfaceField = "interface";
-const StringView s_MaterialMetaSurfaceField = "surface";
-const StringView s_MaterialMetaShadersField = "shaders";
-const StringView s_MaterialMetaShaderVariantField = "shader_variant";
-const StringView s_MaterialMetaParametersField = "parameters";
-const StringView s_MaterialMetaTransparentField = "transparent";
-const StringView s_MaterialMetaTwoSidedField = "two_sided";
-const StringView s_MaterialMetaRefractiveField = "refractive";
-const StringView s_MaterialMetaBxdfField = "bxdf";
+const StringView s_MaterialEngineVirtualRoot = "engine";
+const StringView s_MaterialProjectVirtualRoot = "project";
 
-b8 IsAllowedMaterialAssetField(in StringView fieldName){
-    switch(fieldName){
-        case "interface":
-        case "surface":
-        case "shaders":
-        case "shader_variant":
-        case "parameters":
-        case "transparent":
-        case "two_sided":
-        case "refractive":
-        case "bxdf":
-            return true;
-        default:
-            return false;
-    }
-}
+const u32 s_NoSurfaceDispatchId = 0xFFFFFFFFu;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [reflect]
 flag<u32> MaterialFlag{
@@ -86,6 +72,47 @@ enum<u32> MaterialResourceKind{
 
 b8 IsValidMaterialResourceKind(in MaterialResourceKind resourceKind){
     return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
+}
+
+b8 IsValidSerializedMaterialResourceReference(in MaterialResourceKind resourceKind, in Name resourceName){
+    return resourceName != s_NameNone && IsValidMaterialResourceKind(resourceKind);
+}
+
+// Resource fields name an engine/project asset resolved to a heap slot at runtime.
+b8 IsMaterialAssetReference(in StringView resourceName){
+    usize rootEnd = resourceName.size();
+    for(usize i = 0u; i < resourceName.size(); ++i){
+        if(resourceName[i] == '/'){
+            rootEnd = i;
+            break;
+        }
+    }
+    if(rootEnd == 0u || rootEnd + 1u >= resourceName.size())
+        return false;
+
+    const StringView virtualRoot = resourceName.substr(0u, rootEnd);
+    if(virtualRoot != s_MaterialEngineVirtualRoot && virtualRoot != s_MaterialProjectVirtualRoot)
+        return false;
+
+    usize componentBegin = rootEnd + 1u;
+    for(usize index = componentBegin; index <= resourceName.size(); ++index){
+        if(index != resourceName.size() && resourceName[index] != '/')
+            continue;
+
+        const StringView component = resourceName.substr(componentBegin, index - componentBegin);
+        if(component.empty() || component == "." || component == "..")
+            return false;
+        for(usize charIndex = 0u; charIndex < component.size(); ++charIndex){
+            if(component[charIndex] == '\\')
+                return false;
+        }
+        componentBegin = index + 1u;
+    }
+    return true;
+}
+
+b8 IsSupportedMaterialResourceReference(in MaterialResourceKind resourceKind, in StringView resourceName){
+    return IsValidMaterialResourceKind(resourceKind) && IsMaterialAssetReference(resourceName);
 }
 
 [reflect]
@@ -229,6 +256,35 @@ u32 MaterialLayoutFieldAlignment(in MaterialLayoutFieldType fieldType){
     return MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
 }
 
+b8 TryAlignMaterialLayoutFieldOffset(in u32 byteOffset, in MaterialLayoutFieldType fieldType, mut u32 outOffset){
+    const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
+    if(alignment == 0u || (alignment & (alignment - 1u)) != 0u){
+        outOffset = 0u;
+        return false;
+    }
+    const u32 mask = alignment - 1u;
+    if(byteOffset > 0xFFFFFFFFu - mask){
+        outOffset = 0u;
+        return false;
+    }
+    outOffset = (byteOffset + mask) & ~mask;
+    return true;
+}
+
+b8 TryAlignMaterialLayoutBlockByteSize(in u32 byteSize, mut u32 outAlignedSize){
+    const u32 mask = s_MaterialTypedWordBytes - 1u;
+    if(byteSize > 0xFFFFFFFFu - mask){
+        outAlignedSize = 0u;
+        return false;
+    }
+    outAlignedSize = (byteSize + mask) & ~mask;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [reflect]
 class MaterialTypedLayoutBlock{
     public Name blockName = s_NameNone;
@@ -284,6 +340,110 @@ class MaterialResourceReferenceBinary{
     public NameHash resourceNameHash;
     public u32 resourceKind = 0u;
     public u32 constantByteOffset = 0u;
+}
+
+MaterialTypedLayoutBlockBinary PackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlock block){
+    MaterialTypedLayoutBlockBinary blockBinary;
+    blockBinary.blockNameHash = block.blockName.hash();
+    blockBinary.blockClass = cast<u32>(block.blockClass);
+    blockBinary.fieldBegin = block.fieldBegin;
+    blockBinary.fieldCount = block.fieldCount;
+    blockBinary.byteSize = block.byteSize;
+    return blockBinary;
+}
+
+MaterialTypedLayoutBlock UnpackMaterialTypedLayoutBlockBinary(in MaterialTypedLayoutBlockBinary blockBinary){
+    MaterialTypedLayoutBlock block;
+    block.blockName = Name(blockBinary.blockNameHash);
+    block.blockClass = cast<MaterialBlockClass>(blockBinary.blockClass);
+    block.fieldBegin = blockBinary.fieldBegin;
+    block.fieldCount = blockBinary.fieldCount;
+    block.byteSize = blockBinary.byteSize;
+    return block;
+}
+
+MaterialTypedLayoutFieldBinary PackMaterialTypedLayoutFieldBinary(in MaterialTypedLayoutField field){
+    MaterialTypedLayoutFieldBinary fieldBinary;
+    fieldBinary.fieldNameHash = field.fieldName.hash();
+    fieldBinary.fieldType = cast<u32>(field.fieldType);
+    fieldBinary.offset = field.offset;
+    fieldBinary.defaultValue = field.defaultValue;
+    return fieldBinary;
+}
+
+MaterialTypedLayoutField UnpackMaterialTypedLayoutFieldBinary(in MaterialTypedLayoutFieldBinary fieldBinary){
+    MaterialTypedLayoutField field;
+    field.fieldName = Name(fieldBinary.fieldNameHash);
+    field.fieldType = cast<MaterialLayoutFieldType>(fieldBinary.fieldType);
+    field.offset = fieldBinary.offset;
+    field.defaultValue = fieldBinary.defaultValue;
+    return field;
+}
+
+MaterialResourceReferenceBinary PackMaterialResourceReferenceBinary(in MaterialResourceReference resourceReference){
+    MaterialResourceReferenceBinary resourceReferenceBinary;
+    resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
+    resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
+    if(resourceReference.resourceKind == MaterialResourceKind::SampledImage2D){
+        native(in resourceReference, mut resourceReferenceBinary){
+            resourceReferenceBinary.resourceNameHash = resourceReference.textureAsset.name().hash();
+        }
+    }
+    else{
+        native(in resourceReference, mut resourceReferenceBinary){
+            resourceReferenceBinary.resourceNameHash = resourceReference.samplerAsset.name().hash();
+        }
+    }
+    resourceReferenceBinary.resourceKind = cast<u32>(resourceReference.resourceKind);
+    resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
+    return resourceReferenceBinary;
+}
+
+b8 TryAssignMaterialResourceReferenceAsset(in MaterialResourceKind resourceKind, in Name resourceName, mut MaterialResourceReference reference){
+    switch(resourceKind){
+        case MaterialResourceKind::SampledImage2D:
+            reference.textureAsset.virtualPath = resourceName;
+            return true;
+        case MaterialResourceKind::Sampler:
+            reference.samplerAsset.virtualPath = resourceName;
+            return true;
+        default:
+            return false;
+    }
+}
+
+b8 TryUnpackMaterialResourceReferenceBinary(in MaterialResourceReferenceBinary resourceReferenceBinary, mut MaterialResourceReference outReference){
+    outReference = MaterialResourceReference();
+    const MaterialResourceKind resourceKind = cast<MaterialResourceKind>(resourceReferenceBinary.resourceKind);
+    const Name resourceName = Name(resourceReferenceBinary.resourceNameHash);
+    if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceName))
+        return false;
+
+    outReference.blockName = Name(resourceReferenceBinary.blockNameHash);
+    outReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
+    outReference.resourceKind = resourceKind;
+    outReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
+    return TryAssignMaterialResourceReferenceAsset(resourceKind, resourceName, outReference);
+}
+
+u32 PackMaterialFlags(in b8 transparent, in b8 twoSided, in b8 refractive){
+    u32 materialFlags = 0u;
+    if(transparent)
+        materialFlags |= cast<u32>(MaterialFlag::Transparent);
+    if(twoSided)
+        materialFlags |= cast<u32>(MaterialFlag::TwoSided);
+    if(refractive)
+        materialFlags |= cast<u32>(MaterialFlag::Refractive);
+    return materialFlags;
+}
+
+b8 TryUnpackMaterialFlags(in u32 materialFlags, mut b8 outTransparent, mut b8 outTwoSided, mut b8 outRefractive){
+    if((materialFlags & ~cast<u32>(MaterialFlag::All)) != 0u)
+        return false;
+    outTransparent = (materialFlags & cast<u32>(MaterialFlag::Transparent)) != 0u;
+    outTwoSided = (materialFlags & cast<u32>(MaterialFlag::TwoSided)) != 0u;
+    outRefractive = (materialFlags & cast<u32>(MaterialFlag::Refractive)) != 0u;
+    return true;
 }
 
 b8 ComputeMaterialTypedBlockByteSize(in Span<MaterialTypedLayoutBlock> blocks, mut usize outByteSize){
@@ -362,6 +522,48 @@ b8 ValidateMaterialResourceReferences(in Span<MaterialTypedLayoutBlock> blocks, 
 
     // Each record maps to one resource field. Dup rejects above also block stray numeric/mutable refs.
     return resourceFieldCount == resourceReferences.size();
+}
+
+// Transparent materials need all three pass shaders; opaque materials carry none.
+b8 HasValidMaterialAvboitPixelShaderContract(
+    in b8 transparent,
+    in AssetRef<PixelShader> accumulatePixelShader,
+    in AssetRef<PixelShader> occupancyPixelShader,
+    in AssetRef<PixelShader> extinctionPixelShader
+){
+    if(transparent)
+        return accumulatePixelShader.valid() && occupancyPixelShader.valid() && extinctionPixelShader.valid();
+
+    return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
+}
+
+u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in Span<MaterialTypedLayoutField> fields){
+    if(blocks.empty() && fields.empty())
+        return 0u;
+
+    u64 hash = 0u;
+    native(in blocks, in fields, mut hash){
+        hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
+        Fnv64AppendValue(hash, static_cast<u32>(blocks.size()));
+        Fnv64AppendValue(hash, static_cast<u32>(fields.size()));
+        for(const MaterialTypedLayoutBlock& block : blocks){
+            Fnv64AppendValue(hash, block.blockName.hash());
+            Fnv64AppendValue(hash, static_cast<u32>(block.blockClass));
+            Fnv64AppendValue(hash, block.fieldBegin);
+            Fnv64AppendValue(hash, block.fieldCount);
+            Fnv64AppendValue(hash, block.byteSize);
+        }
+        for(const MaterialTypedLayoutField& field : fields){
+            Fnv64AppendValue(hash, field.fieldName.hash());
+            Fnv64AppendValue(hash, static_cast<u32>(field.fieldType));
+            Fnv64AppendValue(hash, field.offset);
+            Fnv64AppendValue(hash, field.defaultValue.x);
+            Fnv64AppendValue(hash, field.defaultValue.y);
+            Fnv64AppendValue(hash, field.defaultValue.z);
+            Fnv64AppendValue(hash, field.defaultValue.w);
+        }
+    }
+    return hash;
 }
 
 

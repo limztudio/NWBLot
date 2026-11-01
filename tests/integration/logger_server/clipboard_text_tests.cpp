@@ -22,12 +22,11 @@ namespace __hidden_logger_server_clipboard_text_tests{
 
 
 using namespace NWB;
-namespace Clipboard = Log::FrameDetail;
 
 TEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString){
     Tests::TestArena<> testArena;
-    Clipboard::MessageDeque messages(testArena.arena);
-    auto memory = Clipboard::BuildClipboardText(messages);
+    Log::FrameDetail::MessageDeque messages(testArena.arena);
+    auto memory = Log::FrameDetail::BuildClipboardText(messages);
     ASSERT_TRUE(memory);
     EXPECT_GE(GlobalSize(memory->native()), sizeof(tchar));
     const auto* const text = static_cast<const tchar*>(GlobalLock(memory->native()));
@@ -39,10 +38,10 @@ TEST(LoggerClipboardText, EmptyInputOwnsOneTerminatedNativeString){
 
 TEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator){
     Tests::TestArena<> testArena;
-    Clipboard::MessageDeque messages(testArena.arena);
+    Log::FrameDetail::MessageDeque messages(testArena.arena);
     messages.emplace_back(Log::LogString(NWB_TEXT("first"), testArena.arena), Core::Common::LogType::Info);
     messages.emplace_back(Log::LogString(NWB_TEXT("\uD55C\uAE00 \u03A9"), testArena.arena), Core::Common::LogType::Warning);
-    auto memory = Clipboard::BuildClipboardText(messages);
+    auto memory = Log::FrameDetail::BuildClipboardText(messages);
     ASSERT_TRUE(memory);
     constexpr TStringView s_Expected = NWB_TEXT("first\r\n\uD55C\uAE00 \u03A9\r\n");
     EXPECT_GE(GlobalSize(memory->native()), (s_Expected.size() + 1u) * sizeof(tchar));
@@ -56,17 +55,17 @@ TEST(LoggerClipboardText, MultipleUnicodeMessagesPreserveOrderCrLfAndTerminator)
 
 TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTransferredMemory){
     Tests::TestArena<> testArena;
-    Clipboard::MessageDeque messages(testArena.arena);
+    Log::FrameDetail::MessageDeque messages(testArena.arena);
     HGLOBAL freed = nullptr;
     {
-        auto memory = Clipboard::BuildClipboardText(messages);
+        auto memory = Log::FrameDetail::BuildClipboardText(messages);
         ASSERT_TRUE(memory);
         freed = memory->native();
     }
     EXPECT_EQ(GlobalFlags(freed), GMEM_INVALID_HANDLE);
     HGLOBAL transferred = nullptr;
     {
-        auto memory = Clipboard::BuildClipboardText(messages);
+        auto memory = Log::FrameDetail::BuildClipboardText(messages);
         ASSERT_TRUE(memory);
         transferred = memory->native();
         memory->release();
@@ -80,14 +79,14 @@ TEST(LoggerClipboardText, NativeOwnershipFreesUntransferredMemoryAndReleasesTran
 }
 
 TEST(LoggerClipboardText, ByteCountRejectsOverflowBeforeNativeAllocation){
-    const auto empty = Clipboard::ClipboardByteCount(0u);
+    const auto empty = Log::FrameDetail::ClipboardByteCount(0u);
     ASSERT_TRUE(empty);
     EXPECT_EQ(*empty, sizeof(tchar));
     constexpr usize s_MaxCharacters = (Limit<usize>::s_Max / sizeof(tchar)) - 1u;
-    const auto boundary = Clipboard::ClipboardByteCount(s_MaxCharacters);
+    const auto boundary = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters);
     ASSERT_TRUE(boundary);
     EXPECT_EQ(*boundary, (s_MaxCharacters + 1u) * sizeof(tchar));
-    const auto overflow = Clipboard::ClipboardByteCount(s_MaxCharacters + 1u);
+    const auto overflow = Log::FrameDetail::ClipboardByteCount(s_MaxCharacters + 1u);
     ASSERT_FALSE(overflow);
     EXPECT_EQ(overflow.error(), MakeErrorCode(ErrorCondition::value_too_large));
 }

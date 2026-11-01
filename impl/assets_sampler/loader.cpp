@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
+b8 SamplerAssetLoader::Create(const Sampler& samplerAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, SamplerGpuResource& outResource){
     const TStringView owner = ownerName;
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
     NWB_ASSERT(!outResource.valid());
@@ -59,7 +59,7 @@ b8 SamplerAssetLoader::Create(SamplerGpuResource& outResource, const Sampler& sa
     return true;
 }
 
-b8 SamplerAssetLoader::Load(SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
+b8 SamplerAssetLoader::Load(const Core::Assets::AssetRef<Sampler>& samplerAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, SamplerGpuResource& outResource){
     const TStringView owner = ownerName;
     if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner))
         return outResource.valid();
@@ -71,7 +71,7 @@ b8 SamplerAssetLoader::Load(SamplerGpuResource& outResource, const Core::Assets:
     if(!loadedSampler)
         return false;
 
-    return Create(outResource, *loadedSampler, debugName, graphics, owner);
+    return Create(*loadedSampler, debugName, owner, graphics, outResource);
 }
 
 void SamplerAssetLoader::Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics){

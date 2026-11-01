@@ -13,7 +13,6 @@
 #include "csg_shader_variants.h"
 
 #include <impl/assets_csg/cook.h>
-#include <impl/assets_material/cook.h>
 #include <impl/assets_material/types.adhd.h>
 #include <impl/assets_shader/source_dependencies.h>
 
@@ -40,10 +39,12 @@ namespace __hidden_shader_cook_plan{
 
 
 using namespace AssetsGraphicsCookDetail;
+using Core::Assets::CookString;
+using Core::Assets::CookVector;
+using Core::Assets::ResolvedCookPaths;
+using Core::Assets::ScratchArena;
+using Core::Assets::ScratchString;
 
-static constexpr AStringView s_EnabledImplicitDefineValue = "1";
-// One shader entry can expand to itself and its mesh-compute shadow entry.
-static constexpr usize s_MaxPreparedEntriesPerShaderEntry = 2u;
 using IncludeDirectoryScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
@@ -51,7 +52,7 @@ using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<Scr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 AppendIncludeDirectory(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, IncludeDirectoryScratchSet& seenIncludeDirectories, CookVector<Path>& outIncludeDirectories){
+static b8 AppendIncludeDirectory(const Path& includeDirectory, const ShaderCook::ShaderEntry& entry, ScratchArena& scratchArena, CookVector<Path>& outIncludeDirectories, IncludeDirectoryScratchSet& inOutSeenIncludeDirectories){
     const auto isDirectoryResult = IsDirectory(includeDirectory);
     if(!isDirectoryResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to query include root '{}' for entry '{}': {}"), PathToString<tchar>(includeDirectory), ConvertString(entry.name), ConvertString(isDirectoryResult.error().message()));
@@ -68,7 +69,7 @@ static b8 AppendIncludeDirectory(const Path& includeDirectory, const ShaderCook:
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(normalizedIncludeDirectory);
 #endif
-    if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
+    if(!inOutSeenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
         return true;
 
     outIncludeDirectories.push_back(includeDirectory);
@@ -95,12 +96,12 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
     seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRoots.size());
 
     for(const NotNull<const Path*> implicitIncludeRoot : implicitIncludeRoots){
-        if(!AppendIncludeDirectory(*implicitIncludeRoot, entry, scratchArena, seenIncludeDirectories, includeDirectories))
+        if(!AppendIncludeDirectory(*implicitIncludeRoot, entry, scratchArena, includeDirectories, seenIncludeDirectories))
             return MakeUnexpected(Failure{});
     }
 
     for(const CookString& includeRoot : entry.includeRoots){
-        auto includeDirectory = Core::Assets::ResolveVirtualAssetPath(includeDirectories.get_allocator().arena(), assetRoots, includeRoot, scratchArena);
+        auto includeDirectory = Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectories.get_allocator().arena(), scratchArena);
         if(!includeDirectory){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
                 NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve virtual include root '{}' for entry '{}'"), ConvertString(includeRoot), ConvertString(entry.name));
@@ -114,7 +115,7 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
             includeDirectory = *resolved;
         }
 
-        if(!AppendIncludeDirectory(*includeDirectory, entry, scratchArena, seenIncludeDirectories, includeDirectories))
+        if(!AppendIncludeDirectory(*includeDirectory, entry, scratchArena, includeDirectories, seenIncludeDirectories))
             return MakeUnexpected(Failure{});
     }
 
@@ -125,7 +126,7 @@ static Expected<CookVector<Path>> BuildIncludeDirectories(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringView defineName){
+static b8 ValidateShaderDoesNotUseImplicitDefine(const ShaderCook::ShaderEntry& entry, const AStringView defineName){
     if(entry.defineValues.find(defineName) == entry.defineValues.end())
         return true;
 
@@ -133,13 +134,13 @@ static b8 ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entry,
     return false;
 }
 
-static b8 SetShaderImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringView defineName, const AStringView defineValue){
-    if(!ValidateShaderDoesNotUseImplicitDefine(entry, defineName))
+static b8 SetShaderImplicitDefine(const AStringView defineName, const AStringView defineValue, ShaderCook::ShaderEntry& inOutEntry){
+    if(!ValidateShaderDoesNotUseImplicitDefine(inOutEntry, defineName))
         return false;
 
-    ShaderCook::CookArena& arena = entry.name.get_allocator().arena();
+    ShaderCook::CookArena& arena = inOutEntry.name.get_allocator().arena();
     CookString defineNameKey(defineName, arena);
-    entry.implicitDefines.insert_or_assign(Move(defineNameKey), CookString(defineValue, arena));
+    inOutEntry.implicitDefines.insert_or_assign(Move(defineNameKey), CookString(defineValue, arena));
     return true;
 }
 
@@ -148,7 +149,7 @@ static Expected<ShaderCook::ShaderEntry> BuildMeshComputeShadowEntry(const Shade
     entry.archiveStage = s_MeshComputeArchiveStageText;
     entry.stage = Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage);
 
-    if(!SetShaderImplicitDefine(entry, s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue))
+    if(!SetShaderImplicitDefine(s_MeshComputeImplicitDefineText, s_EnabledImplicitDefineValue, entry))
         return MakeUnexpected(Failure{});
     return entry;
 }
@@ -202,7 +203,7 @@ static Expected<::Path<ScratchArena>> ResolveProjectEvaluatorModuleIncludePath(c
     return MakeUnexpected(Failure{});
 }
 
-static b8 AppendUniqueDependency(const ::Path<ScratchArena>& dependency, ScratchArena& scratchArena, DependencyPathScratchSet& seenDependencies, ShaderCook::CookVector<Path>& inOutDependencies){
+static b8 AppendUniqueDependency(const ::Path<ScratchArena>& dependency, ScratchArena& scratchArena, DependencyPathScratchSet& inOutSeenDependencies, ShaderCook::CookVector<Path>& inOutDependencies){
     auto absoluteDependencyResult = AbsolutePath(dependency);
     if(!absoluteDependencyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to resolve CSG evaluator module dependency '{}': {}"), PathToString<tchar>(dependency), ConvertString(absoluteDependencyResult.error().message()));
@@ -213,13 +214,13 @@ static b8 AppendUniqueDependency(const ::Path<ScratchArena>& dependency, Scratch
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(canonicalPath);
 #endif
-    if(seenDependencies.insert(Move(canonicalPath)).second)
+    if(inOutSeenDependencies.insert(Move(canonicalPath)).second)
         inOutDependencies.emplace_back(inOutDependencies.get_allocator().arena(), absoluteDependency);
     return true;
 }
 
 static b8 AppendCsgProjectEvaluatorModuleDependencies(const ShaderCook::ShaderEntry& entry, const Span<const Path> includeDirectories, ScratchArena& scratchArena, ShaderCook::CookVector<Path>& inOutDependencies){
-    const auto foundDefine = entry.defineValues.find(AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName);
+    const auto foundDefine = entry.defineValues.find(s_CsgProjectEvaluatorModuleDefineName);
     if(foundDefine == entry.defineValues.end())
         return true;
 
@@ -280,7 +281,7 @@ namespace AssetsGraphicsCookDetail{
 
 
 Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
-    const ResolvedCookPaths& resolvedPaths,
+    const Core::Assets::ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
     const Path& csgShapeIncludeRoot,
     const Path& deferredBxdfIncludeRoot,
@@ -289,17 +290,18 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     const Span<const MaterialBindEntry> materialBindEntries,
     const Span<const MaterialCookEntry> materialEntries,
     ShaderCook::CookArena& cookArena,
-    ScratchArena& scratchArena,
+    Core::Assets::ScratchArena& scratchArena,
     ShaderCook& shaderCook,
     const Span<ShaderCook::ShaderEntry> inOutShaderEntries
 ){
 
     PreparedShaderPlan plan(cookArena);
-    if(inOutShaderEntries.size() > Limit<usize>::s_Max / __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry){
+    // One shader entry can expand to itself and its mesh-compute shadow entry.
+    if(inOutShaderEntries.size() > Limit<usize>::s_Max / s_MaxPreparedEntriesPerShaderEntry){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: prepared shader entry reserve count overflows"));
         return MakeUnexpected(Failure{});
     }
-    plan.preparedEntries.reserve(inOutShaderEntries.size() * __hidden_shader_cook_plan::s_MaxPreparedEntriesPerShaderEntry);
+    plan.preparedEntries.reserve(inOutShaderEntries.size() * s_MaxPreparedEntriesPerShaderEntry);
     plan.plannedFileCount = 1; // shader archive index
 
     const AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys = AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, scratchArena);
@@ -309,7 +311,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         return MakeUnexpected(Failure{});
     }
 
-    Vector<NotNull<const Path*>, ScratchArena> implicitIncludeRoots(scratchArena);
+    Vector<NotNull<const Path*>, Core::Assets::ScratchArena> implicitIncludeRoots(scratchArena);
     usize implicitIncludeRootCount = 0u;
     if(!materialBindIncludeRoot.empty())
         ++implicitIncludeRootCount;
@@ -338,7 +340,7 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
             implicitIncludeRoots.push_back(MakeNotNull(&assetRoot.path));
     }
 
-    // Authored `.bind` files are not compiler inputs; computeDependencyChecksum receives empty includeDirectories `{}`.
+    // Authored `.bind` files are not compiler inputs; ComputeDependencyChecksum receives empty includeDirectories `{}`.
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
         preparedEntry.entry = Move(entry);
@@ -379,20 +381,20 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         if(!ShaderSourceDependencies::Gather(preparedEntry.sourcePath, preparedEntry.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, scratchArena, preparedEntry.dependencies))
             return MakeUnexpected(Failure{});
 
-        shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata, scratchArena);
+        shaderCook.mergeInheritedDefines(preparedEntry.dependencies, includeMetadata, scratchArena, preparedEntry.entry);
         const usize initialDependencyCount = preparedEntry.dependencies.size();
         if(!__hidden_shader_cook_plan::AppendCsgProjectEvaluatorModuleDependencies(preparedEntry.entry, preparedEntry.includeDirectories, scratchArena, preparedEntry.dependencies))
             return MakeUnexpected(Failure{});
         if(preparedEntry.dependencies.size() != initialDependencyCount)
-            shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata, scratchArena);
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText()))
+            shaderCook.mergeInheritedDefines(preparedEntry.dependencies, includeMetadata, scratchArena, preparedEntry.entry);
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_MaterialBindTypedBindingImplicitDefineText))
             return MakeUnexpected(Failure{});
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipImplicitDefineName))
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_CsgClipImplicitDefineName))
             return MakeUnexpected(Failure{});
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_IntervalSampleEnabledImplicitDefineName))
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, s_CsgIntervalSampleEnabledImplicitDefineName))
             return MakeUnexpected(Failure{});
 
-        auto materialDependency = ResolveMaterialBindDependencyInterface(cookArena, AStringView(preparedEntry.entry.name), materialBindIncludeRoot, materialBindEntries, preparedEntry.dependencies, scratchArena);
+        auto materialDependency = ResolveMaterialBindDependencyInterface(AStringView(preparedEntry.entry.name), materialBindIncludeRoot, materialBindEntries, preparedEntry.dependencies, cookArena, scratchArena);
         if(!materialDependency)
             return MakeUnexpected(Failure{});
         preparedEntry.materialTypedBindingInterface = materialDependency->interfaceName;
@@ -409,15 +411,15 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         ;
         preparedEntry.usesMaterialTypedBinding = preparedEntryStageReadsTypedMaterial && materialDependency->dependsOnMaterialBind;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialDependency->interfacePath);
-        if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText(), MaterialBindNames::TypedBindingImplicitDefineValueText()))
+        if(preparedEntry.usesMaterialTypedBinding && !__hidden_shader_cook_plan::SetShaderImplicitDefine(s_MaterialBindTypedBindingImplicitDefineText, s_MaterialBindTypedBindingImplicitDefineValueText, preparedEntry.entry))
             return MakeUnexpected(Failure{});
-        const auto dependency = shaderCook.computeDependencyChecksum(
+        const auto dependency = ShaderCook::ComputeDependencyChecksum(
             preparedEntry.dependencies,
             preparedEntry.includeDirectories,
             {
                 { resolvedPaths.repoRoot, s_DependencyRepoRootAlias },
                 { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias },
-                { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() },
+                { materialBindIncludeRoot, s_MaterialBindGeneratedIncludeCacheDirectoryText },
                 { csgShapeIncludeRoot, s_GeneratedIncludeCacheDirectory }
             },
             scratchArena
@@ -428,7 +430,12 @@ Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
         preparedEntry.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
         // Authored `.bind` files are not compiler inputs, so hash them on their own and fold that into the shader checksum.
         if(!materialDependency->interfaceSources.empty()){
-            const auto interfaceDependency = shaderCook.computeDependencyChecksum(materialDependency->interfaceSources, {}, { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } }, scratchArena);
+            const auto interfaceDependency = ShaderCook::ComputeDependencyChecksum(
+                materialDependency->interfaceSources,
+                {},
+                { { resolvedPaths.repoRoot, s_DependencyRepoRootAlias }, { resolvedPaths.cacheDirectory, s_DependencyGeneratedCacheRootAlias } },
+                scratchArena
+            );
             if(!interfaceDependency)
                 return MakeUnexpected(Failure{});
             Fnv64AppendValue(preparedEntry.dependencyChecksum, interfaceDependency->checksum);

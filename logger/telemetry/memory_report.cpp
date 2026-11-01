@@ -48,7 +48,6 @@ inline constexpr StringView s_MemoryRecordScopeKey = ", \"scope\": ";
 inline constexpr StringView s_MemoryRecordIdentityKey = ", \"identity\": ";
 inline constexpr StringView s_MemoryRecordMetricsFormat = ", \"streamId\": {}, \"frameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, " "\"peakUsedBytes\": {}, \"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}, \"delta\": ";
 inline constexpr StringView s_MemoryDeltaMetricsFormat = "{{\"previousFrameIndex\": {}, \"reservedBytes\": {}, \"usedBytes\": {}, \"peakUsedBytes\": {}, " "\"allocationCount\": {}, \"reallocationCount\": {}, \"deallocationCount\": {}}}";
-inline constexpr StringView s_JsonNullText = "null";
 inline constexpr char s_JsonRecordClose = '}';
 
 
@@ -122,7 +121,7 @@ void AppendTelemetryMemorySourcesJson(AString<Core::Telemetry::TelemetryArena>& 
         if(source.totalUsedDeltaValid)
             StringAppendFormat(out, __hidden_memory_report::s_MemorySourceDeltaFormat, source.totalUsedDeltaBytes);
         else
-            out += __hidden_memory_report::s_JsonNullText;
+            out += s_JsonNullText;
         out += __hidden_memory_report::s_JsonRecordClose;
         out += sourceIndex + 1u == s_TelemetryMemorySourceCount ? __hidden_memory_report::s_JsonEntryTerminator : __hidden_memory_report::s_JsonEntrySeparator;
     }
@@ -136,13 +135,12 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
     AppendJsonQuotedText(out, __hidden_memory_report::MemorySourceText(payload.snapshot.source));
     out += __hidden_memory_report::s_MemoryRecordPeakBasisKey;
     AppendJsonQuotedText(out, __hidden_memory_report::MemoryPeakBasisText(payload.snapshot.source));
-    char identityText[NameDetail::s_DebugHashTextLength + 1u];
-    NameDetail::HashToDebugString(identityText, sizeof(identityText), payload.scopeName.hash());
-    const AStringView identity(identityText, NameDetail::s_DebugHashTextLength);
-    char resolvedText[Core::Common::NameSymbols::s_MaxResolvedTextLength];
+    Array<char, NameDetail::s_DebugHashTextLength + 1u> identityText;
+    const AStringView identity = TelemetryReportDetail::FormatNameIdentityText(payload.scopeName, identityText);
+    Array<char, Core::Common::NameSymbols::s_MaxResolvedTextLength> resolvedText;
     AStringView scopeText = payload.scopeText;
-    if(scopeText == identity && Core::Common::NameSymbols::Resolve(resolvedText, sizeof(resolvedText), payload.scopeName.hash()))
-        scopeText = AStringView(resolvedText);
+    if(scopeText == identity && Core::Common::NameSymbols::Resolve(resolvedText.data(), resolvedText.size(), payload.scopeName.hash()))
+        scopeText = AStringView(resolvedText.data());
     out += __hidden_memory_report::s_MemoryRecordScopeKey;
     AppendJsonQuotedText(out, scopeText);
     out += __hidden_memory_report::s_MemoryRecordIdentityKey;
@@ -173,7 +171,7 @@ void AppendTelemetryMemoryRecordJson(AString<Core::Alloc::ScratchArena>& out, co
         );
     }
     else
-        out += __hidden_memory_report::s_JsonNullText;
+        out += s_JsonNullText;
     out += __hidden_memory_report::s_JsonRecordClose;
 }
 

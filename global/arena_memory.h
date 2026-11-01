@@ -67,68 +67,14 @@ public:
     }
 
     // Direct arenas derive reservation from usage; hot paths update local counters only.
-    void recordAllocation(const u64 bytes)noexcept{
-        if(bytes == 0u)
-            return;
-
-        const u64 usedBytes = m_usedBytes.fetch_add(bytes, MemoryOrder::relaxed) + bytes;
-        recordPeakUsedBytes(usedBytes);
-        m_allocationCount.fetch_add(1u, MemoryOrder::relaxed);
-    }
-
-    void recordReallocation(const u64 oldBytes, const u64 newBytes)noexcept{
-        if(oldBytes == 0u && newBytes == 0u)
-            return;
-        if(oldBytes == 0u){
-            recordAllocation(newBytes);
-            return;
-        }
-        if(newBytes == 0u){
-            recordDeallocation(oldBytes);
-            return;
-        }
-
-        u64 usedBytes = 0u;
-        if(newBytes >= oldBytes){
-            const u64 growth = newBytes - oldBytes;
-            usedBytes = m_usedBytes.fetch_add(growth, MemoryOrder::relaxed) + growth;
-        }
-        else{
-            const u64 shrink = oldBytes - newBytes;
-            usedBytes = m_usedBytes.fetch_sub(shrink, MemoryOrder::relaxed) - shrink;
-        }
-        recordPeakUsedBytes(usedBytes);
-        m_reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
-    }
-
-    void recordDeallocation(const u64 bytes)noexcept{
-        if(bytes == 0u)
-            return;
-
-        m_usedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
-        m_deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
-    }
-
-    [[nodiscard]] ArenaMemoryStats snapshot()const noexcept{
-        ArenaMemoryStats stats;
-        stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
-        stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage ? stats.usedBytes : m_reservedBytes.load(MemoryOrder::relaxed);
-        stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
-        stats.allocationCount = m_allocationCount.load(MemoryOrder::relaxed);
-        stats.reallocationCount = m_reallocationCount.load(MemoryOrder::relaxed);
-        stats.deallocationCount = m_deallocationCount.load(MemoryOrder::relaxed);
-        return stats;
-    }
+    void recordAllocation(u64 bytes)noexcept;
+    void recordReallocation(u64 oldBytes, u64 newBytes)noexcept;
+    void recordDeallocation(u64 bytes)noexcept;
+    [[nodiscard]] ArenaMemoryStats snapshot()const noexcept;
 
 
 private:
-    void recordPeakUsedBytes(const u64 usedBytes)noexcept{
-        u64 peakBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
-        while(usedBytes > peakBytes){
-            if(m_peakUsedBytes.compare_exchange_weak(peakBytes, usedBytes, MemoryOrder::relaxed))
-                return;
-        }
-    }
+    void recordPeakUsedBytes(u64 usedBytes)noexcept;
 
 
 private:

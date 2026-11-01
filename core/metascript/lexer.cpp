@@ -38,11 +38,6 @@ constexpr usize s_ThreeCharTokenLength = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Lexer::Lexer(MStringView source)noexcept
-    : m_source(source)
-{}
-
-
 Token Lexer::next()noexcept{
     using namespace __hidden_metascript_lexer;
 
@@ -338,8 +333,6 @@ void Lexer::skipWhitespaceAndComments()noexcept{
 }
 
 Token Lexer::readIdentifier()noexcept{
-    using namespace __hidden_metascript_lexer;
-
     const usize start = m_current;
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
@@ -356,8 +349,6 @@ Token Lexer::readIdentifier()noexcept{
 }
 
 Token Lexer::readNumber()noexcept{
-    using namespace __hidden_metascript_lexer;
-
     const usize start = m_current;
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
@@ -369,8 +360,12 @@ Token Lexer::readNumber()noexcept{
         advance();
         if(isAtEnd() || !isDigitFn(peek()))
             return makeErrorToken(invalidLitMsg, startLine, startColumn);
-        while(!isAtEnd() && isDigitFn(peek()))
+        while(!isAtEnd() && (isDigitFn(peek()) || (peek() == '\'' && isDigitFn(peekNext()))))
             advance();
+        if(!isAtEnd() && peek() == '\''){
+            advance();
+            return makeErrorToken(invalidLitMsg, startLine, startColumn);
+        }
         while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
             advance();
         if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
@@ -392,7 +387,7 @@ Token Lexer::readNumber()noexcept{
     if(peek() == '0' && (peekNext() == 'b' || peekNext() == 'B'))
         return finishRadixInteger(IsBinaryDigit, MStringView("invalid binary integer literal"), MStringView("invalid suffix on binary integer literal"));
 
-    while(!isAtEnd() && IsAsciiDigit(peek()))
+    while(!isAtEnd() && (IsAsciiDigit(peek()) || (peek() == '\'' && IsAsciiDigit(peekNext()))))
         advance();
 
     if(!isAtEnd() && peek() == '.'){
@@ -400,7 +395,7 @@ Token Lexer::readNumber()noexcept{
         if(IsAsciiDigit(afterDot)){
             isDouble = true;
             advance();
-            while(!isAtEnd() && IsAsciiDigit(peek()))
+            while(!isAtEnd() && (IsAsciiDigit(peek()) || (peek() == '\'' && IsAsciiDigit(peekNext()))))
                 advance();
         }
     }
@@ -412,8 +407,13 @@ Token Lexer::readNumber()noexcept{
             advance();
         if(isAtEnd() || !IsAsciiDigit(peek()))
             return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
-        while(!isAtEnd() && IsAsciiDigit(peek()))
+        while(!isAtEnd() && (IsAsciiDigit(peek()) || (peek() == '\'' && IsAsciiDigit(peekNext()))))
             advance();
+    }
+
+    if(!isAtEnd() && peek() == '\''){
+        advance();
+        return makeErrorToken(MStringView("invalid digit separator in numeric literal"), startLine, startColumn);
     }
 
     if(isDouble && !isAtEnd() && (peek() == 'f' || peek() == 'F')){

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,28 +13,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
-    return
-        popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open
-        && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken
-        && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration && frame.search->query().revision() == frame.queryRevision && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
-        && frame.search->query().selectionGeneration() == frame.querySelectionGeneration && frame.search->query().externalRevision() == frame.queryExternalRevision && frame.search->query().anchor() == frame.queryAnchor
-        && frame.search->query().caret() == frame.queryCaret))
-    ;
-}
-
-b8 Builder::comboMatches(const ComboFrame& frame)const{
-    return
-        frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results) && comboStateMatches(frame)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration && comboStateMatches(frame)
-        && frame.source->revision() == frame.token.contentRevision && comboStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount && comboStateMatches(frame)
-        && frame.results && frame.results->instanceGeneration() == frame.listToken.contentGeneration && comboStateMatches(frame)
-        && frame.results->revision() == frame.listToken.contentRevision && comboStateMatches(frame)
-        && frame.results->rowCount() == frame.resultCount && comboStateMatches(frame)
-    ;
-}
 
 b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
@@ -92,10 +70,9 @@ b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboRe
 b8 Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
     InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
-    const auto thumbResult = MakeWidgetId(frame.rows.id, s_WidgetPartScrollbar);
-    if(!thumbResult)
+    WidgetId thumb;
+    if(!TryMakeWidgetId(frame.rows.id, s_WidgetPartScrollbar, thumb))
         return false;
-    const WidgetId thumb = *thumbResult;
     auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
     b8 haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
     auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);

@@ -24,26 +24,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GlyphPageBinding{
-    Core::Assets::AssetRef<Font> font;
-    u64 fontGeneration = 0u;
-    u64 atlasIdentity = 0u;
-    u64 generation = 0u;
-    u32 index = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-};
-
-[[nodiscard]] inline b8 SameGlyphPageKey(const GlyphPageBinding& first, const GlyphPageBinding& second)noexcept{
-    return first.font == second.font && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity && first.index == second.index;
-}
-
-[[nodiscard]] b8 operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Coverage is linear R8.
 // Published pages are immutable; versions sharing an atlas/page identity only append glyphs.
 // Repacking or replacing existing texels requires a new atlas identity.
@@ -54,7 +34,10 @@ public:
 
 
 public:
-    GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, Pixels&& pixels)noexcept;
+    GlyphPage(const GlyphPageBinding& binding, Pixels&& pixels)noexcept
+        : m_binding(binding)
+        , m_pixels(Move(pixels))
+    {}
 
 
 public:

@@ -13,9 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 
@@ -147,7 +146,7 @@ private:
     [[nodiscard]] Expected<TrackedCommandBufferPtr, VkResult> getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas()noexcept;
     [[nodiscard]] CommandBufferList::iterator recycleCommandBuffer(CommandBufferList& source, CommandBufferList::iterator commandBuffer);
-    [[nodiscard]] b8 coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, b8 prerequisiteObservedComplete, const SubmissionWait* localWaits, usize localWaitCount)const noexcept;
+    [[nodiscard]] b8 coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, b8 prerequisiteObservedComplete, Span<const SubmissionWait> localWaits)const noexcept;
 
 
 private:

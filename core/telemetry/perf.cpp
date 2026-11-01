@@ -105,7 +105,7 @@ template<typename HeaderT>
     return ParsedPerfPayload<HeaderT>{ .header = *header, .scopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), header->scopeNameBytes), };
 }
 
-static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, b8& inOutSucceeded){
+static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::TimingView& timing, const u32 streamId, Recorder& recorder, u32& inOutRecordedEvents, b8& inOutSucceeded){
     if(!recorder.enabled(EventKind::PerfFrame)){
         inOutSucceeded = false;
         return;
@@ -120,11 +120,11 @@ static void RecordTimingView(const PerfTimingSource::Enum source, const Perf::Ti
             inOutSucceeded = false;
             continue;
         }
-        ++outRecordedEvents;
+        ++inOutRecordedEvents;
     }
 }
 
-static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId, Recorder& recorder, u32& outRecordedEvents, b8& inOutSucceeded){
+static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId, Recorder& recorder, u32& inOutRecordedEvents, b8& inOutSucceeded){
     if(!recorder.enabled(EventKind::MemoryFrame)){
         inOutSucceeded = false;
         return;
@@ -139,7 +139,7 @@ static void RecordMemoryView(const Perf::MemoryView& memory, const u32 streamId,
             inOutSucceeded = false;
             continue;
         }
-        ++outRecordedEvents;
+        ++inOutRecordedEvents;
     }
 }
 

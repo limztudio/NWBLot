@@ -440,8 +440,15 @@ class GpuCommandIrOwnedStream final : NoCopy{
 
 
 public:
-    explicit GpuCommandIrOwnedStream(GraphicsArena& arena)noexcept;
-    GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept;
+    explicit GpuCommandIrOwnedStream(GraphicsArena& arena)noexcept
+        : m_arena(arena)
+        , m_bytes(arena)
+    {}
+    GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept
+        : m_arena(other.m_arena)
+        , m_bytes(Move(other.m_bytes))
+        , m_rasterOwners(Exchange(other.m_rasterOwners, nullptr))
+    {}
     ~GpuCommandIrOwnedStream()noexcept;
 
 

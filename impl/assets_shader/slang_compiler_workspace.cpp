@@ -15,7 +15,6 @@
 
 #include <global/filesystem/cleanup.h>
 #include <global/hash_utils.h>
-#include <global/process_execution.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,13 +38,12 @@ namespace __hidden_slang_compiler_workspace{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_RootKeyPrefix = "root_";
-static constexpr AStringView s_DiagnosticWarningEventName = "warning";
+using namespace ShaderBinaryPayload;
 
 Atomic<u64> g_TemporarySequence{0u};
 
 struct CompilerIncludeReplacement{
-    SlangCompilerWorkspace::ScratchPath path;
+    SlangCompilerWorkspace::ScratchString pathText;
     usize sourceOffset;
     usize sourceBytes;
 };
@@ -66,99 +64,12 @@ SlangCompilerWorkspace::ScopedDirectoryCleanupGuard::~ScopedDirectoryCleanupGuar
         return;
 
     const DiagnosticEventText diagnostic = MakeDiagnosticEventText("ShaderCook: failed to remove temporary compiler directory '{}', error {}", m_path.c_str(), removed.error().value());
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_slang_compiler_workspace::s_DiagnosticWarningEventName, .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = ShaderBinaryPayload::s_SlangWorkspaceDiagnosticWarningEventName, .category = "shader_compiler_cleanup", .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 SlangCompilerWorkspace::WriteBomStrippedCompilerInput(ScratchString& source, const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, Alloc::ScratchArena& scratchArena){
-    ShaderSourceDependencies::SpliceSourceLines(source);
-    ScratchString scanSource(AStringView(source), scratchArena);
-    ShaderSourceDependencies::MaskSourceComments(scanSource);
-    const AStringView sourceView(source.data(), source.size());
-    const AStringView scanView(scanSource);
-    usize includeCount = 0u;
-    for(usize begin = 0u; begin < scanView.size();){
-        const usize foundEnd = scanView.find('\n', begin);
-        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
-        const auto include = ShaderSourceDependencies::ExtractIncludeDirective(scanView.substr(begin, end - begin));
-        if(include)
-            ++includeCount;
-        begin = end < scanView.size() ? end + 1u : end;
-    }
-    ScratchVector<__hidden_slang_compiler_workspace::CompilerIncludeReplacement> replacements{scratchArena};
-    replacements.reserve(includeCount);
-    usize outputBytes = sourceView.size();
-    for(usize begin = 0u; begin < scanView.size();){
-        const usize foundEnd = scanView.find('\n', begin);
-        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
-        const AStringView scanLine = scanView.substr(begin, end - begin);
-        const auto include = ShaderSourceDependencies::ExtractIncludeDirective(scanLine);
-        if(include && include->kind == ShaderSourceDependencies::IncludeKind::Unsupported){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), ConvertString(TrimView(scanLine)), PathToString<tchar>(sourcePath));
-            return false;
-        }
-        if(include && include->kind != ShaderSourceDependencies::IncludeKind::Macro){
-            const ScratchPath includePath(scratchArena, include->name);
-            if(includePath.isAbsolute()){
-                const auto absoluteIncludePath = AbsolutePath(includePath);
-                if(!absoluteIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
-                    return false;
-                }
-                const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
-                auto overlayIncludePath = BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
-                if(!IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), ConvertString(include->name), PathToString<tchar>(sourcePath));
-                    return false;
-                }
-                const auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
-                if(!pathText)
-                    return false;
-                if(pathText->size() > Limit<usize>::s_Max - (outputBytes - include->name.size())){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds representable size"), PathToString<tchar>(outputPath));
-                    return false;
-                }
-                outputBytes = outputBytes - include->name.size() + pathText->size();
-                const usize sourceOffset = begin + static_cast<usize>(include->name.data() - scanLine.data());
-                replacements.push_back({ Move(*overlayIncludePath), sourceOffset, include->name.size() });
-            }
-        }
-        begin = end < scanView.size() ? end + 1u : end;
-    }
-    if(!CanRepresentStreamSize(static_cast<u64>(outputBytes))){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds stream size"), PathToString<tchar>(outputPath));
-        return false;
-    }
-
-    // Stream borrowed slices so replacement output never blocks the source/scan buffers' LIFO retirement.
-    OutputFileStream stream(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!stream.is_open()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to open BOM-stripped compiler input '{}' for writing"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    usize sourceCursor = 0u;
-    for(const __hidden_slang_compiler_workspace::CompilerIncludeReplacement& replacement : replacements){
-        const auto text = BuildCompilerPathText(replacement.path, scratchArena);
-        if(!text)
-            return false;
-        if(replacement.sourceOffset > sourceCursor)
-            stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(replacement.sourceOffset - sourceCursor));
-        if(!text->empty())
-            stream.write(text->data(), static_cast<StreamSize>(text->size()));
-        sourceCursor = replacement.sourceOffset + replacement.sourceBytes;
-    }
-    if(sourceCursor < sourceView.size())
-        stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(sourceView.size() - sourceCursor));
-    stream.close();
-    if(!stream.good()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to write or close BOM-stripped compiler input '{}'"), PathToString<tchar>(outputPath));
-        return false;
-    }
-    return true;
-}
 
 Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::CreateCompilerWorkDirectory(const ScratchPath& parentDirectory, Alloc::ScratchArena& scratchArena){
     auto ensureDirectoriesResult = EnsureDirectories(parentDirectory);
@@ -223,15 +134,14 @@ Expected<SlangCompilerWorkspace::ScratchPath> SlangCompilerWorkspace::BuildCompi
         return MakeUnexpected(Failure{});
 
     const auto rootText = BuildCompilerPathText(rootPath, scratchArena);
-    if(!rootText || rootText->size() > (Limit<usize>::s_Max - __hidden_slang_compiler_workspace::s_RootKeyPrefix.size()) / 2u)
+    if(!rootText || rootText->size() > (Limit<usize>::s_Max - ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size()) / 2u)
         return MakeUnexpected(Failure{});
-    ScratchString rootKey(__hidden_slang_compiler_workspace::s_RootKeyPrefix, scratchArena);
-    rootKey.reserve(__hidden_slang_compiler_workspace::s_RootKeyPrefix.size() + rootText->size() * 2u);
-    static constexpr AStringView s_HexDigits = "0123456789abcdef";
+    ScratchString rootKey(ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix, scratchArena);
+    rootKey.reserve(ShaderBinaryPayload::s_SlangWorkspaceRootKeyPrefix.size() + rootText->size() * 2u);
     for(const char ch : *rootText){
         const u8 byte = static_cast<u8>(ch);
-        rootKey += s_HexDigits[byte >> s_HexNibbleBits];
-        rootKey += s_HexDigits[byte & s_HexNibbleMask];
+        rootKey += ShaderBinaryPayload::s_SlangWorkspaceHexDigits[byte >> s_HexNibbleBits];
+        rootKey += ShaderBinaryPayload::s_SlangWorkspaceHexDigits[byte & s_HexNibbleMask];
     }
     return overlayRoot / rootKey / relativePath;
 }
@@ -286,7 +196,7 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
             return MakeUnexpected(Failure{});
         }
         StripUtf8Bom(sourceText);
-        if(!WriteBomStrippedCompilerInput(sourceText, dependency, request, overlayRoot, *overlayDependencyPath, scratchArena))
+        if(!WriteBomStrippedCompilerInput(dependency, request, overlayRoot, *overlayDependencyPath, sourceText, scratchArena))
             return MakeUnexpected(Failure{});
     }
 
@@ -326,6 +236,91 @@ Expected<SlangCompilerWorkspace::CompilerInputs> SlangCompilerWorkspace::Prepare
         includeDirectories.emplace_back(scratchArena, includeDirectory);
 
     return CompilerInputs{ .includeDirectories = Move(includeDirectories), .sourcePath = Move(*sourcePathResult) };
+}
+
+b8 SlangCompilerWorkspace::WriteBomStrippedCompilerInput(const Path& sourcePath, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, const ScratchPath& outputPath, ScratchString& source, Alloc::ScratchArena& scratchArena){
+    ShaderSourceDependencies::SpliceSourceLines(source);
+    ScratchString scanSource(AStringView(source), scratchArena);
+    ShaderSourceDependencies::MaskSourceComments(scanSource);
+    const AStringView sourceView(source.data(), source.size());
+    const AStringView scanView(scanSource);
+    usize includeCount = 0u;
+    for(usize begin = 0u; begin < scanView.size();){
+        const usize foundEnd = scanView.find('\n', begin);
+        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
+        ShaderBinaryPayload::IncludeDirective include;
+        if(ShaderBinaryPayload::TryExtractIncludeDirective(scanView.substr(begin, end - begin), include))
+            ++includeCount;
+        begin = end < scanView.size() ? end + 1u : end;
+    }
+    ScratchVector<__hidden_slang_compiler_workspace::CompilerIncludeReplacement> replacements{scratchArena};
+    replacements.reserve(includeCount);
+    usize outputBytes = sourceView.size();
+    for(usize begin = 0u; begin < scanView.size();){
+        const usize foundEnd = scanView.find('\n', begin);
+        const usize end = foundEnd == AStringView::npos ? scanView.size() : foundEnd;
+        const AStringView scanLine = scanView.substr(begin, end - begin);
+        ShaderBinaryPayload::IncludeDirective include;
+        const b8 hasInclude = ShaderBinaryPayload::TryExtractIncludeDirective(scanLine, include);
+        if(hasInclude && include.kind == ShaderBinaryPayload::IncludeKind::Unsupported){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported dependency directive '{}' in '{}'"), ConvertString(TrimView(scanLine)), PathToString<tchar>(sourcePath));
+            return false;
+        }
+        if(hasInclude && include.kind != ShaderBinaryPayload::IncludeKind::Macro){
+            const ScratchPath includePath(scratchArena, include.name);
+            if(includePath.isAbsolute()){
+                const auto absoluteIncludePath = AbsolutePath(includePath);
+                if(!absoluteIncludePath){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to resolve compiler include '{}': {}:{}"), PathToString<tchar>(includePath), ConvertString(absoluteIncludePath.error().category().name()), absoluteIncludePath.error().value());
+                    return false;
+                }
+                const ScratchPath normalizedIncludePath = absoluteIncludePath->lexicallyNormal();
+                auto overlayIncludePath = BuildCompilerOverlayPath(overlayRoot, normalizedIncludePath, scratchArena);
+                if(!IsCompilerDependency(request.dependencies, normalizedIncludePath) || !overlayIncludePath){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: absolute include '{}' from '{}' is not a mapped compiler dependency"), ConvertString(include.name), PathToString<tchar>(sourcePath));
+                    return false;
+                }
+                auto pathText = BuildCompilerPathText(*overlayIncludePath, scratchArena);
+                if(!pathText)
+                    return false;
+                if(pathText->size() > Limit<usize>::s_Max - (outputBytes - include.name.size())){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds representable size"), PathToString<tchar>(outputPath));
+                    return false;
+                }
+                outputBytes = outputBytes - include.name.size() + pathText->size();
+                const usize sourceOffset = begin + static_cast<usize>(include.name.data() - scanLine.data());
+                replacements.push_back({ Move(*pathText), sourceOffset, include.name.size() });
+            }
+        }
+        begin = end < scanView.size() ? end + 1u : end;
+    }
+    if(!CanRepresentStreamSize(static_cast<u64>(outputBytes))){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: BOM-stripped compiler input '{}' exceeds stream size"), PathToString<tchar>(outputPath));
+        return false;
+    }
+
+    // Stream borrowed slices so replacement output never blocks the source/scan buffers' LIFO retirement.
+    OutputFileStream stream(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!stream.is_open()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to open BOM-stripped compiler input '{}' for writing"), PathToString<tchar>(outputPath));
+        return false;
+    }
+    usize sourceCursor = 0u;
+    for(const __hidden_slang_compiler_workspace::CompilerIncludeReplacement& replacement : replacements){
+        if(replacement.sourceOffset > sourceCursor)
+            stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(replacement.sourceOffset - sourceCursor));
+        if(!replacement.pathText.empty())
+            stream.write(replacement.pathText.data(), static_cast<StreamSize>(replacement.pathText.size()));
+        sourceCursor = replacement.sourceOffset + replacement.sourceBytes;
+    }
+    if(sourceCursor < sourceView.size())
+        stream.write(sourceView.data() + sourceCursor, static_cast<StreamSize>(sourceView.size() - sourceCursor));
+    stream.close();
+    if(!stream.good()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to write or close BOM-stripped compiler input '{}'"), PathToString<tchar>(outputPath));
+        return false;
+    }
+    return true;
 }
 
 

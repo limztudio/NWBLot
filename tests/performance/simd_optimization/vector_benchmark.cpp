@@ -27,40 +27,15 @@ enum Enum : u32{
 };
 };
 
-inline constexpr StringView s_OperationNames[]{ "dot2", "dot3", "dot4", "sum", "rotation_x", "perspective_fov", "quaternion_normal" };
-using SimdOptimizationBenchmark::s_DataCount;
+inline constexpr Array<StringView, Operation::Count> s_OperationNames = { "dot2", "dot3", "dot4", "sum", "rotation_x", "perspective_fov", "quaternion_normal" };
+using SimdOptimizationBenchmark::BaselineDot2;
+using SimdOptimizationBenchmark::BaselineDot3;
+using SimdOptimizationBenchmark::BaselineDot4;
+using SimdOptimizationBenchmark::BaselineSum;
 using SimdOptimizationBenchmark::Dataset;
-using SimdOptimizationBenchmark::InitializeDataset;
 using SimdOptimizationBenchmark::EqualBits;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Baselines retain the current reduction order and inactive-lane arithmetic contract even after production functions change.
-NWB_INLINE SIMDVectorDouble BaselineDot2(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMaskXY), VectorDoubleAndInt(rhs, s_DoubleSIMDMaskXY));
-    return VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-}
-
-NWB_INLINE SIMDVectorDouble BaselineDot3(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    const SIMDVectorDouble product = VectorDoubleMultiply(VectorDoubleAndInt(lhs, s_DoubleSIMDMask3), VectorDoubleAndInt(rhs, s_DoubleSIMDMask3));
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-    return VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
-}
-
-NWB_INLINE SIMDVectorDouble BaselineDot4(const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{
-    const SIMDVectorDouble product = VectorDoubleMultiply(lhs, rhs);
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(product), VectorDoubleSplatY(product));
-    const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(product));
-    return VectorDoubleAdd(xyz, VectorDoubleSplatW(product));
-}
-
-NWB_INLINE SIMDVectorDouble BaselineSum(const SIMDVectorDouble value)noexcept{
-    const SIMDVectorDouble xy = VectorDoubleAdd(VectorDoubleSplatX(value), VectorDoubleSplatY(value));
-    const SIMDVectorDouble xyz = VectorDoubleAdd(xy, VectorDoubleSplatZ(value));
-    return VectorDoubleAdd(xyz, VectorDoubleSplatW(value));
-}
+using SimdOptimizationBenchmark::InitializeDataset;
+using SimdOptimizationBenchmark::s_DataCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,9 +125,11 @@ template<Operation::Enum Kind>
 u32 VerifyReduction(u64& seed){
 #pragma STDC FENV_ACCESS ON
     return SimdOptimizationBenchmark::VerifyReductionCases(
-        seed, s_OperationNames[Kind],
+        s_OperationNames[Kind],
         [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, false>(lhs, rhs); },
-        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); }
+        [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Evaluate<Kind, true>(lhs, rhs); },
+        SimdOptimizationBenchmark::NoAdditionalReductionCheck{},
+        seed
     );
 }
 
@@ -173,10 +150,12 @@ NWB_NOINLINE SIMDMatrixDouble EvaluateFactory(const f64 angle)noexcept{
 template<Operation::Enum Kind>
 u32 VerifyFactory(){
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 s_Bits[]{ 0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
-        0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x400921fb54442d18ull };
+    constexpr Array<u64, 15> s_Bits = {
+        0u, 0x8000000000000000ull, 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0x3ff0000000000000ull, 0xbff0000000000000ull, 0x7fefffffffffffffull,
+        0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull, 0x400921fb54442d18ull,
+    };
     u32 failures = 0u;
-    for(usize index = 0u; index < LengthOf(s_Bits); ++index){
+    for(usize index = 0u; index < s_Bits.size(); ++index){
         const f64 angle = BitCast<f64>(s_Bits[index]);
         if(!ClearFloatingPointExceptions(FE_ALL_EXCEPT))
             return failures + 1u;
@@ -207,13 +186,13 @@ NWB_NOINLINE SIMDVectorDouble EvaluateQuaternionAxis(const SIMDVectorDouble axis
 
 u32 VerifyQuaternionAxes(){
 #pragma STDC FENV_ACCESS ON
-    constexpr u64 s_AxisBits[][4]{
-        { 0x3ff0000000000000ull, 0u, 0x8000000000000000ull, 0x7ff0000000000123ull },
-        { 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull },
-        { 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7fefffffffffffffull, 0u },
-        { 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0u }
+    constexpr Array<Array<u64, 4>, 4> s_AxisBits = {
+        Array<u64, 4>{ 0x3ff0000000000000ull, 0u, 0x8000000000000000ull, 0x7ff0000000000123ull },
+        Array<u64, 4>{ 0x7ff8000000000123ull, 0xfff8000000000124ull, 0x7ff0000000000125ull, 0xfff0000000000126ull },
+        Array<u64, 4>{ 0x7ff0000000000000ull, 0xfff0000000000000ull, 0x7fefffffffffffffull, 0u },
+        Array<u64, 4>{ 1u, 0x8000000000000001ull, 0x0010000000000000ull, 0u },
     };
-    constexpr u64 s_AngleBits[]{ 0u, 0x8000000000000000ull, 1u, 0x3ff0000000000000ull, 0x7ff0000000000000ull, 0x7ff8000000000233ull, 0xfff0000000000234ull };
+    constexpr Array<u64, 7> s_AngleBits = { 0u, 0x8000000000000000ull, 1u, 0x3ff0000000000000ull, 0x7ff0000000000000ull, 0x7ff8000000000233ull, 0xfff0000000000234ull };
     u32 failures = 0u;
     for(const auto& components : s_AxisBits){
         const SIMDVectorDouble axis = VectorDoubleSetInt(components[0], components[1], components[2], components[3]);
@@ -265,22 +244,21 @@ u32 Verify(){
 
 template<Operation::Enum Kind, b8 Candidate>
 NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iterations, const b8 latency)noexcept{
-    SIMDVectorDouble accumulators[8];
+    if constexpr(Kind <= Operation::Sum){
+        if(!latency){
+            return SimdOptimizationBenchmark::ThroughputWorkload<8u>(
+                data, iterations,
+                [](const SIMDVectorDouble lhs, const SIMDVectorDouble rhs)noexcept{ return Reduce<Kind, Candidate>(lhs, rhs); }
+            );
+        }
+    }
+    Array<SIMDVectorDouble, 8> accumulators = {};
     for(usize lane = 0u; lane < 8u; ++lane)
         accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         if constexpr(Kind <= Operation::Sum){
-            if(latency){
-                const SIMDVectorDouble input = Kind == Operation::Sum ? VectorDoubleScale(accumulators[0], 0.125) : accumulators[0];
-                accumulators[0] = VectorDoubleAdd(Reduce<Kind, Candidate>(input, LoadDouble(data.right[iteration % s_DataCount])), VectorDoubleReplicate(0.125));
-            }
-            else{
-#pragma clang loop unroll(full)
-                for(usize lane = 0u; lane < 8u; ++lane){
-                    const usize index = (iteration * 8u + lane) % s_DataCount;
-                    accumulators[lane] = VectorDoubleAdd(accumulators[lane], Reduce<Kind, Candidate>(LoadDouble(data.left[index]), LoadDouble(data.right[index])));
-                }
-            }
+            const SIMDVectorDouble input = Kind == Operation::Sum ? VectorDoubleScale(accumulators[0], 0.125) : accumulators[0];
+            accumulators[0] = VectorDoubleAdd(Reduce<Kind, Candidate>(input, LoadDouble(data.right[iteration % s_DataCount])), VectorDoubleReplicate(0.125));
         }
         else{
             const f64 angle = data.angles[iteration % s_DataCount];
@@ -299,18 +277,14 @@ NWB_NOINLINE SIMDVectorDouble Workload(const Dataset& data, const usize iteratio
     return result;
 }
 
-template<Operation::Enum Kind, b8 Candidate>
-void Measure(const Dataset& data, const usize iterations, const b8 latency){
-    const usize operations = Kind <= Operation::Sum && !latency ? iterations * 8u : iterations;
-    SimdOptimizationBenchmark::Measure(s_OperationNames[Kind], Candidate, latency, operations, [&]()noexcept{ return Workload<Kind, Candidate>(data, iterations, latency); });
-}
-
 template<Operation::Enum Kind>
-void SelectVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
-    if(candidate)
-        Measure<Kind, true>(data, iterations, latency);
-    else
-        Measure<Kind, false>(data, iterations, latency);
+void RunVariant(const Dataset& data, const b8 candidate, const usize iterations, const b8 latency){
+    const usize operations = Kind <= Operation::Sum && !latency ? iterations * 8u : iterations;
+    SimdOptimizationBenchmark::SelectVariant(
+        s_OperationNames[Kind], candidate, latency, operations,
+        [&]()noexcept{ return Workload<Kind, true>(data, iterations, latency); },
+        [&]()noexcept{ return Workload<Kind, false>(data, iterations, latency); }
+    );
 }
 
 
@@ -338,7 +312,7 @@ int main(const int argc, const char* const* argv){
     const b8 candidate = options->candidate, latency = options->latency;
     const usize iterations = options->iterations;
     Dataset data{};
-    InitializeDataset(data, SimdOptimizationBenchmark::s_InitialSeed);
+    InitializeDataset(SimdOptimizationBenchmark::s_InitialSeed, data);
     for(u32 index = 0u; index < Operation::Count; ++index){
         if(StringView(argv[2]) != s_OperationNames[index])
             continue;
@@ -348,13 +322,13 @@ int main(const int argc, const char* const* argv){
         if(iterations > Limit<usize>::s_Max / operationsPerIteration)
             return 2;
         switch(index){
-        case Operation::Dot2: SelectVariant<Operation::Dot2>(data, candidate, iterations, latency); break;
-        case Operation::Dot3: SelectVariant<Operation::Dot3>(data, candidate, iterations, latency); break;
-        case Operation::Dot4: SelectVariant<Operation::Dot4>(data, candidate, iterations, latency); break;
-        case Operation::Sum: SelectVariant<Operation::Sum>(data, candidate, iterations, latency); break;
-        case Operation::RotationX: SelectVariant<Operation::RotationX>(data, candidate, iterations, latency); break;
-        case Operation::PerspectiveFov: SelectVariant<Operation::PerspectiveFov>(data, candidate, iterations, latency); break;
-        case Operation::QuaternionNormal: SelectVariant<Operation::QuaternionNormal>(data, candidate, iterations, latency); break;
+        case Operation::Dot2: RunVariant<Operation::Dot2>(data, candidate, iterations, latency); break;
+        case Operation::Dot3: RunVariant<Operation::Dot3>(data, candidate, iterations, latency); break;
+        case Operation::Dot4: RunVariant<Operation::Dot4>(data, candidate, iterations, latency); break;
+        case Operation::Sum: RunVariant<Operation::Sum>(data, candidate, iterations, latency); break;
+        case Operation::RotationX: RunVariant<Operation::RotationX>(data, candidate, iterations, latency); break;
+        case Operation::PerspectiveFov: RunVariant<Operation::PerspectiveFov>(data, candidate, iterations, latency); break;
+        case Operation::QuaternionNormal: RunVariant<Operation::QuaternionNormal>(data, candidate, iterations, latency); break;
         default: return 2;
         }
         return 0;

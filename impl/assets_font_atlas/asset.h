@@ -35,11 +35,11 @@ public:
 public:
     [[nodiscard]] b8 loadBinary(Span<const u8> binary);
     [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
-    void setPayload(FontAtlasPayload&& payload)noexcept{ m_payload = Move(payload); }
+    void setPayload(FontAtlasPayload&& payload)noexcept;
 
     [[nodiscard]] const FontAtlasPayload& payload()const noexcept{ return m_payload; }
 
-    [[nodiscard]] const FontAtlasGlyph* glyph(const u32 glyphId)const noexcept{ return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr; }
+    [[nodiscard]] const FontAtlasGlyph* glyph(u32 glyphId)const noexcept;
 
 
 private:

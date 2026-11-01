@@ -13,6 +13,7 @@
 #include <impl/assets_skeleton/cook_matrix.h>
 
 #include <core/assets/binary_payload_io.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -29,75 +30,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, s_ModelSerializeContext))
-        return false;
-
-    const Model& model = static_cast<const Model&>(asset);
-    Core::Alloc::ScratchArena scratchArena(s_AssetsModelSerializeArena);
-    if(!model.validatePayload(scratchArena))
-        return false;
-
-    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
-    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
-    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
-
-    skeletonObjectBinaries.reserve(model.skeletonObjects().size());
-    for(const ModelSkeletonObject& object : model.skeletonObjects()){
-        ModelSkeletonObjectBinary objectBinary;
-        objectBinary.nameHash = object.name.hash();
-        objectBinary.skeletonNameHash = object.skeleton.name().hash();
-        objectBinary.transform = object.transform;
-        skeletonObjectBinaries.push_back(objectBinary);
-    }
-
-    staticMeshObjectBinaries.reserve(model.staticMeshObjects().size());
-    for(const ModelStaticMeshObject& object : model.staticMeshObjects()){
-        ModelStaticMeshObjectBinary objectBinary;
-        objectBinary.nameHash = object.name.hash();
-        objectBinary.meshNameHash = object.mesh.name().hash();
-        objectBinary.materialNameHash = object.material.name().hash();
-        objectBinary.parentObjectNameHash = object.parentObject.hash();
-        objectBinary.parentJointNameHash = object.parentJoint.hash();
-        objectBinary.transform = object.transform;
-        staticMeshObjectBinaries.push_back(objectBinary);
-    }
-
-    skinnedMeshObjectBinaries.reserve(model.skinnedMeshObjects().size());
-    for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects()){
-        ModelSkinnedMeshObjectBinary objectBinary;
-        objectBinary.nameHash = object.name.hash();
-        objectBinary.skinNameHash = object.skin.name().hash();
-        objectBinary.materialNameHash = object.material.name().hash();
-        objectBinary.skeletonObjectNameHash = object.skeletonObject.hash();
-        objectBinary.transform = object.transform;
-        skinnedMeshObjectBinaries.push_back(objectBinary);
-    }
-
-    usize reserveBytes = sizeof(ModelHeaderBinary);
-    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    ModelHeaderBinary header;
-    header.skeletonObjectCount = static_cast<u64>(skeletonObjectBinaries.size());
-    header.staticMeshObjectCount = static_cast<u64>(staticMeshObjectBinaries.size());
-    header.skinnedMeshObjectCount = static_cast<u64>(skinnedMeshObjectBinaries.size());
-    AppendPOD(outBinary, header);
-
-    return
-        Core::Assets::AppendVectorPayload(outBinary, skeletonObjectBinaries, s_ModelSerializeContext, s_ModelSkeletonObjectsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, staticMeshObjectBinaries, s_ModelSerializeContext, s_ModelStaticMeshObjectsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, skinnedMeshObjectBinaries, s_ModelSerializeContext, s_ModelSkinnedMeshObjectsPayloadLabel)
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_model_cook{
 
 
@@ -106,39 +38,19 @@ namespace __hidden_model_cook{
 
 using namespace Core::Metascript;
 
-static constexpr AStringView s_SkeletonsField = "skeletons";
-static constexpr AStringView s_StaticMeshesField = "static_meshes";
-static constexpr AStringView s_SkinnedMeshesField = "skinned_meshes";
-static constexpr AStringView s_SkeletonField = "skeleton";
-static constexpr AStringView s_MeshField = "mesh";
-static constexpr AStringView s_SkinField = "skin";
-static constexpr AStringView s_MaterialField = "material";
-static constexpr AStringView s_ParentObjectField = "parent_object";
-static constexpr AStringView s_ParentJointField = "parent_joint";
-static constexpr AStringView s_TransformField = "transform";
-static constexpr AStringView s_ModelMetaDiagnosticPrefix = "Model meta";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ValidateModelAssetFields(const Path& nwbFilePath, const Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, { s_SkeletonsField, s_StaticMeshesField, s_SkinnedMeshesField });
-}
-
-[[nodiscard]] b8 ValidateModelObjectFields(const Path& nwbFilePath, const Value& object, const AStringView objectKind, const InitializerList<AStringView> allowedFields){
-    return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, object, objectKind, allowedFields);
-}
-
 [[nodiscard]] Expected<SkeletonJointMatrix> ReadTransformField(const Path& nwbFilePath, const Value& object, const AStringView objectKind){
-    const Value* fieldValue = object.findField(s_TransformField);
+    const Value* fieldValue = object.findField(s_ModelTransformField);
     if(!fieldValue)
         return ::MatrixIdentity<Float34>();
-    return AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, *fieldValue, objectKind, s_TransformField);
+    return AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(nwbFilePath, *fieldValue, objectKind, s_ModelTransformField);
 }
 
 template<typename ObjectT, typename ParseObjectFn>
-[[nodiscard]] Expected<Core::Assets::AssetVector<ObjectT>> ParseObjectMap(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const AStringView objectKind, Core::Assets::AssetArena& arena, ParseObjectFn&& parseObject){
+[[nodiscard]] Expected<Core::Assets::AssetVector<ObjectT>> ParseObjectMap(const Path& nwbFilePath, const Value& asset, const AStringView fieldName, const AStringView objectKind, ParseObjectFn&& parseObject, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<ObjectT> objects(arena);
 
     const Value* fieldValue = asset.findField(fieldName);
@@ -170,19 +82,18 @@ template<typename ObjectT, typename ParseObjectFn>
 
 [[nodiscard]] Expected<ModelSkeletonObject> ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue){
     ModelSkeletonObject object{};
-    static constexpr AStringView s_ObjectKind = "Model skeleton object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkeletonObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkeletonField, s_TransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, { s_ModelSkeletonField, s_ModelTransformField }))
         return MakeUnexpected(Failure{});
 
-    auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true);
+    auto skeletonResult = Core::Assets::ReadMetadataAssetRefField<Skeleton>(nwbFilePath, objectValue, s_ModelSkeletonObjectKind, s_ModelSkeletonField, true);
     if(!skeletonResult)
         return MakeUnexpected(Failure{});
     object.skeleton = *skeletonResult;
-    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ObjectKind);
+    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ModelSkeletonObjectKind);
     if(!transformResult)
         return MakeUnexpected(Failure{});
     object.transform = *transformResult;
@@ -191,31 +102,30 @@ template<typename ObjectT, typename ParseObjectFn>
 
 [[nodiscard]] Expected<ModelStaticMeshObject> ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue){
     ModelStaticMeshObject object{};
-    static constexpr AStringView s_ObjectKind = "Model static mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelStaticMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_MeshField, s_MaterialField, s_ParentObjectField, s_ParentJointField, s_TransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, { s_ModelMeshField, s_ModelMaterialField, s_ModelParentObjectField, s_ModelParentJointField, s_ModelTransformField }))
         return MakeUnexpected(Failure{});
 
-    auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true);
+    auto meshResult = Core::Assets::ReadMetadataAssetRefField<Mesh>(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, s_ModelMeshField, true);
     if(!meshResult)
         return MakeUnexpected(Failure{});
     object.mesh = *meshResult;
-    auto materialResult = Core::Assets::ReadMetadataAssetRefField<Material>(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false);
+    auto materialResult = Core::Assets::ReadMetadataAssetRefField<Material>(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, s_ModelMaterialField, false);
     if(!materialResult)
         return MakeUnexpected(Failure{});
     object.material = *materialResult;
-    auto parentObjectResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_ParentObjectField, false);
+    auto parentObjectResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, s_ModelParentObjectField, false);
     if(!parentObjectResult)
         return MakeUnexpected(Failure{});
     object.parentObject = *parentObjectResult;
-    auto parentJointResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_ParentJointField, false);
+    auto parentJointResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind, s_ModelParentJointField, false);
     if(!parentJointResult)
         return MakeUnexpected(Failure{});
     object.parentJoint = *parentJointResult;
-    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ObjectKind);
+    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ModelStaticMeshObjectKind);
     if(!transformResult)
         return MakeUnexpected(Failure{});
     object.transform = *transformResult;
@@ -224,27 +134,26 @@ template<typename ObjectT, typename ParseObjectFn>
 
 [[nodiscard]] Expected<ModelSkinnedMeshObject> ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue){
     ModelSkinnedMeshObject object{};
-    static constexpr AStringView s_ObjectKind = "Model skinned mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ObjectKind), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map"), ConvertString(s_ModelSkinnedMeshObjectKind), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
-    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, { s_ModelSkinField, s_ModelMaterialField, s_ModelSkeletonField, s_ModelTransformField }))
         return MakeUnexpected(Failure{});
 
-    auto skinResult = Core::Assets::ReadMetadataAssetRefField<Skin>(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true);
+    auto skinResult = Core::Assets::ReadMetadataAssetRefField<Skin>(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, s_ModelSkinField, true);
     if(!skinResult)
         return MakeUnexpected(Failure{});
     object.skin = *skinResult;
-    auto materialResult = Core::Assets::ReadMetadataAssetRefField<Material>(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false);
+    auto materialResult = Core::Assets::ReadMetadataAssetRefField<Material>(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, s_ModelMaterialField, false);
     if(!materialResult)
         return MakeUnexpected(Failure{});
     object.material = *materialResult;
-    auto skeletonObjectResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true);
+    auto skeletonObjectResult = Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind, s_ModelSkeletonField, true);
     if(!skeletonObjectResult)
         return MakeUnexpected(Failure{});
     object.skeletonObject = *skeletonObjectResult;
-    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ObjectKind);
+    auto transformResult = ReadTransformField(nwbFilePath, objectValue, s_ModelSkinnedMeshObjectKind);
     if(!transformResult)
         return MakeUnexpected(Failure{});
     object.transform = *transformResult;
@@ -261,6 +170,52 @@ template<typename ObjectT, typename ParseObjectFn>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    if(!checkSerializeAssetType(asset, s_ModelSerializeContext))
+        return false;
+
+    const Model& model = static_cast<const Model&>(asset);
+    Core::Alloc::ScratchArena scratchArena(s_AssetsModelSerializeArena);
+    if(!model.validatePayload(scratchArena))
+        return false;
+
+    Vector<ModelSkeletonObjectBinary, Core::Alloc::ScratchArena> skeletonObjectBinaries(scratchArena);
+    Vector<ModelStaticMeshObjectBinary, Core::Alloc::ScratchArena> staticMeshObjectBinaries(scratchArena);
+    Vector<ModelSkinnedMeshObjectBinary, Core::Alloc::ScratchArena> skinnedMeshObjectBinaries(scratchArena);
+
+    skeletonObjectBinaries.reserve(model.skeletonObjects().size());
+    for(const ModelSkeletonObject& object : model.skeletonObjects())
+        skeletonObjectBinaries.push_back(PackModelSkeletonObjectBinary(object));
+
+    staticMeshObjectBinaries.reserve(model.staticMeshObjects().size());
+    for(const ModelStaticMeshObject& object : model.staticMeshObjects())
+        staticMeshObjectBinaries.push_back(PackModelStaticMeshObjectBinary(object));
+
+    skinnedMeshObjectBinaries.reserve(model.skinnedMeshObjects().size());
+    for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects())
+        skinnedMeshObjectBinaries.push_back(PackModelSkinnedMeshObjectBinary(object));
+
+    usize reserveBytes = sizeof(ModelHeaderBinary);
+    const b8 canReserve = AddBinaryVectorReserveBytes(reserveBytes, skeletonObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, staticMeshObjectBinaries) && AddBinaryVectorReserveBytes(reserveBytes, skinnedMeshObjectBinaries);
+
+    outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
+    const ModelHeaderBinary header = BuildModelHeaderBinary(
+        static_cast<u64>(skeletonObjectBinaries.size()),
+        static_cast<u64>(staticMeshObjectBinaries.size()),
+        static_cast<u64>(skinnedMeshObjectBinaries.size())
+    );
+    AppendPOD(outBinary, header);
+
+    return
+        Core::Assets::AppendVectorPayload(skeletonObjectBinaries, s_ModelSerializeContext, s_ModelSkeletonObjectsPayloadLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(staticMeshObjectBinaries, s_ModelSerializeContext, s_ModelStaticMeshObjectsPayloadLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(skinnedMeshObjectBinaries, s_ModelSerializeContext, s_ModelSkinnedMeshObjectsPayloadLabel, outBinary)
+    ;
+}
+
 Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_model_cook;
 
@@ -269,49 +224,42 @@ Expected<ModelCookEntry> ParseModelCookMetadata(const Name virtualPath, const Pa
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix))
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_ModelMetaDiagnosticPrefix, entry))
         return MakeUnexpected(Failure{});
-    if(!ValidateModelAssetFields(nwbFilePath, asset))
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_ModelMetaDiagnosticPrefix, { s_ModelSkeletonsField, s_ModelStaticMeshesField, s_ModelSkinnedMeshesField }))
         return MakeUnexpected(Failure{});
 
-    auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(nwbFilePath, asset, s_SkeletonsField, AStringView("Model skeleton object"), arena, [&](const Core::Metascript::Value& objectValue){
+    auto skeletonObjectsResult = ParseObjectMap<ModelSkeletonObject>(nwbFilePath, asset, s_ModelSkeletonsField, s_ModelSkeletonObjectKind, [&](const Core::Metascript::Value& objectValue){
         return ParseSkeletonObject(nwbFilePath, objectValue);
-    });
+    }, arena);
     if(!skeletonObjectsResult)
         return MakeUnexpected(Failure{});
     entry.skeletonObjects = Move(*skeletonObjectsResult);
 
-    auto staticMeshObjectsResult = ParseObjectMap<ModelStaticMeshObject>(nwbFilePath, asset, s_StaticMeshesField, AStringView("Model static mesh object"), arena, [&](const Core::Metascript::Value& objectValue){
+    auto staticMeshObjectsResult = ParseObjectMap<ModelStaticMeshObject>(nwbFilePath, asset, s_ModelStaticMeshesField, s_ModelStaticMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
         return ParseStaticMeshObject(nwbFilePath, objectValue);
-    });
+    }, arena);
     if(!staticMeshObjectsResult)
         return MakeUnexpected(Failure{});
     entry.staticMeshObjects = Move(*staticMeshObjectsResult);
 
-    auto skinnedMeshObjectsResult = ParseObjectMap<ModelSkinnedMeshObject>(nwbFilePath, asset, s_SkinnedMeshesField, AStringView("Model skinned mesh object"), arena, [&](const Core::Metascript::Value& objectValue){
+    auto skinnedMeshObjectsResult = ParseObjectMap<ModelSkinnedMeshObject>(nwbFilePath, asset, s_ModelSkinnedMeshesField, s_ModelSkinnedMeshObjectKind, [&](const Core::Metascript::Value& objectValue){
         return ParseSkinnedMeshObject(nwbFilePath, objectValue);
-    });
+    }, arena);
     if(!skinnedMeshObjectsResult)
         return MakeUnexpected(Failure{});
     entry.skinnedMeshObjects = Move(*skinnedMeshObjectsResult);
 
     Model candidateModel(entry.skeletonObjects.get_allocator().arena(), entry.virtualPath);
-    candidateModel.setObjects(Model::SkeletonObjectVector(entry.skeletonObjects), Model::StaticMeshObjectVector(entry.staticMeshObjects), Model::SkinnedMeshObjectVector(entry.skinnedMeshObjects));
+    candidateModel.setObjects(Move(entry.skeletonObjects), Move(entry.staticMeshObjects), Move(entry.skinnedMeshObjects));
     if(!candidateModel.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
+    candidateModel.takeObjects(entry.skeletonObjects, entry.staticMeshObjects, entry.skinnedMeshObjects);
     return entry;
 }
 
 Expected<ModelCookEntry> ParseModelCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, __hidden_model_cook::s_ModelMetaDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseModelCookMetadata(virtualPath, nwbFilePath, **asset, arena, scratchArena);
+    return Core::Assets::ParseCookMetadataDocument<ModelCookEntry, &ParseModelCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ModelMetaDiagnosticPrefix, arena, scratchArena);
 }
 
 Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){

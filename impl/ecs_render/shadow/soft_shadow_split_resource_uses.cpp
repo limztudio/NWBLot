@@ -4,7 +4,6 @@
 
 #include "soft_shadow_split_resource_uses.h"
 
-#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
@@ -27,29 +26,23 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
     const b8 hardwareTransparentTrace = inputs.rayTracingPlan.hardwareTransparentTrace;
     const b8 softShadowHistoryReadable = inputs.rayTracingPlan.softShadowHistoryReadable;
     const b8 opaqueHistoryFrontIsA = inputs.rayTracingPlan.historyFrontIsA;
-    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_graph.importTexture(texture, TextureResourceDesc(identity, label));
-    };
-    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
-    };
 
-    const auto shadowSoftHalfAResult = importTexture(inputs.targets.shadowSoftHalfA, Name(RendererFramePipelineDetail::s_ShadowSoftHalfAName), RendererFramePipelineDetail::s_ShadowSoftHalfALabel);
-    const auto shadowSoftHalfBResult = importTexture(inputs.targets.shadowSoftHalfB, Name(RendererFramePipelineDetail::s_ShadowSoftHalfBName), RendererFramePipelineDetail::s_ShadowSoftHalfBLabel);
-    const auto shadowSoftGeometryResult = importTexture(inputs.targets.shadowSoftGeometry, Name(RendererFramePipelineDetail::s_ShadowSoftGeometryName), RendererFramePipelineDetail::s_ShadowSoftGeometryLabel);
-    const auto shadowSoftGeometryPreviousResult = importTexture(inputs.targets.shadowSoftGeometryPrev, Name(RendererFramePipelineDetail::s_ShadowSoftGeometryPreviousName), RendererFramePipelineDetail::s_ShadowSoftGeometryPreviousLabel);
-    const auto opaqueHistoryAResult = importTexture(inputs.targets.shadowHistA, Name(RendererFramePipelineDetail::s_ShadowHistoryAName), RendererFramePipelineDetail::s_ShadowHistoryALabel);
-    const auto opaqueHistoryBResult = importTexture(inputs.targets.shadowHistB, Name(RendererFramePipelineDetail::s_ShadowHistoryBName), RendererFramePipelineDetail::s_ShadowHistoryBLabel);
-    const auto opaqueMomentsAResult = importTexture(inputs.targets.shadowMomentsA, Name(RendererFramePipelineDetail::s_ShadowMomentsAName), RendererFramePipelineDetail::s_ShadowMomentsALabel);
-    const auto opaqueMomentsBResult = importTexture(inputs.targets.shadowMomentsB, Name(RendererFramePipelineDetail::s_ShadowMomentsBName), RendererFramePipelineDetail::s_ShadowMomentsBLabel);
-    const auto transparentSoftHalfResult = importTexture(inputs.targets.transparentSoftHalf, Name(RendererFramePipelineDetail::s_TransparentSoftHalfName), RendererFramePipelineDetail::s_TransparentSoftHalfLabel);
-    const auto transparentHistoryAResult = importTexture(inputs.targets.transparentHistA, Name(RendererFramePipelineDetail::s_TransparentHistoryAName), RendererFramePipelineDetail::s_TransparentHistoryALabel);
-    const auto transparentHistoryBResult = importTexture(inputs.targets.transparentHistB, Name(RendererFramePipelineDetail::s_TransparentHistoryBName), RendererFramePipelineDetail::s_TransparentHistoryBLabel);
-    const auto transparentMomentsAResult = importTexture(inputs.targets.transparentMomentsA, Name(RendererFramePipelineDetail::s_TransparentMomentsAName), RendererFramePipelineDetail::s_TransparentMomentsALabel);
-    const auto transparentMomentsBResult = importTexture(inputs.targets.transparentMomentsB, Name(RendererFramePipelineDetail::s_TransparentMomentsBName), RendererFramePipelineDetail::s_TransparentMomentsBLabel);
+    const auto shadowSoftHalfAResult = ImportExternalTexture(m_graph, inputs.targets.shadowSoftHalfA, Name(s_ShadowSoftHalfAName), s_ShadowSoftHalfALabel);
+    const auto shadowSoftHalfBResult = ImportExternalTexture(m_graph, inputs.targets.shadowSoftHalfB, Name(s_ShadowSoftHalfBName), s_ShadowSoftHalfBLabel);
+    const auto shadowSoftGeometryResult = ImportExternalTexture(m_graph, inputs.targets.shadowSoftGeometry, Name(s_ShadowSoftGeometryName), s_ShadowSoftGeometryLabel);
+    const auto shadowSoftGeometryPreviousResult = ImportExternalTexture(m_graph, inputs.targets.shadowSoftGeometryPrev, Name(s_ShadowSoftGeometryPreviousName), s_ShadowSoftGeometryPreviousLabel);
+    const auto opaqueHistoryAResult = ImportExternalTexture(m_graph, inputs.targets.shadowHistA, Name(s_ShadowHistoryAName), s_ShadowHistoryALabel);
+    const auto opaqueHistoryBResult = ImportExternalTexture(m_graph, inputs.targets.shadowHistB, Name(s_ShadowHistoryBName), s_ShadowHistoryBLabel);
+    const auto opaqueMomentsAResult = ImportExternalTexture(m_graph, inputs.targets.shadowMomentsA, Name(s_ShadowMomentsAName), s_ShadowMomentsALabel);
+    const auto opaqueMomentsBResult = ImportExternalTexture(m_graph, inputs.targets.shadowMomentsB, Name(s_ShadowMomentsBName), s_ShadowMomentsBLabel);
+    const auto transparentSoftHalfResult = ImportExternalTexture(m_graph, inputs.targets.transparentSoftHalf, Name(s_TransparentSoftHalfName), s_TransparentSoftHalfLabel);
+    const auto transparentHistoryAResult = ImportExternalTexture(m_graph, inputs.targets.transparentHistA, Name(s_TransparentHistoryAName), s_TransparentHistoryALabel);
+    const auto transparentHistoryBResult = ImportExternalTexture(m_graph, inputs.targets.transparentHistB, Name(s_TransparentHistoryBName), s_TransparentHistoryBLabel);
+    const auto transparentMomentsAResult = ImportExternalTexture(m_graph, inputs.targets.transparentMomentsA, Name(s_TransparentMomentsAName), s_TransparentMomentsALabel);
+    const auto transparentMomentsBResult = ImportExternalTexture(m_graph, inputs.targets.transparentMomentsB, Name(s_TransparentMomentsBName), s_TransparentMomentsBLabel);
     Expected<Optional<Core::GpuGraphResourceId>> sceneBvhNodesResult = Optional<Core::GpuGraphResourceId>{};
     if(!(hardwareTransparentTrace)){
-        const auto importedResource = importBuffer(inputs.rayTracingResources.sceneBvhNodeBuffer, Name(RendererFramePipelineDetail::s_SceneBvhNodesName), RendererFramePipelineDetail::s_SceneBvhNodesLabel);
+        const auto importedResource = ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneBvhNodeBuffer, Name(s_SceneBvhNodesName), s_SceneBvhNodesLabel);
         if(!importedResource)
             sceneBvhNodesResult = MakeUnexpected(importedResource.error());
         else
@@ -57,15 +50,15 @@ b8 SoftShadowSplitResourceUseBuilder::build(const SoftShadowSplitResourceInputs&
     }
     Expected<Optional<Core::GpuGraphResourceId>> sceneInstancesResult = Optional<Core::GpuGraphResourceId>{};
     if(!(hardwareTransparentTrace)){
-        const auto importedResource = importBuffer(inputs.rayTracingResources.sceneInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneInstancesName), RendererFramePipelineDetail::s_SceneInstancesLabel);
+        const auto importedResource = ImportExternalBuffer(m_graph, inputs.rayTracingResources.sceneInstanceBuffer, Name(s_SceneInstancesName), s_SceneInstancesLabel);
         if(!importedResource)
             sceneInstancesResult = MakeUnexpected(importedResource.error());
         else
             sceneInstancesResult = Optional<Core::GpuGraphResourceId>{*importedResource};
     }
-    const auto shadowInstanceMaterialsResult = importBuffer(inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName), RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel);
-    const auto shadowTypedMaterialsResult = importBuffer(inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName), RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel);
-    const auto shadowInstancesResult = importBuffer(inputs.rayTracingResources.shadowInstanceBuffer, Name(RendererFramePipelineDetail::s_SceneShadowInstancesName), RendererFramePipelineDetail::s_SceneShadowInstancesLabel);
+    const auto shadowInstanceMaterialsResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceMaterialBuffer, Name(s_SceneShadowInstanceMaterialName), s_SceneShadowInstanceMaterialLabel);
+    const auto shadowTypedMaterialsResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowMaterialTypedBuffer, Name(s_SceneShadowMaterialTypedName), s_SceneShadowMaterialTypedLabel);
+    const auto shadowInstancesResult = ImportExternalBuffer(m_graph, inputs.rayTracingResources.shadowInstanceBuffer, Name(s_SceneShadowInstancesName), s_SceneShadowInstancesLabel);
     if(
         !shadowSoftHalfAResult
         || !shadowSoftHalfBResult

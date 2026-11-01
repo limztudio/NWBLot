@@ -26,7 +26,7 @@ namespace __hidden_adhd_compiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendPascalCaseSegment(MString& out, const MStringView segment){
+void AppendPascalCaseSegment(const MStringView segment, MString& out){
     b8 capitalizeNext = true;
     b8 emittedAny = false;
     for(usize i = 0u; i < segment.size(); ++i){
@@ -50,17 +50,6 @@ void AppendPascalCaseSegment(MString& out, const MStringView segment){
         }
         emittedAny = true;
     }
-}
-
-[[nodiscard]] MString DeriveOutputFilename(const MStringView virtualFilePath, const MStringView suffix, MetaArena& arena){
-    const MStringView base = ExtractAdhdFileStem(virtualFilePath);
-    MString out(arena);
-    if(base.empty())
-        out.append("module");
-    else
-        out.append(base.data(), base.size());
-    out.append(suffix.data(), suffix.size());
-    return out;
 }
 
 
@@ -148,7 +137,7 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
                 const MStringView seg = dirPart.substr(segStart, i - segStart);
                 if(seg != "." && seg != ".."){
                     MString segPascal(arena);
-                    __hidden_adhd_compiler::AppendPascalCaseSegment(segPascal, seg);
+                    __hidden_adhd_compiler::AppendPascalCaseSegment(seg, segPascal);
                     if(!segPascal.empty()){
                         ns.append("::");
                         ns.append(segPascal.data(), segPascal.size());
@@ -162,12 +151,15 @@ MString Compiler::DeriveNamespaceFromPath(const MStringView virtualFilePath, Met
     return ns;
 }
 
-MString Compiler::DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){
-    return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.h", arena);
-}
-
-MString Compiler::DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){
-    return __hidden_adhd_compiler::DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena);
+MString Compiler::DeriveOutputFilename(const MStringView virtualFilePath, const MStringView suffix, MetaArena& arena){
+    const MStringView base = ExtractAdhdFileStem(virtualFilePath);
+    MString out(arena);
+    if(base.empty())
+        out.append("module");
+    else
+        out.append(base.data(), base.size());
+    out.append(suffix.data(), suffix.size());
+    return out;
 }
 
 

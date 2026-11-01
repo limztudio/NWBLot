@@ -119,21 +119,16 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
 
 
 void GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::beginClosingWithinSubmissionOperation()noexcept{
-    SubmissionAttemptExceptionFinalizer* const owner = m_owner;
-    if(!owner || owner->m_armed)
+    if(!m_owner)
         return;
 
-    const auto closing = owner->m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(owner->m_graph, owner->m_compiledGraph);
-    if(!closing){
-        if(owner->m_transaction.hasUnresolvedSubmissionBinding(owner->m_compiledGraph))
-            TerminateInvariant();
-        return;
-    }
-    if(closing->recordingAttemptGeneration == 0u || !closing->submissionBinding.valid())
-        TerminateInvariant();
-    owner->m_recordingAttemptGeneration = closing->recordingAttemptGeneration;
-    owner->m_submissionBinding = closing->submissionBinding;
-    owner->m_armed = true;
+    m_owner->m_transaction.armSubmissionExceptionClosingWithinSubmissionOperation(
+        m_owner->m_compiledGraph,
+        m_owner->m_graph,
+        m_owner->m_armed,
+        m_owner->m_recordingAttemptGeneration,
+        m_owner->m_submissionBinding
+    );
 }
 
 

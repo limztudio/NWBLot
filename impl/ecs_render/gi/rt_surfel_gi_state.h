@@ -1,0 +1,150 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/ecs_render/gi/quality_settings.adhd.h>
+
+#include <core/graphics/api.h>
+#include <core/graphics/rhi/device.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Core::Color s_SurfelIrradianceClearColor = Core::Color(0.f, 0.f, 0.f, 0.f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 15u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
+static_assert(NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL <= NWB_SURFEL_RAYS_PER_SURFEL);
+static_assert(NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL <= NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
+static_assert(NWB_SURFEL_CONVERGED_SAMPLE_COUNT >= 1u && NWB_SURFEL_CONVERGED_SAMPLE_COUNT <= NWB_SURFEL_MAX_ACCUM);
+static_assert(NWB_SURFEL_GUIDE_BIN_COUNT == 16u && NWB_SURFEL_RECORD_SIZE == 96u);
+static_assert(sizeof(Float4) == NWB_SURFEL_GUIDE_FLOAT4_STRIDE);
+static_assert(NWB_SURFEL_RAYS_PER_SURFEL >= NWB_SURFEL_GUIDE_BIN_COUNT);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RtSurfelGiState{
+    // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
+    Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
+    Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
+    Core::BindingLayoutHandle m_surfelHashBuildBindingLayout;
+    Core::BindingLayoutHandle m_surfelTraceBindingLayout;
+    Core::ShaderHandle m_surfelSpawnShader;
+    Core::ComputePipelineHandle m_surfelSpawnPipeline;
+    Core::ShaderHandle m_surfelAgeFreeShader;
+    Core::ComputePipelineHandle m_surfelAgeFreePipeline;
+    Core::ShaderHandle m_surfelHashBuildShader;
+    Core::ComputePipelineHandle m_surfelHashBuildPipeline;
+    Core::ShaderHandle m_surfelTraceShader;
+    Core::ComputePipelineHandle m_surfelTracePipeline;
+    Core::ShaderHandle m_surfelTraceCsgShader;
+    Core::ComputePipelineHandle m_surfelTraceCsgPipeline;
+    // Compute gather avoids frames-in-flight pool races with deferred lighting.
+    Core::BindingLayoutHandle m_surfelResolveBindingLayout;
+    Core::ShaderHandle m_surfelResolveShader;
+    Core::ComputePipelineHandle m_surfelResolvePipeline;
+    // Surface-gated upsample from half-resolution irradiance.
+    Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
+    Core::ShaderHandle m_surfelUpsampleShader;
+    Core::ComputePipelineHandle m_surfelUpsamplePipeline;
+    Core::BindingLayoutHandle m_surfelTraceBuildArgsBindingLayout;
+    Core::ShaderHandle m_surfelTraceBuildArgsShader;
+    Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
+    // HW trace uses the TLAS instead of the SW BVH.
+    Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
+    Core::ShaderHandle m_surfelTraceHwShader;
+    Core::ComputePipelineHandle m_surfelTraceHwPipeline;
+    Core::ShaderHandle m_surfelTraceCsgHwShader;
+    Core::ComputePipelineHandle m_surfelTraceCsgHwPipeline;
+    // Device-lifetime pool, hash heads, and counters; initialized once.
+    Core::BufferHandle m_surfelPoolBuffer;
+    Core::BufferHandle m_surfelGuidePoolBuffer;
+    Core::BufferHandle m_surfelCellHeadBuffer;
+    Core::BufferHandle m_surfelCounterBuffer;
+    Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
+    Core::BufferHandle m_surfelFreeListBuffer;
+    // Previous-frame field prevents read/write feedback during tracing.
+    Core::BufferHandle m_surfelPoolSnapshotBuffer;
+    Core::BufferHandle m_surfelCellHeadSnapshotBuffer;
+    // Async-safe counter readback. The graph-owned copy task publishes this only after its packet accepts.
+    Core::BufferHandle m_surfelCounterReadback;
+    Core::BufferHandle m_surfelConstants;
+
+    // Descriptor generations retire before their backing buffers.
+    Core::GpuDescriptorHandle m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+
+    Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
+    u32 m_surfelCountReadbackFrame = 0u;
+    u32 m_surfelTraceGeometryFailureFlags = 0u;
+    u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
+    u32 m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
+    // Ray-rotation and age counter.
+    u32 m_surfelFrameIndex = 0u;
+
+    b8 m_surfelTraceHwPipelineFailed = false;
+    b8 m_surfelUseHwTrace = false;
+    b8 m_surfelUseCsgTrace = false;
+    b8 m_surfelTraceCsgPipelineFailed = false;
+    b8 m_surfelTraceCsgHwPipelineFailed = false;
+    b8 m_surfelTraceBuildArgsPipelineFailed = false;
+    b8 m_surfelUpsamplePipelineFailed = false;
+    b8 m_surfelResolvePipelineFailed = false;
+    b8 m_surfelResolveDispatchLogged = false;
+    b8 m_surfelTracePipelineFailed = false;
+    b8 m_surfelHashBuildPipelineFailed = false;
+    b8 m_surfelAgeFreePipelineFailed = false;
+    b8 m_surfelSpawnPipelineFailed = false;
+    b8 m_surfelEnabled = false;
+    // First trace uses all surfels; later traces use the update divisor.
+    b8 m_surfelSeeded = false;
+    // Retries graph-owned resource clears after a rejected packet.
+    b8 m_surfelResourcesNeedClear = false;
+    b8 m_surfelResourcesClearPending = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

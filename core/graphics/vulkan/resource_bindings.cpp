@@ -25,6 +25,44 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AttachGraphicsPipelineFixedState(VkGraphicsPipelineCreateInfo& pipelineInfo, const VkPipelineRasterizationStateCreateInfo& rasterizer, const GraphicsPipelineFixedState& fixedState)noexcept{
+    pipelineInfo.pViewportState = &fixedState.viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &fixedState.multisampling;
+    pipelineInfo.pDepthStencilState = &fixedState.depthStencil;
+    pipelineInfo.pColorBlendState = &fixedState.colorBlending;
+    pipelineInfo.pDynamicState = &fixedState.dynamicState;
+}
+
+VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(const RasterState& rasterState, const VkPolygonMode polygonMode, const VkBool32 depthClampEnable)noexcept{
+    auto rasterizer = MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    rasterizer.depthClampEnable = depthClampEnable;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = polygonMode;
+    rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
+    rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
+    rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
+    rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
+    rasterizer.lineWidth = s_DefaultRasterLineWidth;
+    return rasterizer;
+}
+
+VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments){
+    const usize colorFormatCount = fbinfo.colorFormats.size();
+    outBlendAttachments.clear();
+    outBlendAttachments.reserve(colorFormatCount);
+    for(usize i = 0u; i < colorFormatCount; ++i)
+        outBlendAttachments.push_back(ConvertBlendState(blendState.targets[i]));
+
+    auto colorBlending = MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = static_cast<u32>(outBlendAttachments.size());
+    colorBlending.pAttachments = outBlendAttachments.data();
+    return colorBlending;
+}
+
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::Texture_SRV:
@@ -264,11 +302,6 @@ b8 ValidateDescriptorBufferBindingFootprint(
     return true;
 }
 
-// Global heap resource type; TLAS uses its own immutable one-descriptor layout.
-constexpr b8 IsBindlessRegisterSpaceType(ResourceType::Enum type)noexcept{
-    return IsSupportedDescriptorBindingType(type);
-}
-
 constexpr u32 NormalizeBindlessDescriptorCapacity(const u32 capacity)noexcept{
     return capacity > 0 ? capacity : 1u;
 }
@@ -301,7 +334,7 @@ b8 ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize
     return true;
 }
 
-Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, const u32 setLayoutCount, const u32 pushConstantByteSize, TStringView operationName){
+Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const Span<const VkDescriptorSetLayout> setLayouts, const u32 pushConstantByteSize, TStringView operationName){
     VkResult res = VK_SUCCESS;
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
@@ -316,8 +349,8 @@ Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, co
     }
 
     auto layoutInfo = MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
-    layoutInfo.setLayoutCount = setLayoutCount;
-    layoutInfo.pSetLayouts = setLayoutCount > 0 ? setLayouts : nullptr;
+    layoutInfo.setLayoutCount = static_cast<u32>(setLayouts.size());
+    layoutInfo.pSetLayouts = setLayouts.empty() ? nullptr : setLayouts.data();
     layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
     layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
 
@@ -395,7 +428,7 @@ Expected<BindingLayoutHandle> Device::createBindingLayout(const BindingLayoutDes
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, s_OperationName);
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, {}, pushConstantByteSize, s_OperationName);
     if(!pipelineLayout){
         return MakeUnexpected(Failure{});
     }
@@ -436,7 +469,7 @@ Expected<BindingLayoutHandle> Device::createBindlessLayout(const BindlessLayoutD
     const u32 maxCapacity = VulkanDetail::NormalizeBindlessDescriptorCapacity(desc.maxCapacity);
     for(usize i = 0u; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
-        if(!VulkanDetail::IsBindlessRegisterSpaceType(item.type) || (item.type == ResourceType::RayTracingAccelStruct && desc.layoutType != BindlessLayoutType::Immutable)){
+        if(!VulkanDetail::IsSupportedDescriptorBindingType(item.type) || (item.type == ResourceType::RayTracingAccelStruct && desc.layoutType != BindlessLayoutType::Immutable)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"), item.slot, static_cast<u32>(item.type));
             return MakeUnexpected(Failure{});
         }

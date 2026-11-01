@@ -4,8 +4,6 @@
 
 #include "layout_optimizer.h"
 
-#include <global/algorithm.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -234,19 +232,19 @@ void CollectExternalForwardDeclClasses(
     const SymbolTable& symbols,
     const Span<const TemplateParamDecl> outerTemplateParams,
     const Span<const TemplateParamDecl> innerTemplateParams,
+    MVector<MStringView>& outNames,
     const b8 inRefOrAssetContext,
-    const u32 depth,
-    MVector<MStringView>& outNames
+    const u32 depth
 ){
     if(depth > 16u || type.isAuto)
         return;
 
     if(type.isFuncType){
         if(type.funcReturnType)
-            CollectExternalForwardDeclClasses(*type.funcReturnType, symbols, outerTemplateParams, innerTemplateParams, type.funcReturnType->refMode != ParamPassingMode::None, depth + 1u, outNames);
+            CollectExternalForwardDeclClasses(*type.funcReturnType, symbols, outerTemplateParams, innerTemplateParams, outNames, type.funcReturnType->refMode != ParamPassingMode::None, depth + 1u);
         for(const FuncParamType& fp : type.funcParams){
             if(fp.type)
-                CollectExternalForwardDeclClasses(*fp.type, symbols, outerTemplateParams, innerTemplateParams, true, depth + 1u, outNames);
+                CollectExternalForwardDeclClasses(*fp.type, symbols, outerTemplateParams, innerTemplateParams, outNames, true, depth + 1u);
         }
         return;
     }
@@ -274,7 +272,7 @@ void CollectExternalForwardDeclClasses(
     const b8 childInAssetContext = (symbols.resolveBaseTypeName(type.name) == "AssetRef");
     for(const TypeArg& targ : type.templateArgs){
         if(targ.type)
-            CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u, outNames);
+            CollectExternalForwardDeclClasses(*targ.type, symbols, outerTemplateParams, innerTemplateParams, outNames, childInAssetContext || (targ.type->refMode != ParamPassingMode::None), depth + 1u);
     }
 }
 

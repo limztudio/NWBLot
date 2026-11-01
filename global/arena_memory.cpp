@@ -44,7 +44,7 @@ inline constexpr usize s_HeapShardMinBytes = 128u;
 static constinit ArenaMemoryOwnerRecord s_HeapBacking{ .ownerName = Name("global/arena_memory/heap_backing"), .source = ArenaMemorySource::HeapBacking, };
 static constinit Atomic<const ArenaMemoryOwnerRecord*> s_OwnerHead{ &s_HeapBacking };
 static MallocMutex s_OwnerMutex;
-static ArenaMemoryOwnerRecord* s_OwnerBuckets[s_OwnerBucketCount] = {};
+static Array<ArenaMemoryOwnerRecord*, s_OwnerBucketCount> s_OwnerBuckets = {};
 
 struct HeapMemoryShard{
     Atomic<u64> allocatedBytes{ 0u };
@@ -55,7 +55,7 @@ struct HeapMemoryShard{
     const HeapMemoryShard* next = nullptr;
 
     // Separate different threads' writable counters even when CRT allocations have only ordinary alignment.
-    u8 padding[s_HeapShardPadBytes] = {};
+    Array<u8, s_HeapShardPadBytes> padding = {};
 };
 static_assert(sizeof(HeapMemoryShard) >= s_HeapShardMinBytes);
 
@@ -197,6 +197,67 @@ void ArenaMemoryTracker::reset(const u64 reservedBytes)noexcept{
     m_allocationCount.store(0u, MemoryOrder::relaxed);
     m_reallocationCount.store(0u, MemoryOrder::relaxed);
     m_deallocationCount.store(0u, MemoryOrder::relaxed);
+}
+
+void ArenaMemoryTracker::recordAllocation(const u64 bytes)noexcept{
+    if(bytes == 0u)
+        return;
+
+    const u64 usedBytes = m_usedBytes.fetch_add(bytes, MemoryOrder::relaxed) + bytes;
+    recordPeakUsedBytes(usedBytes);
+    m_allocationCount.fetch_add(1u, MemoryOrder::relaxed);
+}
+
+void ArenaMemoryTracker::recordReallocation(const u64 oldBytes, const u64 newBytes)noexcept{
+    if(oldBytes == 0u && newBytes == 0u)
+        return;
+    if(oldBytes == 0u){
+        recordAllocation(newBytes);
+        return;
+    }
+    if(newBytes == 0u){
+        recordDeallocation(oldBytes);
+        return;
+    }
+
+    u64 usedBytes = 0u;
+    if(newBytes >= oldBytes){
+        const u64 growth = newBytes - oldBytes;
+        usedBytes = m_usedBytes.fetch_add(growth, MemoryOrder::relaxed) + growth;
+    }
+    else{
+        const u64 shrink = oldBytes - newBytes;
+        usedBytes = m_usedBytes.fetch_sub(shrink, MemoryOrder::relaxed) - shrink;
+    }
+    recordPeakUsedBytes(usedBytes);
+    m_reallocationCount.fetch_add(1u, MemoryOrder::relaxed);
+}
+
+void ArenaMemoryTracker::recordDeallocation(const u64 bytes)noexcept{
+    if(bytes == 0u)
+        return;
+
+    m_usedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
+    m_deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
+}
+
+ArenaMemoryStats ArenaMemoryTracker::snapshot()const noexcept{
+    ArenaMemoryStats stats;
+    stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
+    stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage ? stats.usedBytes : m_reservedBytes.load(MemoryOrder::relaxed);
+    stats.peakUsedBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
+    stats.allocationCount = m_allocationCount.load(MemoryOrder::relaxed);
+    stats.reallocationCount = m_reallocationCount.load(MemoryOrder::relaxed);
+    stats.deallocationCount = m_deallocationCount.load(MemoryOrder::relaxed);
+    return stats;
+}
+
+void ArenaMemoryTracker::recordPeakUsedBytes(const u64 usedBytes)noexcept{
+    u64 peakBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
+    while(usedBytes > peakBytes){
+        if(m_peakUsedBytes.compare_exchange_weak(peakBytes, usedBytes, MemoryOrder::relaxed))
+            return;
+    }
 }
 
 

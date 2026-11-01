@@ -8,7 +8,7 @@
 #include "passive_scene_support.h"
 
 #include <impl/assets_scene/asset.h>
-#include <impl/assets_ui_skin/subsystem.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
 
 #include <global/simplemath.h>
 #include <global/simdmath.h>
@@ -124,9 +124,7 @@ b8 UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiTextureImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32){
     if(key != Core::Key::F4 && key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
         return false;
     if(action != Core::InputAction::Press)
@@ -278,7 +276,7 @@ b8 UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const f3
         return false;
     source.reset();
     PopupOptions child;
-    child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 370.0f, 8.0f, 16.0f };
+    child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 128.0f };
     if(ui.beginPopup("texture_image_child", m_child, child)){
         source = m_default;

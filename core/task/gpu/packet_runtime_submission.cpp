@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime_internal.h"
+#include "compiler_internal.h"
 #include "task_graph.h"
 
 
@@ -20,6 +21,50 @@ namespace GpuPacketRuntimeDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(const GpuPhysicalQueueId queue, const Span<const QueueSubmissionToken> waitTokens, Alloc::ScratchArena& scratchArena){
+    constexpr usize s_InlineQueueCount = 8u;
+    Array<GpuPhysicalQueueId, s_InlineQueueCount> inlineQueues;
+    usize inlineQueueCount = 0u;
+    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> overflowQueues(scratchArena);
+    PacketWaitStatistics statistics;
+    statistics.plannedWaitTokenCount = waitTokens.size();
+    for(const QueueSubmissionToken& waitToken : waitTokens){
+        if(waitToken.matchesPhysicalQueue(queue.index, queue.deviceGeneration)){
+            ++statistics.sameQueueWaitElisionCount;
+            continue;
+        }
+
+        const GpuPhysicalQueueId waitQueue{ .index = waitToken.physicalQueueIndex, .deviceGeneration = waitToken.deviceGeneration, };
+        const GpuPhysicalQueueId* const distinctQueues = overflowQueues.empty() ? inlineQueues.data() : overflowQueues.data();
+        const usize distinctQueueCount = overflowQueues.empty() ? inlineQueueCount : overflowQueues.size();
+        b8 merged = false;
+        for(usize queueIndex = 0u; queueIndex < distinctQueueCount; ++queueIndex){
+            if(distinctQueues[queueIndex] == waitQueue){
+                merged = true;
+                break;
+            }
+        }
+        if(merged){
+            ++statistics.mergedTimelineWaitCount;
+            continue;
+        }
+
+        if(inlineQueueCount < s_InlineQueueCount){
+            inlineQueues[inlineQueueCount] = waitQueue;
+            ++inlineQueueCount;
+        }
+        else{
+            if(overflowQueues.empty()){
+                overflowQueues.reserve(Min(waitTokens.size(), s_InlineQueueCount * 2u));
+                overflowQueues.insert(overflowQueues.end(), inlineQueues.begin(), inlineQueues.end());
+            }
+            overflowQueues.push_back(waitQueue);
+        }
+        ++statistics.timelineWaitCount;
+    }
+    return statistics;
+}
 
 [[nodiscard]] b8 ValidateInitialOwnershipCompletionToken(
     const GpuTaskGraphInitialOwnerHandoffSourceView& source,
@@ -65,7 +110,7 @@ namespace GpuPacketRuntimeDetail{
                 return false;
 
             const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuTaskGraphCompilerDetail::FindInitialOwnerHandoffSource(resource, barrier.range, barrier.destinationQueue, &barrier.sourceQueue);
             if(!source)
                 return false;
             const QueueSubmissionToken* const token = declarationAccess.externalCompletionToken(source->completion);
@@ -77,51 +122,6 @@ namespace GpuPacketRuntimeDetail{
         }
     }
     return true;
-}
-
-[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(const GpuPhysicalQueueId queue, const QueueSubmissionToken* const waitTokens, const usize waitTokenCount, Alloc::ScratchArena& scratchArena){
-    constexpr usize s_InlineQueueCount = 8u;
-    Array<GpuPhysicalQueueId, s_InlineQueueCount> inlineQueues;
-    usize inlineQueueCount = 0u;
-    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> overflowQueues(scratchArena);
-    PacketWaitStatistics statistics;
-    statistics.plannedWaitTokenCount = waitTokenCount;
-    for(usize waitIndex = 0u; waitIndex < waitTokenCount; ++waitIndex){
-        const QueueSubmissionToken& waitToken = waitTokens[waitIndex];
-        if(waitToken.matchesPhysicalQueue(queue.index, queue.deviceGeneration)){
-            ++statistics.sameQueueWaitElisionCount;
-            continue;
-        }
-
-        const GpuPhysicalQueueId waitQueue{ .index = waitToken.physicalQueueIndex, .deviceGeneration = waitToken.deviceGeneration, };
-        const GpuPhysicalQueueId* const distinctQueues = overflowQueues.empty() ? inlineQueues.data() : overflowQueues.data();
-        const usize distinctQueueCount = overflowQueues.empty() ? inlineQueueCount : overflowQueues.size();
-        b8 merged = false;
-        for(usize queueIndex = 0u; queueIndex < distinctQueueCount; ++queueIndex){
-            if(distinctQueues[queueIndex] == waitQueue){
-                merged = true;
-                break;
-            }
-        }
-        if(merged){
-            ++statistics.mergedTimelineWaitCount;
-            continue;
-        }
-
-        if(inlineQueueCount < s_InlineQueueCount){
-            inlineQueues[inlineQueueCount] = waitQueue;
-            ++inlineQueueCount;
-        }
-        else{
-            if(overflowQueues.empty()){
-                overflowQueues.reserve(Min(waitTokenCount, s_InlineQueueCount * 2u));
-                overflowQueues.insert(overflowQueues.end(), inlineQueues.begin(), inlineQueues.end());
-            }
-            overflowQueues.push_back(waitQueue);
-        }
-        ++statistics.timelineWaitCount;
-    }
-    return statistics;
 }
 
 [[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept{
@@ -139,27 +139,6 @@ namespace GpuPacketRuntimeDetail{
         }
     }
     return true;
-}
-
-[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept{
-    if(resource.initialOwnerHandoffSourceCount == 0u || !resource.initialOwnerHandoffSources || (resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && resource.type != GpuGraphResourceType::AccelStruct))
-        return nullptr;
-
-    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
-    for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
-        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
-        if(
-            source.sourceQueue != barrier.sourceQueue
-            || source.destinationQueue != barrier.destinationQueue
-            || (resource.type == GpuGraphResourceType::Texture && !source.range.textureSubresources.contains(barrier.range.textureSubresources))
-            || (resource.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.contains(barrier.range.bufferRange))
-        )
-            continue;
-        if(result)
-            return nullptr;
-        result = &source;
-    }
-    return result;
 }
 
 

@@ -24,10 +24,6 @@ NWB_CORE_BEGIN
 
 
 class Win32TextInputContextGuard final : private NoCopy{
-private:
-    static constexpr StringView s_WarningEventName = "warning";
-
-
 public:
     Win32TextInputContextGuard(const HWND window, const HIMC context)noexcept
         : m_window(window)
@@ -35,7 +31,7 @@ public:
     {}
     ~Win32TextInputContextGuard()noexcept{
         if(!release()){
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = "win32_text_input_context_release", .message = "Text input: ImmReleaseContext failed", });
+            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = "win32_text_input_context_release", .message = "Text input: ImmReleaseContext failed", });
         }
     }
 

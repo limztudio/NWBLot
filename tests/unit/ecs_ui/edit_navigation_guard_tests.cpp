@@ -85,7 +85,7 @@ protected:
                 mutationAccepted = true;
                 break;
             case CallbackMutation::ReenterHost:
-                innerRejected = !m_host.editNavigated(m_widget, m_navigationModel, {}, {}, m_navigation, m_resolver, m_actions).valid;
+                innerRejected = !m_host.editNavigated(m_widget, {}, {}, m_navigationModel, m_navigation, m_resolver, m_actions).valid;
                 mutationAccepted = true;
                 break;
             case CallbackMutation::FailContext:

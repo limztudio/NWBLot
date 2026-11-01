@@ -54,8 +54,7 @@ TextInputCapabilities Win32TextInputService::capabilities()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum Win32TextInputService::startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc){
-    static_cast<void>(token);
+TextInputAdmission::Enum Win32TextInputService::startNativeSession([[maybe_unused]] const TextInputSessionToken token, const TextInputSessionDesc& desc){
     if(!IsWindow(static_cast<HWND>(m_nativeWindowHandle.get())))
         return TextInputAdmission::Unavailable;
     m_pendingHighSurrogate = 0u;

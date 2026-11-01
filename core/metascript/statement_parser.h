@@ -24,7 +24,16 @@ private:
 
 
 public:
-    StatementParser(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations, Document::StructMap& structs);
+    StatementParser(const MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations, Document::StructMap& structs)
+        : m_cursor(source, arena, scratchArena, errors)
+        , m_validator(m_cursor)
+        , m_expressions(m_cursor, m_validator, variables)
+        , m_arena(arena)
+        , m_scratchArena(scratchArena)
+        , m_variables(variables)
+        , m_declarations(declarations)
+        , m_structs(structs)
+    {}
 
 
 public:

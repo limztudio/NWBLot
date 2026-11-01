@@ -162,7 +162,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     if(coopVecExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, cooperativeVectorFeatures);
 
-    b8 queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
+    Array<b8, s_OptionalDeviceFeatureCount> queriedOptionalFeatures = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::DescriptorBuffer || (apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr))
             continue;
@@ -399,7 +399,7 @@ b8 BackendContext::createVulkanDevice(Alloc::ScratchArena& scratchArena){
     vulkan13features.textureCompressionASTC_HDR = textureCompressionAstcHdrFeatureEnabled ? VK_TRUE : VK_FALSE;
 
     pNext = nullptr;
-    b8 enabledOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
+    Array<b8, s_OptionalDeviceFeatureCount> enabledOptionalFeatures = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)

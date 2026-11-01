@@ -4,7 +4,6 @@ target_sources(nwb_font_builder_bake PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/font_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/sdf_raster.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/atlas_*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/kerning.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_font.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/source_input.cpp"
@@ -23,3 +22,4 @@ target_sources(nwb_font_builder PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp"
 )
 target_link_libraries(nwb_font_builder PRIVATE nwb_font_builder_bake nwb_common nwb_alloc nwb_logclient nwb::cli11_headers)
+

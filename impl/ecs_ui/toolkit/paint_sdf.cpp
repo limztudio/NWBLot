@@ -4,9 +4,6 @@
 
 #include "paint.h"
 
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,17 +14,9 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PaintBuilder::prepareSdfPages(const SharedSdfAtlasPage* const pages, const usize count){
-    return prepareImages(nullptr, 0u, pages, count);
-}
-
 b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
-    if(
-        !page || channel >= page->binding().channelCount || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
-        || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
-        || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f
-    )
+    if(!page || channel >= page->binding().channelCount || !IsValidUvRect(uv))
         return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_sdfPages.size(); ++index){
@@ -35,7 +24,7 @@ b8 PaintBuilder::drawSdfGlyph(const SharedSdfAtlasPage& page, const u32 channel,
             break;
     }
     if(index == m_snapshot.m_sdfPages.size()){
-        if(!prepareSdfPages(&page, 1u))
+        if(!prepareSdfPages(Span<const SharedSdfAtlasPage>(&page, 1u)))
             return false;
         for(index = 0u; index < m_snapshot.m_sdfPages.size(); ++index){
             if(m_snapshot.m_sdfPages[index]->binding() == page->binding())

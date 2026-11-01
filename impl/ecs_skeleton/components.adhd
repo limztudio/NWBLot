@@ -40,6 +40,20 @@ b8 HasSkeletonPoseData(in SkeletonPoseComponent pose){
     return !pose.localJoints.empty() || !pose.parentJoints.empty();
 }
 
+b8 ValidSkeletonPoseTopology(in SkeletonPoseComponent pose){
+    if(!ValidSkeletonSkinningMode(pose.skinningMode))
+        return false;
+    const usize jointCount = pose.localJoints.size();
+    if(jointCount == 0u || pose.parentJoints.size() != jointCount || jointCount > 0xffffffffu)
+        return false;
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
+        const u32 parentJoint = pose.parentJoints[jointIndex];
+        if(parentJoint != s_SkeletonRootParent && cast<usize>(parentJoint) >= jointIndex)
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

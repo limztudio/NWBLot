@@ -9,8 +9,8 @@
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
 
-#include <global/filesystem.h>
 #include <global/binary_big_endian.h>
+#include <global/filesystem.h>
 #include <global/simd/vector.h>
 
 #include <gtest/gtest.h>
@@ -71,7 +71,7 @@ struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
     for(u32 index = 0u; index < 5u; ++index){
         FontAtlasGlyph glyph;
         glyph.glyphId = index;
-        glyph.advanceUnits = VectorGetX(VectorAdd(VectorReplicate(400.f), VectorReplicate(static_cast<f32>(index))));
+        glyph.advanceUnits = 400.f + static_cast<f32>(index);
         if(index < 4u){
             glyph.channel = index;
             glyph.x = 1u;
@@ -86,14 +86,14 @@ struct AtlasTestArena : TestArena<FontAtlasTestArenaTag>{
         }
         payload.glyphs.push_back(glyph);
     }
-    static constexpr u8 s_KernBytes[] = {
+    static constexpr Array<u8, 24> s_KernBytes = {
         0x00u, 0x00u, 0x00u, 0x01u, 0x00u, 0x00u, 0x00u, 0x14u,
         0x00u, 0x01u, 0x00u, 0x01u, 0x00u, 0x06u, 0x00u, 0x00u,
         0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x01u, 0xffu, 0xecu,
     };
     FontAtlasPositioningTable table(testArena.arena);
     table.tag = s_FontAtlasKernTag;
-    table.bytes.assign(s_KernBytes, s_KernBytes + LengthOf(s_KernBytes));
+    table.bytes.assign(s_KernBytes.begin(), s_KernBytes.end());
     table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
     payload.positioningTables.push_back(Move(table));
     return payload;
@@ -160,7 +160,7 @@ TEST(AssetsFontAtlas, BuildOwnsGlyphsGroupsAndPositioningInCallerArena){
     EXPECT_EQ(&payload.groups[0u].pixels.get_allocator().arena(), &resultArena);
     EXPECT_EQ(&payload.positioningTables[0u].bytes.get_allocator().arena(), &resultArena);
 
-    entry.payload.glyphs[0u].advanceUnits = VectorGetX(VectorAdd(VectorReplicate(entry.payload.glyphs[0u].advanceUnits), VectorSplatOne()));
+    entry.payload.glyphs[0u].advanceUnits = entry.payload.glyphs[0u].advanceUnits + 1.0f;
     entry.payload.groups[0u].pixels[0u] ^= 1u;
     entry.payload.positioningTables[0u].bytes.back() ^= 1u;
     ASSERT_TRUE(built->validatePayload(testArena.scratchArena));
@@ -179,7 +179,7 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     ASSERT_TRUE(valid);
     FontAtlas atlas(testArena.arena, Name(s_BodyFontAtlasPath));
     ASSERT_TRUE(atlas.loadBinary(*valid));
-    const usize corruptOffsets[] = {
+    const Array<usize, 15> corruptOffsets = {
         0u,
         4u,
         8u,
@@ -194,11 +194,11 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes,
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 4u,
         s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 8u,
-        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u
+        s_FontAtlasBinaryHeaderBytes + 5u * s_FontAtlasBinaryGlyphBytes + 12u,
     };
     for(const usize offset : corruptOffsets){
         Core::Assets::AssetBytes invalid(*valid);
-        WriteLittleU32(invalid, offset, Limit<u32>::s_Max);
+        WriteLittleU32(offset, Limit<u32>::s_Max, invalid);
         EXPECT_FALSE(atlas.loadBinary(invalid)) << offset;
         EXPECT_EQ(atlas.payload().fontSha256, payload.fontSha256);
         EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
@@ -270,24 +270,24 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersAreRejected){
     auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena, testArena.scratchArena);
     ASSERT_TRUE(loaded);
     const usize groupOffset = s_FontAtlasBinaryHeaderBytes + payload.glyphs.size() * s_FontAtlasBinaryGlyphBytes;
-    const Pair<usize, u32> invalidFields[] = {
-        { 4u, 1u },
-        { 4u, 0u },
-        { 4u, s_FontAtlasBinaryVersion + 1u },
-        { groupOffset, Limit<u32>::s_Max },
-        { groupOffset + 4u, Limit<u32>::s_Max },
-        { groupOffset + 8u, 0u },
-        { groupOffset + 8u, 5u },
-        { groupOffset + 8u, Limit<u32>::s_Max },
-        { groupOffset + 12u, 0u },
-        { groupOffset + 12u, 255u },
-        { groupOffset + 12u, 257u }
+    const Array<Pair<usize, u32>, 11> invalidFields = {
+        Pair<usize, u32>{ 4u, 1u },
+        Pair<usize, u32>{ 4u, 0u },
+        Pair<usize, u32>{ 4u, s_FontAtlasBinaryVersion + 1u },
+        Pair<usize, u32>{ groupOffset, Limit<u32>::s_Max },
+        Pair<usize, u32>{ groupOffset + 4u, Limit<u32>::s_Max },
+        Pair<usize, u32>{ groupOffset + 8u, 0u },
+        Pair<usize, u32>{ groupOffset + 8u, 5u },
+        Pair<usize, u32>{ groupOffset + 8u, Limit<u32>::s_Max },
+        Pair<usize, u32>{ groupOffset + 12u, 0u },
+        Pair<usize, u32>{ groupOffset + 12u, 255u },
+        Pair<usize, u32>{ groupOffset + 12u, 257u },
     };
     for(const auto& field : invalidFields){
         const usize offset = field.first();
         const u32 value = field.second();
         Core::Assets::AssetBytes invalid(*binary);
-        WriteLittleU32(invalid, offset, value);
+        WriteLittleU32(offset, value, invalid);
         EXPECT_FALSE(DeserializeFontAtlasPayload(invalid, testArena.arena, testArena.scratchArena)) << offset << ": " << value;
     }
     FontAtlasPayload invalid(payload);
@@ -341,7 +341,7 @@ TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization){
     candidate.glyphs[0u].x = Limit<u32>::s_Max;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
-    candidate.glyphs[0u].planeRight = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeRight), VectorSplatOne()));
+    candidate.glyphs[0u].planeRight = candidate.glyphs[0u].planeRight + 1.0f;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.glyphs[0u].advanceUnits = Limit<f32>::s_Infinity;
@@ -407,10 +407,10 @@ TEST(AssetsFontAtlas, PaddedPlaneSizeMustMatchBitmapExtentAtTheDeclaredBakeSize)
     FontAtlasPayload original = MakePayload(testArena);
     ASSERT_TRUE(ValidateFontAtlasPayload(original, testArena.scratchArena));
     FontAtlasPayload candidate(original);
-    candidate.glyphs[0u].planeRight = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeRight), VectorSplatOne()));
+    candidate.glyphs[0u].planeRight = candidate.glyphs[0u].planeRight + 1.0f;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
-    candidate.glyphs[0u].planeBottom = VectorGetX(VectorAdd(VectorReplicate(candidate.glyphs[0u].planeBottom), VectorSplatOne()));
+    candidate.glyphs[0u].planeBottom = candidate.glyphs[0u].planeBottom + 1.0f;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate, testArena.scratchArena));
     candidate = original;
     candidate.bakePpem *= 2u;

@@ -195,11 +195,6 @@ inline constexpr i32 s_LeadingBitMask2 = 0x00000003;
 
 
 #if defined(NWB_HAS_SSE2)
-#if defined(NWB_HAS_AVX2)
-NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{ return _mm_srlv_epi32(value, count); }
-
-#endif
-
 NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
 #if defined(NWB_HAS_AVX2)
     return _mm_sllv_epi32(value, count);
@@ -236,7 +231,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     __m128i b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     __m128i r = _mm_slli_epi32(b, 4);
 #if defined(NWB_HAS_AVX2)
-    value = MultiSrlEpi32(value, r);
+    value = _mm_srlv_epi32(value, r);
 #else
     value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 16)), _mm_andnot_si128(c, value));
 #endif
@@ -245,7 +240,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     __m128i s = _mm_slli_epi32(b, 3);
 #if defined(NWB_HAS_AVX2)
-    value = MultiSrlEpi32(value, s);
+    value = _mm_srlv_epi32(value, s);
 #else
     value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 8)), _mm_andnot_si128(c, value));
 #endif
@@ -255,7 +250,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     s = _mm_slli_epi32(b, 2);
 #if defined(NWB_HAS_AVX2)
-    value = MultiSrlEpi32(value, s);
+    value = _mm_srlv_epi32(value, s);
 #else
     value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 4)), _mm_andnot_si128(c, value));
 #endif
@@ -265,7 +260,7 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     b = _mm_srli_epi32(c, static_cast<i32>(s_F32SignBitShift));
     s = _mm_slli_epi32(b, 1);
 #if defined(NWB_HAS_AVX2)
-    value = MultiSrlEpi32(value, s);
+    value = _mm_srlv_epi32(value, s);
 #else
     value = _mm_or_si128(_mm_and_si128(c, _mm_srli_epi32(value, 2)), _mm_andnot_si128(c, value));
 #endif

@@ -26,63 +26,6 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
-static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
-static constexpr AStringView s_DeferredBxdfIncludeSubDir = "deferred_modules";
-static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
-static constexpr AStringView s_DeferredBxdfUnknownFallbackSource = "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
-static constexpr AStringView s_GeneratedUndefBlockEnd = "\n\n";
-static constexpr AStringView s_GeneratedSwitchCaseLabel = "    case ";
-static constexpr AStringView s_GeneratedSwitchCaseReturn = "u: return ";
-static constexpr AStringView s_GeneratedSwitchEnd = "    }\n";
-static constexpr AStringView s_GeneratedDispatchEnd = "}\n\n#endif\n";
-// Shadow bind aliases per interface: the fixed layout symbols, and the symbols each instance adds (3 block suffixes plus the block accessor).
-static constexpr usize s_ShadowSurfaceBindLayoutAliasCount = 7u;
-static constexpr usize s_ShadowSurfaceBindInstanceAliasReserveCount = 4u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Sentinel id for surface-less materials; never emitted as a dispatch case.
-static constexpr u32 s_NoSurfaceDispatchId = Limit<u32>::s_Max;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Path BuildDeferredBxdfIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    return cacheDirectory / configurationSafeName / s_DeferredBxdfIncludeSubDir;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
-static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
-
-// One Slang namespace per interface isolates each `.bind` file-scope symbol in the concatenating TU.
-// The project's `.surface` fragment stays global so its guarded includes keep global ownership; aliases expose that bind API.
-static constexpr AStringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
-static constexpr AStringView s_ShadowSurfaceIncludeSubDir = "shadow_modules";
-static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
-static constexpr AStringView s_ShadowSurfaceUnknownFallbackSource = "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Path BuildShadowSurfaceIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    return cacheDirectory / configurationSafeName / s_ShadowSurfaceIncludeSubDir;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using ShadowSurfaceBindEntryLookup = HashMap<Name, NotNull<const MaterialBindEntry*>, ScratchArena, Hasher<Name>, EqualTo<Name>>;
-
 using ShadowSurfaceBindNamespaceLookup = HashMap<Name, u32, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
 using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
@@ -91,7 +34,7 @@ using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AStringView bindNamespace, ScratchArena& scratchArena, ScratchHashSet<ScratchString>& inOutSeenSymbols, ShadowSurfaceBindAliasVector& outAliasSymbols, ScratchString& inOutSource){
+static void AppendShadowSurfaceBindAlias(const AStringView symbol, const AStringView bindNamespace, ScratchArena& scratchArena, ShadowSurfaceBindAliasVector& outAliasSymbols, ScratchHashSet<ScratchString>& inOutSeenSymbols, ScratchString& inOutSource){
     ScratchString seenSymbol(symbol, scratchArena);
     if(!inOutSeenSymbols.insert(Move(seenSymbol)).second)
         return;
@@ -112,8 +55,8 @@ static b8 AppendShadowSurfaceBindAliases(
     const MaterialBindEntry& bindEntry,
     const AStringView bindNamespace,
     ScratchArena& scratchArena,
-    ScratchHashSet<ScratchString>& inOutSeenSymbols,
     ShadowSurfaceBindAliasVector& outAliasSymbols,
+    ScratchHashSet<ScratchString>& inOutSeenSymbols,
     ScratchString& inOutSource
 ){
     inOutSeenSymbols.clear();
@@ -121,30 +64,29 @@ static b8 AppendShadowSurfaceBindAliases(
     outAliasSymbols.reserve(static_cast<usize>(NameDetail::s_HashLaneCount) + s_ShadowSurfaceBindLayoutAliasCount + bindEntry.structs.size() + bindEntry.instances.size() * s_ShadowSurfaceBindInstanceAliasReserveCount);
 
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
-        char laneDigits[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> laneDigits{};
         ScratchString suffix(s_MaterialBindInterfaceHashSymbolPrefix, scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
-        const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
-        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+        const ScratchString symbol = BuildMaterialBindGeneratedSymbol({}, AStringView(suffix), scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
     }
 
-    const AStringView layoutSymbols[] = {
+    static constexpr Array<AStringView, s_ShadowSurfaceBindLayoutAliasCount> s_LayoutSymbols = {
         s_MaterialBindLayoutHashSymbol,
         s_MaterialBindBlockCountSymbol,
         s_MaterialBindFieldCountSymbol,
         s_MaterialBindStorageConstantSymbol,
         s_MaterialBindStorageMutableSymbol,
         s_MaterialBindConstantByteSizeSymbol,
-        s_MaterialBindMutableByteSizeSymbol
+        s_MaterialBindMutableByteSizeSymbol,
     };
-    static_assert(LengthOf(layoutSymbols) == s_ShadowSurfaceBindLayoutAliasCount);
-    for(const AStringView suffix : layoutSymbols){
-        const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
-        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+    for(const AStringView suffix : s_LayoutSymbols){
+        const ScratchString symbol = BuildMaterialBindGeneratedSymbol({}, suffix, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
     }
 
     for(const MaterialBindStruct& bindStruct : bindEntry.structs){
-        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+        AppendShadowSurfaceBindAlias(AStringView(bindStruct.name), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
     }
 
     for(const MaterialBindInstance& instance : bindEntry.instances){
@@ -155,25 +97,25 @@ static b8 AppendShadowSurfaceBindAliases(
         }
 
         const AStringView instanceName(instance.name);
-        const AStringView blockSuffixes[] = { s_MaterialBindStorageSymbolSuffix, s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindByteSizeSymbolSuffix };
-        for(const AStringView suffix : blockSuffixes){
-            const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName }, suffix);
-            AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+        static constexpr Array<AStringView, 3u> s_BlockSuffixes = { s_MaterialBindStorageSymbolSuffix, s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindByteSizeSymbolSuffix };
+        for(const AStringView suffix : s_BlockSuffixes){
+            const ScratchString symbol = BuildMaterialBindGeneratedSymbol({ instanceName }, suffix, scratchArena);
+            AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
         }
 
-        const ScratchString blockAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName });
-        AppendShadowSurfaceBindAlias(AStringView(blockAccessor), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+        const ScratchString blockAccessor = BuildMaterialBindAccessorName({ instanceName }, scratchArena);
+        AppendShadowSurfaceBindAlias(AStringView(blockAccessor), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
 
         for(const MaterialBindField& field : bindStruct->fields){
             const AStringView fieldName(field.name);
-            const AStringView fieldSuffixes[] = { s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindKeySymbolSuffix, s_MaterialBindDefaultSymbolSuffix };
-            for(const AStringView suffix : fieldSuffixes){
-                const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, { instanceName, fieldName }, suffix);
-                AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+            static constexpr Array<AStringView, 3u> s_FieldSuffixes = { s_MaterialBindByteOffsetSymbolSuffix, s_MaterialBindKeySymbolSuffix, s_MaterialBindDefaultSymbolSuffix };
+            for(const AStringView suffix : s_FieldSuffixes){
+                const ScratchString symbol = BuildMaterialBindGeneratedSymbol({ instanceName, fieldName }, suffix, scratchArena);
+                AppendShadowSurfaceBindAlias(AStringView(symbol), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
             }
 
-            const ScratchString fieldAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName, fieldName });
-            AppendShadowSurfaceBindAlias(AStringView(fieldAccessor), bindNamespace, scratchArena, inOutSeenSymbols, outAliasSymbols, inOutSource);
+            const ScratchString fieldAccessor = BuildMaterialBindAccessorName({ instanceName, fieldName }, scratchArena);
+            AppendShadowSurfaceBindAlias(AStringView(fieldAccessor), bindNamespace, scratchArena, outAliasSymbols, inOutSeenSymbols, inOutSource);
         }
     }
 
@@ -206,25 +148,6 @@ static void AppendShadowSurfaceInputUndefines(ScratchString& inOutSource){
     inOutSource += "#undef inTangent\n";
     inOutSource += "#undef inNormal\n";
     inOutSource += "#undef inColor\n";
-}
-
-static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& arena){
-    ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    lookup.reserve(materialBindEntries.size());
-    for(const MaterialBindEntry& bindEntry : materialBindEntries){
-        const auto interfaceNameResult = Name::FromText(AStringView(bindEntry.virtualPath));
-        if(!interfaceNameResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid"), ConvertString(bindEntry.virtualPath));
-            return MakeUnexpected(Failure{});
-        }
-        const Name interfaceName = *interfaceNameResult;
-        if(!lookup.emplace(interfaceName, MakeNotNull(&bindEntry)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), ConvertString(bindEntry.virtualPath));
-            return MakeUnexpected(Failure{});
-        }
-    }
-
-    return lookup;
 }
 
 
@@ -300,7 +223,7 @@ b8 AssignMaterialShadingModelIds(const Span<MaterialCookEntry> materialEntries, 
 
 Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const AStringView configurationSafeName, const Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena){
     using namespace MaterialCookDetail;
-    Path includeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
+    Path includeRoot = cacheDirectory / configurationSafeName / s_DeferredBxdfIncludeSubDir;
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Deferred bxdf dispatch"))
         return MakeUnexpected(Failure{});
 
@@ -340,7 +263,7 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
         if(sourceById[id].empty())
             continue;
 
-        char idText[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> idText{};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedDefineDirective;
         source += s_DeferredBxdfFunctionMacro;
@@ -362,7 +285,7 @@ Expected<Path> EmitDeferredBxdfDispatchModule(const Path& cacheDirectory, const 
         if(sourceById[id].empty())
             continue;
 
-        char idText[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> idText{};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedSwitchCaseLabel;
         source += idView;
@@ -400,7 +323,7 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace MaterialCookDetail;
-    Path includeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
+    Path includeRoot = cacheDirectory / configurationSafeName / s_ShadowSurfaceIncludeSubDir;
     if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Shadow surface dispatch"))
         return MakeUnexpected(Failure{});
 
@@ -442,7 +365,7 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
         interfaceSlot = interfaceName;
     }
 
-    const auto bindEntryLookup = BuildShadowSurfaceBindEntryLookup(materialBindEntries, scratchArena);
+    const auto bindEntryLookup = BuildMaterialBindInterfaceLookup(materialBindEntries, scratchArena);
     if(!bindEntryLookup)
         return MakeUnexpected(Failure{});
 
@@ -499,10 +422,10 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
         if(surfaceById[id].empty())
             continue;
 
-        char idText[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> idText{};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         const u32 bindNamespaceId = bindNamespaceIdById[id];
-        char bindNamespaceIdText[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> bindNamespaceIdText{};
         const AStringView bindNamespaceIdView = FormatDecimal(bindNamespaceId, bindNamespaceIdText);
         bindNamespace.clear();
         bindNamespace += s_ShadowSurfaceBindNamespacePrefix;
@@ -514,7 +437,7 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
             source += interfaceById[id];
             source += ".bind\"\n}\n";
         }
-        if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), scratchArena, bindAliasSeenSymbols, bindAliasSymbols, source))
+        if(!AppendShadowSurfaceBindAliases(*bindEntryById[id], AStringView(bindNamespace), scratchArena, bindAliasSymbols, bindAliasSeenSymbols, source))
             return MakeUnexpected(Failure{});
         AppendShadowSurfaceInputDefines(source);
         source += s_GeneratedDefineDirective;
@@ -541,7 +464,7 @@ Expected<Path> EmitShadowSurfaceDispatchModule(
         if(surfaceById[id].empty())
             continue;
 
-        char idText[s_DecimalTextBufferBytes];
+        Array<char, s_DecimalTextBufferBytes> idText{};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
         source += s_GeneratedSwitchCaseLabel;
         source += idView;

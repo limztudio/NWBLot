@@ -54,8 +54,8 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.display = context.display;
     const InputRouter& input = context.ui.input();
     const auto observation = ObservePassiveSmokeTargets(
-        current.rectangles, input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
-        [](const usize index)noexcept{ return index != 8u && index != 14u && index != 15u; }
+        input, m_parent.instanceGeneration(), m_child.instanceGeneration(), 2u, current.rectangles.size(),
+        [](const usize index)noexcept{ return index != 8u && index != 14u && index != 15u; }, current.rectangles
     );
     const u32 focusCode = observation.focusCode;
     const u32 imageTargets = observation.passiveTargets;
@@ -72,7 +72,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.values[12u] = m_evictionRemaining;
     current.values[13u] = m_evictionCompleted;
     current.generations = { m_default->generation(), m_alternate->generation(), m_replacement->generation() };
-    const auto update = PublishPassiveSmokeSnapshot(current, m_snapshot, [&]()noexcept{ return current.values != m_snapshot.values || current.generations != m_snapshot.generations; });
+    const auto update = PublishPassiveSmokeSnapshot([&]()noexcept{ return current.values != m_snapshot.values || current.generations != m_snapshot.generations; }, current, m_snapshot);
     if(!update.published)
         return;
     if(update.displayChanged){
@@ -92,7 +92,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintPassiveSmokeValueMarkers(context, m_snapshot.values, m_snapshot.sequence);
+    PaintPassiveSmokeValueMarkers(m_snapshot.values, m_snapshot.sequence, context);
 }
 
 

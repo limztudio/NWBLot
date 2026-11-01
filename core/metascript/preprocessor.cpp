@@ -29,13 +29,23 @@ constexpr u32 s_MaxIncludeDepth = 64u;
     return text.substr(0u, nameEnd);
 }
 
-[[nodiscard]] constexpr MStringView StripLineComment(MStringView line)noexcept{
+[[nodiscard]] constexpr b8 IsEscapedQuoteAt(const MStringView text, const usize quoteIdx)noexcept{
+    usize backslashes = 0u;
+    usize pos = quoteIdx;
+    while(pos > 0u && text[pos - 1u] == '\\'){
+        ++backslashes;
+        --pos;
+    }
+    return (backslashes & 1u) != 0u;
+}
+
+[[nodiscard]] MStringView StripLineComment(const MStringView line, MString& outRewritten)noexcept{
     b8 inString = false;
     b8 inChar = false;
     for(usize i = 0u; i < line.size(); ++i){
-        if(!inChar && line[i] == '"' && (i == 0u || line[i - 1u] != '\\'))
+        if(!inChar && line[i] == '"' && !IsEscapedQuoteAt(line, i))
             inString = !inString;
-        else if(!inString && line[i] == '\'' && (i == 0u || line[i - 1u] != '\\'))
+        else if(!inString && line[i] == '\'' && !IsEscapedQuoteAt(line, i))
             inChar = !inChar;
         if(!inString && !inChar && i + 1u < line.size() && line[i] == '/' && line[i + 1u] == '/')
             return line.substr(0u, i);
@@ -43,7 +53,14 @@ constexpr u32 s_MaxIncludeDepth = 64u;
             const usize endComment = line.find("*/", i + 2u);
             if(endComment == MStringView::npos || TrimView(line.substr(endComment + 2u)).empty())
                 return line.substr(0u, i);
-            i = endComment + 1u;
+            MString tailRewritten(outRewritten.get_allocator());
+            const MStringView tail = StripLineComment(line.substr(endComment + 2u), tailRewritten);
+            outRewritten.clear();
+            outRewritten.reserve(i + 1u + tail.size());
+            outRewritten.append(line.data(), i);
+            outRewritten.push_back(' ');
+            outRewritten.append(tail.data(), tail.size());
+            return MStringView(outRewritten.data(), outRewritten.size());
         }
     }
     return line;
@@ -152,7 +169,7 @@ usize Preprocessor::AppendQuotedLiteral(const MStringView text, usize index, MSt
     return index;
 }
 
-usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index, MString& out, const b8 allowSignedExponent){
+usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index, const b8 allowSignedExponent, MString& out){
     while(index < text.size()){
         const MChar c = text[index];
         if(allowSignedExponent && (c == 'e' || c == 'E' || c == 'p' || c == 'P') && index + 1u < text.size() && (text[index + 1u] == '+' || text[index + 1u] == '-')){
@@ -268,7 +285,8 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                     joinedBuffer.append(rawLine.data(), rawLine.size() - 1u);
                 }
                 else{
-                    const MStringView strippedFirst = StripLineComment(rawLine);
+                    MString rewrittenFirst(m_arena);
+                    const MStringView strippedFirst = StripLineComment(rawLine, rewrittenFirst);
                     joinedBuffer.append(strippedFirst.data(), strippedFirst.size());
                 }
 
@@ -291,7 +309,8 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
                         joinedBuffer.append(nextRaw.data(), nextRaw.size() - 1u);
                     }
                     else{
-                        const MStringView strippedNext = StripLineComment(nextRaw);
+                        MString rewrittenNext(m_arena);
+                        const MStringView strippedNext = StripLineComment(nextRaw, rewrittenNext);
                         joinedBuffer.append(strippedNext.data(), strippedNext.size());
                     }
 
@@ -436,7 +455,8 @@ b8 Preprocessor::processInternal(const MStringView source, const u32 depth, cons
 b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line, const u32 depth, const MStringView currentFileKey, Vector<ConditionalFrame, Alloc::ScratchArena>& condStack, MString& outProcessed){
     using namespace __hidden_metascript_preprocessor;
 
-    const MStringView cleanLine = TrimView(StripLineComment(directiveLine));
+    MString rewrittenDirectiveBuf(m_arena);
+    const MStringView cleanLine = TrimView(StripLineComment(directiveLine, rewrittenDirectiveBuf));
     usize cmdEnd = 0u;
     while(cmdEnd < cleanLine.size() && IsAsciiIdentifierChar(cleanLine[cmdEnd]))
         ++cmdEnd;

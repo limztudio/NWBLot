@@ -4,9 +4,6 @@
 
 #include "paint.h"
 
-#include <global/simd/vector.h>
-#include <global/simplemath.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,16 +14,9 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 PaintBuilder::prepareGlyphPages(const SharedGlyphPage* const pages, const usize count){
-    return prepareImages(pages, count, nullptr, 0u);
-}
-
 b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
     NWB_ASSERT(m_recording);
-    if(
-        !page || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height) || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
-        || VectorGetX(VectorAdd(VectorReplicate(uv.x), VectorReplicate(uv.width))) > 1.0f || VectorGetX(VectorAdd(VectorReplicate(uv.y), VectorReplicate(uv.height))) > 1.0f
-    )
+    if(!page || !IsValidUvRect(uv))
         return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_glyphPages.size(); ++index){
@@ -34,7 +24,7 @@ b8 PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, c
             break;
     }
     if(index == m_snapshot.m_glyphPages.size()){
-        if(!prepareGlyphPages(&page, 1u))
+        if(!prepareGlyphPages(Span<const SharedGlyphPage>(&page, 1u)))
             return false;
         for(index = 0u; index < m_snapshot.m_glyphPages.size(); ++index){
             if(SameGlyphPageKey(m_snapshot.m_glyphPages[index]->binding(), page->binding()))

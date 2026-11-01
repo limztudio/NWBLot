@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../paint_types.adhd"
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +65,31 @@ class LayoutBox{
     public Rect clip;
     public Rect hit;
     public Point measuredSize;
+}
+
+class LayoutTreeNode{
+    public LayoutTreeNode(){
+        this.firstChild = s_LayoutNoParent;
+        this.lastChild = s_LayoutNoParent;
+        this.nextSibling = s_LayoutNoParent;
+    }
+
+    public LayoutTreeNode(in LayoutNodeDesc inDescription){
+        this.description = inDescription;
+        this.firstChild = s_LayoutNoParent;
+        this.lastChild = s_LayoutNoParent;
+        this.nextSibling = s_LayoutNoParent;
+    }
+
+    public LayoutNodeDesc description;
+    public u32 firstChild;
+    public u32 lastChild;
+    public u32 nextSibling;
+}
+
+class LayoutTreeWork{
+    public LayoutBox box;
+    public Rect inheritedClip;
 }
 
 

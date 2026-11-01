@@ -154,7 +154,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
         MethodDecl dummyEnumCtx(m_arena);
         MVector<ScopedVarInfo> enumScope(m_arena);
         TypeRef* enumUnderlyingRef = AllocateAstNode<TypeRef>(m_arena);
-        enumUnderlyingRef->name = enumDecl->sizeTypeName;
+        enumUnderlyingRef->name = enumDecl->name;
 
         for(usize i = 0u; i < enumDecl->entries.size(); ++i){
             const EnumEntry& entry = enumDecl->entries[i];
@@ -180,12 +180,20 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                     ++autoFlagBitIndex;
                 }
                 if(entry.valueExpr){
-                    if(!checkExpr(nullptr, dummyEnumCtx, *entry.valueExpr, enumScope, false, errors)){
+                    if(!checkExpr(nullptr, enumScope, false, dummyEnumCtx, *entry.valueExpr, errors)){
                         ok = false;
                     }
                     else{
                         const MStringView valType = inferExprTypeName(nullptr, &dummyEnumCtx, *entry.valueExpr, enumScope);
-                        if(entry.valueExpr->kind == ExprKind::FloatLiteral || entry.valueExpr->kind == ExprKind::StringLiteral || IsFloatScalarType(valType) || SymbolTable::IsStringSwitchType(valType)){
+                        i64 evalConstVal = 0;
+                        if(
+                            entry.valueExpr->kind == ExprKind::FloatLiteral
+                            || entry.valueExpr->kind == ExprKind::DoubleLiteral
+                            || entry.valueExpr->kind == ExprKind::StringLiteral
+                            || IsFloatScalarType(valType)
+                            || SymbolTable::IsStringSwitchType(valType)
+                            || !TryEvaluateEnumEntryConstant(*enumDecl, entry.name, m_symbols, 0u, evalConstVal)
+                        ){
                             reportError(errors, entry.span, enumDecl->isFlag
                                 ? "flag entry value must be an integral constant expression"
                                 : "enum entry value must be an integral constant expression");
@@ -196,7 +204,7 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             }
             ScopedVarInfo entryVar;
             entryVar.name = entry.name;
-            entryVar.inferredTypeName = enumDecl->sizeTypeName;
+            entryVar.inferredTypeName = enumDecl->name;
             entryVar.type = enumUnderlyingRef;
             entryVar.isConst = true;
             enumScope.push_back(entryVar);
@@ -235,26 +243,50 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
                 reportError(errors, gc->span, "file-level 'const' cannot declare an 'in' or 'mut' reference");
                 ok = false;
             }
+            if(SymbolTable::IsArenaBackedContainer(baseGcType) || baseGcType == "Atomic"){
+                reportError(errors, gc->span, "file-level 'const' cannot have an arena-backed or 'Atomic' type; use compile-time fixed types");
+                ok = false;
+            }
             if(baseGcType == "Path"){
                 if(gc->expr)
-                    markStringToPathAdaptation(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
+                    markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *gc->expr);
                 for(Expr* arg : gc->arguments){
                     if(arg)
-                        markStringToPathAdaptation(nullptr, &dummyGlobalCtx, *arg, emptyScope);
+                        markStringToPathAdaptation(nullptr, &dummyGlobalCtx, emptyScope, *arg);
                 }
             }
         }
         if(gc->expr){
-            if(!checkExpr(nullptr, dummyGlobalCtx, *gc->expr, emptyScope, false, errors))
+            if(!checkExpr(nullptr, emptyScope, false, dummyGlobalCtx, *gc->expr, errors))
                 ok = false;
-            if(gc->varType && gc->varType->isAuto && !gc->expr->resolvedSimdType.empty()){
-                gc->varType->isAuto = false;
-                gc->varType->name = gc->expr->resolvedSimdType;
+            if(gc->varType && gc->varType->isAuto){
+                if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope); inferredRef && !inferredRef->isAuto){
+                    const SourceSpan savedSpan = gc->varType->span;
+                    *gc->varType = *inferredRef;
+                    gc->varType->span = savedSpan;
+                    gc->varType->isAuto = false;
+                }
+                else{
+                    const MStringView inferredName = !gc->expr->resolvedSimdType.empty()
+                        ? gc->expr->resolvedSimdType
+                        : inferExprTypeName(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
+                    if(!inferredName.empty()){
+                        gc->varType->isAuto = false;
+                        gc->varType->name = inferredName;
+                    }
+                }
             }
         }
-        for(Expr* arg : gc->arguments){
-            if(arg && !checkExpr(nullptr, dummyGlobalCtx, *arg, emptyScope, false, errors))
-                ok = false;
+        if(!checkConstructorInitArguments(
+            nullptr,
+            gc->isCtorInit ? gc->varType : nullptr,
+            emptyScope,
+            gc->span,
+            dummyGlobalCtx,
+            gc->arguments,
+            errors
+        )){
+            ok = false;
         }
     }
 
@@ -511,7 +543,7 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
     return ok;
 }
 
-void TypeChecker::buildCallArgHints(ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
+void TypeChecker::buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, const Span<const Expr* const> args, const Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const{
     outArgTypes.clear();
     outArgIsMut.clear();
     outArgTypes.reserve(args.size());
@@ -567,7 +599,7 @@ b8 TypeChecker::isConstructibleTypeName(const MStringView calleeName, const MStr
 }
 
 const MethodDecl* TypeChecker::resolveCustomOperator(
-    ClassDecl* ownerClass,
+    const ClassDecl* ownerClass,
     const MethodDecl* method,
     const TypeRef* lhsTypeRef,
     const MStringView lhsBaseType,
@@ -598,7 +630,7 @@ const MethodDecl* TypeChecker::resolveCustomOperator(
     return nullptr;
 }
 
-MStringView TypeChecker::resolveScopeAccessEnumTypeName(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const ClassDecl** outAccessedClass, const FieldDecl** outAccessedField)const noexcept{
+MStringView TypeChecker::resolveScopeAccessEnumTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, const Span<const ScopedVarInfo> scope, const ClassDecl** outAccessedClass, const FieldDecl** outAccessedField)const noexcept{
     if(outAccessedClass)
         *outAccessedClass = nullptr;
     if(outAccessedField)

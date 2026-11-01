@@ -59,7 +59,12 @@ public:
 
 class AvboitOccupancyRecordBuilder final : NoCopy{
 public:
-    AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept;
+    AvboitOccupancyRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
+        : m_graph(graph)
+        , m_graphics(graphics)
+        , m_materialSystem(materialSystem)
+        , m_avboitSystem(avboitSystem)
+    {}
 
 
 public:

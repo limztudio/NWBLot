@@ -22,7 +22,6 @@ target_link_libraries(nwb_shader_archive PUBLIC nwb_common)
 
 nwb_declare_static_library(nwb_graphics_backend)
 target_sources(nwb_graphics_backend PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/backend_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_crash.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
@@ -89,3 +88,4 @@ if(NWB_GRAPHICS_BACKEND STREQUAL "Vulkan" AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
 endif()
 
 add_subdirectory(runtime)
+

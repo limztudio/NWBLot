@@ -4,6 +4,7 @@
 
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -45,7 +46,9 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
-using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
+using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
+using NWB::Tests::Smoke::s_SmokeTwoPi;
+using NWB::Tests::Smoke::TickSmokeWorld;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SmokeEnvironmentString;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
@@ -86,7 +89,6 @@ static constexpr f32 s_PointLightRange = 16.0f;
 
 static constexpr f32 s_SpinSpeed = 0.5f;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
-static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
@@ -97,15 +99,14 @@ class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     // Pin yaw for A/B captures that isolate flicker from motion.
     static f32 FrozenYaw(){
-        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
-        return s_Yaw;
+        return ReadSmokeFrozenYawCached("NWB_FLICKER_TEST_SPIN_ANGLE");
     }
 
 
 public:
     explicit FlickerTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(s_ProjectName, {}, context))
     {}
     virtual ~FlickerTestSmokeProject()noexcept override{
         m_context.input.removeHandler(m_arrowYawInput);
@@ -118,7 +119,7 @@ public:
         // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_CameraHeight, s_CameraDistance, s_CameraPitch, *m_world);
 
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f), Float4(0.60f, 0.76f, 1.00f), s_PointLightIntensity, s_PointLightRange);
@@ -135,26 +136,26 @@ public:
             }
         }
 
-        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
+        m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), *m_world);
 
         // Overlapping opaque and glass shadows exercise their combined response.
-        const auto opaqueModel = CreateTintedModelEntity(*m_world, s_Model, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto opaqueModel = CreateTintedModelEntity(s_Model, s_OpaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), *m_world);
         m_opaqueOwner = opaqueModel.entity;
         const auto transparentModel = CreateTintedModelEntity(
-            *m_world,
             s_CausticModel,
             s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.00f, 0.42f),
             Float4(s_CharacterSpacingX, 0.0f, s_TransparentFrontZ, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f)
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            *m_world
         );
         m_transparentOwner = transparentModel.entity;
         if(!opaqueModel.tintApplied || !transparentModel.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueModel.tintApplied, transparentModel.tintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
-        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(*m_world, m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh);
+        const auto meshEntity = NWB::Tests::Smoke::FindSpawnedModelObject(m_transparentOwner, Name("mesh"), NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         auto* const renderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(meshEntity);
         if(!renderer){
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: closed refractor renderer is unavailable"));
@@ -175,19 +176,14 @@ public:
     }
 
     virtual b8 onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f;
+        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
-        SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        return true;
+        SetSmokeYawWindowTitle(m_yaw.yaw(), m_yaw.manualControl(), s_SmokeTwoPi, m_context);
+        return TickSmokeWorld(safeDelta, *m_world);
     }
 
 
@@ -209,12 +205,12 @@ private:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
+    ArrowYawInputHandler m_arrowYawInput;
     NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::YawSpinController m_yaw;
-    ArrowYawInputHandler m_arrowYawInput;
 };
 
 

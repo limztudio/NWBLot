@@ -4,8 +4,8 @@
 
 #include "mesh_system.h"
 
-#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/raytrace/types.adhd.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/assets_mesh/asset.h>
 
@@ -305,6 +305,24 @@ Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> RendererMeshSystem::en
     return __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(found.value());
 }
 
+void RendererMeshSystem::discardRayTracingBuildState()noexcept{
+    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
+        MeshResources& mesh = meshIt.value();
+        mesh.blasBuildAccepted = false;
+        mesh.swBvhBuildAccepted = false;
+        mesh.blasGeometryContentRevision = 0u;
+        mesh.swBvhGeometryContentRevision = 0u;
+        if(mesh.blas)
+            mesh.blasBuildPending = true;
+        if(mesh.swBvhNodeBuffer || mesh.swBvhParentBuffer){
+            mesh.swBvhBuildPending = true;
+            mesh.swBvhTopologyBuilt = false;
+        }
+        mesh.blasRefitsSinceRebuild = 0u;
+        mesh.swBvhRefitsSinceRebuild = 0u;
+    }
+}
+
 Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> RendererMeshSystem::collectSoftwareBvhParentBuildStates(Core::Alloc::ScratchArena& arena)const{
     ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector states(arena);
     states.reserve(m_meshState.m_meshes.size());
@@ -349,13 +367,8 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
         if(!mesh.blas)
             continue;
         // This predicate consumes only build/revision state; the graph output below retains the BLAS.
-        ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot{};
-        snapshot.runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision;
-        snapshot.blasGeometryContentRevision = mesh.blasGeometryContentRevision;
-        snapshot.runtimeMesh = mesh.runtimeMesh;
-        snapshot.blasBuildPending = mesh.blasBuildPending;
-        snapshot.blasBuildAccepted = mesh.blasBuildAccepted;
-        outStates.push_back({ .meshName = mesh.meshName, .blas = mesh.blas, .backingFresh = mesh.blasBackingFresh, .nativeBuildsBlas = RequiresMeshBlasUpdate(snapshot), });
+        const b8 nativeBuildsBlas = RequiresMeshBlasUpdateState(mesh.blasBuildPending, mesh.blasBuildAccepted, mesh.runtimeMesh, mesh.runtimeGeometryContentRevision, mesh.blasGeometryContentRevision);
+        outStates.push_back({ .meshName = mesh.meshName, .blas = mesh.blas, .backingFresh = mesh.blasBackingFresh, .nativeBuildsBlas = nativeBuildsBlas, });
     }
 }
 

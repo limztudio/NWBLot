@@ -5,10 +5,9 @@
 #pragma once
 
 
-#include <impl/ecs_render/caustic/settings.adhd.h>
-#include <impl/ecs_render/gi/quality_settings.adhd.h>
-#include <impl/ecs_render/shadow/light_space_settings.adhd.h>
-#include <impl/ecs_render/shadow/quality_settings.adhd.h>
+#include <impl/ecs_render/module.h>
+
+#include <core/alloc/scratch.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,6 +26,13 @@ struct SmokeRenderQualitySettings{
     Impl::ShadowQualitySettings shadow;
     Impl::SoftwareShadowSettings softwareShadow;
 };
+
+
+[[nodiscard]] b8 ApplyCausticQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::CausticQualitySettings& baseSettings = {});
+[[nodiscard]] b8 ApplySurfelGiQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::SurfelGiQualitySettings& baseSettings = {});
+[[nodiscard]] b8 ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::ShadowQualitySettings& baseSettings = {});
+[[nodiscard]] b8 ApplySoftwareShadowSmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena, const Impl::SoftwareShadowSettings& baseSettings = {});
+[[nodiscard]] b8 ApplyReflectionQualitySmokeSettings(const Impl::ReflectionSettings& baseSettings, Impl::RendererSystem& renderer, Core::Alloc::ScratchArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

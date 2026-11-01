@@ -36,17 +36,6 @@ namespace AssetsVolumeCookDetail{
 inline constexpr AStringView s_AssetVolumeName = "graphics";
 inline constexpr AStringView s_AssetVolumeLogPrefix = "AssetVolume";
 
-using CookArena = Core::Assets::CookArena;
-using CookString = Core::Assets::CookString;
-template<typename T>
-using CookVector = Core::Assets::CookVector<T>;
-using ScratchArena = Core::Assets::ScratchArena;
-using ScratchString = Core::Assets::ScratchString;
-using StagedVolumePaths = Core::Filesystem::StagedDirectoryPaths;
-using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
-using ParsedAssetMetadata = Core::Assets::ParsedAssetMetadata;
-using ResolvedCookPaths = Core::Assets::ResolvedCookPaths;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,7 +48,7 @@ struct AssetVolumeWriteResult{
 
 struct AssetVolumePackManifest;
 
-using AssetVolumeManifestCooker = Function<b8(AssetVolumePackManifest&, VirtualPathHashSet&, ScratchArena&)>;
+using AssetVolumeManifestCooker = Function<b8(AssetVolumePackManifest&, CookEntryPathHashSet&, ScratchArena&)>;
 using AssetVolumeManifestCookerVector = CookVector<AssetVolumeManifestCooker>;
 
 

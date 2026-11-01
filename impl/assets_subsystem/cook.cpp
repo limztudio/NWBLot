@@ -11,6 +11,7 @@
 #include "cook.h"
 
 #include <core/assets/binary_payload_io.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -25,6 +26,16 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    const ISubsystem* const subsystem = CastSubsystem(&asset);
+    if(!subsystem){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), s_SubsystemSerializeContext, ConvertString(asset.assetType().resolvedText()));
+        return false;
+    }
+
+    return SubsystemAssetSerialization::Serialize(*subsystem, outBinary);
+}
 
 b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
     Core::Alloc::ScratchArena scratchArena(s_SubsystemSerializeArena);
@@ -76,28 +87,19 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
-    SubsystemHeaderBinary header;
-    header.subsystemTypeHash = subsystem.assetType().hash();
-    header.subsystemCount = static_cast<u64>(subsystemHashes.size());
-    header.fieldCount = static_cast<u64>(fieldCounts.size());
-    header.assetCount = static_cast<u64>(assetHashes.size());
+    const SubsystemHeaderBinary header = BuildSubsystemHeaderBinary(
+        subsystem.assetType().hash(),
+        static_cast<u64>(subsystemHashes.size()),
+        static_cast<u64>(fieldCounts.size()),
+        static_cast<u64>(assetHashes.size())
+    );
     AppendPOD(outBinary, header);
 
     return
-        Core::Assets::AppendVectorPayload(outBinary, subsystemHashes, s_SubsystemSerializeContext, s_SubsystemDepsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, fieldCounts, s_SubsystemSerializeContext, s_SubsystemFieldCountsPayloadLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, assetHashes, s_SubsystemSerializeContext, s_SubsystemAssetsPayloadLabel)
+        Core::Assets::AppendVectorPayload(subsystemHashes, s_SubsystemSerializeContext, s_SubsystemDepsPayloadLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(fieldCounts, s_SubsystemSerializeContext, s_SubsystemFieldCountsPayloadLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(assetHashes, s_SubsystemSerializeContext, s_SubsystemAssetsPayloadLabel, outBinary)
     ;
-}
-
-b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    const ISubsystem* const subsystem = CastSubsystem(&asset);
-    if(!subsystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), s_SubsystemSerializeContext, ConvertString(asset.assetType().resolvedText()));
-        return false;
-    }
-
-    return SubsystemAssetSerialization::Serialize(*subsystem, outBinary);
 }
 
 
@@ -112,22 +114,10 @@ namespace __hidden_subsystem_cook{
 
 using namespace Core::Metascript;
 
-static constexpr AStringView s_SubsystemsFieldName = "subsystems";
-
-template<typename TAsset>
-[[nodiscard]] static Expected<Core::Assets::AssetRef<TAsset>> ParseAssetRefString(const Path& nwbFilePath, const Value& itemValue, const AStringView fieldLabel, Core::Alloc::ScratchArena& scratchArena){
-    if(!itemValue.isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a string"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-        return MakeUnexpected(Failure{});
-    }
-    const AStringView text(itemValue.asString().data(), itemValue.asString().size());
-    return Core::Assets::ParseMetadataReservedAssetRefText<TAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, fieldLabel, text, scratchArena);
-}
-
 [[nodiscard]] static b8 ValidateSubsystemMetadataFields(const ISubsystem& subsystem, const Path& nwbFilePath, const Value& asset){
     const usize count = subsystem.fieldCount();
     return Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_SubsystemDiagnosticPrefix, [&subsystem, count](const AStringView fieldName)noexcept{
-        if(fieldName == s_SubsystemsFieldName)
+        if(fieldName == s_SubsystemSubsystemsFieldName)
             return true;
         for(usize i = 0u; i < count; ++i){
             if(fieldName == subsystem.fieldDescriptor(i).fieldName)
@@ -154,14 +144,14 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
         return false;
 
     outSubsystem.subsystems.clear();
-    if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemsFieldName)){
+    if(const Core::Metascript::Value* const subsystemsValue = asset.findField(s_SubsystemSubsystemsFieldName)){
         if(!subsystemsValue->isList()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemsFieldName));
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': '{}' must be a list of strings"), ConvertString(s_SubsystemDiagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(s_SubsystemSubsystemsFieldName));
             return false;
         }
         outSubsystem.subsystems.reserve(subsystemsValue->asList().size());
         for(const Core::Metascript::Value& itemValue : subsystemsValue->asList()){
-            const auto parsedRef = ParseAssetRefString<ISubsystem>(nwbFilePath, itemValue, s_SubsystemsFieldName, scratchArena);
+            const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefValue<ISubsystem>(nwbFilePath, s_SubsystemDiagnosticPrefix, s_SubsystemSubsystemsFieldName, itemValue, "must be a string", scratchArena);
             if(!parsedRef)
                 return false;
             if(parsedRef->name() == outSubsystem.virtualPath()){
@@ -169,7 +159,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                     NWB_TEXT("{} '{}': '{}' cannot reference subsystem '{}' itself"),
                     ConvertString(s_SubsystemDiagnosticPrefix),
                     PathToString<tchar>(nwbFilePath),
-                    ConvertString(s_SubsystemsFieldName),
+                    ConvertString(s_SubsystemSubsystemsFieldName),
                     ConvertString(outSubsystem.virtualPath().resolvedText())
                 );
                 return false;
@@ -207,7 +197,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
                 return false;
             }
             for(const Core::Metascript::Value& itemValue : fieldValue->asList()){
-                const auto parsedRef = ParseAssetRefString<Core::Assets::IAsset>(nwbFilePath, itemValue, descriptor.fieldName, scratchArena);
+                const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, itemValue, "must be a string", scratchArena);
                 if(!parsedRef)
                     return false;
                 const usize existingCount = outSubsystem.fieldValueCount(i);
@@ -227,7 +217,7 @@ b8 AssetsSubsystemCook::ParseSubsystemCookMetadata(const Path& nwbFilePath, cons
             }
         }
         else{
-            const auto parsedRef = ParseAssetRefString<Core::Assets::IAsset>(nwbFilePath, *fieldValue, descriptor.fieldName, scratchArena);
+            const auto parsedRef = Core::Assets::ParseMetadataReservedAssetRefValue<Core::Assets::IAsset>(nwbFilePath, s_SubsystemDiagnosticPrefix, descriptor.fieldName, *fieldValue, "must be a string", scratchArena);
             if(!parsedRef)
                 return false;
             outSubsystem.appendFieldValue(i, parsedRef->name());

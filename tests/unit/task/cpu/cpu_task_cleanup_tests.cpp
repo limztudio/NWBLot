@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cpu_task_scheduler_test_support.h"
+
 #include <loader/callback_shutdown.h>
 
 #include <core/task/cpu/scheduler.h>
@@ -22,10 +24,8 @@ namespace __hidden_cpu_task_cleanup_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_PollIntervalMS = 1u;
 constexpr u32 s_CleanupWaitIntervalMS = 20u;
 
-constexpr u32 s_ExpectedDualCount = 2u;
 constexpr int s_LoaderShutdownFailure = 73;
 
 
@@ -33,6 +33,9 @@ constexpr int s_LoaderShutdownFailure = 73;
 
 
 using namespace NWB::Core;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::LifetimeProbe;
 
 inline constexpr u32 s_TaskTimeoutMS = 4000u;
 
@@ -42,26 +45,6 @@ inline constexpr u32 s_TaskTimeoutMS = 4000u;
 
 struct TerminalTaskError{
     int code;
-};
-
-struct RetirementProbe{
-    Atomic<u32>* retirements;
-
-
-public:
-    explicit RetirementProbe(Atomic<u32>& counter)noexcept
-        : retirements(&counter)
-    {}
-    RetirementProbe(const RetirementProbe&) = delete;
-    RetirementProbe(RetirementProbe&& other)noexcept
-        : retirements(other.retirements)
-    {
-        other.retirements = nullptr;
-    }
-    ~RetirementProbe()noexcept{
-        if(retirements)
-            retirements->fetch_add(1u, MemoryOrder::release);
-    }
 };
 
 
@@ -174,13 +157,7 @@ private:
 
 
 [[nodiscard]] b8 WaitUntil(const Atomic<b8>& condition)noexcept{
-    const Timer begin = TimerNow();
-    while(!condition.load(MemoryOrder::acquire)){
-        if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
-            return false;
-        SleepMS(__hidden_cpu_task_cleanup_tests::s_PollIntervalMS);
-    }
-    return true;
+    return CpuTaskSchedulerTestSupport::WaitUntil(condition, s_TaskTimeoutMS);
 }
 
 
@@ -200,7 +177,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
     u32 handled = 0u;
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScheduler scheduler(0u);
-        const auto cpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 17 };
@@ -209,7 +186,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
-        const auto secondCpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        const auto secondCpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 29 };
@@ -220,7 +197,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         return 0;
     }, [&](const TerminalTaskError& error){
         ++handled;
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         return error.code;
     }, []()noexcept{ return -1; }
     );
@@ -237,7 +214,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
     u32 callbacks = 0u;
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
-        const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 37 };
@@ -246,7 +223,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
-        const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 41 };
@@ -256,7 +233,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
         return 0;
     }, [&](const TerminalTaskError& error){
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
     }, []()noexcept{ return -1; }
@@ -273,7 +250,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope scope(scheduler);
-        const auto cpuTaskAdmission = scheduler.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scheduler.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 53 };
@@ -282,7 +259,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
         EXPECT_TRUE(cpuTaskAdmission);
         if(cpuTaskAdmission)
             EXPECT_TRUE(cpuTaskAdmission->valid());
-        const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 59 };
@@ -292,7 +269,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
             EXPECT_TRUE(secondCpuTaskAdmission->valid());
         throw TerminalTaskError{ 47 };
     }, [&](const TerminalTaskError& error){
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
         return error.code;
     }, []()noexcept{ return -1; }
     );
@@ -303,10 +280,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
 
 TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCaptures){
     using namespace __hidden_cpu_task_cleanup_tests;
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 1u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     CpuTaskScope scope(scheduler);
     Atomic<u32> retirements{ 0u };
     Atomic<b8> started{ false };
@@ -315,7 +289,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     Atomic<b8> finished{ false };
     Atomic<b8> expired{ false };
     u32 canceledCallbacks = 0u;
-    const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+    const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
         started.store(true, MemoryOrder::release);
         if(!WaitUntil(released))
@@ -326,7 +300,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     if(cpuTaskAdmission)
         EXPECT_TRUE(cpuTaskAdmission->valid());
     EXPECT_TRUE(WaitUntil(started));
-    const auto secondCpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+    const auto secondCpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
         EXPECT_TRUE(probe.retirements != nullptr);
         ++canceledCallbacks;
         throw TerminalTaskError{ 61 };
@@ -346,7 +320,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     releaseWorker.join();
     EXPECT_TRUE(finished.load(MemoryOrder::acquire));
     EXPECT_FALSE(expired.load(MemoryOrder::acquire));
-    EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
+    EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
     EXPECT_EQ(canceledCallbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     const auto thirdCpuTaskAdmission = scheduler.submit([]()noexcept{});
@@ -361,7 +335,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
     CpuTaskScheduler scheduler(0u);
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
-        const auto cpuTaskAdmission = scope.submit([&, probe = RetirementProbe(retirements)](){
+        const auto cpuTaskAdmission = scope.submit([&, probe = LifetimeProbe(retirements)](){
             EXPECT_TRUE(probe.retirements != nullptr);
             EXPECT_TRUE((scope.parallelFor(0u, 16u, 1u, [&](usize){
                 ++callbacks;
@@ -387,14 +361,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
 
 TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCompletionPublishes){
     using namespace __hidden_cpu_task_cleanup_tests;
-    JoiningThread watchdog([](const StopToken& stop)noexcept{
-        const Timer begin = TimerNow();
-        while(!stop.stop_requested()){
-            if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
-                TerminateInvariant();
-            SleepMS(__hidden_cpu_task_cleanup_tests::s_PollIntervalMS);
-        }
-    });
+    DeadlineGuard watchdog(false, s_TaskTimeoutMS);
     CpuTaskHandle parent;
     b8 incompleteDuringRetirement = false;
     usize outstandingDuringRetirement = 0u;
@@ -412,7 +379,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
     ASSERT_TRUE(parent.valid());
     const auto thirdCpuTaskAdmission = scheduler.submit([&](){
         EXPECT_TRUE(incompleteDuringRetirement);
-        EXPECT_EQ(outstandingDuringRetirement, s_ExpectedDualCount);
+        EXPECT_EQ(outstandingDuringRetirement, 2u);
         ++callbacks;
     }, parent
     );
@@ -420,7 +387,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
     const auto dependent = *thirdCpuTaskAdmission;
     ASSERT_TRUE(dependent.valid());
     scheduler.wait(dependent);
-    EXPECT_EQ(callbacks, s_ExpectedDualCount);
+    EXPECT_EQ(callbacks, 2u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 

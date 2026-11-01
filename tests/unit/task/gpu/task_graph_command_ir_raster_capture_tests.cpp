@@ -49,11 +49,11 @@ public:
 TEST(GpuCommandIrRasterCapture, RetainedOwnerAnchorOutlivesIndependentCaptureArena){
     TaskGraphTestUtils::TestArena ownerArena;
     u32 releases = 0u;
-    Graphics::GpuCommandIrOwnerAnchor exported;
+    Core::GpuCommandIrOwnerAnchor exported;
     {
         TaskGraphTestUtils::TestArena captureArena;
-        Graphics::GpuCommandIrCapture capture(captureArena.arena);
-        const auto source = Graphics::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, OwnerReleaseProbe(releases));
+        Core::GpuCommandIrCapture capture(captureArena.arena);
+        const auto source = Core::MakeGpuCommandIrOwnerAnchor(ownerArena.arena, OwnerReleaseProbe(releases));
         ASSERT_TRUE(source);
         exported = *source;
         capture.reset();
@@ -61,7 +61,7 @@ TEST(GpuCommandIrRasterCapture, RetainedOwnerAnchorOutlivesIndependentCaptureAre
     }
     EXPECT_TRUE(exported.valid());
     EXPECT_EQ(releases, 0u);
-    exported = Graphics::GpuCommandIrOwnerAnchor{};
+    exported = Core::GpuCommandIrOwnerAnchor{};
     EXPECT_EQ(releases, 1u);
 }
 

@@ -25,15 +25,6 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
-    [[nodiscard]] static SIMDVectorSingle LoadOutlinePosition(const PlacedGlyph& glyph, const Point origin)noexcept{
-        return VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
-    }
-
-    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
-        const SIMDVectorSingle position = LoadOutlinePosition(glyph, origin);
-        return Rect{ VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
-    }
-
     [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin)noexcept{
         const SIMDVectorSingle center = VectorMultiplyAddExpression(VectorSet(glyph.ink.width, glyph.ink.height, 0.0f, 0.0f), VectorReplicate(0.5f), LoadOutlinePosition(glyph, origin));
         return { VectorGetX(center), VectorGetY(center), 1.0f, 1.0f };
@@ -42,7 +33,7 @@ protected:
     [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
-        const SIMDVectorSingle scale = VectorDivide(VectorReplicate(32.0f), VectorReplicate(static_cast<f32>(atlas.unitsPerEm())));
+        const SIMDVectorSingle scale = VectorReplicate(32.0f / static_cast<f32>(atlas.unitsPerEm()));
         const SIMDVectorSingle position = VectorMultiplyAddExpression(VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f), scale, VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)));
         const SIMDVectorSingle size = VectorMultiply(VectorSubtract(VectorSet(record.planeRight, record.planeBottom, 0.0f, 0.0f), VectorSet(record.planeLeft, record.planeTop, 0.0f, 0.0f)), scale);
         return Rect{ VectorGetX(position), VectorGetY(position), VectorGetX(size), VectorGetY(size) };
@@ -74,7 +65,7 @@ protected:
         payload.glyphs.resize(payload.sourceGlyphCount);
         for(u32 id = 0u; id < payload.sourceGlyphCount; ++id)
             payload.glyphs[id].glyphId = id;
-        const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(32.0f));
+        const SIMDVectorSingle unitsPerPixel = VectorReplicate(static_cast<f32>(payload.unitsPerEm) / 32.0f);
         for(const PlacedGlyph& placed : m_layout.glyphs()){
             if(placed.face->identity() != payload.font || placed.glyphId >= payload.glyphs.size())
                 return false;
@@ -114,11 +105,11 @@ protected:
         Core::Alloc::ScratchArena scratchArena(Name("tests/ui/text/visible_baked/validation_scratch"));
         if(!m_baked.validatePayload(scratchArena))
             return false;
-        const FontSource sources[]{
-            { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u, &m_baked },
-            { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+        const Array<FontSource, 2> sources{
+            FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u, &m_baked },
+            FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
         };
-        if(!m_text.setFonts(scratchArena, sources, 2u))
+        if(!m_text.setFonts(scratchArena, Span(sources.data(), 2u)))
             return false;
         layout = m_text.layout({ .text = text, .fontSize = 32.0f });
         if(!layout)
@@ -146,9 +137,9 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     const Point origin{ 40.0f, 40.0f };
     const Rect outline = OutlineRectangle(glyph, origin);
     const Rect plane = BakedRectangle(glyph, origin);
-    const SIMDVectorSingle clipX = VectorSubtract(VectorReplicate(outline.x), VectorReplicate(4.0f));
-    const SIMDVectorSingle clipY = VectorMultiplyAddExpression(VectorReplicate(outline.height), VectorReplicate(0.5f), VectorReplicate(outline.y));
-    const Rect clip{ VectorGetX(clipX), VectorGetX(clipY), 2.0f, 1.0f };
+    const f32 clipX = outline.x - 4.0f;
+    const f32 clipY = outline.height * 0.5f + outline.y;
+    const Rect clip{ clipX, clipY, 2.0f, 1.0f };
     // Lanes are clip right, clip bottom, plane right, plane bottom.
     const SIMDVectorSingle ends = VectorAdd(VectorSet(clip.x, clip.y, plane.x, plane.y), VectorSet(clip.width, clip.height, plane.width, plane.height));
     ASSERT_LT(VectorGetX(ends), outline.x);
@@ -166,7 +157,7 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
     EXPECT_EQ(snapshot.sdfPages()[0u].get(), glyph.face->bakedAtlas()->page(record.group).get());
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    ExpectRect(snapshot.commands()[0u].clip, clip);
+    UiPaintAssertions::ExpectRect(snapshot.commands()[0u].clip, clip);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, clip.x);
@@ -207,11 +198,11 @@ TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisible
     }
     const Point origin{ 20.0f, 20.0f };
     const Rect clip = OutlineCenterClip(m_layout.glyphs()[0u], origin);
-    const f32 clipBottom = VectorGetX(VectorAdd(VectorReplicate(clip.y), VectorReplicate(clip.height)));
+    const f32 clipBottom = clip.y + clip.height;
     for(usize index = 1u; index < m_layout.glyphs().size(); ++index)
         ASSERT_GT(BakedRectangle(m_layout.glyphs()[index], origin).y, clipBottom);
     beginPaint(1u);
-    ASSERT_TRUE(m_paint.prepareGlyphPages(prior.data(), prior.size()));
+    ASSERT_TRUE(m_paint.prepareGlyphPages(prior));
     m_paint.pushClip(clip);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
     ASSERT_TRUE(m_paint.popClip());
@@ -293,12 +284,12 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
     ASSERT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
     ASSERT_TRUE(m_layout.glyphs()[1u].face->bakedAtlas());
     beginPaint(2u);
-    ASSERT_TRUE(m_paint.prepareGlyphPages(prior.data(), prior.size()));
+    ASSERT_TRUE(m_paint.prepareGlyphPages(prior));
     m_paint.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(m_paint.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     PaintBuilder reference(m_arena);
     reference.begin({ 800.0f, 600.0f, 1.0f, 1.0f }, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_SkinPath), m_skin);
-    ASSERT_TRUE(reference.prepareGlyphPages(prior.data(), prior.size()));
+    ASSERT_TRUE(reference.prepareGlyphPages(prior));
     reference.fillRect({ 2.0f, 3.0f, 5.0f, 7.0f }, { 0.6f, 0.3f, 0.2f, 0.5f });
     ASSERT_TRUE(reference.drawGlyph(oldPage, { 12.0f, 13.0f, 5.0f, 7.0f }, { 0.0f, 0.0f, 0.25f, 0.25f }));
     const DrawSnapshot expected = reference.freeze();

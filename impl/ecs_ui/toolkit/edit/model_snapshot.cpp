@@ -14,11 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditModelSnapshot::EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-    : m_expectedText(arena)
-    , m_expectedPreedit(arena)
-{}
-
 b8 EditModelSnapshot::matches(const EditModel& model)const noexcept{
     const auto composition = model.composition();
     return

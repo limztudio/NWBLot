@@ -46,47 +46,22 @@ b8 UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
         return false;
     }
 
-    UiSkinHeaderBinary header;
-    header.textureNameHash = skin.texture().name().hash();
-    header.atlasWidth = skin.atlasWidth();
-    header.atlasHeight = skin.atlasHeight();
-    header.referenceDensity = skin.referenceDensity();
-    header.regionCount = static_cast<u32>(skin.regions().size());
+    const UiSkinHeaderBinary header = BuildUiSkinHeaderBinary(
+        skin.texture().name().hash(),
+        skin.atlasWidth(),
+        skin.atlasHeight(),
+        skin.referenceDensity(),
+        static_cast<u32>(skin.regions().size())
+    );
 
     outBinary.clear();
     outBinary.reserve(reserveBytes);
     AppendPOD(outBinary, header);
-    for(const UiSkinRegion& region : skin.regions()){
-        UiSkinRegionBinary packed;
-        packed.nameHash = region.name.hash();
-        packed.x = region.rectangle.x;
-        packed.y = region.rectangle.y;
-        packed.width = region.rectangle.width;
-        packed.height = region.rectangle.height;
-        packed.sliceLeft = region.sliceInsets.left;
-        packed.sliceTop = region.sliceInsets.top;
-        packed.sliceRight = region.sliceInsets.right;
-        packed.sliceBottom = region.sliceInsets.bottom;
-        packed.paddingLeft = region.padding.left;
-        packed.paddingTop = region.padding.top;
-        packed.paddingRight = region.padding.right;
-        packed.paddingBottom = region.padding.bottom;
-        packed.minimumWidth = region.minimumWidth;
-        packed.minimumHeight = region.minimumHeight;
-        packed.drawMode = static_cast<u32>(region.drawMode);
-        AppendPOD(outBinary, packed);
-    }
-    for(const UiSkinColor& color : skin.palette().colors){
-        UiSkinColorBinary packed;
-        packed.r = color.r;
-        packed.g = color.g;
-        packed.b = color.b;
-        packed.a = color.a;
-        AppendPOD(outBinary, packed);
-    }
-    UiSkinTypographyBinary typography;
-    typography.defaultFontSize = skin.typography().defaultFontSize;
-    AppendPOD(outBinary, typography);
+    for(const UiSkinRegion& region : skin.regions())
+        AppendPOD(outBinary, PackUiSkinRegionBinary(region));
+    for(const UiSkinColor& color : skin.palette().colors)
+        AppendPOD(outBinary, PackUiSkinColorBinary(color));
+    AppendPOD(outBinary, PackUiSkinTypographyBinary(skin.typography()));
     return true;
 }
 

@@ -20,8 +20,8 @@ namespace UiEditActionTestSupport{
 using namespace UiEditBoxTestSupport;
 
 struct ActionRecord{
-    Ui::EditAction::Enum action = Ui::EditAction::Submit;
     AString<Alloc::GlobalArena> text;
+    Ui::EditAction::Enum action = Ui::EditAction::Submit;
 
 
 public:
@@ -30,42 +30,14 @@ public:
 
 class RecordingActions final : public Ui::IEditActionSink{
 public:
-    explicit RecordingActions(Alloc::GlobalArena& arena)
-        : m_arena(arena)
-        , committed(arena)
-        , records(arena)
-    {
-        committed.assign("0");
-    }
+    explicit RecordingActions(Alloc::GlobalArena& arena);
     virtual ~RecordingActions()noexcept override = default;
 
 
 public:
-    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, const Ui::EditAction::Enum action, const b8 readOnly)override{
-        ActionRecord record(m_arena);
-        record.action = action;
-        record.text.assign(draft.text().data(), draft.text().size());
-        records.push_back(Move(record));
-        if(failSubmit && action == Ui::EditAction::Submit)
-            return false;
-        if(resetHost && action == Ui::EditAction::Submit)
-            resetHost->reset();
-        if(action == Ui::EditAction::Submit){
-            if(readOnly)
-                return true;
-            committed.assign(draft.text().data(), draft.text().size());
-            return !canonicalizeSubmit || draft.setText(committed);
-        }
-        if(action == Ui::EditAction::Blur && !readOnly && !rejectBlur)
-            committed.assign(draft.text().data(), draft.text().size());
-        return draft.setText(committed);
-    }
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& draft, Ui::EditAction::Enum action, b8 readOnly)override;
 
     void clear()noexcept{ records.clear(); }
-
-
-private:
-    Alloc::GlobalArena& m_arena;
 
 
 public:
@@ -75,6 +47,10 @@ public:
     b8 canonicalizeSubmit = false;
     b8 failSubmit = false;
     b8 rejectBlur = false;
+
+
+private:
+    Alloc::GlobalArena& m_arena;
 };
 
 class UiEditActionHostTests : public UiEditBoxHostTests{
@@ -87,12 +63,7 @@ protected:
         return prepare(m_model, options, { 10.0f, 20.0f, 180.0f, 30.0f }, &m_actions) && commit();
     }
 
-    [[nodiscard]] b8 activateActions(){
-        if(!actionFrame() || !key(Core::Key::Tab) || !actionFrame() || !m_textInput.activeSession().valid())
-            return false;
-        m_actions.clear();
-        return true;
-    }
+    [[nodiscard]] b8 activateActions();
 
     [[nodiscard]] b8 commitNative(const AStringView text){
         return m_textInput.commit(text) == TextInputAdmission::Accepted;
@@ -110,12 +81,7 @@ protected:
         return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 
-    [[nodiscard]] usize actionCount(const Ui::EditAction::Enum action)const noexcept{
-        usize count = 0u;
-        for(const auto& record : m_actions.records)
-            count += record.action == action ? 1u : 0u;
-        return count;
-    }
+    [[nodiscard]] usize actionCount(Ui::EditAction::Enum action)const noexcept;
 
 
 protected:

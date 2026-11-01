@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include "frame_graph_test_helpers.h"
-#include "frame_graph_wire_test_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,14 +20,11 @@ namespace __hidden_telemetry_frame_graph_runtime_statistics_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
 using namespace TelemetryTestDetail;
 
 using FrameGraphRuntimeStatisticsMutation = void(*)(Telemetry::FrameGraphRuntimeStatistics&);
 
-static constexpr NotNull<FrameGraphRuntimeStatisticsMutation> s_FrameGraphRuntimeStatisticsCountMutations[] = { MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+static constexpr Array<NotNull<FrameGraphRuntimeStatisticsMutation>, 38> s_FrameGraphRuntimeStatisticsCountMutations = { MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.packetCount = statistics.compile.taskCount + 1u;
     }),
     MakeNotNull<FrameGraphRuntimeStatisticsMutation>([](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
@@ -160,13 +156,13 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     const usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount
-        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
     ;
     Telemetry::EncodedFrameGraphRuntimeStatistics first;
     Telemetry::EncodedFrameGraphRuntimeStatistics second;
     const auto loadRuntimeStatistics = [&]()->b8{
-        if(!Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 911u, nodes, edges, payload))
+        if(!Telemetry::BuildFrameGraphPayload(911u, nodes, edges, testArena.scratchArena, payload))
             return false;
         NWB_MEMCPY(&first, sizeof(first), payload.data() + runtimeStatisticsOffset, sizeof(first));
         NWB_MEMCPY(&second, sizeof(second), payload.data() + runtimeStatisticsOffset + sizeof(first), sizeof(second));
@@ -179,7 +175,7 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size()));
 
     ASSERT_TRUE(loadRuntimeStatistics());
-    first.nodeIndex = s_ExpectedDualCount;
+    first.nodeIndex = 2u;
     second.nodeIndex = 0u;
     NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     NWB_MEMCPY(payload.data() + runtimeStatisticsOffset + sizeof(first), payload.size() - runtimeStatisticsOffset - sizeof(first), &second, sizeof(second));
@@ -264,50 +260,50 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
     BuildTestFrameGraph(testArena.arena, nodes, edges);
 
     nodes[0u].kind = Telemetry::FrameGraphNodeKind::Unknown;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].label = AStringView("bad\0label", 9u);
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     edges[0u].toNodeIndex = 99u;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].queueAssignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::First;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].queueAssignment = MakeChangedFrameGraphQueueAssignment();
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].compiledTask = MakeFrameGraphCompiledTask(41u, 7u, Telemetry::FrameGraphTaskPacketizationDecision::FirstTask);
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestFrameGraph(testArena.arena, nodes, edges);
     nodes[1u].runtimeStatistics = MakeFrameGraphRuntimeStatistics();
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.graphGeneration = 0u;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.compile.totalSeconds = -1.0;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     nodes[0u].runtimeStatistics.recording.recordingElapsedSeconds = Limit<f64>::s_QuietNaN;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
 
     for(usize mutationIndex = 0u; mutationIndex < LengthOf(s_FrameGraphRuntimeStatisticsCountMutations); ++mutationIndex){
         SCOPED_TRACE(mutationIndex);
         BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
         s_FrameGraphRuntimeStatisticsCountMutations[mutationIndex].get()(nodes[0u].runtimeStatistics);
         EXPECT_FALSE(Telemetry::IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
-        EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 1u, nodes, edges, payload));
+        EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(1u, nodes, edges, testArena.scratchArena, payload));
     }
 }
 
@@ -315,7 +311,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsInvalidInput){
 TEST(Telemetry, FrameGraphDurationTailsRejectInvalidValuesAndPreserveSignedZeroSubnormals){
     // The final submission durations are scalar tails after four-lane validation blocks.
     const f64 minimumSubnormal = BitCast<f64>(u64{ 1u });
-    const f64 invalidDurations[]{ -1.0, BitCast<f64>(u64{ 0x8000000000000001ull }), Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull }) };
+    const Array<f64, 5> invalidDurations = { -1.0, BitCast<f64>(u64{ 0x8000000000000001ull }), Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN, BitCast<f64>(u64{ 0x7FF0000000000001ull }) };
     for(const f64 duration : invalidDurations){
         Telemetry::FrameGraphRuntimeStatistics owner = MakeFrameGraphRuntimeStatistics();
         Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queue = MakeFrameGraphPhysicalQueueRuntimeStatistics(1u);

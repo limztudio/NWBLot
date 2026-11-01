@@ -33,8 +33,8 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
             ++missing;
     }
     for(const SharedImageSource& source : snapshot.textureImages()){
-        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const auto& cached)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
-            return cached->m_source->generation() == source->generation();
+        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const GpuVersion<GpuTextureImageVersion>& cached)noexcept{
+            return SameTextureImageKey(*cached->m_source, *source);
         });
         if(found == m_textureCache.end())
             ++missing;
@@ -66,12 +66,9 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     }
     for(usize index = 0u; index < m_textureCache.size();){
         const auto& cached = m_textureCache[index];
-        const auto found = FindIf(
-            snapshot.textureImages().begin(), snapshot.textureImages().end(),
-            [&cached](const auto& source)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
-                return cached->m_source->generation() == source->generation();
-            }
-        );
+        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const SharedImageSource& source)noexcept{
+            return SameTextureImageKey(*cached->m_source, *source);
+        });
         if(found == snapshot.textureImages().end())
             m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
         else

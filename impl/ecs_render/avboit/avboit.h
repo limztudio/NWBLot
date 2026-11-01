@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/avboit/avboit_frame_targets.h>
 #include <impl/assets/graphics/avboit/constants.h>
 
 
@@ -35,7 +35,6 @@ static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * 
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState()noexcept;
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept;
 [[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept;
-[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, b8 hdr10OutputActive)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

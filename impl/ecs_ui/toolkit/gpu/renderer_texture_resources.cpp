@@ -7,8 +7,6 @@
 #include <core/common/log.h>
 #include <core/graphics/rhi/format.h>
 
-#include <global/text_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +24,6 @@ namespace __hidden_ui_gpu_texture_resources{
 
 
 static constexpr TStringView s_ImageLoadContext = NWB_TEXT("UI Texture Image");
-static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,23 +77,10 @@ static constexpr AStringView s_ImageMarkerLabel = "UI Texture Image";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTextureImageVersion::GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)noexcept
-    : m_graphics(graphics)
-    , m_source(Move(source))
-{}
-
-GpuTextureImageVersion::~GpuTextureImageVersion()noexcept{
-    TextureAssetLoader::Release(m_texture, m_graphics);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept{
-    const auto& images = snapshot.textureImages();
-    if(images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages || snapshot.sdfPages().size() > s_PaintMaxImages || images.size() + snapshot.glyphPages().size() + snapshot.sdfPages().size() > s_PaintMaxImages)
+    if(!ValidSnapshotImageCount(snapshot))
         return false;
+    const auto& images = snapshot.textureImages();
     for(usize index = 0u; index < images.size(); ++index){
         if(!__hidden_ui_gpu_texture_resources::ValidSource(images[index]))
             return false;
@@ -106,11 +90,7 @@ b8 GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot)noexcept
         }
     }
     for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::Image){
-            if(command.textureImageIndex >= images.size() || command.glyphPageIndex != Limit<u32>::s_Max || command.sdfPageIndex != Limit<u32>::s_Max || command.sdfChannel != 0u)
-                return false;
-        }
-        else if(command.textureImageIndex != Limit<u32>::s_Max)
+        if(!ValidDrawCommandImageBinding(command, images.size()))
             return false;
     }
     return true;
@@ -123,7 +103,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureIma
         const auto& existing = m_textureCache[index];
         if(existing->m_source->generation() != source->generation())
             continue;
-        if(existing->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_resources::ValidVersion(*existing))
+        if(!SameTextureImageKey(*existing->m_source, *source) || !__hidden_ui_gpu_texture_resources::ValidVersion(*existing))
             return MakeUnexpected(Failure{});
         GpuVersion<GpuTextureImageVersion> reused = existing;
         m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
@@ -136,7 +116,7 @@ Expected<GpuVersion<GpuTextureImageVersion>> GpuRendererState::prepareTextureIma
     if(!versionResult)
         return MakeUnexpected(versionResult.error());
     GpuVersion<GpuTextureImageVersion> version = Move(*versionResult);
-    if(!TextureAssetLoader::Create(version->m_texture, source->texture(), source->identity().name(), m_graphics, __hidden_ui_gpu_texture_resources::s_ImageLoadContext))
+    if(!TextureAssetLoader::Create(source->texture(), source->identity().name(), __hidden_ui_gpu_texture_resources::s_ImageLoadContext, m_graphics, version->m_texture))
         return MakeUnexpected(Failure{});
     if(!__hidden_ui_gpu_texture_resources::ValidVersion(*version)){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness"), source->generation());
@@ -170,34 +150,28 @@ Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(Core::
     for(usize index = 0u; index < frame->m_textureImages.size(); ++index){
         const auto& image = frame->m_textureImages[index];
         const auto& source = frame->m_snapshot.textureImages()[index];
-        if(!image || !source || !image->m_source || image->m_source->generation() != source->generation() || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_resources::ValidVersion(*image))
+        if(!image || !source || !image->m_source || !SameTextureImageKey(*image->m_source, *source) || !__hidden_ui_gpu_texture_resources::ValidVersion(*image))
             return MakeUnexpected(Failure{});
-        char identityText[s_DecimalTextBufferBytes];
-        const AStringView suffix = FormatDecimal(index, identityText);
-        const auto readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
-        const auto textureIdentity = DeriveName(Name("ui.texture_image/"), suffix);
-        if(!readyIdentity || !textureIdentity)
-            return MakeUnexpected(Failure{});
-        const Core::QueueSubmissionToken& readiness = image->m_texture.readinessToken;
-        const auto readyResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc().setIdentity(*readyIdentity).setMarkerLabel("UI Texture Image Upload Completion").setToken(readiness));
-        if(!readyResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})"), index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value);
-            return MakeUnexpected(Failure{});
-        }
-        const Core::GpuExternalCompletionId ready = *readyResult;
-        const auto textureResult = graph.importTexture(
-            image->m_texture.texture,
-            Core::GpuGraphResourceDesc().setIdentity(*textureIdentity).setMarkerLabel(__hidden_ui_gpu_texture_resources::s_ImageMarkerLabel)
-                .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
-                .setExternalFinalState(Core::ResourceStates::ShaderResource)
+        const auto texture = ImportGpuSampledTexture(
+            GpuSampledTextureImportDesc{
+                .index = index,
+                .readyPrefix = s_GpuTextureImageReadyPrefix,
+                .readyMarkerLabel = "UI Texture Image Upload Completion",
+                .completionLabel = NWB_TEXT("texture"),
+                .readinessToken = image->m_texture.readinessToken,
+                .texturePrefix = s_GpuTextureImagePrefix,
+                .textureMarkerLabel = s_GpuTextureImageMarkerLabel,
+                .texture = image->m_texture.texture,
+            },
+            graph,
+            uses
         );
-        if(!textureResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
+        if(!texture){
+            if(texture.error() == GpuSampledTextureImportError::Texture)
+                NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})"), index, source->generation());
             return MakeUnexpected(Failure{});
         }
-        const Core::GpuGraphResourceId texture = *textureResult;
-        resources->push_back(texture);
-        uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
+        resources->push_back(*texture);
     }
     return resources;
 }

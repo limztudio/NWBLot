@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../layout/types.adhd"
-#include "../text/types.adhd"
-#include "../input/input.adhd"
+#include <impl/ecs_ui/toolkit/layout/validation.adhd>
+#include <impl/ecs_ui/toolkit/text/types.adhd>
+#include <impl/ecs_ui/toolkit/input/input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,8 +23,15 @@ const f32 s_StyleScrollbarMinimumThumb = 20.0f;
 const f32 s_StyleScrollWheelStep = 3.0f;
 const f32 s_StyleMarkInset = 0.3f;
 const f32 s_StyleDisabledIconAlpha = 0.5f;
+const f32 s_CheckmarkInsetFraction = 0.2f;
+// The mark loses its inset on both opposite sides.
+const f32 s_CheckmarkInsetSides = 2.0f;
 const f32 s_StyleWindowCollapseExtent = 20.0f;
 const f32 s_StyleWindowResizeExtent = 16.0f;
+const f32 s_WindowResizeGripMaximumThickness = 2.0f;
+const f32 s_WindowResizeGripThicknessFraction = 0.125f;
+const f32 s_WindowResizeGripStartFraction = 0.25f;
+const f32 s_WindowResizeGripLengthFraction = 0.75f;
 const Color s_StyleTextColor = Color(0.92f, 0.94f, 0.98f, 1.0f);
 const Color s_StyleDisabledTextColor = Color(0.48f, 0.50f, 0.55f, 1.0f);
 const Color s_StyleInsetColor = Color(0.08f, 0.10f, 0.14f, 1.0f);
@@ -89,6 +96,14 @@ class ImagePlacement{
     public Rect clip;
 }
 
+class ImageFrameRecord<TImage>{
+    public Name region;
+    // Null selects the atlas-region path; engine frames own the immutable source through deferred paint.
+    public TImage source;
+    public ImageOptions options;
+    public ImageMetrics metrics;
+}
+
 // Gesture baselines stay in the host model; frozen draw snapshots never borrow WindowState.
 class WindowGestureState{
     public InputActionId id;
@@ -124,6 +139,14 @@ class WindowMetrics{
     public f32 titleHeight = 0.0f;
     public f32 collapseExtent = 0.0f;
     public f32 resizeExtent = 0.0f;
+}
+
+Rect ResolveVisibleWindowBounds(in WindowState state, in WindowMetrics metrics){
+    Rect bounds = state.bounds;
+    if(state.collapsed){
+        bounds.height = metrics.titleHeight;
+    }
+    return bounds;
 }
 
 enum<u8> SeparatorDirection{

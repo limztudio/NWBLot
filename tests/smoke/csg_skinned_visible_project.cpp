@@ -4,6 +4,7 @@
 
 #include "csg_smoke_helpers.h"
 #include "fps_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
@@ -52,6 +53,7 @@ using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::TickSmokeWorld;
 
 using CsgSkinnedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using CsgSkinnedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
@@ -147,7 +149,7 @@ class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
     explicit CsgSkinnedVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(s_ProjectName, {}, context))
     {}
     virtual ~CsgSkinnedVisibleSmokeProject()noexcept override{
         destroyWorld();
@@ -213,18 +215,15 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
-        m_animationTime = VectorGetX(VectorMultiplyAddExpression(VectorMin(VectorReplicate(safeDelta), VectorReplicate(s_MaxAnimationDelta)), VectorReplicate(s_CutterAnimationSpeed), VectorReplicate(m_animationTime)));
+        m_animationTime = Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed + m_animationTime;
         const SIMDVectorSingle receiverRotation = BuildReceiverRotation(m_animationTime);
         updateReceiverTransforms(receiverRotation);
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
-        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
@@ -236,7 +235,7 @@ private:
     }
 
     NWB::Core::ECS::EntityID createSkinnedReceiverInstance(const Float4 position, const Float4 colorTint){
-        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto modelResult = CreateTintedModelEntity(s_Model, s_ReceiverMaterial, s_SmokeSurfaceMaterialInterface, colorTint, position, Float4(1.0f, 1.0f, 1.0f, 0.0f), *m_world);
         const NWB::Core::ECS::EntityID entity = modelResult.entity;
         if(!modelResult.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
@@ -245,16 +244,16 @@ private:
     }
 
     [[nodiscard]] b8 installCsgReceiverOnSpawnedModelObject(){
-        m_receiverObject = FindSpawnedModelObject(*m_world, m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh);
+        m_receiverObject = FindSpawnedModelObject(m_receiver, s_ModelMeshObject, NWB::Impl::ModelObjectKind::SkinnedMesh, *m_world);
         if(!m_receiverObject.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
             return false;
         }
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-        AddSkinnedCsgMeshReceiver(*m_world, m_receiverObject, s_ReceiverGroup, false, true);
+        AddSkinnedCsgMeshReceiver(m_receiverObject, s_ReceiverGroup, false, true, *m_world);
 #else
-        AddSkinnedCsgMeshReceiver(*m_world, m_receiverObject, s_ReceiverGroup, true, false);
+        AddSkinnedCsgMeshReceiver(m_receiverObject, s_ReceiverGroup, true, false, *m_world);
 #endif
         return true;
     }
@@ -321,9 +320,9 @@ private:
         NWB::Impl::CsgCapsuleShapeParameters parameters;
         parameters.radiusHalfHeight = Float4(s_CapsuleCutterRadius, s_CapsuleCutterHalfHeight, 0.0f, 0.0f);
 #endif
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         const SIMDVectorSingle receiverRotation = BuildReceiverRotation(0.0f);
-        AssignCsgCutterTransform(cutter, BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(0.0f, receiverRotation));
+        AssignCsgCutterTransform(BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(0.0f, receiverRotation), cutter);
 
         m_cutter = entity.id();
     }
@@ -346,20 +345,20 @@ private:
         if(!cutter)
             return;
 
-        AssignCsgCutterTransform(*cutter, BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(m_animationTime, receiverRotation));
+        AssignCsgCutterTransform(BuildCutterWorldCenter(cutterLocalCenter, receiverRotation), BuildCutterWorldRotation(m_animationTime, receiverRotation), *cutter);
     }
 
 
 private:
+    Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     NWB::Core::ECS::EntityID m_plainReceiver = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::s_InvalidEntityId;
     f32 m_animationTime = s_InitialAnimationTime;
-    Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     b8 m_rendererBaselineCapturePaused = false;
 };

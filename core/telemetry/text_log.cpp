@@ -79,7 +79,7 @@ b8 IsValidTextLogType(const Common::LogType::Enum type)noexcept{
     return false;
 }
 
-b8 BuildTextLogPayload(Alloc::ScratchArena& scratchArena, const Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload){
+b8 BuildTextLogPayload(const Common::LogType::Enum type, TStringView message, Alloc::ScratchArena& scratchArena, TelemetryBytes& outPayload){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;
@@ -137,15 +137,6 @@ b8 RecordTextLog(Recorder& recorder, const Common::LogType::Enum type, const TSt
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TextLogCaptureLogger::TextLogCaptureLogger(Recorder& recorder, Common::ILogger* const forwardLogger)noexcept
-    : m_recorder(recorder)
-    , m_forwardLogger(forwardLogger)
-{}
-
-Common::LogArena& TextLogCaptureLogger::arena(){
-    return m_forwardLogger ? m_forwardLogger->arena() : m_recorder.arena();
-}
 
 void TextLogCaptureLogger::enqueue(Common::LogString&& str, const Common::LogType::Enum type){
     capture(TStringView(str.data(), str.size()), type);

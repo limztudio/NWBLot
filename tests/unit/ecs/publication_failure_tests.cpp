@@ -18,8 +18,6 @@ namespace __hidden_publication_failure_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
 using TestWorld = NWB::Tests::EcsTestWorld;
 
 
@@ -130,9 +128,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update(NWB::Core::ECS::World& world, f32 delta)noexcept override{
-        static_cast<void>(world);
-        static_cast<void>(delta);
+    [[nodiscard]] virtual Expected<void, NWB::Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] NWB::Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept override{
         return {};
     }
 
@@ -180,8 +176,8 @@ TEST(Ecs, FailedComponentMoveAssignmentPreservesEntityMappings){
     ASSERT_TRUE(second.hasComponent<ThrowingMoveAssignmentComponent>());
     EXPECT_EQ(first.getComponent<ThrowingMoveAssignmentComponent>().value, 89u);
     EXPECT_EQ(second.getComponent<ThrowingMoveAssignmentComponent>().value, 97u);
-    EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), s_ExpectedDualCount);
-    EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingMoveAssignmentComponent>(), s_ExpectedDualCount);
+    EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 2u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<ThrowingMoveAssignmentComponent>(), 2u);
 
     first.removeComponent<ThrowingMoveAssignmentComponent>();
     EXPECT_FALSE(first.hasComponent<ThrowingMoveAssignmentComponent>());
@@ -259,13 +255,13 @@ TEST(Ecs, FailedWorldTaskJoinStillRetiresBorrowingSystemsInOrder){
     EXPECT_THROW(failDuringWorldWait(), i32);
     EXPECT_TRUE(state.borrowerObservedProvider);
     EXPECT_FALSE(state.providerAlive);
-    EXPECT_EQ(state.destructionCount, s_ExpectedDualCount);
-    EXPECT_EQ(state.destructionOrder[0], s_ExpectedDualCount);
+    EXPECT_EQ(state.destructionCount, 2u);
+    EXPECT_EQ(state.destructionOrder[0], 2u);
     EXPECT_EQ(state.destructionOrder[1], 1u);
 }
 
 TEST(Ecs, WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems){
-    for(u32 round = 0u; round < s_ExpectedDualCount; ++round){
+    for(u32 round = 0u; round < 2u; ++round){
         SystemLifetimeState state;
         {
             TestWorld testWorld;
@@ -276,8 +272,8 @@ TEST(Ecs, WorldClearAndDestructionRetireBorrowersBeforeEarlierSystems){
         }
         EXPECT_TRUE(state.borrowerObservedProvider);
         EXPECT_FALSE(state.providerAlive);
-        EXPECT_EQ(state.destructionCount, s_ExpectedDualCount);
-        EXPECT_EQ(state.destructionOrder[0], s_ExpectedDualCount);
+        EXPECT_EQ(state.destructionCount, 2u);
+        EXPECT_EQ(state.destructionOrder[0], 2u);
         EXPECT_EQ(state.destructionOrder[1], 1u);
     }
 }

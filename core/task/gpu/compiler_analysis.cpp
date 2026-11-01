@@ -300,7 +300,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
         }
     }
-    SIMDVectorDouble validationSeconds = VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), validationBegin));
+    f64 validationSeconds = DurationInSeconds<f64>(TimerNow(), validationBegin);
 
     const Timer dependencyAnalysisBegin = TimerNow();
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
@@ -315,7 +315,12 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
     };
     HashMap<u64, DependencyPairIndices, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> dependencyPairs(0, GpuTaskDependencyPairHasher(), EqualTo<u64>(), scratchArena);
     Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
-    HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> inferredEdgeIndices(0u, InferredDependencyHasher{ MakeNotNull(&outAnalysis.m_inferredEdges) }, InferredDependencyEqual{ MakeNotNull(&outAnalysis.m_inferredEdges) }, scratchArena);
+    HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> inferredEdgeIndices(
+        0u,
+        InferredDependencyHasher{ MakeNotNull(&outAnalysis.m_inferredEdges) },
+        InferredDependencyEqual{ MakeNotNull(&outAnalysis.m_inferredEdges) },
+        scratchArena
+    );
     usize expectedEdgeCount = resourceVersionDependencyEdges.size();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
@@ -507,7 +512,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             outAnalysis.m_schedulingIncomingProducers
         );
     }
-    const f64 topologicalOrderSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(semanticTopologySeconds), VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), finalTopologyBegin))));
+    const f64 topologicalOrderSeconds = semanticTopologySeconds + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin);
 
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -538,7 +543,7 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
             }
         }
     }
-    validationSeconds = VectorDoubleAdd(validationSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin)));
+    validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
 
     const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
@@ -591,9 +596,9 @@ b8 GpuTaskGraphCompiler::analyze(const GpuTaskGraph::DeclarationReadView& graph,
         if(!hasBackBufferWriter)
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
     }
-    validationSeconds = VectorDoubleAdd(validationSeconds, VectorDoubleReplicate(DurationInSeconds<f64>(TimerNow(), presentationValidationBegin)));
+    validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
 
-    outAnalysis.m_validationSeconds = VectorDoubleGetX(validationSeconds);
+    outAnalysis.m_validationSeconds = validationSeconds;
     outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;
     outAnalysis.m_hazardAnalysisSeconds = hazardAnalysisSeconds;
     outAnalysis.m_topologicalOrderSeconds = topologicalOrderSeconds;

@@ -9,8 +9,6 @@
 
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
 
-#include <global/bit.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -61,10 +59,10 @@ public:
 
 
 private:
-    mutable SliderCallbackMutation::Enum m_mutation = SliderCallbackMutation::None;
     SliderState* m_state = nullptr;
     Builder* m_builder = nullptr;
     PopupState* m_popup = nullptr;
+    mutable SliderCallbackMutation::Enum m_mutation = SliderCallbackMutation::None;
 };
 
 struct SliderAcceptedFrame{

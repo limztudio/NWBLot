@@ -10,24 +10,7 @@
 #include <impl/ecs_mesh/runtime/mesh.h>
 
 #include <core/ecs/system.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class World;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ECS_END
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,16 +38,18 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept override{ return {}; }
+
 
 public:
-    [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity)noexcept;
-    [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept;
+    [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity)noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
+    [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
     [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const noexcept;
     // Distinguish non-rendering owners from temporarily unavailable meshes.
     [[nodiscard]] Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> resolveRenderableMeshStatus(Core::ECS::EntityID entity)const;
     [[nodiscard]] b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const;
     void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
+
 
 public:
     virtual void registerRuntimeMeshProvider(IRuntimeMeshProvider& provider)override;

@@ -8,11 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_glyph_metadata.h"
+#include "cook.h"
 
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
-
-#include <global/simd/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,76 +30,57 @@ namespace __hidden_font_atlas_cook_glyph_metadata{
 
 
 using Core::Metascript::Value;
-static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
-static constexpr AStringView s_AdvanceUnitsField = "advance_units";
-static constexpr AStringView s_GroupField = "group";
-static constexpr AStringView s_ChannelField = "channel";
-static constexpr AStringView s_XField = "x";
-static constexpr AStringView s_YField = "y";
-static constexpr AStringView s_WidthField = "width";
-static constexpr AStringView s_HeightField = "height";
-static constexpr AStringView s_PlaneLeftField = "plane_left";
-static constexpr AStringView s_PlaneTopField = "plane_top";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<u32> ReadU32(const Path& path, const Value& glyph, const AStringView field, const u32 maximum){
-    const Value* value = glyph.findField(field);
-    if(value && value->isInteger() && value->asInteger() >= 0 && static_cast<u64>(value->asInteger()) <= maximum){
-        return static_cast<u32>(value->asInteger());
-    }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}"), PathToString<tchar>(path), ConvertString(field), maximum);
-    return MakeUnexpected(Failure{});
-}
-
-[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Path& path, const Value& map, const u32 glyphId, const SIMDVectorSingle unitsPerPixel){
+[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Path& path, const Value& map, const u32 glyphId, const f32 unitsPerPixel){
     FontAtlasGlyph glyph{};
 
-    if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
+    if(!Core::Assets::CheckMetadataAssetMap(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix))
         return MakeUnexpected(Failure{});
-    const b8 hasBitmap = map.findField(s_WidthField) != nullptr;
-    if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
-        return field == s_AdvanceUnitsField || (hasBitmap && (field == s_GroupField || field == s_ChannelField || field == s_XField || field == s_YField || field == s_WidthField || field == s_HeightField || field == s_PlaneLeftField || field == s_PlaneTopField));
+    const b8 hasBitmap = map.findField(s_FontAtlasGlyphWidthField) != nullptr;
+    if(!Core::Assets::ValidateMetadataAssetFields(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, [hasBitmap](const AStringView field)noexcept{
+        return IsAllowedFontAtlasGlyphField(field, hasBitmap);
     }))
         return MakeUnexpected(Failure{});
-    auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_AdvanceUnitsField, true);
+    auto advanceUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphAdvanceUnitsField, true);
     if(!advanceUnitsResult)
         return MakeUnexpected(Failure{});
     glyph.advanceUnits = *advanceUnitsResult;
     glyph.glyphId = glyphId;
     if(!hasBitmap)
         return glyph;
-    auto groupResult = ReadU32(path, map, s_GroupField, s_FontAtlasMaxGroupCount - 1u);
+    auto groupResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphGroupField, 0u, s_FontAtlasMaxGroupCount - 1u);
     if(!groupResult)
         return MakeUnexpected(Failure{});
     glyph.group = *groupResult;
-    auto channelResult = ReadU32(path, map, s_ChannelField, s_FontAtlasMaxChannelCount - 1u);
+    auto channelResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphChannelField, 0u, s_FontAtlasMaxChannelCount - 1u);
     if(!channelResult)
         return MakeUnexpected(Failure{});
     glyph.channel = *channelResult;
-    auto xResult = ReadU32(path, map, s_XField, s_FontAtlasMaxExtent);
+    auto xResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphXField, 0u, s_FontAtlasMaxExtent);
     if(!xResult)
         return MakeUnexpected(Failure{});
     glyph.x = *xResult;
-    auto yResult = ReadU32(path, map, s_YField, s_FontAtlasMaxExtent);
+    auto yResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphYField, 0u, s_FontAtlasMaxExtent);
     if(!yResult)
         return MakeUnexpected(Failure{});
     glyph.y = *yResult;
-    auto widthResult = ReadU32(path, map, s_WidthField, s_FontAtlasMaxExtent);
+    auto widthResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphWidthField, 0u, s_FontAtlasMaxExtent);
     if(!widthResult)
         return MakeUnexpected(Failure{});
     glyph.width = *widthResult;
-    auto heightResult = ReadU32(path, map, s_HeightField, s_FontAtlasMaxExtent);
+    auto heightResult = ReadFontAtlasMetadataU32(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphHeightField, 0u, s_FontAtlasMaxExtent);
     if(!heightResult)
         return MakeUnexpected(Failure{});
     glyph.height = *heightResult;
-    auto planeLeftResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_PlaneLeftField, true);
+    auto planeLeftResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneLeftField, true);
     if(!planeLeftResult)
         return MakeUnexpected(Failure{});
     glyph.planeLeft = *planeLeftResult;
-    auto planeTopResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, s_PlaneTopField, true);
+    auto planeTopResult = Core::Assets::ReadMetadataFiniteF32Field(path, map, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphPlaneTopField, true);
     if(!planeTopResult)
         return MakeUnexpected(Failure{});
     glyph.planeTop = *planeTopResult;
@@ -108,12 +88,7 @@ static constexpr AStringView s_PlaneTopField = "plane_top";
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return MakeUnexpected(Failure{});
     }
-    const SIMDVectorSingle size = VectorSet(static_cast<f32>(glyph.width), static_cast<f32>(glyph.height), static_cast<f32>(glyph.width), static_cast<f32>(glyph.height));
-    const SIMDVectorSingle origin = VectorSet(glyph.planeLeft, glyph.planeTop, glyph.planeLeft, glyph.planeTop);
-    const SIMDVectorSingle end = VectorMultiplyAddExpression(size, unitsPerPixel, origin);
-    glyph.planeRight = VectorGetX(end);
-    glyph.planeBottom = VectorGetY(end);
-    glyph.drawable = 1u;
+    ComputeFontAtlasGlyphPlaneBounds(unitsPerPixel, glyph);
     return glyph;
 }
 
@@ -129,7 +104,7 @@ static constexpr AStringView s_PlaneTopField = "plane_top";
 
 Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript::Value& asset, const FontAtlasPayload& payload){
     using namespace __hidden_font_atlas_cook_glyph_metadata;
-    const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_FontAtlasGlyphsField);
+    const auto glyphs = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphs)
         return MakeUnexpected(glyphs.error());
     if(payload.sourceGlyphCount == 0u || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || (*glyphs)->asList().size() != payload.sourceGlyphCount){
@@ -138,7 +113,7 @@ Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(payload.glyphs.get_allocator().arena());
     candidate.reserve(payload.sourceGlyphCount);
-    const SIMDVectorSingle unitsPerPixel = VectorDivide(VectorReplicate(static_cast<f32>(payload.unitsPerEm)), VectorReplicate(static_cast<f32>(payload.bakePpem)));
+    const f32 unitsPerPixel = ComputeFontAtlasUnitsPerPixel(payload.unitsPerEm, payload.bakePpem);
     for(u32 index = 0u; index < payload.sourceGlyphCount; ++index){
         auto glyphResult = ReadGlyph(nwbFilePath, (*glyphs)->asList()[index], index, unitsPerPixel);
         if(!glyphResult)

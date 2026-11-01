@@ -6,6 +6,8 @@
 
 
 #include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/shared/plan_reservation_base.h>
+#include <impl/ecs_render/shared/statistics_readback_state.h>
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/command.h>
@@ -29,7 +31,9 @@ NWB_IMPL_BEGIN
 // An unprovable token quarantines the generation until reset after join.
 class ReflectionFeedbackState : NoCopy{
 public:
-    explicit ReflectionFeedbackState(u16 deviceGeneration)noexcept;
+    explicit ReflectionFeedbackState(const u16 deviceGeneration)noexcept
+        : m_deviceGeneration(deviceGeneration)
+    {}
 
 
 public:
@@ -64,29 +68,14 @@ private:
 using ReflectionFeedbackControl = RefCounter<ReflectionFeedbackState>;
 using ReflectionFeedbackControlHandle = RefCountPtr< ReflectionFeedbackControl, ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] Expected<ReflectionFeedbackControlHandle> CreateReflectionFeedbackControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
-class ReflectionFeedbackReservation final : NoCopy{
+class ReflectionFeedbackReservation final : public PlanReservationBase<ReflectionFeedbackControlHandle, ReflectionFeedbackPlan>{
 public:
-    ReflectionFeedbackReservation(ReflectionFeedbackControlHandle control, const ReflectionFeedbackPlan& plan)noexcept;
-    ReflectionFeedbackReservation(ReflectionFeedbackReservation&& other)noexcept;
-    ~ReflectionFeedbackReservation()noexcept;
+    using PlanReservationBase<ReflectionFeedbackControlHandle, ReflectionFeedbackPlan>::PlanReservationBase;
 
 
 public:
-    ReflectionFeedbackReservation& operator=(ReflectionFeedbackReservation&& other)noexcept;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
-    void discard()noexcept;
-
-
-private:
-    ReflectionFeedbackControlHandle m_control;
-    ReflectionFeedbackPlan m_plan;
-    b8 m_reserved = false;
 };
 
 

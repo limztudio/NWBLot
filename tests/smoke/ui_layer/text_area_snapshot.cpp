@@ -33,7 +33,7 @@ namespace __hidden_ui_text_area_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RectNames[]{ NWB_TEXT("bounds"), NWB_TEXT("content"), NWB_TEXT("clip"), NWB_TEXT("caret"),
+static constexpr Array<TStringView, 16> s_RectNames = { NWB_TEXT("bounds"), NWB_TEXT("content"), NWB_TEXT("clip"), NWB_TEXT("caret"),
     NWB_TEXT("reset"), NWB_TEXT("long"), NWB_TEXT("readonly"), NWB_TEXT("enabled"), NWB_TEXT("viewport"),
     NWB_TEXT("clipboard"), NWB_TEXT("outside"), NWB_TEXT("x_track"), NWB_TEXT("x_thumb"), NWB_TEXT("y_track"),
     NWB_TEXT("y_thumb"), NWB_TEXT("corner") };
@@ -77,9 +77,9 @@ b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     for(u32 index = 0u; index < 6u; ++index){
         // Lanes are column step and row offset.
         const SIMDVectorSingle lifted = VectorSubtract(labelOrigin, VectorSet(0.0f, index < 3u ? 76.0f : 38.0f, 0.0f, 0.0f));
-        current.rectangles[4u + index] = StoreSmokeRect(VectorSelect(lifted, VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index % 3u)), VectorReplicate(120.0f), labelOrigin), s_SIMDMaskX));
+        current.rectangles[4u + index] = { VectorGetX(labelOrigin) + static_cast<f32>(index % 3u) * 120.0f, VectorGetY(lifted), VectorGetZ(lifted), VectorGetW(lifted) };
     }
-    current.rectangles[10u] = { placement.bounds.x, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(placement.bounds.y), VectorReplicate(placement.bounds.height)), VectorReplicate(8.0f))), 160.0f, 30.0f };
+    current.rectangles[10u] = { placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f };
     current.rectangles[11u] = scrollbars.horizontal.track;
     current.rectangles[12u] = scrollbars.horizontal.thumb;
     current.rectangles[13u] = scrollbars.vertical.track;
@@ -148,13 +148,13 @@ b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
+    const f32 y = context.display.logicalHeight - 18.0f;
     usize marker = 0u;
     for(usize index = 0u; index <= m_snapshot.values.size(); ++index){
         const u64 value = index == m_snapshot.values.size() ? m_snapshot.sequence : m_snapshot.values[index];
         const u32 parts = index == 1u || index == 10u || (index >= 18u && index <= 20u) ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
-            context.paint.fillRect({ VectorGetX(VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(marker)), VectorReplicate(8.0f), VectorReplicate(8.0f))), y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
+            context.paint.fillRect({ static_cast<f32>(marker) * 8.0f + 8.0f, y, 6.0f, 10.0f }, EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }

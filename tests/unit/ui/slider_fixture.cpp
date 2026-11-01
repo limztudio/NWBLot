@@ -112,7 +112,7 @@ void SliderFixture::configureSliderSkin(){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    constexpr StringView s_Names[]{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
+    constexpr Array<StringView, 3> s_Names{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
     for(u32 index = 0u; index < 3u; ++index){
         UiSkinRegion region;
         const auto regionName = Name::FromText(s_Names[index]);
@@ -149,11 +149,11 @@ WidgetId SliderFixture::host()const{
 }
 
 WidgetId SliderFixture::track()const{
-    return UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "track"));
+    return UiTestSupport::RequireWidgetId(host(), "track");
 }
 
 WidgetId SliderFixture::thumb()const{
-    return UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "thumb"));
+    return UiTestSupport::RequireWidgetId(host(), "thumb");
 }
 
 Point SliderFixture::trackPoint(const f64 normalized, const SliderState& state)const noexcept{

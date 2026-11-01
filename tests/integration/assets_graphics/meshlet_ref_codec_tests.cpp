@@ -64,8 +64,8 @@ struct ThrowingMeshletFailureConversion{
     [[nodiscard]] ThrowingMeshletFailureBool operator()(usize, TStringView)const noexcept;
 };
 
-static_assert(noexcept(Impl::AppendMeshletRefDelta(DeclVal<NoThrowMeshletBytes&>(), 0u, Impl::MeshletRefDeltaWidth::U8)));
-static_assert(!noexcept(Impl::AppendMeshletRefDelta(DeclVal<ThrowingMeshletAppend&>(), 0u, Impl::MeshletRefDeltaWidth::U8)));
+static_assert(noexcept(Impl::AppendMeshletRefDelta(0u, Impl::MeshletRefDeltaWidth::U8, DeclVal<NoThrowMeshletBytes&>())));
+static_assert(!noexcept(Impl::AppendMeshletRefDelta(0u, Impl::MeshletRefDeltaWidth::U8, DeclVal<ThrowingMeshletAppend&>())));
 static_assert(noexcept(Impl::EncodeMeshletRefDeltas(DeclVal<const PositionRefView&>(), DeclVal<const AttributeRefView&>(), false, DeclVal<NoThrowMeshletFailure>(), DeclVal<MeshletView&>(), DeclVal<NoThrowMeshletBytes&>(), DeclVal<NoThrowMeshletBytes&>())));
 static_assert(!noexcept(Impl::EncodeMeshletRefDeltas(
     DeclVal<const PositionRefView&>(),
@@ -100,6 +100,10 @@ static constexpr u32 s_Oct16ChannelMask = 255u;
 static constexpr u32 s_Oct16YShift = 8u;
 static constexpr f32 s_Oct16UnormScale = 1.0f / 255.0f;
 static constexpr f32 s_Oct16SignedScale = 2.0f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static SIMDVectorSingle ScalarOct16Reference(const u32 packed)noexcept{
     const f32 unormX = static_cast<f32>(packed & s_Oct16ChannelMask) * s_Oct16UnormScale;
@@ -144,19 +148,19 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
     EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingUv0Shift), NWB::Impl::MeshletRefDeltaWidth::U32);
 
     for(u32 localPositionIndex = 0u; localPositionIndex < NWB::Impl::MeshletPositionCount(meshlet); ++localPositionIndex){
-        const auto decodedRef = NWB::Impl::DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
-        ASSERT_TRUE(decodedRef);
-        EXPECT_EQ(decodedRef->position, positionRefs[localPositionIndex].position);
-        EXPECT_EQ(decodedRef->skin, positionRefs[localPositionIndex].skin);
+        NWB::Impl::MeshletPositionStreamRef decodedRef;
+        ASSERT_TRUE(NWB::Impl::TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, true, decodedRef));
+        EXPECT_EQ(decodedRef.position, positionRefs[localPositionIndex].position);
+        EXPECT_EQ(decodedRef.skin, positionRefs[localPositionIndex].skin);
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < NWB::Impl::MeshletAttributeCount(meshlet); ++localAttributeIndex){
-        const auto decodedRef = NWB::Impl::DecodeMeshletAttributeRef(attributeRefDeltas.data(), attributeRefDeltas.size(), meshlet, localAttributeIndex);
-        ASSERT_TRUE(decodedRef);
-        EXPECT_EQ(decodedRef->normal, attributeRefs[localAttributeIndex].normal);
-        EXPECT_EQ(decodedRef->tangent, attributeRefs[localAttributeIndex].tangent);
-        EXPECT_EQ(decodedRef->uv0, attributeRefs[localAttributeIndex].uv0);
-        EXPECT_EQ(decodedRef->color, attributeRefs[localAttributeIndex].color);
+        NWB::Impl::MeshletAttributeStreamRef decodedRef;
+        ASSERT_TRUE(NWB::Impl::TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex, decodedRef));
+        EXPECT_EQ(decodedRef.normal, attributeRefs[localAttributeIndex].normal);
+        EXPECT_EQ(decodedRef.tangent, attributeRefs[localAttributeIndex].tangent);
+        EXPECT_EQ(decodedRef.uv0, attributeRefs[localAttributeIndex].uv0);
+        EXPECT_EQ(decodedRef.color, attributeRefs[localAttributeIndex].color);
     }
 }
 
@@ -173,7 +177,7 @@ TEST(AssetsGraphics, MeshletOct16DecodePreservesQuantizationAndFoldBits){
 }
 
 TEST(AssetsGraphics, MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries){
-    const OctEncodingBoundary boundaries[] = {
+    const Array<OctEncodingBoundary, 11u> boundaries = {{
         { { -0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x807fu },
         { { 0.0f, 0.0f, 1.0f }, 0x8080u },
         { { 0x1p-23f, 0.0f, 0x1.fffffcp-1f }, 0x8080u },
@@ -185,7 +189,7 @@ TEST(AssetsGraphics, MeshletOct16EncodingRetainsHalfStepAndFoldBoundaries){
         { { 1.0f, 1.0f, 0.0f }, 0xbfbfu },
         { { 1.0f, 1.0f, -0x1p-23f }, 0xbfbfu },
         { { 1.0f, 1.0f, 0x1p-23f }, 0xbfbfu },
-    };
+    }};
     for(const OctEncodingBoundary& boundary : boundaries){
         volatile f32 x = boundary.axis.x, y = boundary.axis.y, z = boundary.axis.z;
         EXPECT_EQ(NWB::Impl::PackMeshletConeOct16(VectorSet(x, y, z, 0.0f)), boundary.packed) << boundary.packed;
@@ -202,43 +206,43 @@ TEST(AssetsGraphics, MeshletPositionAndSkinDeltasRejectU32WraparoundAtEveryWidth
         meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
         meshlet.positionBase = Limit<u32>::s_Max - 1u;
         const u32 byteWidth = MeshletRefDeltaByteWidth(width);
-        u8 bytes[8u] = { 1u };
-        const auto boundary = DecodeMeshletPositionRef(bytes, byteWidth, meshlet, 0u, false);
-        ASSERT_TRUE(boundary);
-        EXPECT_EQ(boundary->position, Limit<u32>::s_Max);
+        Array<u8, 8u> bytes = { 1u };
+        MeshletPositionStreamRef boundary;
+        ASSERT_TRUE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth), meshlet, 0u, false, boundary));
+        EXPECT_EQ(boundary.position, Limit<u32>::s_Max);
         meshlet.positionBase = Limit<u32>::s_Max;
-        EXPECT_FALSE(DecodeMeshletPositionRef(bytes, byteWidth, meshlet, 0u, false));
+        EXPECT_FALSE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth), meshlet, 0u, false, boundary));
 
         bytes[0u] = 0u;
         bytes[byteWidth] = 1u;
         meshlet.positionBase = 0u;
         meshlet.skinBase = Limit<u32>::s_Max - 1u;
-        const auto skinBoundary = DecodeMeshletPositionRef(bytes, byteWidth * 2u, meshlet, 0u, true);
-        ASSERT_TRUE(skinBoundary);
-        EXPECT_EQ(skinBoundary->skin, Limit<u32>::s_Max);
+        MeshletPositionStreamRef skinBoundary;
+        ASSERT_TRUE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth * 2u), meshlet, 0u, true, skinBoundary));
+        EXPECT_EQ(skinBoundary.skin, Limit<u32>::s_Max);
         meshlet.skinBase = Limit<u32>::s_Max;
-        EXPECT_FALSE(DecodeMeshletPositionRef(bytes, byteWidth * 2u, meshlet, 0u, true));
+        EXPECT_FALSE(TryDecodeMeshletPositionRef(Span<const u8>(bytes.data(), byteWidth * 2u), meshlet, 0u, true, skinBoundary));
     }
 }
 
 TEST(AssetsGraphics, MeshletAttributeDeltasRejectU32WraparoundInEveryChannelAndWidth){
     using namespace NWB::Impl;
-    u32 MeshletDesc::* const baseMembers[] = { &MeshletDesc::normalBase, &MeshletDesc::tangentBase, &MeshletDesc::uv0Base, &MeshletDesc::colorBase };
-    u32 MeshletAttributeStreamRef::* const indexMembers[] = { &MeshletAttributeStreamRef::normal, &MeshletAttributeStreamRef::tangent, &MeshletAttributeStreamRef::uv0, &MeshletAttributeStreamRef::color };
+    const Array<u32 MeshletDesc::*, 4u> baseMembers = { &MeshletDesc::normalBase, &MeshletDesc::tangentBase, &MeshletDesc::uv0Base, &MeshletDesc::colorBase };
+    const Array<u32 MeshletAttributeStreamRef::*, 4u> indexMembers = { &MeshletAttributeStreamRef::normal, &MeshletAttributeStreamRef::tangent, &MeshletAttributeStreamRef::uv0, &MeshletAttributeStreamRef::color };
     for(const MeshletRefDeltaWidth::Enum width : { MeshletRefDeltaWidth::U8, MeshletRefDeltaWidth::U16, MeshletRefDeltaWidth::U32 }){
         const u32 byteWidth = MeshletRefDeltaByteWidth(width);
-        for(usize channel = 0u; channel < LengthOf(baseMembers); ++channel){
+        for(usize channel = 0u; channel < baseMembers.size(); ++channel){
             MeshletDesc meshlet;
             meshlet.counts = PackMeshletCounts(1u, 1u, 1u, 1u);
             meshlet.encoding = PackMeshletRefEncoding(width, width, width, width, width, width);
             meshlet.*baseMembers[channel] = Limit<u32>::s_Max - 1u;
-            u8 bytes[16u] = {};
+            Array<u8, 16u> bytes = {};
             bytes[channel * byteWidth] = 1u;
-            const auto boundary = DecodeMeshletAttributeRef(bytes, byteWidth * 4u, meshlet, 0u);
-            ASSERT_TRUE(boundary);
-            EXPECT_EQ((*boundary).*indexMembers[channel], Limit<u32>::s_Max);
+            MeshletAttributeStreamRef boundary;
+            ASSERT_TRUE(TryDecodeMeshletAttributeRef(Span<const u8>(bytes.data(), byteWidth * 4u), meshlet, 0u, boundary));
+            EXPECT_EQ(boundary.*indexMembers[channel], Limit<u32>::s_Max);
             meshlet.*baseMembers[channel] = Limit<u32>::s_Max;
-            EXPECT_FALSE(DecodeMeshletAttributeRef(bytes, byteWidth * 4u, meshlet, 0u));
+            EXPECT_FALSE(TryDecodeMeshletAttributeRef(Span<const u8>(bytes.data(), byteWidth * 4u), meshlet, 0u, boundary));
         }
     }
 }

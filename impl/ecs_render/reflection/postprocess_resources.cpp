@@ -3,7 +3,7 @@
 
 
 #include "postprocess_resources.h"
-#include "timing_names.h"
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <impl/assets/graphics/reflection/temporal_constants.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -22,33 +22,6 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace __hidden_reflection_postprocess_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_SpatialVariants[] = { "NWB_REFLECTION_SPATIAL_RADIUS=1", "NWB_REFLECTION_SPATIAL_RADIUS=2", "NWB_REFLECTION_SPATIAL_RADIUS=3", };
-static_assert(LengthOf(s_SpatialVariants) == NWB_REFLECTION_SPATIAL_MAX_RADIUS);
-static constexpr u32 s_HistoryDescriptorIndex = 0u;
-static constexpr u32 s_SpatialDescriptorIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-RendererReflectionPostprocess::RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
-    : m_arena(arena)
-    , m_graphics(graphics)
-    , m_shaders(shaders)
-{}
 
 void RendererReflectionPostprocess::invalidateResources(){
     releaseTargets();
@@ -73,7 +46,7 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
             m_control->reset(device.getDeviceGeneration());
     }
     if(!m_control){
-        auto controlResult = CreateReflectionHistoryControl(m_arena, device.getDeviceGeneration());
+        auto controlResult = CreateStatisticsControl<ReflectionHistoryControl>(m_arena, device.getDeviceGeneration());
         if(!controlResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Reflection history: failed to allocate acceptance control"));
             return false;
@@ -83,8 +56,8 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
     const b8 active = settings.traceMode != ReflectionTraceMode::Disabled;
     if(settings.temporalEnabled && active){
         if(
-            !preparePipeline(m_temporalPipeline, m_temporalShader, &ReflectionSubsystem::temporalCs, Core::ShaderArchive::s_DefaultVariant)
-            || !prepareImage(m_history, __hidden_reflection_postprocess_resources::s_HistoryDescriptorIndex, Name("engine/reflection/opaque_history"))
+            !preparePipeline(&ReflectionSubsystem::temporalCs, Core::ShaderArchive::s_DefaultVariant, m_temporalPipeline, m_temporalShader)
+            || !prepareImage(m_history, s_ReflectionHistoryDescriptorIndex, s_ReflectionOpaqueHistoryName)
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
@@ -92,8 +65,8 @@ b8 RendererReflectionPostprocess::prepareResources(const u32 width, const u32 he
     if(settings.spatialFilterEnabled && settings.spatialRadius > 0u && active){
         const u32 radiusIndex = settings.spatialRadius - 1u;
         if(
-            !preparePipeline(m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex], &ReflectionSubsystem::spatialCs, __hidden_reflection_postprocess_resources::s_SpatialVariants[radiusIndex])
-            || !prepareImage(m_spatial, __hidden_reflection_postprocess_resources::s_SpatialDescriptorIndex, Name("engine/reflection/opaque_spatial"))
+            !preparePipeline(&ReflectionSubsystem::spatialCs, ResolveReflectionSpatialVariant(radiusIndex), m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex])
+            || !prepareImage(m_spatial, s_ReflectionSpatialDescriptorIndex, s_ReflectionOpaqueSpatialName)
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, s_ReflectionGpuTimingQueriesPerRange)
         )
             return false;
@@ -133,10 +106,10 @@ void RendererReflectionPostprocess::releaseTargets(){
 }
 
 b8 RendererReflectionPostprocess::preparePipeline(
-    Core::ComputePipelineHandle& pipeline,
-    Core::ShaderHandle& shader,
     const Core::Assets::AssetRef<ComputeShader> ReflectionSubsystem::* shaderMember,
-    const AStringView variant
+    const AStringView variant,
+    Core::ComputePipelineHandle& pipeline,
+    Core::ShaderHandle& shader
 ){
     if(pipeline)
         return true;
@@ -155,7 +128,7 @@ b8 RendererReflectionPostprocess::preparePipeline(
             return false;
     }
     const Name shaderName = m_shaders.resolveSubsystemAsset<ReflectionSubsystem>(shaderMember);
-    if(!m_shaders.loadShader<ComputeShader>(shader, shaderName, variant, shaderName))
+    if(!m_shaders.loadShader<ComputeShader>(shaderName, variant, shaderName, shader))
         return false;
     Core::ComputePipelineDesc desc;
     desc.setComputeShader(shader).addBindingLayout(m_layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

@@ -303,11 +303,7 @@ void CommandList::discardInvalidCommandBuffer(){
         }
     }
 
-    m_currentCmdBuf->discardTimerQueryRecordingClaims();
-    m_currentCmdBuf->m_resourceReferences.discardBufferStateCommits();
-    m_currentCmdBuf->discardRetainedTextureStateCommits();
-    m_currentCmdBuf->releasePendingAccelStructBuildCommits();
-    m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
+    m_currentCmdBuf->discardPendingRecordingCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
     m_nativeRecordingID = 0u;

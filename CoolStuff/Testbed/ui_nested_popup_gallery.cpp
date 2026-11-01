@@ -97,7 +97,7 @@ b8 UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     list.height = { LayoutSizePolicy::Fixed, s_ListHeight };
     if(!ui.label(s_TitleKey, "Parent: controls before and after child") || !ui.beginRow("before", row))
         return false;
-    (void)ui.button(s_ActionKey, "Before", button);
+    ui.button(s_ActionKey, "Before", button);
     const EditBoxResult before = ui.editBox(s_EditKey, m_beforeText, m_beforeEdit, edit);
     if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", m_source, m_beforeList, list).valid)
         return false;
@@ -105,7 +105,7 @@ b8 UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
         m_child.open();
     if(!paintChild(ui) || !ui.beginRow("after", row))
         return false;
-    (void)ui.button(s_ActionKey, "After", button);
+    ui.button(s_ActionKey, "After", button);
     const EditBoxResult after = ui.editBox(s_EditKey, m_afterText, m_afterEdit, edit);
     if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", m_source, m_afterList, list).valid)
         return false;
@@ -118,7 +118,7 @@ b8 UiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     search.combo.popupHeight = s_SearchPopupHeight;
     if(!ui.searchComboBox("search", m_source, m_search, search).combo.valid)
         return false;
-    (void)ui.button(s_MenuAnchorKey, "Right-click / Menu for commands", wide);
+    ui.button(s_MenuAnchorKey, "Right-click / Menu for commands", wide);
     ContextMenuOptions menu;
     menu.size = { s_MenuWidth, s_MenuHeight };
     const ContextMenuResult result = ui.contextMenu(s_CommandsKey, s_MenuAnchorKey, m_source, m_menu, menu);
@@ -147,13 +147,16 @@ b8 UiNestedPopupGallery::paintChild(NWB::Impl::Ui::Builder& ui){
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, {} };
     if(!ui.label(s_TitleKey, "Independent child overlay"))
         return false;
-    (void)ui.button(s_ActionKey, "Child action", button);
+    ui.button(s_ActionKey, "Child action", button);
     EditBoxOptions edit;
     const EditBoxResult result = ui.editBox(s_EditKey, m_childText, m_childEdit, edit);
     if(ui.button("close_branch", "Close ancestor and entire branch", button))
         m_parent.close();
     return result.valid && ui.endPopup();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

@@ -8,8 +8,6 @@
 #include <global/basic_string.h>
 #include <global/numeric_text.h>
 
-#include <cstdlib>
-
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <global/blocking_io.h>
 #if defined(_MSC_VER) && defined(NWB_DEBUG)
@@ -18,8 +16,6 @@
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX)
 #include <global/blocking_io.h>
-
-#include <signal.h>
 #endif
 
 
@@ -80,7 +76,7 @@ static CrashDetail::CrashAck MakeAck(const CrashDetail::CrashRequest& request, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int RunCrashHandlerProcess(const isize argc, tchar** argv){
+int RunCrashHandlerProcess([[maybe_unused]] const isize argc, [[maybe_unused]] tchar** argv){
     if(!__hidden_crash_handler::SilenceProcess())
         return __hidden_crash_handler::s_ProcessFailureExitCode;
     CrashDetail::InitializeDumpArena();
@@ -160,8 +156,6 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
 #else
-    static_cast<void>(argc);
-    static_cast<void>(argv);
     return __hidden_crash_handler::s_ProcessFailureExitCode;
 #endif
 }

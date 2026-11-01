@@ -22,9 +22,17 @@
 
 
 struct NwbRefractionPushConstants{
-#define NWB_REFRACTION_SHADER_FIELD(name, defaultValue) uint name;
-    NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_SHADER_FIELD)
-#undef NWB_REFRACTION_SHADER_FIELD
+    uint width;
+    uint height;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint viewHeapSlot;
+    uint opaqueReflectionSlot;
+    uint refractionEnabled;
+    uint tileListSlot;
+    uint tileArgumentsSlot;
+    uint diagnosticsSlot;
+    uint certifiedInstanceIndex;
 };
 [[vk::push_constant]] NwbRefractionPushConstants g_NwbRefractionPush;
 
@@ -226,7 +234,8 @@ bool nwbRefractionScreenBackgroundPixel(const NwbRefractionEntry entry, const fl
     if(sourceOpaqueDepth >= 1.0)
         return false;
     const float3 sourceOpaque = nwbRefractionReconstruct(sourcePixel, sourceOpaqueDepth);
-    const float stepScale = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE), NWB_REFRACTION_MAX_DISTANCE) * (1.0 / (float(NWB_REFRACTION_SCREEN_STEP_COUNT) * float(NWB_REFRACTION_SCREEN_STEP_COUNT)));
+    const float maxDistance = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * NWB_REFRACTION_SCREEN_MAX_DISTANCE_BIAS_SCALE), NWB_REFRACTION_MAX_DISTANCE);
+    const float stepScale = maxDistance * (1.0 / (float(NWB_REFRACTION_SCREEN_STEP_COUNT) * float(NWB_REFRACTION_SCREEN_STEP_COUNT)));
     const float entryCameraDistance = entry.cameraDistance;
     float previousT = entry.bias;
     for(uint step = 1u; step <= NWB_REFRACTION_SCREEN_STEP_COUNT; ++step){

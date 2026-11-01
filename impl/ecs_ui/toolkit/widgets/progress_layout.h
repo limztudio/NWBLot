@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../paint.h"
+#include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
 
 

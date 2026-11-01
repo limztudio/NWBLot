@@ -19,20 +19,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiEditClipboardController::UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept
-    : m_service(service)
-    , m_completion(arena)
-    , m_expectedModel(arena)
-    , m_insertText(arena)
-{}
-
 UiEditClipboardController::~UiEditClipboardController()noexcept{
     if(!cancel())
         TerminateInvariant();
 }
 
 
-UiEditClipboardResult UiEditClipboardController::request(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const b8 readOnly){
+UiEditClipboardResult UiEditClipboardController::request(const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action, const Core::ClipboardChannel::Enum channel, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!owner.valid())
@@ -67,7 +60,7 @@ UiEditClipboardResult UiEditClipboardController::request(const Ui::UiTextEditOwn
     return { UiEditClipboardStatus::Pending };
 }
 
-UiEditClipboardResult UiEditClipboardController::drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly){
+UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& owner, Ui::EditModel& model, const b8 readOnly){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!m_token.valid())

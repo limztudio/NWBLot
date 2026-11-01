@@ -64,7 +64,11 @@ b8 GpuCompiledGraph::ReadView::validFor(const GpuTaskGraphDeclarationReadView& g
     NWB_ASSERT(m_graph->m_tasks.size() == m_graph->m_graphTaskCount && m_graph->m_compiledTaskIndexByTask.size() == m_graph->m_graphTaskCount && m_graph->m_packetTasks.size() == m_graph->m_graphTaskCount);
     NWB_ASSERT((m_graph->m_graphTaskCount == 0u) == m_graph->m_packets.empty() && m_graph->m_packets.size() <= m_graph->m_graphTaskCount);
     NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->m_presentEndpoint.valid() && m_graph->m_presentEndpoint.producer.generation == m_graph->m_generation && m_graph->m_presentEndpoint.backBuffer.generation == m_graph->m_generation));
-    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (m_graph->validPacket(m_graph->m_presentEndpoint.packet) && m_graph->m_presentEndpoint.packet == m_graph->packetForTask(m_graph->m_presentEndpoint.producer) && m_graph->queueInfo(m_graph->m_presentEndpoint.queue) != nullptr));
+    NWB_ASSERT(!m_graph->m_hasPresentEndpoint || (
+        m_graph->validPacket(m_graph->m_presentEndpoint.packet)
+        && m_graph->m_presentEndpoint.packet == m_graph->packetForTask(m_graph->m_presentEndpoint.producer)
+        && m_graph->queueInfo(m_graph->m_presentEndpoint.queue) != nullptr
+    ));
     const GpuPresentEndpoint* const graphEndpoint = graph.presentEndpoint();
     return
         m_graph->m_generation == graph.generation()
@@ -150,8 +154,8 @@ b8 GpuCompiledGraph::ReadView::taskPrecedesInSamePacket(const GpuTaskId& first, 
     return m_graph && m_graph->taskPrecedesInSamePacket(first, second);
 }
 
-b8 GpuCompiledGraph::ReadView::tasksFormContiguousPacketSequence(const GpuTaskId* const tasks, const usize taskCount)const noexcept{
-    return m_graph && m_graph->tasksFormContiguousPacketSequence(tasks, taskCount);
+b8 GpuCompiledGraph::ReadView::tasksFormContiguousPacketSequence(const Span<const GpuTaskId> tasks)const noexcept{
+    return m_graph && m_graph->tasksFormContiguousPacketSequence(tasks);
 }
 
 b8 GpuCompiledGraph::ReadView::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{

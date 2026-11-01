@@ -5,7 +5,7 @@
 #include "reflection_spatial_owner_probe.h"
 
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_render/reflection/timing_names.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>

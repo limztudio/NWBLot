@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/software_transparent_sampling.h>
+#include <impl/ecs_render/shadow/types.adhd.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <global/simd/vector.h>
@@ -14,12 +14,6 @@
 
 
 namespace __hidden_software_transparent_sampling_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,9 +66,9 @@ TEST(SoftwareTransparentSampling, MovingCasterWithStationaryReceiverCannotReuseT
 
 TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
     const RayTracingSceneContentStamp scene{ 10u, 20u, true };
-    SceneLightGpuData original[2];
+    Array<SceneLightGpuData, 2> original{};
     original[1].direction.x = 0.25f;
-    constexpr Float4 SceneLightGpuData::* s_Fields[] = {
+    constexpr Array<Float4 SceneLightGpuData::*, 5> s_Fields = {
         &SceneLightGpuData::position, &SceneLightGpuData::direction,
         &SceneLightGpuData::colorIntensity, &SceneLightGpuData::params,
         &SceneLightGpuData::params2,
@@ -82,22 +76,22 @@ TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
     for(const auto field : s_Fields){
         SoftwareTransparentSamplingHistory history;
         history.prepareScene(scene);
-        history.prepareLighting(Span<const SceneLightGpuData>(original, s_ExpectedDualCount));
+        history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 2u));
         history.accept();
-        SceneLightGpuData changed[] = { original[0], original[1] };
+        Array<SceneLightGpuData, 2> changed = { original[0], original[1] };
         Float4& value = changed[0].*field;
-        value.x = VectorGetX(VectorAdd(VectorReplicate(value.x), VectorReplicate(0.125f)));
-        history.prepareLighting(Span<const SceneLightGpuData>(changed, s_ExpectedDualCount));
+        value.x = value.x + 0.125f;
+        history.prepareLighting(Span<const SceneLightGpuData>(changed.data(), 2u));
         EXPECT_FALSE(history.usable());
     }
     SoftwareTransparentSamplingHistory history;
     history.prepareScene(scene);
-    history.prepareLighting(Span<const SceneLightGpuData>(original, s_ExpectedDualCount));
+    history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 2u));
     history.accept();
-    SceneLightGpuData reversed[] = { original[1], original[0] };
-    history.prepareLighting(Span<const SceneLightGpuData>(reversed, s_ExpectedDualCount));
+    Array<SceneLightGpuData, 2> reversed = { original[1], original[0] };
+    history.prepareLighting(Span<const SceneLightGpuData>(reversed.data(), 2u));
     EXPECT_FALSE(history.usable());
-    history.prepareLighting(Span<const SceneLightGpuData>(original, 1u));
+    history.prepareLighting(Span<const SceneLightGpuData>(original.data(), 1u));
     EXPECT_FALSE(history.usable());
 }
 

@@ -60,7 +60,7 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
             continue;
-        ExpectRect(command.clip, expected);
+        UiPaintAssertions::ExpectRect(command.clip, expected);
         ASSERT_LE(static_cast<usize>(command.firstIndex) + command.indexCount, snapshot.indices().size());
         for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index){
             ASSERT_LT(snapshot.indices()[index], snapshot.vertices().size());
@@ -77,7 +77,7 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
 
 // Compare nonzero native raster coverage rather than transparent atlas borders that may legitimately be clipped.
 [[nodiscard]] static Expected<f64> GlyphCoverageArea(const DrawSnapshot& snapshot)noexcept{
-    SIMDVectorDouble area = VectorDoubleZero();
+    f64 area = 0.0;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material == PaintMaterial::SdfGlyph)
             return MakeUnexpected(Failure{});
@@ -109,36 +109,26 @@ static void ExpectGlyphRegion(const DrawSnapshot& snapshot, const Rect& expected
             if(!IsFinite(width) || !IsFinite(height) || width <= 0.0 || height <= 0.0)
                 return MakeUnexpected(Failure{});
             const SIMDVectorDouble texelScale = VectorDoubleDivide(size, VectorDoubleSubtract(VectorDoubleSwizzle<2, 3, 0, 1>(texel), texel));
-            const SIMDVectorDouble texelArea = VectorDoubleMultiply(VectorDoubleSplatX(texelScale), VectorDoubleSplatY(texelScale));
+            const f64 texelArea = VectorDoubleGetX(texelScale) * VectorDoubleGetY(texelScale);
             const SIMDVectorDouble firstTexel = VectorDoubleFloor(texel);
             const SIMDVectorDouble endTexel = VectorDoubleCeiling(texel);
             const u32 endX = static_cast<u32>(VectorDoubleGetZ(endTexel));
             const u32 endY = static_cast<u32>(VectorDoubleGetW(endTexel));
             for(u32 y = static_cast<u32>(VectorDoubleGetY(firstTexel)); y < endY; ++y){
-                const SIMDVectorDouble row = VectorDoubleReplicate(static_cast<f64>(y));
-                const SIMDVectorDouble visibleHeight = VectorDoubleSubtract(VectorDoubleMin(VectorDoubleSplatW(texel), VectorDoubleAdd(row, VectorDoubleSplatOne())), VectorDoubleMax(VectorDoubleSplatY(texel), row));
+                const f64 row = static_cast<f64>(y);
+                const f64 visibleHeight = Min(bottom, row + 1.0) - Max(top, row);
                 for(u32 x = static_cast<u32>(VectorDoubleGetX(firstTexel)); x < endX; ++x){
                     const u8 coverage = page.pixels()[static_cast<usize>(y) * binding.width + x];
                     if(coverage == 0u)
                         continue;
-                    const SIMDVectorDouble column = VectorDoubleReplicate(static_cast<f64>(x));
-                    const SIMDVectorDouble visibleWidth = VectorDoubleSubtract(VectorDoubleMin(VectorDoubleSplatZ(texel), VectorDoubleAdd(column, VectorDoubleSplatOne())), VectorDoubleMax(VectorDoubleSplatX(texel), column));
-                    area = VectorDoubleMultiplyAddExpression(VectorDoubleMultiply(VectorDoubleMultiply(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(coverage)), VectorDoubleReplicate(255.0)), visibleWidth), visibleHeight), texelArea, area);
+                    const f64 column = static_cast<f64>(x);
+                    const f64 visibleWidth = Min(right, column + 1.0) - Max(left, column);
+                    area += (static_cast<f64>(coverage) / 255.0) * visibleWidth * visibleHeight * texelArea;
                 }
             }
         }
     }
-    return VectorDoubleGetX(area);
-}
-
-static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core::Alloc::ScratchArena>& vertices){
-    vertices.reserve(snapshot.indices().size());
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Glyph && command.material != PaintMaterial::SdfGlyph)
-            continue;
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
-            vertices.push_back(snapshot.vertices()[snapshot.indices()[index]]);
-    }
+    return area;
 }
 
 
@@ -168,7 +158,7 @@ protected:
             return;
         UiSkin::RegionVector regions(m_arena);
         regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        const AStringView names[]{ s_CheckboxNormalRegion, "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
+        const Array<AStringView, 4> names{ s_CheckboxNormalRegion, "checkbox.hover", "checkbox.checked", "checkbox.disabled" };
         for(u32 index = 0u; index < LengthOf(names); ++index){
             const auto regionName = Name::FromText(names[index]);
             ASSERT_TRUE(regionName);
@@ -193,7 +183,7 @@ protected:
         m_builder.setSkin(m_skin);
     }
 
-    void checkIntrinsicRowCoverage(IntrinsicRowSource& source, ListState& list, ComboState& combo, const b8 popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation){
+    void checkIntrinsicRowCoverage(const b8 popup, const f32 fontSize, const DisplayMetrics& display, const u64 generation, IntrinsicRowSource& source, ListState& list, ComboState& combo){
         SCOPED_TRACE(testing::Message() << "popup=" << popup << ", fontSize=" << fontSize << ", scale=" << display.pixelScaleX << "/" << display.pixelScaleY);
         m_builder.style().fontSize = fontSize;
         const auto rowMetrics = SelectablePainter::Measure(m_skin, m_builder.listStyle().row);
@@ -223,20 +213,20 @@ protected:
         const ListState& state = popup ? combo.listState() : list;
         const ScrollPlacement& placement = state.placement();
         ASSERT_GT(placement.endRow, placement.firstRow);
-        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(MakeWidgetId(owner, UiComboTests::s_ComboRowsKey)) : owner;
-        const WidgetId rows = UiTestSupport::RequireWidgetId(MakeWidgetId(listOwner, UiComboTests::s_ListRowsKey));
-        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, placement.firstRow + 1u)));
+        const WidgetId listOwner = popup ? UiTestSupport::RequireWidgetId(owner, UiComboTests::s_ComboRowsKey) : owner;
+        const WidgetId rows = UiTestSupport::RequireWidgetId(listOwner, UiComboTests::s_ListRowsKey);
+        const HitTarget* first = target(UiTestSupport::RequireWidgetPartId(rows, placement.firstRow + 1u));
         ASSERT_NE(first, nullptr);
         const f32 rowHeight = first->rectangle.height;
-        SIMDVectorSingle expectedHeight = VectorReplicate(rowMetrics->minimum.y);
+        f32 expectedHeight = rowMetrics->minimum.y;
         for(const StringView label : { StringView{}, source.ordinaryText, source.specialText }){
             const auto layout = m_text.layout({ .text = label, .fontSize = fontSize });
             ASSERT_TRUE(layout);
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);
-            expectedHeight = VectorMax(expectedHeight, VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(rowMetrics->padding.top)), VectorReplicate(rowMetrics->padding.bottom)));
+            expectedHeight = Max(expectedHeight, visual->height + rowMetrics->padding.top + rowMetrics->padding.bottom);
         }
-        EXPECT_FLOAT_EQ(rowHeight, VectorGetX(expectedHeight));
+        EXPECT_FLOAT_EQ(rowHeight, expectedHeight);
         // Lanes are content height and scroll step.
         const SIMDVectorDouble listExtent = VectorDoubleMultiply(VectorDoubleReplicate(static_cast<f64>(rowHeight)), VectorDoubleSet(static_cast<f64>(source.count), 3.0, 0.0, 0.0));
         EXPECT_DOUBLE_EQ(placement.contentHeight, VectorDoubleGetX(listExtent));
@@ -247,7 +237,7 @@ protected:
         reference.begin(display, generation, m_skinGeneration, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         reference.pushClip(placement.contentClip);
         for(u64 index = placement.firstRow; index < placement.endRow; ++index){
-            const HitTarget* row = target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(rows, index + 1u)));
+            const HitTarget* row = target(UiTestSupport::RequireWidgetPartId(rows, index + 1u));
             ASSERT_NE(row, nullptr);
             EXPECT_FLOAT_EQ(row->rectangle.height, rowHeight);
             const StringView label = index == source.specialIndex ? source.specialText : source.ordinaryText;
@@ -256,13 +246,12 @@ protected:
             const auto visual = m_text.measure(*layout, display);
             ASSERT_TRUE(visual);
             const Insets& padding = rowMetrics->padding;
-            const SIMDVectorSingle paddedHeight = VectorAdd(VectorAdd(VectorReplicate(visual->height), VectorReplicate(padding.top)), VectorReplicate(padding.bottom));
-            EXPECT_GE(VectorGetX(VectorAdd(VectorReplicate(rowHeight), VectorReplicate(0.0001f))), VectorGetX(paddedHeight));
-            const SIMDVectorSingle contentHeight = VectorSubtract(VectorSubtract(VectorReplicate(rowHeight), VectorReplicate(padding.top)), VectorReplicate(padding.bottom));
-            const SIMDVectorSingle centering = VectorMax(VectorZero(), VectorMultiply(VectorSubtract(contentHeight, VectorReplicate(visual->height)), VectorReplicate(0.5f)));
-            const SIMDVectorSingle start = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(padding.left, padding.top, 0.0f, 0.0f));
-            // Only y gets the centering offset.
-            const SIMDVectorSingle originValue = VectorSubtract(VectorSelect(start, VectorAdd(start, centering), s_SIMDMaskY), VectorSet(visual->x, visual->y, 0.0f, 0.0f));
+            const f32 paddedHeight = visual->height + padding.top + padding.bottom;
+            EXPECT_GE(rowHeight + 0.0001f, paddedHeight);
+            const f32 contentHeight = rowHeight - padding.top - padding.bottom;
+            const f32 centering = Max(0.0f, (contentHeight - visual->height) * 0.5f);
+            const SIMDVectorSingle start = VectorAdd(VectorSet(row->rectangle.x, row->rectangle.y, 0.0f, 0.0f), VectorSet(padding.left, padding.top + centering, 0.0f, 0.0f));
+            const SIMDVectorSingle originValue = VectorSubtract(start, VectorSet(visual->x, visual->y, 0.0f, 0.0f));
             const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
             ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
         }
@@ -272,7 +261,7 @@ protected:
         ASSERT_TRUE(expectedCoverage);
         ASSERT_TRUE(actualCoverage);
         ASSERT_GT(*expectedCoverage, 0.0);
-        EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
+        EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
     }
 
     void checkContentButtonRow(const StringView firstText, const StringView secondText, const f32 fontSize, const f32 scale, const u64 generation, const b8 fixedHeight = false){
@@ -302,7 +291,7 @@ protected:
             row.height = { LayoutSizePolicy::Fixed, 32.0f };
         ASSERT_TRUE(m_builder.beginRow("navigation", row));
         WidgetOptions navigation;
-        navigation.width = { LayoutSizePolicy::Fixed, VectorGetX(VectorMax(VectorReplicate(100.0f), VectorAdd(VectorMax(VectorReplicate(firstMeasured->width), VectorReplicate(secondMeasured->width)), VectorReplicate(16.0f)))) };
+        navigation.width = { LayoutSizePolicy::Fixed, Max(100.0f, Max(firstMeasured->width, secondMeasured->width) + 16.0f) };
         if(fixedHeight)
             navigation.height = { LayoutSizePolicy::Fixed, 32.0f };
         EXPECT_FALSE(m_builder.button("previous", firstText, navigation));
@@ -316,8 +305,8 @@ protected:
         const DrawSnapshot actual = m_paint.freeze();
         ASSERT_TRUE(m_context.commitFrame(generation));
         const WidgetId rowId = id("navigation", s_PanelKey);
-        const HitTarget* first = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "previous")));
-        const HitTarget* second = target(UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "next")));
+        const HitTarget* first = target(UiTestSupport::RequireWidgetId(rowId, "previous"));
+        const HitTarget* second = target(UiTestSupport::RequireWidgetId(rowId, "next"));
         const HitTarget* after = target(id("after", s_PanelKey));
         ASSERT_NE(first, nullptr);
         ASSERT_NE(second, nullptr);
@@ -325,14 +314,14 @@ protected:
         EXPECT_FLOAT_EQ(first->rectangle.height, VectorGetX(heights));
         EXPECT_FLOAT_EQ(second->rectangle.height, VectorGetY(heights));
         EXPECT_FLOAT_EQ(second->rectangle.y, first->rectangle.y);
-        EXPECT_FLOAT_EQ(after->rectangle.y, VectorGetX(VectorAdd(VectorAdd(VectorReplicate(first->rectangle.y), VectorMax(VectorSplatX(heights), VectorSplatY(heights))), VectorReplicate(m_builder.style().gap))));
-        ExpectRect(first->clip, first->rectangle);
-        ExpectRect(second->clip, second->rectangle);
+        EXPECT_FLOAT_EQ(after->rectangle.y, first->rectangle.y + Max(VectorGetX(heights), VectorGetY(heights)) + m_builder.style().gap);
+        UiPaintAssertions::ExpectRect(first->clip, first->rectangle);
+        UiPaintAssertions::ExpectRect(second->clip, second->rectangle);
         PaintBuilder reference(m_arena);
         reference.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
-        const Rect controls[]{ first->rectangle, second->rectangle };
-        const Rect measured[]{ *firstMeasured, *secondMeasured };
-        const NotNull<const TextLayout*> layouts[]{ MakeNotNull(&*firstLayout), MakeNotNull(&*secondLayout) };
+        const Array<Rect, 2> controls{ first->rectangle, second->rectangle };
+        const Array<Rect, 2> measured{ *firstMeasured, *secondMeasured };
+        const Array<NotNull<const TextLayout*>, 2> layouts{ MakeNotNull(&*firstLayout), MakeNotNull(&*secondLayout) };
         for(u32 index = 0u; index < 2u; ++index){
             const Rect& bounds = controls[index];
             const Rect& visual = measured[index];
@@ -348,9 +337,9 @@ protected:
         ASSERT_TRUE(expectedCoverage);
         ASSERT_GT(*expectedCoverage, 0.0);
         if(fixedHeight)
-            EXPECT_LT(*actualCoverage, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.999))));
+            EXPECT_LT(*actualCoverage, *expectedCoverage * 0.999);
         else
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
+            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
     }
 };
 
@@ -372,7 +361,7 @@ TEST_F(UiTextRegionTests, StandaloneMultilineLabelClipsNestedBoundsAfterResizeAc
             ASSERT_TRUE(label.paint(m_text, m_paint, bounds));
             EXPECT_GT(label.layout().measure().x, bounds.width);
             EXPECT_GT(label.layout().measure().y, bounds.height);
-            ExpectRect(m_paint.currentClip(), inherited);
+            UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
             ASSERT_TRUE(m_paint.popClip());
             ASSERT_TRUE(m_paint.popClip());
             EXPECT_FALSE(m_paint.popClip());
@@ -396,7 +385,7 @@ TEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforeP
         m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
         m_paint.pushClip(inherited);
         ASSERT_TRUE(label.paint(m_text, m_paint, bounds));
-        ExpectRect(m_paint.currentClip(), inherited);
+        UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
         ASSERT_TRUE(m_paint.popClip());
         EXPECT_FALSE(m_paint.popClip());
         const DrawSnapshot snapshot = m_paint.freeze();
@@ -408,10 +397,10 @@ TEST_F(UiTextRegionTests, EmptyAndFailedStandaloneLabelRegionsRestoreClipBeforeP
     m_paint.begin({ 300.0f, 200.0f, 1.0f, 1.0f }, generation, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     m_paint.pushClip(inherited);
     EXPECT_FALSE(label.paint(m_text, m_paint, { 20.0f, 20.0f, 30.0f, 20.0f }, { 1.0f, 1.0f, 1.0f, 2.0f }));
-    ExpectRect(m_paint.currentClip(), inherited);
+    UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
     const Rect sibling{ 110.0f, 70.0f, 60.0f, 22.0f };
     ASSERT_TRUE(label.paint(m_text, m_paint, sibling));
-    ExpectRect(m_paint.currentClip(), inherited);
+    UiPaintAssertions::ExpectRect(m_paint.currentClip(), inherited);
     ASSERT_TRUE(m_paint.popClip());
     EXPECT_FALSE(m_paint.popClip());
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -433,11 +422,11 @@ TEST_F(UiTextRegionTests, OversizedButtonTextKeepsAsymmetricPaddingWithoutShrink
         ASSERT_TRUE(m_context.commitFrame(generation++));
         const HitTarget* button = target(id("button", s_PanelKey));
         ASSERT_NE(button, nullptr);
-        ExpectRect(button->rectangle, { 13.0f, 24.0f, 80.0f, 28.0f });
-        ExpectRect(button->clip, button->rectangle);
+        UiPaintAssertions::ExpectRect(button->rectangle, { 13.0f, 24.0f, 80.0f, 28.0f });
+        UiPaintAssertions::ExpectRect(button->clip, button->rectangle);
         const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
         ASSERT_TRUE(skin);
-        ExpectRect(skin->bounds, button->rectangle);
+        UiPaintAssertions::ExpectRect(skin->bounds, button->rectangle);
         ExpectGlyphRegion(snapshot, { 15.0f, 27.0f, 74.0f, 20.0f });
     }
 }
@@ -482,12 +471,12 @@ TEST_F(UiTextRegionTests, CheckboxGlyphOverhangCannotEnterIndicatorReservationOr
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* checkbox = target(id("checkbox", s_PanelKey));
     ASSERT_NE(checkbox, nullptr);
-    ExpectRect(checkbox->rectangle, { 13.0f, 24.0f, 120.0f, 36.0f });
-    ExpectRect(checkbox->clip, { 13.0f, 24.0f, 92.0f, 36.0f });
+    UiPaintAssertions::ExpectRect(checkbox->rectangle, { 13.0f, 24.0f, 120.0f, 36.0f });
+    UiPaintAssertions::ExpectRect(checkbox->clip, { 13.0f, 24.0f, 92.0f, 36.0f });
     ExpectGlyphRegion(snapshot, { 45.0f, 24.0f, 60.0f, 36.0f });
     const auto skin = sampleSkinPaint(snapshot, Name(s_CheckboxNormalRegion));
     ASSERT_TRUE(skin);
-    ExpectRect(skin->bounds, { 13.0f, 30.0f, 24.0f, 24.0f });
+    UiPaintAssertions::ExpectRect(skin->bounds, { 13.0f, 30.0f, 24.0f, 24.0f });
 }
 
 TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFullRowHitBounds){
@@ -504,11 +493,11 @@ TEST_F(UiTextRegionTests, OversizedSelectableTextKeepsAllFourPaddingEdgesAndFull
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* selectable = target(id("selectable", s_PanelKey));
     ASSERT_NE(selectable, nullptr);
-    ExpectRect(selectable->rectangle, { 13.0f, 24.0f, 90.0f, 34.0f });
-    ExpectRect(selectable->clip, selectable->rectangle);
+    UiPaintAssertions::ExpectRect(selectable->rectangle, { 13.0f, 24.0f, 90.0f, 34.0f });
+    UiPaintAssertions::ExpectRect(selectable->clip, selectable->rectangle);
     const auto skin = sampleSkinPaint(snapshot, Name(s_ButtonNormalRegion));
     ASSERT_TRUE(skin);
-    ExpectRect(skin->bounds, selectable->rectangle);
+    UiPaintAssertions::ExpectRect(skin->bounds, selectable->rectangle);
     ExpectGlyphRegion(snapshot, { 20.0f, 35.0f, 70.0f, 18.0f });
 }
 
@@ -534,10 +523,8 @@ TEST_F(UiTextRegionTests, SelectableCentersWithinAsymmetricVerticalPaddingInstea
     PaintBuilder reference(m_arena);
     reference.begin(display, 2u, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
     reference.pushClip(content);
-    const SIMDVectorSingle contentStart = VectorSet(content.x, content.y, 0.0f, 0.0f);
-    const SIMDVectorSingle centered = VectorMultiplyAddExpression(VectorSubtract(VectorReplicate(content.height), VectorReplicate(measured->height)), VectorReplicate(0.5f), contentStart);
-    // Only y gets the centering offset.
-    const SIMDVectorSingle originValue = VectorSubtract(VectorSelect(contentStart, centered, s_SIMDMaskY), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+    const f32 centeredY = (content.height - measured->height) * 0.5f + content.y;
+    const SIMDVectorSingle originValue = VectorSubtract(VectorSet(content.x, centeredY, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
     const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
     ASSERT_TRUE(m_text.paint(reference, *layout, origin, m_builder.style().text));
     ASSERT_TRUE(reference.popClip());
@@ -578,21 +565,21 @@ TEST_F(UiTextRegionTests, WindowTitleInkKeepsPaddingAndCollapseReservationWhenVi
             const HitTarget* title = target(id("@window.title"));
             ASSERT_NE(title, nullptr);
             const Rect& header = title->rectangle;
-            const SIMDVectorSingle titleStart = VectorAdd(VectorReplicate(header.x), VectorReplicate(5.0f));
-            const SIMDVectorSingle left = VectorAdd(titleStart, VectorReplicate(collapsible ? 28.0f : 0.0f));
-            const SIMDVectorSingle right = VectorMin(VectorReplicate(width), VectorSubtract(VectorAdd(VectorReplicate(header.x), VectorReplicate(header.width)), VectorReplicate(7.0f)));
-            const SIMDVectorSingle inkTop = VectorAdd(VectorReplicate(header.y), VectorReplicate(6.0f));
-            const SIMDVectorSingle inkHeight = VectorSubtract(VectorReplicate(header.height), VectorReplicate(14.0f));
-            ExpectGlyphRegion(snapshot, { VectorGetX(left), VectorGetX(inkTop), VectorGetX(VectorSubtract(right, left)), VectorGetX(inkHeight) });
+            const f32 titleStart = header.x + 5.0f;
+            const f32 left = titleStart + (collapsible ? 28.0f : 0.0f);
+            const f32 right = Min(width, header.x + header.width - 7.0f);
+            const f32 inkTop = header.y + 6.0f;
+            const f32 inkHeight = header.height - 14.0f;
+            ExpectGlyphRegion(snapshot, { left, inkTop, right - left, inkHeight });
             const auto skin = sampleSkinPaint(snapshot, Name("window.title"));
             ASSERT_TRUE(skin);
-            ExpectRect(skin->bounds, title->clip);
+            UiPaintAssertions::ExpectRect(skin->bounds, title->clip);
             if(collapsible){
                 const HitTarget* collapse = target(id("@window.collapse"));
                 ASSERT_NE(collapse, nullptr);
-                EXPECT_FLOAT_EQ(collapse->rectangle.x, VectorGetX(titleStart));
+                EXPECT_FLOAT_EQ(collapse->rectangle.x, titleStart);
                 EXPECT_FLOAT_EQ(collapse->rectangle.width, 20.0f);
-                EXPECT_LE(VectorGetX(VectorAdd(VectorReplicate(collapse->rectangle.x), VectorReplicate(collapse->rectangle.width))), VectorGetX(left));
+                EXPECT_LE(collapse->rectangle.x + collapse->rectangle.width, left);
             }
         }
     }
@@ -611,7 +598,7 @@ TEST_F(UiTextRegionTests, ContentNavigationHeightPreservesCoverageThatFixed32Pix
 TEST_F(UiTextRegionTests, ContentRowsPreserveDescendersStackedAccentsMultilineAndKoreanFallbackCoverage){
     ASSERT_NO_FATAL_FAILURE(useDefaultButtonPadding());
     ASSERT_TRUE(installKoreanFallback());
-    const StringView samples[]{
+    const Array<StringView, 4> samples{
         "Agjpqy A\xCC\x81 e\xCC\x88 ",
         s_PaddedStackedAccentSample,
         "Previous\nA\xCC\x81\xCC\x81 gjpqy g\xCC\xA3 ",
@@ -642,7 +629,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
     ASSERT_TRUE(installKoreanFallback());
     m_builder.style().fontSize = 16.0f;
     m_builder.editStyle().padding = { 8.0f, 8.0f, 8.0f, 8.0f };
-    const StringView samples[]{ s_PaddedStackedAccentSample, "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 " };
+    const Array<StringView, 2> samples{ s_PaddedStackedAccentSample, "A\xCC\x81\xCC\x81 g\xCC\xA3 \xED\x95\x9C\xEA\xB8\x80 " };
     u64 generation = 1u;
     for(const StringView sample : samples){
         for(const f32 scale : { 1.0f, 1.25f, 1.5f, 2.0f }){
@@ -663,12 +650,12 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             ASSERT_TRUE(finishPanel());
             const DrawSnapshot actual = m_paint.freeze();
             ASSERT_TRUE(m_context.commitFrame(generation));
-            EXPECT_FLOAT_EQ(state.placement.bounds.height, VectorGetX(VectorMax(VectorReplicate(32.0f), VectorAdd(VectorAdd(VectorReplicate(measured->height), VectorReplicate(8.0f)), VectorReplicate(8.0f)))));
+            EXPECT_FLOAT_EQ(state.placement.bounds.height, Max(32.0f, measured->height + 8.0f + 8.0f));
             EXPECT_FLOAT_EQ(state.placement.scroll, 0.0f);
-            const SIMDVectorSingle inkTop = VectorAdd(VectorReplicate(state.placement.textOrigin.y), VectorReplicate(measured->y));
-            const SIMDVectorSingle contentBottom = VectorAdd(VectorReplicate(state.placement.content.y), VectorReplicate(state.placement.content.height));
-            EXPECT_GE(VectorGetX(inkTop), VectorGetX(VectorSubtract(VectorReplicate(state.placement.content.y), VectorReplicate(0.0001f))));
-            EXPECT_LE(VectorGetX(VectorAdd(inkTop, VectorReplicate(measured->height))), VectorGetX(VectorAdd(contentBottom, VectorReplicate(0.0001f))));
+            const f32 inkTop = state.placement.textOrigin.y + measured->y;
+            const f32 contentBottom = state.placement.content.y + state.placement.content.height;
+            EXPECT_GE(inkTop, state.placement.content.y - 0.0001f);
+            EXPECT_LE(inkTop + measured->height, contentBottom + 0.0001f);
             PaintBuilder reference(m_arena);
             reference.begin(display, generation++, 1u, Core::Assets::AssetRef<UiSkin>(s_TestSkinPath), m_skin);
             ASSERT_TRUE(m_text.paint(reference, *layout, state.placement.textOrigin, m_builder.editStyle().text));
@@ -677,7 +664,7 @@ TEST_F(UiTextRegionTests, NaturalEditHeightKeepsCombiningAndFallbackInkOutsideLo
             ASSERT_TRUE(expectedCoverage);
             ASSERT_TRUE(actualCoverage);
             ASSERT_GT(*expectedCoverage, 0.0);
-            EXPECT_NEAR(*actualCoverage, *expectedCoverage, VectorDoubleGetX(VectorDoubleMax(VectorDoubleReplicate(0.00001), VectorDoubleMultiply(VectorDoubleReplicate(*expectedCoverage), VectorDoubleReplicate(0.000002)))));
+            EXPECT_NEAR(*actualCoverage, *expectedCoverage, Max(0.00001, *expectedCoverage * 0.000002));
         }
     }
 }
@@ -694,7 +681,7 @@ TEST_F(UiTextRegionTests, IntrinsicListAndComboRowsPreserveActualMarksFallbackAn
     for(const b8 popup : { false, true }){
         for(const f32 fontSize : { 12.0f, 16.0f, 22.0f }){
             for(const Point scale : { Point{ 1.0f, 1.0f }, Point{ 1.25f, 1.25f }, Point{ 1.5f, 1.5f }, Point{ 2.0f, 2.0f }, Point{ 1.25f, 1.5f } })
-                ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, fontSize, { 800.0f, 600.0f, scale.x, scale.y }, generation++));
+                ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, fontSize, { 800.0f, 600.0f, scale.x, scale.y }, generation++, source, list, combo));
         }
     }
 }
@@ -711,16 +698,16 @@ TEST_F(UiTextRegionTests, IntrinsicRowsShrinkAfterSourceFontSizeAndResolvedStyle
         source.specialText = s_MultilineAccentText;
         ++source.contentRevision;
         m_builder.listStyle().row.padding = { 8.0f, 16.0f, 8.0f, 18.0f };
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 22.0f, display, generation++));
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 22.0f, display, generation++, source, list, combo));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
         m_builder.listStyle().row.padding = { 8.0f, 4.0f, 8.0f, 4.0f };
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
         source.specialText = s_OrdinaryRowText;
         ++source.contentRevision;
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 12.0f, display, generation++));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 12.0f, display, generation++, source, list, combo));
         source.specialText = s_StackedAccentText;
         ++source.generation;
-        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(source, list, combo, popup, 16.0f, display, generation++));
+        ASSERT_NO_FATAL_FAILURE(checkIntrinsicRowCoverage(popup, 16.0f, display, generation++, source, list, combo));
     }
 }
 

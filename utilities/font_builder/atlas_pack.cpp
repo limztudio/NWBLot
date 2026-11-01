@@ -3,7 +3,6 @@
 
 
 #include "bake.h"
-#include "atlas_compact.h"
 
 #include <core/common/log.h>
 
@@ -60,7 +59,7 @@ b8 PackGlyphs(const BakeOptions& options, const Span<const RasterGlyph> glyphs, 
     outPayload.glyphs.reserve(glyphs.size());
     for(const RasterGlyph& glyph : glyphs)
         outPayload.glyphs.push_back(glyph.record);
-    __hidden_font_builder_atlas_pack::Shelf shelves[Impl::s_FontAtlasMaxGroupCount * Impl::s_FontAtlasMaxChannelCount]{};
+    Array<__hidden_font_builder_atlas_pack::Shelf, Impl::s_FontAtlasMaxGroupCount * Impl::s_FontAtlasMaxChannelCount> shelves{};
     u32 lastPage = 0u;
     for(const u32 index : order){
         const RasterGlyph& glyph = glyphs[index];

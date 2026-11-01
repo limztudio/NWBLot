@@ -141,7 +141,7 @@ b8 UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
             return false;
     }
     observeState();
-    PaintSingleSmokeValueMarkers(context, values(), m_sequence);
+    PaintSingleSmokeValueMarkers(values(), m_sequence, context);
     return true;
 }
 
@@ -155,13 +155,11 @@ b8 UiPopupSmokeScene::paintLaterRoot(Impl::UiPaintContext& context)const{
     if(!context.ui.endPanel())
         return false;
     context.paint.fillRect(bounds, { 0.72f, 0.02f, 0.04f, 1.0f });
-    context.paint.fillRect({ VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalWidth), VectorReplicate(40.0f))), 24.0f, 16.0f, 16.0f }, { 0.12f, 0.52f, 0.86f, 1.0f });
+    context.paint.fillRect({ context.display.logicalWidth - 40.0f, 24.0f, 16.0f, 16.0f }, { 0.12f, 0.52f, 0.86f, 1.0f });
     return true;
 }
 
-b8 UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiPopupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key != Core::Key::F5 && key != Core::Key::F6 && key != Core::Key::F7)
         return false;
     if(action == Core::InputAction::Press){

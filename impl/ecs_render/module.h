@@ -52,17 +52,15 @@ NWB_IMPL_BEGIN
 class ActiveSceneSubsystems;
 class RendererFramePipeline;
 
+using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
+
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
 private:
     using PipelineOwner = Core::GlobalUniquePtr<RendererFramePipeline>;
 
 
 public:
-    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
-
-
-public:
-    RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver);
+    RendererSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver);
     virtual ~RendererSystem()noexcept override;
 
 

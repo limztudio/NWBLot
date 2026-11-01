@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "telemetry_test_helpers.h"
+#include "frame_graph_test_helpers.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
 
@@ -22,12 +22,6 @@ namespace __hidden_frame_graph_statistics_scaling_tests{
 
 static constexpr AStringView s_QueueAliasOwner = "queue_alias_owner";
 static constexpr AStringView s_QueueAliasOwner2 = "Queue alias owner";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,25 +47,6 @@ public:
     {}
 };
 
-[[nodiscard]] Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept{
-    Telemetry::FrameGraphRuntimeStatistics stats;
-    stats.graphGeneration = 71u;
-    stats.planGeneration = 72u;
-    stats.recordingAttemptGeneration = 73u;
-    stats.deviceGeneration = 17u;
-    stats.compile.taskCount = packetCount;
-    stats.compile.packetCount = packetCount;
-    stats.recording.packetCount = packetCount;
-    stats.recording.taskCount = packetCount;
-    stats.recording.commandListCount = packetCount;
-    stats.submission.acceptedPacketCount = packetCount;
-    stats.submission.acceptedTaskCount = packetCount;
-    stats.submission.nativeSubmissionCount = packetCount;
-    stats.submission.nativeCommandListCount = packetCount;
-    stats.present = true;
-    return stats;
-}
-
 [[nodiscard]] Telemetry::FrameGraphPhysicalQueueRuntimeStatistics QueueStatistics(const u16 queueIndex, const u32 packetCount)noexcept{
     Telemetry::FrameGraphPhysicalQueueRuntimeStatistics stats;
     stats.graphGeneration = 71u;
@@ -92,10 +67,10 @@ public:
     return stats;
 }
 
-void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32 ownerCount){
+void PrepareFixture(const u32 packetCount, const u32 ownerCount, StatisticsFixture& fixture){
     const u32 packetsPerOwner = packetCount / ownerCount;
     fixture.nodes.reserve(ownerCount);
-    fixture.queues.reserve(ownerCount * s_ExpectedDualCount);
+    fixture.queues.reserve(ownerCount * 2u);
     fixture.packets.reserve(packetCount);
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         fixture.nodes.push_back(Telemetry::FrameGraphNodeDesc{
@@ -109,14 +84,14 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
     }
 }
 
-[[nodiscard]] b8 AppendFixtureStatistics(NWB::Core::Alloc::ScratchArena& scratchArena, const u32 packetCount, const u32 ownerCount, StatisticsFixture& fixture){
+[[nodiscard]] b8 AppendFixtureStatistics(const u32 packetCount, const u32 ownerCount, NWB::Core::Alloc::ScratchArena& scratchArena, StatisticsFixture& fixture){
     Telemetry::FrameGraphBuilder builder(scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const u32 packetsPerOwner = packetCount / ownerCount;
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         const Telemetry::FrameGraphNodeHandle owner{ ownerIndex };
-        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(3u, packetsPerOwner / s_ExpectedDualCount)))
+        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(3u, packetsPerOwner / 2u)))
             return false;
-        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(1u, packetsPerOwner / s_ExpectedDualCount)))
+        if(!builder.addPhysicalQueueRuntimeStatistics(owner, QueueStatistics(1u, packetsPerOwner / 2u)))
             return false;
     }
     // Odd multiplication permutes the power-of-two workload, interleaving both owners and physical queues.
@@ -144,8 +119,8 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
 TEST(Telemetry, PacketStatisticsDuplicateRejectionPreservesSeededTables){
     TestArena testArena;
     StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, 64u, s_ExpectedDualCount);
-    ASSERT_TRUE(AppendFixtureStatistics(testArena.scratchArena, 64u, s_ExpectedDualCount, fixture));
+    PrepareFixture(64u, 2u, fixture);
+    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena.scratchArena, fixture));
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     const auto packet = fixture.packets[17u];
     const Telemetry::FrameGraphNodeHandle owner{ packet.ownerNodeIndex };
@@ -162,39 +137,39 @@ TEST(Telemetry, PacketStatisticsDuplicateRejectionPreservesSeededTables){
 TEST(Telemetry, PacketStatisticsPreserveOptionalQueueCoverageAndRejectMismatchedTotals){
     TestArena testArena;
     StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, 64u, s_ExpectedDualCount);
-    ASSERT_TRUE(AppendFixtureStatistics(testArena.scratchArena, 64u, s_ExpectedDualCount, fixture));
+    PrepareFixture(64u, 2u, fixture);
+    ASSERT_TRUE(AppendFixtureStatistics(64u, 2u, testArena.scratchArena, fixture));
     Telemetry::TelemetryBytes payload(testArena.arena);
     fixture.queues.erase(fixture.queues.begin());
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
     Expected<Telemetry::FrameGraphPayload> decoded = MakeUnexpected(Failure{});
     ASSERT_TRUE((decoded = Telemetry::ParseFrameGraphPayload(testArena.arena, testArena.scratchArena, payload.data(), payload.size())));
     ASSERT_EQ(decoded->physicalQueueRuntimeStatistics.size(), 3u);
     const auto original = fixture.packets[0u];
     fixture.packets[0u].queue.index = original.queue.index == 1u ? 3u : 1u;
     fixture.packets[0u].queueClass = original.queueClass == Telemetry::FrameGraphQueueClass::Graphics ? Telemetry::FrameGraphQueueClass::Compute : Telemetry::FrameGraphQueueClass::Graphics;
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 
 TEST(Telemetry, PacketStatisticsSparsePacketIdentifiersRemainValid){
     TestArena testArena;
     StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, s_ExpectedDualCount, 1u);
-    ASSERT_TRUE(AppendFixtureStatistics(testArena.scratchArena, s_ExpectedDualCount, 1u, fixture));
+    PrepareFixture(2u, 1u, fixture);
+    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena.scratchArena, fixture));
     fixture.nodes[0u].runtimeStatistics.compile.packetCount = Limit<u32>::s_Max - 1u;
     fixture.nodes[0u].runtimeStatistics.compile.taskCount = Limit<u32>::s_Max - 1u;
-    fixture.packets[0u].packetIndex = Limit<u32>::s_Max - s_ExpectedDualCount;
+    fixture.packets[0u].packetIndex = Limit<u32>::s_Max - 2u;
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(Telemetry::FrameGraphNodeHandle{ 0u }, fixture.packets[0u]));
     Telemetry::TelemetryBytes payload(testArena.arena);
-    EXPECT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload));
+    EXPECT_TRUE(Telemetry::BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
 }
 
 TEST(Telemetry, PacketStatisticsInvalidInputDoesNotConsumeIdentity){
     TestArena testArena;
     StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, s_ExpectedDualCount, 1u);
+    PrepareFixture(2u, 1u, fixture);
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
     auto queue = QueueStatistics(1u, 1u);
     queue.planGeneration = 74u;
@@ -243,8 +218,8 @@ TEST(Telemetry, PacketStatisticsQueueSourceSurvivesDestinationGrowth){
 TEST(Telemetry, PacketStatisticsSeededDuplicatesRemainInvalidPayloads){
     TestArena testArena;
     StatisticsFixture fixture(testArena.arena);
-    PrepareFixture(fixture, s_ExpectedDualCount, 1u);
-    ASSERT_TRUE(AppendFixtureStatistics(testArena.scratchArena, s_ExpectedDualCount, 1u, fixture));
+    PrepareFixture(2u, 1u, fixture);
+    ASSERT_TRUE(AppendFixtureStatistics(2u, 1u, testArena.scratchArena, fixture));
     fixture.queues.push_back(fixture.queues[0u]);
     fixture.packets.push_back(fixture.packets[0u]);
     Telemetry::FrameGraphBuilder builder(testArena.scratchArena, fixture.nodes, fixture.edges, fixture.pendingEdges, fixture.queues, fixture.packets);
@@ -253,7 +228,7 @@ TEST(Telemetry, PacketStatisticsSeededDuplicatesRemainInvalidPayloads){
     EXPECT_EQ(fixture.queues.size(), 3u);
     EXPECT_EQ(fixture.packets.size(), 3u);
     Telemetry::TelemetryBytes payload(testArena.arena);
-    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, payload));
     EXPECT_TRUE(payload.empty());
 }
 

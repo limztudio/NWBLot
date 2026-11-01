@@ -192,7 +192,7 @@ TEST(UiTooltipBehaviorTests, RenewedDeclarationRestartsTheDelayEvenWithTheSameAn
 }
 
 TEST(UiTooltipBehaviorTests, EveryPopupLifetimeFieldParticipatesInTheHoverBinding){
-    PopupToken replacements[5u] = { s_Popup, s_Popup, s_Popup, s_Popup, {} };
+    Array<PopupToken, 5u> replacements = { s_Popup, s_Popup, s_Popup, s_Popup, PopupToken{} };
     ++replacements[0u].widget.value;
     ++replacements[1u].declarationGeneration;
     ++replacements[2u].instanceGeneration;
@@ -239,7 +239,7 @@ TEST(UiTooltipBehaviorTests, ChangingDelayCannotMakePreviousElapsedTimeQualifyTh
 }
 
 TEST(UiTooltipBehaviorTests, ChangingWidthGapOrSideAlsoStartsANewHoverLifetime){
-    TooltipOptions replacements[3u];
+    Array<TooltipOptions, 3u> replacements;
     replacements[0u].maximumWidth = 256.0f;
     replacements[1u].gap = 8.0f;
     replacements[2u].side = PopupPlacementSide::Right;
@@ -274,7 +274,7 @@ TEST(UiTooltipBehaviorTests, FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithou
 }
 
 TEST(UiTooltipBehaviorTests, InvalidTimingPreservesTheOldBindingAndItsAccumulatedDelay){
-    const f32 invalidDeltas[] = { -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity };
+    const Array<f32, 4> invalidDeltas = { -1.0f, Limit<f32>::s_QuietNaN, Limit<f32>::s_Infinity, -Limit<f32>::s_Infinity };
     const TooltipOptions options;
     for(const f32 delta : invalidDeltas){
         TooltipState state;
@@ -290,7 +290,7 @@ TEST(UiTooltipBehaviorTests, InvalidTimingPreservesTheOldBindingAndItsAccumulate
 }
 
 TEST(UiTooltipBehaviorTests, InvalidOptionsAreRejectedBeforeAnyBindingOrDelayMutation){
-    TooltipOptions invalid[12u];
+    Array<TooltipOptions, 12u> invalid;
     invalid[0u].delaySeconds = -1.0f;
     invalid[1u].delaySeconds = Limit<f32>::s_QuietNaN;
     invalid[2u].delaySeconds = Limit<f32>::s_Infinity;
@@ -324,14 +324,14 @@ TEST(UiTooltipBehaviorTests, InvalidAnchorsDeclarationsAndPartialPopupTokensPres
         u64 declaration;
         PopupToken popup;
     };
-    const Binding invalid[] = {
-        { {}, s_Declaration, s_Popup },
-        { s_Anchor, 0u, s_Popup },
-        { s_Anchor, s_Declaration, { {}, 19u, 23u, 7u } },
-        { s_Anchor, s_Declaration, { s_Popup.widget, 0u, 23u, 7u } },
-        { s_Anchor, s_Declaration, { s_Popup.widget, 19u, 0u, 7u } },
-        { s_Anchor, s_Declaration, { s_Popup.widget, 19u, 23u, 0u } },
-        { s_Anchor, s_Declaration, { s_Popup.widget, 0u, 0u, 0u } }
+    const Array<Binding, 7> invalid = {
+        Binding{ {}, s_Declaration, s_Popup },
+        Binding{ s_Anchor, 0u, s_Popup },
+        Binding{ s_Anchor, s_Declaration, { {}, 19u, 23u, 7u } },
+        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 0u, 23u, 7u } },
+        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 19u, 0u, 7u } },
+        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 19u, 23u, 0u } },
+        Binding{ s_Anchor, s_Declaration, { s_Popup.widget, 0u, 0u, 0u } }
     };
     const TooltipOptions options;
     for(const Binding& rejected : invalid){

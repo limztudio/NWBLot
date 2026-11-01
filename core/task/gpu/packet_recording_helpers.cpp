@@ -31,6 +31,23 @@ namespace GpuPacketRecordingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuTimingScopeDefinition TimingScopeDefinition(const Name& identity, const AStringView markerLabel)noexcept{
+    GpuTimingScopeDefinition definition;
+    definition.identity = identity;
+    definition.markerLabel = markerLabel;
+    return definition;
+}
+
+Expected<Name> PacketTimingScopeName(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet){
+    const GpuCompiledPacketView packetView = planAccess.packet(packet);
+    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+        return MakeUnexpected(Failure{});
+    const GpuTaskGraphTaskView task = declarationAccess.taskAt(packetView.tasks[0u].index);
+    if(task.id != packetView.tasks[0u])
+        return MakeUnexpected(Failure{});
+    return GpuTaskPacketTimingScopeName(task.identity);
+}
+
 b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder){
     b8 recordsTiming = false;
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){

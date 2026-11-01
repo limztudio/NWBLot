@@ -146,7 +146,11 @@ Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
         validatedTimerQueryCommandBuffers.reserve(numCmd);
         for(usize i = 0u; i < numCmd; ++i){
             auto& tracked = *MakeNotNull(ppCmd[i]->m_currentCmdBuf.get());
-            if(!tracked.validateTimerQueryRecordingClaims(*this, localWaits, localWaitCount, validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(), validatedTimerQueryCommandBuffers.size())){
+            if(!tracked.validateTimerQueryRecordingClaims(
+                *this,
+                localWaits ? Span<const SubmissionWait>(localWaits, localWaitCount) : Span<const SubmissionWait>{},
+                validatedTimerQueryCommandBuffers
+            )){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
                 return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
@@ -481,7 +485,6 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
         return next;
     }
 
-    cmdBuf->releasePendingAccelStructBuildCommits();
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
@@ -507,7 +510,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(CommandBufferList
     return next;
 }
 
-b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const b8 prerequisiteObservedComplete, const SubmissionWait* const localWaits, const usize localWaitCount)const noexcept{
+b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite, const b8 prerequisiteObservedComplete, const Span<const SubmissionWait> localWaits)const noexcept{
     if(!prerequisite.valid() || prerequisiteObservedComplete)
         return true;
     if(prerequisite.matchesPhysicalQueue(m_physicalQueue.index, m_physicalQueue.deviceGeneration))
@@ -523,8 +526,8 @@ b8 Queue::coversTimerQueryPrerequisite(const QueueSubmissionToken& prerequisite,
     const auto coveredBy = [&](const VkSemaphore semaphore, const u64 value)noexcept -> b8 {
         return semaphore == producerQueue->m_trackingSemaphore && value >= prerequisite.value;
     };
-    for(usize waitIndex = 0u; waitIndex < localWaitCount; ++waitIndex){
-        if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
+    for(const SubmissionWait& localWait : localWaits){
+        if(coveredBy(localWait.semaphore, localWait.value))
             return true;
     }
     return false;

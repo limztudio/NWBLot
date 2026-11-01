@@ -28,40 +28,26 @@ TESTBED_BEGIN
 
 
 namespace __hidden_testbed_entry{
-static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
 static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TESTBED_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
-}
-
-TStringView NWB::QueryProjectWindowTitle()noexcept{
-    return Testbed::__hidden_testbed_entry::s_WindowTitle;
-}
-
-b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
-    Core::GraphicsRuntime& graphics = context.graphics;
-    return graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
-}
-
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<Testbed::Project>(context);
-}
-
-Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> Testbed::CreateInitialProjectWorld(NWB::ProjectRuntimeContext& context){
+Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialProjectWorld(NWB::ProjectRuntimeContext& context){
     auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_FATAL(__hidden_testbed_entry::s_WorldAllocFailed);
@@ -96,7 +82,7 @@ Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> Testbed::CreateInitialPr
     return world;
 }
 
-void Testbed::DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world){
+void DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world)noexcept{
     NWB_ASSERT(world);
 
     NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *MakeNotNull(world->getSystem<NWB::Impl::MeshSkinningSystem>());
@@ -113,6 +99,33 @@ void Testbed::DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, Un
 
     world->clear();
     world.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TESTBED_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
+}
+
+TStringView NWB::QueryProjectWindowTitle()noexcept{
+    return Testbed::s_WindowTitle;
+}
+
+b8 NWB::ConfigureProjectRuntime(ProjectStartupContext& context)noexcept{
+    Core::GraphicsRuntime& graphics = context.graphics;
+    return graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()) && graphics.setHDR10OutputEnabled(true);
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<Testbed::Project>(context);
 }
 
 

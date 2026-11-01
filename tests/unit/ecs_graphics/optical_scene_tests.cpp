@@ -3,14 +3,15 @@
 
 
 #include <impl/ecs_render/components.adhd.h>
-#include <impl/ecs_render/raytrace/optical_scene_resources.h>
+#include <impl/ecs_render/optics/optical_scene_resources.h>
 
 #include <core/alloc/general.h>
+
+#include <tests/common/floating_point_environment_guard.h>
 
 #include <gtest/gtest.h>
 
 #include <global/floating_point_environment.h>
-#include <global/scope_exit.h>
 #include <global/simd/vector.h>
 
 
@@ -18,12 +19,6 @@
 
 
 namespace __hidden_optical_scene_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,7 +43,7 @@ TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
     renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
     context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, false, VectorZero(), VectorZero(), false);
     renderer.opticalBoundaryMode = static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max);
-    context.gather.append(Core::ECS::EntityID(s_ExpectedDualCount, 0u), renderer, false, VectorZero(), VectorZero(), false);
+    context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, false, VectorZero(), VectorZero(), false);
     EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
     renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
     context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
@@ -57,14 +52,14 @@ TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
 }
 
 TEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport){
-    const OpticalBoundaryMode::Enum modes[] = { OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority, static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max), };
+    const Array<OpticalBoundaryMode::Enum, 3> modes = { OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority, static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max), };
     for(const auto mode : modes){
         for(const b8 boundsValid : {false, true}){
             OpticalSceneContext context;
             RendererComponent renderer;
             context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
             renderer.opticalBoundaryMode = mode;
-            context.gather.append(Core::ECS::EntityID(s_ExpectedDualCount, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), boundsValid);
+            context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), boundsValid);
             renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
             context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, VectorZero(), VectorSet(1.f, 1.f, 1.f, 0.f), true);
             EXPECT_FALSE(context.gather.unspecifiedBoundariesOnly);
@@ -90,7 +85,7 @@ TEST(OpticalScene, OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds){
     context.gather.append(Core::ECS::EntityID(10u, 0u), renderer, false, VectorSet(-100.f, -100.f, -100.f, 0.f), VectorZero(), false);
     context.gather.append(Core::ECS::EntityID(20u, 0u), renderer, true, VectorSet(-1.f, -2.f, -3.f, 0.f), VectorSet(1.f, 2.f, 3.f, 0.f), true);
 
-    ASSERT_EQ(context.gather.instances.size(), s_ExpectedDualCount);
+    ASSERT_EQ(context.gather.instances.size(), 2u);
     EXPECT_EQ(context.gather.instances[0].entityId, Core::ECS::EntityID(10u, 0u).id);
     EXPECT_EQ(context.gather.instances[0].flags, 0u);
     EXPECT_EQ(context.gather.header.transparentCount, 1u);
@@ -103,9 +98,9 @@ TEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut){
     OpticalSceneContext context;
     RendererComponent renderer;
     context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), false);
-    context.gather.append(Core::ECS::EntityID(s_ExpectedDualCount, 0u), renderer, true, VectorSet(-2.f, -2.f, -2.f, 0.f), VectorSet(2.f, 2.f, 2.f, 0.f), true);
+    context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, true, VectorSet(-2.f, -2.f, -2.f, 0.f), VectorSet(2.f, 2.f, 2.f, 0.f), true);
 
-    EXPECT_EQ(context.gather.header.transparentCount, s_ExpectedDualCount);
+    EXPECT_EQ(context.gather.header.transparentCount, 2u);
     EXPECT_EQ(context.gather.header.flags, 0u);
     EXPECT_EQ(context.gather.instances[0].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
 }
@@ -113,7 +108,7 @@ TEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut){
 TEST(OpticalScene, NonfiniteAndInvertedBoundsRejectTheProof){
     OpticalSceneContext context;
     RendererComponent renderer;
-    const Float3U invalidMins[] = { { Limit<f32>::s_Infinity, 0.f, 0.f }, { 2.f, 0.f, 0.f }, };
+    const Array<Float3U, 2> invalidMins = {{ { Limit<f32>::s_Infinity, 0.f, 0.f }, { 2.f, 0.f, 0.f }, }};
     for(const auto& boundsMin : invalidMins){
         RayTracingOpticalSceneGather gather(context.scratch, 1u);
         gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, LoadFloat(boundsMin), VectorSet(1.f, 1.f, 1.f, 0.f), true);
@@ -142,7 +137,7 @@ TEST(OpticalScene, IncompleteBoundsHaveDistinctContentIdentity){
 TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){
     OpticalSceneContext context;
     RendererComponent renderer;
-    context.gather.append(Core::ECS::EntityID(7u, s_ExpectedDualCount), renderer, true, VectorZero(), VectorSet(1.f, 2.f, 3.f, 0.f), true);
+    context.gather.append(Core::ECS::EntityID(7u, 2u), renderer, true, VectorZero(), VectorSet(1.f, 2.f, 3.f, 0.f), true);
     const RayTracingOpticalSceneUpload upload(context.arena, context.gather);
     context.gather.instances.clear();
     context.gather.header.transparentCount = 0u;
@@ -154,7 +149,7 @@ TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){
     NWB_MEMCPY(&storedCount, sizeof(storedCount), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET, sizeof(u32));
     NWB_MEMCPY(&storedEntity, sizeof(storedEntity), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES, sizeof(u32));
     EXPECT_EQ(storedCount, 1u);
-    EXPECT_EQ(storedEntity, Core::ECS::EntityID(7u, s_ExpectedDualCount).id);
+    EXPECT_EQ(storedEntity, Core::ECS::EntityID(7u, 2u).id);
 }
 
 TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation){
@@ -174,19 +169,19 @@ TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslatio
     StoreFloat(bounds->minimum, minimum);
     StoreFloat(bounds->maximum, maximum);
     for(u32 corner = 0u; corner < 8u; ++corner){
-        const f64 coordinates[] = { (corner & 1u) ? localMax.x : localMin.x, (corner & s_ExpectedDualCount) ? localMax.y : localMin.y, (corner & 4u) ? localMax.z : localMin.z, };
+        const Array<f64, 3> coordinates = { (corner & 1u) ? localMax.x : localMin.x, (corner & 2u) ? localMax.y : localMin.y, (corner & 4u) ? localMax.z : localMin.z, };
         for(usize row = 0u; row < 3u; ++row){
-            SIMDVectorDouble exact = VectorDoubleReplicate(transform.m[row][3u]);
+            f64 exact = static_cast<f64>(transform.m[row][3u]);
             for(usize column = 0u; column < 3u; ++column)
-                exact = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(static_cast<f64>(transform.m[row][column])), VectorDoubleReplicate(coordinates[column]), exact);
-            EXPECT_LT(static_cast<f64>(minimum.raw[row]), VectorDoubleGetX(exact));
-            EXPECT_GT(static_cast<f64>(maximum.raw[row]), VectorDoubleGetX(exact));
+                exact += static_cast<f64>(transform.m[row][column]) * coordinates[column];
+            EXPECT_LT(static_cast<f64>(minimum.raw[row]), exact);
+            EXPECT_GT(static_cast<f64>(maximum.raw[row]), exact);
         }
     }
 }
 
 TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
-    volatile f32 inputs[] = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
+    Array<volatile f32, 5> inputs = { -0x1p+24f, 0x1.000002p+24f, 0x1p+24f, 1.0f, 0x1.fffffep-1f, };
     Float34U transform{};
     transform._11 = inputs[0u];
     transform._12 = inputs[1u];
@@ -220,17 +215,14 @@ TEST(OpticalScene, CancellationRetainsOrderedAffineEnclosure){
         EXPECT_LT(VectorGetX(magnitude), 0x1p-16f);
         EXPECT_LT(VectorGetY(magnitude), 0x1p-16f);
     }
-    EXPECT_LT(VectorGetX(VectorSubtract(VectorReplicate(maximum.x), VectorReplicate(minimum.x))), 0x1p-16f);
+    EXPECT_LT(maximum.x - minimum.x, 0x1p-16f);
 }
 
 TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionFlags){
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    const NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
     Float34U transform{};
     transform._11 = -2.f;
@@ -242,7 +234,7 @@ TEST(OpticalScene, InactiveSignalingNaNLanesPreserveAffineEnclosureAndExceptionF
     SIMDMatrix objectToWorld = LoadFloat(transform);
     const SIMDVectorSingle localMin = VectorSet(-3.f, -2.f, -1.f, 0.f);
     const SIMDVectorSingle localMax = VectorSet(1.f, 4.f, 5.f, 0.f);
-    volatile u32 inactiveBits[]{ 0x7f800123u, 0xff800456u };
+    Array<volatile u32, 2> inactiveBits = { 0x7f800123u, 0xff800456u };
     const SIMDVectorSingle poisonedMin = VectorSelect(localMin, VectorReplicateInt(inactiveBits[0]), s_SIMDMaskW);
     const SIMDVectorSingle poisonedMax = VectorSelect(localMax, VectorReplicateInt(inactiveBits[1]), s_SIMDMaskW);
     objectToWorld.v[3] = VectorReplicateInt(inactiveBits[0]);

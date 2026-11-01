@@ -43,63 +43,10 @@ inline constexpr AStringView s_MultilineViewFontPath = "tests/ui/widgets/multili
 inline constexpr AStringView s_MultilineViewSkinPath = "tests/ui/widgets/multiline_view/skin";
 inline constexpr Rect s_MultilineViewViewport{ 0.0f, 0.0f, 500.0f, 500.0f };
 
-class FixtureShaper final : public ITextShaper{
-public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()noexcept override = default;
+using NWB::Tests::UiFixtureText::FixtureShaper;
 
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
-        ShapedRun run(m_arena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        if(request.text == "ffi")
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
-        else if(request.text == "\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab")
-            run.glyphs.push_back({ {}, 1u, 0u, 9u, {}, { 12.0f, 0.0f }, {} });
-        else{
-            NWB::Tests::UiFixtureText::AppendCodePointGlyphs(run, request.text);
-        }
-        if(request.direction == TextDirection::RightToLeft){
-            NWB::Tests::UiFixtureText::ReverseGlyphs(run);
-        }
-        return run;
-    }
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-};
-
-inline void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
-    NWB::UiWidgetTests::ExpectRect(actual.bounds, expected.bounds);
-    NWB::UiWidgetTests::ExpectRect(actual.frameClip, expected.frameClip);
-    NWB::UiWidgetTests::ExpectRect(actual.content, expected.content);
-    NWB::UiWidgetTests::ExpectRect(actual.clip, expected.clip);
-    NWB::UiWidgetTests::ExpectRect(actual.caret, expected.caret);
-    EXPECT_FLOAT_EQ(actual.textOrigin.x, expected.textOrigin.x);
-    EXPECT_FLOAT_EQ(actual.textOrigin.y, expected.textOrigin.y);
-    EXPECT_FLOAT_EQ(actual.scroll, expected.scroll);
-    EXPECT_FLOAT_EQ(actual.scrollY, expected.scrollY);
-}
-
-inline void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output){
-    output.clear();
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Solid)
-            continue;
-        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
-            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-            if(first.color.r != color.r || first.color.g != color.g || first.color.b != color.b || first.color.a != color.a)
-                continue;
-            const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            const SIMDVectorSingle size = VectorSubtract(VectorSet(opposite.position.x, opposite.position.y, 0.0f, 0.0f), VectorSet(first.position.x, first.position.y, 0.0f, 0.0f));
-            output.push_back({ first.position.x, first.position.y, VectorGetX(size), VectorGetY(size) });
-        }
-    }
-}
+void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected);
+void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, PaintVector<Rect>& output);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,60 +54,14 @@ inline void CollectSolidRects(const DrawSnapshot& snapshot, const Color& color, 
 
 class MultilineViewFixture : public testing::Test{
 public:
-    MultilineViewFixture()
-        : m_arena(Name("tests/ui/widgets/multiline_view"))
-        , m_model(m_arena, {}, EditTextMode::Multiline)
-        , m_shaper(m_arena)
-        , m_layoutBuilder(m_arena, m_shaper)
-        , m_view(m_arena)
-        , m_font(m_arena, Name(s_MultilineViewFontPath))
-        , m_text(m_arena)
-        , m_skin(m_arena, Name(s_MultilineViewSkinPath))
-        , m_paint(m_arena)
-    {
-        UiSkin::RegionVector regions(m_arena);
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/widgets/multiline_view/texture"), 4u, 4u, 1.0f, Move(regions));
-    }
+    MultilineViewFixture();
 
 
 protected:
-    [[nodiscard]] b8 shapeView(){
-        if(!m_view.snapshot(m_model))
-            return false;
-        auto layout = m_layoutBuilder.layout({ m_view.displayText() });
-        return layout && m_view.adoptLayout(Move(*layout));
-    }
-
-    [[nodiscard]] b8 place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {})noexcept{
-        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, s_MultilineViewViewport, previousScroll);
-        if(!placement)
-            return false;
-        m_placement = *placement;
-        return true;
-    }
-
-    [[nodiscard]] b8 loadFont(){
-        Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-        const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "latin.font";
-        Core::Assets::AssetBytes bytes(m_arena);
-        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
-        if(!bytesResult)
-            return false;
-        bytes = Move(*bytesResult);
-        m_font.setFontBytes(Move(bytes));
-        if(!m_font.validatePayload())
-            return false;
-        const FontSource source{ Core::Assets::AssetRef<Font>(s_MultilineViewFontPath), m_font, 1u };
-        return m_text.setFonts(fontScratchArena, &source, 1u);
-    }
-
-    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
-        m_paint.begin({ s_MultilineViewViewport.width, s_MultilineViewViewport.height, 1.0f, 1.0f }, 1u, 1u, Core::Assets::AssetRef<UiSkin>(s_MultilineViewSkinPath), m_skin);
-        if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
-            return MakeUnexpected(Failure{});
-        EXPECT_FALSE(m_paint.popClip());
-        return m_paint.freeze();
-    }
+    [[nodiscard]] b8 shapeView();
+    [[nodiscard]] b8 place(f32 width = 100.0f, f32 height = 100.0f, Point previousScroll = {})noexcept;
+    [[nodiscard]] b8 loadFont();
+    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags);
 
 
 protected:

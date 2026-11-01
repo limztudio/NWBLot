@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "source_input.h"
+#include "bake.h"
 
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/prepared_source.h>
@@ -20,9 +20,9 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 
 Expected<Core::Assets::AssetBytes, AStringView> ReadFontSourceInput(const Path& path, Core::Assets::AssetArena& arena){
-    constexpr AStringView s_PreparedFontExtensions[] = { s_PreparedFontExtension };
+    static constexpr Array<AStringView, 1u> s_PreparedFontExtensions = { Impl::s_PreparedFontExtension };
     if(PathHasListedExtension(path, s_PreparedFontExtensions)){
-        auto prepared = Impl::ReadPreparedFontSource(path, arena, false);
+        auto prepared = Impl::ReadPreparedFontSource(path, false, arena);
         if(!prepared)
             return MakeUnexpected(prepared.error());
         if(prepared->faceIndex != 0u){

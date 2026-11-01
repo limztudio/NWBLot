@@ -91,7 +91,7 @@ b8 EncodeEvent(const EventHeader& header, const void* payload, const usize paylo
         return false;
 
     const EncodedEventHeader encodedHeader = __hidden_telemetry_codec::EncodeHeader(header);
-    const auto aliasOffset = ContainerDetail::SourceAliasesDestination(outBytes, static_cast<const u8*>(payload), payloadBytes);
+    const auto aliasOffset = ContainerDetail::SourceAliasesDestination(outBytes, Span<const u8>(static_cast<const u8*>(payload), payloadBytes));
     if(aliasOffset){
         if(payloadBytes > outBytes.size() - *aliasOffset)
             return false;
@@ -175,7 +175,7 @@ Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const vo
     return DecodedEvent{ .event = Move(event), .bytesRead = cursor + payloadBytes };
 }
 
-Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* const bytes, const usize byteCount, Recorder& inOutRecorder){
+Expected<usize, DecodeResult> DecodeEventStream(const void* const bytes, const usize byteCount, TelemetryArena& arena, Recorder& inOutRecorder){
     inOutRecorder.clear();
     if(!bytes)
         return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });

@@ -29,7 +29,7 @@ TEST_F(UiPopupInputTests, NestedAcceptanceCancelsTheParentSessionOnlyAfterGeomet
     ASSERT_TRUE(nestedFrame());
     EXPECT_TRUE(m_childResult.focused);
     EXPECT_TRUE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.publishedText(), "child");
+    EXPECT_EQ(m_textInput.surroundingText(), "child");
 }
 
 TEST_F(UiPopupInputTests, NestedPreeditEscapeCancelsCompositionThenDismissesOnlyTheChild){
@@ -61,7 +61,7 @@ TEST_F(UiPopupInputTests, NestedPreeditEscapeCancelsCompositionThenDismissesOnly
     ASSERT_EQ(m_context.input().popupCount(), 1u);
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     ASSERT_TRUE(nestedFrame());
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
     EXPECT_NE(m_textInput.activeSession(), childSession);
 }
 
@@ -92,7 +92,7 @@ TEST_F(UiPopupInputTests, AncestorReopeningFencesQueuedChildNativeAndClipboardIn
     ASSERT_EQ(m_context.input().popupCount(), 1u);
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     ASSERT_TRUE(nestedFrame());
-    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    EXPECT_EQ(m_textInput.surroundingText(), "popup");
 }
 
 TEST_F(UiPopupInputTests, NestedFocusLossCancelsTheWholeFamilyWithoutRestoringAnUnfocusedEditor){

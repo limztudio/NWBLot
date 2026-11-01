@@ -32,9 +32,36 @@ const u32 s_FontAtlasBinaryHeaderBytes = 164u;
 const u32 s_FontAtlasBinaryGlyphBytes = 52u;
 const u32 s_FontAtlasBinaryGroupHeaderBytes = 48u;
 const u32 s_FontAtlasBinaryTableHeaderBytes = 40u;
+const u32 s_FontAtlasQwordHighWordShift = 32u;
+
+const usize s_FontAtlasOccupiedWordLastBit = 63u;
+const f32 s_FontAtlasGlyphPlaneSizeRelativeTolerance = 0.0001f;
 
 const Name s_AssetsFontAtlasLoadBinaryArena = "impl/assets_font_atlas/load_binary";
 const Name s_AssetsFontAtlasSerializeArena = "impl/assets_font_atlas/serialize";
+
+const StringView s_FontAtlasMetaDiagnosticPrefix = "Font atlas meta";
+const StringView s_FontAtlasMetaFontField = "font";
+const StringView s_FontAtlasBakePpemField = "bake_ppem";
+const StringView s_FontAtlasSpreadPixelsField = "spread_pixels";
+const StringView s_FontAtlasRasterModeField = "raster_mode";
+const StringView s_FontAtlasAscenderUnitsField = "ascender_units";
+const StringView s_FontAtlasDescenderUnitsField = "descender_units";
+const StringView s_FontAtlasLineGapUnitsField = "line_gap_units";
+const StringView s_FontAtlasRasterModeBitmap = "bitmap";
+const StringView s_FontAtlasRasterModeOutline = "outline";
+const StringView s_FontAtlasGlyphsField = "glyphs";
+
+const StringView s_FontAtlasGlyphMetaDiagnosticPrefix = "Font atlas glyph meta";
+const StringView s_FontAtlasGlyphAdvanceUnitsField = "advance_units";
+const StringView s_FontAtlasGlyphGroupField = "group";
+const StringView s_FontAtlasGlyphChannelField = "channel";
+const StringView s_FontAtlasGlyphXField = "x";
+const StringView s_FontAtlasGlyphYField = "y";
+const StringView s_FontAtlasGlyphWidthField = "width";
+const StringView s_FontAtlasGlyphHeightField = "height";
+const StringView s_FontAtlasGlyphPlaneLeftField = "plane_left";
+const StringView s_FontAtlasGlyphPlaneTopField = "plane_top";
 
 [reflect]
 enum<u32> FontAtlasRasterMode{
@@ -57,6 +84,80 @@ class FontAtlasGlyph{
     public f32 planeBottom = 0.0f;
     public f32 advanceUnits = 0.0f;
     public u32 drawable = 0u;
+}
+
+b8 TryParseFontAtlasRasterMode(in StringView text, mut FontAtlasRasterMode outRasterMode){
+    if(text == s_FontAtlasRasterModeBitmap){
+        outRasterMode = FontAtlasRasterMode::Bitmap;
+        return true;
+    }
+    if(text == s_FontAtlasRasterModeOutline){
+        outRasterMode = FontAtlasRasterMode::Outline;
+        return true;
+    }
+    return false;
+}
+
+b8 IsAllowedFontAtlasGlyphField(in StringView field, in b8 hasBitmap){
+    return
+        field == s_FontAtlasGlyphAdvanceUnitsField
+        || (
+            hasBitmap
+            && (
+                field == s_FontAtlasGlyphGroupField
+                || field == s_FontAtlasGlyphChannelField
+                || field == s_FontAtlasGlyphXField
+                || field == s_FontAtlasGlyphYField
+                || field == s_FontAtlasGlyphWidthField
+                || field == s_FontAtlasGlyphHeightField
+                || field == s_FontAtlasGlyphPlaneLeftField
+                || field == s_FontAtlasGlyphPlaneTopField
+            )
+        )
+    ;
+}
+
+b8 IsValidFontAtlasMetrics(in f32 ascenderUnits, in f32 descenderUnits, in f32 lineGapUnits){
+    return isFinite(ascenderUnits) && isFinite(descenderUnits) && isFinite(lineGapUnits) && ascenderUnits > descenderUnits && lineGapUnits >= 0.0f;
+}
+
+b8 IsValidFontAtlasGlyphGroupRect(in FontAtlasGlyph glyph, in u32 groupWidth, in u32 groupHeight, in u32 groupChannelCount, in u32 guardTexels){
+    return
+        glyph.channel < groupChannelCount
+        && glyph.x >= guardTexels
+        && glyph.y >= guardTexels
+        && glyph.x < groupWidth
+        && glyph.y < groupHeight
+        && glyph.width < groupWidth - glyph.x
+        && glyph.height < groupHeight - glyph.y
+    ;
+}
+
+u64 PackFontAtlasQword(in u32 low, in u32 high){
+    return cast<u64>(low) | (cast<u64>(high) << s_FontAtlasQwordHighWordShift);
+}
+
+u32 UnpackFontAtlasLowWord(in u64 qword){
+    return cast<u32>(qword);
+}
+
+u32 UnpackFontAtlasHighWord(in u64 qword){
+    return cast<u32>(qword >> s_FontAtlasQwordHighWordShift);
+}
+
+b8 IsValidNondrawableFontAtlasGlyph(in FontAtlasGlyph glyph){
+    return
+        glyph.group == 0u
+        && glyph.channel == 0u
+        && glyph.x == 0u
+        && glyph.y == 0u
+        && glyph.width == 0u
+        && glyph.height == 0u
+        && glyph.planeLeft == 0.0f
+        && glyph.planeTop == 0.0f
+        && glyph.planeRight == 0.0f
+        && glyph.planeBottom == 0.0f
+    ;
 }
 
 

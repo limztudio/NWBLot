@@ -20,24 +20,6 @@ namespace __hidden_ui_edit_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_NewlineText = "\n";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 IsMutation(const EditCommand::Enum command)noexcept{
-    return
-        command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
-        || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
-        || command == EditCommand::Undo || command == EditCommand::Redo || command == EditCommand::Newline
-    ;
-}
-
-static b8 SuppressRepeat(const EditCommand::Enum command)noexcept{
-    return command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel;
-}
-
 static b8 EraseWord(EditModel& model, const b8 forward){
     if(model.hasSelection())
         return model.replaceSelection({});
@@ -65,7 +47,7 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     if(request.command == EditCommand::None || request.command > EditCommand::Newline)
         return result;
     result.handled = true;
-    if(request.repeat && __hidden_ui_edit_commands::SuppressRepeat(request.command))
+    if(request.repeat && ShouldSuppressEditCommandRepeat(request.command))
         return result;
     if(model.composition().active){
         if(request.command == EditCommand::Cancel){
@@ -74,7 +56,7 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
         }
         return result;
     }
-    if(readOnly && __hidden_ui_edit_commands::IsMutation(request.command))
+    if(readOnly && IsMutatingEditCommand(request.command))
         return result;
     const u64 revision = model.revision();
     const usize anchor = model.anchor();
@@ -89,7 +71,7 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     case EditCommand::WordRight: applied = model.move(EditMove::WordRight, request.extend); break;
     case EditCommand::DocumentHome: applied = model.move(EditMove::DocumentHome, request.extend); break;
     case EditCommand::DocumentEnd: applied = model.move(EditMove::DocumentEnd, request.extend); break;
-    case EditCommand::Newline: applied = model.replaceSelection(__hidden_ui_edit_commands::s_NewlineText); break;
+    case EditCommand::Newline: applied = model.replaceSelection(s_EditNewlineText); break;
     case EditCommand::Backspace: applied = model.backspace(); break;
     case EditCommand::Delete: applied = model.eraseForward(); break;
     case EditCommand::WordBackspace: applied = __hidden_ui_edit_commands::EraseWord(model, false); break;

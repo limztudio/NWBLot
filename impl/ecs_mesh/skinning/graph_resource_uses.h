@@ -36,7 +36,7 @@ public:
 };
 
 // The result owns ordered uses built from immutable plans.
-[[nodiscard]] Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const MeshSkinningGraphDispatchPlan* plans, usize planCount, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(Span<const MeshSkinningGraphDispatchPlan> plans, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

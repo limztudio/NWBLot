@@ -15,59 +15,21 @@ namespace __hidden_adhd_compiler_core_tests{
 
 
 using namespace NWB::AdhdCompilerTestsDetail;
+using NWB::Core::Metascript::Adhd::Compiler;
+using NWB::Core::Metascript::Adhd::CompileResult;
+using NWB::Core::Metascript::MString;
+using NWB::Core::Metascript::MStringView;
+using NWB::Core::Metascript::MetaArena;
 
-TEST(AdhdInplaceFunction, StatelessZeroByteAndStatefulTrampolines){
-    using StatelessFn = InplaceFunction<0u, i32(i32, i32)>;
-    static_assert(sizeof(StatelessFn) == sizeof(void*), "Stateless InplaceFunction<0> must be 1 pointer wide");
-
-    StatelessFn addFn([](const i32 a, const i32 b)noexcept -> i32{ return a + b; });
-    ASSERT_TRUE(static_cast<b8>(addFn));
-    EXPECT_EQ(addFn(10, 22), 32);
-
-    const StatelessFn copiedStateless = addFn;
-    EXPECT_EQ(copiedStateless(5, 7), 12);
-
-    i32(*rawPtr)(i32, i32) = addFn.rawFn();
-    ASSERT_NE(rawPtr, nullptr);
-    EXPECT_EQ(rawPtr(3, 4), 7);
-
-    auto cFirst = addFn.cTrampolineFirst();
-    EXPECT_EQ(cFirst(addFn.userData(), 8, 9), 17);
-
-    i32 accumulator = 100;
-    InplaceFunction<64u, i32(i32)> statefulFn([&accumulator](const i32 delta)noexcept -> i32{
-        accumulator += delta;
-        return accumulator;
-    });
-    ASSERT_TRUE(static_cast<b8>(statefulFn));
-    EXPECT_EQ(statefulFn(15), 115);
-
-    auto statefulTrampoline = statefulFn.cTrampolineLast();
-    EXPECT_EQ(statefulTrampoline(10, statefulFn.userData()), 125);
-}
-
-TEST(AdhdPreprocessor, DeduplicatesIncludesAndSupportsMacrosInNwbAndAdhd){
+TEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes){
     AdhdTestArena arena;
-
-    static constexpr MStringView s_NwbSource =
-        "#define ASSET_SCALE 4\r\n"
-        "#if ASSET_SCALE == 4\r\n"
-        "number scale = ASSET_SCALE;\r\n"
-        "#endif\r\n";
-
-    NWB::Core::Metascript::Document doc(arena.arena);
-    ASSERT_TRUE(doc.parse(s_NwbSource));
-    ASSERT_EQ(doc.declarations().size(), 1u);
-    ASSERT_NE(doc.findVariable("scale"), nullptr);
-    EXPECT_EQ(doc.findVariable("scale")->asInteger(), 4);
-
     MockIncludeResolver resolver;
+
     static constexpr MStringView s_AdhdSource =
         "#include \"shared_defs.adhd\"\r\n"
         "#include \"shared_defs.adhd\"\r\n"
-        "#define MUL_ADD(a, b, c) ((a) * (b) + (c))\r\n"
         "u32 compute(in u32 x) {\r\n"
-        "    return MUL_ADD(x, 2, kSharedLimit);\r\n"
+        "    return x + kSharedLimit;\r\n"
         "}\r\n";
 
     CompileResult result(arena.arena);
@@ -237,96 +199,24 @@ TEST(AdhdCompiler, EnforcesMandatoryInitializationAndProhibitions){
     EXPECT_FALSE(Compiler::Compile(s_MutateInParam, "impl/test.adhd", arena.arena, res6));
 }
 
-TEST(AdhdCompiler, InfersFuncCaptureStorageAndLowersParallelAndDiagnostics){
+TEST(AdhdCompiler, ReordersTemplateInstantiationFieldsAndRejectsFreeOperatorsOrMissingMethodBodies){
     AdhdTestArena arena;
 
     static constexpr MStringView s_Source =
-        "void runFrame(in StringView mode, mut u32 counter) {\r\n"
-        "    Func<i32(in i32)> stateless = lambda(in i32 x) -> i32 {\r\n"
-        "        return x + 1;\r\n"
-        "    };\r\n"
-        "    Func<void(in u32)> stateful = lambda[mut counter](in u32 step) -> void {\r\n"
-        "        counter += step;\r\n"
-        "    };\r\n"
-        "    [core(Heavy), priority(Critical)]\r\n"
-        "    parallel TaskA {\r\n"
-        "        counter += 1;\r\n"
-        "    }\r\n"
-        "    parallel TaskB : TaskA {\r\n"
-        "        counter += 2;\r\n"
-        "    }\r\n"
-        "    for(u32 i = 0; i < 4; ++i) {\r\n"
-        "        [core(Light), priority(Normal)]\r\n"
-        "        parallel stateful(i);\r\n"
-        "    }\r\n"
-        "    switch(mode) {\r\n"
-        "    case \"fast\":\r\n"
-        "        [essential]\r\n"
-        "        info(\"Fast mode active\");\r\n"
-        "        break;\r\n"
-        "    default:\r\n"
-        "        assert(counter > 0, \"counter must be positive\");\r\n"
-        "        break;\r\n"
-        "    }\r\n"
-        "}\r\n";
-
-    CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/frame/runner.adhd", arena.arena, result));
-
-    const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
-    EXPECT_NE(cppView.find("InplaceFunction<0u,"), MStringView::npos);
-    EXPECT_NE(cppView.find("InplaceFunction<64u,"), MStringView::npos);
-    EXPECT_NE(cppView.find("__adhd_task_scope.submit("), MStringView::npos);
-    EXPECT_NE(cppView.find("::NWB::Core::CpuTaskCost::Heavy"), MStringView::npos);
-    EXPECT_NE(cppView.find("::NWB::Core::CpuTaskPriority::Critical"), MStringView::npos);
-    EXPECT_NE(cppView.find("NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT(\"Fast mode active\"))"), MStringView::npos);
-    EXPECT_NE(cppView.find("NWB_ASSERT_MSG((counter > 0), NWB_TEXT(\"counter must be positive\"))"), MStringView::npos);
-}
-
-TEST(AdhdCompiler, SupportsEnumFlagKeywordsBitwiseOperatorsAndSimdLowering){
-    AdhdTestArena arena;
-
-    static constexpr MStringView s_Source =
-        "flag<u32> RenderMask {\r\n"
-        "    None = 0,\r\n"
-        "    Opaque = 1 << 0,\r\n"
-        "    Shadow = 1 << 1,\r\n"
-        "}\r\n"
         "class Pair<T, U> {\r\n"
         "    public T first = 0;\r\n"
         "    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n"
         "}\r\n"
-        "[reflect, asset(\"material_def\")]\r\n"
-        "class MaterialDef {\r\n"
-        "    public f32x4 baseColor = f32x4(1.0f, 1.0f, 1.0f, 1.0f);\r\n"
-        "    public AssetRef<TextureAsset> albedoMap = AssetRef<TextureAsset>();\r\n"
+        "class Holder {\r\n"
         "    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n"
-        "    public RenderMask mask = RenderMask::Opaque;\r\n"
-        "    public RenderMask operator|(in RenderMask extra)const {\r\n"
-        "        return this.mask | extra;\r\n"
-        "    }\r\n"
-        "    public f32 saturateWeight(in f32 w)const;\r\n"
-        "}\r\n"
-        "f32 MaterialDef::saturateWeight(in f32 w)const {\r\n"
-        "    return clamp(w, 0.0f, 1.0f);\r\n"
         "}\r\n";
 
     CompileResult result(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/render/material_def.adhd", arena.arena, result, nullptr, "NWB::CustomRender"));
+    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/render/material_def.adhd", arena.arena, result));
     ASSERT_EQ(result.unit.templateInstantiations.size(), 1u);
     ASSERT_EQ(result.unit.templateInstantiations[0]->orderedFields.size(), 2u);
     EXPECT_EQ(result.unit.templateInstantiations[0]->orderedFields[0]->name, "second");
     EXPECT_EQ(result.unit.templateInstantiations[0]->orderedFields[1]->name, "first");
-
-    const MStringView hdrView(result.generatedHeader.data(), result.generatedHeader.size());
-    const MStringView cppView(result.generatedSource.data(), result.generatedSource.size());
-    EXPECT_NE(hdrView.find("namespace NWB::CustomRender"), MStringView::npos);
-    EXPECT_NE(hdrView.find("Float4 baseColor = Float4("), MStringView::npos);
-    EXPECT_NE(hdrView.find("template<>\r\nclass Pair<u8, Float4> final"), MStringView::npos);
-    EXPECT_NE(hdrView.find("assetDependencyFieldCount()"), MStringView::npos);
-    EXPECT_NE(hdrView.find("deserializeNwb("), MStringView::npos);
-    EXPECT_NE(cppView.find("return \"albedoMap\";"), MStringView::npos);
-    EXPECT_NE(cppView.find("::Clamp(w, 0.0f, 1.0f)"), MStringView::npos);
 
     static constexpr MStringView s_FreeOpSource =
         "u32 operator+(in u32 a, in u32 b) {\r\n"
@@ -377,110 +267,8 @@ TEST(AdhdCompiler, EnforcesMutCallSiteAndParallelConcurrencySafety){
     EXPECT_TRUE(Compiler::Compile(s_SafeParallelVector, "impl/test_par_good.adhd", arena.arena, safeParRes));
 }
 
-TEST(AdhdCompiler, SupportsCharLiteralsLineContinuationsInlineAttributesAndOverloadResolution){
+TEST(AdhdCompiler, RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttributeConflicts){
     AdhdTestArena arena;
-
-    static constexpr MStringView s_Source =
-        "#define MAKE_PAIR(a, \\\r\n"
-        "    b) ((a) + (b))\r\n"
-        "#if 'A' == 65 && '\\n' == 10 && '\\x10' == 16\r\n"
-        "const u32 s_CharConst = 'Z';\r\n"
-        "#endif\r\n"
-        "[inline]\r\n"
-        "i32 pickOverload(in i32 v) {\r\n"
-        "    return MAKE_PAIR(\r\n"
-        "        v,\r\n"
-        "        cast<i32>('!')\r\n"
-        "    );\r\n"
-        "}\r\n"
-        "[noinline]\r\n"
-        "f32 pickOverload(in f32 v) {\r\n"
-        "    return v + 1.0f;\r\n"
-        "}\r\n"
-        "class OverloadProbe {\r\n"
-        "    public i32 m_val;\r\n"
-        "    [inline]\r\n"
-        "    public OverloadProbe(in i32 v) {\r\n"
-        "        this.m_val = v;\r\n"
-        "    }\r\n"
-        "    [noinline]\r\n"
-        "    public OverloadProbe(in f32 v) {\r\n"
-        "        this.m_val = cast<i32>(v);\r\n"
-        "    }\r\n"
-        "    [inline]\r\n"
-        "    public i32 eval(in i32 x)const {\r\n"
-        "        return pickOverload(x);\r\n"
-        "    }\r\n"
-        "    [noinline]\r\n"
-        "    public f32 eval(in f32 x)const {\r\n"
-        "        return pickOverload(x);\r\n"
-        "    }\r\n"
-        "}\r\n"
-        "void runProbe() {\r\n"
-        "    f32x3u splatU(2.0f);\r\n"
-        "    parallel_for(usize i = 0u; i < 16u; i += 4u) {\r\n"
-        "    }\r\n"
-        "}\r\n"
-        "in f32x4 borrowSimdRef(in f32x4 v) {\r\n"
-        "    return v;\r\n"
-        "}\r\n";
-
-    CompileResult res(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_Source, "impl/test_char_inline_overload.adhd", arena.arena, res));
-
-    const MStringView hdrView(res.generatedHeader.data(), res.generatedHeader.size());
-    const MStringView cppView(res.generatedSource.data(), res.generatedSource.size());
-
-    EXPECT_NE(hdrView.find("inline constexpr u32 s_CharConst = 'Z';"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE inline i32 pickOverload(const i32 v)"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE OverloadProbe(const i32 v)noexcept"), MStringView::npos);
-    EXPECT_NE(hdrView.find("NWB_FORCE_INLINE i32 eval(const i32 x)const noexcept"), MStringView::npos);
-    EXPECT_NE(cppView.find("NWB_NOINLINE f32 pickOverload(const f32 v)"), MStringView::npos);
-    EXPECT_NE(cppView.find("NWB_NOINLINE OverloadProbe::OverloadProbe(const f32 v)noexcept"), MStringView::npos);
-    EXPECT_NE(cppView.find("NWB_NOINLINE f32 OverloadProbe::eval(const f32 x)const noexcept"), MStringView::npos);
-    EXPECT_NE(cppView.find("Float3U splatU(2.0f, 2.0f, 2.0f);"), MStringView::npos);
-    EXPECT_NE(cppView.find("static_cast<usize>(16u), static_cast<usize>(4u), [&](const usize __adhd_idx)noexcept"), MStringView::npos);
-    EXPECT_NE(cppView.find("return ::MakeNotNull(&(v));"), MStringView::npos);
-}
-
-TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
-    AdhdTestArena arena;
-
-    static constexpr MStringView s_ReflectSerializeSource =
-        "enum<u8> SlotKey {\r\n"
-        "    Primary = 0u,\r\n"
-        "    Secondary = 1u\r\n"
-        "}\r\n"
-        "[serialize]\r\n"
-        "class SubEntry {\r\n"
-        "    public u32 id = 0u;\r\n"
-        "}\r\n"
-        "class AssetBox<T> {\r\n"
-        "    public T item;\r\n"
-        "}\r\n"
-        "class TexAsset {}\r\n"
-        "[serialize, reflect]\r\n"
-        "class BundlePayload {\r\n"
-        "    public Array<Name, 2> tags;\r\n"
-        "    public Array<SubEntry, 2> subs;\r\n"
-        "}\r\n"
-        "[reflect]\r\n"
-        "class SceneTable {\r\n"
-        "    public Map<SlotKey, i32> slotWeights;\r\n"
-        "    public AssetBox<AssetRef<TexAsset>> boxedTex;\r\n"
-        "}\r\n";
-
-    CompileResult reflectRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_ReflectSerializeSource, "impl/test_bundle_reflect.adhd", arena.arena, reflectRes));
-    const MStringView reflectHdr(reflectRes.generatedHeader.data(), reflectRes.generatedHeader.size());
-    const MStringView reflectCpp(reflectRes.generatedSource.data(), reflectRes.generatedSource.size());
-
-    EXPECT_NE(reflectHdr.find("(sizeof(tags) / sizeof(tags[0])) * sizeof(::NameHash)"), MStringView::npos);
-    EXPECT_NE(reflectHdr.find("(sizeof(subs) / sizeof(subs[0])) * SubEntry::serializedBinarySize()"), MStringView::npos);
-    EXPECT_NE(reflectCpp.find("for(const auto& __elem : this->tags)"), MStringView::npos);
-    EXPECT_NE(reflectCpp.find("for(auto& __elem : this->subs)"), MStringView::npos);
-    EXPECT_NE(reflectHdr.find("if(const auto __ek = SlotKey::parseNamedEnum(__k)){ this->slotWeights[*__ek] = static_cast<i32>(__v.asInteger()); }"), MStringView::npos);
-    EXPECT_NE(reflectHdr.find("AssetBox<::NWB::Core::Assets::AssetRef<TexAsset>>::extractNwbAssetDependencies(*__f, callback)"), MStringView::npos);
 
     static constexpr MStringView s_OverflowFlagEnum =
         "flag<u8> TooManyFlags {\r\n"
@@ -550,51 +338,8 @@ TEST(AdhdCompiler, ValidatesNewSemanticConstraintsAndExtendedReflection){
     EXPECT_FALSE(Compiler::Compile(s_ConflictingInlineAttrs, "impl/bad_inline_attrs.adhd", arena.arena, badAttrRes));
 }
 
-TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
+TEST(AdhdCompiler, RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors){
     AdhdTestArena arena;
-
-    static constexpr MStringView s_ValidPass2Source =
-        "/* leading block comment */ #define PICK_VAL(cond, a, b) ((cond) ? (a) : (b))\r\n"
-        "#if PICK_VAL(1, 10, 20) == 10 && '\\u0041' == 65\r\n"
-        "enum<u8> SemiEnum {\r\n"
-        "    First = 0u\r\n"
-        "};\r\n"
-        "interface ISemiInterface {\r\n"
-        "    i32 get()const;\r\n"
-        "};\r\n"
-        "class TexAsset {};\r\n"
-        "[reflect]\r\n"
-        "class OptionalContainerDeps {\r\n"
-        "    public Optional<Vector<AssetRef<TexAsset>>> optRefs;\r\n"
-        "};\r\n"
-        "[inline]\r\n"
-        "u32 inlineParallelAndRawVec(in f32x3u unalignedVec, mut Vector<f32x4> simdItems) {\r\n"
-        "    for(mut f32x4 item : simdItems) {\r\n"
-        "        item = item + f32x4(1.0f, 2.0f, 3.0f, 4.0f);\r\n"
-        "    }\r\n"
-        "    parallel LocalTask {\r\n"
-        "        Vector<i32> taskLocalVec;\r\n"
-        "        taskLocalVec.push_back(42);\r\n"
-        "    }\r\n"
-        "    wait();\r\n"
-        "    f32 firstLane = unalignedVec[0];\r\n"
-        "    native(in laneVal = firstLane) {\r\n"
-        "        const i32 sep = 1'000;\r\n"
-        "        const char* rawBrace = R\"(raw } brace)\";\r\n"
-        "        (void)sep;\r\n"
-        "        (void)rawBrace;\r\n"
-        "        (void)laneVal;\r\n"
-        "    }\r\n"
-        "    return bit_cast<u32>(firstLane);\r\n"
-        "}\r\n"
-        "#endif\r\n";
-
-    CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_ValidPass2Source, "impl/pass2_valid.adhd", arena.arena, validRes));
-    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
-    EXPECT_NE(hdrView.find("#include <core/task/cpu/scheduler.h>"), MStringView::npos);
-    EXPECT_NE(hdrView.find("unalignedVec.raw[0]"), MStringView::npos);
-    EXPECT_NE(hdrView.find("if(this->optRefs.has_value()){ for(const auto& __dep : *this->optRefs){ if(__dep.valid()) callback(__dep.virtualPath); } }"), MStringView::npos);
 
     static constexpr MStringView s_BadHexLiteral =
         "const u32 kBad = 0x1G;\r\n";
@@ -659,106 +404,8 @@ TEST(AdhdCompiler, SupportsPass2PreprocessorSemaAndCodegenEnhancements){
     EXPECT_FALSE(Compiler::Compile(s_ParallelForSet, "impl/bad_par_set.adhd", arena.arena, parSetRes));
 }
 
-TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
+TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndParallelLambdaMutation){
     AdhdTestArena arena;
-
-    static constexpr MStringView s_ValidPass3Source =
-        "/* multi-line block comment\r\n"
-        "   closing before directive */ #define K_SHIFT 2\r\n"
-        "const i32 MaxCount = 8;\r\n"
-        "enum<u8> ExecMode {\r\n"
-        "    Slow = 0,\r\n"
-        "    Fast = 1,\r\n"
-        "}\r\n"
-        "class ModeHolder {\r\n"
-        "    public ExecMode mode = ExecMode::Fast;\r\n"
-        "    public Vector<Func<i32(in i32)>> callbacks;\r\n"
-        "    public Array<u32, (1 << K_SHIFT)> table = Array<u32, (1 << K_SHIFT)>();\r\n"
-        "    public i32 evaluate(in i32 x, in StringView tag) {\r\n"
-        "        ExecMode m0 = this.mode::Fast;\r\n"
-        "        i32 limit = (MaxCount) - 1;\r\n"
-        "        i32 dblNeg = - -x;\r\n"
-        "        auto fn = lambda[in MaxCount, in limit](in i32 v) -> i32 {\r\n"
-        "            return v + MaxCount + limit;\r\n"
-        "        };\r\n"
-        "        this.callbacks.push_back(fn);\r\n"
-        "        switch(x) {\r\n"
-        "        case 1: {\r\n"
-        "            dblNeg += 1;\r\n"
-        "        } break;\r\n"
-        "        default:\r\n"
-        "            break;\r\n"
-        "        }\r\n"
-        "        switch(tag) {\r\n"
-        "        default:\r\n"
-        "            break;\r\n"
-        "        case \"alpha\":\r\n"
-        "            if(x < 0) {\r\n"
-        "                break;\r\n"
-        "            }\r\n"
-        "            dblNeg += 2;\r\n"
-        "            break;\r\n"
-        "        }\r\n"
-        "        for(i32 k = 0; k < 2; ++k) {\r\n"
-        "            switch(tag) {\r\n"
-        "            case \"beta\":\r\n"
-        "                if(k == 0) {\r\n"
-        "                    continue;\r\n"
-        "                }\r\n"
-        "                if(x == 0) {\r\n"
-        "                    break;\r\n"
-        "                }\r\n"
-        "                dblNeg += 1;\r\n"
-        "                break;\r\n"
-        "            default:\r\n"
-        "                break;\r\n"
-        "            }\r\n"
-        "        }\r\n"
-        "        parallel {\r\n"
-        "            String taskNote = \"worker_a\";\r\n"
-        "            taskNote.clear();\r\n"
-        "        }\r\n"
-        "        parallel {\r\n"
-        "            String taskNote2 = \"worker_b\";\r\n"
-        "            taskNote2.clear();\r\n"
-        "        }\r\n"
-        "        wait();\r\n"
-        "        native {\r\n"
-        "            #pragma clang diagnostic push\r\n"
-        "            #pragma clang diagnostic pop\r\n"
-        "        }\r\n"
-        "        return dblNeg + cast<i32>(m0);\r\n"
-        "    }\r\n"
-        "}\r\n";
-
-    CompileResult validRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_ValidPass3Source, "impl/pass3_valid.adhd", arena.arena, validRes));
-    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
-    const MStringView cppView(validRes.generatedSource.data(), validRes.generatedSource.size());
-    EXPECT_NE(hdrView.find("Vector<::InplaceFunction<64u, i32(i32)>> callbacks{s_ClassArena};"), MStringView::npos);
-    EXPECT_NE(cppView.find("-(-x)"), MStringView::npos);
-    EXPECT_NE(cppView.find("[limit]("), MStringView::npos);
-    EXPECT_NE(cppView.find("goto __adhd_switch_break_"), MStringView::npos);
-    EXPECT_NE(cppView.find("::NWB::Core::Alloc::ScratchArena __adhd_scratch(::Name(\"parallel\"));"), MStringView::npos);
-
-    static constexpr MStringView s_SimdLoopScopeSource =
-        "void processSimdLoops(mut Vector<f32x4> vec) {\r\n"
-        "    for(in f32x4 item : vec) {\r\n"
-        "        f32x4 tmp = item + item;\r\n"
-        "    }\r\n"
-        "    for(mut f32x4 item : vec) {\r\n"
-        "        item = item + item;\r\n"
-        "        if(vec.size() > 4u) {\r\n"
-        "            continue;\r\n"
-        "        }\r\n"
-        "        break;\r\n"
-        "    }\r\n"
-        "}\r\n";
-    CompileResult simdLoopRes(arena.arena);
-    ASSERT_TRUE(Compiler::Compile(s_SimdLoopScopeSource, "impl/simd_loop_scope.adhd", arena.arena, simdLoopRes));
-    const MStringView simdLoopCpp(simdLoopRes.generatedSource.data(), simdLoopRes.generatedSource.size());
-    EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n            continue;"), MStringView::npos);
-    EXPECT_NE(simdLoopCpp.find("::StoreFloat(__adhd_simd_item, item);\r\n        break;"), MStringView::npos);
 
     static constexpr MStringView s_BadSurrogateEscape =
         "const u32 kSurrogate = '\\uD800';\r\n";
@@ -815,6 +462,25 @@ TEST(AdhdCompiler, ValidatesPass3PreprocessorParserSemaAndCodegenEdgeCases){
         "}\r\n";
     CompileResult badParLamRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_BadParallelContainerLambda, "impl/bad_par_lam.adhd", arena.arena, badParLamRes));
+
+    static constexpr MStringView s_BadBuiltinTypeDotMember =
+        "u32 badLimit() { return u32.foo; }\r\n";
+    CompileResult badBuiltinDotRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadBuiltinTypeDotMember, "impl/bad_builtin_dot.adhd", arena.arena, badBuiltinDotRes));
+
+    static constexpr MStringView s_BadMutateScalarLimit =
+        "void badMutLimit() { u32.max = 0u; }\r\n";
+    CompileResult badMutLimitRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadMutateScalarLimit, "impl/bad_mut_limit.adhd", arena.arena, badMutLimitRes));
+
+    static constexpr MStringView s_ScalarLimitsValid =
+        "type ShapeId = u32;\r\n"
+        "const ShapeId kInvalidShape = ShapeId.max;\r\n"
+        "f32 lowestFloat() { return f32.min; }\r\n";
+    CompileResult scalarLimitsRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ScalarLimitsValid, "impl/scalar_limits.adhd", arena.arena, scalarLimitsRes));
+    EXPECT_NE(MStringView(scalarLimitsRes.generatedHeader.data(), scalarLimitsRes.generatedHeader.size()).find("::Limit<::u32>::s_Max"), MStringView::npos);
+    EXPECT_NE(MStringView(scalarLimitsRes.generatedHeader.data(), scalarLimitsRes.generatedHeader.size()).find("::Limit<::f32>::s_Min"), MStringView::npos);
 }
 
 

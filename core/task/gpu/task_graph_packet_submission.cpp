@@ -183,7 +183,7 @@ void GpuTaskGraph::abortPacketSubmission(const GpuCompiledGraph& compiledGraph, 
                 return;
         }
         notification.activateWithinLock();
-        discardPacketTasksWithinLock(packetPlan, tasks, notificationGeneration);
+        discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount), notificationGeneration);
         lease.reset();
     }
 
@@ -211,7 +211,7 @@ b8 GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph&
         if(task.lifecycleState != TaskLifecycleState::Submitting || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration || task.submissionClaimGeneration != lease.m_claimGeneration)
             return false;
     }
-    discardPacketTasksWithinLock(packetPlan, tasks);
+    discardPacketTasksWithinLock(Span<const GpuTaskId>(tasks, packetPlan.taskCount));
     lease.reset();
     return true;
 }

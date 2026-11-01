@@ -19,53 +19,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_paint{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_QuadVertexCount = 4u;
-inline constexpr u32 s_QuadIndexCount = 6u;
-inline constexpr u32 s_NineSliceAxisCells = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
-    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-DrawSnapshot::DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept
-    : m_vertices(arena)
-    , m_indices(arena)
-    , m_commands(arena)
-    , m_glyphPages(arena)
-    , m_sdfPages(arena)
-    , m_textureImages(arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-PaintBuilder::PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
-    : m_snapshot(arena)
-    , m_regions(arena)
-    , m_clips(arena)
-{}
-
 void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, const u64 skinGeneration, const Core::Assets::AssetRef<UiSkin>& skinRef, const UiSkin& skin){
     NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
     NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
@@ -93,12 +46,12 @@ void PaintBuilder::begin(const DisplayMetrics& metrics, const u64 generation, co
 }
 
 void PaintBuilder::reserve(const usize quadCount, const usize clipDepth){
-    if(quadCount > Limit<u32>::s_Max / __hidden_ui_paint::s_QuadIndexCount || clipDepth == Limit<usize>::s_Max){
+    if(quadCount > Limit<u32>::s_Max / s_PaintQuadIndexCount || clipDepth == Limit<usize>::s_Max){
         NWB_ASSERT(false);
         return;
     }
-    m_snapshot.m_vertices.reserve(quadCount * __hidden_ui_paint::s_QuadVertexCount);
-    m_snapshot.m_indices.reserve(quadCount * __hidden_ui_paint::s_QuadIndexCount);
+    m_snapshot.m_vertices.reserve(quadCount * s_PaintQuadVertexCount);
+    m_snapshot.m_indices.reserve(quadCount * s_PaintQuadIndexCount);
     m_snapshot.m_commands.reserve(quadCount);
     m_clips.reserve(clipDepth + 1u);
 }
@@ -108,8 +61,7 @@ void PaintBuilder::pushClip(const Rect& clip){
     const Rect& parent = m_clips.back();
     Rect next;
     if(HasUiRectArea(parent) && HasUiRectArea(clip)){
-        const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(parent.x, parent.y, parent.width, parent.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
-        next = { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
+        next = StoreRect(IntersectRectValue(LoadRect(parent), LoadRect(clip)));
     }
     m_clips.push_back(next);
 }
@@ -120,10 +72,6 @@ b8 PaintBuilder::popClip()noexcept{
         return false;
     m_clips.pop_back();
     return true;
-}
-
-void PaintBuilder::fillRect(const Rect& rectangle, const Color& color){
-    emitQuad(rectangle, {}, color, PaintMaterial::Solid);
 }
 
 b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
@@ -140,7 +88,7 @@ b8 PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const
         const f32 atlasHeight = static_cast<f32>(m_snapshot.m_skinBinding.atlasHeight);
         const auto& pixels = region->rectangle;
         const SIMDVectorSingle normalized = VectorDivide(VectorSet(static_cast<f32>(pixels.x), static_cast<f32>(pixels.y), static_cast<f32>(pixels.width), static_cast<f32>(pixels.height)), VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
-        const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
+        const Rect uv = StoreRect(normalized);
         emitQuad(rectangle, uv, tint, PaintMaterial::Skin);
     }
     return true;
@@ -170,11 +118,10 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     const Rect clip = m_clips.back();
     if(!HasUiRectArea(rectangle) || !HasUiRectArea(clip))
         return;
-    const SIMDVectorSingle intersection = IntersectRectValue(VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
-    const Rect visible{ VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
+    const Rect visible = StoreRect(IntersectRectValue(LoadRect(rectangle), LoadRect(clip)));
     if(!HasUiRectArea(visible) || color.a <= 0.0f)
         return;
-    if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - __hidden_ui_paint::s_QuadVertexCount || m_snapshot.m_indices.size() > Limit<u32>::s_Max - __hidden_ui_paint::s_QuadIndexCount){
+    if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - s_PaintQuadVertexCount || m_snapshot.m_indices.size() > Limit<u32>::s_Max - s_PaintQuadIndexCount){
         NWB_ASSERT(false);
         return;
     }
@@ -200,17 +147,17 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     m_snapshot.m_vertices.push_back({ { visibleRight, visible.y }, { right, top }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visibleRight, visibleBottom }, { right, bottom }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visible.x, visibleBottom }, { left, bottom }, premultiplied });
-    const u32 indices[]{ vertexBase, vertexBase + 1u, vertexBase + 2u, vertexBase, vertexBase + 2u, vertexBase + 3u };
-    m_snapshot.m_indices.insert(m_snapshot.m_indices.end(), indices, indices + __hidden_ui_paint::s_QuadIndexCount);
+    const Array<u32, s_PaintQuadIndexCount> indices = { vertexBase, vertexBase + 1u, vertexBase + 2u, vertexBase, vertexBase + 2u, vertexBase + 3u };
+    m_snapshot.m_indices.insert(m_snapshot.m_indices.end(), indices.begin(), indices.end());
     if(!m_snapshot.m_commands.empty()){
         auto& previous = m_snapshot.m_commands.back();
         if(
             previous.layer == m_layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
             && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
             && previous.textureImageIndex == textureImageIndex
-            && __hidden_ui_paint::EqualClip(previous.clip, clip)
+            && EqualUiRect(previous.clip, clip)
         ){
-            previous.indexCount += __hidden_ui_paint::s_QuadIndexCount;
+            previous.indexCount += s_PaintQuadIndexCount;
             return;
         }
         // Distinct commands already have increasing firstIndex; only a layer descent needs ordering at freeze.
@@ -219,7 +166,7 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     }
     DrawCommand command;
     command.firstIndex = firstIndex;
-    command.indexCount = __hidden_ui_paint::s_QuadIndexCount;
+    command.indexCount = s_PaintQuadIndexCount;
     command.clip = clip;
     command.material = material;
     command.glyphPageIndex = glyphPageIndex;
@@ -250,20 +197,20 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const SIMDVectorSingle first = VectorAdd(origin, VectorSelect(firstBorder, scaledBorder, shrink));
     const SIMDVectorSingle end = VectorAdd(origin, size);
     const SIMDVectorSingle second = VectorSelect(VectorSubtract(end, VectorSelect(lastBorder, VectorZero(), shrink)), first, shrink);
-    const f32 x[]{ rectangle.x, VectorGetX(first), VectorGetX(second), VectorGetX(end) };
-    const f32 y[]{ rectangle.y, VectorGetY(first), VectorGetY(second), VectorGetY(end) };
-    const f32 u[]{ static_cast<f32>(pixels.x), static_cast<f32>(pixels.x + borders.left), static_cast<f32>(pixels.x + pixels.width - borders.right), static_cast<f32>(pixels.x + pixels.width) };
-    const f32 v[]{ static_cast<f32>(pixels.y), static_cast<f32>(pixels.y + borders.top), static_cast<f32>(pixels.y + pixels.height - borders.bottom), static_cast<f32>(pixels.y + pixels.height) };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> x = { rectangle.x, VectorGetX(first), VectorGetX(second), VectorGetX(end) };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> y = { rectangle.y, VectorGetY(first), VectorGetY(second), VectorGetY(end) };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> u = { static_cast<f32>(pixels.x), static_cast<f32>(pixels.x + borders.left), static_cast<f32>(pixels.x + pixels.width - borders.right), static_cast<f32>(pixels.x + pixels.width) };
+    const Array<f32, s_PaintNineSliceAxisCells + 1u> v = { static_cast<f32>(pixels.y), static_cast<f32>(pixels.y + borders.top), static_cast<f32>(pixels.y + pixels.height - borders.bottom), static_cast<f32>(pixels.y + pixels.height) };
     const f32 atlasWidth = static_cast<f32>(binding.atlasWidth);
     const f32 atlasHeight = static_cast<f32>(binding.atlasHeight);
-    for(u32 row = 0u; row < __hidden_ui_paint::s_NineSliceAxisCells; ++row){
-        for(u32 column = 0u; column < __hidden_ui_paint::s_NineSliceAxisCells; ++column){
+    for(u32 row = 0u; row < s_PaintNineSliceAxisCells; ++row){
+        for(u32 column = 0u; column < s_PaintNineSliceAxisCells; ++column){
             const SIMDVectorSingle targetSize = VectorSubtract(VectorSet(x[column + 1u], y[row + 1u], x[column + 1u], y[row + 1u]), VectorSet(x[column], y[row], x[column], y[row]));
             const Rect target{ x[column], y[row], VectorGetX(targetSize), VectorGetY(targetSize) };
             const SIMDVectorSingle textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]), VectorSet(u[column], v[row], u[column], v[row]));
             const SIMDVectorSingle textureCoordinates = VectorPermute<0, 1, 4, 5>(VectorSet(u[column], v[row], 0.0f, 0.0f), textureSize);
             const SIMDVectorSingle normalized = VectorDivide(textureCoordinates, VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
-            const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
+            const Rect uv = StoreRect(normalized);
             emitQuad(target, uv, tint, PaintMaterial::Skin);
         }
     }

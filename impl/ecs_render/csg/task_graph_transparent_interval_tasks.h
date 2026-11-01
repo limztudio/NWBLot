@@ -56,7 +56,14 @@ public:
         DeferredFrameTargets& targetsIn,
         Core::GpuTimingSubmissionTicket& timingTicketIn,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
-    )noexcept;
+    )noexcept
+        : materialSystem(materialSystemIn)
+        , csgSystem(csgSystemIn)
+        , targets(targetsIn)
+        , timingTicket(timingTicketIn)
+        , transparentCsgIntervalsTiming(transparentCsgIntervalsTimingIn)
+        , transparentCsgSnapshot(arena)
+    {}
 };
 
 
@@ -72,7 +79,7 @@ public:
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
 };
@@ -91,7 +98,7 @@ public:
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
 };

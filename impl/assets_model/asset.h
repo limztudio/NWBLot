@@ -66,18 +66,15 @@ public:
     [[nodiscard]] b8 validatePayload(Core::Alloc::ScratchArena& scratchArena)const;
     b8 loadBinary(Span<const u8> binary);
 
+
 public:
-    void setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept{
-        m_skeletonObjects = Move(skeletonObjects);
-        m_staticMeshObjects = Move(staticMeshObjects);
-        m_skinnedMeshObjects = Move(skinnedMeshObjects);
-    }
+    void setObjects(SkeletonObjectVector&& skeletonObjects, StaticMeshObjectVector&& staticMeshObjects, SkinnedMeshObjectVector&& skinnedMeshObjects)noexcept;
+    void takeObjects(SkeletonObjectVector& outSkeletonObjects, StaticMeshObjectVector& outStaticMeshObjects, SkinnedMeshObjectVector& outSkinnedMeshObjects)noexcept;
+
 
 public:
     [[nodiscard]] const SkeletonObjectVector& skeletonObjects()const noexcept{ return m_skeletonObjects; }
-
     [[nodiscard]] const StaticMeshObjectVector& staticMeshObjects()const noexcept{ return m_staticMeshObjects; }
-
     [[nodiscard]] const SkinnedMeshObjectVector& skinnedMeshObjects()const noexcept{ return m_skinnedMeshObjects; }
 
 

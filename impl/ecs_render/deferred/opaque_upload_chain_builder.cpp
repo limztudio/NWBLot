@@ -24,16 +24,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem)noexcept
-    : m_graph(graph)
-    , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(const OpaqueUploadChainInputs& inputs){
     OpaqueUploadChainResult result{};
     if(!inputs.dependencyTask.valid())
@@ -74,7 +64,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         const Core::GpuUploadBlobId materialTypedBlob = *materialTypedBlobResult;
 
         Core::GpuTaskDesc instanceUploadDesc;
-        instanceUploadDesc.setIdentity(Name("render.graphics_prefix.material_instances_upload")).setMarkerLabel("Material Instances Upload").setScheduling(immutableUploadScheduling).setDependencies(&materialDrawUploadTask, 1u);
+        instanceUploadDesc.setIdentity(Name("render.graphics_prefix.material_instances_upload")).setMarkerLabel("Material Instances Upload").setScheduling(immutableUploadScheduling).setDependencies({ &materialDrawUploadTask, 1u });
         const auto materialDrawUploadTaskResult = m_graph.addUploadBufferTask(
             instanceUploadDesc,
             Core::GpuUploadBufferTaskDesc{
@@ -91,7 +81,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         materialDrawUploadTask = *materialDrawUploadTaskResult;
 
         Core::GpuTaskDesc materialTypedUploadDesc;
-        materialTypedUploadDesc.setIdentity(Name("render.graphics_prefix.material_typed_upload")).setMarkerLabel("Material Typed Upload").setScheduling(immutableUploadScheduling).setDependencies(&materialDrawUploadTask, 1u);
+        materialTypedUploadDesc.setIdentity(Name("render.graphics_prefix.material_typed_upload")).setMarkerLabel("Material Typed Upload").setScheduling(immutableUploadScheduling).setDependencies({ &materialDrawUploadTask, 1u });
         const auto materialDrawUploadTaskResult2 = m_graph.addUploadBufferTask(materialTypedUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = materialTypedBlob, .destination = inputs.materialTyped, .finalState = Core::ResourceStates::Common, });
         if(!materialDrawUploadTaskResult2){
             materialDrawUploadTask = {};
@@ -133,7 +123,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         const Core::GpuUploadBlobId intervalSampleStateBlob = *intervalSampleStateBlobResult;
 
         Core::GpuTaskDesc receiverRangesUploadDesc;
-        receiverRangesUploadDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload")).setMarkerLabel("CSG Receiver Ranges Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
+        receiverRangesUploadDesc.setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload")).setMarkerLabel("CSG Receiver Ranges Upload").setScheduling(immutableUploadScheduling).setDependencies({ &csgFrameUploadTask, 1u });
         const auto csgFrameUploadTaskResult = m_graph.addUploadBufferTask(
             receiverRangesUploadDesc,
             Core::GpuUploadBufferTaskDesc{
@@ -149,7 +139,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         csgFrameUploadTask = *csgFrameUploadTaskResult;
 
         Core::GpuTaskDesc cuttersUploadDesc;
-        cuttersUploadDesc.setIdentity(Name("render.graphics_prefix.csg_cutters_upload")).setMarkerLabel("CSG Cutters Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
+        cuttersUploadDesc.setIdentity(Name("render.graphics_prefix.csg_cutters_upload")).setMarkerLabel("CSG Cutters Upload").setScheduling(immutableUploadScheduling).setDependencies({ &csgFrameUploadTask, 1u });
         const auto csgFrameUploadTaskResult2 = m_graph.addUploadBufferTask(cuttersUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = cuttersBlob, .destination = inputs.csgCutters, .finalState = Core::ResourceStates::Common, });
         if(!csgFrameUploadTaskResult2){
             csgFrameUploadTask = {};
@@ -158,7 +148,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         csgFrameUploadTask = *csgFrameUploadTaskResult2;
 
         Core::GpuTaskDesc clipContextSlotsUploadDesc;
-        clipContextSlotsUploadDesc.setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload")).setMarkerLabel("CSG Clip Context Slots Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
+        clipContextSlotsUploadDesc.setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload")).setMarkerLabel("CSG Clip Context Slots Upload").setScheduling(immutableUploadScheduling).setDependencies({ &csgFrameUploadTask, 1u });
         const auto csgFrameUploadTaskResult3 = m_graph.addUploadBufferTask(clipContextSlotsUploadDesc, Core::GpuUploadBufferTaskDesc{ .source = clipContextSlotsBlob, .destination = inputs.csgClipContextSlots, .finalState = Core::ResourceStates::Common, });
         if(!csgFrameUploadTaskResult3){
             csgFrameUploadTask = {};
@@ -167,7 +157,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(Core::GpuTaskGraph& graph, Re
         csgFrameUploadTask = *csgFrameUploadTaskResult3;
 
         Core::GpuTaskDesc intervalSampleStateUploadDesc;
-        intervalSampleStateUploadDesc.setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload")).setMarkerLabel("CSG Interval Sample State Upload").setScheduling(immutableUploadScheduling).setDependencies(&csgFrameUploadTask, 1u);
+        intervalSampleStateUploadDesc.setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload")).setMarkerLabel("CSG Interval Sample State Upload").setScheduling(immutableUploadScheduling).setDependencies({ &csgFrameUploadTask, 1u });
         const auto csgFrameUploadTaskResult4 = m_graph.addUploadBufferTask(
             intervalSampleStateUploadDesc,
             Core::GpuUploadBufferTaskDesc{ .source = intervalSampleStateBlob, .destination = inputs.csgIntervalSampleState, .finalState = Core::ResourceStates::Common, }

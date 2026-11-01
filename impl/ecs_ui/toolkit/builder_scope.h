@@ -16,18 +16,15 @@
 #include "edit/integer_model.h"
 #include "edit/float_model.h"
 #include "widgets/popup.h"
-#include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
 #include "widgets/list.h"
-#include <impl/ecs_ui/toolkit/widgets/list_style.adhd.h>
 #include "widgets/radio_group_frame.h"
 #include "widgets/slider_frame.h"
 #include "widgets/progress_layout.h"
-#include "widgets/image_frame.h"
+#include "widgets/image_layout.h"
 #include "widgets/combo.h"
 #include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
 #include "widgets/search_combo.h"
 #include "widgets/tooltip.h"
-#include <impl/ecs_ui/toolkit/widgets/tooltip_style.adhd.h>
 #include "widgets/context_menu.h"
 
 
@@ -168,7 +165,7 @@ private:
         WidgetStyle widgetStyle;
         ListStyle style;
         ListOptions options;
-        ListState::MeasureKey measureKey;
+        ListMeasureKey measureKey;
         f64 scrollOffset = 0.0;
         u64 cursorKey = 0u;
         f32 rowHeight = 0.0f;

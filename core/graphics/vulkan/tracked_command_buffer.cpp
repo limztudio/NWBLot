@@ -15,24 +15,6 @@
 NWB_VULKAN_BEGIN
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(Queue& queue, const VulkanContext& context, const VkCommandPool commandPool, const b8 ownsCommandPool, Futex* const sharedCommandPoolMutex)noexcept
-    : RefCounter<GraphicsResource>(context.cpuScheduler)
-    , m_cmdPool(commandPool)
-    , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
-    , m_resourceReferences(context.objectArena)
-    , m_referencedStagingBuffers(context.objectArena)
-    , m_referencedDescriptorHeaps(context.objectArena)
-    , m_retainedTextureStateCommits(context.objectArena)
-    , m_pendingAccelStructBuildCommits(context.objectArena)
-    , m_referencedTopLevelAccelStructs(context.objectArena)
-    , m_referencedBottomLevelReferenceSets(context.objectArena)
-    , m_pendingOpacityMicromapBuildCommits(context.objectArena)
-    , m_timerQueryRecordingClaims(context.objectArena)
-    , m_ownsCmdPool(ownsCommandPool)
-    , m_context(context)
-    , m_queue(queue)
-{}
-
 TrackedCommandBuffer::~TrackedCommandBuffer()noexcept{
     abandonPendingAccelStructBuildCommits();
 
@@ -134,10 +116,8 @@ TrackedCommandBuffer::TimerQueryClaimOwnerMatches TrackedCommandBuffer::resolveT
 
 b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(
     const Queue& submissionQueue,
-    const QueueSubmissionWait* const localWaits,
-    const usize localWaitCount,
-    const NotNull<TrackedCommandBuffer*>* const precedingCommandBuffers,
-    const usize precedingCommandBufferCount
+    const Span<const QueueSubmissionWait> localWaits,
+    const Span<const NotNull<TrackedCommandBuffer*>> precedingCommandBuffers
 )const noexcept{
     for(const TimerQueryRecordingClaim& claim : m_timerQueryRecordingClaims){
         TimerQuery& query = *claim.query;
@@ -147,7 +127,7 @@ b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(
         NothrowScopedLock queryLock(query.m_mutex);
         const QueueSubmissionToken currentPrerequisite = query.prerequisiteSubmissionWithinLock();
         const b8 prerequisiteMatches = currentPrerequisite == claim.prerequisiteSubmission;
-        if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits, localWaitCount)))
+        if((claim.recordsReset || claim.recordsBegin) && (!prerequisiteMatches || !submissionQueue.coversTimerQueryPrerequisite(claim.prerequisiteSubmission, claim.prerequisiteObservedComplete, localWaits)))
             return false;
         const TimerQueryClaimOwnerMatches ownerMatches = resolveTimerQueryClaimOwnerMatches(query, claim);
         if(claim.recordsReset && !claim.recordsBegin && !ownerMatches.resetOwnerMatches)
@@ -176,7 +156,7 @@ b8 TrackedCommandBuffer::validateTimerQueryRecordingClaims(
                 continue;
 
             b8 orderedAfterBatchBegin = false;
-            for(usize precedingIndex = 0u; precedingIndex < precedingCommandBufferCount; ++precedingIndex){
+            for(usize precedingIndex = 0u; precedingIndex < precedingCommandBuffers.size(); ++precedingIndex){
                 TrackedCommandBuffer& preceding = *precedingCommandBuffers[precedingIndex];
                 if(&preceding == query.m_beginRecordingOwner.commandBuffer && preceding.m_recordingID == query.m_beginRecordingOwner.recordingID && preceding.recordsTimerQueryBegin(query, claim.generation)){
                     orderedAfterBatchBegin = true;
@@ -316,21 +296,15 @@ void TrackedCommandBuffer::commitRetainedTextureStateCommits()noexcept{
     m_retainedTextureStateCommits.clear();
 }
 
-void TrackedCommandBuffer::discardRetainedTextureStateCommits()noexcept{
-    m_retainedTextureStateCommits.clear();
-}
-
 b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     AccelStruct& accelStruct,
     const VkAccelerationStructureTypeKHR accelStructType,
     const VkBuildAccelerationStructureFlagsKHR buildFlags,
-    const AccelStructGeometryBuildSignature* const geometrySignatures,
-    const usize geometrySignatureCount,
-    const RayTracingInstanceDesc* const instances,
-    const usize instanceCount
+    const Span<const AccelStructGeometryBuildSignature> geometrySignatures,
+    const Span<const RayTracingInstanceDesc> instances
 ){
-    NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
-    NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
+    NWB_ASSERT(geometrySignatures.size() <= UINT32_MAX);
+    NWB_ASSERT(geometrySignatures.empty() || geometrySignatures.data());
 
     GlobalUniquePtr<AccelStructBuildSignatureRole> preparedRole = accelStruct.acquireBuildSignatureRole();
     if(!preparedRole)
@@ -339,12 +313,12 @@ b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     preparedRole->accelStructType = accelStructType;
     preparedRole->buildFlags = buildFlags;
     preparedRole->geometrySignatures.clear();
-    if(geometrySignatureCount != 0u){
-        preparedRole->geometrySignatures.reserve(geometrySignatureCount);
-        preparedRole->geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
+    if(!geometrySignatures.empty()){
+        preparedRole->geometrySignatures.reserve(geometrySignatures.size());
+        preparedRole->geometrySignatures.assign(geometrySignatures.begin(), geometrySignatures.end());
     }
 
-    if(instances && instanceCount != 0u){
+    if(instances.data() && !instances.empty()){
         AccelStructBottomLevelReferenceControl* references = nullptr;
         if(preparedRole->bottomLevelReferences && preparedRole->bottomLevelReferences->getReferenceCount() == 1u){
             references = preparedRole->bottomLevelReferences.get();
@@ -356,9 +330,9 @@ b8 TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
                 return false;
             preparedRole->bottomLevelReferences = AccelStructBottomLevelReferenceHandle(references, AccelStructBottomLevelReferenceHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
         }
-        references->resources.reserve(instanceCount);
-        for(usize instanceIndex = 0u; instanceIndex < instanceCount; ++instanceIndex){
-            if(AccelStruct* const bottomLevel = instances[instanceIndex].bottomLevelAS)
+        references->resources.reserve(instances.size());
+        for(const RayTracingInstanceDesc& instance : instances){
+            if(AccelStruct* const bottomLevel = instance.bottomLevelAS)
                 references->resources.emplace_back(bottomLevel, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
         }
     }
@@ -409,21 +383,6 @@ void TrackedCommandBuffer::commitPendingAccelStructBuildCommits()noexcept{
         accelStruct.m_acceptedBuildSignatureRole = commit.preparedRole;
         commit.preparedRole = nullptr;
     }
-}
-
-void TrackedCommandBuffer::releasePendingAccelStructBuildCommits()noexcept{
-    m_referencedBottomLevelReferenceSets.clear();
-    for(PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
-        AccelStructBuildSignatureRole* const preparedRole = commit.preparedRole;
-        AccelStructBuildSignatureRole* const displacedRole = commit.displacedRole;
-        commit.preparedRole = nullptr;
-        commit.displacedRole = nullptr;
-        if(preparedRole)
-            commit.accelStruct->retireBuildSignatureRole(*preparedRole);
-        if(displacedRole)
-            commit.accelStruct->retireBuildSignatureRole(*displacedRole);
-    }
-    m_pendingAccelStructBuildCommits.clear();
 }
 
 void TrackedCommandBuffer::retainTopLevelAccelStruct(AccelStruct& accelStruct){
@@ -505,16 +464,16 @@ void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits()noexcept{
     m_pendingOpacityMicromapBuildCommits.clear();
 }
 
-void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits()noexcept{
-    m_pendingOpacityMicromapBuildCommits.clear();
-}
-
-void TrackedCommandBuffer::clearTrackedReferences()noexcept{
+void TrackedCommandBuffer::discardPendingRecordingCommits()noexcept{
     discardTimerQueryRecordingClaims();
     m_resourceReferences.discardBufferStateCommits();
     discardRetainedTextureStateCommits();
     abandonPendingAccelStructBuildCommits();
     discardPendingOpacityMicromapBuildCommits();
+}
+
+void TrackedCommandBuffer::clearTrackedReferences()noexcept{
+    discardPendingRecordingCommits();
 
     for(const auto heap : m_referencedDescriptorHeaps){
 

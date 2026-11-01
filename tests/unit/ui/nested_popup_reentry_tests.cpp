@@ -44,7 +44,7 @@ public:
         ++m_metadataCalls;
         if(m_revisionBuilder){
             Builder& builder = *MakeNotNull(Exchange(m_revisionBuilder, nullptr));
-            attempt(builder, ReentryKind::Panel);
+            attempt(ReentryKind::Panel, builder);
         }
         return contentRevision;
     }
@@ -55,27 +55,11 @@ public:
         return count;
     }
 
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        observeCallback();
-        return ComboSource::key(index);
-    }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        observeCallback();
-        return ComboSource::indexOf(value);
-    }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 backwards)const noexcept override{
-        observeCallback();
-        return ComboSource::findEnabled(start, backwards);
-    }
-
     [[nodiscard]] virtual StringView text(const u64 index)const override{
-        observeCallback();
         const StringView value = ComboSource::text(index);
         if(m_textBuilder){
             Builder& builder = *MakeNotNull(Exchange(m_textBuilder, nullptr));
-            attempt(builder, m_kind);
+            attempt(m_kind, builder);
         }
         if(m_armSource){
             ReentrySource& source = *MakeNotNull(Exchange(m_armSource, nullptr));
@@ -86,12 +70,7 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        observeCallback();
-        return ComboSource::enabled(index);
-    }
-
-    void armText(Builder& builder, const ReentryKind::Enum kind)noexcept{
+    void armText(const ReentryKind::Enum kind, Builder& builder)noexcept{
         m_textBuilder = &builder;
         m_kind = kind;
     }
@@ -139,12 +118,12 @@ public:
 
 
 private:
-    void observeCallback()const noexcept{
+    virtual void observeCallback()const noexcept override{
         if(m_attempts != 0u || (m_observer && m_observer->attempts() != 0u))
             ++m_callbacksAfterAttempt;
     }
 
-    void attempt(Builder& builder, const ReentryKind::Enum kind)const{
+    void attempt(const ReentryKind::Enum kind, Builder& builder)const{
         ++m_attempts;
         if(kind == ReentryKind::Reset){
             ++m_resetAttempts;
@@ -265,8 +244,8 @@ protected:
             UiWidgetTests::ExpectHitTargetIdentity(after, before);
             EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
             EXPECT_EQ(after.popup, before.popup);
-            ExpectRect(after.rectangle, before.rectangle);
-            ExpectRect(after.clip, before.clip);
+            UiPaintAssertions::ExpectRect(after.rectangle, before.rectangle);
+            UiPaintAssertions::ExpectRect(after.clip, before.clip);
         }
     }
 
@@ -325,7 +304,7 @@ TEST_F(UiNestedPopupReentryTests, ChildFirstRowResetRejectsWithoutClearingBorrow
     m_childSource.resetObservations();
     m_siblingSource.resetObservations();
     m_siblingSource.observeAttemptsOf(m_childSource);
-    m_childSource.armText(m_builder, ReentryKind::Reset);
+    m_childSource.armText(ReentryKind::Reset, m_builder);
     EXPECT_FALSE(m_builder.endPopup());
     EXPECT_EQ(m_childSource.attempts(), 1u);
     EXPECT_EQ(m_childSource.resetAttempts(), 1u);
@@ -354,7 +333,7 @@ TEST_F(UiNestedPopupReentryTests, ChildFirstRowBalancedPanelReentryRejectsBefore
     m_childSource.resetObservations();
     m_siblingSource.resetObservations();
     m_siblingSource.observeAttemptsOf(m_childSource);
-    m_childSource.armText(m_builder, ReentryKind::Panel);
+    m_childSource.armText(ReentryKind::Panel, m_builder);
     EXPECT_FALSE(m_builder.endPopup());
     expectPanelRejected(m_childSource);
     EXPECT_EQ(m_childSource.textCalls, 1u);
@@ -383,7 +362,7 @@ TEST_F(UiNestedPopupReentryTests, ParentComboAutomaticPopupRowResetRejectsBefore
     m_comboSource.resetObservations();
     m_childSource.resetObservations();
     m_childSource.observeAttemptsOf(m_comboSource);
-    m_comboSource.armText(m_builder, ReentryKind::Reset);
+    m_comboSource.armText(ReentryKind::Reset, m_builder);
     EXPECT_FALSE(m_builder.endPopup());
     EXPECT_EQ(m_comboSource.attempts(), 1u);
     EXPECT_EQ(m_comboSource.resetAttempts(), 1u);

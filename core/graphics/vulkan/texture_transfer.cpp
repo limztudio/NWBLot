@@ -211,7 +211,14 @@ b8 CommandList::tryWriteTexture(Texture& dest, u32 arraySlice, u32 mipLevel, con
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
     NWB_ASSERT(VulkanDetail::IsBufferImageCopyAspectMaskSupported(copyAspectMask));
 
-    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(mipExtent, copyFormatLayout, static_cast<u64>(rowPitch), static_cast<u64>(depthPitch), VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices, VulkanDetail::BufferImageCopyPitchFields::EmitExplicit);
+    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(
+        mipExtent,
+        copyFormatLayout,
+        static_cast<u64>(rowPitch),
+        static_cast<u64>(depthPitch),
+        VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
+        VulkanDetail::BufferImageCopyPitchFields::EmitExplicit
+    );
     if(!copyLayout){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source pitches do not define a valid buffer-image copy layout"));
         return false;

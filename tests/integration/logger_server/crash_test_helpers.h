@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include <tests/common/crash_test_paths.h>
+#include <tests/integration/crash/crash_test_paths.h>
 
 #include <logger/server/crash_ingest.h>
+#include <logger/server/crash_paths.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,49 +58,59 @@ struct ManifestTriggerFields{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CrashTestPaths::CrashRootDirectory;
-using CrashTestPaths::RemoveTestArtifacts;
-using CrashTestPaths::SpoolDirectory;
-using CrashTestPaths::TestCaseDirectory;
-using CrashTestPaths::TestRootDirectory;
-
-[[nodiscard]] CrashTestPath StorageDirectory(Core::Alloc::GlobalArena& arena, AStringView testGroup);
-[[nodiscard]] CrashTestPath ArchiveInputDirectory(Core::Alloc::GlobalArena& arena, AStringView testGroup);
+[[nodiscard]] inline CrashTestPath StorageDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
+    return CrashTestPaths::TestCaseDirectory(arena, testGroup) / "storage";
+}
+[[nodiscard]] inline CrashTestPath ArchiveInputDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
+    return CrashTestPaths::TestCaseDirectory(arena, testGroup) / "input";
+}
 [[nodiscard]] CrashTestPath ArchiveFileName(Core::Alloc::GlobalArena& arena, AStringView stem);
-[[nodiscard]] CrashTestPath ArchivePath(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
-[[nodiscard]] CrashTestPath ExtractedPackageDirectory(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
-[[nodiscard]] CrashTestPath RawArchivePath(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
-[[nodiscard]] CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
-void AppendArchiveFile(CrashTestText& archive, AStringView relativePath, AStringView content);
+[[nodiscard]] inline CrashTestPath ArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
+    return ArchiveInputDirectory(arena, testGroup) / ArchiveFileName(arena, stem);
+}
+[[nodiscard]] inline CrashTestPath ExtractedPackageDirectory(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
+    return StorageDirectory(arena, testGroup) / Log::s_CrashExtractedDirectoryName / stem;
+}
+[[nodiscard]] inline CrashTestPath RawArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
+    return StorageDirectory(arena, testGroup) / Log::s_CrashRawDirectoryName / ArchiveFileName(arena, stem);
+}
+[[nodiscard]] inline CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
+    return StorageDirectory(arena, testGroup) / Log::s_CrashInvalidDirectoryName / ArchiveFileName(arena, stem);
+}
+void AppendArchiveFile(AStringView relativePath, AStringView content, CrashTestText& archive);
 void BeginArchiveWithManifest(
-    CrashTestText& archive,
-    Core::Alloc::GlobalArena& arena,
     AStringView crashId,
     AStringView platform,
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField::Enum eventField = ManifestEventField::Include,
-    const ManifestTriggerFields& trigger = ManifestTriggerFields{}
+    ManifestEventField::Enum eventField,
+    const ManifestTriggerFields& trigger,
+    Core::Alloc::GlobalArena& arena,
+    CrashTestText& archive
 );
 [[nodiscard]] CrashTestText BuildManifest(
-    Core::Alloc::GlobalArena& arena,
     AStringView crashId,
     AStringView platform,
     AStringView event,
     AStringView reasonKind,
     u64 reasonCode,
-    ManifestEventField::Enum eventField = ManifestEventField::Include,
-    const ManifestTriggerFields& trigger = ManifestTriggerFields{}
+    ManifestEventField::Enum eventField,
+    const ManifestTriggerFields& trigger,
+    Core::Alloc::GlobalArena& arena
 );
 [[nodiscard]] b8 WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, AStringView archive);
 [[nodiscard]] b8 WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, Span<const u8> archive);
 [[nodiscard]] Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
-void BuildLinuxCrashArchive(CrashTestText& archive, Core::Alloc::GlobalArena& arena, AStringView crashId);
-[[nodiscard]] b8 Contains(AStringView text, AStringView needle)noexcept;
-[[nodiscard]] b8 ContainsMessage(TStringView text, TStringView needle)noexcept;
+void BuildLinuxCrashArchive(AStringView crashId, Core::Alloc::GlobalArena& arena, CrashTestText& archive);
+[[nodiscard]] inline b8 Contains(const AStringView text, const AStringView needle)noexcept{
+    return text.find(needle) != AStringView::npos;
+}
+[[nodiscard]] inline b8 ContainsMessage(const TStringView text, const TStringView needle)noexcept{
+    return text.find(needle) != TStringView::npos;
+}
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, AStringView report, AStringView suffix);
 
 

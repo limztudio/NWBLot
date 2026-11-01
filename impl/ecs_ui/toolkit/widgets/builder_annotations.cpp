@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,25 +15,14 @@ NWB_IMPL_UI_BEGIN
 
 
 Builder::Item* Builder::annotationAnchor(const AStringView stableKey)noexcept{
-    const auto idResult = MakeWidgetId(m_context.scopeId(), stableKey);
-    if(!idResult)
+    WidgetId id;
+    if(!TryMakeWidgetId(m_context.scopeId(), stableKey, id))
         return nullptr;
-    const WidgetId id = *idResult;
     for(auto& item : m_scope->m_items){
         if(item.state.id == id && item.state.kind != WidgetKind::Separator)
             return &item;
     }
     return nullptr;
-}
-
-b8 Builder::paintDeferred(){
-    if(!paintDeferredContents() || !validateDeferredSources() || !validateDeferredStates())
-        return false;
-    return true;
-}
-
-b8 Builder::paintDeferredContents(){
-    return paintContextMenus() && paintCombos() && paintTooltips();
 }
 
 b8 Builder::validateDeferredSources()const{
@@ -132,20 +121,6 @@ void Builder::releaseDeferredLoans()noexcept{
     }
     for(auto& frame : m_scope->m_tooltips)
         frame.state = nullptr;
-}
-
-b8 Builder::listStateMatches(const ListFrame& frame)const noexcept{
-    return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
-}
-
-b8 Builder::listMatches(const ListFrame& frame)const{
-    return
-        frame.source && listStateMatches(frame)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
-        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount
-        && listStateMatches(frame)
-    ;
 }
 
 

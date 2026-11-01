@@ -124,6 +124,20 @@ TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i3
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void WaylandTextInputDeferredState::clear()noexcept{
+    m_pending = false;
+    m_cause = TextInputChangeCause::InputMethod;
+}
+
+void WaylandTextInputDeferredState::surroundingChanged(const TextInputChangeCause::Enum cause)noexcept{
+    m_pending = true;
+    m_cause = cause;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void WaylandTextInputSerialTracker::reset()noexcept{
     m_token = {};
     m_firstSerial = 0u;

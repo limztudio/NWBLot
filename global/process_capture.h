@@ -5,7 +5,9 @@
 #pragma once
 
 
+#include "array.h"
 #include "process_execution.h"
+#include "timer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +56,6 @@ namespace ProcessExecutionDetail{
 
 
 inline constexpr usize s_DefaultCaptureProcessOutputTimeoutMilliseconds = 3000u;
-inline constexpr u64 s_MillisecondsPerSecond = 1000u;
 inline constexpr u64 s_NanosecondsPerMillisecond = 1000000u;
 inline constexpr int s_ProcessPollSleepMilliseconds = 1;
 inline constexpr usize s_DefaultCaptureOutputMaxBytes = 8192u;
@@ -81,9 +82,9 @@ inline void CloseFileDescriptor(int& fd)noexcept{
         return MakeUnexpected(static_cast<ErrorCondition>(errno));
 
     const u64 fractionalMilliseconds = static_cast<u64>(time.tv_nsec / s_NanosecondsPerMillisecond);
-    if(static_cast<u64>(time.tv_sec) > (Limit<u64>::s_Max - fractionalMilliseconds) / s_MillisecondsPerSecond)
+    if(static_cast<u64>(time.tv_sec) > (Limit<u64>::s_Max - fractionalMilliseconds) / s_MillisecondsInSecond)
         return MakeUnexpected(ErrorCondition::value_too_large);
-    return static_cast<u64>(time.tv_sec) * s_MillisecondsPerSecond + fractionalMilliseconds;
+    return static_cast<u64>(time.tv_sec) * s_MillisecondsInSecond + fractionalMilliseconds;
 }
 
 [[nodiscard]] inline Expected<b8, ErrorCondition> TimeoutExpired(const u64 deadlineMilliseconds)noexcept{
@@ -195,8 +196,8 @@ template<typename ArenaT, typename StringT>
         return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::InvalidArguments, .nativeError = ErrorCondition::invalid_argument, });
     const auto& argv = nativeArguments.argv;
 
-    int pipeFds[2] = { -1, -1 };
-    if(::pipe(pipeFds) != 0)
+    Array<int, 2u> pipeFds = { -1, -1 };
+    if(::pipe(pipeFds.data()) != 0)
         return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PipeFailed, .nativeError = static_cast<ErrorCondition>(errno), });
     ScopeExit closePipe([&]()noexcept{
         ProcessExecutionDetail::CloseFileDescriptor(pipeFds[0]);
@@ -243,8 +244,8 @@ template<typename ArenaT, typename StringT>
     if(flags < 0 || ::fcntl(pipeFds[0], F_SETFL, flags | O_NONBLOCK) < 0)
         return MakeUnexpected(ProcessCaptureFailure{ .kind = ProcessCaptureFailureKind::PipeFlagsFailed, .nativeError = static_cast<ErrorCondition>(errno), });
 
-    char buffer[ProcessExecutionDetail::s_CaptureReadBufferBytes];
-    const usize effectiveReadBufferBytes = readBufferBytes < sizeof(buffer) ? readBufferBytes : sizeof(buffer);
+    Array<char, ProcessExecutionDetail::s_CaptureReadBufferBytes> buffer = {};
+    const usize effectiveReadBufferBytes = readBufferBytes < buffer.size() ? readBufferBytes : buffer.size();
     b8 readSucceeded = true;
     ProcessCaptureFailure readFailure;
     b8 outputTruncated = false;
@@ -278,15 +279,15 @@ template<typename ArenaT, typename StringT>
             break;
         }
 
-        const ssize_t readBytes = ::read(pipeFds[0], buffer, effectiveReadBufferBytes);
+        const ssize_t readBytes = ::read(pipeFds[0], buffer.data(), effectiveReadBufferBytes);
         if(readBytes > 0){
             const usize length = static_cast<usize>(readBytes);
             const usize remainingOutputBytes = outOutput.size() < maxOutputBytes ? maxOutputBytes - outOutput.size() : 0u;
             if(length <= remainingOutputBytes)
-                outOutput.append(buffer, length);
+                outOutput.append(buffer.data(), length);
             else{
                 if(remainingOutputBytes != 0u)
-                    outOutput.append(buffer, remainingOutputBytes);
+                    outOutput.append(buffer.data(), remainingOutputBytes);
                 outputTruncated = true;
             }
             continue;

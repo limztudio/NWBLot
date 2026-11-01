@@ -10,6 +10,7 @@
 #include <logger/common.h>
 #include <logger/telemetry/ingest.h>
 
+#include "crash_auth.h"
 #include "crash_ingest.h"
 
 
@@ -26,7 +27,7 @@ inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
 struct PendingCrashUpload{
-    char path[s_MaxPendingCrashUploadPathText] = {};
+    Array<char, s_MaxPendingCrashUploadPathText> path = {};
 };
 
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
@@ -55,7 +56,7 @@ public:
 
 protected:
     b8 internalInit(u16 port, BasicStringView<tchar> logFileNameBase = {}, AStringView crashSymbolStoreDirectory = {}, CrashRetentionConfig crashRetentionConfig = CrashRetentionConfig{}, AStringView crashUploadToken = AStringView());
-    void internalDestroy();
+    void internalDestroy(){ stopCrashIngestWorker(); }
     b8 internalUpdate();
 
 

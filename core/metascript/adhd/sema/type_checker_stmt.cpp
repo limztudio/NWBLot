@@ -79,11 +79,14 @@ b8 TypeChecker::checkStatementList(ClassDecl* ownerClass, MethodDecl& method, MV
     return ok;
 }
 
-b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, MethodDecl& method, const TypeRef* targetType, MVector<Expr*>& arguments, const Span<const ScopedVarInfo> scope, const SourceSpan errorSpan, MVector<ParseError>& errors){
+b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, const TypeRef* targetType, const Span<const ScopedVarInfo> scope, const SourceSpan errorSpan, MethodDecl& method, MVector<Expr*>& arguments, MVector<ParseError>& errors){
     b8 ok = true;
     const TypeRef* resolvedTargetType = targetType ? m_symbols.unwrapTypeAlias(targetType) : nullptr;
-    const ClassDecl* ctorCls = resolvedTargetType
-        ? m_symbols.findClass(m_symbols.resolveBaseTypeName(resolvedTargetType->name))
+    const MStringView baseTargetName = resolvedTargetType
+        ? m_symbols.resolveBaseTypeName(resolvedTargetType->name)
+        : MStringView{};
+    const ClassDecl* ctorCls = !baseTargetName.empty()
+        ? m_symbols.findClass(baseTargetName)
         : nullptr;
     const MethodDecl* matchedCtor = nullptr;
     if(ctorCls){
@@ -96,10 +99,21 @@ b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, MethodDecl&
             ok = false;
         }
     }
+    else if(resolvedTargetType && !baseTargetName.empty()){
+        if(!IsValidBuiltinVectorOrMatrixCtorArity(baseTargetName, arguments.size())){
+            reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
+            ok = false;
+        }
+        if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseTargetName); simdVecInfo && simdVecInfo->isMixed && arguments.size() == 1u && arguments[0]){
+            const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *arguments[0], scope);
+            if(arg0Type != baseTargetName){
+                reportError(errors, errorSpan, "mixed float/integer SIMD vector type does not support single-scalar splat construction; provide all 4 lane arguments");
+                ok = false;
+            }
+        }
+    }
     if(!checkCallableArguments(
         ownerClass,
-        method,
-        arguments,
         scope,
         matchedCtor,
         ctorCls,
@@ -108,6 +122,8 @@ b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, MethodDecl&
         nullptr,
         nullptr,
         MStringView{},
+        method,
+        arguments,
         errors
     )){
         ok = false;
@@ -162,11 +178,11 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
         }
         if(baseVarTypeName == "Path"){
             if(stmt.expr)
-                markStringToPathAdaptation(ownerClass, &method, *stmt.expr, scope);
+                markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
             if(stmt.isCtorInit){
                 for(Expr* arg : stmt.arguments){
                     if(arg)
-                        markStringToPathAdaptation(ownerClass, &method, *arg, scope);
+                        markStringToPathAdaptation(ownerClass, &method, scope, *arg);
                 }
             }
         }
@@ -174,8 +190,31 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
 
     if(stmt.expr){
         const b8 isMutRefBinding = (varRefMode == ParamPassingMode::Mut);
-        if(!checkExpr(ownerClass, method, *stmt.expr, scope, isMutRefBinding, errors))
+        if(!checkExpr(ownerClass, scope, isMutRefBinding, method, *stmt.expr, errors))
             ok = false;
+        if(varRefMode == ParamPassingMode::In){
+            b8 isRvalueBind = (
+                stmt.expr->kind == ExprKind::IntegerLiteral
+                || stmt.expr->kind == ExprKind::FloatLiteral
+                || stmt.expr->kind == ExprKind::DoubleLiteral
+                || stmt.expr->kind == ExprKind::StringLiteral
+                || stmt.expr->kind == ExprKind::BoolLiteral
+                || stmt.expr->kind == ExprKind::Binary
+                || stmt.expr->kind == ExprKind::Cast
+                || stmt.expr->kind == ExprKind::BitCast
+                || stmt.expr->kind == ExprKind::Lambda
+                || stmt.expr->kind == ExprKind::ScopeAccess
+            );
+            if(!isRvalueBind && (stmt.expr->kind == ExprKind::Call || stmt.expr->kind == ExprKind::Unary)){
+                const TypeRef* exprRetType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                if(m_symbols.resolveRefMode(exprRetType) == ParamPassingMode::None)
+                    isRvalueBind = true;
+            }
+            if(isRvalueBind){
+                reportError(errors, stmt.span, "cannot bind 'in' reference variable to a literal or rvalue temporary");
+                ok = false;
+            }
+        }
         if(stmt.varType && stmt.varType->isAuto && !stmt.expr->resolvedSimdType.empty()){
             stmt.varType->isAuto = false;
             stmt.varType->name = stmt.expr->resolvedSimdType;
@@ -184,11 +223,11 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
 
     if(!checkConstructorInitArguments(
         ownerClass,
-        method,
         stmt.isCtorInit ? stmt.varType : nullptr,
-        stmt.arguments,
         scope,
         stmt.span,
+        method,
+        stmt.arguments,
         errors
     )){
         ok = false;
@@ -236,7 +275,7 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
     return ok;
 }
 
-b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
+b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, MethodDecl& method, Stmt& stmt, MVector<ParseError>& errors){
     b8 ok = true;
     if(m_parallelDepth > 0u && !m_inLambda){
         reportError(errors, stmt.span, "'return' cannot be used inside a 'parallel' or 'parallel_for' construct");
@@ -258,7 +297,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, 
         PropagateFuncCaptureBytes(const_cast<TypeRef*>(activeRetType), stmt.expr, scope, m_symbols);
         const MStringView baseRetTypeName = m_symbols.resolveBaseTypeName(activeRetType->name);
         if(baseRetTypeName == "Path")
-            markStringToPathAdaptation(ownerClass, &method, *stmt.expr, scope);
+            markStringToPathAdaptation(ownerClass, &method, scope, *stmt.expr);
         if(retRefMode != ParamPassingMode::None){
             stmt.wrapReturnNotNull = true;
             b8 isDanglingReturn = false;
@@ -277,8 +316,41 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, 
                 || stmt.expr->kind == ExprKind::Cast
                 || stmt.expr->kind == ExprKind::BitCast
                 || stmt.expr->kind == ExprKind::Lambda
-            )
+                || stmt.expr->kind == ExprKind::ScopeAccess
+            ){
                 isDanglingReturn = true;
+            }
+            else if(stmt.expr->kind == ExprKind::Call || stmt.expr->kind == ExprKind::Unary){
+                const TypeRef* retExprType = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                if(m_symbols.resolveRefMode(retExprType) == ParamPassingMode::None)
+                    isDanglingReturn = true;
+            }
+            else if(stmt.expr->kind == ExprKind::MemberAccess || stmt.expr->kind == ExprKind::Index){
+                const TypeRef* subTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
+                if(m_symbols.resolveRefMode(subTypeRef) == ParamPassingMode::None){
+                    const Expr* root = stmt.expr->lhs;
+                    while(root && (root->kind == ExprKind::MemberAccess || root->kind == ExprKind::Index)){
+                        const TypeRef* midType = inferExprTypeRef(ownerClass, &method, *root, scope);
+                        if(m_symbols.resolveRefMode(midType) != ParamPassingMode::None || (midType && m_symbols.resolveBaseTypeName(midType->name) == "Span")){
+                            root = nullptr;
+                            break;
+                        }
+                        root = root->lhs;
+                    }
+                    if(root && root->kind == ExprKind::Identifier){
+                        if(const ScopedVarInfo* rootLocal = FindScopedVar(scope, root->text)){
+                            if(
+                                !rootLocal->isParam
+                                && rootLocal->mode == ParamPassingMode::None
+                                && m_symbols.resolveRefMode(rootLocal->type) == ParamPassingMode::None
+                                && resolveScopedVarBaseType(*rootLocal) != "Span"
+                            ){
+                                isDanglingReturn = true;
+                            }
+                        }
+                    }
+                }
+            }
             if(isDanglingReturn){
                 reportError(errors, stmt.span, "cannot return a reference to a temporary or stack-local variable");
                 ok = false;
@@ -290,7 +362,7 @@ b8 TypeChecker::checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, 
                 ok = false;
         }
     }
-    if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, retRefMode == ParamPassingMode::Mut, errors))
+    if(stmt.expr && !checkExpr(ownerClass, scope, retRefMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
         ok = false;
     if(stmt.expr && IsEscapingMutCaptureLambda(stmt.expr, scope)){
         reportError(errors, stmt.span, "cannot return lambda with 'mut' capture; mutable reference captures cannot escape their enclosing scope");
@@ -354,14 +426,18 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 reportError(errors, stmt.span, "'wait' does not accept template arguments");
                 ok = false;
             }
+            if(stmt.expr->arguments.empty()){
+                reportError(errors, stmt.span, "'wait' requires at least one 'parallel' task name argument");
+                ok = false;
+            }
             break;
         }
-        if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
+        if(stmt.expr && !checkExpr(ownerClass, scope, false, method, *stmt.expr, errors))
             ok = false;
         break;
     }
     case StmtKind::Return:{
-        if(!checkReturnStatement(ownerClass, method, stmt, scope, errors))
+        if(!checkReturnStatement(ownerClass, scope, method, stmt, errors))
             ok = false;
         break;
     }
@@ -381,14 +457,18 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     }
     case StmtKind::ParallelCall:{
         method.usesTaskScope = true;
+        const b8 savedParScratch = m_activeParallelBlockUsesScratch;
+        m_activeParallelBlockUsesScratch = false;
         ++m_parallelDepth;
-        if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
+        if(stmt.expr && !checkExpr(ownerClass, scope, false, method, *stmt.expr, errors))
             ok = false;
         --m_parallelDepth;
+        stmt.usesScratchArena = m_activeParallelBlockUsesScratch;
+        m_activeParallelBlockUsesScratch = savedParScratch || stmt.usesScratchArena;
         break;
     }
     case StmtKind::If:{
-        if(stmt.condition && !checkExpr(ownerClass, method, *stmt.condition, scope, false, errors))
+        if(stmt.condition && !checkExpr(ownerClass, scope, false, method, *stmt.condition, errors))
             ok = false;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
             ok = false;
@@ -398,7 +478,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     }
     case StmtKind::Switch:{
         if(stmt.expr){
-            if(!checkExpr(ownerClass, method, *stmt.expr, scope, false, errors))
+            if(!checkExpr(ownerClass, scope, false, method, *stmt.expr, errors))
                 ok = false;
             const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
@@ -435,7 +515,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         for(usize i = 0u; i < stmt.switchCases.size(); ++i){
             SwitchCase& sc = stmt.switchCases[i];
             if(sc.matchExpr){
-                if(!checkExpr(ownerClass, method, *sc.matchExpr, scope, false, errors))
+                if(!checkExpr(ownerClass, scope, false, method, *sc.matchExpr, errors))
                     ok = false;
                 if(sc.matchExpr->kind == ExprKind::StringLiteral)
                     stmt.lowerSwitchToIfChain = true;
@@ -451,6 +531,16 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                         else if(sc.matchExpr->kind == ExprKind::ScopeAccess && prevSc.matchExpr->scopeChain.size() == 2u && sc.matchExpr->scopeChain.size() == 2u){
                             isDup = (prevSc.matchExpr->scopeChain[0] == sc.matchExpr->scopeChain[0]
                                 && prevSc.matchExpr->scopeChain[1] == sc.matchExpr->scopeChain[1]);
+                        }
+                    }
+                    if(!isDup && !stmt.lowerSwitchToIfChain && sc.matchExpr->kind != ExprKind::StringLiteral && prevSc.matchExpr->kind != ExprKind::StringLiteral){
+                        i64 prevConst = 0;
+                        i64 curConst = 0;
+                        if(TryEvaluateExprConstant(prevSc.matchExpr, m_symbols, 0u, nullptr, prevConst) && TryEvaluateExprConstant(sc.matchExpr, m_symbols, 0u, nullptr, curConst)){
+                            const b8 prevIsBool = (prevSc.matchExpr->kind == ExprKind::BoolLiteral);
+                            const b8 curIsBool = (sc.matchExpr->kind == ExprKind::BoolLiteral);
+                            if(prevIsBool == curIsBool && prevConst == curConst)
+                                isDup = true;
                         }
                     }
                     if(isDup){
@@ -475,7 +565,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             reportError(errors, stmt.span, "duplicate variable or parameter name in scope");
             ok = false;
         }
-        if(stmt.expr && !checkExpr(ownerClass, method, *stmt.expr, scope, stmt.rangeMode == ParamPassingMode::Mut, errors))
+        if(stmt.expr && !checkExpr(ownerClass, scope, stmt.rangeMode == ParamPassingMode::Mut, method, *stmt.expr, errors))
             ok = false;
         const TypeRef* elemTypeRef = nullptr;
         MStringView resolvedElemName;
@@ -540,7 +630,29 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 && stmt.initStmt != nullptr
                 && stmt.condition->lhs->text == stmt.initStmt->name
                 && stmt.condition->rhs != nullptr;
-            const b8 validStep = stmt.stepExpr != nullptr;
+            b8 validStep = false;
+            if(stmt.stepExpr && stmt.initStmt){
+                const MStringView idxName = stmt.initStmt->name;
+                if(stmt.stepExpr->kind == ExprKind::Unary && stmt.stepExpr->op == TokenType::PlusPlus && stmt.stepExpr->lhs && stmt.stepExpr->lhs->kind == ExprKind::Identifier && stmt.stepExpr->lhs->text == idxName){
+                    validStep = true;
+                }
+                else if(stmt.stepExpr->kind == ExprKind::Binary && stmt.stepExpr->lhs && stmt.stepExpr->lhs->kind == ExprKind::Identifier && stmt.stepExpr->lhs->text == idxName && stmt.stepExpr->rhs){
+                    const Expr* stepAmountExpr = nullptr;
+                    if(stmt.stepExpr->op == TokenType::PlusEqual){
+                        stepAmountExpr = stmt.stepExpr->rhs;
+                    }
+                    else if(stmt.stepExpr->op == TokenType::Equal && stmt.stepExpr->rhs->kind == ExprKind::Binary && stmt.stepExpr->rhs->op == TokenType::Plus && stmt.stepExpr->rhs->lhs && stmt.stepExpr->rhs->rhs){
+                        if(stmt.stepExpr->rhs->lhs->kind == ExprKind::Identifier && stmt.stepExpr->rhs->lhs->text == idxName)
+                            stepAmountExpr = stmt.stepExpr->rhs->rhs;
+                        else if(stmt.stepExpr->rhs->rhs->kind == ExprKind::Identifier && stmt.stepExpr->rhs->rhs->text == idxName)
+                            stepAmountExpr = stmt.stepExpr->rhs->lhs;
+                    }
+                    if(stepAmountExpr){
+                        i64 constStep = 1;
+                        validStep = !TryEvaluateExprConstant(stepAmountExpr, m_symbols, 0u, nullptr, constStep) || constStep > 0;
+                    }
+                }
+            }
             if(!validInit || !validCond || !validStep){
                 reportError(errors, stmt.span, "indexed 'parallel_for' requires canonical bounds ('parallel_for(usize i = start; i < end; ++i)')");
                 ok = false;
@@ -549,10 +661,21 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
         const usize saved = scope.size();
         if(stmt.initStmt && !checkStatement(ownerClass, method, *stmt.initStmt, scope, errors))
             ok = false;
-        if(stmt.condition && !checkExpr(ownerClass, method, *stmt.condition, scope, false, errors))
+        if(isPar && saved < scope.size()){
+            const MStringView idxType = resolveScopedVarBaseType(scope[saved]);
+            if(!idxType.empty() && !IsIntegerScalarType(idxType) && !FindTemplateParam(ownerClass, &method, idxType)){
+                reportError(errors, stmt.span, "indexed 'parallel_for' requires an integer loop variable type");
+                ok = false;
+            }
+        }
+        if(isPar)
+            ++m_parallelDepth;
+        if(stmt.condition && !checkExpr(ownerClass, scope, false, method, *stmt.condition, errors))
             ok = false;
-        if(stmt.stepExpr && !checkExpr(ownerClass, method, *stmt.stepExpr, scope, false, errors))
+        if(stmt.stepExpr && !checkExpr(ownerClass, scope, false, method, *stmt.stepExpr, errors))
             ok = false;
+        if(isPar)
+            --m_parallelDepth;
         if(isPar){
             for(usize i = saved; i < scope.size(); ++i)
                 scope[i].isConst = true;
@@ -565,7 +688,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
     }
     case StmtKind::While:
     case StmtKind::DoWhile:{
-        if(stmt.condition && !checkExpr(ownerClass, method, *stmt.condition, scope, false, errors))
+        if(stmt.condition && !checkExpr(ownerClass, scope, false, method, *stmt.condition, errors))
             ok = false;
         ++m_loopDepth;
         if(!checkStatementList(ownerClass, method, stmt.statements, scope, errors))
@@ -586,7 +709,7 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             if(binding.sourceExpr){
                 if(binding.mode == ParamPassingMode::Mut)
                     binding.sourceExpr->isMutArg = true;
-                if(!checkExpr(ownerClass, method, *binding.sourceExpr, scope, binding.mode == ParamPassingMode::Mut, errors))
+                if(!checkExpr(ownerClass, scope, binding.mode == ParamPassingMode::Mut, method, *binding.sourceExpr, errors))
                     ok = false;
             }
         }
@@ -597,11 +720,11 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
             Expr* arg = stmt.arguments[i];
             if(!arg)
                 continue;
-            if(!checkExpr(ownerClass, method, *arg, scope, false, errors))
+            if(!checkExpr(ownerClass, scope, false, method, *arg, errors))
                 ok = false;
             const b8 isAfterCond = (stmt.diagnosticKind != DiagnosticKind::Assert) || (i >= 1u);
             if(isAfterCond)
-                markStringToPathAdaptation(ownerClass, &method, *arg, scope);
+                markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         }
         break;
     }

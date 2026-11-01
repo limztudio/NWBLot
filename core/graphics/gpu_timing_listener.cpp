@@ -146,24 +146,23 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
     }
 }
 
-b8 GpuTimingRecorder::setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const NotNull<const Name*> scopeNames, const usize scopeCount){
-    if(scopeCount == 0u)
+b8 GpuTimingRecorder::setFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Span<const Name> scopeNames){
+    if(scopeNames.empty() || !scopeNames.data())
         return false;
-    return replaceFeedbackCollectionScopes(subscription, scopeNames.get(), scopeCount);
+    return replaceFeedbackCollectionScopes(subscription, scopeNames);
 }
 
 b8 GpuTimingRecorder::clearFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription){
-    return replaceFeedbackCollectionScopes(subscription, nullptr, 0u);
+    return replaceFeedbackCollectionScopes(subscription, {});
 }
 
-b8 GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Name* const scopeNames, const usize scopeCount){
-    if(!subscription.valid() || (scopeCount != 0u && !scopeNames))
+b8 GpuTimingRecorder::replaceFeedbackCollectionScopes(const GpuTimingSampleSubscription& subscription, const Span<const Name> scopeNames){
+    if(!subscription.valid() || (!scopeNames.empty() && !scopeNames.data()))
         return false;
 
     Vector<Name, Alloc::GlobalArena> replacementScopes(m_arena);
-    replacementScopes.reserve(scopeCount);
-    for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
-        const Name& scopeName = scopeNames[scopeIndex];
+    replacementScopes.reserve(scopeNames.size());
+    for(const Name& scopeName : scopeNames){
         if(!scopeName)
             return false;
         for(const Name& previousScope : replacementScopes){

@@ -78,6 +78,10 @@ NWB_IMPL_BEGIN
 
 class MeshSkinningRuntimeCache final : NoCopy{
 private:
+    using InstanceMap = HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>>;
+
+
+private:
     struct MeshSkinningSource{
         UniquePtr<Core::Assets::IAsset> meshAsset;
         UniquePtr<Core::Assets::IAsset> skinAsset;
@@ -91,7 +95,14 @@ private:
 
 
 public:
-    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
+    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager)
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_assetManager(assetManager)
+        , m_sources(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
+        , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), arena)
+    {}
 
 
 public:
@@ -108,11 +119,9 @@ private:
     [[nodiscard]] b8 uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<RuntimeMeshHandle> allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity)noexcept;
+    InstanceMap::iterator eraseInstance(InstanceMap::iterator it)noexcept;
     void releaseSource(const Name& sourceName)noexcept;
     void eraseUnusedSource(const Name& sourceName)noexcept;
-    [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const noexcept;
-    [[nodiscard]] MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)noexcept;
-    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)const noexcept;
 
 
 private:
@@ -121,7 +130,7 @@ private:
     Core::Assets::AssetManager& m_assetManager;
 
     HashMap<Name, MeshSkinningSource, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_sources;
-    HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_instances;
+    InstanceMap m_instances;
     HashMap<u64, Core::ECS::EntityID, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_handleToEntity;
     u64 m_nextHandleValue = 1u;
 };

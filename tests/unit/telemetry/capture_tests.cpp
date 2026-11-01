@@ -25,7 +25,6 @@ constexpr AStringView s_ScopeDiagnosticCategory = "scope_diagnostic";
 constexpr AStringView s_TelemetryGuardCategory = "telemetry_guard";
 constexpr AStringView s_ErrorEvent = "error";
 
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 using namespace TelemetryTestDetail;
@@ -61,10 +60,10 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error, .category = s_ScopeDiagnosticCategory, .message = "ignored after scope", });
 
-    EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
+    EXPECT_EQ(previousLogger.messageCount(), 2u);
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
-    EXPECT_EQ(session.eventCount(), s_ExpectedDualCount);
+    EXPECT_EQ(session.eventCount(), 2u);
 }
 
 TEST(Telemetry, TextCaptureCountsRejectedPayloadsWithoutCountingFilteredEventsAndStillForwards){
@@ -98,19 +97,19 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
-    constexpr char s_Message[] = { 'd', 0, 'm' };
+    constexpr Array<char, 3> s_Message = { 'd', 0, 'm' };
     const DiagnosticEventRecord source{
         .event = AStringView("error.trailing").substr(0u, 5u),
         .category = "unit_category",
         .expression = "value != nullptr",
-        .message = AStringView(s_Message, sizeof(s_Message)),
+        .message = AStringView(s_Message.data(), s_Message.size()),
         .file = "diagnostic_test.cpp",
         .instructionPointer = 0x1234u,
         .line = 77u,
         .terminatesProcess = true,
     };
 
-    ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
+    ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(source, testArena.arena, payload));
 
     Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(payload.data(), payload.size())));

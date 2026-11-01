@@ -93,7 +93,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         .queueClass = queueInfo->queueClass,
         .deviceGeneration = m_deviceGeneration,
     };
-    SIMDVectorDouble submissionSeconds = VectorDoubleZero();
+    f64 submissionSeconds = 0.0;
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);
         if(!packetID.valid())
@@ -121,7 +121,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             statistics.timelineWaitCount += runtime.timelineWaitCount;
             statistics.mergedTimelineWaitCount += runtime.mergedTimelineWaitCount;
             statistics.inheritedTimelineWaitElisionCount += runtime.inheritedTimelineWaitElisionCount;
-            submissionSeconds = VectorDoubleAdd(submissionSeconds, VectorDoubleReplicate(runtime.submissionSeconds));
+            submissionSeconds += runtime.submissionSeconds;
             if(packet.joinsAcceptedQueueFrontier)
                 ++statistics.acceptedFrontierSubmissionCount;
             if(packet.isRecoverySubmission)
@@ -137,7 +137,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             break;
         }
     }
-    statistics.submissionSeconds = VectorDoubleGetX(submissionSeconds);
+    statistics.submissionSeconds = submissionSeconds;
     return statistics;
 }
 

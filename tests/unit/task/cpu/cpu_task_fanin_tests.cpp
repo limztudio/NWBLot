@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "task_wait.h"
+#include "cpu_task_scheduler_test_support.h"
 
 #include <core/task/cpu/scheduler.h>
 #include <core/alloc/scratch.h>
@@ -23,8 +23,10 @@ namespace __hidden_cpu_task_fanin_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::HomogeneousWorkers;
+using CpuTaskSchedulerTestSupport::WaitUntil;
 
 inline constexpr u32 s_GateTimeoutMS = 20000u;
 inline constexpr u32 s_TestTimeoutMS = 60000u;
@@ -33,29 +35,8 @@ inline constexpr u32 s_TestTimeoutMS = 60000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeadlineGuard final{
-public:
-    DeadlineGuard()
-        : m_watchdog([](const StopToken& stop)noexcept{
-            const Timer begin = TimerNow();
-            while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS)
-                    TerminateInvariant();
-                SleepMS(__hidden_cpu_task_fanin_tests::s_PollIntervalMS);
-            }
-        }
-        )
-    {}
-    ~DeadlineGuard()noexcept = default;
-
-
-private:
-    JoiningThread m_watchdog;
-};
-
-
 void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependencyCount, const usize repetitionCount){
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_TestTimeoutMS);
     Atomic<b8> rootEntered{ false };
     Atomic<b8> releaseRoot{ false };
     Atomic<b8> rootExpired{ false };
@@ -63,10 +44,7 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
     Atomic<u32> completionCountObservedByJoin{ 0u };
     Atomic<u32> joinInvocationCount{ 0u };
     Vector<u32, Alloc::ScratchArena> dependencyInvocations(uniqueDependencyCount, 0u, scratchArena);
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 1u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
+    CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
     ScopeExit releaseGuard([&]()noexcept{ releaseRoot.store(true, MemoryOrder::release); });
 
     const auto completedTaskAdmission = scheduler.submit([]()noexcept{});
@@ -77,13 +55,13 @@ void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependency
 
     const auto cpuTaskAdmission = scheduler.submit([&]()noexcept{
         rootEntered.store(true, MemoryOrder::release);
-        if(!CpuTaskTestSupport::WaitUntil(releaseRoot, s_GateTimeoutMS))
+        if(!WaitUntil(releaseRoot, s_GateTimeoutMS))
             rootExpired.store(true, MemoryOrder::release);
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const CpuTaskHandle root = *cpuTaskAdmission;
     ASSERT_TRUE(root.valid());
-    ASSERT_TRUE(CpuTaskTestSupport::WaitUntil(rootEntered, s_GateTimeoutMS));
+    ASSERT_TRUE(WaitUntil(rootEntered, s_GateTimeoutMS));
     EXPECT_TRUE(scheduler.isComplete(completed));
     EXPECT_FALSE(scheduler.isComplete(root));
 
@@ -160,7 +138,7 @@ TEST(CpuTaskSchedulerTests, LargeRepeatedFanInPublishesExactlyOneJoin){
 
 TEST(CpuTaskSchedulerTests, NestedLargeFanInAcceptsIndependentPredecessorsAndDuplicateEdges){
     using namespace __hidden_cpu_task_fanin_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_TestTimeoutMS);
     Alloc::ScratchArena scratchArena("CpuTaskSchedulerTests.NestedLargeFanIn");
     constexpr usize s_FanIn = 1024u;
     constexpr usize s_ChainLength = 1024u;
@@ -209,7 +187,7 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInAcceptsIndependentPredecessorsAndDup
 
 TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependencyList){
     using namespace __hidden_cpu_task_fanin_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_TestTimeoutMS);
     Alloc::ScratchArena scratchArena("CpuTaskSchedulerTests.NestedCyclicFanIn");
     constexpr usize s_FanIn = 1024u;
     Vector<CpuTaskHandle, Alloc::ScratchArena> prerequisites(s_FanIn + 1u, CpuTaskHandle{}, scratchArena);
@@ -245,7 +223,7 @@ TEST(CpuTaskSchedulerTests, NestedLargeFanInRejectsACycleAtTheEndOfTheDependency
 
 TEST(CpuTaskSchedulerTests, NestedDependencyAcceptsARetiredGenerationInTheAncestorsSlot){
     using namespace __hidden_cpu_task_fanin_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_TestTimeoutMS);
     CpuTaskScheduler scheduler(0u);
     const auto completedTaskAdmission = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(completedTaskAdmission);

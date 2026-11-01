@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "scene_resources.h"
+#include "task_graph_scene_resources.h"
 #include "rt_private.h"
 #include "renderer_raytracing_state.h"
 
@@ -65,7 +65,7 @@ b8 RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::GpuDescriptorClass::UniformBuffer, false, m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle)){
+    if(!heap.isInitialized() || !RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::UniformBuffer, false, heap, *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
         return false;
     }

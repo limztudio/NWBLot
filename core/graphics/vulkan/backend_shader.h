@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Shader final : public RefCounter<GraphicsResource>, NoCopy{
+class Shader final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
     friend class ShaderLibrary;
@@ -78,7 +78,7 @@ struct ShaderLibraryKeyHasher{
 };
 
 
-class ShaderLibrary final : public RefCounter<GraphicsResource>, NoCopy{
+class ShaderLibrary final : public RefCounter<GraphicsResource>{
     friend class Device;
 
 

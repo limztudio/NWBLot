@@ -41,30 +41,28 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ListMeasureKey{
+    u64 sourceGeneration = 0u;
+    u64 sourceRevision = 0u;
+    u64 rowCount = 0u;
+    u64 textIdentity = 0u;
+    u64 textGeneration = 0u;
+    f32 fontSize = 0.0f;
+    f32 pixelScaleX = 0.0f;
+    f32 pixelScaleY = 0.0f;
+    Array<f32, s_ListRowMetricCount> rowMetrics{};
+    Array<char, s_ListLanguageBufferBytes> language{};
+    u32 scriptTag = 0u;
+
+
+public:
+    [[nodiscard]] constexpr b8 operator==(const ListMeasureKey&)const noexcept = default;
+};
+
 class ListState final : NoCopy{
     friend class Builder;
     friend class BuilderScopeFrame;
     friend class ListBehavior;
-
-
-private:
-    struct MeasureKey{
-        u64 sourceGeneration = 0u;
-        u64 sourceRevision = 0u;
-        u64 rowCount = 0u;
-        u64 textIdentity = 0u;
-        u64 textGeneration = 0u;
-        f32 fontSize = 0.0f;
-        f32 pixelScaleX = 0.0f;
-        f32 pixelScaleY = 0.0f;
-        Array<f32, s_ListRowMetricCount> rowMetrics{};
-        Array<char, s_TextMaxLanguageBytes + 1u> language{};
-        u32 scriptTag = 0u;
-
-
-    public:
-        [[nodiscard]] b8 operator==(const MeasureKey&)const noexcept = default;
-    };
 
 
 public:
@@ -94,7 +92,7 @@ public:
 
 
 private:
-    MeasureKey m_measureKey;
+    ListMeasureKey m_measureKey;
     f32 m_rowHeight = 0.0f;
     f32 m_scrollRowHeight = 0.0f;
     u64 m_scrollSourceGeneration = 0u;
@@ -110,6 +108,13 @@ private:
 
 class ListBehavior final{
 public:
+    [[nodiscard]] static Expected<ListKeyResolution> ResolveKey(const IListDataSource& source, u64 count, u64 key);
+    [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
+        return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision;
+    }
+    [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
+        return SourceMatches(source, generation, revision) && source.rowCount() == count;
+    }
     [[nodiscard]] static b8 Reconcile(ListState& state, const IListDataSource& source);
     [[nodiscard]] static b8 Apply(ListState& state, ListResult& result, const IListDataSource& source, const ListOptions& options, const ControlAction& action);
 };

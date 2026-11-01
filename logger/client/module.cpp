@@ -227,6 +227,25 @@ b8 Client::internalUpdate(){
     return true;
 }
 
+void Client::enqueue(MessageType&& data){
+    this->m_messageQueue.emplace(Move(data));
+    m_messageCount.fetch_add(1, MemoryOrder::relaxed);
+    this->m_semaphore.release();
+}
+
+void Client::enqueue(const MessageType& data){
+    this->m_messageQueue.emplace(data);
+    m_messageCount.fetch_add(1, MemoryOrder::relaxed);
+    this->m_semaphore.release();
+}
+
+b8 Client::tryDequeueMessage(MessageType& msg){
+    auto dequeued = this->tryDequeue(msg);
+    if(dequeued)
+        m_messageCount.fetch_sub(1, MemoryOrder::relaxed);
+    return dequeued;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

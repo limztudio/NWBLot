@@ -80,12 +80,7 @@ public:
 
 
 private:
-    void reset()noexcept{
-        m_packet = {};
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
-        m_claimGeneration = 0u;
-    }
+    void reset()noexcept;
 
 
 private:
@@ -122,12 +117,7 @@ public:
 
 
 private:
-    void reset()noexcept{
-        m_packet = {};
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
-        m_claimGeneration = 0u;
-    }
+    void reset()noexcept;
 
 
 private:
@@ -192,13 +182,7 @@ public:
 
 
 private:
-    void reset()noexcept{
-        m_packet = {};
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
-        m_claimGeneration = 0u;
-        m_submissionBinding = {};
-    }
+    void reset()noexcept;
 
 
 private:

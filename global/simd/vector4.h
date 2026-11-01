@@ -321,11 +321,15 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4Orthogonal(SIMDVectorDoub
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4AngleBetweenNormals(SIMDVectorSingle n0, SIMDVectorSingle n1)noexcept{ return VectorACos(VectorClamp(Vector4Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4AngleBetweenNormals(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble4Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4AngleBetweenNormals(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{
+    return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble4Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne));
+}
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4AngleBetweenNormalsEst(SIMDVectorSingle n0, SIMDVectorSingle n1)noexcept{ return VectorACosEst(VectorClamp(Vector4Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{ return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble4Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne)); }
+NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4AngleBetweenNormalsEst(SIMDVectorDouble n0, SIMDVectorDouble n1)noexcept{
+    return SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleClamp(VectorDouble4Dot(n0, n1), s_DoubleSIMDNegativeOne, s_DoubleSIMDOne));
+}
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4AngleBetweenVectors(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
     const SIMDVectorSingle reciprocalLength0 = Vector4ReciprocalLength(v0);

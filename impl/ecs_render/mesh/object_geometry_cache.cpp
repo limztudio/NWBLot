@@ -30,14 +30,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ObjectGeometryCacheSnapshot::valid()const noexcept{
-    return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, const b8 runtimeMesh)noexcept{
     ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
     if(!expected.valid() || cache.buffer != expected.buffer)
@@ -107,15 +99,15 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
     if(!cache.buffer){
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        const auto layout = ECSRenderDetail::ResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount);
-        if(!layout)
+        ObjectGeometryCacheLayout layout{};
+        if(!TryResolveObjectGeometryCacheLayout(mesh.meshletLocalVertexRefBuffer->getDescription().byteSize, mesh.meshletPrimitiveIndexCount, layout))
             return false;
         const auto bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
         if(!bufferName)
             return false;
         Core::BufferDesc desc;
         desc
-            .setByteSize(layout->bufferByteSize)
+            .setByteSize(layout.bufferByteSize)
             .setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
@@ -133,8 +125,8 @@ b8 RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const Cor
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), ConvertString(mesh.meshName.resolvedText()));
             return false;
         }
-        cache.indexByteOffset = layout->indexByteOffset;
-        cache.indexCount = layout->indexCount;
+        cache.indexByteOffset = layout.indexByteOffset;
+        cache.indexCount = layout.indexCount;
         cache.acceptedContent = false;
         cache.initialized = false;
     }

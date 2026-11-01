@@ -47,45 +47,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, const f32 viewportHeight)override{
-        records.emplace_back(m_arena);
-        NavigationCall& record = records.back();
-        record.text.assign(model.text().data(), model.text().size());
-        record.navigation = navigation;
-        record.selectionGeneration = model.selectionGeneration();
-        record.caret = model.caret();
-        record.viewportHeight = viewportHeight;
-
-        Expected<Ui::EditNavigationResult> result = MakeUnexpected(Failure{});
-        Ui::EditBoxView view(m_arena);
-        Expected<Ui::TextLayout, Ui::TextLayoutStatus::Enum> layout = MakeUnexpected(Ui::TextLayoutStatus::InvalidParameters);
-        if(view.snapshot(model))
-            layout = m_layoutBuilder.layout({ view.displayText() });
-        if(layout && view.adoptLayout(Move(*layout))){
-            const auto caret = view.caretGeometry().caretRect(view.displayCaret());
-            if(caret){
-                const f32 preferredX = navigation.valid ? navigation.preferredX : caret->x;
-                Expected<usize> target = MakeUnexpected(Failure{});
-                if(direction == Ui::EditNavigationDirection::Up || direction == Ui::EditNavigationDirection::Down)
-                    target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down, preferredX);
-                else{
-                    const SIMDVectorSingle distance = direction == Ui::EditNavigationDirection::PageDown ? VectorReplicate(viewportHeight) : VectorNegate(VectorReplicate(viewportHeight));
-                    target = view.caretGeometry().hitTest({ preferredX, VectorGetX(VectorAdd(VectorMultiplyAddExpression(VectorReplicate(caret->height), VectorReplicate(0.5f), VectorReplicate(caret->y)), distance)) });
-                }
-                if(target)
-                    result = Ui::EditNavigationResult{ *target, preferredX };
-            }
-        }
-        if(forceResult)
-            result = forcedResult;
-        record.result = result;
-        if(hook){
-            Function<void()> callback = Move(hook);
-            hook = {};
-            callback();
-        }
-        return result;
-    }
+    [[nodiscard]] virtual Expected<Ui::EditNavigationResult> resolve(const Ui::EditModel& model, Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation, f32 viewportHeight)override;
 
 
 public:
@@ -119,19 +81,8 @@ public:
 
 
 public:
-    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const b8)override{
-        records.emplace_back(m_arena);
-        records.back().text.assign(model.text().data(), model.text().size());
-        records.back().action = action;
-        return true;
-    }
-
-    [[nodiscard]] usize count(const Ui::EditAction::Enum action)const noexcept{
-        usize result = 0u;
-        for(const auto& record : records)
-            result += record.action == action ? 1u : 0u;
-        return result;
-    }
+    [[nodiscard]] virtual b8 apply(Ui::EditModel& model, Ui::EditAction::Enum action, b8 readOnly)override;
+    [[nodiscard]] usize count(Ui::EditAction::Enum action)const noexcept;
 
 
 public:
@@ -148,13 +99,7 @@ private:
 
 class UiEditNavigationHostTests : public UiEditBoxHostTests{
 public:
-    UiEditNavigationHostTests()
-        : m_navigationModel(m_arena, {}, Ui::EditTextMode::Multiline)
-        , m_resolver(m_arena, m_layoutBuilder)
-        , m_actions(m_arena)
-    {
-        m_includeButton = true;
-    }
+    UiEditNavigationHostTests();
 
 
 protected:
@@ -162,28 +107,7 @@ protected:
         return prepareNavigationModel(m_navigationModel, m_navigation, options, bounds, previousScroll);
     }
 
-    [[nodiscard]] b8 prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
-        if(!beginEditFrame())
-            return false;
-        m_result = m_host.editNavigated(m_widget, model, options, {}, navigation, m_resolver, m_actions);
-        if(!m_result.valid)
-            return false;
-        if(!publishEdit(model, options, bounds, previousScroll))
-            return false;
-        const auto button = m_context.declare("other", Ui::WidgetKind::Button);
-        if(!button)
-            return false;
-        m_otherWidget = **button;
-        Ui::HitTarget other;
-        other.rectangle = { 230.0f, 20.0f, 100.0f, 30.0f };
-        other.clip = { 0.0f, 0.0f, 500.0f, 200.0f };
-        other.focusable = true;
-        other.activatable = true;
-        if(!m_context.addTarget(m_otherWidget, other) || !m_context.endRoot() || !m_context.finishFrame())
-            return false;
-        m_host.finishFrame();
-        return true;
-    }
+    [[nodiscard]] b8 prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation, const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, Ui::Point previousScroll = {});
 
     [[nodiscard]] b8 navigationFrame(const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
         return prepareNavigation(options, bounds, previousScroll) && commit();
@@ -193,15 +117,10 @@ protected:
         return navigationFrame(options, bounds) && key(Core::Key::Tab) && navigationFrame(options, bounds) && m_context.input().focus() == m_widget.id;
     }
 
-    [[nodiscard]] b8 commitNative(const AStringView text){
-        if(m_textInput.commit(text) != TextInputAdmission::Accepted)
-            return false;
-        m_host.collectNative();
-        return true;
-    }
+    [[nodiscard]] b8 commitNative(AStringView text);
 
     [[nodiscard]] b8 click(const Ui::Point position, const b8 shift = false){
-        return dispatch({ .position = position, .type = Ui::InputEventType::PrimaryDown, .shift = shift  }) && dispatch({ .position = position, .type = Ui::InputEventType::PrimaryUp, .shift = shift  });
+        return dispatch({ .position = position, .type = Ui::InputEventType::PrimaryDown, .shift = shift }) && dispatch({ .position = position, .type = Ui::InputEventType::PrimaryUp, .shift = shift });
     }
 
     [[nodiscard]] b8 focusOther(){

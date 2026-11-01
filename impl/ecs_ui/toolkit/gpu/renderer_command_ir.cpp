@@ -8,9 +8,6 @@
 #include <core/task/gpu/capture/command_ir_raster.h>
 #include <core/task/gpu/compiled_graph.h>
 
-#include <global/algorithm.h>
-#include <global/simd/vector_arithmetic.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,7 +24,7 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 ReplayCaptured(const GpuFrame& frame, const Core::GpuTaskRecordContext& context, Core::CommandList& commands, const Core::GpuCommandIrCapture& capture){
+[[nodiscard]] static b8 ReplayCaptured(const GpuFrame& frame, const Core::GpuTaskRecordContext& context, const Core::GpuCommandIrCapture& capture, Core::CommandList& commands){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
     const auto stream = capture.exportOwned(frame->m_arena);
@@ -40,11 +37,11 @@ namespace __hidden_ui_gpu_command_ir{
 [[nodiscard]] static b8 CaptureRasterState(
     const GpuRasterTask::Payload& payload,
     const Core::GpuTaskRecordContext& context,
-    Core::GpuCommandIrCapture& capture,
-    Core::GpuDescriptorHeap& heap,
     const Core::GpuCommandIrOwnerAnchor& descriptorOwner,
     const Core::Viewport& viewport,
-    const Core::Rect& scissor
+    const Core::Rect& scissor,
+    Core::GpuDescriptorHeap& heap,
+    Core::GpuCommandIrCapture& capture
 ){
     const GpuFrame& frame = payload.frame;
     Core::GpuCommandIrRasterStateDesc state;
@@ -67,10 +64,10 @@ namespace __hidden_ui_gpu_command_ir{
 [[nodiscard]] static b8 CaptureOutputState(
     const GpuOutputTask::Payload& payload,
     const Core::GpuTaskRecordContext& context,
-    Core::GpuCommandIrCapture& capture,
-    Core::GpuDescriptorHeap& heap,
     const Core::GpuCommandIrOwnerAnchor& descriptorOwner,
-    const Core::Viewport& viewport
+    const Core::Viewport& viewport,
+    Core::GpuDescriptorHeap& heap,
+    Core::GpuCommandIrCapture& capture
 ){
     Core::GpuCommandIrRasterStateDesc state;
     state.pipeline = payload.graphPipeline;
@@ -93,7 +90,7 @@ namespace __hidden_ui_gpu_command_ir{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands){
     // A task-local stream must not silently disappear from a caller's separate packet capture.
     if(context.commandIrCapture)
         return false;
@@ -133,7 +130,7 @@ b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandLis
             continue;
         const Core::Rect& scissor = *resolvedScissor;
         if(!hasRasterState || scissor != boundScissor){
-            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, capture, heap, *descriptorOwner, viewport, scissor))
+            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, *descriptorOwner, viewport, scissor, heap, capture))
                 return false;
             boundScissor = scissor;
             hasRasterState = true;
@@ -150,14 +147,14 @@ b8 RecordRasterCommandIr(const GpuRasterTask::Payload& payload, Core::CommandLis
     }
     if(hasDraw && !capture.captureEndRenderPass(context.task, context.packet, context.queue))
         return false;
-    if(!__hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, commands, capture))
+    if(!__hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, capture, commands))
         return false;
     if(hasDraw)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiGpuRenderer: raster command IR replay active"));
     return true;
 }
 
-b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context){
+b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, const Core::GpuTaskRecordContext& context, Core::CommandList& commands){
     if(context.commandIrCapture)
         return false;
     const GpuFrame& frame = payload.frame;
@@ -172,7 +169,7 @@ b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandLis
         return false;
     const Core::TextureDesc& target = payload.acquired.backBuffer.texture->getDescription();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
-    if(!__hidden_ui_gpu_command_ir::CaptureOutputState(payload, context, capture, heap, *descriptorOwner, viewport))
+    if(!__hidden_ui_gpu_command_ir::CaptureOutputState(payload, context, *descriptorOwner, viewport, heap, capture))
         return false;
     GpuOutputPushConstants push;
     push.textureSlot = frame->m_target->m_sampledImage.slot();
@@ -182,7 +179,7 @@ b8 RecordOutputCommandIr(const GpuOutputTask::Payload& payload, Core::CommandLis
         return false;
     if(!capture.captureDraw(context.task, context.packet, context.queue, Core::DrawArguments().setVertexCount(s_GpuFullscreenTriangleVertexCount), false) || !capture.captureEndRenderPass(context.task, context.packet, context.queue))
         return false;
-    return __hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, commands, capture);
+    return __hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, capture, commands);
 }
 
 

@@ -191,7 +191,12 @@ void Device::captureDeviceLoss(const AStringView context){
                             report.binaryDumpSize = vendorBinary.size();
                         }
                         else if(!vendorBinaryIsRgd){
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary not packaged: {} bytes from vendor 0x{:x}\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u32>(m_context.physicalDeviceProperties.vendorID)));
+                            report.details.append(StringFormat(
+                                m_gpuCrashReportArena,
+                                "device fault vendor binary not packaged: {} bytes from vendor 0x{:x}\n",
+                                static_cast<u64>(vendorBinaryByteSize),
+                                static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
+                            ));
                         }
                         else{
                             report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary skipped: {} bytes exceeds {} byte cap\n", static_cast<u64>(vendorBinaryByteSize), static_cast<u64>(s_MaxDeviceFaultVendorBinaryBytes)));

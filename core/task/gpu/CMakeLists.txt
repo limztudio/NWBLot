@@ -25,3 +25,4 @@ target_sources(nwb_gpu_task PRIVATE
 )
 
 target_link_libraries(nwb_gpu_task PUBLIC nwb_graphics_backend nwb_cpu_task nwb_telemetry)
+

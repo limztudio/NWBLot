@@ -23,13 +23,12 @@ namespace __hidden_ui_pointer_gesture_value_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 
-class UiPointerGestureValueTests : public testing::Test{
+class UiPointerGestureValueTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerGestureValueTests();
 
 
 protected:
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event);
     [[nodiscard]] b8 publish(usize count = 2u);
     [[nodiscard]] Expected<PointerGesture> take()noexcept;
     [[nodiscard]] Expected<ControlAction> takeControl()noexcept;
@@ -37,8 +36,6 @@ protected:
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Array<HitTarget, 2u> m_targets;
     u64 m_generation = 0u;
 };
@@ -48,8 +45,7 @@ protected:
 
 
 UiPointerGestureValueTests::UiPointerGestureValueTests()
-    : m_arena(Name("tests/ui/pointer_gesture_value"))
-    , m_router(m_arena)
+    : RouterTestFixture(Name("tests/ui/pointer_gesture_value"))
 {
     HitTarget& host = m_targets[0u];
     host.id = { 1u };
@@ -76,14 +72,9 @@ UiPointerGestureValueTests::UiPointerGestureValueTests()
     thumb.gestureMaximum = 9.0;
 }
 
-InputRoutingResult UiPointerGestureValueTests::send(const InputEvent& event){
-    EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-    return m_router.process();
-}
-
 b8 UiPointerGestureValueTests::publish(const usize count){
     const u64 generation = m_generation + 1u;
-    if(!m_router.commitTargets(m_targets.data(), count, generation))
+    if(!m_router.commitTargets(Span(m_targets.data(), count), generation))
         return false;
     m_generation = generation;
     return true;

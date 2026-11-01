@@ -9,7 +9,7 @@
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>

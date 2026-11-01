@@ -27,27 +27,16 @@ namespace __hidden_ui_glyph_visibility{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f64 s_RasterMarginPixels = 2.0;
-inline constexpr f64 s_FixedPointRoundBias = 0.5;
-inline constexpr f64 s_HalfPixel = 0.5;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static b8 ValidLocation(const PlacedGlyph& glyph, const Point& topLeft)noexcept{
     return IsFinite(glyph.position.x) && IsFinite(glyph.position.y) && IsFinite(topLeft.x) && IsFinite(topLeft.y);
 }
 
-[[nodiscard]] static b8 ValidFontSize(const f32 fontSize)noexcept{
-    return IsFinite(fontSize) && fontSize >= 1.0f / s_TextFixedPointScale && fontSize <= s_TextMaxFontSize;
-}
-
 [[nodiscard]] static TextGlyphIntersection::Enum IntersectBounds(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorSingle clip)noexcept{
     const SIMDVectorDouble limit = VectorDoubleReplicate(static_cast<f64>(Limit<f32>::s_Max));
+    const SIMDVectorDouble inBoundsMask = VectorDoubleAndInt(VectorDoubleInBounds(minimum, limit), VectorDoubleAndInt(VectorDoubleInBounds(maximum, limit), VectorDoubleGreaterOrEqual(maximum, minimum)));
     if(
         !VectorDoubleIsFinite(minimum, VectorDoubleComponentMask::s_DoubleXY) || !VectorDoubleIsFinite(maximum, VectorDoubleComponentMask::s_DoubleXY)
-        || (VectorDoubleMoveMask(VectorDoubleAndInt(VectorDoubleInBounds(minimum, limit), VectorDoubleAndInt(VectorDoubleInBounds(maximum, limit), VectorDoubleGreaterOrEqual(maximum, minimum)))) & VectorDoubleComponentMask::s_DoubleXY) != VectorDoubleComponentMask::s_DoubleXY
+        || (VectorDoubleMoveMask(inBoundsMask) & VectorDoubleComponentMask::s_DoubleXY) != VectorDoubleComponentMask::s_DoubleXY
     )
         return TextGlyphIntersection::Invalid;
     // Both sides are finite and bounded here, so this f64 subtract cannot overflow.
@@ -93,7 +82,7 @@ const BakedFontAtlas* TextGlyphVisibility::SelectAtlas(const PlacedGlyph& glyph,
 TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& glyph, const BakedFontAtlas* const selectedAtlas, const f32 fontSize, const f32 physicalSize, const Point& topLeft, const Rect& clip, const Point pixelScale)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(
-        !ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !IsFinite(physicalSize)
+        !ValidLocation(glyph, topLeft) || !IsValidTextFontSize(fontSize) || !IsFinite(physicalSize)
         || physicalSize < 1.0f || physicalSize > s_TextMaxRasterPpemF32 || !IsValidUiRect(clip)
         || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
@@ -119,18 +108,21 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
         if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
-    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleReplicate(s_FixedPointRoundBias))), VectorDoubleReplicate(s_TextFixedPointScaleF64));
+    const SIMDVectorDouble shapedSizeValue = VectorDoubleDivide(
+        VectorDoubleFloor(VectorDoubleAdd(VectorDoubleMultiply(VectorDoubleReplicate(fontSize), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleReplicate(s_TextHalfPixel))),
+        VectorDoubleReplicate(s_TextFixedPointScaleF64)
+    );
     const SIMDVectorDouble scaleNumerators = VectorDoubleSet(glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize), physicalSize, glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize), 0.0);
     const SIMDVectorDouble scaleDenominators = VectorDoubleSelect(VectorDoubleSet(1.0, fontSize, glyph.coverage.known ? 1.0 : static_cast<f64>(glyph.face->unitsPerEm()), 1.0), shapedSizeValue, glyph.coverage.known ? VectorDoubleZero() : s_DoubleSIMDMaskX);
     const SIMDVectorDouble scales = VectorDoubleDivide(scaleNumerators, scaleDenominators);
     const SIMDVectorDouble correction = VectorDoubleSplatX(scales);
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const SIMDVectorDouble rasterMarginValue = VectorDoubleAdd(
-        VectorDoubleAdd(VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), correction), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleDivide(VectorDoubleReplicate(s_RasterMarginPixels), VectorDoubleSplatY(scales))),
+        VectorDoubleAdd(VectorDoubleDivide(VectorDoubleMax(VectorDoubleSplatOne(), correction), VectorDoubleReplicate(s_TextFixedPointScaleF64)), VectorDoubleDivide(VectorDoubleReplicate(s_TextRasterMarginPixels), VectorDoubleSplatY(scales))),
         VectorDoubleSplatZ(scales)
     );
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0);
-    const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleAndInt(rasterMarginValue, s_DoubleSIMDMaskXY), VectorDoubleDivide(VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0), pixelScaleVector));
+    const SIMDVectorDouble margin = VectorDoubleAdd(VectorDoubleAndInt(rasterMarginValue, s_DoubleSIMDMaskXY), VectorDoubleDivide(VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0), pixelScaleVector));
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
     const SIMDVectorDouble inkEnd = VectorDoubleAdd(inkOrigin, VectorDoubleSet(ink.width, ink.height, 0.0, 0.0));
     const SIMDVectorDouble position = VectorDoubleAdd(VectorDoubleSet(topLeft.x, topLeft.y, 0.0, 0.0), VectorDoubleSet(glyph.position.x, glyph.position.y, 0.0, 0.0));
@@ -146,7 +138,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(const PlacedGlyph& gl
 
 Expected<SIMDVectorDoubleResult> TextGlyphVisibility::LoadAtlasRectangle(const PlacedGlyph& glyph, const BakedFontAtlas& atlas, const f32 fontSize, const Point& topLeft)noexcept{
     using namespace __hidden_ui_glyph_visibility;
-    if(!ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !atlas.valid() || atlas.unitsPerEm() == 0u)
+    if(!ValidLocation(glyph, topLeft) || !IsValidTextFontSize(fontSize) || !atlas.valid() || atlas.unitsPerEm() == 0u)
         return MakeUnexpected(Failure{});
     const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
     if(!record)
@@ -199,7 +191,7 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(const PlacedGlyph& glyph, 
     const SIMDVectorDouble position = VectorDoubleSelect(positive, negative, s_DoubleSIMDMaskY);
     // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
     const SIMDVectorDouble pixelScaleVector = VectorDoubleSet(pixelScale.x, pixelScale.y, 0.0, 0.0);
-    const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0));
+    const SIMDVectorDouble biased = VectorDoubleMultiplyAddExpression(position, pixelScaleVector, VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0));
     const SIMDVectorDouble aligned = VectorDoubleDivide(VectorDoubleFloor(biased), VectorDoubleSet(pixelScale.x, pixelScale.y, 1.0, 1.0));
     const SIMDVectorDouble size = VectorDoubleDivide(VectorDoubleSet(record.pixels.width, record.pixels.height, 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(rasterScale)));
     return MakeUiRect<UiRectPrecision::BoundedEndpoints>(VectorDoublePermute<0, 1, 4, 5>(aligned, size));

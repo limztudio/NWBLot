@@ -7,10 +7,6 @@
 
 #include "global.h"
 
-#include <global/type.h>
-
-#include <csignal>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,6 +19,15 @@ NWB_CRASH_BEGIN
 
 inline constexpr StringView s_SignalReasonKind = "signal";
 inline constexpr StringView s_WindowsExceptionReasonKind = "windows_exception";
+inline constexpr StringView s_TerminateReasonKind = "terminate";
+inline constexpr StringView s_ManualDumpReasonKind = "manual_dump";
+inline constexpr StringView s_GpuCrashReasonKind = "gpu_crash";
+inline constexpr StringView s_UnknownReasonKind = "unknown";
+
+inline constexpr StringView s_WindowsPlatformName = "windows";
+inline constexpr StringView s_LinuxPlatformName = "linux";
+inline constexpr StringView s_AndroidPlatformName = "android";
+inline constexpr StringView s_UnknownPlatformName = "unknown";
 
 [[nodiscard]] inline StringView PosixSignalName(const u64 signalNumber)noexcept{
 #if defined(SIGILL)

@@ -24,16 +24,6 @@ namespace __hidden_skinning_graph_resource_uses{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_DeformationUseCapacity = 13u;
-static constexpr usize s_PostDispatchUseCapacity = 11u;
-static constexpr usize s_LocalBoundsUseCapacity = 3u;
-static constexpr usize s_FinalizerUseCapacity = 6u;
-static constexpr usize s_PromotedIndexCapacityFactor = 4u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct ResourceUseInfo{
     usize outputIndex = 0u;
     Core::ResourceStates::Mask requiredState = Core::ResourceStates::Unknown;
@@ -47,19 +37,13 @@ struct ResourceUseEntry{
 
 // Inline storage covers one plan's roles; larger sets index unique identities only.
 template<usize InlineCapacity>
-struct ResourceUseCollector : NoCopy{
+class ResourceUseCollector final : NoCopy{
+private:
     using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, Core::GpuGraphResourceIdHasher, EqualTo<Core::GpuGraphResourceId>>;
 
 
 public:
-    Core::Alloc::ScratchArena& m_scratchArena;
-    ResourceUseEntry m_inline[InlineCapacity] = {};
-    usize m_count = 0u;
-    Optional<Index> m_index;
-
-
-public:
-    [[nodiscard]] static b8 MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access)noexcept{
+    [[nodiscard]] static b8 MergeUse(const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access, ResourceUseInfo& info)noexcept{
         if(info.requiredState != state)
             return false;
         if(info.access != access)
@@ -83,7 +67,7 @@ public:
         for(usize index = 0u; index < m_count; ++index){
             ResourceUseEntry& entry = m_inline[index];
             if(entry.resource == resource)
-                return MergeUse(entry.info, state, access);
+                return MergeUse(state, access, entry.info);
         }
         if(m_count < InlineCapacity){
             m_inline[m_count] = { resource, { m_count, state, access } };
@@ -98,7 +82,7 @@ public:
 
     [[nodiscard]] b8 promoteIndex(){
         NWB_ASSERT(!m_index && m_count == InlineCapacity);
-        Index index(InlineCapacity * s_PromotedIndexCapacityFactor, Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
+        Index index(InlineCapacity * s_SkinningPromotedIndexCapacityFactor, Core::GpuGraphResourceIdHasher{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline){
             const auto [found, inserted] = index.emplace(entry.resource, entry.info);
             if(!inserted){
@@ -117,7 +101,7 @@ public:
             ++m_count;
             return true;
         }
-        return MergeUse(found.value(), state, access);
+        return MergeUse(state, access, found.value());
     }
 
     void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{
@@ -134,6 +118,13 @@ public:
                 writeUse(m_inline[index].resource, m_inline[index].info);
         }
     }
+
+
+public:
+    Core::Alloc::ScratchArena& m_scratchArena;
+    Array<ResourceUseEntry, InlineCapacity> m_inline{};
+    usize m_count = 0u;
+    Optional<Index> m_index;
 };
 
 
@@ -146,23 +137,22 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const MeshSkinningGraphDispatchPlan* const plans, const usize planCount, Core::Alloc::ScratchArena& scratchArena){
+Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const Span<const MeshSkinningGraphDispatchPlan> plans, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_skinning_graph_resource_uses;
 
     MeshSkinningGraphResourceUses uses(scratchArena);
-    if(planCount == 0u)
+    if(plans.empty())
         return uses;
-    if(!plans){
+    if(!plans.data()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph resource uses require dispatch plans"));
         return MakeUnexpected(Failure{});
     }
 
-    ResourceUseCollector<s_DeformationUseCapacity> deformation(scratchArena);
-    ResourceUseCollector<s_PostDispatchUseCapacity> postDispatch(scratchArena);
-    ResourceUseCollector<s_LocalBoundsUseCapacity> localBounds(scratchArena);
-    ResourceUseCollector<s_FinalizerUseCapacity> finalizer(scratchArena);
-    for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
-        const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
+    ResourceUseCollector<s_SkinningDeformationUseCapacity> deformation(scratchArena);
+    ResourceUseCollector<s_SkinningPostDispatchUseCapacity> postDispatch(scratchArena);
+    ResourceUseCollector<s_SkinningLocalBoundsUseCapacity> localBounds(scratchArena);
+    ResourceUseCollector<s_SkinningFinalizerUseCapacity> finalizer(scratchArena);
+    for(const MeshSkinningGraphDispatchPlan& plan : plans){
         if(!plan.hasActiveSkin)
             continue;
         if(
@@ -185,8 +175,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const
         }
     }
 
-    for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
-        const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
+    for(const MeshSkinningGraphDispatchPlan& plan : plans){
         if(
             !postDispatch.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
@@ -207,8 +196,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const
         }
     }
 
-    for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
-        const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
+    for(const MeshSkinningGraphDispatchPlan& plan : plans){
         if(!plan.updatesMeshletBounds)
             continue;
         if(
@@ -221,8 +209,7 @@ Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(const
         }
     }
 
-    for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
-        const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
+    for(const MeshSkinningGraphDispatchPlan& plan : plans){
         if(
             ((plan.hasActiveSkin || plan.copiedRestStreams) && (
                 !finalizer.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)

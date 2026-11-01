@@ -4,6 +4,7 @@
 
 #include "edit_box.h"
 
+
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
 
@@ -22,10 +23,6 @@ namespace __hidden_ui_edit_box_paint{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static b8 ValidColor(const Color& color)noexcept{
-    return IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f;
-}
 
 [[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept{
     const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused : flags.hovered ? style.hover : style.normal;
@@ -49,11 +46,11 @@ namespace __hidden_ui_edit_box_paint{
 
 b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
     if(
-        !m_ready || !__hidden_ui_edit_box_paint::ValidColor(style.background)
-        || !__hidden_ui_edit_box_paint::ValidColor(style.text) || !__hidden_ui_edit_box_paint::ValidColor(style.disabledText)
-        || !__hidden_ui_edit_box_paint::ValidColor(style.selection)
-        || !__hidden_ui_edit_box_paint::ValidColor(style.inactiveSelection)
-        || !__hidden_ui_edit_box_paint::ValidColor(style.caret) || !__hidden_ui_edit_box_paint::ValidColor(style.preedit)
+        !m_ready || !IsValidPaintColor(style.background)
+        || !IsValidPaintColor(style.text) || !IsValidPaintColor(style.disabledText)
+        || !IsValidPaintColor(style.selection)
+        || !IsValidPaintColor(style.inactiveSelection)
+        || !IsValidPaintColor(style.caret) || !IsValidPaintColor(style.preedit)
     )
         return false;
     paint.pushClip(placement.frameClip);
@@ -94,13 +91,11 @@ b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin
                 break;
             }
             if(segment->width > 0.0f){
-                const SIMDVectorSingle thickness = VectorMin(VectorReplicate(placement.caret.width), VectorReplicate(segment->height));
-                const SIMDVectorSingle underlineOffset = VectorMax(VectorZero(), VectorSubtract(VectorSet(0.0f, segment->height, 0.0f, 0.0f), VectorAndInt(thickness, s_SIMDMaskY)));
-                const SIMDVectorSingle verticalOffset = VectorAdd(VectorSet(placement.textOrigin.x, placement.textOrigin.y, 0.0f, 0.0f), underlineOffset);
-                const SIMDVectorSingle underlineOrigin = VectorAdd(VectorSet(segment->x, segment->y, segment->x, segment->y), VectorSwizzle<0, 1, 0, 1>(verticalOffset));
-                segment->x = VectorGetX(underlineOrigin);
-                segment->y = VectorGetY(underlineOrigin);
-                segment->height = VectorGetX(thickness);
+                const f32 thickness = Min(placement.caret.width, segment->height);
+                const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, segment->height - thickness);
+                segment->x += placement.textOrigin.x;
+                segment->y += verticalOffset;
+                segment->height = thickness;
                 paint.fillRect(*segment, style.preedit);
             }
         }

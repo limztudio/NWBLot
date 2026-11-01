@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "reflection_statistics_test_helpers.h"
+
 #include <impl/ecs_render/reflection/feedback.h>
 #include <impl/ecs_render/reflection/feedback_resources.h>
 
@@ -22,37 +24,12 @@ namespace __hidden_reflection_feedback_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
-
-[[nodiscard]] ReflectionSceneContentStamp Stamp()noexcept{
-    return ReflectionSceneContentStamp{1u, s_ExpectedDualCount, 3u, 4u, true};
-}
-
-[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value)noexcept{
-    return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 1u, .queue = Core::CommandQueue::Graphics, };
-}
-
-void Accept(ReflectionFeedbackState& state, const ReflectionFeedbackPlan& plan, const b8 hardwareReady = true){
-    ASSERT_TRUE(state.reserve(plan));
-    ASSERT_TRUE(state.accept(plan, Token(plan.sequence), hardwareReady));
-}
-
-struct LeaseTask{
-    struct Payload{
-        ReflectionFeedbackReservation reservation;
-    };
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
-};
+using ReflectionStatisticsTestHelpers::Accept;
+using ReflectionStatisticsTestHelpers::Stamp;
+using ReflectionStatisticsTestHelpers::Token;
+using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionFeedbackReservation>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +38,7 @@ public:
 TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
     const auto partial = ComputeReflectionFeedbackExtent(9u, 17u);
     ASSERT_TRUE(partial);
-    EXPECT_EQ(partial->tilesX, s_ExpectedDualCount);
+    EXPECT_EQ(partial->tilesX, 2u);
     EXPECT_EQ(partial->tilesY, 3u);
     EXPECT_EQ(partial->entryCount, 12u);
     EXPECT_EQ(partial->byteCount, 64u);
@@ -78,9 +55,9 @@ TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
 TEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence){
     ReflectionFeedbackState state(1u);
     const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(state, first);
+    Accept(first, state);
     for(u32 index = 0u; index < 8u; ++index){
-        const auto rejected = state.plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount + index);
+        const auto rejected = state.plan(Stamp(), ReflectionSettings{}, true, 2u + index);
         EXPECT_EQ(rejected.probeIndex, 1u);
         EXPECT_NE(rejected.currentBank, first.currentBank);
         ASSERT_TRUE(state.reserve(rejected));
@@ -96,22 +73,22 @@ TEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence){
 TEST(ReflectionFeedback, EveryTrustedContentDomainInvalidatesPreviousTileState){
     for(u32 domain = 0u; domain < 4u; ++domain){
         ReflectionFeedbackState state(1u);
-        Accept(state, state.plan(Stamp(), ReflectionSettings{}, true, 1u));
+        Accept(state.plan(Stamp(), ReflectionSettings{}, true, 1u), state);
         auto stamp = Stamp();
         if(domain == 0u)
             ++stamp.geometry;
         else if(domain == 1u)
             ++stamp.material;
-        else if(domain == s_ExpectedDualCount)
+        else if(domain == 2u)
             ++stamp.lighting;
         else
             ++stamp.view;
-        const auto changed = state.plan(stamp, ReflectionSettings{}, true, s_ExpectedDualCount);
+        const auto changed = state.plan(stamp, ReflectionSettings{}, true, 2u);
         EXPECT_TRUE(changed.reset);
         EXPECT_FALSE(changed.reused);
         EXPECT_EQ(changed.probeIndex, 0u);
         EXPECT_EQ(changed.resetReason, domain == 3u ? ReflectionFeedbackResetReason::ViewChanged : ReflectionFeedbackResetReason::SceneChanged);
-        Accept(state, changed);
+        Accept(changed, state);
         const auto stable = state.plan(stamp, ReflectionSettings{}, true, 3u);
         EXPECT_FALSE(stable.reset);
         EXPECT_TRUE(stable.reused);
@@ -123,20 +100,20 @@ TEST(ReflectionFeedback, ScreenRangeBudgetAndSeedChangesInvalidateFeedback){
     for(u32 field = 0u; field < 10u; ++field){
         ReflectionFeedbackState state(1u);
         ReflectionSettings settings;
-        Accept(state, state.plan(Stamp(), settings, true, 1u));
+        Accept(state.plan(Stamp(), settings, true, 1u), state);
         switch(field){
         case 0u: ++settings.samplingSeed; break;
         case 1u: --settings.maxHardwareRaysPerFrame; break;
-        case s_ExpectedDualCount: --settings.maxOpticalQueries; break;
-        case 3u: settings.maxRayDistance = VectorGetX(VectorAdd(VectorReplicate(settings.maxRayDistance), VectorSplatOne())); break;
-        case 4u: settings.distanceFadeStart = VectorGetX(VectorSubtract(VectorReplicate(settings.distanceFadeStart), VectorSplatOne())); break;
-        case 5u: settings.roughnessCutoff = VectorGetX(VectorSubtract(VectorReplicate(settings.roughnessCutoff), VectorReplicate(0.1f))); break;
+        case 2u: --settings.maxOpticalQueries; break;
+        case 3u: settings.maxRayDistance = settings.maxRayDistance + 1.0f; break;
+        case 4u: settings.distanceFadeStart = settings.distanceFadeStart - 1.0f; break;
+        case 5u: settings.roughnessCutoff = settings.roughnessCutoff - 0.1f; break;
         case 6u: --settings.screenMaxSteps; break;
-        case 7u: settings.screenThickness = VectorGetX(VectorAdd(VectorReplicate(settings.screenThickness), VectorReplicate(0.01f))); break;
-        case 8u: settings.screenConfidenceThreshold = VectorGetX(VectorSubtract(VectorReplicate(settings.screenConfidenceThreshold), VectorReplicate(0.1f))); break;
-        case 9u: settings.screenEdgeFade = VectorGetX(VectorAdd(VectorReplicate(settings.screenEdgeFade), VectorReplicate(0.01f))); break;
+        case 7u: settings.screenThickness = settings.screenThickness + 0.01f; break;
+        case 8u: settings.screenConfidenceThreshold = settings.screenConfidenceThreshold - 0.1f; break;
+        case 9u: settings.screenEdgeFade = settings.screenEdgeFade + 0.01f; break;
         }
-        const auto next = state.plan(Stamp(), settings, true, s_ExpectedDualCount);
+        const auto next = state.plan(Stamp(), settings, true, 2u);
         EXPECT_EQ(next.resetReason, ReflectionFeedbackResetReason::SettingsChanged);
         EXPECT_FALSE(next.reused);
         EXPECT_EQ(next.probeIndex, 0u);
@@ -153,7 +130,7 @@ TEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeed
         switch(reason){
         case 0u: enabled = false; break;
         case 1u: stamp.trusted = false; break;
-        case s_ExpectedDualCount: settings.traceMode = ReflectionTraceMode::Disabled; break;
+        case 2u: settings.traceMode = ReflectionTraceMode::Disabled; break;
         case 3u: settings.traceMode = ReflectionTraceMode::ScreenSpace; break;
         case 4u: settings.traceMode = ReflectionTraceMode::Hardware; break;
         case 5u: settings.maxHardwareRaysPerFrame = 0u; break;
@@ -163,8 +140,8 @@ TEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeed
         const auto outcome = ResolveReflectionFeedbackOutcome(plan, hardwareReady);
         EXPECT_FALSE(outcome.eligible);
         EXPECT_FALSE(outcome.reused);
-        Accept(state, plan, hardwareReady);
-        const auto next = state.plan(stamp, settings, enabled, s_ExpectedDualCount);
+        Accept(plan, state, hardwareReady);
+        const auto next = state.plan(stamp, settings, enabled, 2u);
         EXPECT_EQ(next.probeIndex, 0u);
         EXPECT_FALSE(next.reused);
     }
@@ -173,13 +150,13 @@ TEST(ReflectionFeedback, OnlyTrustedEnabledHybridWithAvailableHardwareCanUseFeed
 TEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableInvalidatesReuse){
     ReflectionFeedbackState state(1u);
     const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(state, first);
-    const auto disabled = state.plan(Stamp(), ReflectionSettings{}, false, s_ExpectedDualCount);
+    Accept(first, state);
+    const auto disabled = state.plan(Stamp(), ReflectionSettings{}, false, 2u);
     EXPECT_NE(disabled.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(disabled));
     state.discard(disabled);
     EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
-    Accept(state, state.plan(Stamp(), ReflectionSettings{}, false, 4u));
+    Accept(state.plan(Stamp(), ReflectionSettings{}, false, 4u), state);
     const auto enabled = state.plan(Stamp(), ReflectionSettings{}, true, 5u);
     EXPECT_FALSE(enabled.reused);
     EXPECT_TRUE(enabled.reset);
@@ -191,24 +168,24 @@ TEST(ReflectionFeedback, RejectedDisablePreservesAcceptedBankButAcceptedDisableI
 TEST(ReflectionFeedback, RejectedUntrustedPrefixPreservesAcceptedFeedback){
     ReflectionFeedbackState state(1u);
     const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(state, first);
+    Accept(first, state);
     auto untrusted = Stamp();
     untrusted.trusted = false;
-    const auto rejected = state.plan(untrusted, ReflectionSettings{}, true, s_ExpectedDualCount);
+    const auto rejected = state.plan(untrusted, ReflectionSettings{}, true, 2u);
     EXPECT_FALSE(rejected.eligible);
     EXPECT_NE(rejected.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(rejected));
     state.discard(rejected);
     EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
-    Accept(state, state.plan(untrusted, ReflectionSettings{}, true, 4u));
+    Accept(state.plan(untrusted, ReflectionSettings{}, true, 4u), state);
     EXPECT_FALSE(state.plan(Stamp(), ReflectionSettings{}, true, 5u).reused);
 }
 
 TEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObservation){
     ReflectionFeedbackState state(1u);
     const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    Accept(state, first);
-    const auto failed = state.plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
+    Accept(first, state);
+    const auto failed = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
     ASSERT_TRUE(failed.reused);
     const auto outcome = ResolveReflectionFeedbackOutcome(failed, false);
     EXPECT_FALSE(outcome.eligible);
@@ -216,8 +193,8 @@ TEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObs
     EXPECT_EQ(outcome.resetReason, ReflectionFeedbackResetReason::HardwareChanged);
     EXPECT_EQ(outcome.probeIndex, 0u);
     EXPECT_EQ(outcome.epoch, first.epoch + 1u);
-    EXPECT_EQ(outcome.startGraphicsFrame, s_ExpectedDualCount);
-    Accept(state, failed, false);
+    EXPECT_EQ(outcome.startGraphicsFrame, 2u);
+    Accept(failed, state, false);
     const auto recovery = state.plan(Stamp(), ReflectionSettings{}, true, 3u);
     const auto recovered = ResolveReflectionFeedbackOutcome(recovery, true);
     EXPECT_TRUE(recovered.eligible);
@@ -226,7 +203,7 @@ TEST(ReflectionFeedback, LateHardwareFailureDisablesBypassAndRecoveryRestartsObs
     EXPECT_EQ(recovered.resetReason, ReflectionFeedbackResetReason::HardwareChanged);
     EXPECT_EQ(recovered.startGraphicsFrame, 3u);
     EXPECT_EQ(recovery.previousBank, first.currentBank);
-    Accept(state, recovery);
+    Accept(recovery, state);
     EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 4u).reused);
 }
 
@@ -234,14 +211,14 @@ TEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwne
     for(u32 invalid = 0u; invalid < 6u; ++invalid){
         ReflectionFeedbackState state(1u);
         const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-        Accept(state, first);
-        const auto plan = state.plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount + invalid);
+        Accept(first, state);
+        const auto plan = state.plan(Stamp(), ReflectionSettings{}, true, 2u + invalid);
         ASSERT_TRUE(state.reserve(plan));
         auto token = Token(plan.sequence);
         switch(invalid){
         case 0u: token.value = 0u; break;
         case 1u: token.physicalQueueIndex = Limit<u16>::s_Max; break;
-        case s_ExpectedDualCount: token.deviceGeneration = s_ExpectedDualCount; break;
+        case 2u: token.deviceGeneration = 2u; break;
         case 3u: token.queue = Core::CommandQueue::Compute; break;
         case 4u: token.value = first.sequence; break;
         case 5u: token.physicalQueueIndex = 1u; break;
@@ -270,8 +247,8 @@ TEST(ReflectionFeedback, InvalidAcceptedTokensQuarantineBankReuseUntilJoinedOwne
 TEST(ReflectionFeedback, StalePlanCannotReserveAfterAnIndependentPlanAccepts){
     ReflectionFeedbackState state(1u);
     const auto stale = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
-    const auto current = state.plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
-    Accept(state, current);
+    const auto current = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
+    Accept(current, state);
     EXPECT_FALSE(state.reserve(stale));
     EXPECT_FALSE(state.accept(stale, Token(99u), true));
     state.discard(stale);
@@ -282,22 +259,22 @@ TEST(ReflectionFeedback, ResourceGenerationBlocksOldCallbacksWithoutDiscardingTh
     ReflectionFeedbackState state(1u);
     const auto old = state.plan(Stamp(), ReflectionSettings{}, true, 1u);
     ASSERT_TRUE(state.reserve(old));
-    state.reset(s_ExpectedDualCount);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
+    state.reset(2u);
+    const auto next = state.plan(Stamp(), ReflectionSettings{}, true, 2u);
     EXPECT_GT(next.generation, old.generation);
     EXPECT_EQ(next.resetReason, ReflectionFeedbackResetReason::ResourcesChanged);
     ASSERT_TRUE(state.reserve(next));
     state.discard(old);
     EXPECT_FALSE(state.accept(old, Token(1u), true));
     auto token = Token(1u);
-    token.deviceGeneration = s_ExpectedDualCount;
+    token.deviceGeneration = 2u;
     EXPECT_TRUE(state.accept(next, token, true));
     EXPECT_TRUE(state.plan(Stamp(), ReflectionSettings{}, true, 3u).reused);
 }
 
 TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_graph")};
-    auto controlResult = CreateReflectionFeedbackControl(arena, 1u);
+    auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
     Core::GpuTaskGraph graph(arena);
@@ -305,7 +282,7 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionFeedbackReservation(control, rejected)}).has_value());
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests.feedback.lease")).setMarkerLabel("Feedback Lease");
-    const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
+    const auto pending = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
     {
         const auto gpuTaskAdmission = graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionFeedbackReservation(control, pending)});
         ASSERT_TRUE(gpuTaskAdmission);
@@ -320,7 +297,7 @@ TEST(ReflectionFeedback, RejectedGraphAndResetReleaseTheMoveOnlyReservation){
 
 TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuarantineAfterDestruction){
     Core::Alloc::GlobalArena arena{Name("tests/reflection/feedback_move")};
-    auto controlResult = CreateReflectionFeedbackControl(arena, 1u);
+    auto controlResult = CreateStatisticsControl<ReflectionFeedbackControl>(arena, 1u);
     ASSERT_TRUE(controlResult);
     auto control = Move(*controlResult);
     const auto first = control->plan(Stamp(), ReflectionSettings{}, true, 1u);
@@ -332,7 +309,7 @@ TEST(ReflectionFeedback, MovedLeasePublishesOnceAndInvalidAcceptanceRetainsQuara
     moved.accept(Token(first.sequence), true);
     EXPECT_FALSE(moved.valid());
     moved.accept(Token(99u), true);
-    const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, s_ExpectedDualCount);
+    const auto retry = control->plan(Stamp(), ReflectionSettings{}, true, 2u);
     EXPECT_EQ(retry.probeIndex, 1u);
     {
         ReflectionFeedbackReservation accepted(control, retry);

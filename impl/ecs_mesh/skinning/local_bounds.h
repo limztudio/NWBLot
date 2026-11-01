@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include "../../global.h"
+#include <impl/global.h>
 
-#include <core/alloc/general.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_desc.h>
 
@@ -56,8 +55,6 @@ struct MeshSkinningLocalBoundsDispatch{
 };
 
 struct MeshSkinningLocalBoundsTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::GpuTimingSubmissionTicket& timingTicket;
@@ -65,8 +62,16 @@ struct MeshSkinningLocalBoundsTask{
 
 
     public:
-        Payload(Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket, Span<const MeshSkinningLocalBoundsDispatch> dispatches)noexcept;
+        Payload(Core::GraphicsRuntime& inGraphics, Core::GpuTimingSubmissionTicket& inTimingTicket, const Span<const MeshSkinningLocalBoundsDispatch> inDispatches)noexcept
+            : graphics(inGraphics)
+            , timingTicket(inTimingTicket)
+            , dispatches(inDispatches)
+        {}
     };
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
 
 public:

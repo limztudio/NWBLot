@@ -25,28 +25,11 @@ namespace __hidden_ui_gpu{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Begin and end timestamps of the standalone frame scope.
-static constexpr u32 s_FrameTimingQueryCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static Core::GlobalUniquePtr<GpuRendererState> CreateState(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assets, GpuRenderer::ShaderPathResolveCallback resolver){
     Core::GlobalUniquePtr<GpuRendererState> state = Core::MakeGlobalUnique<GpuRendererState>(arena, arena, graphics, assets, Move(resolver));
     if(!state)
         TerminateInvariant();
     return state;
-}
-
-[[nodiscard]] static b8 TokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token){
-    if(!token.valid())
-        return true;
-    if(!token.hasPhysicalQueueIdentity())
-        return false;
-    const Core::GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
-    const auto timeline = device.getQueueTimelineSnapshot(queue);
-    return timeline && timeline->valid() && timeline->queue == queue && timeline->completedValue >= token.value;
 }
 
 
@@ -58,50 +41,6 @@ static constexpr u32 s_FrameTimingQueryCount = 2u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-GpuSkinVersion::GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept
-    : m_graphics(graphics)
-{}
-
-GpuSkinVersion::~GpuSkinVersion()noexcept{
-    TextureAssetLoader::Release(m_texture, m_graphics);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuTargetVersion::GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept
-    : m_graphics(graphics)
-{}
-
-GpuTargetVersion::~GpuTargetVersion()noexcept{
-    FreeGpuDescriptor(m_graphics, m_sampledImage);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuSharedResources::GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept
-    : m_graphics(graphics)
-{}
-
-GpuSharedResources::~GpuSharedResources()noexcept{
-    FreeGpuDescriptor(m_graphics, m_samplerDescriptor);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept
-    : m_arena(arena)
-    , m_snapshot(arena)
-    , m_glyphPages(arena)
-    , m_sdfPages(arena)
-    , m_textureImages(arena)
-{}
 
 void GpuFrameData::reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept{
     m_snapshot = Move(snapshot);
@@ -125,30 +64,22 @@ void GpuFrameData::reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> ski
     m_prepared = false;
 }
 
-b8 GpuFrameData::prefixComplete(Core::Device& device)const{
-    return __hidden_ui_gpu::TokenComplete(device, m_vertexUpload) && __hidden_ui_gpu::TokenComplete(device, m_indexUpload) && __hidden_ui_gpu::TokenComplete(device, m_clear) && __hidden_ui_gpu::TokenComplete(device, m_raster);
-}
-
 b8 GpuFrameData::recyclable(Core::Device& device)const{
-    if(!__hidden_ui_gpu::TokenComplete(device, m_finalConsumer) || !prefixComplete(device))
+    if(!GpuTokenComplete(device, m_finalConsumer) || !prefixComplete(device))
         return false;
     for(const auto& page : m_glyphPages){
-        if(!__hidden_ui_gpu::TokenComplete(device, page->m_readinessToken))
+        if(!GpuTokenComplete(device, page->m_readinessToken))
             return false;
     }
     for(const auto& page : m_sdfPages){
-        if(!__hidden_ui_gpu::TokenComplete(device, page->m_readinessToken))
+        if(!GpuTokenComplete(device, page->m_readinessToken))
             return false;
     }
     for(const auto& image : m_textureImages){
-        if(!__hidden_ui_gpu::TokenComplete(device, image->m_texture.readinessToken))
+        if(!GpuTokenComplete(device, image->m_texture.readinessToken))
             return false;
     }
     return true;
-}
-
-b8 GpuFrameData::complete(Core::Device& device)const{
-    return m_finalConsumer.valid() && recyclable(device);
 }
 
 
@@ -164,9 +95,9 @@ GpuRendererState::GpuRendererState(Core::Alloc::GlobalArena& arena, Core::Graphi
     , m_sdfCache(arena)
     , m_textureCache(arena)
 {
-    m_glyphCache.reserve(s_GpuMaxGlyphPages);
-    m_sdfCache.reserve(s_GpuMaxSdfPages);
-    m_textureCache.reserve(s_GpuMaxTextureImages);
+    m_glyphCache.reserve(s_PaintMaxImages);
+    m_sdfCache.reserve(s_PaintMaxImages);
+    m_textureCache.reserve(s_PaintMaxImages);
 }
 
 
@@ -188,7 +119,7 @@ void GpuRenderer::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsyste
 b8 GpuRenderer::validateResources(const u32 width, const u32 height){
     if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;
-    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), __hidden_ui_gpu::s_FrameTimingQueryCount);
+    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), s_GpuFrameTimingQueryCount);
     if(!m_state->m_frameTimingScopePrepared)
         NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
     if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
@@ -266,7 +197,7 @@ b8 GpuRenderer::setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const Ui
         return false;
     GpuVersion<GpuSkinVersion> version = Move(*versionResult);
     version->m_binding = binding;
-    if(!TextureAssetLoader::Create(version->m_texture, *texture, s_GpuAtlasTextureName, m_state->m_graphics, s_GpuRendererContext))
+    if(!TextureAssetLoader::Create(*texture, s_GpuAtlasTextureName, s_GpuRendererContext, m_state->m_graphics, version->m_texture))
         return false;
     if(!version->m_texture.readinessToken.valid() || !version->m_texture.readinessToken.hasPhysicalQueueIdentity())
         return false;
@@ -353,6 +284,7 @@ void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Co
     m_state->m_pending.reset();
     m_state->m_claimed = false;
     m_state->m_declaredGraph = nullptr;
+    m_state->m_graphGeneration = 0u;
     m_state->m_declaredLayer = {};
     m_state->m_readyToDeclare = false;
 }

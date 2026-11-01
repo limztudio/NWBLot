@@ -12,9 +12,9 @@
 
 
 #include "asset.h"
-#include "cook_types.h"
-#include "material_typed_constants.h"
+#include <impl/assets_material/cook_types.adhd.h>
 
+#include <core/alloc/global.h>
 #include <core/alloc/scratch.h>
 
 #include <global/not_null.h>
@@ -29,37 +29,36 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MaterialBindNames{
+using MaterialCookArena = Core::Alloc::GlobalArena;
+using MaterialCookString = AString<MaterialCookArena>;
+
+template<typename T>
+using MaterialCookVector = Vector<T, MaterialCookArena>;
+
+template<typename T, typename V>
+using MaterialCookMap = HashMap<T, V, MaterialCookArena, Hasher<T>, EqualTo<T>>;
+
+template<typename T>
+using MaterialCookHashSet = HashSet<T, MaterialCookArena, Hasher<T>, EqualTo<T>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline AStringView SourceExtensionText()noexcept{
-    static constexpr AStringView s_ExtensionText = ".bind";
-    return s_ExtensionText;
+namespace MaterialBindDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ItemT>
+[[nodiscard]] inline const ItemT* FindNamedBindItem(const Span<const ItemT> items, const AStringView itemName)noexcept{
+    for(const auto& item : items){
+        if(AStringView(item.name) == itemName)
+            return &item;
+    }
+    return nullptr;
 }
-
-inline AStringView GeneratedIncludeCacheDirectoryText()noexcept{
-    static constexpr AStringView s_DirectoryText = "material_bind_includes";
-    return s_DirectoryText;
-}
-
-inline AStringView TypedBindingImplicitDefineText()noexcept{
-    static constexpr AStringView s_DefineText = "NWB_MATERIAL_TYPED_BINDING";
-    return s_DefineText;
-}
-
-#define NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value) #Value
-#define NWB_MATERIAL_TYPED_STRINGIFY(Value) NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value)
-
-inline AStringView TypedBindingImplicitDefineValueText()noexcept{
-    static constexpr AStringView s_DefineValueText = NWB_MATERIAL_TYPED_STRINGIFY(NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE);
-    return s_DefineValueText;
-}
-
-#undef NWB_MATERIAL_TYPED_STRINGIFY
-#undef NWB_MATERIAL_TYPED_STRINGIFY_IMPL
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +97,9 @@ public:
 
 
 public:
-    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
+    [[nodiscard]] const MaterialBindAttribute* findAttribute(const AStringView attributeName)const noexcept{
+        return MaterialBindDetail::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
+    }
     [[nodiscard]] AStringView defaultArgument()const noexcept;
 };
 
@@ -117,8 +118,12 @@ public:
 
 
 public:
-    [[nodiscard]] const MaterialBindField* findField(AStringView fieldName)const noexcept;
-    [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const noexcept;
+    [[nodiscard]] const MaterialBindField* findField(const AStringView fieldName)const noexcept{
+        return MaterialBindDetail::FindNamedBindItem<MaterialBindField>(fields, fieldName);
+    }
+    [[nodiscard]] const MaterialBindAttribute* findAttribute(const AStringView attributeName)const noexcept{
+        return MaterialBindDetail::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
+    }
 };
 
 struct MaterialBindInstance{
@@ -150,15 +155,12 @@ public:
 
 
 public:
-    void reset()noexcept{
-        source.clear();
-        virtualPath.clear();
-        structs.clear();
-        instances.clear();
+    [[nodiscard]] const MaterialBindStruct* findStruct(const AStringView typeName)const noexcept{
+        return MaterialBindDetail::FindNamedBindItem<MaterialBindStruct>(structs, typeName);
     }
-
-    [[nodiscard]] const MaterialBindStruct* findStruct(AStringView typeName)const noexcept;
-    [[nodiscard]] const MaterialBindInstance* findInstance(AStringView instanceName)const noexcept;
+    [[nodiscard]] const MaterialBindInstance* findInstance(const AStringView instanceName)const noexcept{
+        return MaterialBindDetail::FindNamedBindItem<MaterialBindInstance>(instances, instanceName);
+    }
 };
 
 
@@ -166,20 +168,6 @@ public:
 
 
 using MaterialBindParameterMap = MaterialCookMap<ACompactString, ACompactString>;
-
-struct MaterialBindTypedLayoutBlockLookupEntry{
-    u32 blockIndex = 0u;
-    u32 byteBegin = 0u;
-    u32 constantByteBegin = 0u;
-};
-
-struct MaterialBindTypedLayoutParameterLookupEntry{
-    u32 fieldIndex = 0u;
-    u32 byteOffset = 0u;
-    u32 constantByteOffset = 0u;
-    Name blockName = s_NameNone;
-};
-
 using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
 using MaterialBindTypedLayoutParameterLookup = MaterialCookMap<ACompactString, MaterialBindTypedLayoutParameterLookupEntry>;
 
@@ -201,10 +189,6 @@ public:
         , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
         , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
-
-
-public:
-    void reset()noexcept;
 };
 
 struct MaterialBindTypedLayoutCache{
@@ -229,7 +213,9 @@ public:
 
 [[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName)noexcept;
-[[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey)noexcept;
+[[nodiscard]] inline u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey)noexcept{
+    return UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, parameterKey);
+}
 [[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(const MaterialBindEntry& bindEntry, const Name& contextName, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<NotNull<const MaterialBindTypedLayout*>> FindOrBuildMaterialBindTypedLayout(const Name& materialInterface, const MaterialBindEntry& bindEntry, Core::Alloc::ScratchArena& scratchArena, MaterialBindTypedLayoutCache& inOutCache);
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes);

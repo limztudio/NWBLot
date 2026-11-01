@@ -7,6 +7,9 @@
 
 #include "statistics.h"
 
+#include <impl/ecs_render/shared/plan_reservation_base.h>
+#include <impl/ecs_render/shared/statistics_readback_state.h>
+
 #include <core/alloc/global.h>
 
 #include <global/arena_object.h>
@@ -26,7 +29,9 @@ NWB_IMPL_BEGIN
 // CPU acceptance chooses banks; GPU ordering protects reuse; owner never waits.
 class ReflectionHistoryState : NoCopy{
 public:
-    explicit ReflectionHistoryState(u16 deviceGeneration)noexcept;
+    explicit ReflectionHistoryState(const u16 deviceGeneration)noexcept
+        : m_deviceGeneration(deviceGeneration)
+    {}
 
 
 public:
@@ -59,29 +64,14 @@ private:
 using ReflectionHistoryControl = RefCounter<ReflectionHistoryState>;
 using ReflectionHistoryControlHandle = RefCountPtr< ReflectionHistoryControl, ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena> >;
 
-[[nodiscard]] Expected<ReflectionHistoryControlHandle> CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
-class ReflectionHistoryReservation final : NoCopy{
+class ReflectionHistoryReservation final : public PlanReservationBase<ReflectionHistoryControlHandle, ReflectionHistoryPlan>{
 public:
-    ReflectionHistoryReservation(ReflectionHistoryControlHandle control, const ReflectionHistoryPlan& plan)noexcept;
-    ReflectionHistoryReservation(ReflectionHistoryReservation&& other)noexcept;
-    ~ReflectionHistoryReservation()noexcept;
+    using PlanReservationBase<ReflectionHistoryControlHandle, ReflectionHistoryPlan>::PlanReservationBase;
 
 
 public:
-    ReflectionHistoryReservation& operator=(ReflectionHistoryReservation&& other)noexcept;
-
-
-public:
-    [[nodiscard]] b8 valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady)noexcept;
-    void discard()noexcept;
-
-
-private:
-    ReflectionHistoryControlHandle m_control;
-    ReflectionHistoryPlan m_plan;
-    b8 m_reserved = false;
 };
 
 

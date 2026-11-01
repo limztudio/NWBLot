@@ -29,16 +29,7 @@ namespace __hidden_mesh_cook_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_EdgeKeyVertexShift = 32u;
-inline constexpr usize s_ManifoldEdgeTriangleCount = 2u;
-
-struct TriangleEdge{
-    u64 positions = 0u;
-    u32 triangle = 0u;
-    b8 forward = false;
-};
-
-[[nodiscard]] static u32 FindComponent(const Span<u32> parents, u32 triangle)noexcept{
+[[nodiscard]] static u32 FindComponent(u32 triangle, const Span<u32> parents)noexcept{
     while(parents[triangle] != triangle){
         parents[triangle] = parents[parents[triangle]];
         triangle = parents[triangle];
@@ -46,9 +37,9 @@ struct TriangleEdge{
     return triangle;
 }
 
-static void JoinComponents(const Span<u32> parents, const Span<u8> ranks, const u32 first, const u32 second)noexcept{
-    u32 firstRoot = FindComponent(parents, first);
-    u32 secondRoot = FindComponent(parents, second);
+static void JoinComponents(const u32 first, const u32 second, const Span<u32> parents, const Span<u8> ranks)noexcept{
+    u32 firstRoot = FindComponent(first, parents);
+    u32 secondRoot = FindComponent(second, parents);
     if(firstRoot == secondRoot)
         return;
     if(ranks[firstRoot] < ranks[secondRoot])
@@ -142,7 +133,7 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
             ++end;
         const b8 validEdge = end - first == s_ManifoldEdgeTriangleCount &&edges[first].forward != edges[first + 1u].forward;
         for(usize index = first; index < end; ++index){
-            JoinComponents(parents, ranks, edges[first].triangle, edges[index].triangle);
+            JoinComponents(edges[first].triangle, edges[index].triangle, parents, ranks);
             if(!validEdge)
                 invalidTriangles[edges[index].triangle] = 1u;
         }
@@ -152,13 +143,13 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
     Vector<u8, Core::Alloc::ScratchArena> invalidComponents(triangleCount, 0u, scratchArena);
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
         if(invalidTriangles[triangle] != 0u)
-            invalidComponents[FindComponent(parents, triangle)] = 1u;
+            invalidComponents[FindComponent(triangle, parents)] = 1u;
     }
     Vector<f64, Core::Alloc::ScratchArena> componentVolumes(triangleCount, 0.0, scratchArena);
     u32 originComponent = Limit<u32>::s_Max;
     SIMDVectorDouble origin = VectorDoubleZero();
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
-        const u32 component = FindComponent(parents, triangle);
+        const u32 component = FindComponent(triangle, parents);
         if(invalidComponents[component] != 0u)
             continue;
         const usize base = static_cast<usize>(triangle) * s_MeshletTriangleIndexCount;
@@ -169,10 +160,10 @@ Expected<Vector<u32, Core::Alloc::ScratchArena>> BuildSolidTriangleWords(const S
         const SIMDVectorDouble aValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base]]));
         const SIMDVectorDouble bValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 1u]]));
         const SIMDVectorDouble cValue = ConvertVectorSingleToDouble(LoadFloat(positions[triangleIndices[base + 2u]]));
-        componentVolumes[component] = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(componentVolumes[component]), RelativeTriangleVolume(aValue, bValue, cValue, origin)));
+        componentVolumes[component] += VectorDoubleGetX(RelativeTriangleVolume(aValue, bValue, cValue, origin));
     }
     for(u32 triangle = 0u; triangle < static_cast<u32>(triangleCount); ++triangle){
-        const u32 component = FindComponent(parents, triangle);
+        const u32 component = FindComponent(triangle, parents);
         if(invalidComponents[component] == 0u && componentVolumes[component] != 0.0)
             words[triangle / s_MeshletSolidTriangleWordBits] |= 1u << (triangle % s_MeshletSolidTriangleWordBits);
     }

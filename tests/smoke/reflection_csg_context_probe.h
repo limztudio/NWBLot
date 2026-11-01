@@ -36,7 +36,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer, u32 rayCapacity, u64 sourceFrame, b8 csg);
+void ReportReflectionSlicePackets(u32 rayCapacity, u64 sourceFrame, b8 csg, ProjectRuntimeContext& context, Impl::RendererSystem& renderer);
 
 // Synchronized probe for reflection CSG captures and packet receipts.
 class ReflectionCsgContextProbe final{
@@ -45,7 +45,7 @@ private:
 
 
 public:
-    ReflectionCsgContextProbe(ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer, u32 rayCapacity)noexcept;
+    ReflectionCsgContextProbe(u32 rayCapacity, ProjectRuntimeContext& context, Core::ECS::World& world, Impl::RendererSystem& renderer)noexcept;
     ~ReflectionCsgContextProbe()noexcept = default;
 
 
@@ -59,12 +59,12 @@ private:
 
 
 private:
+    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
+    ReflectionCsgContextEntities m_entities;
+    UniquePtr<FramebufferCapture> m_capture;
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
     Impl::RendererSystem& m_renderer;
-    ReflectionCsgContextEntities m_entities;
-    Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> m_capturePaths;
-    UniquePtr<FramebufferCapture> m_capture;
     u64 m_phaseSource = 0u;
     u64 m_targetSource = Limit<u64>::s_Max;
     u64 m_packetSource = Limit<u64>::s_Max;

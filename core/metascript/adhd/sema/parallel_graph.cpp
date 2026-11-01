@@ -14,13 +14,6 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ParallelGraphValidator::validateMethod(const MethodDecl& method, MVector<ParseError>& errors){
-    if(!method.hasBody)
-        return true;
-
-    return validateBlock(method.body, errors);
-}
-
 b8 ParallelGraphValidator::validateBlock(const Span<const Stmt* const> statements, MVector<ParseError>& errors){
     MVector<MStringView> declaredTaskNames(m_arena);
     b8 ok = true;

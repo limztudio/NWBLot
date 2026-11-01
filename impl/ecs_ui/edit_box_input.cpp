@@ -108,10 +108,8 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
                     m_context.input().cancelSubmitCommands(entry->widget.id);
                 return;
             }
-            const auto navigation = Ui::TranslateEditNavigation(intent);
-            event.navigation = navigation.has_value();
-            if(navigation){
-                event.navigationDirection = *navigation;
+            event.navigation = Ui::TryTranslateEditNavigation(intent, event.navigationDirection);
+            if(event.navigation){
                 if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
                     return;
                 event.navigationViewportHeight = entry->displayed.placement.content.height;
@@ -166,7 +164,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.completed = input.type == Ui::InputEventType::PrimaryUp;
         if(input.type == Ui::InputEventType::PrimaryDown){
             const u64 clickTimestampMs = input.hoverCapable ? input.timestampMs : 0u;
-            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == Ui::UiEditClickKind::Word;
+            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision, entry->displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
         }
         else if(input.type == Ui::InputEventType::PrimaryUp)
             m_clickTracker.release(entry->owner);
@@ -193,11 +191,11 @@ b8 UiEditBoxHost::character(const u32 unicode){
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry.owner;
     event.focusGeneration = entry.focusGeneration;
-    char bytes[s_Utf8MaxSequenceBytes];
+    Array<char, s_Utf8MaxSequenceBytes> bytes{};
     const auto count = EncodeUtf8CodePoint(unicode, bytes);
     if(!count)
         return true;
-    event.native.text.assign(bytes, *count);
+    event.native.text.assign(bytes.data(), *count);
     m_clickTracker.cancel();
     if(!append(Move(event)))
         return true;

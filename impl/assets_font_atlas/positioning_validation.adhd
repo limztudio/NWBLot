@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/types.adhd>
 #include <impl/assets_font_atlas/types.adhd>
 
 
@@ -11,10 +12,8 @@
 // Byte offsets and sizes below follow the big-endian OpenType kern, GPOS and GDEF table layouts.
 const u32 s_FontAtlasValidationWorkBudget = 1048576u;
 
-const u32 s_FontAtlasOtBitsPerByte = 8u;
 const u32 s_FontAtlasOtU16Bytes = 2u;
 const u32 s_FontAtlasOtU32Bytes = 4u;
-const u32 s_FontAtlasOtU16Bits = 16u;
 const u32 s_FontAtlasOtMinorVersionOffset = 2u;
 const u32 s_FontAtlasOtAnyClassCount = 65536u;
 const u32 s_FontAtlasOtRangeRecordBytes = 6u;
@@ -151,6 +150,10 @@ const u32 s_FontAtlasLookupFlagUseMarkFilteringSet = 0x10u;
 
 
 class FontAtlasTableValidator{
+    private Span<u8> m_bytes;
+    private u32 m_glyphCount;
+    private u32 m_budget;
+
     public FontAtlasTableValidator(in Span<u8> bytes, in u32 glyphCount){
         this.m_bytes = bytes;
         this.m_glyphCount = glyphCount;
@@ -328,16 +331,11 @@ class FontAtlasTableValidator{
     }
 
     private u16 u16At(in u64 offset)const{
-        const usize idx = cast<usize>(offset);
-        const u16 hi = cast<u16>(this.m_bytes[idx]) << s_FontAtlasOtBitsPerByte;
-        const u16 lo = cast<u16>(this.m_bytes[idx + 1u]);
-        return hi | lo;
+        return ReadFontSfntU16BigEndian(this.m_bytes, cast<usize>(offset));
     }
 
     private u32 u32At(in u64 offset)const{
-        const u32 hi = cast<u32>(this.u16At(offset)) << s_FontAtlasOtU16Bits;
-        const u32 lo = cast<u32>(this.u16At(offset + s_FontAtlasOtU16Bytes));
-        return hi | lo;
+        return ReadFontSfntU32BigEndian(this.m_bytes, cast<usize>(offset));
     }
 
     private b8 coverage(in u64 offset, mut u32 outGlyphCount){
@@ -630,10 +628,6 @@ class FontAtlasTableValidator{
         }
         return true;
     }
-
-    private Span<u8> m_bytes;
-    private u32 m_glyphCount;
-    private u32 m_budget;
 }
 
 b8 ValidateFontAtlasPositioningTableBytes(in u32 tag, in Span<u8> bytes, in u32 glyphCount){

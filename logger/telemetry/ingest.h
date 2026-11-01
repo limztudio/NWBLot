@@ -42,7 +42,7 @@ struct TelemetryIngestResult{
     b8 wroteJson = false;
     b8 wrotePerfCsv = false;
     b8 wroteGraph = false;
-    Telemetry::DecodeResult decode;
+    Core::Telemetry::DecodeResult decode;
     TelemetryReportSummary summary;
 
 

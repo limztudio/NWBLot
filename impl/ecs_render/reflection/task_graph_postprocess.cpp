@@ -3,8 +3,10 @@
 
 
 #include "task_graph_postprocess.h"
-#include "timing_names.h"
+#include <impl/ecs_render/kernel/timing_names.h>
 
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/assets/graphics/reflection/temporal_constants.h>
 #include <impl/assets/graphics/reflection/spatial_constants.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -35,33 +37,20 @@ namespace __hidden_task_graph_postprocess{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Extra temporal uses besides the surface reads: the radiance write and the previous-history read.
-static constexpr usize s_TemporalExtraResourceUseCount = 2u;
-
-struct TemporalParameters{
-#define NWB_REFLECTION_CPU_POST_FIELD(name) u32 name = 0u;
-    NWB_REFLECTION_TEMPORAL_UINT_FIELDS(NWB_REFLECTION_CPU_POST_FIELD)
-#undef NWB_REFLECTION_CPU_POST_FIELD
-};
+using TemporalParameters = ReflectionTemporalPushConstants;
 static_assert(sizeof(TemporalParameters) == NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
 
-struct SpatialParameters{
-#define NWB_REFLECTION_CPU_POST_FIELD(name) u32 name = 0u;
-    NWB_REFLECTION_SPATIAL_UINT_FIELDS(NWB_REFLECTION_CPU_POST_FIELD)
-#undef NWB_REFLECTION_CPU_POST_FIELD
-};
+using SpatialParameters = ReflectionSpatialPushConstants;
 static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES);
 
-struct DepthReduceParameters{
-#define NWB_REFLECTION_DEPTH_CPU_FIELD(name) u32 name = 0u;
-    NWB_REFLECTION_DEPTH_UINT_FIELDS(NWB_REFLECTION_DEPTH_CPU_FIELD)
-#undef NWB_REFLECTION_DEPTH_CPU_FIELD
-};
+using DepthReduceParameters = ReflectionDepthReducePushConstants;
 static_assert(sizeof(DepthReduceParameters) == NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES);
 
 struct DepthReduceTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;
@@ -89,6 +78,8 @@ public:
 struct TemporalTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         ReflectionPostprocessSnapshot snapshot;
@@ -110,12 +101,17 @@ public:
         if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)
             return true;
         commandList.endRenderPass();
-        const TemporalParameters parameters{
-            payload.width, payload.height, payload.snapshot.current.storageSlot, payload.snapshot.previous.sampledSlot,
-            payload.snapshot.opaqueSpecularSlot, outcome.reused ? payload.snapshot.history.previousSampleCount : 0u,
-            payload.snapshot.history.settings.temporalMaxSamples, outcome.reused ? 1u : 0u,
-            outcome.sampleIndex, payload.snapshot.history.settings.samplingSeed,
-        };
+        TemporalParameters parameters;
+        parameters.width = payload.width;
+        parameters.height = payload.height;
+        parameters.currentRadianceUavSlot = payload.snapshot.current.storageSlot;
+        parameters.previousRadianceSrvSlot = payload.snapshot.previous.sampledSlot;
+        parameters.opaqueSpecularSlot = payload.snapshot.opaqueSpecularSlot;
+        parameters.previousSampleCount = outcome.reused ? payload.snapshot.history.previousSampleCount : 0u;
+        parameters.maxSampleCount = payload.snapshot.history.settings.temporalMaxSamples;
+        parameters.historyValid = outcome.reused ? 1u : 0u;
+        parameters.sampleIndex = outcome.sampleIndex;
+        parameters.samplingSeed = payload.snapshot.history.settings.samplingSeed;
         Core::ComputeState state;
         state.setPipeline(payload.snapshot.temporalPipeline.get());
         commandList.setComputeState(state);
@@ -139,6 +135,8 @@ public:
 struct SpatialTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;
@@ -164,6 +162,8 @@ public:
 struct StatisticsReadbackTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
 
+
+public:
     struct Payload{
         Core::BufferHandle source;
         Core::BufferHandle destination;
@@ -197,7 +197,7 @@ public:
             feedback.eligible = false;
             feedback.reused = false;
         }
-        payload.reservation.accept(token, hardwareReady, &history, &feedback);
+        payload.reservation.acceptReservation(token, hardwareReady, &history, &feedback);
     }
 
     static void Discarded(Payload& payload)noexcept{
@@ -208,6 +208,8 @@ public:
 struct FinalizeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+
+public:
     struct Payload{};
 
 
@@ -234,31 +236,12 @@ Expected<Core::GpuGraphResourceId> ImportReflectionTexture(
     const AStringView resourceLabel,
     const b8 firstWrite
 ){
-    {
-        const Core::GpuTaskGraph::DeclarationReadView view(graph);
-        if(!view.valid())
-            return MakeUnexpected(Failure{});
-        const Core::GpuGraphResourceId existing = view.findImportedTexture(texture);
-        if(existing.valid())
-            return existing;
-    }
     // Producers overwrite everything; Unknown preserves fresh Undefined.
-    return graph.importTexture(
-        texture,
-        TextureResourceDesc(texture->getCreationDescription().name, resourceLabel).setInitialState(firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common)
-    );
+    return FindOrImportTexture(graph, texture, resourceLabel, firstWrite ? Core::ResourceStates::Unknown : Core::ResourceStates::Common);
 }
 
 Expected<Core::GpuGraphResourceId> ImportReflectionBuffer(Core::GpuTaskGraph& graph, const Core::BufferHandle& buffer){
-    {
-        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        if(!declarations.valid())
-            return MakeUnexpected(Failure{});
-        const Core::GpuGraphResourceId existing = declarations.findImportedBuffer(buffer);
-        if(existing.valid())
-            return existing;
-    }
-    return graph.importBuffer(buffer, BufferResourceDesc(buffer->getCreationDescription().debugName, "Reflection Buffer"));
+    return FindOrImportBuffer(graph, buffer, s_ReflectionBufferLabel);
 }
 
 Core::GpuTaskDesc ReflectionTaskDesc(const Name identity, const AStringView label, const Core::GpuTaskId& dependency)noexcept{
@@ -270,16 +253,16 @@ Core::GpuTaskDesc ReflectionTaskDesc(const Name identity, const AStringView labe
     Core::GpuTaskDesc desc;
     desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
     if(dependency.valid())
-        desc.setDependencies(&dependency, 1u);
+        desc.setDependencies({ &dependency, 1u });
     return desc;
 }
 
 Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
     const ReflectionDepthPyramidSnapshot& pyramid,
     const Core::GpuGraphResourceId opaqueDepth,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
+    Core::GraphicsRuntime& graphics,
     Core::GpuGraphResourceId& outDepthPyramid
 ){
     using namespace __hidden_task_graph_postprocess;
@@ -299,12 +282,12 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
         parameters.sourceHeight = source.height;
         parameters.destinationWidth = destination.width;
         parameters.destinationHeight = destination.height;
-        const Core::GpuTaskResourceUse depthUses[] = {
+        const Array<Core::GpuTaskResourceUse, 2u> depthUses = {
             ReadTextureUse(mipIndex == 0u ? opaqueDepth : outDepthPyramid, Core::TextureSubresourceSet(mipIndex == 0u ? 0u : mipIndex - 1u, 1u, 0u, 1u)),
             WriteTextureUse(outDepthPyramid, Core::TextureSubresourceSet(mipIndex, 1u, 0u, 1u), Core::ResourceStates::UnorderedAccess),
         };
-        Core::GpuTaskDesc depthDesc = ReflectionTaskDesc(destination.taskIdentity, "Reflection Depth Reduce", dependency);
-        depthDesc.setResourceUses(depthUses, LengthOf(depthUses));
+        Core::GpuTaskDesc depthDesc = ReflectionTaskDesc(destination.taskIdentity, s_ReflectionDepthReduceTaskLabel, dependency);
+        depthDesc.setResourceUses(depthUses);
         depthDesc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
         const auto depthTask = graph.addTask<DepthReduceTask>(depthDesc, DepthReduceTask::Payload{graphics, pyramid.pipeline, parameters});
         if(!depthTask)
@@ -315,12 +298,12 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
 }
 
 Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
+    Core::GraphicsRuntime& graphics,
+    Core::Alloc::ScratchArena& scratchArena,
     ReflectionGraphResult& result
 ){
     using namespace __hidden_task_graph_postprocess;
@@ -329,20 +312,20 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     if(!reservation.valid() || (snapshot.history.eligible && !snapshot.temporalPipeline))
         return MakeUnexpected(Failure{});
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(inputs.surfaceReads.size() + s_TemporalExtraResourceUseCount);
+    uses.reserve(inputs.surfaceReads.size() + s_ReflectionTemporalExtraResourceUseCount);
     if(snapshot.history.eligible){
         uses.assign(inputs.surfaceReads.begin(), inputs.surfaceReads.end());
         uses.push_back(ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
         if(snapshot.history.reused){
-            const auto previousResult = ImportReflectionTexture(graph, snapshot.previous.texture, "Reflection History Image", false);
+            const auto previousResult = ImportReflectionTexture(graph, snapshot.previous.texture, s_ReflectionHistoryImageLabel, false);
             if(!previousResult)
                 return MakeUnexpected(Failure{});
             const Core::GpuGraphResourceId previous = *previousResult;
             uses.push_back(ReadUse(previous));
         }
     }
-    Core::GpuTaskDesc desc = ReflectionTaskDesc(Name("render.reflection.temporal"), "Reflection Temporal Accumulation", dependency);
-    desc.setResourceUses(uses.data(), uses.size());
+    Core::GpuTaskDesc desc = ReflectionTaskDesc(s_ReflectionTemporalTaskName, s_ReflectionTemporalTaskLabel, dependency);
+    desc.setResourceUses(uses);
     if(snapshot.history.eligible)
         desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
     const auto temporalTask = graph.addTask<TemporalTask>(
@@ -356,25 +339,28 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
         return dependency;
     if(!snapshot.spatialPipeline || !snapshot.spatial.texture)
         return MakeUnexpected(Failure{});
-    const auto spatialResult = ImportReflectionTexture(graph, snapshot.spatial.texture, "Reflection History Image", true);
+    const auto spatialResult = ImportReflectionTexture(graph, snapshot.spatial.texture, s_ReflectionHistoryImageLabel, true);
     if(!spatialResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId spatial = *spatialResult;
     uses.assign(inputs.surfaceReads.begin(), inputs.surfaceReads.end());
     uses.push_back(ReadUse(result.opaqueRadiance));
     uses.push_back(WriteUse(spatial, Core::ResourceStates::UnorderedAccess));
-    desc = ReflectionTaskDesc(Name("render.reflection.spatial"), "Reflection Spatial Filter", dependency);
-    desc.setResourceUses(uses.data(), uses.size());
+    desc = ReflectionTaskDesc(s_ReflectionSpatialTaskName, s_ReflectionSpatialTaskLabel, dependency);
+    desc.setResourceUses(uses);
     desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
+    SpatialParameters spatialParameters;
+    spatialParameters.width = resources.parameters.width;
+    spatialParameters.height = resources.parameters.height;
+    spatialParameters.sourceRadianceSrvSlot = snapshot.current.sampledSlot;
+    spatialParameters.destinationRadianceUavSlot = snapshot.spatial.storageSlot;
+    spatialParameters.deferredResourcesSlot = snapshot.deferredResourcesSlot;
+    spatialParameters.opaqueSpecularSlot = snapshot.opaqueSpecularSlot;
+    spatialParameters.viewSlot = snapshot.viewSlot;
+    spatialParameters.radius = snapshot.history.settings.spatialRadius;
     const auto spatialTask = graph.addTask<SpatialTask>(
         desc,
-        SpatialTask::Payload{
-            graphics, snapshot.spatialPipeline,
-            SpatialParameters{
-                resources.parameters.width, resources.parameters.height, snapshot.current.sampledSlot, snapshot.spatial.storageSlot,
-                snapshot.deferredResourcesSlot, snapshot.opaqueSpecularSlot, snapshot.viewSlot, snapshot.history.settings.spatialRadius,
-            },
-        }
+        SpatialTask::Payload{ graphics, snapshot.spatialPipeline, spatialParameters }
     );
     if(!spatialTask)
         return MakeUnexpected(spatialTask.error());
@@ -384,11 +370,11 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
 }
 
 Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
-    Core::GpuTaskGraph& graph,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
     const b8 feedbackReserved,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
     ReflectionGraphResult& result
 ){
     using namespace __hidden_task_graph_postprocess;
@@ -404,7 +390,7 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
             if(!readbackResourceResult)
                 return MakeUnexpected(Failure{});
             const Core::GpuGraphResourceId readbackResource = *readbackResourceResult;
-            const Core::GpuTaskResourceUse copyUses[] = {
+            const Array<Core::GpuTaskResourceUse, 2u> copyUses = {
                 Core::GpuTaskResourceUse{
                     .resource = result.counters,
                     .range = Core::GpuTaskResourceRange{.bufferRange = Core::BufferRange(0u, NWB_REFLECTION_COUNTER_SIZE)},
@@ -418,8 +404,8 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
                     .access = Core::GpuTaskResourceAccess::Write,
                 },
             };
-            Core::GpuTaskDesc copyDesc = ReflectionTaskDesc(Name("render.reflection.statistics"), "Reflection Statistics Readback", dependency);
-            copyDesc.setResourceUses(copyUses, LengthOf(copyUses));
+            Core::GpuTaskDesc copyDesc = ReflectionTaskDesc(s_ReflectionStatisticsTaskName, s_ReflectionStatisticsTaskLabel, dependency);
+            copyDesc.setResourceUses(copyUses);
             const auto copyTask = graph.addTask<StatisticsReadbackTask>(
                 copyDesc,
                 StatisticsReadbackTask::Payload{
@@ -433,9 +419,9 @@ Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
         }
     }
 
-    const Core::GpuTaskResourceUse finalUses[] = {ReadUse(result.opaqueRadiance), ReadUse(result.glassRadiance)};
-    Core::GpuTaskDesc desc = ReflectionTaskDesc(Name("render.reflection.finalize"), "Reflection Finalize Outputs", dependency);
-    desc.setResourceUses(finalUses, LengthOf(finalUses));
+    const Array<Core::GpuTaskResourceUse, 2u> finalUses = {ReadUse(result.opaqueRadiance), ReadUse(result.glassRadiance)};
+    Core::GpuTaskDesc desc = ReflectionTaskDesc(s_ReflectionFinalizeTaskName, s_ReflectionFinalizeTaskLabel, dependency);
+    desc.setResourceUses(finalUses);
     return graph.addTask<FinalizeTask>(desc, FinalizeTask::Payload{});
 }
 

@@ -124,16 +124,16 @@ private:
         GpuSubmissionPacketId* outFailedPacket
     )const;
     [[nodiscard]] b8 recordPacket(
-        GpuRecordedGraph& outRecordedGraph,
-        GpuRecordedGraph::PacketRecordingScratch& scratch,
-        GpuCommandIrCapture* commandIrCapture,
-        GpuPacketRecordingAbort* deferredAbort,
-        Alloc::ScratchArena& stateFanInScratchArena,
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         GpuSubmissionPacketId packetID,
+        Alloc::ScratchArena& stateFanInScratchArena,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuCommandIrCapture* commandIrCapture,
+        GpuPacketRecordingAbort* deferredAbort,
         u64 recordingWorkerDomain = 0u,
         u32 recordingWorkerIndex = 0u
     )const;
@@ -154,8 +154,8 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuPacketRecordingAccess& recordingAccess,
         GpuSubmissionPacketId packetID,
-        Alloc::ScratchArena& stateFanInScratchArena,
-        const CommandListResourceStateHandoff* initialStates
+        const CommandListResourceStateHandoff* initialStates,
+        Alloc::ScratchArena& stateFanInScratchArena
     )const;
 
 
@@ -182,7 +182,7 @@ struct PacketWaitStatistics{
     usize mergedTimelineWaitCount = 0u;
 };
 
-[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(GpuPhysicalQueueId queue, const QueueSubmissionToken* waitTokens, usize waitTokenCount, Alloc::ScratchArena& scratchArena);
+[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(GpuPhysicalQueueId queue, Span<const QueueSubmissionToken> waitTokens, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;
 
 [[nodiscard]] b8 ValidateInitialOwnershipCompletionToken(const GpuTaskGraphInitialOwnerHandoffSourceView& source, const GpuCompiledBarrier& barrier, const GpuPhysicalQueueInfo& sourceQueue, const QueueSubmissionToken& token, u16 deviceGeneration)noexcept;
@@ -190,7 +190,6 @@ struct PacketWaitStatistics{
 
 // Reject missing declaration tokens across the entire range before any native packet can be accepted.
 [[nodiscard]] b8 ValidateExternalDependencyTokens(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketRange& range)noexcept;
-[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(const GpuTaskGraphResourceView& resource, const GpuCompiledBarrier& barrier)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

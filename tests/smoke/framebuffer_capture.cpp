@@ -44,12 +44,12 @@ static constexpr u32 s_Byte3Shift = 24u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void WriteU16LE(const NotNull<u8*> destination, const u16 value)noexcept{
+static void WriteU16LE(const u16 value, const NotNull<u8*> destination)noexcept{
     destination.get()[0] = static_cast<u8>(value & s_ByteMask);
     destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
 }
 
-static void WriteU32LE(const NotNull<u8*> destination, const u32 value)noexcept{
+static void WriteU32LE(const u32 value, const NotNull<u8*> destination)noexcept{
     destination.get()[0] = static_cast<u8>(value & s_ByteMask);
     destination.get()[1] = static_cast<u8>((value >> s_Byte1Shift) & s_ByteMask);
     destination.get()[2] = static_cast<u8>((value >> s_Byte2Shift) & s_ByteMask);
@@ -122,15 +122,15 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FramebufferCapture::FramebufferCapture(ProjectRuntimeContext& context, const AStringView outputPath, const u32 captureFrameCount, const FramebufferCaptureOptions options)
-    : FramebufferCapture(context, ::Path<Core::Alloc::GlobalArena>(context.objectArena, outputPath), captureFrameCount, options)
+FramebufferCapture::FramebufferCapture(const AStringView outputPath, const u32 captureFrameCount, ProjectRuntimeContext& context, const FramebufferCaptureOptions options)
+    : FramebufferCapture(::Path<Core::Alloc::GlobalArena>(context.objectArena, outputPath), captureFrameCount, context, options)
 {}
 
-FramebufferCapture::FramebufferCapture(ProjectRuntimeContext& context, ::Path<Core::Alloc::GlobalArena>&& outputPath, const u32 captureFrameCount, const FramebufferCaptureOptions options)
+FramebufferCapture::FramebufferCapture(::Path<Core::Alloc::GlobalArena>&& outputPath, const u32 captureFrameCount, ProjectRuntimeContext& context, const FramebufferCaptureOptions options)
     : Core::IRenderPass(context.graphics)
     , m_context(context)
-    , m_options(options)
     , m_outputPath(Move(outputPath))
+    , m_options(options)
     , m_completionState(MakeRefCount<CompletionState>())
     , m_captureFrameCount(captureFrameCount)
 {
@@ -275,8 +275,7 @@ void FramebufferCapture::finish(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 FramebufferCapture::validateResources(const u32 width, const u32 height, const u32 sampleCount){
-    static_cast<void>(sampleCount);
+b8 FramebufferCapture::validateResources(const u32 width, const u32 height, const u32 /*sampleCount*/){
     if(m_skipped || m_failed || width == 0u || height == 0u)
         return true;
     if((m_options.requiredWidth != 0u && width != m_options.requiredWidth) || (m_options.requiredHeight != 0u && height != m_options.requiredHeight))
@@ -398,14 +397,22 @@ Expected<Core::GpuTaskId> FramebufferCapture::declareTaskGraphPresentation(Core:
     const Core::GpuGraphResourceId stagingHazard = *stagingHazardResult;
 
     Core::GpuTaskDesc taskDesc;
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        { .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, },
-        { .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
+    const Array<Core::GpuTaskResourceUse, 2> resourceUses = {
+        Core::GpuTaskResourceUse{ .resource = backbuffer, .range = { .textureSubresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, },
+        Core::GpuTaskResourceUse{ .resource = stagingHazard, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write, },
     };
-    taskDesc.setIdentity(Name("tests.smoke.framebuffer_capture")).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(&previousTask, 1u).setResourceUses(resourceUses, LengthOf(resourceUses));
+    taskDesc.setIdentity(Name("tests.smoke.framebuffer_capture")).setMarkerLabel("Framebuffer Capture Readback").setScheduling(scheduling).setDependencies(Span(&previousTask, 1u)).setResourceUses(resourceUses);
     const auto readbackTask = graph.addTask<ReadbackTask>(
         taskDesc,
-        ReadbackTask::Payload{ .source = frame.backBuffer.texture, .sourceSlice = {}, .destination = m_readback, .destinationSlice = {}, .completionState = m_completionState, .graphicsFrameIndex = m_lastCountedGraphicsFrame, .generation = m_completionState->generation, }
+        ReadbackTask::Payload{
+            .source = frame.backBuffer.texture,
+            .sourceSlice = {},
+            .destination = m_readback,
+            .destinationSlice = {},
+            .completionState = m_completionState,
+            .graphicsFrameIndex = m_lastCountedGraphicsFrame,
+            .generation = m_completionState->generation,
+        }
     );
     if(!readbackTask){
         markFailed(NWB_TEXT("failed to declare the framebuffer readback task"));
@@ -516,14 +523,14 @@ b8 FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, const 
     Vector<u8, Core::Alloc::ScratchArena> bitmapBytes(bitmapFileBytes, 0u, scratchArena);
     bitmapBytes[0] = static_cast<u8>('B');
     bitmapBytes[1] = static_cast<u8>('M');
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 2u), static_cast<u32>(bitmapFileBytes));
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 10u), static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset));
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize), static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize));
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 18u), width);
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 22u), height);
-    __hidden_framebuffer_capture::WriteU16LE(MakeNotNull(bitmapBytes.data() + 26u), 1u);
-    __hidden_framebuffer_capture::WriteU16LE(MakeNotNull(bitmapBytes.data() + 28u), 24u);
-    __hidden_framebuffer_capture::WriteU32LE(MakeNotNull(bitmapBytes.data() + 34u), static_cast<u32>(*bitmapPixelBytes));
+    __hidden_framebuffer_capture::WriteU32LE(static_cast<u32>(bitmapFileBytes), MakeNotNull(bitmapBytes.data() + 2u));
+    __hidden_framebuffer_capture::WriteU32LE(static_cast<u32>(__hidden_framebuffer_capture::s_BitmapPixelOffset), MakeNotNull(bitmapBytes.data() + 10u));
+    __hidden_framebuffer_capture::WriteU32LE(static_cast<u32>(__hidden_framebuffer_capture::s_BitmapInfoHeaderSize), MakeNotNull(bitmapBytes.data() + __hidden_framebuffer_capture::s_BitmapFileHeaderSize));
+    __hidden_framebuffer_capture::WriteU32LE(width, MakeNotNull(bitmapBytes.data() + 18u));
+    __hidden_framebuffer_capture::WriteU32LE(height, MakeNotNull(bitmapBytes.data() + 22u));
+    __hidden_framebuffer_capture::WriteU16LE(1u, MakeNotNull(bitmapBytes.data() + 26u));
+    __hidden_framebuffer_capture::WriteU16LE(24u, MakeNotNull(bitmapBytes.data() + 28u));
+    __hidden_framebuffer_capture::WriteU32LE(static_cast<u32>(*bitmapPixelBytes), MakeNotNull(bitmapBytes.data() + 34u));
 
     const b8 sourceIsBgra = __hidden_framebuffer_capture::IsBgraFormat(m_captureDescription.format);
     for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
@@ -564,6 +571,76 @@ b8 FramebufferCapture::writeCapture(const NotNull<const u8*> sourceBytes, const 
         return false;
     }
     return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
+    const TStringView projectName,
+    const u32 defaultFrameCount,
+    const FramebufferCaptureOptions& options,
+    ProjectRuntimeContext& context,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    if(!outputPath)
+        return UniquePtr<FramebufferCapture>{};
+
+    u32 captureFrameCount = defaultFrameCount;
+    const auto frameCountText = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    if(frameCountText){
+        const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
+        if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
+            return MakeUnexpected(Failure{});
+        }
+        captureFrameCount = static_cast<u32>(*parsedFrameCount);
+    }
+
+    auto capture = MakeUnique<FramebufferCapture>(AStringView(outputPath->data(), outputPath->size()), captureFrameCount, context, options);
+    if(!capture || !capture->start())
+        return MakeUnexpected(Failure{});
+    return capture;
+}
+
+Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
+    const TStringView projectName,
+    const u32 defaultFrameCount,
+    const FramebufferCaptureOptions& options,
+    ProjectRuntimeContext& context
+){
+    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
+    return ConfigureSmokeFramebufferCapture(projectName, defaultFrameCount, options, context, scratchArena);
+}
+
+Expected<SmokeCaptureSeries> PrepareSmokeCaptureSeries(const AStringView outputPath, const u32 sampleCount, const FramebufferCaptureOptions& options, ProjectRuntimeContext& context){
+    SmokeCaptureSeries result(context.objectArena);
+    result.paths.reserve(sampleCount);
+    for(u32 sample = 0u; sample < sampleCount; ++sample){
+        const auto path = sample + 1u == sampleCount ? SmokeEnvironmentString(outputPath, context.objectArena) : StringFormat(context.objectArena, "{}.{}.bmp", outputPath, sample);
+        result.paths.emplace_back(context.objectArena, AStringView(path));
+    }
+    result.capture = MakeUnique<FramebufferCapture>(Move(result.paths.front()), 1u, context, options);
+    if(!result.capture || !result.capture->start())
+        return MakeUnexpected(Failure{});
+    return result;
+}
+
+b8 TickSmokeWorld(const f32 delta, Core::ECS::World& world){
+    const auto updated = world.tick(delta);
+    if(!updated){
+        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        return false;
+    }
+    return true;
+}
+
+b8 TickSmokeWorldWithCapture(const f32 delta, Core::ECS::World& world, UniquePtr<FramebufferCapture>& capture){
+    if(capture)
+        capture->update();
+    return TickSmokeWorld(delta, world);
 }
 
 

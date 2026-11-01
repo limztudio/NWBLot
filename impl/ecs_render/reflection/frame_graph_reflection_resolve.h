@@ -1,0 +1,107 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/mesh/mesh_view_private.h>
+#include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
+#include <impl/ecs_render/reflection/reflection_system.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
+
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererRayTracingSystem;
+class RendererReflectionSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Reflection resolve owns reflection snapshot and reflection task declaration.
+struct FrameGraphReflectionResolveInputs{
+    DeferredFrameTargets& targets;
+    const ECSRenderDetail::MeshViewBufferSnapshot& meshViewSnapshot;
+    const RayTracingSceneGraphResources& sceneResources;
+    const ReflectionSettings& reflectionSettings;
+    const ReflectionSceneContentStamp& contentStamp;
+    const CsgFrameState& csgFrameState;
+    u32 reflectionFrameIndex = 0u;
+    b8 reflectionSceneAvailable = false;
+    b8 useLaggedLightingHistory = false;
+    Core::GpuGraphResourceId specularRoughness;
+    Core::GpuGraphResourceId refractionSpecularRoughness;
+    Core::GpuGraphResourceId normal;
+    Core::GpuGraphResourceId depth;
+    Core::GpuGraphResourceId worldPosition;
+    Core::GpuGraphResourceId refractionDepth;
+    Core::GpuGraphResourceId refractionNormalIor;
+    Core::GpuGraphResourceId opaqueColor;
+    Core::GpuGraphResourceId meshView;
+    Core::GpuGraphResourceId currentBindlessSlots;
+    Core::GpuGraphResourceId sceneShading;
+    Core::GpuGraphResourceId lights;
+    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
+    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    Core::GpuTaskId traceContextUploadTask;
+    Core::GpuTaskId lightingTask;
+    const b8& hardwarePreparationReady;
+    b8& hardwareDispatchLogged;
+    b8& fallbackDispatchLogged;
+};
+
+struct FrameGraphReflectionResolveResult{
+    RendererTaskGraphDetail::ReflectionGraphResult reflectionGraph;
+    ReflectionCompositeInputs reflectionCompositeInputs;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FrameGraphReflectionResolve final : NoCopy{
+public:
+    FrameGraphReflectionResolve(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererRayTracingSystem& raytracingSystem, RendererReflectionSystem& reflectionSystem)noexcept
+        : m_graph(graph)
+        , m_graphics(graphics)
+        , m_raytracingSystem(raytracingSystem)
+        , m_reflectionSystem(reflectionSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(const FrameGraphReflectionResolveInputs& inputs, Core::Alloc::ScratchArena& scratchArena, RayTracingSceneGraphReads& sceneReads);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    Core::GraphicsRuntime& m_graphics;
+    RendererRayTracingSystem& m_raytracingSystem;
+    RendererReflectionSystem& m_reflectionSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

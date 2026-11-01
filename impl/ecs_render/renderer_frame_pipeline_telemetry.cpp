@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -23,27 +23,6 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_renderer_frame_pipeline_telemetry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_UnknownStageLabel = "Unknown";
-static constexpr AStringView s_GraphicsQueueLabel = "Graphics";
-static constexpr AStringView s_ComputeQueueLabel = "Compute";
-static constexpr AStringView s_TransferQueueLabel = "Transfer";
-static constexpr AStringView s_InternalRouteLabel = "Internal";
-static constexpr AStringView s_ExternalImportRouteLabel = "ExternalImport";
-static constexpr AStringView s_ExternalExportRouteLabel = "ExternalExport";
-static constexpr AStringView s_ExclusiveSharingLabel = "Exclusive";
-static constexpr AStringView s_AsyncComputeSharingLabel = "AsyncCompute";
-static constexpr AStringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
-static constexpr AStringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
-static constexpr AStringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
-static constexpr AStringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
-static constexpr AStringView s_RendererFrameTitle = "Renderer Frame";
-static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
-static constexpr f64 s_PercentScaleTelemetry = 100.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +77,7 @@ static constexpr f64 s_PercentScaleTelemetry = 100.0;
     }
 }
 
-static void AppendCommandArenaWorkerStatistics(AString<Core::Alloc::GlobalArena>& label, const Core::GpuCommandArenaWorkerStatistics& statistics){
+static void AppendCommandArenaWorkerStatistics(const Core::GpuCommandArenaWorkerStatistics& statistics, AString<Core::Alloc::GlobalArena>& label){
     StringAppendFormat(
         label,
         "\n    Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
@@ -201,7 +180,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
         const Core::GpuTaskGraphCompileStatistics& compileStatistics = deferredRuntimeStatistics.compile;
         const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = deferredRuntimeStatistics.recording;
         const Core::GpuTaskGraphSubmissionStatistics& submissionStatistics = deferredRuntimeStatistics.submission;
-        const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(__hidden_renderer_frame_pipeline_telemetry::s_MillisecondsPerSecondTelemetry);
+        const SIMDVectorDouble millisecondsScale = VectorDoubleReplicate(s_MillisecondsPerSecondTelemetry);
         const SIMDVectorDouble frameTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.declarationSeconds, compileStatistics.totalSeconds, recordingStatistics.recordingElapsedSeconds, submissionStatistics.submissionSeconds), millisecondsScale);
         const SIMDVectorDouble compileTimingMs = VectorDoubleMultiply(VectorDoubleSet(compileStatistics.analysisSeconds, compileStatistics.queueAssignmentSeconds, compileStatistics.planningSeconds, compileStatistics.validationSeconds), millisecondsScale);
         const SIMDVectorDouble analysisPlanningTimingMs = VectorDoubleMultiply(
@@ -218,7 +197,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
         );
         const SIMDVectorDouble frontierCapacityMsAndPercent = VectorDoubleMultiply(
             VectorDoubleSelect(VectorDoubleSet(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0, 0.0, 0.0), recordingStatistics.readyFrontierWorkerUtilization(), s_DoubleSIMDMaskY),
-            VectorDoubleSet(__hidden_renderer_frame_pipeline_telemetry::s_MillisecondsPerSecondTelemetry, __hidden_renderer_frame_pipeline_telemetry::s_PercentScaleTelemetry, 1.0, 1.0)
+            VectorDoubleSet(s_MillisecondsPerSecondTelemetry, s_PercentScaleTelemetry, 1.0, 1.0)
         );
         StringAppendFormat(
             m_frameGraphRendererLabel,
@@ -337,7 +316,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
             );
             StringAppendFormat(
                 m_frameGraphRendererLabel,
-                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
+                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} "
+                "native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
                 "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
                 "\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
@@ -402,7 +382,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
             const Core::GpuCommandArenaWorkerStatistics directCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u);
             if(directCommandArenaStatistics.valid())
-                __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, directCommandArenaStatistics);
+                __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(directCommandArenaStatistics, m_frameGraphRendererLabel);
 
             // Recorded packets retain the exact worker domain/index used for native allocation.
             // Walk compiled order, reject identities already seen on this queue; packet counts are small, so no persistent storage.
@@ -436,7 +416,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
                 const Core::GpuCommandArenaWorkerStatistics workerCommandArenaStatistics = m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, recordedPacket->recordingWorkerDomain, recordedPacket->recordingWorkerIndex);
                 if(workerCommandArenaStatistics.valid())
-                    __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(m_frameGraphRendererLabel, workerCommandArenaStatistics);
+                    __hidden_renderer_frame_pipeline_telemetry::AppendCommandArenaWorkerStatistics(workerCommandArenaStatistics, m_frameGraphRendererLabel);
             }
         }
 
@@ -449,7 +429,8 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
 
                 StringAppendFormat(
                     m_frameGraphRendererLabel,
-                    "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
+                    "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} "
+                    "destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
                     transferIndex,
                     transfer.resourceIdentity.resolvedText(),
                     __hidden_renderer_frame_pipeline_telemetry::OwnershipTransferRouteLabel(transfer.route),
@@ -467,13 +448,14 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
         }
     }
     else
-        m_frameGraphRendererLabel += __hidden_renderer_frame_pipeline_telemetry::s_RendererFrameTitle;
+        m_frameGraphRendererLabel += s_RendererFrameTitle;
 
     const Core::GpuTimingRecorderStatistics gpuTimingStatistics = m_graphics.gpuTiming().statistics(device);
     StringAppendFormat(
         m_frameGraphRendererLabel,
         "\nGPU timing (device-wide cumulative since query reset): generation={} query collection={} timing sink={} feedback={} active={} comparable timestamps={} prepared scopes={} requested/materialized queries={}/{} materialization failures={}"
-        "\nGPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={} discarded before acceptance={} quarantined={} begin failures={} skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}",
+        "\nGPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={} discarded before acceptance={} quarantined={} begin failures={} "
+        "skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}",
         gpuTimingStatistics.deviceGeneration,
         gpuTimingStatistics.queryCollectionEnabled,
         gpuTimingStatistics.timingSinkEnabled,
@@ -678,7 +660,7 @@ b8 RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& b
                 .compiledPlan = &deferredCompiledPlan,
                 .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
             };
-            if(!deferredTaskGraphView.appendFrameGraphTelemetry(builder, m_deferredLightingTaskGraphAnalysis, scratchArena, deferredLightingTelemetryOptions))
+            if(!deferredTaskGraphView.appendFrameGraphTelemetry(m_deferredLightingTaskGraphAnalysis, scratchArena, builder, deferredLightingTelemetryOptions))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
         }
     }

@@ -26,13 +26,17 @@ namespace BuiltAssetDetail{
 inline constexpr AStringView s_Extension = ".nwba";
 inline constexpr AStringView s_ManifestFilename = "assets.list";
 
-[[nodiscard]] b8 WriteBinaryFileIfChanged(Vector<u8, Alloc::ScratchArena>& existing, const ::Path<Alloc::ScratchArena>& path, Span<const u8> bytes, b8 replaceDifferent = true);
-[[nodiscard]] b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena);
 struct BuiltAssetPayload{
     Name virtualPath = s_NameNone;
     usize payloadOffset = 0u;
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] b8 WriteBinaryFileIfChanged(const ::Path<Alloc::ScratchArena>& path, Span<const u8> bytes, b8 replaceDifferent, Vector<u8, Alloc::ScratchArena>& existing);
+[[nodiscard]] b8 WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest, Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes);
 
 

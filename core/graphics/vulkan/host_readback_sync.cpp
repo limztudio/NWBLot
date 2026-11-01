@@ -182,10 +182,6 @@ void HostReadbackBarrierTracker::appendBarriers(Vector<VkBufferMemoryBarrier2, A
         barriers.push_back(BuildHostReadBufferBarrier(buffer));
 }
 
-void HostReadbackBarrierTracker::clear()noexcept{
-    m_buffers.clear();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -4,15 +4,8 @@
 
 #include "task_graph_occupancy_tasks.h"
 
-#include <impl/ecs_render/avboit/compute_emulation_record.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-
-#include <core/graphics/backend_selection.h>
-#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,7 +53,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitOccupancyComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
 
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.occupancyTiming);
+    return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -70,7 +63,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitOccupancy, MaterialPipelinePass::AvboitOccupancy, &AvboitFrameTargets::lowFramebuffer, };
 
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, trait, payload.occupancyTiming);
+    return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -81,10 +74,6 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitRasterPassFromPayload(
         payload,
         commandList,
-        &Payload::occupancyPhasePrepared,
-        &Payload::occupancySnapshot,
-        &Payload::occupancyComputeEmulationOutputStatesGraphOwned,
-        &Payload::occupancyCsgComputeEmulationOutputStatesGraphOwned,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitOccupancyPass(
                 dispatchCommandList,
@@ -95,15 +84,14 @@ namespace RendererTaskGraphDetail{
                 payload.frameBindings,
                 dispatchInstanceCount,
                 dispatchMaterialTypedByteCount,
-                payload.occupancyMaterialFrameStatesGraphOwned,
-                payload.occupancyMaterialGeometryStatesGraphOwned,
-                payload.occupancyComputeEmulationOutputStatesGraphOwned,
-                payload.occupancyCsgComputeEmulationOutputStatesGraphOwned,
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned,
+                payload.computeEmulationOutputStatesGraphOwned,
+                payload.csgComputeEmulationOutputStatesGraphOwned,
                 payload.generatedGeometryReused,
-                payload.occupancyComputeEmulationTiming
+                payload.computeEmulationTiming
             );
-        },
-        payload.occupancyComputeEmulationTiming
+        }
     );
 }
 
@@ -120,14 +108,6 @@ namespace RendererTaskGraphDetail{
             payload.avboitSystem.dispatchAvboitDepthWarp(dispatchCommandList, targets, attribution, timingRecorded);
         }
     );
-}
-
-void AvboitDepthWarpGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    AcceptAvboitComputeEffect(payload, token);
-}
-
-void AvboitDepthWarpGraphTask::Discarded(Payload& payload)noexcept{
-    DiscardAvboitComputeEffect(payload);
 }
 
 

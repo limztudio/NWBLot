@@ -2,9 +2,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_csg/shape_id.adhd>
+#include <impl/ecs_csg/frame_types.adhd>
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_RendererCsgStateByteSize = 360u;
+const usize s_OpaqueCsgFrameGpuResourceUseCount = 5u;
+const u32 s_CsgPeelLayerCount = 4u;
+const u32 s_CsgReceiverEventLayerCount = 32u;
+const u32 s_CsgReceiverSpanLayerCount = 16u;
+const u32 s_CsgRemovedIntervalLayerCount = 16u;
+const Name s_CsgReceiverRangeBufferName = "ecs_render/csg_receiver_ranges";
+const Name s_CsgCutterBufferName = "ecs_render/csg_cutters";
 const i32 s_CsgBoundsValidFlag = 1;
 const i32 s_CsgBoundsFiniteFlag = 2;
 const u32 s_CsgInvalidIndex = 0xffffffffu;
+const u32 s_CsgRayShapeUnsupported = 0u;
+const u32 s_CsgRayShapePlane = 1u;
+const u32 s_CsgRayShapeBox = 2u;
+const u32 s_CsgRayShapeSphere = 3u;
+const u32 s_CsgRayShapeCapsule = 4u;
+const f32 s_MinClipWForWorkRegion = 0.000001f;
+const i32 s_WorkRegionPixelPadding = 2;
+const u32 s_BoxCornerCount = 8u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,6 +52,38 @@ type CsgReceiverCpuBounds = CsgBoundsGpuData;
 
 b8 CsgReceiverBoundsCanCull(in CsgReceiverCpuBounds bounds){
     return bounds.valid() && bounds.finite();
+}
+
+void RefreshRuntimeMeshCsgBounds(in f32x3_i32 minBounds, in f32x3_i32 maxBounds, in b8 finiteBounds, mut CsgReceiverCpuBounds outBounds){
+    outBounds.minBounds = minBounds;
+    outBounds.maxBounds = maxBounds;
+    outBounds.minBounds.w = s_CsgBoundsValidFlag;
+    if(finiteBounds)
+        outBounds.minBounds.w = outBounds.minBounds.w | s_CsgBoundsFiniteFlag;
+    outBounds.maxBounds.w = 0;
+}
+
+b8 BuildPositionStreamBounds(in Span<f32x3u> positions, mut CsgReceiverCpuBounds outBounds){
+    outBounds = CsgReceiverCpuBounds();
+    if(positions.empty())
+        return false;
+
+    f32x4 minBounds(f32.max, f32.max, f32.max, 0.0f);
+    f32x4 maxBounds(-f32.max, -f32.max, -f32.max, 0.0f);
+    for(usize i = 0u; i < positions.size(); ++i){
+        const f32x3u pos = positions[i];
+        if(!isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z))
+            return false;
+        const f32x4 p(pos.x, pos.y, pos.z, 0.0f);
+        minBounds = min(minBounds, p);
+        maxBounds = max(maxBounds, p);
+    }
+    if(minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z)
+        return false;
+
+    outBounds.minBounds = f32x3_i32(minBounds.x, minBounds.y, minBounds.z, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
+    outBounds.maxBounds = f32x3_i32(maxBounds.x, maxBounds.y, maxBounds.z, 0);
+    return true;
 }
 
 
@@ -70,6 +126,224 @@ class CsgShadowReceiverRangeGpu{
     public u32 flags = 0u;
     // Packed contexts assign the absolute byte offset of this receiver's cooked membership words.
     public u32 solidTriangleWordOffset = 0u;
+}
+
+class CsgShadowReceiverInput{
+    public EntityID entity = s_InvalidEntityId;
+    public CsgReceiverPass receiverPass = CsgReceiverPass::Opaque;
+    // Leave false when CPU bounds cannot conservatively contain the current deformed receiver.
+    public b8 boundsValid = false;
+    public f32x3u worldMin(0.0f, 0.0f, 0.0f);
+    public f32x3u worldMax(0.0f, 0.0f, 0.0f);
+}
+
+f32 ComputeWorldToShapeScaleBound(in f32x3x4 worldToShape){
+    const f32x3x4 transposed = transpose(worldToShape);
+    const f32x4 row0 = mul(f32x4(1.0f, 0.0f, 0.0f, 0.0f), transposed);
+    const f32x4 row1 = mul(f32x4(0.0f, 1.0f, 0.0f, 0.0f), transposed);
+    const f32x4 row2 = mul(f32x4(0.0f, 0.0f, 1.0f, 0.0f), transposed);
+    const f32 lengthSquared = (lengthSq(row0.xyz) + lengthSq(row1.xyz)) + lengthSq(row2.xyz);
+    return sqrt(lengthSquared);
+}
+
+f32 ReadCsgParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
+    u32 word = 0u;
+    const usize size = parameterBytes.size();
+    if(byteOffset < size)
+        word = word | cast<u32>(parameterBytes[byteOffset]);
+    if(byteOffset + 1u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 1u]) << 8u);
+    if(byteOffset + 2u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 2u]) << 16u);
+    if(byteOffset + 3u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 3u]) << 24u);
+    return bit_cast<f32>(word);
+}
+
+void CopyCsgCutterInlineParameters(in Span<u8> parameterBytes, mut CsgCutterGpuData inOutCutter){
+    inOutCutter.parameter0 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    inOutCutter.parameter1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    if(parameterBytes.empty())
+        return;
+
+    inOutCutter.parameter0 = f32x4(
+        ReadCsgParameterFloatLane(parameterBytes, 0u),
+        ReadCsgParameterFloatLane(parameterBytes, 4u),
+        ReadCsgParameterFloatLane(parameterBytes, 8u),
+        ReadCsgParameterFloatLane(parameterBytes, 12u)
+    );
+    if(parameterBytes.size() <= 16u)
+        return;
+
+    inOutCutter.parameter1 = f32x4(
+        ReadCsgParameterFloatLane(parameterBytes, 16u),
+        ReadCsgParameterFloatLane(parameterBytes, 20u),
+        ReadCsgParameterFloatLane(parameterBytes, 24u),
+        ReadCsgParameterFloatLane(parameterBytes, 28u)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgWorkRect{
+    public CsgWorkRect(){
+        this.minX = 0;
+        this.maxX = 0;
+        this.minY = 0;
+        this.maxY = 0;
+    }
+
+    public CsgWorkRect(in i32 inMinX, in i32 inMaxX, in i32 inMinY, in i32 inMaxY){
+        this.minX = inMinX;
+        this.maxX = inMaxX;
+        this.minY = inMinY;
+        this.maxY = inMaxY;
+    }
+
+    public i32 width()const{
+        return this.maxX - this.minX;
+    }
+
+    public i32 height()const{
+        return this.maxY - this.minY;
+    }
+
+    public i32 minX;
+    public i32 maxX;
+    public i32 minY;
+    public i32 maxY;
+}
+
+class CsgFrameWorkRegion{
+    public b8 bounded()const{
+        return !this.fullFrame && this.minX < this.maxX && this.minY < this.maxY;
+    }
+
+    public b8 valid()const{
+        return this.fullFrame || this.bounded();
+    }
+
+    public u32 width()const{
+        if(this.bounded())
+            return this.maxX - this.minX;
+        return 0u;
+    }
+
+    public u32 height()const{
+        if(this.bounded())
+            return this.maxY - this.minY;
+        return 0u;
+    }
+
+    public void expandFull(){
+        this.fullFrame = true;
+    }
+
+    public void expandClamped(in i32 rectMinX, in i32 rectMaxX, in i32 rectMinY, in i32 rectMaxY, in u32 frameWidth, in u32 frameHeight){
+        if(this.fullFrame || frameWidth == 0u || frameHeight == 0u)
+            return;
+
+        const i32 maxExtentX = cast<i32>(frameWidth);
+        const i32 maxExtentY = cast<i32>(frameHeight);
+        const i32 clampedMinX = max(min(rectMinX, maxExtentX), 0);
+        const i32 clampedMaxX = max(min(rectMaxX, maxExtentX), 0);
+        const i32 clampedMinY = max(min(rectMinY, maxExtentY), 0);
+        const i32 clampedMaxY = max(min(rectMaxY, maxExtentY), 0);
+        if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
+            return;
+
+        this.minX = min(this.minX, cast<u32>(clampedMinX));
+        this.minY = min(this.minY, cast<u32>(clampedMinY));
+        this.maxX = max(this.maxX, cast<u32>(clampedMaxX));
+        this.maxY = max(this.maxY, cast<u32>(clampedMaxY));
+    }
+
+    public void expandWorldBounds(in f32x4x4 worldToClip, in f32x4 minBounds, in f32x4 maxBounds, in u32 frameWidth, in u32 frameHeight){
+        if(
+            frameWidth == 0u || frameHeight == 0u
+            || !isFinite(minBounds.x) || !isFinite(minBounds.y) || !isFinite(minBounds.z)
+            || !isFinite(maxBounds.x) || !isFinite(maxBounds.y) || !isFinite(maxBounds.z)
+            || minBounds.x > maxBounds.x || minBounds.y > maxBounds.y || minBounds.z > maxBounds.z
+        ){
+            this.expandFull();
+            return;
+        }
+
+        const f32 widthFloat = cast<f32>(frameWidth);
+        const f32 heightFloat = cast<f32>(frameHeight);
+        f32 minPixelX = widthFloat;
+        f32 minPixelY = heightFloat;
+        f32 maxPixelX = 0.0f;
+        f32 maxPixelY = 0.0f;
+        for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
+            f32 wx = minBounds.x;
+            if((corner & 1u) != 0u)
+                wx = maxBounds.x;
+            f32 wy = minBounds.y;
+            if(((corner >> 1u) & 1u) != 0u)
+                wy = maxBounds.y;
+            f32 wz = minBounds.z;
+            if(((corner >> 2u) & 1u) != 0u)
+                wz = maxBounds.z;
+            const f32x4 worldPosition(wx, wy, wz, 1.0f);
+            const f32x4 clipPosition = mul(worldPosition, worldToClip);
+            const f32 clipW = clipPosition.w;
+            if(!isFinite(clipW) || clipW <= s_MinClipWForWorkRegion){
+                this.expandFull();
+                return;
+            }
+
+            const f32 ndcX = clipPosition.x / clipW;
+            const f32 ndcY = clipPosition.y / clipW;
+            if(!isFinite(ndcX) || !isFinite(ndcY)){
+                this.expandFull();
+                return;
+            }
+
+            const f32 normX = ndcX * 0.5f + 0.5f;
+            const f32 normY = 1.0f - (ndcY * 0.5f + 0.5f);
+            const f32 pixelX = normX * widthFloat;
+            const f32 pixelY = normY * heightFloat;
+            if(!isFinite(pixelX) || !isFinite(pixelY)){
+                this.expandFull();
+                return;
+            }
+            minPixelX = min(minPixelX, pixelX);
+            minPixelY = min(minPixelY, pixelY);
+            maxPixelX = max(maxPixelX, pixelX);
+            maxPixelY = max(maxPixelY, pixelY);
+        }
+
+        if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > widthFloat || minPixelY > heightFloat)
+            return;
+
+        const f32 workMinX = max(minPixelX, 0.0f);
+        const f32 workMinY = max(minPixelY, 0.0f);
+        const f32 workMaxX = min(maxPixelX, widthFloat);
+        const f32 workMaxY = min(maxPixelY, heightFloat);
+        const i32 paddedMinX = cast<i32>(floor(workMinX)) - s_WorkRegionPixelPadding;
+        const i32 paddedMaxX = cast<i32>(ceil(workMaxX)) + s_WorkRegionPixelPadding;
+        const i32 paddedMinY = cast<i32>(floor(workMinY)) - s_WorkRegionPixelPadding;
+        const i32 paddedMaxY = cast<i32>(ceil(workMaxY)) + s_WorkRegionPixelPadding;
+        this.expandClamped(paddedMinX, paddedMaxX, paddedMinY, paddedMaxY, frameWidth, frameHeight);
+    }
+
+    public CsgWorkRect resolveRect(in u32 frameWidth, in u32 frameHeight)const{
+        if(!this.bounded())
+            return CsgWorkRect(0, cast<i32>(frameWidth), 0, cast<i32>(frameHeight));
+
+        const u32 resolvedMaxX = min(this.maxX, frameWidth);
+        const u32 resolvedMaxY = min(this.maxY, frameHeight);
+        return CsgWorkRect(cast<i32>(this.minX), cast<i32>(resolvedMaxX), cast<i32>(this.minY), cast<i32>(resolvedMaxY));
+    }
+
+    public u32 minX = u32.max;
+    public u32 minY = u32.max;
+    public u32 maxX = 0u;
+    public u32 maxY = 0u;
+    public b8 fullFrame = false;
 }
 
 
@@ -118,6 +392,64 @@ class CsgIntervalDispatchPushConstants{
     public u32 resourceSlotPadding2 = 0u;
 }
 
+CsgIntervalSampleStateGpuData ResolveCsgIntervalSampleState(
+    in CsgFrameWorkRegion workRegion,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    in u32 meshViewHeapSlot
+){
+    const CsgWorkRect workRect = workRegion.resolveRect(frameWidth, frameHeight);
+    CsgIntervalSampleStateGpuData state;
+    state.workMinX = cast<u32>(max(workRect.minX, 0));
+    state.workMinY = cast<u32>(max(workRect.minY, 0));
+    state.workMaxX = cast<u32>(max(workRect.maxX, 0));
+    state.workMaxY = cast<u32>(max(workRect.maxY, 0));
+    state.meshViewHeapSlot = meshViewHeapSlot;
+    return state;
+}
+
+CsgIntervalDispatchPushConstants ResolveCsgIntervalDispatchPushConstants(
+    in CsgFrameWorkRegion workRegion,
+    in u32 frameWidth,
+    in u32 frameHeight,
+    in u32 csgPeelLayerCount,
+    in u32 receiverCount,
+    in u32 meshViewHeapSlot,
+    in u32 csgContextHeapSlot
+){
+    const CsgWorkRect workRect = workRegion.resolveRect(frameWidth, frameHeight);
+    CsgIntervalDispatchPushConstants pushConstants;
+    pushConstants.frameWidth = frameWidth;
+    pushConstants.frameHeight = frameHeight;
+    pushConstants.receiverCount = receiverCount;
+    pushConstants.layerCount = min(csgPeelLayerCount, s_CsgPeelLayerCount);
+    pushConstants.workOffsetX = cast<u32>(max(workRect.minX, 0));
+    pushConstants.workOffsetY = cast<u32>(max(workRect.minY, 0));
+    pushConstants.workExtentX = cast<u32>(max(workRect.width(), 0));
+    pushConstants.workExtentY = cast<u32>(max(workRect.height(), 0));
+    pushConstants.meshViewHeapSlot = meshViewHeapSlot;
+    pushConstants.csgContextHeapSlot = csgContextHeapSlot;
+    return pushConstants;
+}
+
+CsgClipContextSlots ResolveCsgClipContextSlots(
+    in u32 receiverRangesSlot,
+    in u32 cuttersSlot,
+    in u32 materialTypedSlot,
+    in u32 meshInstancesSlot,
+    in u32 deferredBindlessResourcesSlot,
+    in u32 intervalSampleStateSlot
+){
+    CsgClipContextSlots contextSlots;
+    contextSlots.receiverRanges = receiverRangesSlot;
+    contextSlots.cutters = cuttersSlot;
+    contextSlots.materialTyped = materialTypedSlot;
+    contextSlots.meshInstances = meshInstancesSlot;
+    contextSlots.deferredBindlessResources = deferredBindlessResourcesSlot;
+    contextSlots.intervalSampleState = intervalSampleStateSlot;
+    return contextSlots;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -134,6 +466,31 @@ class CsgFrameStateCacheSignature{
 
     public u64 contentHash = 0u;
     public u64 shapeRegistryRevision = 0u;
+}
+
+u32 ResolveCsgShapeGpuKind(in b8 hasShaderModule, in Name shapeName){
+    if(hasShaderModule)
+        return s_CsgRayShapeUnsupported;
+    if(shapeName == s_CsgPlaneShapeName)
+        return s_CsgRayShapePlane;
+    if(shapeName == s_CsgBoxShapeName)
+        return s_CsgRayShapeBox;
+    if(shapeName == s_CsgSphereShapeName)
+        return s_CsgRayShapeSphere;
+    if(shapeName == s_CsgCapsuleShapeName)
+        return s_CsgRayShapeCapsule;
+    return s_CsgRayShapeUnsupported;
+}
+
+b8 CsgFrameHasReceiverPassWork(in CsgFrameState csgFrameState, in CsgReceiverPass receiverPass){
+    switch(receiverPass){
+    case CsgReceiverPass::Opaque:
+        return csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
+    case CsgReceiverPass::Transparent:
+        return csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
+    default:
+        return false;
+    }
 }
 
 

@@ -249,9 +249,54 @@ static_assert(alignof(FormatInfo) == alignof(void*), "FormatInfo should retain p
 static_assert(IsStandardLayout_V<FormatInfo>, "FormatInfo should retain standard layout");
 static_assert(IsTriviallyCopyable_V<FormatInfo>, "FormatInfo should remain trivially copyable");
 
+struct TextureDesc;
+
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
-[[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
-[[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
+
+[[nodiscard]] constexpr u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept{
+    return formatInfo.blockSize;
+}
+
+[[nodiscard]] constexpr u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
+    switch(formatInfo.format){
+    case Format::ASTC_5x4_UNORM:
+    case Format::ASTC_5x4_UNORM_SRGB:
+    case Format::ASTC_5x4_FLOAT:
+        return 4u;
+
+    case Format::ASTC_6x5_UNORM:
+    case Format::ASTC_6x5_UNORM_SRGB:
+    case Format::ASTC_6x5_FLOAT:
+    case Format::ASTC_8x5_UNORM:
+    case Format::ASTC_8x5_UNORM_SRGB:
+    case Format::ASTC_8x5_FLOAT:
+    case Format::ASTC_10x5_UNORM:
+    case Format::ASTC_10x5_UNORM_SRGB:
+    case Format::ASTC_10x5_FLOAT:
+        return 5u;
+
+    case Format::ASTC_8x6_UNORM:
+    case Format::ASTC_8x6_UNORM_SRGB:
+    case Format::ASTC_8x6_FLOAT:
+    case Format::ASTC_10x6_UNORM:
+    case Format::ASTC_10x6_UNORM_SRGB:
+    case Format::ASTC_10x6_FLOAT:
+        return 6u;
+
+    case Format::ASTC_10x8_UNORM:
+    case Format::ASTC_10x8_UNORM_SRGB:
+    case Format::ASTC_10x8_FLOAT:
+        return 8u;
+
+    case Format::ASTC_12x10_UNORM:
+    case Format::ASTC_12x10_UNORM_SRGB:
+    case Format::ASTC_12x10_FLOAT:
+        return 10u;
+
+    default:
+        return formatInfo.blockSize;
+    }
+}
 
 // Combined depth/stencil copies address one aspect plane at a time.
 // Automatic infers single-aspect formats; a combined format requires an explicit Depth or Stencil selection.
@@ -274,6 +319,7 @@ struct TextureUploadAspectLayout{
 
 [[nodiscard]] Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, TextureUploadAspect::Enum requestedAspect)noexcept;
 [[nodiscard]] Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(const FormatInfo& formatInfo, TextureUploadAspect::Enum requestedAspect)noexcept;
+[[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, u32 arraySlice, u32 mipLevel, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect)noexcept;
 
 namespace FormatSupport{
     static constexpr auto s_FormatSupportNoneBase = 0;

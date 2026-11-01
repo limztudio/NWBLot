@@ -35,6 +35,8 @@ namespace CommandQueue{
     };
 };
 
+inline constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
+
 // Native recording names the pool/timeline owner queue. IDs scope to one device generation; invalid IDs never key ownership.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
@@ -222,19 +224,19 @@ struct TimerQueryResult{
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept{
+    [[nodiscard]] constexpr b8 valid()const noexcept{
         return timestampValidBits > 0u && timestampValidBits <= s_FullWidthBits && secondsPerTick > 0.0;
     }
 
-    [[nodiscard]] u64 timestampMask()const noexcept{
+    [[nodiscard]] constexpr u64 timestampMask()const noexcept{
         if(!valid())
             return 0u;
         return timestampValidBits == s_FullWidthBits ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
     }
 
-    [[nodiscard]] u64 maskedBeginTicks()const noexcept{ return beginTicks & timestampMask(); }
+    [[nodiscard]] constexpr u64 maskedBeginTicks()const noexcept{ return beginTicks & timestampMask(); }
 
-    [[nodiscard]] u64 durationTicks()const noexcept{
+    [[nodiscard]] constexpr u64 durationTicks()const noexcept{
         const u64 mask = timestampMask();
         if(mask == 0u)
             return 0u;
@@ -243,9 +245,8 @@ public:
         return timestampValidBits == s_FullWidthBits ? duration : duration & mask;
     }
 
-    [[nodiscard]] f64 durationSeconds()const noexcept{
-        const SIMDVectorDouble ticks = VectorDoubleReplicate(static_cast<f64>(durationTicks()));
-        return VectorDoubleGetX(VectorDoubleMultiply(ticks, VectorDoubleReplicate(secondsPerTick)));
+    [[nodiscard]] constexpr f64 durationSeconds()const noexcept{
+        return static_cast<f64>(durationTicks()) * secondsPerTick;
     }
 
     [[nodiscard]] b8 hasComparableRange()const noexcept{
@@ -304,14 +305,7 @@ public:
 
 
 public:
-    void reset()noexcept{
-        m_textureStates.clear();
-        m_bufferStates.clear();
-        m_permanentTextureStates.clear();
-        m_permanentBufferStates.clear();
-        m_deviceGeneration = 0u;
-        m_valid = false;
-    }
+    void reset()noexcept;
 
     [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
 
@@ -344,7 +338,9 @@ public:
     // Swaps snapshot storage with no alloc. Both snapshots must share one arena.
     [[nodiscard]] b8 exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
     [[nodiscard]] b8 hasPendingBufferReleases()const noexcept;
-    [[nodiscard]] b8 empty()const noexcept;
+    [[nodiscard]] b8 empty()const noexcept{
+        return m_textureStates.empty() && m_bufferStates.empty() && m_permanentTextureStates.empty() && m_permanentBufferStates.empty();
+    }
 
 
 private:
@@ -383,8 +379,8 @@ struct RenderPassAttachmentActions{
 };
 
 struct RenderPassParameters{
-    Color colorClearValues[s_MaxRenderTargets]{};
-    RenderPassAttachmentActions colorAttachmentActions[s_MaxRenderTargets]{};
+    Array<Color, s_MaxRenderTargets> colorClearValues{};
+    Array<RenderPassAttachmentActions, s_MaxRenderTargets> colorAttachmentActions{};
     RenderPassAttachmentActions depthAttachmentActions;
     RenderPassAttachmentActions stencilAttachmentActions;
     f32 depthClearValue = s_DepthClearValue;

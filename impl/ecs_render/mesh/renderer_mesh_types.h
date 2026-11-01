@@ -61,7 +61,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // One heap handle per ABI slot; retired before runtime meshes are replaced.
-    Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
+    Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> geometryHeapHandles{};
     // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.
     Core::GpuDescriptorHandle swBvhPositionHeapHandle;
     Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle;

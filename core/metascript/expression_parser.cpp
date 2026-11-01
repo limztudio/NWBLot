@@ -22,7 +22,6 @@ namespace __hidden_metascript_expression_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_InitialReferencePathSegmentCount = 4u;
 constexpr MStringView s_ListExpectedCommaOrCloseMessage = "expected ',' or '}' in list";
 constexpr MStringView s_MapKeysMustBeStringsMessage = "map keys must be strings";
 constexpr MStringView s_MapExpectedCommaOrCloseMessage = "expected ',' or '}' in map";
@@ -98,7 +97,7 @@ Value ExpressionParser::parseUnary(){
             return Value(-val.asInteger(), m_arena);
         }
         if(val.isDouble())
-            return Value(VectorDoubleGetX(VectorDoubleNegate(VectorDoubleReplicate(val.asDouble()))), m_arena);
+            return Value(-val.asDouble(), m_arena);
 
         m_cursor.error("unary '-' requires numeric operand");
         return Value(m_arena);
@@ -141,7 +140,7 @@ Value ExpressionParser::parsePrimary(){
         m_cursor.advance();
 
         ScratchPath path{m_scratchArena};
-        path.reserve(__hidden_metascript_expression_parser::s_InitialReferencePathSegmentCount);
+        path.reserve(s_InitialReferencePathSegmentCount);
         path.push_back(name);
         if(!parseReferencePath(path))
             return Value(m_arena);

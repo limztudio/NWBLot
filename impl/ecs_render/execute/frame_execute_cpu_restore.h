@@ -5,24 +5,18 @@
 #pragma once
 
 
-#include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/ecs_render/deferred/deferred_system.h>
-#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/deferred/deferred_system.h>
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,18 +35,13 @@ public:
 
 public:
     static void RestorePrefixCpuState(RendererMeshSystem& meshSystem, RendererDeferredSystem& deferredSystem)noexcept;
-    static void RestoreShadowCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    static void RestoreCausticsCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    static void RestoreSurfelGiCpuState(RendererRayTracingState& rayTracingState, const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
-    static void RestoreAvboitCpuState(RendererAvboitSystem& avboitSystem, b8 targetsNeedClear)noexcept;
-    static void RestorePostGbufferEffectsCpuState(RendererRayTracingState& rayTracingState, RendererAvboitSystem& avboitSystem, const RayTracingFrameCpuStateSnapshot& snapshot, b8 avboitTargetsNeedClear)noexcept;
     static void RestorePostGbufferPacketCpuState(
+        const Snapshot& snapshot,
+        b8 restoreBindlessSlots,
         RendererMeshSystem& meshSystem,
         RendererDeferredSystem& deferredSystem,
         RendererRayTracingState& rayTracingState,
         RendererAvboitSystem& avboitSystem,
-        const Snapshot& snapshot,
-        b8 restoreBindlessSlots,
         DeferredFrameTargets& targets
     )noexcept;
 

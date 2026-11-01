@@ -407,7 +407,7 @@ b8 GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignment
         return *block;
     };
 
-    static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
+    static constexpr Array<GpuDescriptorClass::Enum, 9> s_ResourceClasses = {{
         GpuDescriptorClass::SampledImage,
         GpuDescriptorClass::StorageImage,
         GpuDescriptorClass::SampledBuffer,
@@ -417,8 +417,8 @@ b8 GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignment
         GpuDescriptorClass::SampledImage3D,
         GpuDescriptorClass::SampledImage2DArrayUint,
         GpuDescriptorClass::SampledImageCube
-    };
-    static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = { GpuDescriptorClass::Sampler };
+    }};
+    static constexpr Array<GpuDescriptorClass::Enum, 1> s_SamplerClasses = {{ GpuDescriptorClass::Sampler }};
     const auto resourceBlock = carve(m_resourceLayout, s_ResourceClasses);
     if(!resourceBlock)
         return false;
@@ -459,7 +459,12 @@ b8 GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeItem
         const b8 allocateBlock = !retainedBlock.valid();
         auto block = MakeNotNull(&retainedBlock);
         if(allocateBlock){
-            const Expected<DescriptorBufferSegment> allocatedBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(m_accelStructLayout->getDescriptorBufferSegmentKind(), setSizeBytes, m_context.descriptorBufferManager->getOffsetAlignmentBytes(), m_descriptorBufferGeneration);
+            const Expected<DescriptorBufferSegment> allocatedBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(
+                m_accelStructLayout->getDescriptorBufferSegmentKind(),
+                setSizeBytes,
+                m_context.descriptorBufferManager->getOffsetAlignmentBytes(),
+                m_descriptorBufferGeneration
+            );
             if(!allocatedBlock){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: failed to carve {}-byte TLAS block."), setSizeBytes);
                 return false;

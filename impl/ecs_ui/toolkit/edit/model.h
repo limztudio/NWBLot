@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include <impl/ecs_ui/toolkit/global.h>
 
 #include <impl/ecs_ui/toolkit/edit/types.adhd.h>
 
@@ -75,15 +75,19 @@ public:
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
     [[nodiscard]] b8 setText(AStringView value);
     [[nodiscard]] b8 setSelection(usize anchor, usize caret)noexcept;
-    [[nodiscard]] b8 selectAll()noexcept;
+    [[nodiscard]] b8 selectAll()noexcept{ return setSelection(0u, m_text.size()); }
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] b8 move(EditMove::Enum movement, b8 extend = false)noexcept;
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
     [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
-    [[nodiscard]] b8 replaceSelection(AStringView value);
-    [[nodiscard]] b8 backspace();
-    [[nodiscard]] b8 eraseForward();
+    [[nodiscard]] b8 replaceSelection(const AStringView value){ return replaceRange(selectionStart(), selectionEnd(), value); }
+    [[nodiscard]] b8 backspace(){
+        return replaceRange(hasSelection() ? selectionStart() : previousBoundary(m_caret), hasSelection() ? selectionEnd() : m_caret, {});
+    }
+    [[nodiscard]] b8 eraseForward(){
+        return replaceRange(hasSelection() ? selectionStart() : m_caret, hasSelection() ? selectionEnd() : nextBoundary(m_caret), {});
+    }
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
     [[nodiscard]] b8 eraseSurrounding(usize beforeBytes, usize afterBytes);
     // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
@@ -98,7 +102,9 @@ public:
     [[nodiscard]] b8 updateComposition(AStringView value, usize anchor, usize caret);
     [[nodiscard]] b8 commitComposition(AStringView value);
     void cancelComposition()noexcept;
-    [[nodiscard]] EditCompositionView composition()const noexcept;
+    [[nodiscard]] EditCompositionView composition()const noexcept{
+        return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret, Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
+    }
 
 
 private:

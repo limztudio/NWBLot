@@ -5,11 +5,12 @@
 #pragma once
 
 
-#include <impl/ecs_render/shared/task_graph_stage.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/packet_runtime.h>
+#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,6 +21,17 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Domains publish this boundary after declaring topology; downstream avoids local coupling.
+struct RendererTaskGraphTransparencyStage{
+    Core::GpuTaskId firstTask;
+    Core::GpuTaskId completionTask;
+    b8 hasTransparentTasks = false;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
+};
 
 // AVBOIT owns its stage identifiers; the host observes the typed boundary and owns execution.
 struct RendererAvboitTaskGraphStageState{
@@ -33,21 +45,21 @@ struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_occupancyStreamTask;
     Core::GpuTaskId m_occupancyComputeEmulationTask;
     Core::GpuTaskId m_occupancyReusedGeometryProducer;
-    Core::GpuTaskId m_occupancySharedComputeEmulationTasks[s_SharedComputeEmulationMaximumPhaseCount] = {};
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_occupancySharedComputeEmulationTasks = {};
     usize m_occupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_occupancyTask;
     Core::GpuTaskId m_depthWarpTask;
     Core::GpuTaskId m_extinctionStreamTask;
     Core::GpuTaskId m_extinctionComputeEmulationTask;
     Core::GpuTaskId m_extinctionReusedGeometryProducer;
-    Core::GpuTaskId m_extinctionSharedComputeEmulationTasks[s_SharedComputeEmulationMaximumPhaseCount] = {};
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_extinctionSharedComputeEmulationTasks = {};
     usize m_extinctionSharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_extinctionTask;
     Core::GpuTaskId m_integrationTask;
     Core::GpuTaskId m_accumulationStreamTask;
     Core::GpuTaskId m_accumulationComputeEmulationTask;
     Core::GpuTaskId m_accumulationReusedGeometryProducer;
-    Core::GpuTaskId m_accumulationSharedComputeEmulationTasks[s_SharedComputeEmulationMaximumPhaseCount] = {};
+    Array<Core::GpuTaskId, s_SharedComputeEmulationMaximumPhaseCount> m_accumulationSharedComputeEmulationTasks = {};
     usize m_accumulationSharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_accumulationTask;
     Core::GpuTaskId m_accumulationFinalizeTask;
@@ -71,8 +83,6 @@ public:
 };
 
 // AVBOIT contributes timing bindings; domain stays free of recording ownership.
-inline constexpr usize s_AvboitTaskGraphTimingTicketCapacity = 7u;
-
 struct RendererAvboitTaskGraphTimingTickets{
     Core::GpuTimingSubmissionTicket& m_pre;
     Core::GpuTimingSubmissionTicket& m_depthWarp;

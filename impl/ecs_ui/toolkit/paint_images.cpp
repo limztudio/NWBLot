@@ -14,19 +14,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_paint_images{
-[[nodiscard]] static b8 SameTextureKey(const ImageSource& first, const ImageSource& second)noexcept{
-    return first.identity() == second.identity() && first.generation() == second.generation();
-}
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const usize glyphCount, const SharedSdfAtlasPage* const sdfPages, const usize sdfCount, const SharedImageSource* const textureImages, const usize textureCount){
+b8 PaintBuilder::prepareImages(const Span<const SharedGlyphPage> glyphPages, const Span<const SharedSdfAtlasPage> sdfPages, const Span<const SharedImageSource> textureImages){
     NWB_ASSERT(m_recording);
-    if(glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages) || (textureCount != 0u && !textureImages))
+    const usize glyphCount = glyphPages.size();
+    const usize sdfCount = sdfPages.size();
+    const usize textureCount = textureImages.size();
+    if(glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages)
         return false;
     usize addedGlyphs = 0u;
     for(usize candidate = 0u; candidate < glyphCount; ++candidate){
@@ -85,13 +78,13 @@ b8 PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const us
             return false;
         b8 found = false;
         for(const SharedImageSource& existing : m_snapshot.m_textureImages){
-            if(__hidden_ui_paint_images::SameTextureKey(*textureImages[candidate], *existing)){
+            if(SameTextureImageKey(*textureImages[candidate], *existing)){
                 found = true;
                 break;
             }
         }
         for(usize previous = 0u; previous < candidate; ++previous){
-            if(__hidden_ui_paint_images::SameTextureKey(*textureImages[candidate], *textureImages[previous])){
+            if(SameTextureImageKey(*textureImages[candidate], *textureImages[previous])){
                 found = true;
                 break;
             }
@@ -133,7 +126,7 @@ b8 PaintBuilder::prepareImages(const SharedGlyphPage* const glyphPages, const us
     for(usize candidate = 0u; candidate < textureCount; ++candidate){
         b8 found = false;
         for(const SharedImageSource& bound : m_snapshot.m_textureImages){
-            if(__hidden_ui_paint_images::SameTextureKey(*bound, *textureImages[candidate])){
+            if(SameTextureImageKey(*bound, *textureImages[candidate])){
                 found = true;
                 break;
             }

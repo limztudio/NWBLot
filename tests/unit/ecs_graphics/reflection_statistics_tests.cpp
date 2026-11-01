@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "reflection_statistics_test_helpers.h"
+
 #include <impl/ecs_render/reflection/statistics_readback.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 
@@ -20,18 +22,16 @@ namespace __hidden_reflection_statistics_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
+using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionStatisticsReservation>;
+using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<ReflectionStatisticsReservation>;
+
+inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
 
 struct StatisticsContext{
     Core::Alloc::GlobalArena arena{Name("tests/reflection/statistics")};
-    ReflectionStatisticsControlHandle control = CreateReflectionStatisticsControl(arena, 7u).value_or(ReflectionStatisticsControlHandle{});
+    ReflectionStatisticsControlHandle control = CreateStatisticsControl<ReflectionStatisticsControl>(arena, 7u).value_or(ReflectionStatisticsControlHandle{});
 };
 
 [[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
@@ -50,24 +50,8 @@ struct StatisticsContext{
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u)noexcept{
-    return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 7u, .queue = Core::CommandQueue::Graphics, };
+    return ReflectionStatisticsTestHelpers::Token<7u, 20u>(value);
 }
-
-struct LeaseTask{
-    struct Payload{
-        ReflectionStatisticsReservation reservation;
-    };
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
-};
-
-struct DestructorLeaseTask{
-    struct Payload{
-        ReflectionStatisticsReservation reservation;
-    };
-};
 
 [[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{
     Core::GpuTaskDesc desc;
@@ -111,8 +95,8 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
 }
 
 TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion){
-    const b8 variants[] = {false, true};
-    for(const b8 csgHardwareEnabled : variants){
+    static constexpr Array<b8, 2> s_Variants = { false, true };
+    for(const b8 csgHardwareEnabled : s_Variants){
         StatisticsContext context;
         ASSERT_TRUE(context.control);
         ReflectionStatistics metadata = Metadata();
@@ -125,9 +109,11 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
         context.control->discard(key);
         Expected<ReflectionStatistics> statistics;
         EXPECT_FALSE(context.control->tryGetLatestStatistics());
-        const u32 counters[] = { 100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u, 123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u, 31u, };
-        static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
-        context.control->complete(key, Token(), counters);
+        static constexpr Array<u32, s_ReflectionCounterWordCount> s_Counters = {
+            100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u, 123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u, 31u,
+        };
+        static_assert(sizeof(s_Counters) == NWB_REFLECTION_COUNTER_SIZE);
+        context.control->complete(key, Token(), s_Counters);
         statistics = context.control->tryGetLatestStatistics();
         ASSERT_TRUE(statistics);
 
@@ -156,14 +142,13 @@ TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
     feedback.reused = true;
     context.control->accept(key, Token(), true, nullptr, &feedback);
     feedback.epoch = 999u;
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(key, Token(), counters);
     Expected<ReflectionStatistics> statistics;
     statistics = context.control->tryGetLatestStatistics();
     ASSERT_TRUE(statistics);
 
     EXPECT_EQ(statistics->feedbackEpoch, 4u);
-
 }
 
 TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
@@ -173,7 +158,7 @@ TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     const auto newer = context.control->reserve(Metadata(11u));
     context.control->accept(older, Token(20u), true);
     context.control->accept(newer, Token(21u), false);
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(newer, Token(21u), counters);
     context.control->complete(older, Token(20u), counters);
     Expected<ReflectionStatistics> statistics;
@@ -190,7 +175,7 @@ TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_ReflectionCounterWordCount> counters = {};
     Core::QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
     context.control->complete(key, wrong, counters);
@@ -210,7 +195,7 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     ASSERT_TRUE(context.control);
     const auto previous = context.control->reserve(Metadata());
     context.control->accept(previous, Token(), true);
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(8u);
     Expected<ReflectionStatistics> statistics;
@@ -235,7 +220,7 @@ TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
     ASSERT_TRUE(context.control);
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
-    context.control->complete(key, Token(), nullptr);
+    context.control->complete(key, Token(), {});
     EXPECT_FALSE(context.control->tryGetLatestStatistics());
     EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
 }
@@ -247,7 +232,7 @@ TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
     context.control->accept(key, {}, true);
     context.control->discard(key);
     EXPECT_FALSE(context.control->pending(key.slot));
-    EXPECT_FALSE(context.control->pending(ReflectionStatisticsState::s_SlotCount));
+    EXPECT_FALSE(context.control->pending(s_StatisticsReadbackSlotCount));
     EXPECT_FALSE(context.control->pending(Limit<u32>::s_Max));
     EXPECT_NE(context.control->reserve(Metadata()).slot, key.slot);
     context.control->reset(7u);
@@ -277,12 +262,12 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
     {
         ReflectionStatisticsReservation lease(context.control, Metadata());
         index = lease.slotIndex();
-        lease.accept(Token(), true);
+        lease.acceptReservation(Token(), true);
     }
     EXPECT_NE(context.control->reserve(Metadata()).slot, index);
     const auto pending = context.control->pending(index);
     ASSERT_TRUE(pending);
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_ReflectionCounterWordCount> counters = {};
     context.control->complete(pending->key, pending->token, counters);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
 }

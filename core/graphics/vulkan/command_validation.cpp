@@ -17,6 +17,80 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
+    if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY) || !IsFinite(viewport.minZ) || !IsFinite(viewport.maxZ))
+        return false;
+    if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
+        return false;
+
+    const SIMDVectorSingle extent = viewport.extent();
+    const f32 width = VectorGetX(extent);
+    const f32 height = VectorGetY(extent);
+    return
+        static_cast<f64>(width) <= static_cast<f64>(limits.maxViewportDimensions[0u])
+        && static_cast<f64>(height) <= static_cast<f64>(limits.maxViewportDimensions[1u])
+        && viewport.minX >= limits.viewportBoundsRange[0u]
+        && viewport.maxX <= limits.viewportBoundsRange[1u]
+        && viewport.minY >= limits.viewportBoundsRange[0u]
+        && viewport.maxY <= limits.viewportBoundsRange[1u]
+    ;
+}
+
+b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{
+    if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY))
+        return false;
+
+    const SIMDVectorSingle viewportBounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+    const SIMDVectorSingle flooredBounds = VectorFloor(viewportBounds);
+    const SIMDVectorSingle ceiledBounds = VectorCeiling(viewportBounds);
+    const f64 minX = static_cast<f64>(VectorGetX(flooredBounds));
+    const f64 maxX = static_cast<f64>(VectorGetY(ceiledBounds));
+    const f64 minY = static_cast<f64>(VectorGetZ(flooredBounds));
+    const f64 maxY = static_cast<f64>(VectorGetW(ceiledBounds));
+    return minX >= 0.0 && minY >= 0.0 && maxX >= minX && maxY >= minY && maxX <= static_cast<f64>(Limit<i32>::s_Max) && maxY <= static_cast<f64>(Limit<i32>::s_Max);
+}
+
+Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept{
+    if(!IsImplicitScissorValid(viewport))
+        return MakeUnexpected(Failure{});
+
+    const Rect rect = Rect::FromViewport(viewport);
+    VkRect2D scissor{};
+    scissor.offset = { rect.minX, rect.minY };
+    scissor.extent = { static_cast<u32>(rect.maxX - rect.minX), static_cast<u32>(rect.maxY - rect.minY) };
+    return scissor;
+}
+
+b8 IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
+    if(ConvertFormat(format) == VK_FORMAT_UNDEFINED)
+        return false;
+    const FormatInfo& formatInfo = GetFormatInfo(format);
+    return !formatInfo.hasDepth && !formatInfo.hasStencil;
+}
+
+MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, const b8 taskShaderActive)noexcept{
+    return taskShaderActive
+        ? MeshDispatchLimits{ { properties.maxTaskWorkGroupCount[0u], properties.maxTaskWorkGroupCount[1u], properties.maxTaskWorkGroupCount[2u] }, properties.maxTaskWorkGroupTotalCount }
+        : MeshDispatchLimits{ { properties.maxMeshWorkGroupCount[0u], properties.maxMeshWorkGroupCount[1u], properties.maxMeshWorkGroupCount[2u] }, properties.maxMeshWorkGroupTotalCount }
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 CommandList::validateFramebufferForRendering(Framebuffer* const framebuffer, const TStringView operationName){
     if(!framebuffer)
         return true;

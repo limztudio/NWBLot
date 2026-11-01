@@ -26,12 +26,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_resource_set_validation_tests{
 
 
@@ -57,7 +51,7 @@ public:
         members.clear();
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){
-            char text[32u] = {};
+            Array<char, 32u> text = {};
             const auto identityNameResult = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
             if(!identityNameResult)
                 return false;
@@ -70,13 +64,13 @@ public:
                 return false;
             members.push_back(resource);
         }
-        for(usize index = 0u; index < count / s_ExpectedDualCount; ++index)
+        for(usize index = 0u; index < count / 2u; ++index)
             Swap(members[index], members[count - index - 1u]);
         return true;
     }
 
     [[nodiscard]] Core::GpuGraphResourceSetDesc description(const Name& identity)const noexcept{
-        return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Members").setMembers(members.data(), members.size());
+        return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Validation Members").setMembers(members);
     }
 };
 
@@ -140,11 +134,11 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
             EXPECT_TRUE(secondGpuTaskAdmission->valid());
     }
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
-    EXPECT_EQ(declarations.resourceSetCount(), s_ExpectedDualCount);
+    EXPECT_EQ(declarations.resourceSetCount(), 2u);
 }
 
 TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartialSets){
-    for(const usize count : { s_ExpectedDualCount, 8u, 32u, 33u, 1024u }){
+    for(const usize count : { 2u, 8u, 32u, 33u, 1024u }){
         ResourceSetContext context(count);
         ASSERT_TRUE(context.ready);
         const Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/rejected"));
@@ -153,14 +147,14 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
             const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
             revision = declarations.declarationRevision();
         }
-        for(const usize index : Array<usize, s_ExpectedDualCount>{ 1u, count - 1u }){
+        for(const usize index : Array<usize, 2u>{ 1u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = context.members[0u];
             EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
         }
-        for(const usize index : Array<usize, s_ExpectedDualCount>{ 0u, count - 1u }){
+        for(const usize index : Array<usize, 2u>{ 0u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = {};
             EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
@@ -190,7 +184,7 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
     ResourceSetContext context(1u);
     ASSERT_TRUE(context.ready);
     Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/empty"));
-    desc.setMembers(nullptr, 0u);
+    desc.setMembers({});
     const auto emptyResult = context.graph.importResourceSet(desc);
     ASSERT_TRUE(emptyResult);
     const Core::GpuGraphResourceSetId empty = *emptyResult;
@@ -208,7 +202,7 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
         EXPECT_EQ(declarations.resourceSetAt(empty.index).memberCount, 0u);
     }
     desc.identity = Name("tests/resource_set_validation/bad_shape");
-    desc.setMembers(nullptr, 1u);
+    desc.memberCount = 1u;
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());
     desc = context.description(s_NameNone);
     EXPECT_FALSE(context.graph.importResourceSet(desc).has_value());

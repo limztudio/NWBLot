@@ -37,15 +37,12 @@ using ShaderStageKeySet = HashSet<ShaderStageKey, Core::Alloc::ScratchArena, Has
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
-inline constexpr AStringView s_IntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
-inline constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr AStringView s_ExternallyPlannedMacroIncludes[]{ s_ProjectEvaluatorModuleDefineName };
+inline constexpr Array<AStringView, 1u> s_ExternallyPlannedMacroIncludes = { s_CsgProjectEvaluatorModuleDefineName };
 [[nodiscard]] ShaderStageKeySet CollectMaterialClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<ShaderStageKeySet, NameTextError::Enum> CollectAvboitClipShaderKeys(Span<const MaterialCookEntry> materialEntries, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<b8, NameTextError::Enum> SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
 [[nodiscard]] b8 AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
-[[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(ShaderCook::CookArena& cookArena, AStringView entryName, const ShaderCook::DefineCombo& sourceCombo);
+[[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(AStringView entryName, const ShaderCook::DefineCombo& sourceCombo, ShaderCook::CookArena& cookArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

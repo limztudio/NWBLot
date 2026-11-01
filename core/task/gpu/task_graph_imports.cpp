@@ -65,16 +65,6 @@ namespace __hidden_gpu_task_graph_imports{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize GpuTaskGraph::ResourcePointerHasher::operator()(const ResourcePointerKey& key)const noexcept{
-    usize hash = Hasher<const void*>{}(key.pointer);
-    HashCombine(hash, static_cast<u8>(key.type));
-    return hash;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GpuTaskGraph::ResourcePointerKey GpuTaskGraph::MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept{
     switch(resource.type){
     case GpuGraphResourceType::Texture:

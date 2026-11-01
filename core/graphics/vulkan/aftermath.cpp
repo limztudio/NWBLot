@@ -10,7 +10,7 @@
 #if defined(NWB_WITH_AFTERMATH)
 #include <GFSDK_Aftermath_GpuCrashDump.h>
 
-#include <core/common/aftermath_runtime.h>
+#include <core/crash/aftermath_runtime.h>
 
 #include <global/shared_library.h>
 #include <global/sync.h>
@@ -88,8 +88,7 @@ static State& GetState(){
 
 
 // Crash dump callback is free-threaded; copy the dump for the device-lost thread.
-static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const uint32_t gpuCrashDumpSize, void* pUserData){
-    static_cast<void>(pUserData);
+static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const uint32_t gpuCrashDumpSize, [[maybe_unused]] void* pUserData){
     if(!pGpuCrashDump || gpuCrashDumpSize == 0u)
         return;
 
@@ -101,8 +100,7 @@ static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const
 }
 
 // Crash dump description callback (free-threaded). Adds application identity to the dump for triage.
-static void GFSDK_AFTERMATH_CALL OnCrashDumpDescription(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addValue, void* pUserData){
-    static_cast<void>(pUserData);
+static void GFSDK_AFTERMATH_CALL OnCrashDumpDescription(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addValue, [[maybe_unused]] void* pUserData){
     addValue(static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpDescriptionKey_ApplicationName), s_AppName.data());
 }
 
@@ -133,7 +131,7 @@ b8 Initialize(){
         return true; // process-global: only enable once.
 
     Alloc::GlobalArena& arena = DumpArena();
-    const auto opened = state.library.open(arena, Common::s_AftermathRuntimeName);
+    const auto opened = state.library.open(arena, Crash::s_AftermathRuntimeName);
     if(!opened){
         const SharedLibraryFailure& failure = opened.error();
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime load failed: {}; native detail '{}'; detail truncated {}"), ConvertString(failure.code.message()), ConvertString(failure.detail.view()), failure.detailTruncated);

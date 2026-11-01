@@ -4,7 +4,7 @@
 
 #include "skin_asset.h"
 
-#include <impl/assets_mesh/subsystem.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>
@@ -103,6 +103,11 @@ b8 Skin::validatePayload()const{
         }
     }
     return true;
+}
+
+void Skin::setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept{
+    m_influences = Move(influences);
+    m_inverseBindMatrices = Move(inverseBindMatrices);
 }
 
 

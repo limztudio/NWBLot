@@ -21,10 +21,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native coverage preserves small descenders that lose their bottom row when the baked SDF is downscaled.
-inline constexpr f32 s_BakedFontAtlasMinScale = 0.75f;
-inline constexpr f32 s_BakedFontAtlasMaxScale = 1.5f;
-
 // This version copies only rendering metadata and image bytes. FontFace keeps it with its exact shaping source.
 class BakedFontAtlas : NoCopy{
 public:

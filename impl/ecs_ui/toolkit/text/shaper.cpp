@@ -22,22 +22,7 @@ namespace __hidden_ui_text_shaper{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static usize ClusterEnd(const Span<const RawShapedGlyph> glyphs, usize begin)noexcept{
-    usize end = begin + 1u;
-    while(end < glyphs.size() && glyphs[end].byteBegin == glyphs[begin].byteBegin)
-        ++end;
-    return end;
-}
-
-[[nodiscard]] static b8 HasMissing(const Span<const RawShapedGlyph> glyphs, usize begin, usize end)noexcept{
-    for(usize index = begin; index < end; ++index){
-        if(glyphs[index].glyphId == 0u)
-            return true;
-    }
-    return false;
-}
-
-static void Append(ShapedRun& run, const SharedFontFace& face, const Span<const RawShapedGlyph> glyphs, usize begin, usize end){
+static void Append(const SharedFontFace& face, const Span<const RawShapedGlyph> glyphs, usize begin, usize end, ShapedRun& run){
     for(usize index = begin; index < end; ++index){
         const RawShapedGlyph& glyph = glyphs[index];
         run.glyphs.push_back({ face, glyph.glyphId, glyph.byteBegin, glyph.byteEnd, glyph.offset, glyph.advance, glyph.ink, glyph.coverage });
@@ -54,16 +39,9 @@ static void Append(ShapedRun& run, const SharedFontFace& face, const Span<const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextShaper::TextShaper(Core::Alloc::GlobalArena& arena)noexcept
-    : m_arena(arena)
-    , m_fonts(arena)
-    , m_primary(arena)
-    , m_fallback(arena)
-    , m_spans(arena)
-{}
-
-b8 TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
-    if(!sources || count == 0u || count > s_TextMaxFontSources)
+b8 TextShaper::setFonts(Core::Alloc::ScratchArena& scratchArena, const Span<const FontSource> sources){
+    const usize count = sources.size();
+    if(count == 0u || count > s_TextMaxFontSources)
         return false;
     PaintVector<SharedFontFace> fonts(m_arena);
     fonts.reserve(count);
@@ -96,14 +74,14 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
     m_spans.reserve(m_primary.size());
     usize begin = 0u;
     while(begin < m_primary.size()){
-        const usize end = __hidden_ui_text_shaper::ClusterEnd(m_primary, begin);
-        FontSpan span{ 0u, begin, end, m_primary[begin].byteBegin, m_primary[begin].byteEnd };
-        if(__hidden_ui_text_shaper::HasMissing(m_primary, begin, end)){
+        const usize end = FindClusterEnd(m_primary, begin);
+        TextFontSpan span{ 0u, begin, end, m_primary[begin].byteBegin, m_primary[begin].byteEnd };
+        if(ClusterHasMissingGlyph(m_primary, begin, end)){
             span.fontIndex = m_fonts.size();
             for(usize fontIndex = 1u; fontIndex < m_fonts.size(); ++fontIndex){
                 if(!m_fonts[fontIndex]->shape(request, span.byteBegin, span.byteEnd, m_fallback))
                     return MakeUnexpected(TextLayoutStatus::FontFailure);
-                if(__hidden_ui_text_shaper::HasMissing(m_fallback, 0u, m_fallback.size()))
+                if(ClusterHasMissingGlyph(m_fallback, 0u, m_fallback.size()))
                     continue;
                 span.fontIndex = fontIndex;
                 break;
@@ -112,7 +90,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
                 return MakeUnexpected(TextLayoutStatus::MissingGlyph);
         }
         if(!m_spans.empty() && m_spans.back().fontIndex == span.fontIndex){
-            FontSpan& previous = m_spans.back();
+            TextFontSpan& previous = m_spans.back();
             previous.glyphEnd = span.glyphEnd;
             previous.byteBegin = Min(previous.byteBegin, span.byteBegin);
             previous.byteEnd = Max(previous.byteEnd, span.byteEnd);
@@ -121,14 +99,14 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             m_spans.push_back(span);
         begin = end;
     }
-    for(const FontSpan& span : m_spans){
+    for(const TextFontSpan& span : m_spans){
         const SharedFontFace& face = m_fonts[span.fontIndex];
         if(span.fontIndex == 0u)
-            __hidden_ui_text_shaper::Append(run, face, m_primary, span.glyphBegin, span.glyphEnd);
+            __hidden_ui_text_shaper::Append(face, m_primary, span.glyphBegin, span.glyphEnd, run);
         else{
             if(!face->shape(request, span.byteBegin, span.byteEnd, m_fallback))
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            if(__hidden_ui_text_shaper::HasMissing(m_fallback, 0u, m_fallback.size()))
+            if(ClusterHasMissingGlyph(m_fallback, 0u, m_fallback.size()))
                 return MakeUnexpected(TextLayoutStatus::MissingGlyph);
             const auto metrics = face->metrics(request.fontSize);
             if(!metrics)
@@ -139,7 +117,7 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             run.metrics.ascender = VectorGetX(maximumMetrics);
             run.metrics.descender = VectorGetY(maximumMetrics);
             run.metrics.lineGap = VectorGetZ(maximumMetrics);
-            __hidden_ui_text_shaper::Append(run, face, m_fallback, 0u, m_fallback.size());
+            __hidden_ui_text_shaper::Append(face, m_fallback, 0u, m_fallback.size(), run);
         }
     }
     return run;

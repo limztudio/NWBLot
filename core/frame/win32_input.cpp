@@ -93,10 +93,6 @@ static i32 TranslateShiftKey(LPARAM lParam)noexcept{
     }
 }
 
-static i32 TranslateNavigationKey(i32 extendedKey, i32 keypadKey, LPARAM lParam)noexcept{
-    return IsExtendedKey(lParam) ? extendedKey : keypadKey;
-}
-
 static i32 TranslateKey(WPARAM wParam, LPARAM lParam)noexcept{
     const u32 vk = static_cast<u32>(wParam);
 
@@ -131,16 +127,16 @@ static i32 TranslateKey(WPARAM wParam, LPARAM lParam)noexcept{
     case VK_RETURN: return IsExtendedKey(lParam) ? Key::KeypadEnter : Key::Enter;
     case VK_TAB: return Key::Tab;
     case VK_BACK: return Key::Backspace;
-    case VK_INSERT: return TranslateNavigationKey(Key::Insert, Key::Keypad0, lParam);
-    case VK_DELETE: return TranslateNavigationKey(Key::Delete, Key::KeypadDecimal, lParam);
-    case VK_RIGHT: return TranslateNavigationKey(Key::Right, Key::Keypad6, lParam);
-    case VK_LEFT: return TranslateNavigationKey(Key::Left, Key::Keypad4, lParam);
-    case VK_DOWN: return TranslateNavigationKey(Key::Down, Key::Keypad2, lParam);
-    case VK_UP: return TranslateNavigationKey(Key::Up, Key::Keypad8, lParam);
-    case VK_PRIOR: return TranslateNavigationKey(Key::PageUp, Key::Keypad9, lParam);
-    case VK_NEXT: return TranslateNavigationKey(Key::PageDown, Key::Keypad3, lParam);
-    case VK_HOME: return TranslateNavigationKey(Key::Home, Key::Keypad7, lParam);
-    case VK_END: return TranslateNavigationKey(Key::End, Key::Keypad1, lParam);
+    case VK_INSERT: return IsExtendedKey(lParam) ? Key::Insert : Key::Keypad0;
+    case VK_DELETE: return IsExtendedKey(lParam) ? Key::Delete : Key::KeypadDecimal;
+    case VK_RIGHT: return IsExtendedKey(lParam) ? Key::Right : Key::Keypad6;
+    case VK_LEFT: return IsExtendedKey(lParam) ? Key::Left : Key::Keypad4;
+    case VK_DOWN: return IsExtendedKey(lParam) ? Key::Down : Key::Keypad2;
+    case VK_UP: return IsExtendedKey(lParam) ? Key::Up : Key::Keypad8;
+    case VK_PRIOR: return IsExtendedKey(lParam) ? Key::PageUp : Key::Keypad9;
+    case VK_NEXT: return IsExtendedKey(lParam) ? Key::PageDown : Key::Keypad3;
+    case VK_HOME: return IsExtendedKey(lParam) ? Key::Home : Key::Keypad7;
+    case VK_END: return IsExtendedKey(lParam) ? Key::End : Key::Keypad1;
     case VK_CLEAR: return Key::Keypad5;
     case VK_CAPITAL: return Key::CapsLock;
     case VK_SCROLL: return Key::ScrollLock;
@@ -344,13 +340,13 @@ Optional<LRESULT> Win32FrameInput::handleMessage(const UINT message, const WPARA
 
     case WM_MOUSEWHEEL: {
         dispatchScreenMousePosition(lParam);
-        m_frame.input().mouseScrollUpdate(0.0, VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam))), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)))));
+        m_frame.input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
     }
     return LRESULT{ 0 };
 
     case WM_MOUSEHWHEEL: {
         dispatchScreenMousePosition(lParam);
-        m_frame.input().mouseScrollUpdate(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam))), VectorDoubleReplicate(static_cast<f64>(WHEEL_DELTA)))), 0.0);
+        m_frame.input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
     }
     return LRESULT{ 0 };
 

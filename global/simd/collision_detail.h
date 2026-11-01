@@ -59,10 +59,6 @@ namespace FrustumPlaneIndex{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) != 0u;
 }
 
-[[nodiscard]] NWB_INLINE SIMDVectorSingle Vector3MaxComponent(const SIMDVectorSingle value)noexcept{
-    return VectorMax(VectorSplatX(value), VectorMax(VectorSplatY(value), VectorSplatZ(value)));
-}
-
 [[nodiscard]] NWB_INLINE SIMDVectorSingle Vector3SignedUnitMask(const SIMDVectorSingle position, const SIMDVectorSingle componentMask)noexcept{
     const SIMDVectorSingle sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, VectorGreaterOrEqual(position, VectorZero()));
     return VectorAndInt(sign, componentMask);
@@ -236,10 +232,6 @@ namespace FrustumPlaneIndex{
 
 [[nodiscard]] NWB_INLINE b8 VectorDouble4AnyTrue(const SIMDVectorDouble value)noexcept{
     return (VectorDoubleMoveMask(value) & VectorDoubleComponentMask::s_DoubleXYZW) != 0u;
-}
-
-[[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDouble3MaxComponent(const SIMDVectorDouble value)noexcept{
-    return VectorDoubleMax(VectorDoubleSplatX(value), VectorDoubleMax(VectorDoubleSplatY(value), VectorDoubleSplatZ(value)));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDouble3SignedUnitMask(const SIMDVectorDouble position, const SIMDVectorDouble componentMask)noexcept{

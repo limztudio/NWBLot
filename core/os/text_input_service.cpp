@@ -24,11 +24,6 @@ namespace __hidden_text_input_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static u64 AllocateServiceIdentity()noexcept{
-    static Atomic<u64> s_NextIdentity{ 1u };
-    return NextNonWrappingIdentity(s_NextIdentity);
-}
-
 static TextInputAdmission::Enum ValidateSurrounding(const AStringView text, const usize anchorByte, const usize caretByte)noexcept{
     const TextInputAdmission::Enum status = ValidateTextInputUtf8(text, s_TextInputMaxSurroundingBytes);
     if(status != TextInputAdmission::Accepted)
@@ -52,7 +47,7 @@ QueuedTextInputService::QueuedTextInputService(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_surrounding(arena)
     , m_events(arena)
-    , m_serviceIdentity(__hidden_text_input_service::AllocateServiceIdentity())
+    , m_serviceIdentity(AllocateServiceIdentity())
     , m_ownerThread(QueryCurrentThreadId())
 {
     m_events.reserve(s_TextInputMaxEvents);
@@ -84,15 +79,14 @@ Expected<TextInputSessionToken, TextInputAdmission::Enum> QueuedTextInputService
     const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(desc.surrounding, desc.anchorByte, desc.caretByte);
     if(validation != TextInputAdmission::Accepted)
         return MakeUnexpected(validation);
-    if(m_nextGeneration == Limit<u64>::s_Max)
-        TerminateInvariant();
+    const u64 generation = m_nextGeneration;
+    AdvanceNonWrappingRevision(m_nextGeneration);
 
     m_transitioning = true;
     ScopeExit finishTransition([this]()noexcept{ m_transitioning = false; });
     clearEvents();
     m_cancelledToken = {};
-    m_activeToken = { .service = m_serviceIdentity, .generation = m_nextGeneration };
-    ++m_nextGeneration;
+    m_activeToken = { .service = m_serviceIdentity, .generation = generation };
     m_caret = desc.caret;
     m_surrounding.assign(desc.surrounding.data(), desc.surrounding.size());
     m_anchorByte = desc.anchorByte;
@@ -156,14 +150,12 @@ TextInputAdmission::Enum QueuedTextInputService::updateSurrounding(const TextInp
     const TextInputAdmission::Enum validation = __hidden_text_input_service::ValidateSurrounding(text, anchorByte, caretByte);
     if(validation != TextInputAdmission::Accepted)
         return validation;
-    if(m_surroundingRevision == Limit<u64>::s_Max)
-        TerminateInvariant();
     m_transitioning = true;
     ScopeExit finishTransition([this]()noexcept{ m_transitioning = false; });
     m_surrounding.assign(text.data(), text.size());
     m_anchorByte = anchorByte;
     m_caretByte = caretByte;
-    ++m_surroundingRevision;
+    AdvanceNonWrappingRevision(m_surroundingRevision);
     updateNativeSurrounding(m_surrounding, m_anchorByte, m_caretByte, m_surroundingRevision, cause);
     return token == m_activeToken ? TextInputAdmission::Accepted : TextInputAdmission::NativeFailure;
 }
@@ -209,15 +201,7 @@ b8 QueuedTextInputService::setFocused(const b8 focused){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum QueuedTextInputService::startNativeSession(TextInputSessionToken, const TextInputSessionDesc&){
-    return TextInputAdmission::Accepted;
-}
-
 void QueuedTextInputService::endNativeSession(TextInputSessionToken){}
-
-TextInputAdmission::Enum QueuedTextInputService::updateNativeCaret(TextInputRect){
-    return TextInputAdmission::Accepted;
-}
 
 void QueuedTextInputService::updateNativeSurrounding(AStringView, usize, usize, u64, TextInputChangeCause::Enum){}
 

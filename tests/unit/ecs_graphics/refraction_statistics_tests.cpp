@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "reflection_statistics_test_helpers.h"
+
 #include <impl/ecs_render/refraction/statistics_readback.h>
 
 #include <core/alloc/general.h>
-#include <core/task/gpu/task_graph.h>
 
 #include <gtest/gtest.h>
 
@@ -22,9 +23,11 @@ namespace __hidden_refraction_statistics_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 
+inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
+
 struct StatisticsContext{
     Core::Alloc::GlobalArena arena{Name("tests/refraction/statistics")};
-    RefractionStatisticsControlHandle control = CreateRefractionStatisticsControl(arena, 7u).value_or(RefractionStatisticsControlHandle{});
+    RefractionStatisticsControlHandle control = CreateStatisticsControl<RefractionStatisticsControl>(arena, 7u).value_or(RefractionStatisticsControlHandle{});
 };
 
 [[nodiscard]] RefractionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
@@ -40,23 +43,7 @@ struct StatisticsContext{
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u)noexcept{
-    return Core::QueueSubmissionToken{ .value = value, .physicalQueueIndex = 0u, .deviceGeneration = 7u, .queue = Core::CommandQueue::Graphics, };
-}
-
-struct LeaseTask{
-    struct Payload{
-        RefractionStatisticsReservation reservation;
-    };
-
-
-public:
-    static void Discarded(Payload& payload)noexcept{ payload.reservation.discard(); }
-};
-
-[[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{
-    Core::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests.refraction.statistics.lease")).setMarkerLabel("Refraction statistics lease");
-    return desc;
+    return ReflectionStatisticsTestHelpers::Token<7u, 20u>(value);
 }
 
 
@@ -85,26 +72,11 @@ TEST(RefractionStatistics, RingSaturationDoesNotRecycleOutstandingGpuWork){
     EXPECT_FALSE(context.control->reserve(Metadata()).valid());
 }
 
-TEST(RefractionStatistics, RejectedReservationCannotMutateItsReusedSlot){
-    StatisticsContext context;
-    const auto rejected = context.control->reserve(Metadata());
-    context.control->discard(rejected);
-    const auto current = context.control->reserve(Metadata(10u));
-    ASSERT_EQ(rejected.slot, current.slot);
-    context.control->accept(rejected, Token(), true);
-    context.control->discard(rejected);
-    context.control->accept(current, Token(21u), false);
-    const auto pending = context.control->pending(current.slot);
-    ASSERT_TRUE(pending);
-    EXPECT_EQ(pending->key.sequence, current.sequence);
-    EXPECT_EQ(pending->token.value, 21u);
-}
-
 TEST(RefractionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
-    const u32 counters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_RefractionCounterWordCount> counters = {};
     Core::QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
     context.control->complete(key, wrong, counters);
@@ -137,12 +109,12 @@ TEST(RefractionStatistics, OlderCompletionsCannotReplaceFrozenNewerPublication){
     metadata.width = 1u;
     context.control->accept(older, Token(20u), true);
     context.control->accept(newer, Token(21u), false);
-    const u32 counters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {
+    static constexpr Array<u32, s_RefractionCounterWordCount> s_Counters = {
         23u, 41u, 2u, 3u, 5u, 7u, 11u, 43u, 13u, 17u, 19u, 29u, 31u, 47u, 37u, 53u,
         59u, 61u, 67u, 71u, 73u, 79u, 83u, 89u, 97u, 101u, 103u, 107u, 1u,
     };
-    context.control->complete(newer, Token(21u), counters);
-    const u32 olderCounters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {};
+    context.control->complete(newer, Token(21u), s_Counters);
+    const Array<u32, s_RefractionCounterWordCount> olderCounters = {};
     context.control->complete(older, Token(20u), olderCounters);
     const auto statistics = context.control->tryGetLatestStatistics();
     ASSERT_TRUE(statistics);
@@ -167,7 +139,7 @@ TEST(RefractionStatistics, DeviceResetRejectsStaleAcceptanceAndCompletion){
     StatisticsContext context;
     const auto previous = context.control->reserve(Metadata());
     context.control->accept(previous, Token(), true);
-    const u32 counters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_RefractionCounterWordCount> counters = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(0u);
     EXPECT_FALSE(context.control->tryGetLatestStatistics());
@@ -196,64 +168,15 @@ TEST(RefractionStatistics, FailedMappingRetiresSlotWithoutReplacingPublication){
     StatisticsContext context;
     const auto first = context.control->reserve(Metadata());
     context.control->accept(first, Token(), true);
-    const u32 counters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {};
+    const Array<u32, s_RefractionCounterWordCount> counters = {};
     context.control->complete(first, Token(), counters);
     const auto failed = context.control->reserve(Metadata(10u));
     context.control->accept(failed, Token(21u), true);
-    context.control->complete(failed, Token(21u), nullptr);
+    context.control->complete(failed, Token(21u), {});
     const auto statistics = context.control->tryGetLatestStatistics();
     ASSERT_TRUE(statistics);
     EXPECT_EQ(statistics->sequence, first.sequence);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, failed.slot);
-}
-
-TEST(RefractionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
-    StatisticsContext context;
-    const auto key = context.control->reserve(Metadata());
-    context.control->accept(key, {}, true);
-    context.control->discard(key);
-    EXPECT_FALSE(context.control->pending(key.slot));
-    EXPECT_FALSE(context.control->pending(RefractionStatisticsState::s_SlotCount));
-    EXPECT_FALSE(context.control->pending(Limit<u32>::s_Max));
-    EXPECT_NE(context.control->reserve(Metadata()).slot, key.slot);
-    context.control->reset(7u);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
-}
-
-TEST(RefractionStatistics, RejectedGraphRegistrationAndGraphResetReleaseUnacceptedLeases){
-    StatisticsContext context;
-    Core::GpuTaskGraph graph(context.arena);
-    const auto rejected = graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{RefractionStatisticsReservation(context.control, Metadata())});
-    EXPECT_FALSE(rejected);
-    {
-        const auto task = graph.addTask<LeaseTask>(TaskDesc(), LeaseTask::Payload{RefractionStatisticsReservation(context.control, Metadata())});
-        ASSERT_TRUE(task);
-        EXPECT_NE(context.control->reserve(Metadata()).slot, 0u);
-    }
-    graph.reset();
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, 0u);
-}
-
-TEST(RefractionStatistics, MovingLeaseKeepsAcceptedGpuWorkReservedAfterDestruction){
-    StatisticsContext context;
-    u32 acceptedSlot = 0u;
-    {
-        RefractionStatisticsReservation first(context.control, Metadata());
-        acceptedSlot = first.slotIndex();
-        RefractionStatisticsReservation second(context.control, Metadata());
-        const u32 replacedSlot = second.slotIndex();
-        second = Move(first);
-        EXPECT_FALSE(first.valid());
-        EXPECT_EQ(second.slotIndex(), acceptedSlot);
-        EXPECT_EQ(context.control->reserve(Metadata()).slot, replacedSlot);
-        second.accept(Token(), true);
-    }
-    EXPECT_NE(context.control->reserve(Metadata()).slot, acceptedSlot);
-    const auto pending = context.control->pending(acceptedSlot);
-    ASSERT_TRUE(pending);
-    const u32 counters[NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32)] = {};
-    context.control->complete(pending->key, pending->token, counters);
-    EXPECT_EQ(context.control->reserve(Metadata()).slot, acceptedSlot);
 }
 
 

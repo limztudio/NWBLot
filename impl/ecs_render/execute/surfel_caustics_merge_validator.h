@@ -39,11 +39,7 @@ struct SurfelCausticsMergeValidationResult{
     b8 causticPhotonMergedIntoCausticsPacket = false;
     b8 causticGeometryMergedIntoCausticsPacket = false;
     b8 causticResolvePrepareMergedIntoCausticsPacket = false;
-    b8 causticResolveWaveletMergedIntoCausticsPacket = false;
-    b8 causticResolveSecondWaveletMergedIntoCausticsPacket = false;
-    b8 causticResolveThirdWaveletMergedIntoCausticsPacket = false;
-    b8 causticResolveFourthWaveletMergedIntoCausticsPacket = false;
-    b8 causticResolveFifthWaveletMergedIntoCausticsPacket = false;
+    b8 causticResolveWaveletsMergedIntoCausticsPacket = false;
     b8 causticResolveUpsampleMergedIntoCausticsPacket = false;
     b8 causticIrradianceClearMergedIntoCausticsPacket = false;
     b8 causticAccumulatorBootstrapClearMergedIntoCausticsPacket = false;
@@ -59,7 +55,9 @@ struct SurfelCausticsMergeValidationResult{
 
 class SurfelCausticsMergeValidator final : NoCopy{
 public:
-    explicit SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
+    explicit SurfelCausticsMergeValidator(const RendererFramePipeline& pipeline)noexcept
+        : m_pipeline(pipeline)
+    {}
 
 
 public:
@@ -67,7 +65,7 @@ public:
 
 
 private:
-    NotNull<RendererFramePipeline*> m_pipeline;
+    const RendererFramePipeline& m_pipeline;
 };
 
 

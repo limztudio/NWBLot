@@ -3,7 +3,6 @@
 
 
 #include "local_bounds.h"
-#include "resource_names.h"
 #include "runtime_instance.h"
 #include "timing_names.h"
 
@@ -39,14 +38,14 @@ b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSki
         return false;
     }
     Core::BufferDesc desc;
-    desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(*partialName);
+    desc.setByteSize(static_cast<u64>(instance.meshlets.size()) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveUAVs(true).setCanHaveRawViews(true).setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(partialName);
     auto partialsResult = graphics.createBuffer(desc);
     if(!partialsResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
         return false;
     }
     Core::BufferHandle partials = Move(*partialsResult);
-    desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(*outputName);
+    desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
     auto outputResult = graphics.createBuffer(desc);
     if(!outputResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
@@ -57,16 +56,6 @@ b8 CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSki
     instance.localBoundsBuffer = Move(output);
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-MeshSkinningLocalBoundsTask::Payload::Payload(Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket, const Span<const MeshSkinningLocalBoundsDispatch> dispatches)noexcept
-    : graphics(graphics)
-    , timingTicket(timingTicket)
-    , dispatches(dispatches)
-{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

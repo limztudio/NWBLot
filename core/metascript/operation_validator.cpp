@@ -20,12 +20,6 @@ namespace __hidden_metascript_operation_validator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_DivisionByZeroText = "division by zero";
-inline constexpr AStringView s_ListAppendSizeOverflowText = "list append size overflow";
-inline constexpr AStringView s_StringConcatenationSizeOverflowText = "string concatenation size overflow";
-inline constexpr AStringView s_ListConcatenationSizeOverflowText = "list concatenation size overflow";
-inline constexpr AStringView s_StringAppendSizeOverflowText = "string append size overflow";
-
 [[nodiscard]] b8 BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs)noexcept{
     switch(op){
     case TokenType::Plus:
@@ -66,8 +60,6 @@ inline constexpr AStringView s_StringAppendSizeOverflowText = "string append siz
 
 
 b8 OperationValidator::validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
-    using namespace __hidden_metascript_operation_validator;
-
     switch(op){
     case TokenType::Plus:
         if(lhs.isNumeric() && rhs.isNumeric())
@@ -103,8 +95,6 @@ b8 OperationValidator::validateBinaryOperation(const TokenType::Enum op, const V
 }
 
 b8 OperationValidator::validateAssignment(const TokenType::Enum op, const Value& target, const Value& rhs, const u32 line, const u32 column){
-    using namespace __hidden_metascript_operation_validator;
-
     switch(op){
     case TokenType::Equal:
         return true;

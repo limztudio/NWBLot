@@ -31,13 +31,13 @@ namespace __hidden_stress_csg_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Name s_Groups[] = { Name("stress/csg/transparent"), Name("stress/csg/opaque") };
+static constexpr Array<Name, 2> s_Groups = { Name("stress/csg/transparent"), Name("stress/csg/opaque") };
 static constexpr Name s_MeshObject("mesh");
 static constexpr usize s_BodyCount = 20u;
 static constexpr Float4 s_CutterHalfExtents(4.5f, 0.08f, 0.65f, 0.0f);
 static constexpr f32 s_CutterHeight = 0.9f;
 static constexpr f32 s_CutterAmplitude = 0.1f;
-static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
+static constexpr Array<f32, 2> s_RowDepth = { -0.55f, 0.55f };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +49,7 @@ static constexpr f32 s_RowDepth[] = { -0.55f, 0.55f };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena, const Core::ECS::EntityID* const owners, const usize ownerCount, const b8 opaqueOnly){
+b8 StressCsgScene::initialize(const Span<const Core::ECS::EntityID> owners, const b8 opaqueOnly, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
     const auto value = ReadSmokeEnvironmentText(scratchArena, "NWB_STRESS_CSG_PROFILE");
     if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
@@ -57,40 +57,41 @@ b8 StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena
         NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
         return false;
     }
-    if(!owners || ownerCount != __hidden_stress_csg_scene::s_BodyCount || opaqueOnly){
+    const usize ownerCount = owners.size();
+    if(ownerCount != __hidden_stress_csg_scene::s_BodyCount || opaqueOnly){
         NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class"));
         return false;
     }
-    Core::ECS::EntityID meshes[__hidden_stress_csg_scene::s_BodyCount] = {};
+    Array<Core::ECS::EntityID, __hidden_stress_csg_scene::s_BodyCount> meshes = {};
     for(usize index = 0u; index < ownerCount; ++index){
-        meshes[index] = FindSpawnedModelObject(world, owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh);
+        meshes[index] = FindSpawnedModelObject(owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh, world);
         if(!meshes[index].valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
             return false;
         }
     }
     for(usize index = 0u; index < ownerCount; ++index){
-        const usize row = index % LengthOf(m_cutters);
-        AddSkinnedCsgMeshReceiver(world, meshes[index], __hidden_stress_csg_scene::s_Groups[row], row == 1u, row == 0u);
+        const usize row = index % m_cutters.size();
+        AddSkinnedCsgMeshReceiver(meshes[index], __hidden_stress_csg_scene::s_Groups[row], row == 1u, row == 0u, world);
     }
-    for(usize row = 0u; row < LengthOf(m_cutters); ++row){
+    for(usize row = 0u; row < m_cutters.size(); ++row){
         auto entity = world.createEntity();
         auto& cutter = entity.addComponent<Impl::CsgCutterComponent>();
         cutter.receiverGroup = __hidden_stress_csg_scene::s_Groups[row];
         cutter.shapeType = Name("engine/csg/box");
         Impl::CsgBoxShapeParameters parameters;
         parameters.halfExtents = __hidden_stress_csg_scene::s_CutterHalfExtents;
-        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterParameters(parameters, cutter);
         m_cutters[row] = entity.id();
     }
     m_enabled = true;
-    if(!update(world, 0.0f))
+    if(!update(0.0f, world))
         return false;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}") NWB_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
         , ownerCount
-        , ownerCount / LengthOf(m_cutters)
-        , ownerCount / LengthOf(m_cutters)
-        , LengthOf(m_cutters)
+        , ownerCount / m_cutters.size()
+        , ownerCount / m_cutters.size()
+        , m_cutters.size()
         , __hidden_stress_csg_scene::s_CutterHalfExtents.x
         , __hidden_stress_csg_scene::s_CutterHalfExtents.y
         , __hidden_stress_csg_scene::s_CutterHalfExtents.z
@@ -102,7 +103,7 @@ b8 StressCsgScene::initialize(Core::ECS::World& world, Core::Alloc::ScratchArena
     return true;
 }
 
-b8 StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
+b8 StressCsgScene::update(const f32 yaw, Core::ECS::World& world){
     if(!m_enabled)
         return true;
     if(!IsFinite(yaw)){
@@ -111,14 +112,14 @@ b8 StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
     }
     const SIMDVectorSingle phases = VectorAdd(VectorReplicate(yaw), VectorSet(0.0f, s_PI, 0.0f, 0.0f));
     const SIMDVectorSingle heights = VectorMultiplyAddExpression(VectorSin(phases), VectorReplicate(__hidden_stress_csg_scene::s_CutterAmplitude), VectorReplicate(__hidden_stress_csg_scene::s_CutterHeight));
-    for(usize row = 0u; row < LengthOf(m_cutters); ++row){
+    for(usize row = 0u; row < m_cutters.size(); ++row){
         auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(m_cutters[row]);
         if(!cutter){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
             return false;
         }
         const f32 height = row == 0u ? VectorGetX(heights) : VectorGetY(heights);
-        AssignCsgCutterTransform(*cutter, VectorSet(0.0f, height, __hidden_stress_csg_scene::s_RowDepth[row], 0.0f), QuaternionIdentity());
+        AssignCsgCutterTransform(VectorSet(0.0f, height, __hidden_stress_csg_scene::s_RowDepth[row], 0.0f), QuaternionIdentity(), *cutter);
     }
     return true;
 }

@@ -392,12 +392,12 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
     ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
     // Resource, sampler, and TLAS heap sets are contiguous at 0/1/2.
-    const u32 bufferIndices[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = {
+    const Array<u32, DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct> bufferIndices = {{
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
         DescriptorBufferManager::s_SamplerDescriptorBufferIndex,
         DescriptorBufferManager::s_ResourceDescriptorBufferIndex,
-    };
-    const VkDeviceSize offsets[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = { resourceBlock.offsetBytes, samplerBlock.offsetBytes, accelStructBlock.offsetBytes };
+    }};
+    const Array<VkDeviceSize, DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct> offsets = {{ resourceBlock.offsetBytes, samplerBlock.offsetBytes, accelStructBlock.offsetBytes }};
 
     m_context.deviceDispatch.vkCmdSetDescriptorBufferOffsetsEXT(
         m_currentCmdBuf->m_cmdBuf,
@@ -405,8 +405,8 @@ void CommandList::bindDescriptorBufferHeapNative(GpuDescriptorHeap& heap, const 
         pipelineBindings.m_pipelineLayout,
         abi.resourceSetIndex,
         bindAccelStruct ? DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct : DescriptorBufferManager::s_PersistentDescriptorBufferCount,
-        bufferIndices,
-        offsets
+        bufferIndices.data(),
+        offsets.data()
     );
 }
 

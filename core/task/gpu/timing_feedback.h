@@ -312,8 +312,12 @@ public:
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
 
     [[nodiscard]] usize historyCount()const noexcept{ return m_histories.size(); }
+
     [[nodiscard]] const GpuTaskTimingHistory* find(const GpuTaskTimingKey& key, const GpuPhysicalQueueId& physicalQueue)const noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept;
+
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingAssignmentKey& key)const noexcept{
+        return findAssignmentState(key);
+    }
 
 
 private:

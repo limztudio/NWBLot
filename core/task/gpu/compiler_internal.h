@@ -26,23 +26,23 @@ public:
 
     // Queue decision only. No command lists, no submission; the scheduler supplies the device topology.
     [[nodiscard]] b8 assignQueues(
-        GpuTaskGraphQueueAssignments& outAssignments,
-        Alloc::ScratchArena& scratchArena,
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuPhysicalQueueTopology& topology,
+        Alloc::ScratchArena& scratchArena,
+        GpuTaskGraphQueueAssignments& outAssignments,
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
     // The packet compiler reuses the analysis and queue-assignment results shared by scheduler admission, telemetry, and packet creation.
     // Tasks retain one packet by default.
     [[nodiscard]] b8 compile(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuPhysicalQueueTopology& topology,
+        Alloc::ScratchArena& scratchArena,
         GpuTaskGraphAnalysis& outAnalysis,
         GpuTaskGraphQueueAssignments& outAssignments,
         GpuCompiledGraph& outCompiledGraph,
-        Alloc::ScratchArena& scratchArena,
-        const GpuTaskGraph::DeclarationReadView& graph,
-        const GpuPhysicalQueueTopology& topology,
         const GpuTaskGraphCompileOptions& options = {}
     )const;
 };
@@ -52,6 +52,12 @@ public:
 
 
 namespace GpuTaskGraphCompilerDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_BitsPerWord = sizeof(u64) * s_BitsPerByte;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -167,6 +173,10 @@ public:
 
 
 private:
+    [[nodiscard]] b8 hasRelatedBit(u32 sourceIndex, u32 destinationIndex)const noexcept;
+
+
+private:
     // Symmetric ancestor/descendant/self masks; topological ranks retain directed reachability.
     Vector<u64, Alloc::ScratchArena> m_words;
     Vector<u32, Alloc::ScratchArena> m_topologicalRanks;
@@ -209,7 +219,7 @@ public:
     void rebuildAssignmentLoads(Span<const GpuTaskQueueAssignment> assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, NotNull<const GpuTaskQueueAssignment*> members, usize memberCount)const noexcept;
+    [[nodiscard]] u64 independentQueueCost(const GpuTaskSchedulingReachability& reachability, const GpuPhysicalQueueId& queue, Span<const GpuTaskQueueAssignment> members)const noexcept;
 };
 
 struct GpuTaskQueueScoreExclusions{
@@ -239,14 +249,6 @@ struct GpuTaskQueuePlacementGroup{
     GpuPhysicalQueueId initialOwnershipQueue;
 };
 
-[[nodiscard]] Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    const GpuPhysicalQueueTopology& topology,
-    Alloc::ScratchArena& scratchArena,
-    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups
-);
-
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
@@ -254,6 +256,14 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskQueuePlacementGroup& group,
     CommandQueue::Enum requiredClass = CommandQueue::kCount
 )noexcept;
+
+[[nodiscard]] Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuPhysicalQueueTopology& topology,
+    Alloc::ScratchArena& scratchArena,
+    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups
+);
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(
     const GpuTaskGraph::DeclarationReadView& graph,
@@ -352,6 +362,13 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceRangeForPlanning(const GpuTaskGraph::DeclarationReadView& graph, const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& range)noexcept;
 [[nodiscard]] b8 RangesOverlap(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& lhs, const GpuTaskResourceRange& rhs)noexcept;
 [[nodiscard]] b8 RangeContains(const GpuTaskGraphResourceView& resource, const GpuTaskResourceRange& outer, const GpuTaskResourceRange& inner)noexcept;
+[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    const GpuPhysicalQueueId& destinationQueue,
+    const GpuPhysicalQueueId* requiredSourceQueue = nullptr,
+    const GpuTaskGraph::DeclarationReadView* planningGraph = nullptr
+)noexcept;
 
 [[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(const GpuTaskGraph::DeclarationReadView& graph, Alloc::ScratchArena& scratchArena, Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges);
 
@@ -367,7 +384,7 @@ struct GpuTaskQueuePlacementGroup{
 );
 
 [[nodiscard]] b8 CollectLatestResourceStateFragments(
-    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Span<const GpuTaskResourceRange> requestedRanges,
@@ -376,7 +393,7 @@ struct GpuTaskQueuePlacementGroup{
 );
 
 [[nodiscard]] b8 CollectTerminalResourceStateFragments(
-    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,

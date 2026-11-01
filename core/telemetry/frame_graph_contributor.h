@@ -49,7 +49,15 @@ struct FrameGraphPassMetadata{
 class FrameGraphBuilder final : NoCopy{
 public:
     // Statistics tables may be prepopulated, but must only be changed through this builder during its lifetime.
-    FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u);
+    FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex = 0u)
+        : m_scratchArena(scratchArena)
+        , m_nodes(nodes)
+        , m_edges(edges)
+        , m_pendingNameEdges(pendingNameEdges)
+        , m_physicalQueueIdentities(scratchArena)
+        , m_packetIdentities(scratchArena)
+        , m_frameIndex(frameIndex)
+    {}
     FrameGraphBuilder(
         Alloc::ScratchArena& scratchArena,
         FrameGraphNodeDescs& nodes,

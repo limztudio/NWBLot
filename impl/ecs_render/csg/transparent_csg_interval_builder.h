@@ -12,7 +12,7 @@
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -43,7 +43,7 @@ struct TransparentCsgIntervalProducerInputs{
     const CsgFrameState& csgFrameState;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources;
-    const ECSRenderDetail::MeshViewGpuData& meshViewState;
+    const MeshViewGpuData& meshViewState;
     Core::GpuGraphResourceId materialInstances;
     Core::GpuGraphResourceId materialTyped;
     Core::GpuGraphResourceId csgReceiverRanges;
@@ -70,7 +70,12 @@ struct TransparentCsgIntervalProducerResult{
 
 class TransparentCsgIntervalBuilder final : NoCopy{
 public:
-    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem)noexcept;
+    TransparentCsgIntervalBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererCsgSystem& csgSystem, RendererAvboitSystem& avboitSystem)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+        , m_csgSystem(csgSystem)
+        , m_avboitSystem(avboitSystem)
+    {}
 
 
 public:

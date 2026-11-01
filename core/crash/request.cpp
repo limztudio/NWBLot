@@ -27,12 +27,6 @@ namespace CrashDetail{
 
 CrashState g_State;
 
-inline constexpr StringView s_UnknownPlatformLabel = "unknown";
-inline constexpr StringView s_WindowsPlatformLabel = "windows";
-inline constexpr StringView s_LinuxPlatformLabel = "linux";
-inline constexpr StringView s_AndroidPlatformLabel = "android";
-inline constexpr StringView s_UnknownReasonLabel = "unknown";
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,13 +46,13 @@ static PlatformKind::Enum CurrentPlatformKind()noexcept{
 StringView PlatformKindName(const u32 platform)noexcept{
     switch(platform){
     case PlatformKind::Windows:
-        return s_WindowsPlatformLabel;
+        return s_WindowsPlatformName;
     case PlatformKind::Linux:
-        return s_LinuxPlatformLabel;
+        return s_LinuxPlatformName;
     case PlatformKind::Android:
-        return s_AndroidPlatformLabel;
+        return s_AndroidPlatformName;
     default:
-        return s_UnknownPlatformLabel;
+        return s_UnknownPlatformName;
     }
 }
 
@@ -69,13 +63,13 @@ StringView ReasonKindName(const u32 reasonKind)noexcept{
     case CrashReasonKind::PosixSignal:
         return s_SignalReasonKind;
     case CrashReasonKind::Terminate:
-        return "terminate";
+        return s_TerminateReasonKind;
     case CrashReasonKind::ManualDump:
-        return s_ManualDumpCategory;
+        return s_ManualDumpReasonKind;
     case CrashReasonKind::GpuCrash:
-        return s_GpuCrashCategory;
+        return s_GpuCrashReasonKind;
     default:
-        return s_UnknownReasonLabel;
+        return s_UnknownReasonKind;
     }
 }
 

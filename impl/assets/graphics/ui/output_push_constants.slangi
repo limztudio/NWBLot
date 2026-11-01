@@ -16,7 +16,7 @@
 
 
 struct NwbUiOutputPushConstants{
-#define NWB_UI_OUTPUT_SHADER_UINT_FIELD(name, defaultValue) uint name;
+#define NWB_UI_OUTPUT_SHADER_UINT_FIELD(name) uint name;
     NWB_UI_OUTPUT_PUSH_CONSTANTS_FIELDS(NWB_UI_OUTPUT_SHADER_UINT_FIELD)
 #undef NWB_UI_OUTPUT_SHADER_UINT_FIELD
 };

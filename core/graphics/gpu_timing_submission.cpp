@@ -35,6 +35,22 @@ inline constexpr Name s_SubmissionScratchArena("graphics.gpu_timing.submission_s
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)noexcept
+    : m_ticket(ticket)
+{
+    const auto activation = m_ticket.activateOnCurrentThread();
+    m_activated = activation.has_value();
+    m_previousTicket = activation ? *activation : activation.error().previousTicket;
+}
+
+GpuTimingSubmissionTicket::RecordingScope::~RecordingScope()noexcept{
+    m_ticket.deactivateOnCurrentThread(m_previousTicket, m_activated);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class GpuTimingSubmissionTicket::PreparedSubmissionUnwindScope final : NoCopy{
 public:
     explicit PreparedSubmissionUnwindScope(GpuTimingSubmissionTicket& ticket)noexcept
@@ -59,55 +75,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<class ExecutionQueue>
-NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQueue(Device& device, CommandList* const* commandLists, const usize commandListCount, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
-    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
-    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
-        return MakeUnexpected(Failure{});
-    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        discardPreparedSubmission();
-        return MakeUnexpected(Failure{});
-    }
-    PreparedSubmissionUnwindScope submissionUnwind(*this);
-    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
-    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
-        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
-
-    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
-    if(!waitTokens.empty())
-        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
-    const auto submission = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
-    const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
-    const b8 resolved = resolveSubmission(token);
-    submissionUnwind.release();
-    if(!resolved)
-        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
-    if(!submission)
-        return MakeUnexpected(submission.error());
-    return token;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)noexcept
-    : m_ticket(ticket)
-{
-    const auto activation = m_ticket.activateOnCurrentThread();
-    m_activated = activation.has_value();
-    m_previousTicket = activation ? *activation : activation.error().previousTicket;
-}
-
-GpuTimingSubmissionTicket::RecordingScope::~RecordingScope()noexcept{
-    m_ticket.deactivateOnCurrentThread(m_previousTicket, m_activated);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 GpuTimingSubmissionTicket::GpuTimingSubmissionTicket(GpuTimingRecorder& recorder)noexcept
     : m_recorder(recorder)
     , m_scopePublications(recorder.m_arena)
@@ -119,11 +86,11 @@ GpuTimingSubmissionTicket::~GpuTimingSubmissionTicket()noexcept{
 }
 
 Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const CommandQueue::Enum executionQueue, const QueueSubmissionDesc& submitDesc){
-    return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
+    return submitToQueue(device, commandLists ? Span<CommandList* const>(commandLists, commandListCount) : Span<CommandList* const>{}, executionQueue, submitDesc);
 }
 
 Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submit(Device& device, CommandList* const* commandLists, const usize commandListCount, const GpuPhysicalQueueId& executionQueue, const QueueSubmissionDesc& submitDesc){
-    return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
+    return submitToQueue(device, commandLists ? Span<CommandList* const>(commandLists, commandListCount) : Span<CommandList* const>{}, executionQueue, submitDesc);
 }
 
 void GpuTimingSubmissionTicket::discard(){
@@ -147,12 +114,41 @@ void GpuTimingSubmissionTicket::discard(){
     m_resolved = true;
 }
 
-b8 GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
+template<class ExecutionQueue>
+NWB_INLINE Expected<QueueSubmissionToken> GpuTimingSubmissionTicket::submitToQueue(Device& device, const Span<CommandList* const> commandLists, const ExecutionQueue& executionQueue, const QueueSubmissionDesc& submitDesc){
+    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
+    if(!prepareSubmission(commandLists, waitTokens))
+        return MakeUnexpected(Failure{});
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        discardPreparedSubmission();
+        return MakeUnexpected(Failure{});
+    }
+    PreparedSubmissionUnwindScope submissionUnwind(*this);
+    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
+    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
+        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
+
+    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
+    if(!waitTokens.empty())
+        mergedSubmitDesc.setWaitTokens(waitTokens);
+    const auto submission = device.executeCommandLists(commandLists.data(), commandLists.size(), executionQueue, mergedSubmitDesc);
+    const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
+    const b8 resolved = resolveSubmission(token);
+    submissionUnwind.release();
+    if(!resolved)
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
+    if(!submission)
+        return MakeUnexpected(submission.error());
+    return token;
+}
+
+b8 GpuTimingSubmissionTicket::prepareSubmission(const Span<CommandList* const> commandLists, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     const usize initialWaitTokenCount = waitTokens.size();
     if(!prepareSubmissionState(waitTokens))
         return false;
 
-    if(!commandLists || commandListCount == 0u){
+    if(commandLists.empty()){
         waitTokens.resize(initialWaitTokenCount);
         discardPreparedSubmission();
         return false;
@@ -160,15 +156,15 @@ b8 GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists
 
     // Queue::submit omits command lists whose buffer is absent.
     // Reject this before submit: a split-scope producer must never run without its end-timestamp consumer.
-    for(usize i = 0u; i < commandListCount; ++i){
-        if(!commandLists[i] || !commandLists[i]->hasCommandBuffer()){
+    for(CommandList* const commandList : commandLists){
+        if(!commandList || !commandList->hasCommandBuffer()){
             waitTokens.resize(initialWaitTokenCount);
             discardPreparedSubmission();
             return false;
         }
     }
 
-    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
+    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists);
     if(endpointValidation == ScopeEndpointValidationResult::Valid)
         return true;
 
@@ -180,12 +176,12 @@ b8 GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLists
     return false;
 }
 
-b8 GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(CommandList* const* commandLists, const usize commandListCount, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
+b8 GpuTimingSubmissionTicket::prepareSubmissionAfterCommandListValidation(const Span<CommandList* const> commandLists, Vector<QueueSubmissionToken, Alloc::ScratchArena>& waitTokens){
     const usize initialWaitTokenCount = waitTokens.size();
     if(!prepareSubmissionState(waitTokens))
         return false;
 
-    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists, commandListCount);
+    const ScopeEndpointValidationResult::Enum endpointValidation = validateScopePublicationEndpoints(commandLists);
     if(endpointValidation == ScopeEndpointValidationResult::Valid)
         return true;
 
@@ -210,7 +206,7 @@ b8 GpuTimingSubmissionTicket::prepareSubmissionState(Vector<QueueSubmissionToken
     return true;
 }
 
-GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissionTicket::validateScopePublicationEndpoints(CommandList* const* commandLists, const usize commandListCount)noexcept{
+GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissionTicket::validateScopePublicationEndpoints(const Span<CommandList* const> commandLists)noexcept{
     NothrowScopedLock lock(m_mutex);
     NWB_ASSERT_MSG(m_submissionPrepared && !m_resolved, NWB_TEXT("GPU timing endpoint validation requires a prepared submission"));
     if(!m_submissionPrepared || m_resolved)
@@ -224,7 +220,7 @@ GpuTimingSubmissionTicket::ScopeEndpointValidationResult::Enum GpuTimingSubmissi
 
         usize beginIndex = Limit<usize>::s_Max;
         usize endIndex = Limit<usize>::s_Max;
-        for(usize commandListIndex = 0u; commandListIndex < commandListCount; ++commandListIndex){
+        for(usize commandListIndex = 0u; commandListIndex < commandLists.size(); ++commandListIndex){
             const CommandList* const commandList = commandLists[commandListIndex];
             if(commandList == publication.beginEndpoint.commandList && beginIndex == Limit<usize>::s_Max)
                 beginIndex = commandListIndex;

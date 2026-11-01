@@ -25,27 +25,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook_dependency_registry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-::AutoRegistrationQueue<NotNull<CookDependencyRegistrationFunction>, AssetArena>& QueryAutoRegistrationQueue(){
-    static ::AutoRegistrationQueue<NotNull<CookDependencyRegistrationFunction>, AssetArena> s_Queue(AssetsArenaScope::s_CookDependencyQueueArena);
-    return s_Queue;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDependencyExtractFunction extractDependencies, const Name& categoryAssetType){
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook dependency type"));
@@ -61,8 +40,18 @@ b8 CookDependencyRegistry::registerType(const Name& assetType, const CookDepende
         return false;
     }
 
-    if(categoryAssetType)
-        m_categories.emplace(assetType, categoryAssetType);
+    if(categoryAssetType){
+        const auto [it, inserted] = m_categories.emplace(assetType, categoryAssetType);
+        if(!inserted && it.value() != categoryAssetType){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("AssetCook: conflicting category '{}' for cook dependency type '{}' (already '{}')"),
+                ConvertString(categoryAssetType.resolvedText()),
+                ConvertString(assetType.resolvedText()),
+                ConvertString(it.value().resolvedText())
+            );
+            return false;
+        }
+    }
     return true;
 }
 
@@ -113,7 +102,7 @@ b8 CookDependencyRegistry::extractDependencies(const CookDependencyItemContext& 
 
 
 CookDependencyAutoRegistrar::CookDependencyAutoRegistrar(const CookDependencyRegistrationFunction function){
-    ::RegisterAutoFactory(__hidden_cook_dependency_registry::QueryAutoRegistrationQueue(), function);
+    ::RegisterAutoFactory(QueryAssetAutoRegistrationQueue<NotNull<CookDependencyRegistrationFunction>, AssetsArenaScope::s_CookDependencyQueueArena>(), function);
 }
 
 
@@ -123,7 +112,7 @@ CookDependencyAutoRegistrar::CookDependencyAutoRegistrar(const CookDependencyReg
 b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena){
     Vector<NotNull<CookDependencyRegistrationFunction>, Core::Alloc::ScratchArena> functions{ scratchArena };
     return RunAutoCollectedFunctions(
-        __hidden_cook_dependency_registry::QueryAutoRegistrationQueue(),
+        QueryAssetAutoRegistrationQueue<NotNull<CookDependencyRegistrationFunction>, AssetsArenaScope::s_CookDependencyQueueArena>(),
         registry,
         functions,
         [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook dependency registration function")); },

@@ -20,6 +20,38 @@ NWB_TEX_CONV_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace UtilityDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Alloc::GlobalArena& Arena(){
+    static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);
+    return s_Arena;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+OutputPaths::OutputPaths()
+    : metadata(UtilityDetail::Arena())
+    , data(UtilityDetail::Arena())
+    , metadataTemporary(UtilityDetail::Arena())
+    , dataTemporary(UtilityDetail::Arena())
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace TexConvCliDetail{
 
 
@@ -33,13 +65,13 @@ inline constexpr StringView s_OutputOptionName = "-o,--output";
 inline constexpr StringView s_AlphaOptionName = "--alpha";
 inline constexpr StringView s_LinearFlagName = "--linear";
 inline constexpr StringView s_ForceFlagName = "--force";
-inline constexpr int s_MinVolumeSliceCount = 1;
-inline constexpr int s_UnboundedOptionCount = -1;
+inline constexpr i32 s_MinVolumeSliceCount = 1;
+inline constexpr i32 s_UnboundedOptionCount = -1;
 inline constexpr u32 s_SingleTextureInputModeCount = 1u;
-inline constexpr int s_AlphaOptionPresentCount = 0;
-inline constexpr int s_TexConvExitSuccess = 0;
-inline constexpr int s_TexConvExitFailure = 1;
-inline constexpr int s_TexConvExitFatal = -1;
+inline constexpr i32 s_AlphaOptionPresentCount = 0;
+inline constexpr i32 s_TexConvExitSuccess = 0;
+inline constexpr i32 s_TexConvExitFailure = 1;
+inline constexpr i32 s_TexConvExitFatal = -1;
 inline constexpr usize s_CompletionReportReserveSlack = 128u;
 inline constexpr Name s_ConversionScratchArena("utilities/tex_conv/conversion");
 
@@ -64,7 +96,7 @@ template<b8 AlphaMask>
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'"), PathToString<tchar>(path));
         return false;
     }
-    if(!IsSupportedInputPath(path)){
+    if(!PathHasListedExtension(path, s_SupportedInputExtensions)){
         if constexpr(AlphaMask)
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, " "and Radiance HDR."));
         else
@@ -84,7 +116,7 @@ template<b8 AlphaMask>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(const int argc, char** argv){
+i32 Run(const i32 argc, char** argv){
     AInteropString inputArgument;
     AInteropString outputArgument;
     AInteropString alphaArgument;
@@ -95,7 +127,7 @@ int Run(const int argc, char** argv){
 
     CLI::App app{ "Convert LDR or HDR images into prepared linear UASTC texture assets." };
     app.add_option(TexConvCliDetail::s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
+    app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<i32>(TextureFormat::s_TextureCubeFaceCount));
     app.add_option(TexConvCliDetail::s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
     app.add_option(TexConvCliDetail::s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
     CLI::Option& alphaOption = *app.add_option(TexConvCliDetail::s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");

@@ -22,6 +22,8 @@ NWB_METASCRIPT_BEGIN
 interface IIncludeResolver{
     virtual ~IIncludeResolver()noexcept = default;
 
+
+public:
     [[nodiscard]] virtual b8 resolveInclude(MStringView includePath, b8 isAngleBracket, MetaArena& arena, MString& outResolvedKey, MString& outContent) = 0;
     virtual void popIncludeScope()noexcept{}
 };
@@ -77,7 +79,7 @@ public:
 public:
     [[nodiscard]] static usize SkipQuotedLiteral(MStringView text, usize index)noexcept;
     [[nodiscard]] static usize AppendQuotedLiteral(MStringView text, usize index, MString& out);
-    [[nodiscard]] static usize AppendPreprocessorNumber(MStringView text, usize index, MString& out, b8 allowSignedExponent = true);
+    [[nodiscard]] static usize AppendPreprocessorNumber(MStringView text, usize index, b8 allowSignedExponent, MString& out);
 
 
 public:

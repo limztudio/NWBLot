@@ -28,7 +28,7 @@ TEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits){
     TestArena<> context;
     using Bytes = ::Vector<u8, Core::Alloc::GlobalArena>;
     const typename Bytes::allocator_type allocator(context.arena);
-    const AStringView invalid[] = {
+    const Array<AStringView, 20u> invalid = {
         "Z", "Zg", "Zg=", "Zg===", "=g==", "Z===", "Zg=A", "Zg==AAAA", "AAAAZg==AAAA",
         "Zm9=", "Zh==", "AB==", "AAB=", "Zg-_", "Zg\r\n", "Zg \t", "Zg#=", "====",
         AStringView("Zg\0=", 4u), AStringView("Zg\xff=", 4u),

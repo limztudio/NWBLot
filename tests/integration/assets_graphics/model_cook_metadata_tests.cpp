@@ -104,7 +104,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount, const usize meshCount){
+static void AddIndexedObjects(const usize skeletonCount, const usize meshCount, ModelMetadata& metadata){
     for(usize index = 0u; index < skeletonCount; ++index){
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
         const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_metadata/skeleton_{}", index);
@@ -127,7 +127,7 @@ TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRec
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     for(const usize skeletonCount : { 1u, 33u }){
         ModelMetadata metadata;
-        AddIndexedObjects(metadata, skeletonCount, 257u);
+        AddIndexedObjects(skeletonCount, 257u, metadata);
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
         const AStringView assetPath = "tests/model_cook_metadata/skeleton_0";

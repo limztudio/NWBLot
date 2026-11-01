@@ -9,8 +9,6 @@
 
 #include <global/text_utils.h>
 
-#include <wchar.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -137,14 +135,14 @@ b8 X11TextInputService::convertPreeditText(const XIMText& text){
             next += bytes;
             codePoint = static_cast<u32>(wide);
         }
-        char bytes[s_Utf8MaxSequenceBytes];
+        Array<char, s_Utf8MaxSequenceBytes> bytes;
         const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
         if(!encoded)
             return false;
         const usize count = *encoded;
         if(count > s_TextInputMaxEventTextBytes - m_insertion.size())
             return false;
-        m_insertion.append(bytes, count);
+        m_insertion.append(bytes.data(), count);
     }
     return true;
 }

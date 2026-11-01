@@ -113,11 +113,10 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const GpuRecordedGraph& recordedGraph,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId& packetID,
-    const usize timingTicketCount,
+    const Span<const NotNull<GpuTimingSubmissionTicket*>> timingTickets,
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
     const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
     Alloc::ScratchArena& scratchArena,
-    const NotNull<GpuTimingSubmissionTicket*>* const timingTickets,
     GpuTaskGraph& graph,
     GpuGraphSubmissionTransaction& transaction
 )const{
@@ -127,11 +126,12 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(!declarationAccess.valid())
         return false;
 
+    const usize timingTicketCount = timingTickets.size();
     if(
         device().getDeviceGeneration() != planAccess.deviceGeneration()
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
         || !transaction.validFor(planAccess)
-        || (timingTicketCount != 0u && !timingTickets)
+        || (timingTicketCount != 0u && !timingTickets.data())
         || (preSubmitHook && !preSubmitHook->valid())
     )
         return false;
@@ -200,7 +200,7 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     usize preparedTimingTicketCount = 0u;
     PreparedTimingTicketsUnwindScope preparedTimingTicketsUnwind(submissionTimingTickets.data(), preparedTimingTicketCount);
     for(; preparedTimingTicketCount < submissionTimingTickets.size(); ++preparedTimingTicketCount){
-        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmissionAfterCommandListValidation(recordedPacket->commandLists, recordedPacket->commandListCount, waitTokens))
+        if(submissionTimingTickets[preparedTimingTicketCount]->prepareSubmissionAfterCommandListValidation(Span<CommandList* const>(recordedPacket->commandLists.data(), recordedPacket->commandListCount), waitTokens))
             continue;
         return false;
     }
@@ -223,7 +223,7 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
     nativeSubmissionInfo.commandListCount = recordedPacket->commandListCount;
-    const GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(packet.queue, waitTokens.data(), waitTokens.size(), scratchArena);
+    const GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(packet.queue, waitTokens, scratchArena);
     nativeSubmissionInfo.plannedWaitTokenCount = waitStatistics.plannedWaitTokenCount;
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
@@ -237,11 +237,11 @@ b8 GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     QueueSubmissionDesc submitDesc;
     if(!waitTokens.empty())
-        submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
+        submitDesc.setWaitTokens(waitTokens);
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const auto submission = device().executeGraphCommandLists(recordedPacket->commandLists, recordedPacket->commandListCount, packet.queue, submitDesc);
+    const auto submission = device().executeGraphCommandLists(recordedPacket->commandLists.data(), recordedPacket->commandListCount, packet.queue, submitDesc);
     const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
     const usize emittedTimelineWaitCount = submission ? submission->timelineWaitCount : 0u;
     if(token.valid()){

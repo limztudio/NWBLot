@@ -27,9 +27,9 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-UiLayerSmokeProject::UiLayerSmokeProject(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World> world)noexcept
-    : m_context(context)
-    , m_world(Move(world))
+UiLayerSmokeProject::UiLayerSmokeProject(NotNullUniquePtr<Core::ECS::World> world, ProjectRuntimeContext& context)noexcept
+    : m_world(Move(world))
+    , m_context(context)
 {}
 
 UiLayerSmokeProject::~UiLayerSmokeProject()noexcept{
@@ -45,7 +45,7 @@ b8 UiLayerSmokeProject::onStartup(){
         captureOptions.requiredHeight = 600u;
     }
     constexpr u32 s_DefaultCaptureFrameCount = 60u;
-    auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions);
+    auto capture = ConfigureSmokeFramebufferCapture(NWB_TEXT("UiLayerSmokeProject"), s_DefaultCaptureFrameCount, captureOptions, m_context);
     if(!capture)
         return false;
     m_framebufferCapture = Move(*capture);
@@ -60,14 +60,7 @@ void UiLayerSmokeProject::onShutdown(){
 }
 
 b8 UiLayerSmokeProject::onUpdate(const f32 delta){
-    if(m_framebufferCapture)
-        m_framebufferCapture->update();
-    const auto updated = m_world->tick(delta);
-    if(!updated){
-        NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-        return false;
-    }
-    return true;
+    return TickSmokeWorldWithCapture(delta, *m_world, m_framebufferCapture);
 }
 
 void UiLayerSmokeProject::destroyRuntime(){

@@ -26,18 +26,18 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Graphics::GpuCommandIrCapture& capture){
-    Graphics::TextureSlice sourceSlice;
+[[nodiscard]] b8 CaptureAllBuiltinCommandIrRecords(Core::GpuCommandIrCapture& capture){
+    Core::TextureSlice sourceSlice;
     sourceSlice.setOrigin(1u, 2u, 3u).setSize(4u, 5u, 6u).setMipLevel(7u).setArraySlice(8u);
-    Graphics::TextureSlice destinationSlice;
+    Core::TextureSlice destinationSlice;
     destinationSlice.setOrigin(9u, 10u, 11u).setSize(12u, 13u, 14u).setMipLevel(15u).setArraySlice(16u);
-    Graphics::GpuClearTextureTaskDesc clearTexture;
+    Core::GpuClearTextureTaskDesc clearTexture;
     clearTexture.destination = s_CommandIrDestination;
-    clearTexture.subresources = Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u);
-    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::DepthStencil;
-    clearTexture.floatValue = Graphics::Color(0.25f, 0.5f, 0.75f, 1.f);
-    clearTexture.uintValue = Graphics::UIntColor(2u, 3u, 5u, 7u);
-    clearTexture.intValue = Graphics::IntColor(-2, -3, -5, -7);
+    clearTexture.subresources = Core::TextureSubresourceSet(2u, 3u, 4u, 5u);
+    clearTexture.valueType = Core::GpuClearTextureTaskValueType::DepthStencil;
+    clearTexture.floatValue = Core::Color(0.25f, 0.5f, 0.75f, 1.f);
+    clearTexture.uintValue = Core::UIntColor(2u, 3u, 5u, 7u);
+    clearTexture.intValue = Core::IntColor(-2, -3, -5, -7);
     clearTexture.depthValue = 0.125f;
     clearTexture.stencilValue = 19u;
     clearTexture.clearDepth = true;
@@ -51,7 +51,7 @@ namespace TaskGraphTestUtils{
     ;
 }
 
-void CopyCommandIrBytes(Graphics::GraphicsBytes& outBytes, const BinaryByteView source){
+void CopyCommandIrBytes(const BinaryByteView source, Core::GraphicsBytes& outBytes){
     outBytes.resize(source.size());
     if(!source.empty())
         NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());

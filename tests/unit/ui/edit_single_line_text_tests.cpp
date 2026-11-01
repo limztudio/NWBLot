@@ -42,7 +42,7 @@ TEST(UiSingleLineText, NormalizedByteLimitsRejectWholeScalarsAndBreakPairs){
 
 TEST(UiSingleLineText, RejectsMalformedUtf8NulAndUnrenderableAsciiControlsAtomically){
     Tests::TestArena arena;
-    const AStringView invalid[]{ "\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xE2\x82", "x\x1By", "\x7F", AStringView("a\0b", 3u) };
+    const Array<AStringView, 7> invalid = { "\xC0\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xE2\x82", "x\x1By", "\x7F", AStringView("a\0b", 3u) };
     for(const auto value : invalid){
         EXPECT_EQ(NormalizeSingleLineText(arena.arena, value, 64u), MakeUnexpected(EditTextStatus::InvalidText));
     }

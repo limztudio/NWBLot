@@ -3,11 +3,11 @@
 
 
 #include "system.h"
-#include "transform_helpers.h"
 
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/components.adhd.h>
+#include <impl/ecs_scene/view.h>
 #include <impl/ecs_skeleton/components.adhd.h>
 
 #include <core/assets/manager.h>
@@ -31,15 +31,6 @@ namespace __hidden_model_system{
 
 
 static constexpr TStringView s_AssetLoadContext = NWB_TEXT("ModelSystem");
-
-void TagObject(Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const Name model, const Name object, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
-    auto& objectComponent = entity.addComponent<ModelObjectComponent>();
-    objectComponent.owner = owner;
-    objectComponent.model = model;
-    objectComponent.object = object;
-    objectComponent.localTransform = localTransform;
-    objectComponent.kind = kind;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,22 +61,15 @@ ModelSystem::ModelSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& worl
     writeAccess<Scene::TransformComponent>();
     writeAccess<SkeletonPoseComponent>();
 
-    if(rendererHooks.accesses){
-        for(usize i = 0u; i < rendererHooks.accessCount; ++i)
-            registerAccess(rendererHooks.accesses[i].typeId, rendererHooks.accesses[i].mode);
-    }
+    for(const Core::ECS::ComponentAccess& access : rendererHooks.accesses)
+        registerAccess(access.typeId, access.mode);
 }
 
-void ModelSystem::prepare(Core::ECS::World& world){
-    static_cast<void>(world);
-
+void ModelSystem::prepare([[maybe_unused]] Core::ECS::World& world){
     syncModelRuntimes();
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update(Core::ECS::World& world, const f32 delta){
-    static_cast<void>(world);
-    static_cast<void>(delta);
-
+Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] const f32 delta){
     const auto transformed = updateModelObjectTransforms();
     if(!transformed)
         return MakeUnexpected(transformed.error());
@@ -94,7 +78,7 @@ Expected<void, Core::CpuTaskAdmissionError::Enum> ModelSystem::update(Core::ECS:
 }
 
 void ModelSystem::syncModelRuntimes(){
-    Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_model/sync_runtime"));
+    Core::Alloc::ScratchArena scratchArena(s_ModelSyncRuntimeArena);
     clearInactiveModelRuntimes(scratchArena);
 
     m_world.view<ModelComponent>().each([&](const Core::ECS::EntityID entity, ModelComponent& component){
@@ -109,14 +93,12 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
         return !m_world.tryGetComponent<ModelRuntimeComponent>(object.owner) || !m_world.tryGetComponent<ModelComponent>(object.owner);
     };
     usize inactiveObjectCount = 0u;
-    objects.each([&](const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
-        static_cast<void>(entity);
+    objects.each([&]([[maybe_unused]] const Core::ECS::EntityID entity, const ModelObjectComponent& object)noexcept{
         if(objectIsInactive(object))
             ++inactiveObjectCount;
     });
     usize inactiveRuntimeCount = 0u;
-    runtimes.each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime)noexcept{
-        static_cast<void>(runtime);
+    runtimes.each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
         if(!m_world.tryGetComponent<ModelComponent>(entity))
             ++inactiveRuntimeCount;
     });
@@ -137,8 +119,7 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
     if(inactiveRuntimeCount != 0u){
         // Destroying objects can also remove runtime components, so take a fresh view after that batch completes.
         inactiveEntities.clear();
-        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, const ModelRuntimeComponent& runtime)noexcept{
-            static_cast<void>(runtime);
+        m_world.view<ModelRuntimeComponent>().each([&](const Core::ECS::EntityID entity, [[maybe_unused]] const ModelRuntimeComponent& runtime)noexcept{
             if(!m_world.tryGetComponent<ModelComponent>(entity))
                 inactiveEntities.push_back(entity);
         });
@@ -176,8 +157,7 @@ void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const Mod
 void ModelSystem::clearModelRuntime(const Core::ECS::EntityID entity, Core::Alloc::ScratchArena& scratchArena){
     const auto objects = m_world.view<ModelObjectComponent>();
     usize ownedCount = 0u;
-    objects.each([&](const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
-        static_cast<void>(objectEntity);
+    objects.each([&]([[maybe_unused]] const Core::ECS::EntityID objectEntity, const ModelObjectComponent& object)noexcept{
         if(object.owner == entity)
             ++ownedCount;
     });
@@ -231,11 +211,7 @@ b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Model
         return false;
     const Skeleton& skeleton = **skeletonAsset;
 
-    Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::Skeleton);
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::Skeleton);
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>();
     pose.parentJoints.clear();
@@ -254,11 +230,7 @@ b8 ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Model
 }
 
 b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
-    Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::StaticMesh);
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::StaticMesh);
     if(m_applyRenderer)
         m_applyRenderer(m_world, owner, object.material, entity);
 
@@ -315,11 +287,7 @@ b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const Mo
         return false;
     }
 
-    Core::ECS::Entity entity = m_world.createEntity();
-    __hidden_model_system::TagObject(entity, owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, object.name, object.transform, ModelObjectKind::SkinnedMesh);
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-    if(const auto decomposition = MatrixDecompose(MatrixMultiply(ModelTransformHelpers::LoadOwnerWorldMatrix(m_world, owner), LoadFloat(object.transform))))
-        ModelTransformHelpers::StoreDecomposedTransform(*decomposition, transform);
+    Core::ECS::Entity entity = createSpawnedObjectEntity(owner, object.name, object.transform, ModelObjectKind::SkinnedMesh);
     if(m_applyRenderer)
         m_applyRenderer(m_world, owner, object.material, entity);
 
@@ -327,6 +295,15 @@ b8 ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const Mo
     binding.skin = object.skin;
     binding.skeletonEntity = skeletonEntity;
     return true;
+}
+
+Core::ECS::Entity ModelSystem::createSpawnedObjectEntity(const Core::ECS::EntityID owner, const Name objectName, const SkeletonJointMatrix& localTransform, const ModelObjectKind::Enum kind){
+    Core::ECS::Entity entity = m_world.createEntity();
+    entity.addComponent<ModelObjectComponent>() = MakeModelObjectComponent(owner, m_world.entity(owner).getComponent<ModelRuntimeComponent>().model, objectName, localTransform, kind);
+    auto& transform = entity.addComponent<Scene::TransformComponent>();
+    if(const auto decomposition = MatrixDecompose(MatrixMultiply(Scene::LoadEntityTransformMatrix(m_world, owner), LoadFloat(localTransform))))
+        Scene::StoreDecomposedTransform(*decomposition, transform);
+    return entity;
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const noexcept{

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "telemetry_test_helpers.h"
+#include "frame_graph_test_helpers.h"
 
 #include <core/alloc/scratch.h>
 
@@ -31,33 +31,8 @@ static constexpr AStringView s_RuntimePacketSubmissionCount2 = "runtime_packet_s
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace TelemetryTestDetail;
 
-
-[[nodiscard]] Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept{
-    Telemetry::FrameGraphRuntimeStatistics statistics;
-    statistics.graphGeneration = 71u;
-    statistics.planGeneration = 72u;
-    statistics.recordingAttemptGeneration = 73u;
-    statistics.deviceGeneration = 17u;
-    statistics.compile.taskCount = packetCount;
-    statistics.compile.packetCount = packetCount;
-    statistics.recording.packetCount = packetCount;
-    statistics.recording.taskCount = packetCount;
-    statistics.recording.commandListCount = packetCount;
-    statistics.submission.acceptedPacketCount = packetCount;
-    statistics.submission.acceptedTaskCount = packetCount;
-    statistics.submission.nativeSubmissionCount = packetCount;
-    statistics.submission.nativeCommandListCount = packetCount;
-    statistics.present = true;
-    return statistics;
-}
 
 struct ReportFixture{
     Telemetry::FrameGraphNodeDescs nodes;
@@ -85,9 +60,9 @@ public:
         const Telemetry::FrameGraphRuntimeStatistics owner = OwnerStatistics(packetCount);
         nodes.push_back(Telemetry::FrameGraphNodeDesc{ .name = Name("tests/telemetry/report/owner"), .label = "Measured owner", .kind = Telemetry::FrameGraphNodeKind::Pass, .queueAssignment = {}, .compiledTask = {}, .runtimeStatistics = owner, });
         if(includeQueues){
-            const u32 queueCount = packetCount > 1u ? s_ExpectedDualCount : packetCount;
+            const u32 queueCount = packetCount > 1u ? 2u : packetCount;
             for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){
-                const u32 acceptedCount = packetCount / s_ExpectedDualCount + (queueOffset == 0u ? packetCount % s_ExpectedDualCount : 0u);
+                const u32 acceptedCount = packetCount / 2u + (queueOffset == 0u ? packetCount % 2u : 0u);
                 Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics;
                 statistics.graphGeneration = owner.graphGeneration;
                 statistics.planGeneration = owner.planGeneration;
@@ -116,7 +91,7 @@ public:
                 .commandListCount = 1u,
                 .ownerNodeIndex = ownerIndex,
                 .packetIndex = packetIndex,
-                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % s_ExpectedDualCount), .deviceGeneration = 17u },
+                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
                 .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
             });
         }
@@ -149,14 +124,14 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     fixture.addUnmeasuredNode();
     fixture.addOwner(0u, 5u);
     fixture.addUnmeasuredNode();
-    fixture.addOwner(s_ExpectedDualCount, 7u, false);
+    fixture.addOwner(2u, 7u, false);
     fixture.addUnmeasuredNode();
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u));
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena{ Name(s_ReportArenaName) };
-    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
+    auto reportResult2 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
@@ -176,7 +151,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     EXPECT_LT(first.find("\"packet\": {\"index\": 0,"), first.find("\"packet\": {\"index\": 1,"));
     EXPECT_LT(first.find("\"packet\": {\"index\": 1,"), first.find("\"packet\": {\"index\": 2,"));
     EXPECT_TRUE(ContainsText(empty, "\"physicalQueues\": null, \"packetSubmissions\": []"));
-    EXPECT_EQ(CountText(last, s_PacketIndex), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(last, s_PacketIndex), 2u);
     EXPECT_TRUE(ContainsText(last, "\"physicalQueues\": null"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 7,"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 8,"));
@@ -203,29 +178,29 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     first.addUnmeasuredNode();
     ReportFixture second(testArena.arena);
     second.addUnmeasuredNode();
-    second.addOwner(s_ExpectedDualCount, 7u);
+    second.addOwner(2u, 7u);
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena{ Name(s_ReportArenaName) };
-    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
+    auto reportResult3 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult3);
     report = Move(*reportResult3);
-    ASSERT_EQ(report.summary.frameGraphFrameCount, s_ExpectedDualCount);
+    ASSERT_EQ(report.summary.frameGraphFrameCount, 2u);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), 5u);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), 2u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3), 1u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount2), 1u);
 
     recorder.clear();
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, testArena.scratchArena, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
+    auto reportResult4 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult4);
     report = Move(*reportResult4);
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), 2u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount2), 1u);
     EXPECT_FALSE(ContainsText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3));
 }
@@ -236,17 +211,17 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     fixture.addUnmeasuredNode();
     fixture.addOwner(3u, 1u);
     Telemetry::TelemetryBytes original(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.scratchArena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original));
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, testArena.scratchArena, original));
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
     ASSERT_EQ(header.queueAssignmentCount, 0u);
     ASSERT_EQ(header.compiledTaskCount, 0u);
     ASSERT_EQ(header.edgeCount, 0u);
     ASSERT_EQ(header.runtimeStatisticsCount, 1u);
-    ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
+    ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
     ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
     const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Telemetry::EncodedFrameGraphNode) + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics);
-    const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
+    const usize packetOffset = queueOffset + 2u * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
     ASSERT_LE(packetOffset + 3u * sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -264,7 +239,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     NWB_MEMCPY(&nextPacket, sizeof(nextPacket), original.data() + packetOffset + sizeof(packet), sizeof(nextPacket));
     NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &nextPacket, sizeof(nextPacket));
     NWB_MEMCPY(malformed.data() + packetOffset + sizeof(packet), sizeof(packet), &packet, sizeof(packet));
-    ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), s_ExpectedDualCount));
+    ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 2u));
 
     malformed = original;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics queue;
@@ -278,13 +253,13 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
 
     Log::TelemetryReport report(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena{ Name(s_ReportArenaName) };
-    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view(), scratchArena);
+    auto reportResult5 = Log::BuildTelemetryReport(recorder.view(), testArena.arena, scratchArena);
     ASSERT_TRUE(reportResult5);
     report = Move(*reportResult5);
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.parseFailureCount, 3u);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(report.summary.frameGraphNodeCount, s_ExpectedDualCount);
+    EXPECT_EQ(report.summary.frameGraphNodeCount, 2u);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), 3u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3), 1u);
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));

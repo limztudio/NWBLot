@@ -3,8 +3,6 @@
 
 
 #include "asset.h"
-#include "binary_payload.h"
-#include "font_validation.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/binary_payload_io.h>

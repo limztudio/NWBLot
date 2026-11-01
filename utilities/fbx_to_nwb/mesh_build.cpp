@@ -54,18 +54,21 @@ template<typename VisitTriangle>
         return false;
     for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];
-        if(face.num_indices < s_TriangleIndexCount)
+        if(face.num_indices < Impl::s_MeshletTriangleIndexCount)
             continue;
 
         const u32 triangleCount = ufbx_triangulate_face(inOutTriangleIndices.data(), inOutTriangleIndices.size(), &mesh, face);
 
         for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-            u32 cornerIndices[s_TriangleIndexCount] = { inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u], inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u] };
+            const usize baseIndex = static_cast<usize>(triangleIndex) * Impl::s_MeshletTriangleIndexCount;
+            Array<u32, Impl::s_MeshletTriangleIndexCount> cornerIndices = { inOutTriangleIndices[baseIndex + 0u], inOutTriangleIndices[baseIndex + 1u], inOutTriangleIndices[baseIndex + 2u] };
             if(flipWinding)
-                Swap(cornerIndices[1], cornerIndices[2]);
+                Swap(cornerIndices[1u], cornerIndices[2u]);
 
-            for([[maybe_unused]] const u32 cornerIndex : cornerIndices)
+#if defined(NWB_DEBUG)
+            for(const u32 cornerIndex : cornerIndices)
                 NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
+#endif
 
             if(!visitTriangle(cornerIndices))
                 return false;
@@ -138,10 +141,6 @@ template<typename VisitTriangle>
     return SIMDVectorSingleResult{ VectorSelect(outputTangent->value, sign, s_SIMDMaskW) };
 }
 
-[[nodiscard]] static b8 IsFiniteSkinInfluence(const SIMDVectorSingle weights)noexcept{
-    return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
-}
-
 [[nodiscard]] static b8 IsFiniteSourceTriangleCorner(
     const SIMDVectorSingle position,
     const SIMDVectorSingle normal,
@@ -156,7 +155,7 @@ template<typename VisitTriangle>
         return false;
     if(hasTangent && !VectorIsFinite(tangent, VectorComponentMask::s_XYZW))
         return false;
-    return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);
+    return !wantsSkinning || VectorIsFinite(skinWeights, VectorComponentMask::s_XYZW);
 }
 
 [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
@@ -170,9 +169,9 @@ template<typename VisitTriangle>
     PositionNormalMap outNormals(scratchArena);
     outNormals.reserve(mesh.num_vertices);
 
-    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
-        SIMDVectorSingle positions[s_TriangleIndexCount] = {};
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex)
+    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
+        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> positions = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex)
             positions[triangleCornerIndex] = LoadCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
 
         const SIMDVectorDouble areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
@@ -236,7 +235,7 @@ b8 FbxMeshBuild::AppendInstanceMesh(
     const b8 importColors = options.importColors && mesh->vertex_color.exists;
     const b8 importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
     const SIMDVectorSingle defaultColorVector = LoadFloat(defaultColor);
-    ufbx_skin_deformer* skin = nullptr;
+    const ufbx_skin_deformer* skin = nullptr;
     ::Vector<u16, Core::Alloc::ScratchArena> clusterJoints(scratchArena);
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
@@ -244,7 +243,11 @@ b8 FbxMeshBuild::AppendInstanceMesh(
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
-        auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, skin, scratchArena, inOutSkinContext);
+        if(!skin){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
+            return false;
+        }
+        auto jointMap = FbxSkinDetail::BuildClusterJointMap(instance, options, *skin, scratchArena, inOutSkinContext);
         if(!jointMap)
             return false;
         clusterJoints = Move(*jointMap);
@@ -258,11 +261,11 @@ b8 FbxMeshBuild::AppendInstanceMesh(
         smoothNormals = Move(*normals);
     }
 
-    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
-        SourceTriangleCorner triangleCorners[s_TriangleIndexCount] = {};
-        SIMDVectorSingle trianglePositions[s_TriangleIndexCount] = {};
-        SIMDVectorSingle triangleNormals[s_TriangleIndexCount] = {};
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
+    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
+        Array<SourceTriangleCorner, Impl::s_MeshletTriangleIndexCount> triangleCorners = {};
+        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> trianglePositions = {};
+        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> triangleNormals = {};
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 
@@ -318,12 +321,12 @@ b8 FbxMeshBuild::AppendInstanceMesh(
 
             SIMDVectorSingle skinWeights = VectorZero();
             if(wantsSkinning){
-                const auto influence = FbxSkinDetail::LoadInfluence(skin, clusterJoints, logicalVertex);
+                const auto influence = FbxSkinDetail::LoadInfluence(*skin, clusterJoints, logicalVertex);
                 if(!influence)
                     return false;
                 UInt4 jointIds;
                 StoreInt(influence->joints, jointIds);
-                for(usize slot = 0u; slot < s_MeshSkinInfluenceCount; ++slot)
+                for(usize slot = 0u; slot < Impl::s_SkinInfluenceJointCount; ++slot)
                     corner.skin.joint[slot] = static_cast<u16>(jointIds.raw[slot]);
                 skinWeights = influence->weights;
                 StoreFloat(skinWeights, corner.skin.weight);
@@ -352,11 +355,11 @@ b8 FbxMeshBuild::AppendInstanceMesh(
                 normal = normalizedFaceNormal->value;
         }
 
-        for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
+        for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
             SourceTriangleCorner& corner = triangleCorners[triangleCornerIndex];
             StoreFloat(trianglePositions[triangleCornerIndex], corner.position);
             StoreFloat(triangleNormals[triangleCornerIndex], corner.normal);
-            const auto vertexRefIndex = FbxSourceMeshStreams::InternSourceCorner(inOutMesh, corner, wantsSkinning);
+            const auto vertexRefIndex = FbxSourceMeshStreams::InternSourceCorner(corner, wantsSkinning, inOutMesh);
             if(!vertexRefIndex)
                 return false;
             inOutMesh.mesh.indices.push_back(*vertexRefIndex);
@@ -378,12 +381,12 @@ Expected<usize> FbxMeshBuild::EstimateSelectedTriangleCorners(const Span<const M
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
             return MakeUnexpected(Failure{});
         }
-        if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / s_TriangleIndexCount){
+        if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / Impl::s_MeshletTriangleIndexCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return MakeUnexpected(Failure{});
         }
 
-        outTriangleCorners += static_cast<usize>(mesh->num_triangles) * s_TriangleIndexCount;
+        outTriangleCorners += static_cast<usize>(mesh->num_triangles) * Impl::s_MeshletTriangleIndexCount;
     }
     return outTriangleCorners;
 }

@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "fixture_text_shaping.h"
+
 #include <impl/ecs_ui/toolkit/text/layout.h>
 
 #include <gtest/gtest.h>
@@ -44,18 +46,9 @@ public:
             run.glyphs.push_back({ {}, 2u, 0u, 3u, { -4.0f, -2.0f }, {}, { 0.0f, -8.0f, 3.0f, 2.0f } });
         }
         else{
-            usize begin = 0u;
-            while(begin < request.text.size()){
-                usize end = begin + 1u;
-                while(end < request.text.size() && IsUtf8Continuation(static_cast<u8>(request.text[end])))
-                    ++end;
-                run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, { -1.0f, -8.0f, 12.0f, 10.0f } });
-                begin = end;
-            }
-            if(request.direction == TextDirection::RightToLeft){
-                for(usize index = 0u; index < run.glyphs.size() / 2u; ++index)
-                    Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
-            }
+            NWB::Tests::UiFixtureText::AppendCodePointGlyphs(request.text, { -1.0f, -8.0f, 12.0f, 10.0f }, run);
+            if(request.direction == TextDirection::RightToLeft)
+                NWB::Tests::UiFixtureText::ReverseGlyphs(run);
         }
         return run;
     }
@@ -224,7 +217,7 @@ TEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic
         ASSERT_TRUE(layoutResult);
         m_layout = Move(*layoutResult);
     }
-    const StringView invalid[]{ "\xc0\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xe2\x82", { "\0", 1u } };
+    const Array<StringView, 5> invalid{ "\xc0\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xe2\x82", StringView( "\0", 1u ) };
     for(const StringView text : invalid){
         {
             const auto layoutResult = m_builder.layout({ text });

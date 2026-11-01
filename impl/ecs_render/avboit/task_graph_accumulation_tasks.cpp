@@ -4,13 +4,8 @@
 
 #include "task_graph_accumulation_tasks.h"
 
-#include <impl/ecs_render/avboit/compute_emulation_record.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-
-#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +26,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitAccumulationComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
 
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.accumulationTiming);
+    return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -41,7 +36,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitAccumulate, MaterialPipelinePass::AvboitAccumulate, &AvboitFrameTargets::accumulationFramebuffer, };
 
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, trait, payload.accumulationTiming);
+    return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -52,10 +47,6 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitRasterPassFromPayload(
         payload,
         commandList,
-        &Payload::accumulationPhasePrepared,
-        &Payload::accumulationSnapshot,
-        &Payload::accumulationComputeEmulationOutputStatesGraphOwned,
-        &Payload::accumulationCsgComputeEmulationOutputStatesGraphOwned,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitAccumulatePass(
                 dispatchCommandList,
@@ -66,15 +57,14 @@ namespace RendererTaskGraphDetail{
                 payload.frameBindings,
                 dispatchInstanceCount,
                 dispatchMaterialTypedByteCount,
-                payload.accumulationMaterialFrameStatesGraphOwned,
-                payload.accumulationMaterialGeometryStatesGraphOwned,
-                payload.accumulationComputeEmulationOutputStatesGraphOwned,
-                payload.accumulationCsgComputeEmulationOutputStatesGraphOwned,
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned,
+                payload.computeEmulationOutputStatesGraphOwned,
+                payload.csgComputeEmulationOutputStatesGraphOwned,
                 payload.generatedGeometryReused,
-                payload.accumulationComputeEmulationTiming
+                payload.computeEmulationTiming
             );
-        },
-        payload.accumulationComputeEmulationTiming
+        }
     );
 }
 
@@ -82,7 +72,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 AvboitAccumulationFinalizeGraphTask::Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{
+[[nodiscard]] b8 AvboitAccumulationFinalizeGraphTask::Record([[maybe_unused]] const Payload& payload, [[maybe_unused]] Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context)noexcept{
     return true;
 }
 

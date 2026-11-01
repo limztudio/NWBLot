@@ -37,7 +37,7 @@ TEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingMode
 
 TEST_F(MultilineModelTests, CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine){
     ASSERT_TRUE(m_model.setText("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1\n\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\n"));
-    const usize expected[]{ 0u, 3u, 4u, 10u, 11u, 19u, 20u };
+    const Array<usize, 7> expected{ 0u, 3u, 4u, 10u, 11u, 19u, 20u };
     ASSERT_EQ(m_model.graphemeBoundaries().size(), 7u);
     for(usize index = 0u; index < 7u; ++index)
         EXPECT_EQ(m_model.graphemeBoundaries()[index], expected[index]);
@@ -59,7 +59,7 @@ TEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelection
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("q\nr", 0u, 3u));
     const MultilineSnapshot before(m_arena, m_model);
-    const AStringView invalid[]{ "\r\n", "\t", "\xC2\x85", s_LineSeparator, s_ParagraphSeparator, "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
+    const Array<AStringView, 8> invalid{ "\r\n", "\t", "\xC2\x85", s_LineSeparator, s_ParagraphSeparator, "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
     for(const AStringView value : invalid){
         SCOPED_TRACE(value);
         EXPECT_FALSE(m_model.setText(value));
@@ -69,15 +69,15 @@ TEST_F(MultilineModelTests, InvalidSetAndReplacementPreserveTextHistorySelection
     for(u32 scalar = 0u; scalar < 32u; ++scalar){
         if(scalar == '\n')
             continue;
-        const char bytes[]{ static_cast<char>(scalar) };
-        EXPECT_FALSE(m_model.setText({ bytes, 1u }));
-        EXPECT_FALSE(m_model.replaceSelection({ bytes, 1u }));
+        const Array<char, 1> bytes{ static_cast<char>(scalar) };
+        EXPECT_FALSE(m_model.setText({ bytes.data(), 1u }));
+        EXPECT_FALSE(m_model.replaceSelection({ bytes.data(), 1u }));
         before.expectUnchanged(m_model);
     }
     for(u32 scalar = 0x80u; scalar <= 0x9Fu; ++scalar){
-        const char bytes[]{ static_cast<char>(0xC2u), static_cast<char>(scalar) };
-        EXPECT_FALSE(m_model.setText({ bytes, 2u }));
-        EXPECT_FALSE(m_model.replaceSelection({ bytes, 2u }));
+        const Array<char, 2> bytes{ static_cast<char>(0xC2u), static_cast<char>(scalar) };
+        EXPECT_FALSE(m_model.setText({ bytes.data(), 2u }));
+        EXPECT_FALSE(m_model.replaceSelection({ bytes.data(), 2u }));
         before.expectUnchanged(m_model);
     }
     m_model.cancelComposition();
@@ -162,9 +162,9 @@ TEST_F(MultilineModelTests, SurroundingDeletionAcrossLinesRemainsBoundaryChecked
 
 TEST_F(MultilineModelTests, HomeEndAddressCurrentHardLineIncludingEmptyAndTrailingLines){
     ASSERT_TRUE(m_model.setText("ab\n\ncde\n"));
-    const usize homes[]{ 0u, 0u, 0u, 3u, 4u, 4u, 4u, 4u, 8u };
-    const usize ends[]{ 2u, 2u, 2u, 3u, 7u, 7u, 7u, 7u, 8u };
-    const usize boundaries[]{ 2u, 3u, 4u, 7u, 8u };
+    const Array<usize, 9> homes{ 0u, 0u, 0u, 3u, 4u, 4u, 4u, 4u, 8u };
+    const Array<usize, 9> ends{ 2u, 2u, 2u, 3u, 7u, 7u, 7u, 7u, 8u };
+    const Array<usize, 5> boundaries{ 2u, 3u, 4u, 7u, 8u };
     for(const usize caret : boundaries){
         ASSERT_TRUE(m_model.setSelection(caret, caret));
         ASSERT_TRUE(m_model.move(EditMove::Home));

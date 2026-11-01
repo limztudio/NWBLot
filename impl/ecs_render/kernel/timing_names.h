@@ -98,13 +98,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> DeferredGraphQueueInternalIdle(const Core::GpuPhysicalQueueId& queue, Core::Alloc::ScratchArena& scratchArena){
-    if(!queue.valid())
-        return Optional<Name>{};
-
-    const AString<Core::Alloc::ScratchArena> scopeName = StringFormat(scratchArena, "render.deferred_graph.queue_{}.internal_idle", queue.index);
-    return ToName(scopeName);
-}
+[[nodiscard]] Expected<Optional<Name>, NameTextError::Enum> DeferredGraphQueueInternalIdle(const Core::GpuPhysicalQueueId& queue, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +132,19 @@ inline constexpr AStringView s_DeferredPresentLabel = "Deferred Present";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ReflectionGpuTimingScope{
+    inline constexpr Core::GpuTimingScopeDefinition s_DepthPyramid("render.reflection_depth_pyramid");
+    inline constexpr Core::GpuTimingScopeDefinition s_Classify("render.reflection_classify");
+    inline constexpr Core::GpuTimingScopeDefinition s_BuildArgs("render.reflection_build_args");
+    inline constexpr Core::GpuTimingScopeDefinition s_Hardware("render.reflection_hardware");
+    inline constexpr Core::GpuTimingScopeDefinition s_Temporal("render.reflection_temporal");
+    inline constexpr Core::GpuTimingScopeDefinition s_Spatial("render.reflection_spatial");
 };
 
 

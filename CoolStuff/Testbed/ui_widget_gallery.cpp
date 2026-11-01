@@ -28,15 +28,14 @@ namespace __hidden_ui_widget_gallery{
 namespace Section{
     enum Enum : u32{
         Controls, Edit, List, Combo, SearchCombo, PopupTools, NestedPopup,
-        NumericEdit, TextArea, RadioGroup, Slider, Progress, Image, Count
+        NumericEdit, TextArea, RadioGroup, Slider, Progress, Image, kCount
     };
 };
 
-static constexpr f32 s_Margin = 18.0f;
 static constexpr f32 s_SelectorHeight = 88.0f;
 static constexpr f32 s_ContentGap = 12.0f;
 static constexpr Name s_SelectorArena("testbed/ui/gallery_selector");
-static constexpr Array<StringView, Section::Count> s_SectionNames{
+static constexpr Array<StringView, Section::kCount> s_SectionNames{
     "Controls and menu", "Text editing", "Virtual list", "Keyed combo", "Searchable combo",
     "Tooltips and context menu", "Nested popups", "Numeric editing", "Multiline text",
     "Radio choices", "Slider", "Progress", "Images"
@@ -52,15 +51,15 @@ static constexpr Array<StringView, Section::Count> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const SIMDVectorSingle preferredTop)noexcept{
+SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySize, const f32 preferredTop)noexcept{
     using namespace __hidden_ui_widget_gallery;
     const f32 height = ((s_SelectorHeight + s_ContentGap) + s_ContentHeight);
     const SIMDVectorSingle size = VectorSet(s_SelectorWidth, height, 0.0f, 0.0f);
-    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_Margin));
-    const SIMDVectorSingle preferred = VectorAndInt(preferredTop, s_SIMDMaskY);
+    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(displaySize, size), VectorReplicate(s_GalleryMargin));
+    const SIMDVectorSingle preferred = VectorSet(0.0f, preferredTop, 0.0f, 0.0f);
     const SIMDVectorSingle topLimit = VectorAndInt(VectorLess(preferred, available), VectorSelectControl(0u, 1u, 0u, 0u));
     const SIMDVectorSingle capped = VectorSelect(available, preferred, topLimit);
-    const SIMDVectorSingle margin = VectorReplicate(s_Margin);
+    const SIMDVectorSingle margin = VectorReplicate(s_GalleryMargin);
     const SIMDVectorSingle origin = VectorSelect(capped, margin, VectorGreater(margin, capped));
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }
@@ -68,18 +67,6 @@ SIMDVectorSingle UiWidgetGallery::LayoutBounds(const SIMDVectorSingle displaySiz
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-UiWidgetGallery::UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
-    : m_edits(arena)
-    , m_searchCombos(arena)
-    , m_nestedPopups(arena)
-    , m_numericEdits(arena)
-    , m_textAreas(arena)
-{}
-
-b8 UiWidgetGallery::loadAssets(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
-    return m_images.loadAssets(arena, assets, sceneSubsystems);
-}
 
 void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl::Ui::Rect& bounds){
     using namespace NWB::Impl::Ui;
@@ -96,13 +83,13 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const NWB::Impl:
     navigation.enabled = m_selectedGallery != 0u && !ui.input().hasPopup();
     if(ui.button("previous", "Previous", navigation))
         --m_selectedGallery;
-    navigation.enabled = m_selectedGallery + 1u < Section::Count && !ui.input().hasPopup();
+    navigation.enabled = m_selectedGallery + 1u < Section::kCount && !ui.input().hasPopup();
     if(ui.button("next", "Next", navigation))
         ++m_selectedGallery;
     valid = ui.endContainer() && valid;
     const u32 selected = m_selectedGallery;
     NWB::Core::Alloc::ScratchArena scratchArena(s_SelectorArena);
-    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::Count), s_SectionNames[selected]);
+    const auto caption = StringFormat(scratchArena, "UI samples {}/{}: {}", selected + 1u, static_cast<u32>(Section::kCount), s_SectionNames[selected]);
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){
@@ -167,6 +154,9 @@ void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, NWB::Cor
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI widget declaration failed"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

@@ -41,6 +41,19 @@ b8 GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGrap
     return false;
 }
 
+b8 GpuRecordedGraph::ArtifactOperation::ActiveScopeIs(const ArtifactOperation& operation)noexcept{
+    if(!operation.m_ownsAdmission || !operation.m_recordedGraph)
+        return false;
+    b8 foundOperation = false;
+    for(const ArtifactOperation* active = s_ActiveOperation; active; active = active->m_previousOperation){
+        if(active->m_recordedGraph != operation.m_recordedGraph)
+            return false;
+        if(active == &operation)
+            foundOperation = true;
+    }
+    return foundOperation;
+}
+
 
 GpuRecordedGraph::ArtifactOperation::ArtifactOperation(const GpuRecordedGraph& recordedGraph, const ArtifactOperationMode::Enum mode)noexcept{
     const b8 exclusive = mode == ArtifactOperationMode::Exclusive;

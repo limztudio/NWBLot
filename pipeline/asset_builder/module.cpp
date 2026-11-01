@@ -3,13 +3,19 @@
 
 
 #include "build.h"
-#include "../command_line.h"
 
-#include <core/assets/cook_paths.h>
+#include <pipeline/command_line.h>
+
 #include <core/task/cpu/scheduler.h>
 #include <core/common/log.h>
 
 #include <global/cpu_topology.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,16 +34,17 @@ inline constexpr u32 s_MinParallelCoreCount = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::ScratchArena& scratchArena, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
-    namespace Assets = NWB::Core::Assets;
+static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena& scratchArena, AssetBuilder::AssetBuildOptions& options){
+    namespace Assets = Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
     const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)));
     if(!repoRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repository root"));
         return false;
     }
+    options.resolvedRepoRoot = repoRoot->lexicallyNormal();
     const auto& sources = parsed.assetRoots.empty() ? parsed.inputs : parsed.assetRoots;
-    auto roots = Assets::ResolveAssetRoots(*repoRoot, sources, parsed.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
+    auto roots = Assets::ResolveAssetRoots(options.resolvedRepoRoot, sources, parsed.assetRoots.empty(), Assets::AssetRootDuplicatePolicy::ExactText, scratchArena);
     if(!roots){
         const auto& error = roots.error();
         if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
@@ -51,10 +58,8 @@ static b8 ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::Scratch
         return false;
     }
     options.assetRoots.reserve(roots->size());
-    for(const Assets::ResolvedAssetRoot& root : *roots){
-        const auto text = PathToString(arena, root.path);
-        options.assetRoots.emplace_back(arena, AStringView(text), root.virtualRoot);
-    }
+    for(Assets::ResolvedAssetRoot& root : *roots)
+        options.assetRoots.emplace_back(Move(root.path), root.virtualRoot);
     return true;
 }
 
@@ -69,27 +74,33 @@ static b8 ResolveRoots(const PipelineOptions& parsed, NWB::Core::Assets::Scratch
 
 
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(__hidden_asset_builder::s_AssetBuilderArena);
+    Core::Assets::AssetArena arena(__hidden_asset_builder::s_AssetBuilderArena);
+    Core::Assets::ScratchArena scratchArena(__hidden_asset_builder::s_AssetBuilderArena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
-    return commandLine.run(argc, argv, arena, [&](PipelineOptions& options){
+    return commandLine.run(argc, argv, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        NWB::Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
-        NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
+        Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
+        AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
         buildOptions.outputDirectory = options.outputPath;
         buildOptions.configuration = options.configuration;
         if(options.assetType)
             buildOptions.assetType = *options.assetType;
         buildOptions.useExplicitInputs = true;
-        NWB::Core::Assets::ScratchArena scratchArena(__hidden_asset_builder::s_AssetBuilderArena);
         if(!__hidden_asset_builder::ResolveRoots(options, scratchArena, buildOptions))
             return s_PipelineExitFailure;
         buildOptions.inputs = Move(options.inputs);
-        const b8 built = NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions);
+        const b8 built = AssetBuilder::BuildAssets(buildOptions, scratchArena);
         cpuScheduler.wait();
         return built ? s_PipelineExitSuccess : s_PipelineExitFailure;
-    });
+    }, arena, scratchArena);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

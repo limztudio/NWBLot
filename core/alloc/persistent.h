@@ -41,7 +41,7 @@ private:
 
 
 public:
-    [[nodiscard]] static usize StructureAlignedSize(usize byte);
+    [[nodiscard]] static usize StructureAlignedSize(const usize byte){ return StructureAlignedSize(byte, alignof(MaxAlign)); }
     [[nodiscard]] static usize StructureAlignedSize(usize byte, usize align);
 
 
@@ -94,7 +94,9 @@ inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakeP
 }
 
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n)noexcept(sizeof(RemoveExtent_T<T>) == 1u && ArenaObjectDetail::IsNothrowArenaArrayConstruction<RemoveExtent_T<T>>()){
+inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(
+    NWB::Core::Alloc::PersistentArena& arena, usize n
+)noexcept(sizeof(RemoveExtent_T<T>) == 1u && ArenaObjectDetail::IsNothrowArenaArrayConstruction<RemoveExtent_T<T>>()){
     return ::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>

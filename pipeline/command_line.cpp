@@ -15,13 +15,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_PIPELINE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_pipeline_command_line{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 AssignText(const AStringView text, NWB::Core::Assets::AssetString& output){
+static b8 AssignText(const AStringView text, Core::Assets::AssetString& output){
     if(!text.empty() && !IsSingleLinePathText(text)){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
         return false;
@@ -30,11 +36,11 @@ static b8 AssignText(const AStringView text, NWB::Core::Assets::AssetString& out
     return true;
 }
 
-static b8 AssignInputs(const Span<const AInteropString> values, NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outputs){
+static b8 AssignInputs(const Span<const AInteropString> values, Core::Assets::AssetVector<Core::Assets::AssetString>& outputs){
     auto& arena = outputs.get_allocator().arena();
     outputs.reserve(values.size());
     for(const AInteropString& value : values){
-        NWB::Core::Assets::AssetString text(arena);
+        Core::Assets::AssetString text(arena);
         if(value.empty() || !AssignText(value, text)){
             NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: input path must not be empty"));
             return false;
@@ -80,7 +86,7 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
     }
 }
 
-Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv, NWB::Core::Assets::AssetArena& arena){
+Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     PipelineOptions options(arena);
     CommandLineParseApp(m_app, argc, argv);
 
@@ -112,13 +118,12 @@ Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv
         return MakeUnexpected(Failure{});
     }
     if(!m_inputList.empty()){
-        NWB::Core::Alloc::ScratchArena scratchArena(NWB::Core::Assets::AssetsArenaScope::s_InputListScratch);
         const AStringView listText(m_inputList.data(), m_inputList.size());
         if(!IsSingleLinePathText(listText)){
             NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
             return MakeUnexpected(Failure{});
         }
-        if(!NWB::Core::Assets::ReadAssetInputList(options.inputs, Path(arena, listText), scratchArena, m_tool == PipelineTool::AssetGatherer))
+        if(!Core::Assets::ReadAssetInputList(Path(arena, listText), scratchArena, options.inputs, m_tool == PipelineTool::AssetGatherer))
             return MakeUnexpected(Failure{});
     }
     return options;
@@ -133,6 +138,12 @@ int PipelineCommandLine::exit(const CLI::ParseError& error)const{
     NWB_CERR << m_app.help();
     return s_PipelineExitFailure;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

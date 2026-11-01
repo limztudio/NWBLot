@@ -32,10 +32,6 @@ namespace __hidden_font_atlas_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<FontAtlas> BuildFontAtlasCookedAsset(FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    return BuildFontAtlasAsset(entry, arena, scratchArena);
-}
-
 static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     const auto fontRef = Core::Assets::ReadMetadataAssetRefField<Font>(context.nwbFilePath, context.asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasMetaFontField, true);
     if(!fontRef)
@@ -45,14 +41,18 @@ static b8 ExtractFontAtlasDependencies(const Core::Assets::CookDependencyItemCon
 
 static b8 RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
-        registry, NWB_TEXT("font atlas"),
+        NWB_TEXT("font atlas"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadata(root, virtualRoot, path, doc, context.cookArena, context.scratchArena);
         },
         [](Name virtualPath, const Path& path, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadataValue(virtualPath, path, asset, context.cookArena, context.scratchArena);
         },
-        &BuildFontAtlasCookedAsset, false
+        [](FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+            return BuildFontAtlasAsset(Move(entry), arena, scratchArena);
+        },
+        registry,
+        false
     );
 }
 

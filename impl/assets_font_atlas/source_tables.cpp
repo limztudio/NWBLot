@@ -14,14 +14,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
-    if(!font.validatePayload())
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Span<const u8> fontBytes, const u32 faceIndex, const u32 sourceGlyphCount, const b8 validateSource, Core::Assets::AssetArena& arena){
+    if(validateSource){
+        if(!ValidateFontSource(fontBytes, faceIndex, arena))
+            return MakeUnexpected(Failure{});
+    }
+    else if(faceIndex != 0u){
         return MakeUnexpected(Failure{});
-    const Core::Assets::AssetBytes& source = font.fontBytes();
+    }
     FontSfntDirectory directory;
-    if(!ReadFontSfntDirectory({ source.data(), source.size() }, directory))
+    if(!ReadFontSfntDirectory(fontBytes, directory))
         return MakeUnexpected(Failure{});
-    static constexpr u32 s_Tags[] = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
+    static constexpr Array<u32, s_FontAtlasMaxPositioningTableCount> s_Tags = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
     Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
     tables.reserve(s_FontAtlasMaxPositioningTableCount);
     u64 totalBytes = 0u;
@@ -47,7 +51,7 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
             table.tag = tag;
             table.bytes.assign(sourceBytes.begin(), sourceBytes.end());
             table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-            if(!ValidateFontAtlasPositioningTable(table, sourceGlyphCount))
+            if(!ValidateFontAtlasPositioningTableBytes(table.tag, table.bytes, sourceGlyphCount))
                 return MakeUnexpected(Failure{});
             tables.push_back(Move(table));
             totalBytes += length;
@@ -55,6 +59,12 @@ Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPosi
         }
     }
     return tables;
+}
+
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(const Font& font, const u32 sourceGlyphCount, Core::Assets::AssetArena& arena){
+    if(!font.validatePayload())
+        return MakeUnexpected(Failure{});
+    return CopyFontAtlasPositioningTables(font.fontBytes(), font.faceIndex(), sourceGlyphCount, false, arena);
 }
 
 

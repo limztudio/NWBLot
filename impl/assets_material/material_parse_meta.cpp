@@ -10,6 +10,10 @@
 
 #include "cook_private.h"
 
+#include <impl/assets_shader/cook.h>
+
+#include <core/assets/cook_metadata.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +30,7 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_MaterialMetaDiagnosticPrefix = "Material meta";
+static Core::Assets::NonStandaloneAssetTypeAutoRegistrar s_MaterialNonStandaloneAssetTypeRegistrar(Material::AssetTypeName(), "material");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,74 +103,27 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
     }
     assignments.reserve(assignmentReserve);
 
-    auto failInvalidVariant = [&](){
+    const auto logInvalidVariant = [&](){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(rawVariantView));
-        return MakeUnexpected(Failure{});
     };
 
-    usize begin = 0u;
-    while(begin < rawVariantView.size()){
-        usize segmentEnd = rawVariantView.find(';', begin);
-        if(segmentEnd == AStringView::npos)
-            segmentEnd = rawVariantView.size();
-
-        const AStringView segment = TrimView(rawVariantView.substr(begin, segmentEnd - begin));
-        if(segment.empty())
-            return failInvalidVariant();
-
-        const usize equalPos = segment.find('=');
-        if(equalPos == AStringView::npos || equalPos == 0u || equalPos + 1u >= segment.size())
-            return failInvalidVariant();
-
-        const AStringView defineName = TrimView(segment.substr(0u, equalPos));
-        const AStringView defineValue = TrimView(segment.substr(equalPos + 1u));
-        if(defineName.empty() || defineValue.empty())
-            return failInvalidVariant();
-        if(!assignments.emplace(defineName, defineValue).second)
-            return failInvalidVariant();
-
-        begin = segmentEnd + 1u;
-    }
-
-    CookString canonicalVariant{arena};
-    if(assignments.size() == 1u){
-        const auto& [defineName, defineValue] = *assignments.begin();
-        canonicalVariant.reserve(defineName.size() + defineValue.size() + 1u);
-        canonicalVariant += defineName;
-        canonicalVariant += '=';
-        canonicalVariant += defineValue;
-    }
-    else{
-        struct AssignmentPtr{
-            const AStringView* key = nullptr;
-            const AStringView* value = nullptr;
-        };
-        Vector<AssignmentPtr, ScratchArena> sortedAssignments{scratchArena};
-        sortedAssignments.reserve(assignments.size());
-        for(const auto& [defineName, defineValue] : assignments)
-            sortedAssignments.push_back(AssignmentPtr{ &defineName, &defineValue });
-        Sort(sortedAssignments.begin(), sortedAssignments.end(), [](const AssignmentPtr& lhs, const AssignmentPtr& rhs)noexcept{
-            return *lhs.key < *rhs.key;
-        });
-
-        usize canonicalVariantSize = sortedAssignments.size() - 1u;
-        for(const AssignmentPtr& assignment : sortedAssignments)
-            canonicalVariantSize += assignment.key->size() + assignment.value->size() + 1u;
-
-        canonicalVariant.reserve(canonicalVariantSize);
-        b8 first = true;
-        for(const AssignmentPtr& assignment : sortedAssignments){
-            if(!first)
-                canonicalVariant += ';';
-            first = false;
-
-            canonicalVariant += *assignment.key;
-            canonicalVariant += '=';
-            canonicalVariant += *assignment.value;
+    const b8 parsedAssignments = ShaderCook::ParseVariantSignatureAssignments(
+        rawVariantView,
+        [&](const AStringView defineName, const AStringView defineValue) -> b8{
+            if(!assignments.emplace(defineName, defineValue).second){
+                logInvalidVariant();
+                return false;
+            }
+            return true;
+        },
+        [&](const VariantSignatureSegmentError::Enum, const AStringView){
+            logInvalidVariant();
         }
-    }
+    );
+    if(!parsedAssignments)
+        return MakeUnexpected(Failure{});
 
-    return canonicalVariant;
+    return ShaderCook::BuildCanonicalVariantName(assignments, arena, scratchArena);
 }
 
 
@@ -353,7 +310,7 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
     ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
     ScratchString extension = PathToString(scratchArena, interfacePathPath.extensionView());
     CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) != AStringView(".bind")){
+    if(AStringView(extension) != s_MaterialBindSourceExtensionText){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
         return MakeUnexpected(Failure{});
     }
@@ -426,18 +383,13 @@ static Expected<b8> ParseMaterialBoolProperty(const Path& nwbFilePath, const Cor
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' is required and must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
         return MakeUnexpected(Failure{});
     }
-    if(!propertyValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
+    if(propertyValue->isInteger()){
+        const i64 propertyInt = propertyValue->asInteger();
+        if(propertyInt == 0 || propertyInt == 1)
+            return propertyInt != 0;
     }
-
-    const i64 propertyInt = propertyValue->asInteger();
-    if(propertyInt != 0 && propertyInt != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-
-    return propertyInt != 0;
+    NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1"), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -460,7 +412,7 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
     const Core::Metascript::Value& asset = **assetValue;
 
     // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
-    auto derivedVirtualPath = Core::Assets::BuildDerivedAssetVirtualPath(arena, assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    auto derivedVirtualPath = Core::Assets::AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, nwbFilePath, arena, scratchArena);
     if(!derivedVirtualPath)
         return MakeUnexpected(Failure{});
     const auto virtualPathName = Name::FromText(AStringView(*derivedVirtualPath));
@@ -480,11 +432,11 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(const Path& assetRoot, con
     if(!materialInterface)
         return MakeUnexpected(Failure{});
     entry.materialInterface = Move(*materialInterface);
-    auto bxdfSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaBxdfField, ".bxdf", arena, scratchArena);
+    auto bxdfSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaBxdfField, s_MaterialBxdfExtension, arena, scratchArena);
     if(!bxdfSource)
         return MakeUnexpected(Failure{});
     entry.bxdfSource = Move(*bxdfSource);
-    auto surfaceSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaSurfaceField, ".surface", arena, scratchArena);
+    auto surfaceSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, s_MaterialMetaSurfaceField, s_MaterialSurfaceExtension, arena, scratchArena);
     if(!surfaceSource)
         return MakeUnexpected(Failure{});
     entry.surfaceSource = Move(*surfaceSource);

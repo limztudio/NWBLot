@@ -7,6 +7,7 @@
 #include "runtime_standalone_graph.h"
 #include "profile_names.h"
 
+#include <core/graphics/backend_contract.h>
 #include <core/graphics/backend_selection.h>
 #include <core/common/log.h>
 #include <core/task/gpu/scheduler.h>
@@ -25,9 +26,72 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming)
-    : GraphicsRuntime(allocator, cpuScheduler, gpuTasks, gpuTiming, nullptr)
-{}
+static_assert(GraphicsContract::BackendApi<GraphicsBackend::Backend>);
+static_assert(GraphicsContract::DeviceApi<GraphicsBackend::Device>);
+static_assert(GraphicsContract::CommandListApi<GraphicsBackend::CommandList>);
+
+static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::Heap, HeapDesc>);
+static_assert(GraphicsContract::TextureApi<GraphicsBackend::Texture>);
+static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::StagingTexture, TextureDesc>);
+static_assert(GraphicsContract::BufferApi<GraphicsBackend::Buffer>);
+static_assert(GraphicsContract::ShaderApi<GraphicsBackend::Shader>);
+static_assert(GraphicsContract::ShaderLibraryApi<GraphicsBackend::ShaderLibrary>);
+static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::Sampler, SamplerDesc>);
+static_assert(GraphicsContract::InputLayoutApi<GraphicsBackend::InputLayout>);
+static_assert(GraphicsContract::FramebufferApi<GraphicsBackend::Framebuffer>);
+static_assert(GraphicsContract::RayTracingOpacityMicromapApi<GraphicsBackend::RayTracingOpacityMicromap>);
+static_assert(GraphicsContract::RayTracingAccelStructApi<GraphicsBackend::RayTracingAccelStruct>);
+static_assert(GraphicsContract::BindingLayoutApi<GraphicsBackend::BindingLayout>);
+static_assert(GraphicsContract::GraphicsPipelineApi<GraphicsBackend::GraphicsPipeline>);
+static_assert(GraphicsContract::ComputePipelineApi<GraphicsBackend::ComputePipeline>);
+static_assert(GraphicsContract::MeshletPipelineApi<GraphicsBackend::MeshletPipeline>);
+static_assert(GraphicsContract::RayTracingShaderTableApi<GraphicsBackend::RayTracingShaderTable>);
+static_assert(GraphicsContract::RayTracingPipelineApi<GraphicsBackend::RayTracingPipeline>);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_graphics_runtime_contract{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+concept GraphicsRuntimeApi = requires(const T& graphics){
+    { graphics.getDevice() }->SameAs<GraphicsBackend::Device&>;
+};
+
+static_assert(GraphicsRuntimeApi<GraphicsRuntime>);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_graphics_feature_queries{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+constexpr u32 s_DefaultWaveLaneCount = 64u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 GraphicsRuntime::GraphicsRuntime(GraphicsAllocator& allocator, CpuTaskScheduler& cpuScheduler, GpuTaskScheduler& gpuTasks, Perf::TimingSink& gpuTiming, Perf::TimingSink* const cpuTiming)
     : m_allocator(allocator)
@@ -215,6 +279,38 @@ Expected<AdapterInfo> GraphicsRuntime::getSelectedAdapterInfo()const{
     return m_backend->getSelectedAdapterInfo();
 }
 
+b8 GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature)const noexcept{
+    auto& device = getDevice();
+    return device.queryFeatureSupport(feature);
+}
+
+u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
+    const auto info = getDevice().getWaveLaneCounts();
+    if(info.maxWaveLaneCount > 0u)
+        return info.maxWaveLaneCount;
+    // No wave size reported: 64 lanes is the safe desktop upper bound and keeps groupshared reductions correct.
+    return __hidden_graphics_feature_queries::s_DefaultWaveLaneCount;
+}
+
+void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
+    m_renderPasses.remove(MakeNotNull(&pass));
+    m_renderPasses.push_back(MakeNotNull(&pass));
+
+    pass.backBufferResizing();
+    pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
+}
+
+void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
+    const b8 deviceIdle = waitForIdle();
+    GraphicsBackend::Device* const device = m_backend->getDevice();
+    NWB_FATAL_ASSERT_MSG(deviceIdle || (device && device->isDeviceLost()), NWB_TEXT("Render-pass removal requires either a completed device join or terminal device loss"));
+
+    pass.invalidateResources();
+    m_renderPasses.remove(MakeNotNull(&pass));
+}
+
 QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noexcept{
     return m_backend->claimFramePresentationSignal();
 }
@@ -223,9 +319,18 @@ b8 GraphicsRuntime::confirmFramePresentationSignal(const QueueSubmissionPreSubmi
     return m_backend->confirmFramePresentationSignal(claim, token);
 }
 
-
 b8 GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim){
     return m_backend->cancelFramePresentationSignal(claim);
+}
+
+void GraphicsRuntime::clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept{
+    if(m_taskGraphPresentationContributor == &contributor)
+        m_taskGraphPresentationContributor = nullptr;
+}
+
+void GraphicsRuntime::clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
+    if(m_taskGraphOutputLayerContributor == &contributor)
+        m_taskGraphOutputLayerContributor = nullptr;
 }
 
 TStringView GraphicsRuntime::getRendererString()const noexcept{
@@ -253,6 +358,34 @@ void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback
     m_pointerScaleChangedCallback = callback;
     m_pointerScaleChangedUserData = userData;
     notifyPointerScaleChanged();
+}
+
+Expected<CooperativeVectorDeviceFeatures> GraphicsRuntime::queryCoopVecFeatures()const{
+    auto& device = getDevice();
+    return device.queryCoopVecFeatures();
+}
+
+Expected<usize> GraphicsRuntime::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
+    auto& device = getDevice();
+    return device.getCoopVecMatrixSize(type, layout, rows, columns);
+}
+
+void GraphicsRuntime::invalidateRenderPassResources(){
+    for(const auto renderPass : m_renderPasses)
+        renderPass->invalidateResources();
+}
+
+b8 GraphicsRuntime::validateRenderPassResources(){
+    b8 valid = true;
+    for(const auto renderPass : m_renderPasses){
+        valid = renderPass->validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount) && valid;
+    }
+    return valid;
+}
+
+void GraphicsRuntime::animate(const f64 elapsedTime){
+    for(const auto renderPass : m_renderPasses)
+        renderPass->animate(static_cast<f32>(elapsedTime));
 }
 
 void GraphicsRuntime::notifyPointerScaleChanged()const{

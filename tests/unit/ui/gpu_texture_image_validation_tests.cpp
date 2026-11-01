@@ -158,7 +158,7 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetAcceptsMixedSourcesAtC
     ASSERT_TRUE(imageResult);
     const SharedImageSource image = Move(*imageResult);
     ASSERT_TRUE(sdf && image);
-    ASSERT_TRUE(m_builder.prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
+    ASSERT_TRUE(m_builder.prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
     const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
     const Rect uv{ 0.0f, 0.0f, 1.0f, 1.0f };
     ASSERT_TRUE(m_builder.drawGlyph(glyphs[0u], rectangle, uv));
@@ -190,7 +190,7 @@ TEST_F(GpuTextureImageValidationFixture, SharedImageBudgetOverflowIncludesEveryI
     ASSERT_TRUE(additionResult);
     const SharedImageSource addition = Move(*additionResult);
     ASSERT_TRUE(sdf && image && addition);
-    ASSERT_TRUE(m_builder.prepareImages(glyphs.data(), glyphs.size(), &sdf, 1u, &image, 1u));
+    ASSERT_TRUE(m_builder.prepareImages(glyphs, Span(&sdf, 1u), Span(&image, 1u)));
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
     const_cast<PaintVector<SharedImageSource>&>(snapshot.textureImages()).push_back(addition);
@@ -249,7 +249,7 @@ TEST_F(GpuTextureImageValidationFixture, ImageCommandRejectsGlyphAndSdfMetadata)
     ASSERT_TRUE(sdfCreationResult);
     const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(image && glyph && sdf);
-    ASSERT_TRUE(m_builder.prepareImages(&glyph, 1u, &sdf, 1u, &image, 1u));
+    ASSERT_TRUE(m_builder.prepareImages(Span(&glyph, 1u), Span(&sdf, 1u), Span(&image, 1u)));
     ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
     DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);

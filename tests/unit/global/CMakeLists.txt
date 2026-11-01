@@ -14,6 +14,8 @@ target_sources(nwb_global_tests PRIVATE
 )
 target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/simd_memory_tests.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.cpp"
+    "${CMAKE_SOURCE_DIR}/tests/common/simd_memory_guard_fixture.h"
 )
 target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/name_identity_tests.cpp"
@@ -32,3 +34,4 @@ target_link_libraries(nwb_global_contract_boundary_tests PRIVATE nwb_common nwb_
 target_sources(nwb_global_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/tests/common/arena_owner_fixture.h"
 )
+

@@ -36,9 +36,10 @@ class ListStyle{
 }
 
 const f32 s_ListDefaultHeight = 240.0f;
-const f32 s_ListMinimumWidth = 120.0f;
 // Padding left, top, right, bottom, then minimum x and y.
 const usize s_ListRowMetricCount = 6u;
+const usize s_ListLanguageBufferBytes = 64u;
+const u32 s_ListMaxPreparedRows = 1024u;
 
 class ListOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
@@ -66,6 +67,29 @@ class SelectablePaintFlags{
     public b8 selected = false;
     public b8 hover = false;
     public b8 focused = false;
+}
+
+class ListKeyResolution{
+    public ListKeyResolution(){
+        this.index = 0u;
+        this.present = false;
+    }
+
+    public ListKeyResolution(in u64 inIndex, in b8 inPresent){
+        this.index = inIndex;
+        this.present = inPresent;
+    }
+
+    public u64 index;
+    public b8 present;
+}
+
+b8 IsValidListOptions(in ListOptions options){
+    return options.enabled && isFinite(options.wheelRows) && options.wheelRows > 0.0f;
+}
+
+b8 IsReverseListControlAction(in ControlActionKind kind){
+    return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
 

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "recorder.h"
+#include "frame_graph_kinds.h"
 
 #include <global/expected.h>
 
@@ -81,7 +81,7 @@ namespace FrameGraphStatisticsDetail{
 
 [[nodiscard]] inline Expected<u64> FrameGraphCompileBarrierCount(const FrameGraphCompileRuntimeStatistics& statistics)noexcept{
     u64 barrierCountTotal = statistics.transitionBarrierCount;
-    const u64 remainingBarrierCounts[] = { statistics.uavBarrierCount, statistics.ownershipReleaseBarrierCount, statistics.ownershipAcquireBarrierCount, statistics.stateExportBarrierCount, };
+    const Array<u64, 4u> remainingBarrierCounts = { statistics.uavBarrierCount, statistics.ownershipReleaseBarrierCount, statistics.ownershipAcquireBarrierCount, statistics.stateExportBarrierCount, };
     for(const u64 barrierCount : remainingBarrierCounts){
         if(barrierCount > Limit<u64>::s_Max - barrierCountTotal)
             return MakeUnexpected(Failure{});

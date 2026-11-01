@@ -31,12 +31,6 @@ u32 GraphicsRuntime::getBackBufferCount()const noexcept{
     return m_backend->getBackBufferCount();
 }
 
-Framebuffer* GraphicsRuntime::getFramebuffer(u32 index)const noexcept{
-    if(index < m_swapChainFramebuffers.size())
-        return m_swapChainFramebuffers[index].get();
-    return nullptr;
-}
-
 Expected<BufferHandle> GraphicsRuntime::createBuffer(const BufferDesc& desc)const{
     return getDevice().createBuffer(desc);
 }

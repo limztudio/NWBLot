@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../input/commands.adhd"
+#include <impl/ecs_ui/toolkit/input/commands.adhd>
+#include <impl/ecs_ui/toolkit/text/types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,6 +15,30 @@ const f64 s_CaretVisiblePhaseEnd = 0.5;
 const usize s_EditDefaultMaxBytes = 4096u;
 const usize s_EditDefaultMaxHistoryRecords = 64u;
 const usize s_EditDefaultMaxHistoryBytes = 131072u;
+const usize s_EditMaxBytes = 1048576u;
+const usize s_EditMaxHistoryRecords = 256u;
+const usize s_EditMaxHistoryBytes = 16777216u;
+const StringView s_EditNewlineText = "\n";
+
+const u32 s_EditUnicodeTab = 0x09u;
+const u32 s_EditUnicodeLineFeed = 0x0Au;
+const u32 s_EditUnicodeCarriageReturn = 0x0Du;
+const u32 s_EditUnicodeNextLine = 0x85u;
+const u32 s_EditUnicodeNoBreakSpace = 0xA0u;
+const u32 s_EditUnicodeOghamSpaceMark = 0x1680u;
+const u32 s_EditUnicodeEnQuad = 0x2000u;
+const u32 s_EditUnicodeHairSpace = 0x200Au;
+const u32 s_EditUnicodeNarrowNoBreakSpace = 0x202Fu;
+const u32 s_EditUnicodeMediumMathematicalSpace = 0x205Fu;
+const u32 s_EditUnicodeIdeographicSpace = 0x3000u;
+const u32 s_EditAsciiExclamation = 0x21u;
+const u32 s_EditAsciiSlash = 0x2Fu;
+const u32 s_EditAsciiColon = 0x3Au;
+const u32 s_EditAsciiAt = 0x40u;
+const u32 s_EditAsciiLeftBracket = 0x5Bu;
+const u32 s_EditAsciiGrave = 0x60u;
+const u32 s_EditAsciiLeftBrace = 0x7Bu;
+const u32 s_EditAsciiTilde = 0x7Eu;
 
 const usize s_NumericEditMaxBytes = 128u;
 const usize s_NumericEditMaxHistoryRecords = 64u;
@@ -240,6 +265,164 @@ b8 ValidateIntegerBounds(in IntegerBounds bounds){
 
 b8 ValidateFloatBounds(in FloatBounds bounds){
     return isFinite(bounds.minimum) && isFinite(bounds.maximum) && bounds.minimum <= bounds.maximum && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp);
+}
+
+usize SkipNumericSign(in StringView text){
+    usize skipped = 0u;
+    native(in text, mut skipped){
+        skipped = !text.empty() && (text.front() == '+' || text.front() == '-') ? 1u : 0u;
+    }
+    return skipped;
+}
+
+NumericParseStatus ValidateIntegerGrammar(in StringView text){
+    const usize begin = SkipNumericSign(text);
+    if(begin == text.size())
+        return NumericParseStatus::Incomplete;
+    NumericParseStatus status = NumericParseStatus::Complete;
+    native(in text, in begin, mut status){
+        for(usize index = begin; index < text.size(); ++index){
+            const char ch = text[index];
+            if(ch < '0' || ch > '9'){
+                status = NumericParseStatus::Invalid;
+                break;
+            }
+        }
+    }
+    return status;
+}
+
+NumericParseStatus ValidateFloatGrammar(in StringView text){
+    usize index = SkipNumericSign(text);
+    NumericParseStatus status = NumericParseStatus::Complete;
+    native(in text, mut index, mut status){
+        b8 digits = false;
+        while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
+            digits = true;
+            ++index;
+        }
+        if(index < text.size() && text[index] == '.'){
+            ++index;
+            while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
+                digits = true;
+                ++index;
+            }
+        }
+        if(!digits)
+            status = index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
+        else if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
+            ++index;
+            if(index < text.size() && (text[index] == '+' || text[index] == '-'))
+                ++index;
+            const usize exponent = index;
+            while(index < text.size() && text[index] >= '0' && text[index] <= '9')
+                ++index;
+            if(exponent == index)
+                status = index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
+            else
+                status = index == text.size() ? NumericParseStatus::Complete : NumericParseStatus::Invalid;
+        }
+        else
+            status = index == text.size() ? NumericParseStatus::Complete : NumericParseStatus::Invalid;
+    }
+    return status;
+}
+
+enum<u8> EditNavigationRunClass{
+    Whitespace,
+    Punctuation,
+    Text,
+    LineBreak,
+}
+
+class MultilineTextStep{
+    public usize sourceBytes = 0u;
+    public usize outputBytes = 0u;
+    public u8 replacement = 0u;
+}
+
+class SingleLineTextStep{
+    public usize sourceBytes = 0u;
+    public usize outputBytes = 0u;
+    public b8 space = false;
+}
+
+b8 TryTranslateEditNavigation(in InputCommandIntent intent, mut EditNavigationDirection outDirection){
+    outDirection = EditNavigationDirection::Up;
+    if(!intent.edit)
+        return false;
+    switch(intent.command){
+    case InputCommand::Up: outDirection = EditNavigationDirection::Up; return true;
+    case InputCommand::Down: outDirection = EditNavigationDirection::Down; return true;
+    case InputCommand::PageUp: outDirection = EditNavigationDirection::PageUp; return true;
+    case InputCommand::PageDown: outDirection = EditNavigationDirection::PageDown; return true;
+    default: return false;
+    }
+}
+
+b8 IsMutatingEditCommand(in EditCommand command){
+    return
+        command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
+        || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
+        || command == EditCommand::Undo || command == EditCommand::Redo || command == EditCommand::Newline
+    ;
+}
+
+b8 ShouldSuppressEditCommandRepeat(in EditCommand command){
+    return command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel;
+}
+
+EditLimits ClampEditLimits(in EditLimits limits){
+    EditLimits bounded;
+    bounded.maxBytes = min(limits.maxBytes, s_EditMaxBytes);
+    bounded.maxHistoryRecords = min(limits.maxHistoryRecords, s_EditMaxHistoryRecords);
+    bounded.maxHistoryBytes = min(limits.maxHistoryBytes, s_EditMaxHistoryBytes);
+    return bounded;
+}
+
+b8 IsSingleLineScalar(in u32 scalar){
+    return scalar != 0u && scalar != s_EditUnicodeLineFeed && scalar != s_EditUnicodeCarriageReturn && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator;
+}
+
+b8 IsSingleLineSpaceScalar(in u32 scalar){
+    return (scalar >= s_EditUnicodeTab && scalar <= s_EditUnicodeCarriageReturn) || scalar == s_EditUnicodeNextLine || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator;
+}
+
+b8 IsSingleLineRejectedScalar(in u32 scalar){
+    return !IsSingleLineSpaceScalar(scalar) && (scalar < s_TextUnicodeSpace || scalar == s_TextUnicodeDelete);
+}
+
+b8 IsMultilineLineBreakScalar(in u32 scalar){
+    return scalar == s_EditUnicodeCarriageReturn || scalar == s_EditUnicodeNextLine || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator;
+}
+
+b8 IsCanonicalMultilineScalar(in u32 scalar){
+    return scalar == s_EditUnicodeLineFeed || (scalar >= s_TextUnicodeSpace && (scalar < s_TextUnicodeDelete || scalar > s_TextUnicodeC1Last) && scalar != s_TextUnicodeLineSeparator && scalar != s_TextUnicodeParagraphSeparator);
+}
+
+b8 IsEditWhitespaceScalar(in u32 scalar){
+    return
+        (scalar >= s_EditUnicodeTab && scalar <= s_EditUnicodeCarriageReturn) || scalar == s_TextUnicodeSpace || scalar == s_EditUnicodeNextLine || scalar == s_EditUnicodeNoBreakSpace
+        || scalar == s_EditUnicodeOghamSpaceMark || (scalar >= s_EditUnicodeEnQuad && scalar <= s_EditUnicodeHairSpace) || scalar == s_TextUnicodeLineSeparator
+        || scalar == s_TextUnicodeParagraphSeparator || scalar == s_EditUnicodeNarrowNoBreakSpace || scalar == s_EditUnicodeMediumMathematicalSpace || scalar == s_EditUnicodeIdeographicSpace
+    ;
+}
+
+b8 IsEditAsciiPunctuationScalar(in u32 scalar){
+    return
+        (scalar >= s_EditAsciiExclamation && scalar <= s_EditAsciiSlash)
+        || (scalar >= s_EditAsciiColon && scalar <= s_EditAsciiAt)
+        || (scalar >= s_EditAsciiLeftBracket && scalar <= s_EditAsciiGrave)
+        || (scalar >= s_EditAsciiLeftBrace && scalar <= s_EditAsciiTilde)
+    ;
+}
+
+EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
+    if(IsEditWhitespaceScalar(scalar))
+        return EditNavigationRunClass::Whitespace;
+    if(IsEditAsciiPunctuationScalar(scalar))
+        return EditNavigationRunClass::Punctuation;
+    return EditNavigationRunClass::Text;
 }
 
 

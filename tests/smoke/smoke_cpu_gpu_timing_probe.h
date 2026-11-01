@@ -68,10 +68,10 @@ private:
 
 
 private:
-    TStringView m_owner;
-    SmokeEnvironmentString m_outputPath;
+    Array<Array<Scope, s_MaxScopesPerDomain>, 2u> m_scopes{};
     Vector<Record, Core::Alloc::GlobalArena> m_records;
-    Scope m_scopes[2u][s_MaxScopesPerDomain] = {};
+    SmokeEnvironmentString m_outputPath;
+    TStringView m_owner;
     u64 m_firstSourceFrame = 0u;
     u64 m_firstPresentation = 0u;
     b8 m_enabled = false;

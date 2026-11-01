@@ -8,6 +8,7 @@
 #include "backend.h"
 #include "device_extension_policy.h"
 
+#include <core/common/frame_data.h>
 #include <core/task/cpu/scheduler.h>
 
 #include "swap_chain_presentation.h"
@@ -118,15 +119,15 @@ private:
 
 
 private:
-    static constexpr StringView s_EnabledInstanceExts[] = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, };
-    static constexpr StringView s_DebugRequiredInstanceExts[] = { VK_EXT_DEBUG_UTILS_EXTENSION_NAME, };
-    static constexpr ExtEntry s_EnabledDeviceExts[] = {
+    static constexpr Array<StringView, 1> s_EnabledInstanceExts = {{ VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME }};
+    static constexpr Array<StringView, 1> s_DebugRequiredInstanceExts = {{ VK_EXT_DEBUG_UTILS_EXTENSION_NAME }};
+    static constexpr Array<ExtEntry, 2> s_EnabledDeviceExts = {{
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
         // Descriptor buffers are the renderer's only descriptor transport.
         // A device without this extension does not meet the renderer's minimum requirements.
         { VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, DeviceExtensionFeature::DescriptorBuffer },
-    };
-    static constexpr ExtEntry s_OptionalDeviceExts[] = {
+    }};
+    static constexpr Array<ExtEntry, 15> s_OptionalDeviceExts = {{
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -144,7 +145,7 @@ private:
         // Keep this optional so consumers can select BC6H or RGBA16_FLOAT on hardware without it.
         { VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME, DeviceExtensionFeature::TextureCompressionAstcHdr },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
-    };
+    }};
 
 
 private:

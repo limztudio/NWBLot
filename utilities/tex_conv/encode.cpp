@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 
 #include <global/simdmath.h>
+#include <global/simplemath.h>
 
 #include <basisu_transcoder.h>
 
@@ -57,11 +58,11 @@ inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(rgb, VectorReplicate(s_SrgbLinearThreshold)));
 }
 
-[[nodiscard]] static b8 PrepareLinearPlane(basisu::imagef& plane, const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb){
+[[nodiscard]] static b8 PrepareLinearPlane(const basisu::imagef& alphaMask, const AlphaSource& alphaSource, const b8 hdr, const b8 srgb, basisu::imagef& inOutPlane){
     const SIMDVectorSingle maximumRgb = VectorReplicate(hdr ? s_UastcHdrMaximum : 1.0f);
-    for(u32 y = 0u; y < plane.get_height(); ++y){
-        for(u32 x = 0u; x < plane.get_width(); ++x){
-            basisu::vec4F& pixel = plane(x, y);
+    for(u32 y = 0u; y < inOutPlane.get_height(); ++y){
+        for(u32 x = 0u; x < inOutPlane.get_width(); ++x){
+            basisu::vec4F& pixel = inOutPlane(x, y);
             const SIMDVectorSingle rgb = VectorSet(pixel[0u], pixel[1u], pixel[2u], 0.0f);
             if(!Vector3IsFinite(rgb) || !Vector3GreaterOrEqual(rgb, VectorZero()) || !Vector3LessOrEqual(rgb, maximumRgb)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: RGB input must contain finite values in [0, {}]."), hdr ? s_UastcHdrMaximum : 1.0f);
@@ -78,7 +79,7 @@ inline constexpr f32 s_SrgbLinearThreshold = 0.04045f;
                 return false;
             }
             if(alphaSource.mode != AlphaSourceMode::Original)
-                alpha = VectorGetX(VectorSaturate(VectorReplicate(alpha)));
+                alpha = Clamp(alpha, 0.0f, 1.0f);
             else if(alpha < 0.0f || alpha > 1.0f){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: original alpha input must be in [0, 1]."));
                 return false;
@@ -154,7 +155,7 @@ Expected<PreparedTexture> PrepareTexture(const Span<const ScratchPath> inputPath
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture inputs must have the same resolution."));
             return MakeUnexpected(Failure{});
         }
-        if(!__hidden_encode::PrepareLinearPlane(*plane, alphaMask, alphaSource, hdr, !hdr && srgb))
+        if(!__hidden_encode::PrepareLinearPlane(alphaMask, alphaSource, hdr, !hdr && srgb, *plane))
             return MakeUnexpected(Failure{});
         input.planes.push_back(Move(*plane));
     }

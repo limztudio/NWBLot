@@ -29,32 +29,18 @@ struct SourceTriangleCorner{
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
 struct MeshSkinInfluenceHasher{
-    usize operator()(const MeshSkinInfluence& value)const noexcept{
-        usize seed = Hasher<u16>{}(value.joint[0u]);
-        for(usize i = 1u; i < s_MeshSkinInfluenceCount; ++i)
-            HashCombine(seed, value.joint[i]);
-        for(const f32 weight : value.weight.raw)
-            HashCombine(seed, FloatingHashBits(weight));
-        return seed;
-    }
+public:
+    usize operator()(const MeshSkinInfluence& value)const noexcept;
 };
 
 struct SourceVertexRefHasher{
-    usize operator()(const SourceVertexRef& value)const noexcept{
-        usize seed = Hasher<u32>{}(value.position);
-        HashCombine(seed, value.normal);
-        HashCombine(seed, value.tangent);
-        HashCombine(seed, value.uv0);
-        HashCombine(seed, value.color);
-        HashCombine(seed, value.skin);
-        return seed;
-    }
+public:
+    usize operator()(const SourceVertexRef& value)const noexcept;
 };
 
 struct SourceVertexRefEqual{
-    b8 operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
-        return lhs.position == rhs.position && lhs.normal == rhs.normal && lhs.tangent == rhs.tangent && lhs.uv0 == rhs.uv0 && lhs.color == rhs.color && lhs.skin == rhs.skin;
-    }
+public:
+    b8 operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept;
 };
 
 using Vec2IndexMap = UtilityScratchMap<Vec2, u32>;
@@ -64,21 +50,6 @@ using MeshSkinInfluenceIndexMap = UtilityScratchMap<MeshSkinInfluence, u32, Mesh
 using SourceVertexRefIndexMap = UtilityScratchMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
 
 struct SourceMeshBuildContext{
-public:
-    SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena)
-        : mesh(sourceMesh)
-        , scratchArena(sourceScratchArena)
-        , positions(sourceScratchArena)
-        , normals(sourceScratchArena)
-        , tangents(sourceScratchArena)
-        , uv0(sourceScratchArena)
-        , colors(sourceScratchArena)
-        , skin(sourceScratchArena)
-        , vertexRefs(sourceScratchArena)
-    {}
-
-
-public:
     SourceMeshStreams& mesh;
     Core::Alloc::ScratchArena& scratchArena;
     Vec3IndexMap positions;
@@ -88,6 +59,10 @@ public:
     Vec4IndexMap colors;
     MeshSkinInfluenceIndexMap skin;
     SourceVertexRefIndexMap vertexRefs;
+
+
+public:
+    SourceMeshBuildContext(SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& sourceScratchArena);
 };
 
 
@@ -96,13 +71,14 @@ public:
 
 class FbxSourceMeshStreams final : NoCopy{
 public:
-    static void ReserveSourceMeshStreams(SourceMeshStreams& mesh, const usize estimatedTriangleCorners, const b8 wantsSkinning);
-    static void ReserveSourceMeshBuildContext(SourceMeshBuildContext& context, const usize estimatedTriangleCorners, const b8 wantsSkinning);
+    static void ReserveSourceMeshStreams(usize estimatedTriangleCorners, b8 wantsSkinning, SourceMeshStreams& outMesh);
+    static void ReserveSourceMeshBuildContext(usize estimatedTriangleCorners, b8 wantsSkinning, SourceMeshBuildContext& inOutContext);
     [[nodiscard]] static b8 SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh)noexcept;
-    [[nodiscard]] static b8 DropSourceMeshTangents(SourceMeshStreams& mesh, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] static b8 DropSourceMeshTangents(Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
     [[nodiscard]] static b8 EnsureTriangleIndexScratchCapacity(const ufbx_mesh& mesh, UtilityScratchVector<u32>& inOutTriangleIndices);
-    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(SourceMeshStreams& mesh, const b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] static Expected<u32> InternSourceCorner(SourceMeshBuildContext& context, const SourceTriangleCorner& corner, const b8 wantsSkinning);
+    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(b8 usedDefaultUvs, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh);
+    [[nodiscard]] static Expected<u32> InternSourceCorner(const SourceTriangleCorner& corner, b8 wantsSkinning, SourceMeshBuildContext& inOutContext);
+    [[nodiscard]] static b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, AStringView context);
 
 
 public:

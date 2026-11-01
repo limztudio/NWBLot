@@ -21,7 +21,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     CreatedPipelineLayout result;
 
     if(bindingLayouts.empty()){
-        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, 0u, operationName);
+        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, {}, 0u, operationName);
         if(!pipelineLayout)
             return MakeUnexpected(Failure{});
         result.layout = *pipelineLayout;
@@ -62,7 +62,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     }
 
     if(descriptorSetLayoutCount == 0u){
-        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, operationName);
+        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, {}, pushConstantByteSize, operationName);
         if(!pipelineLayout)
             return MakeUnexpected(Failure{});
         result.layout = *pipelineLayout;
@@ -116,7 +116,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
         }
     }
 
-    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, descriptorSetLayouts.data(), static_cast<u32>(descriptorSetLayouts.size()), pushConstantByteSize, operationName);
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, descriptorSetLayouts, pushConstantByteSize, operationName);
     if(!pipelineLayout)
         return MakeUnexpected(Failure{});
     result.layout = *pipelineLayout;
@@ -126,7 +126,7 @@ Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(co
     return result;
 }
 
-Expected<PipelineBindingState> Device::buildPipelineBindings(const BindingLayoutVector& bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
+Expected<PipelineBindingState> Device::buildPipelineBindings(const Span<const BindingLayoutHandle> bindingLayouts, TStringView operationName, Alloc::ScratchArena& scratchArena)const{
     PipelineBindingState bindings;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
@@ -141,8 +141,8 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(const BindingLayout
     bindings.m_pushConstantByteSize = layout->pushConstantByteSize;
     bindings.m_ownsPipelineLayout = layout->ownsLayout;
 
-    bindings.m_bindingLayoutsAtCreation = bindingLayouts;
     for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
+        bindings.m_bindingLayoutsAtCreation.push_back(bindingLayouts[layoutIndex]);
         const BindingLayout& bindingLayout = *bindingLayouts[layoutIndex];
         const BindlessLayoutDesc* const bindlessDesc = bindingLayout.getBindlessDesc();
         bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc ? bindlessDesc->descriptorSetIndex : Limit<u32>::s_Max;
@@ -151,15 +151,14 @@ Expected<PipelineBindingState> Device::buildPipelineBindings(const BindingLayout
 }
 
 
-void Device::appendPipelineShaderStage(Shader& shader, const VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const{
-    Shader& s = shader;
+void Device::appendPipelineShaderStage(const Shader& shader, const VkShaderStageFlagBits stage, PipelineSpecializationInfoVector& specializationInfos, PipelineShaderStageVector& shaderStages)const{
     auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
-    stageInfo.module = s.m_shaderModule;
-    stageInfo.pName = s.m_entryPointName.data();
+    stageInfo.module = shader.m_shaderModule;
+    stageInfo.pName = shader.m_entryPointName.data();
 
-    if(!s.m_specializationEntries.empty()){
-        specializationInfos.push_back(s.makeSpecializationInfo());
+    if(!shader.m_specializationEntries.empty()){
+        specializationInfos.push_back(shader.makeSpecializationInfo());
         stageInfo.pSpecializationInfo = &specializationInfos.back();
     }
 

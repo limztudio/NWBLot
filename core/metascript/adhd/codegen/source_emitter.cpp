@@ -131,10 +131,10 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
     m_typeEmitter.emitTemplateHeaderCpp(out, callable.templateParams);
     if(emitBody){
         if(callable.isForceInline)
-            out.append("NWB_FORCE_INLINE ");
+            out.append("NWB_INLINE ");
         else if(callable.isNoInline)
             out.append("NWB_NOINLINE ");
-        if(emitInlineKeyword)
+        if(emitInlineKeyword && !callable.isForceInline)
             out.append("inline ");
     }
 
@@ -200,6 +200,17 @@ void SourceEmitter::emitCtorOrCallArgs(MString& out, const MStringView baseTypeN
             out.push_back('(');
             emitExpr(out, *arguments[0]);
             out.push_back(')');
+        }
+        else if(arguments.size() == 1u && arguments[0] && arguments[0]->resolvedSimdType.empty()){
+            const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(baseTypeName);
+            const u32 elemCount = matInfo ? matInfo->elemCount : 16u;
+            out.append("{ .raw = { ");
+            for(u32 i = 0u; i < elemCount; ++i){
+                if(i > 0u)
+                    out.append(", ");
+                emitExpr(out, *arguments[0]);
+            }
+            out.append(" } }");
         }
         else{
             out.append("{ .raw = { ");

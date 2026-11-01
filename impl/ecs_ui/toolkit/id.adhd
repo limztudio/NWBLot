@@ -5,13 +5,27 @@
 // Stable keys of widget parts; builder, paint, and input code must derive the same ids.
 const StringView s_WidgetPartPopup = "popup";
 const StringView s_WidgetPartRows = "rows";
+const StringView s_WidgetPartQuery = "query";
+const StringView s_WidgetPartChoices = "choices";
 const StringView s_WidgetPartScrollbar = "scrollbar";
 const StringView s_WidgetPartTrack = "track";
 const StringView s_WidgetPartThumb = "thumb";
 const StringView s_WidgetPartScrollHorizontalThumb = "scroll.x.thumb";
 const StringView s_WidgetPartScrollVerticalThumb = "scroll.y.thumb";
+const StringView s_WidgetPartScrollHorizontalBefore = "scroll.x.before";
+const StringView s_WidgetPartScrollVerticalBefore = "scroll.y.before";
+const StringView s_WidgetPartScrollHorizontalAfter = "scroll.x.after";
+const StringView s_WidgetPartScrollVerticalAfter = "scroll.y.after";
+const StringView s_WidgetPartScrollCorner = "scroll.corner";
+const StringView s_WindowChromeTitleKey = "@window.title";
+const StringView s_WindowChromeCollapseKey = "@window.collapse";
+const StringView s_WindowChromeResizeKey = "@window.resize";
 
 const u64 s_WidgetMaxStates = 4096u;
+const usize s_WidgetStateRetainedCapacity = 8192u;
+const usize s_WidgetFrameReserve = 16u;
+const usize s_ContextMaxScopeDepth = 64u;
+const usize s_SmallStateClaims = 32u;
 const u64 s_WidgetFnv64OffsetBasis = 14695981039346656037ull;
 const u64 s_WidgetFnv64Prime = 1099511628211ull;
 
@@ -94,6 +108,37 @@ class WidgetState{
     public u64 declarationGeneration;
     public u64 lastSeenFrame;
     public WidgetKind kind;
+}
+
+class ContextStateClaim{
+    public b8 operator==(in ContextStateClaim rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration && this.kind == rhs.kind;
+    }
+
+    public b8 operator!=(in ContextStateClaim rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration || this.kind != rhs.kind;
+    }
+
+    public u64 instanceGeneration = 0u;
+    public WidgetKind kind = WidgetKind::Panel;
+}
+
+usize ContextStateClaimHash(in ContextStateClaim claim){
+    usize hash = 0u;
+    native(in claim, mut hash){
+        hash = Hasher<u64>{}(claim.instanceGeneration);
+        HashCombine(hash, static_cast<u8>(claim.kind));
+    }
+    return hash;
+}
+
+[inline]
+b8 ContainsWidgetRoot(in Span<WidgetRoot> roots, in WidgetRoot root){
+    for(usize index = 0u; index < roots.size(); ++index){
+        if(roots[index] == root)
+            return true;
+    }
+    return false;
 }
 
 u64 UpdateWidgetFnv64Byte(in u64 hash, in u8 byteValue){

@@ -23,33 +23,14 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept{
-    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+// G-buffer sentinels; keep creation and clears in lockstep.
+inline constexpr Core::Color s_GBufferNormalClearColor = Core::Color(0.5f, 0.5f, 1.f, 1.f);
+inline constexpr Core::Color s_GBufferWorldPositionClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
+inline constexpr Core::Color s_GBufferSpecularRoughnessClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
 
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-inline Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept{
-    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
-
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device)noexcept{
-    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::RGBA16_FLOAT, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
-
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
-
-inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept{
-    constexpr Core::Format::Enum s_Candidates[] = { Core::Format::D32, Core::Format::D24S8, Core::Format::D16, };
-    constexpr Core::FormatSupport::Mask s_RequiredSupport = Core::FormatSupport::DepthStencil;
-
-    return SelectSupportedFormat(device, s_Candidates, s_RequiredSupport);
-}
+[[nodiscard]] Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device)noexcept;
+[[nodiscard]] Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

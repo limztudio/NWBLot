@@ -5,10 +5,9 @@
 #pragma once
 
 
-#include "frame_state_cache.h"
-
 #include <impl/global.h>
 #include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_render/csg/types.adhd.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -23,25 +22,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererCsgSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererCsgState final : NoCopy{
-    friend class RendererCsgSystem;
-
-
 public:
     RendererCsgState()noexcept = default;
 
 
-private:
+public:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     // CSG layouts are push-only; resources use the global heap.
     Core::BindingLayoutHandle m_clipBindingLayout;
     Core::BindingLayoutHandle m_intervalPeelBindingLayout;
@@ -71,7 +61,6 @@ private:
     Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
     b8 m_frameStateCacheValid = false;
 };
-static constexpr usize s_RendererCsgStateByteSize = 360u;
 static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
 
 

@@ -56,7 +56,7 @@ struct AuthoredSkin{
     b8 complete;
 };
 
-[[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(ToolkitSkinArena& testArena, const Path& assetRoot, const Path& atlasPath, const AStringView virtualRoot){
+[[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(const Path& assetRoot, const Path& atlasPath, const AStringView virtualRoot, ToolkitSkinArena& testArena){
     Core::Assets::AssetString metadata(testArena.arena);
     if(!ReadTextFile(atlasPath, metadata))
         return MakeUnexpected(Failure{});
@@ -73,7 +73,7 @@ struct AuthoredSkin{
     return AuthoredSkin{ Move(*skinResult), entryResult->completeToolkitSkin };
 }
 
-static void CopyWithoutRegion(ToolkitSkinArena& testArena, const UiSkin& source, const Name& removed, UiSkin& outSkin){
+static void CopyWithoutRegion(const UiSkin& source, const Name& removed, ToolkitSkinArena& testArena, UiSkin& outSkin){
     UiSkin::RegionVector regions(testArena.arena);
     for(const UiSkinRegion& region : source.regions()){
         if(region.name != removed)
@@ -92,28 +92,28 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     ToolkitSkinArena testArena;
     const Path assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / s_EngineDirectory / s_AssetsDirectory;
     const Path atlasPath = assetRoot / s_UiDirectory / s_SkinsDirectory / s_DefaultSkinDirectory / s_AtlasMetadataFilename;
-    auto sourceResult = LoadAuthoredSkin(testArena, assetRoot, atlasPath, "engine");
+    auto sourceResult = LoadAuthoredSkin(assetRoot, atlasPath, "engine", testArena);
     ASSERT_TRUE(sourceResult);
     const UiSkin& source = sourceResult->skin;
     EXPECT_TRUE(sourceResult->complete);
 
-    const Name required[]{ Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"), Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
+    const Array<Name, 6u> required = { Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"), Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
     for(const Name& removed : required){
         UiSkin candidate(testArena.arena, source.virtualPath());
-        CopyWithoutRegion(testArena, source, removed, candidate);
+        CopyWithoutRegion(source, removed, testArena, candidate);
         EXPECT_TRUE(candidate.validatePayload());
         EXPECT_FALSE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
-    const Name optional[]{ Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"), Name("combo.open"), Name("slider.thumb.hover") };
+    const Array<Name, 5u> optional = { Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"), Name("combo.open"), Name("slider.thumb.hover") };
     for(const Name& removed : optional){
         UiSkin candidate(testArena.arena, source.virtualPath());
-        CopyWithoutRegion(testArena, source, removed, candidate);
+        CopyWithoutRegion(source, removed, testArena, candidate);
         EXPECT_TRUE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
     UiSkin noResize(testArena.arena, source.virtualPath());
-    CopyWithoutRegion(testArena, source, Name(s_WhiteRegionName), noResize);
+    CopyWithoutRegion(source, Name(s_WhiteRegionName), testArena, noResize);
     EXPECT_FALSE(ValidateUiSkinToolkitContract(noResize));
 
     UiSkin::RegionVector regions(testArena.arena);

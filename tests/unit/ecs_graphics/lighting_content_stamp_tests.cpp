@@ -17,39 +17,33 @@ namespace __hidden_lighting_content_stamp_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
 
 
 TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
     SceneShadingGpuData shading;
-    SceneLightGpuData lights[2];
-    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 1u));
+    Array<SceneLightGpuData, 2> lights{};
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights.data(), 1u));
     lights[1].position.x = 3.f;
     lights[1].colorIntensity.w = 0.f;
-    EXPECT_EQ(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 1u)), original);
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, s_ExpectedDualCount)), original);
+    EXPECT_EQ(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights.data(), 1u)), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights.data(), 2u)), original);
     EXPECT_EQ(
         ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>{}),
-        ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, 0u))
+        ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights.data(), 0u))
     );
 }
 
 
 TEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity){
     SceneShadingGpuData shading;
-    SceneLightGpuData lights[2];
+    Array<SceneLightGpuData, 2> lights{};
     lights[0].colorIntensity.x = 0.2f;
     lights[1].colorIntensity.y = 0.7f;
-    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights, s_ExpectedDualCount));
-    const SceneLightGpuData reversed[2] = {lights[1], lights[0]};
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(reversed, s_ExpectedDualCount)), original);
+    const u64 original = ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(lights.data(), 2u));
+    const Array<SceneLightGpuData, 2> reversed = {lights[1], lights[0]};
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, Span<const SceneLightGpuData>(reversed.data(), 2u)), original);
 }
 
 

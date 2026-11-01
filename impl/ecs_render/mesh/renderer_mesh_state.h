@@ -10,6 +10,8 @@
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
+#include <global/containers.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,29 +22,22 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererMeshSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererMeshState final : NoCopy{
-    friend class RendererMeshSystem;
+public:
+    explicit RendererMeshState(Core::Alloc::GlobalArena& arena)
+        : m_meshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    {}
 
 
 public:
-    explicit RendererMeshState(Core::Alloc::GlobalArena& arena);
-
-
-private:
     void invalidateResources()noexcept;
 
 
-private:
+public:
     HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_meshes;
     Core::BufferHandle m_meshViewBuffer;
     ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
-    u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};
+    Array<u8, sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT> m_meshViewGpuData = {};
     b8 m_meshViewGpuDataValid = false;
 };
 

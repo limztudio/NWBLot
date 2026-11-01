@@ -23,10 +23,6 @@ using CsgDeformDistanceFunc = SIMDVectorSingle(*)(SIMDVectorSingle, SIMDVectorSi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVectorSingle CsgDeformCutterField::PlaneSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{
-    return VectorAdd(Vector3Dot(shapePosition, parameter0), VectorSplatW(parameter0));
-}
-
 SIMDVectorSingle CsgDeformCutterField::BoxSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{
     // 3-lane helpers ignore w, so the affine w=1 lane needs no masking. Inside/outside combine stays replicated on lanes.
     const SIMDVectorSingle halfExtents = VectorSetW(parameter0, s_ShapeWMask);
@@ -34,10 +30,6 @@ SIMDVectorSingle CsgDeformCutterField::BoxSignedDistanceVec(SIMDVectorSingle sha
     const SIMDVectorSingle outsideVec = Vector3Length(VectorMax(q, VectorZero()));
     const SIMDVectorSingle insideVec = VectorMin(Vector3MinComponent(q), VectorZero());
     return VectorAdd(outsideVec, insideVec);
-}
-
-SIMDVectorSingle CsgDeformCutterField::SphereSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{
-    return VectorSubtract(Vector3Length(shapePosition), VectorSplatX(parameter0));
 }
 
 SIMDVectorSingle CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept{

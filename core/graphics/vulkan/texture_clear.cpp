@@ -60,7 +60,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     }
 
-    const f32 clearDepthValue = clearDepth ? VectorGetX(VectorSaturate(VectorReplicate(depth))) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? Saturate(depth) : 0.0f;
 
     VkClearDepthStencilValue clearValue{};
     clearValue.depth = clearDepthValue;
@@ -95,10 +95,6 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         m_context.deviceDispatch.vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
     }
     retainResource(&texture);
-}
-
-void CommandList::clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
-    clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
 }
 
 void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const b8 clearDepth, const f32 depth, const b8 clearStencil, const u8 stencil){
@@ -138,7 +134,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_TextureNotReadyForNativeClearReason);
         return;
     }
-    const f32 clearDepthValue = clearDepth ? VectorGetX(VectorSaturate(VectorReplicate(depth))) : 0.0f;
+    const f32 clearDepthValue = clearDepth ? Saturate(depth) : 0.0f;
     if(!m_renderPassActive && desc.sampleCount != 1u){
         rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_BoundedMultisampledClearInactiveReason);
         return;
@@ -219,7 +215,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
     if(m_commandRecordingFailed)
         return;
 
-    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const NotNull<const u8*> clearPattern, const u32 clearPatternSize) -> b8 {
+    const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const Span<const u8> clearPattern) -> b8 {
         u32 planIndex = 0u;
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++planIndex){
             const MipClearPlan& mipPlan = mipClearPlans[planIndex];
@@ -239,7 +235,7 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
                 rejectCommandRecording(s_OperationName, VulkanTextureDetail::s_ClearStagingRangeInvalidReason);
                 return false;
             }
-            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern.get(), clearPatternSize);
+            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, uploadLayout.clearByteCount, clearPattern);
 
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
             VulkanTextureDetail::BuildArrayLayerBufferImageCopies(resolvedSubresources, aspect, mipLevel, mipPlan.resolvedBox, stagingOffset, uploadLayout, regions);
@@ -252,9 +248,9 @@ void CommandList::clearDepthStencilTextureBox(Texture& texture, TextureSubresour
         return true;
     };
 
-    if(clearDepth && !copyAspect(VK_IMAGE_ASPECT_DEPTH_BIT, MakeNotNull(depthPattern->bytes.data()), depthPattern->byteCount))
+    if(clearDepth && !copyAspect(VK_IMAGE_ASPECT_DEPTH_BIT, depthPattern->span()))
         return;
-    if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, MakeNotNull(stencilPattern->bytes.data()), stencilPattern->byteCount))
+    if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, stencilPattern->span()))
         return;
 
     retainResource(&texture);

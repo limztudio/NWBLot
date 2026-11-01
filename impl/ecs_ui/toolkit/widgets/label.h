@@ -20,7 +20,11 @@ NWB_IMPL_UI_BEGIN
 // A passive label caches logical layout; paint confines its ink to the supplied region and inherited clip at the current display scale.
 class Label final : NoCopy{
 public:
-    explicit Label(Core::Alloc::GlobalArena& arena);
+    explicit Label(Core::Alloc::GlobalArena& arena)
+        : m_text(arena)
+        , m_language(s_TextDefaultLanguage, arena)
+        , m_layout(arena)
+    {}
 
 
 public:

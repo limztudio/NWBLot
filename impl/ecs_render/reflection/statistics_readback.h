@@ -14,24 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GraphicsRuntime;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_BEGIN
 
 
@@ -46,48 +28,34 @@ public:
 
 public:
     void accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
-    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept;
+    void complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, Span<const u32> counters = {})noexcept;
 };
 
 using ReflectionStatisticsControl = RefCounter<ReflectionStatisticsState>;
-using ReflectionStatisticsControlHandle = RefCountPtr< ReflectionStatisticsControl, ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena> >;
+using ReflectionStatisticsControlHandle = StatisticsControlHandle<ReflectionStatisticsState>;
 
-[[nodiscard]] Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, u16 deviceGeneration)noexcept;
 
 // Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : public StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>{
 public:
     using StatisticsReservationBase<ReflectionStatisticsControlHandle, ReflectionStatistics>::StatisticsReservationBase;
-
-
-public:
-    void accept(const Core::QueueSubmissionToken& token, b8 hardwareReady, const ReflectionHistoryOutcome* history = nullptr, const ReflectionFeedbackOutcome* feedback = nullptr)noexcept;
 };
 
 struct ReflectionStatisticsReadbackSnapshot{
     ReflectionStatisticsControlHandle control;
-    Core::BufferHandle buffers[ReflectionStatisticsState::s_SlotCount];
+    Array<Core::BufferHandle, s_StatisticsReadbackSlotCount> buffers{};
     ReflectionStatistics metadata;
 };
 
-class ReflectionStatisticsReadback final : NoCopy{
+class ReflectionStatisticsReadback final : public StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>{
 public:
-    ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
+    using StatisticsReadbackBase<ReflectionStatisticsState, ReflectionStatistics>::StatisticsReadbackBase;
 
 
 public:
-    void invalidateResources()noexcept;
     [[nodiscard]] b8 prepareResources();
     void pollCompleted();
-    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    ReflectionStatisticsControlHandle m_control;
-    Core::BufferHandle m_buffers[ReflectionStatisticsState::s_SlotCount];
 };
 
 

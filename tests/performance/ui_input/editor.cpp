@@ -115,7 +115,7 @@ public:
         m_widget = **widget;
         EditBoxOptions options;
         options.readOnly = true;
-        if(!m_host.edit(m_widget, m_model, options).valid || !m_host.publish(m_widget, m_view, m_placement, options))
+        if(!m_host.edit(m_widget, options, m_model).valid || !m_host.publish(m_widget, m_view, m_placement, options))
             return false;
         HitTarget target;
         target.rectangle = m_placement.bounds;
@@ -239,11 +239,11 @@ private:
 
 
 b8 RunEditBenchmarks(){
-    constexpr usize s_StopCounts[]{ 256u, 4096u, 16384u };
-    constexpr AStringView s_PublicationNames[]{ "editor.publish.256", "editor.publish.4096", "editor.publish.16384" };
-    constexpr usize s_LineCounts[]{ 100u, 1000u, 10000u };
-    constexpr AStringView s_SelectionNames[]{ "editor.empty_selection.100", "editor.empty_selection.1000", "editor.empty_selection.10000" };
-    for(usize index = 0u; index < 3u; ++index){
+    constexpr Array<usize, 3> s_StopCounts{ 256u, 4096u, 16384u };
+    constexpr Array<AStringView, 3> s_PublicationNames{ "editor.publish.256", "editor.publish.4096", "editor.publish.16384" };
+    constexpr Array<usize, 3> s_LineCounts{ 100u, 1000u, 10000u };
+    constexpr Array<AStringView, 3> s_SelectionNames{ "editor.empty_selection.100", "editor.empty_selection.1000", "editor.empty_selection.10000" };
+    for(usize index = 0u; index < s_StopCounts.size(); ++index){
         __hidden_ui_editor_benchmark::PublicationCase publication(s_StopCounts[index]);
         if(!publication.setup() || !publication.operation() || !publication.checksum())
             return false;

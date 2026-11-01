@@ -3,7 +3,8 @@
 
 
 #include "window.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
@@ -36,23 +37,16 @@ Expected<WindowMetrics> WindowLayout::Measure(
     metrics.contentPadding = { frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom };
     metrics.titlePadding = { title.padding.left, title.padding.top, title.padding.right, title.padding.bottom };
     metrics.collapseExtent = options.collapsible ? style.windowCollapseExtent : 0.0f;
-    if(options.collapsible && collapse){
-        const SIMDVectorSingle sourceExtent = VectorDivide(VectorReplicate(static_cast<f32>(Max(collapse->rectangle.width, collapse->rectangle.height))), VectorReplicate(density));
-        const SIMDVectorSingle regionMinimum = VectorSet(collapse->minimumWidth, collapse->minimumHeight, 0.0f, 0.0f);
-        metrics.collapseExtent = VectorGetX(VectorMax(VectorReplicate(metrics.collapseExtent), VectorMax(sourceExtent, VectorMax(regionMinimum, VectorSplatY(regionMinimum)))));
-    }
+    if(options.collapsible && collapse)
+        metrics.collapseExtent = ResolveUiSkinSquareExtent(metrics.collapseExtent, *collapse, density);
     metrics.resizeExtent = style.windowResizeExtent;
-    if(resize){
-        const SIMDVectorSingle sourceExtent = VectorDivide(VectorReplicate(static_cast<f32>(Max(resize->rectangle.width, resize->rectangle.height))), VectorReplicate(density));
-        const SIMDVectorSingle regionMinimum = VectorSet(resize->minimumWidth, resize->minimumHeight, 0.0f, 0.0f);
-        metrics.resizeExtent = VectorGetX(VectorMax(VectorReplicate(metrics.resizeExtent), VectorMax(sourceExtent, VectorMax(regionMinimum, VectorSplatY(regionMinimum)))));
-    }
+    if(resize)
+        metrics.resizeExtent = ResolveUiSkinSquareExtent(metrics.resizeExtent, *resize, density);
     const SIMDVectorSingle titleContent = VectorMax(VectorSet(titleSize.x, titleSize.y, 0.0f, 0.0f), VectorSet(titleSize.x, metrics.collapseExtent, 0.0f, 0.0f));
     const SIMDVectorSingle titlePadded = VectorAdd(VectorAdd(titleContent, VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, 0.0f, 0.0f)), VectorSet(metrics.titlePadding.right, metrics.titlePadding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle titleBounded = VectorMax(VectorSelect(titlePadded, VectorReplicate(title.minimumHeight), s_SIMDMaskY), titlePadded);
-    metrics.titleHeight = VectorGetY(titleBounded);
-    const SIMDVectorSingle collapseSize = options.collapsible ? VectorAdd(VectorSet(metrics.collapseExtent, 0.0f, 0.0f, 0.0f), VectorSet(style.gap, 0.0f, 0.0f, 0.0f)) : VectorZero();
-    const SIMDVectorSingle titleExtent = VectorAdd(titleBounded, collapseSize);
+    metrics.titleHeight = Max(title.minimumHeight, VectorGetY(titlePadded));
+    const f32 collapseWidth = options.collapsible ? metrics.collapseExtent + style.gap : 0.0f;
+    const SIMDVectorSingle titleExtent = VectorSet(VectorGetX(titlePadded) + collapseWidth, metrics.titleHeight, 0.0f, 0.0f);
     const SIMDVectorSingle titleMinimum = VectorMax(VectorSet(title.minimumWidth, metrics.titleHeight, 0.0f, 0.0f), titleExtent);
     const SIMDVectorSingle contentMinimum = VectorAdd(VectorAdd(titleMinimum, VectorSet(0.0f, metrics.contentPadding.top, 0.0f, 0.0f)), VectorSet(0.0f, metrics.contentPadding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle frameMinimum = VectorSet(frame.minimumWidth, frame.minimumHeight, 0.0f, 0.0f);
@@ -65,34 +59,26 @@ Expected<WindowMetrics> WindowLayout::Measure(
     return metrics;
 }
 
-Rect WindowLayout::Visible(const WindowState& state, const WindowMetrics& metrics)noexcept{
-    Rect bounds = state.bounds;
-    if(state.collapsed)
-        bounds.height = metrics.titleHeight;
-    return bounds;
-}
-
 Rect WindowLayout::Content(const WindowState& state, const WindowMetrics& metrics)noexcept{
-    const SIMDVectorSingle title = VectorSet(0.0f, metrics.titleHeight, 0.0f, 0.0f);
-    const SIMDVectorSingle origin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, 0.0f, 0.0f), title);
-    const SIMDVectorSingle size = VectorSubtract(VectorSet(state.bounds.width, state.bounds.height, 0.0f, 0.0f), title);
-    const SIMDVectorSingle boundedSize = VectorSelect(size, VectorMax(VectorZero(), size), s_SIMDMaskY);
-    return { VectorGetX(origin), VectorGetY(origin), VectorGetX(boundedSize), VectorGetY(boundedSize) };
+    return {
+        state.bounds.x,
+        state.bounds.y + metrics.titleHeight,
+        state.bounds.width,
+        Max(0.0f, state.bounds.height - metrics.titleHeight)
+    };
 }
 
 Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metrics)noexcept{
-    const SIMDVectorSingle origin = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y), VectorSet(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top));
-    const SIMDVectorSingle available = VectorSubtract(VectorSubtract(VectorSubtract(VectorSet(0.0f, metrics.titleHeight, 0.0f, 0.0f), VectorSet(0.0f, metrics.titlePadding.top, 0.0f, 0.0f)), VectorSet(0.0f, metrics.titlePadding.bottom, 0.0f, 0.0f)), VectorSet(0.0f, metrics.collapseExtent, 0.0f, 0.0f));
-    const SIMDVectorSingle centered = VectorAdd(origin, VectorMax(VectorZero(), VectorScale(available, s_RectCenterFraction)));
-    return { VectorGetX(centered), VectorGetY(centered), metrics.collapseExtent, metrics.collapseExtent };
+    const f32 x = state.bounds.x + metrics.titlePadding.left;
+    const f32 availableHeight = ((metrics.titleHeight - metrics.titlePadding.top) - metrics.titlePadding.bottom) - metrics.collapseExtent;
+    const f32 y = (state.bounds.y + metrics.titlePadding.top) + Max(0.0f, availableHeight * s_RectCenterFraction);
+    return { x, y, metrics.collapseExtent, metrics.collapseExtent };
 }
 
 Rect WindowLayout::Resize(const WindowState& state, const WindowMetrics& metrics)noexcept{
-    const SIMDVectorSingle contentSize = VectorSubtract(VectorSet(state.bounds.width, state.bounds.height, 0.0f, 0.0f), VectorSet(0.0f, metrics.titleHeight, 0.0f, 0.0f));
-    const SIMDVectorSingle extentVector = VectorSplatX(VectorMin(VectorReplicate(metrics.resizeExtent), VectorMin(contentSize, VectorSplatY(contentSize))));
-    const f32 extent = VectorGetX(extentVector);
-    const SIMDVectorSingle end = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y), VectorSet(state.bounds.width, state.bounds.height, state.bounds.width, state.bounds.height));
-    const SIMDVectorSingle origin = VectorSubtract(end, extentVector);
+    const f32 extent = Min(metrics.resizeExtent, Min(state.bounds.width, state.bounds.height - metrics.titleHeight));
+    const SIMDVectorSingle end = VectorAdd(VectorSet(state.bounds.x, state.bounds.y, 0.0f, 0.0f), VectorSet(state.bounds.width, state.bounds.height, 0.0f, 0.0f));
+    const SIMDVectorSingle origin = VectorSubtract(end, VectorReplicate(extent));
     return { VectorGetX(origin), VectorGetY(origin), extent, extent };
 }
 

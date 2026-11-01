@@ -26,51 +26,9 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline Core::RenderState BuildMeshRenderState()noexcept{
-    Core::RenderState renderState;
-    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
-    renderState.rasterState.enableDepthClip();
-    return renderState;
-}
-
-inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const b8 twoSided)noexcept{
-    auto applyTwoSided = [&](Core::RenderState renderState)noexcept{
-        if(twoSided)
-            renderState.rasterState.setCullNone();
-        return renderState;
-    };
-
-    switch(pass){
-    case MaterialPipelinePass::Opaque:
-        return applyTwoSided(BuildMeshRenderState());
-    case MaterialPipelinePass::CsgReceiverSurface:{
-        Core::RenderState renderState;
-        renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
-        Core::BlendState::RenderTarget target;
-        target.setColorWriteMask(Core::ColorMask::None);
-        for(u32 index = 0u; index < Core::s_MaxRenderTargets; ++index)
-            renderState.blendState.setRenderTarget(index, target);
-        renderState.rasterState.enableDepthClip().setCullNone();
-        return renderState;
-    }
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-        return applyTwoSided(BuildRendererAvboitVoxelRenderState());
-    case MaterialPipelinePass::AvboitAccumulate:
-        return applyTwoSided(BuildRendererAvboitAccumulateRenderState());
-    case MaterialPipelinePass::AvboitRefractionCapture:
-        return applyTwoSided(BuildRendererAvboitRefractionCaptureRenderState());
-    default:
-        return applyTwoSided(BuildMeshRenderState());
-    }
-}
-
-inline Core::RenderState BuildCompositeRenderState()noexcept{
-    Core::RenderState renderState;
-    renderState.depthStencilState.enableDepthTest().enableDepthWrite().setDepthFunc(Core::ComparisonFunc::LessOrEqual);
-    renderState.rasterState.enableDepthClip().setCullNone();
-    return renderState;
-}
+[[nodiscard]] Core::RenderState BuildMeshRenderState()noexcept;
+[[nodiscard]] Core::RenderState BuildRenderStateForPass(MaterialPipelinePass::Enum pass, b8 twoSided)noexcept;
+[[nodiscard]] Core::RenderState BuildCompositeRenderState()noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

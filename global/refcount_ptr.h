@@ -68,10 +68,10 @@ private:
 
 
 public:
-    typedef Deleter deleter_type;
-    typedef T element_type;
-    typedef RefCountPtr<element_type, deleter_type> this_type;
-    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
+    using deleter_type = Deleter;
+    using element_type = T;
+    using this_type = RefCountPtr<element_type, deleter_type>;
+    using pointer = typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type;
 
 
 private:
@@ -94,7 +94,7 @@ public:
     {
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    constexpr RefCountPtr(std::nullptr_t)noexcept
+    constexpr RefCountPtr(Nullptr)noexcept
         : m_pair(pointer())
     {
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
@@ -246,7 +246,7 @@ public:
         return *this;
     }
 
-    this_type& operator=(std::nullptr_t)noexcept{
+    this_type& operator=(Nullptr)noexcept{
         reset();
         return *this;
     }

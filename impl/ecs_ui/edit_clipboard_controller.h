@@ -28,13 +28,18 @@ NWB_IMPL_BEGIN
 // End native text input before a drain that may apply cut/paste, and restart it with the resulting surrounding text.
 class UiEditClipboardController final : NoCopy{
 public:
-    UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept;
+    UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)noexcept
+        : m_service(service)
+        , m_completion(arena)
+        , m_expectedModel(arena)
+        , m_insertText(arena)
+    {}
     ~UiEditClipboardController()noexcept;
 
 
 public:
-    [[nodiscard]] UiEditClipboardResult request(const Ui::UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, b8 readOnly = false);
-    [[nodiscard]] UiEditClipboardResult drain(const Ui::UiTextEditOwner& owner, Ui::EditModel& model, b8 readOnly = false);
+    [[nodiscard]] UiEditClipboardResult request(const UiTextEditOwner& owner, const Ui::EditModel& model, Ui::EditClipboardAction::Enum action, Core::ClipboardChannel::Enum channel = Core::ClipboardChannel::Clipboard, b8 readOnly = false);
+    [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, b8 readOnly = false);
     [[nodiscard]] b8 cancel();
     [[nodiscard]] b8 pending()const noexcept{ return m_token.valid(); }
 
@@ -53,7 +58,7 @@ private:
     Core::ClipboardCompletion m_completion;
     Ui::EditModelSnapshot m_expectedModel;
     AString<Core::Alloc::GlobalArena> m_insertText;
-    Ui::UiTextEditOwner m_owner;
+    UiTextEditOwner m_owner;
     Core::ClipboardRequestToken m_token;
     Core::ClipboardChannel::Enum m_channel = Core::ClipboardChannel::Clipboard;
     Ui::EditClipboardAction::Enum m_action = Ui::EditClipboardAction::None;

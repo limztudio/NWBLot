@@ -60,15 +60,10 @@ struct ObjectGeometryCacheSnapshot{
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept{
+        return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer && indexByteOffset != 0u && indexCount != 0u;
+    }
 };
-
-[[nodiscard]] inline Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(const u64 localVertexRefByteSize, const u32 primitiveIndexCount)noexcept{
-    ObjectGeometryCacheLayout layout{};
-    if(!TryResolveObjectGeometryCacheLayout(localVertexRefByteSize, primitiveIndexCount, layout))
-        return MakeUnexpected(Failure{});
-    return layout;
-}
 
 [[nodiscard]] b8 AcceptObjectGeometryCacheWrite(MeshResources& mesh, const RuntimeMeshBuffers& sourceBuffers, const ObjectGeometryCacheSnapshot& expected, b8 runtimeMesh)noexcept;
 

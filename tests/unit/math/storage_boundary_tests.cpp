@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <global/array.h>
+#include <tests/common/floating_point_environment_guard.h>
 #include <global/floating_point_environment.h>
 #include <global/simdmath.h>
 #include <global/limit.h>
@@ -38,16 +39,16 @@ TEST(Math, SignedZeroStorageEqualityProducesEqualHashes){
 }
 
 template<typename Storage, usize LogicalCount, typename Source>
-static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const f64 (&expected)[LogicalCount]){
+static void CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding(const Source& source, const Array<f64, LogicalCount>& expected){
     struct StorageRecord{
         Storage value;
-        u64 neighbor[4];
+        Array<u64, 4> neighbor{};
     };
     StorageRecord record{};
     NWB_MEMSET(&record, 0xa5, sizeof(record));
-    const u64 poison[]{ 0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u };
+    const Array<u64, 3> poison = { 0x7ff0000000000000u, 0x7ff8000000001234u, 0xfff0000000000000u };
     const usize logicalBytes = LogicalCount * sizeof(f64);
-    NWB_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison, sizeof(Storage) - logicalBytes);
+    NWB_MEMCPY(reinterpret_cast<u8*>(&record.value) + logicalBytes, sizeof(Storage) - logicalBytes, poison.data(), sizeof(Storage) - logicalBytes);
     Array<u8, sizeof(StorageRecord)> original{};
     NWB_MEMCPY(original.data(), original.size(), &record, sizeof(record));
     for(const b8 stream : { false, true }){
@@ -108,11 +109,11 @@ TEST(Math, DoubleStorageHashesCanonicalizeSignedZeroAndRetainSubFloatResiduals){
 }
 
 TEST(Math, AlignedShortDoubleStoresAndStreamsPreservePoisonedPaddingAndNeighborStorage){
-    const f64 pairExpected[]{ -0.0, 1.0 + 0x1p-52 };
+    const Array<f64, 2> pairExpected = { -0.0, 1.0 + 0x1p-52 };
     CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double2, 2u>(SIMDVectorDouble{ pairExpected[0], pairExpected[1], Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairExpected);
-    const f64 tripleExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
+    const Array<f64, 3> tripleExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0 };
     CheckDoubleStoresIgnoreInactiveLanesAndPreserveObjectPadding<Double3, 3u>(SIMDVectorDouble{ tripleExpected[0], tripleExpected[1], tripleExpected[2], Limit<f64>::s_QuietNaN }, tripleExpected);
-    const f64 matrixExpected[]{ -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
+    const Array<f64, 9> matrixExpected = { -0.0, 1.0 + 0x1p-52, 0x1p+40 + 1.0, 2.0, -0.0, -0x1p+40 - 1.0, 0x1p-40, -3.0, 1.0 + 0x1p-52 };
     const SIMDMatrixDouble matrix = {
         SIMDVectorDouble{ matrixExpected[0], matrixExpected[1], matrixExpected[2], Limit<f64>::s_Infinity },
         SIMDVectorDouble{ matrixExpected[3], matrixExpected[4], matrixExpected[5], Limit<f64>::s_QuietNaN },
@@ -131,43 +132,42 @@ TEST(Math, AlignedShortDoubleAndCompactMatrixHashesIgnorePaddingWithSignedZeroAn
 TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndInPlaceConversion){
     struct AlignedRecord{
         Double3 value;
-        u64 gap[4];
+        Array<u64, 4> gap{};
     };
     struct alignas(32) UnalignedRecord{
         u64 prefix;
         Double3U value;
-        u64 gap[4];
+        Array<u64, 4> gap{};
     };
-    AlignedRecord aligned[3]{};
-    UnalignedRecord unaligned[3]{};
-    NWB_MEMSET(aligned, 0xa5, sizeof(aligned));
-    NWB_MEMSET(unaligned, 0x5a, sizeof(unaligned));
+    Array<AlignedRecord, 3> aligned{};
+    Array<UnalignedRecord, 3> unaligned{};
+    NWB_MEMSET(aligned.data(), 0xa5, sizeof(aligned));
+    NWB_MEMSET(unaligned.data(), 0x5a, sizeof(unaligned));
     const u64 poison = 0x7ff8000000001234u;
     for(usize index = 0u; index < LengthOf(aligned); ++index){
-        const SIMDVectorDouble position = VectorDoubleReplicate(static_cast<f64>(index));
-        const SIMDVectorDouble x = VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), position, VectorDoubleReplicate(0x1p+40 + 0.25));
-        const SIMDVectorDouble previousPosition = VectorDoubleSubtract(position, VectorDoubleSplatOne());
-        const SIMDVectorDouble y = VectorDoubleMultiply(previousPosition, VectorDoubleReplicate(0x1p-40));
-        StoreDouble(VectorDoubleMergeX(x, y, VectorDoubleReplicate(1.0 + 0x1p-52), VectorDoubleReplicate(Limit<f64>::s_Infinity)), aligned[index].value);
+        const f64 position = static_cast<f64>(index);
+        const f64 x = 0.25 * position + (0x1p+40 + 0.25);
+        const f64 y = (position - 1.0) * 0x1p-40;
+        StoreDouble(VectorDoubleSet(x, y, 1.0 + 0x1p-52, Limit<f64>::s_Infinity), aligned[index].value);
         NWB_MEMCPY(reinterpret_cast<u8*>(&aligned[index].value) + 3u * sizeof(f64), sizeof(aligned[index].value) - 3u * sizeof(f64), &poison, sizeof(poison));
     }
     Array<u8, sizeof(aligned)> alignedOriginal{};
     Array<u8, sizeof(unaligned)> unalignedOriginal{};
-    NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned, sizeof(aligned));
-    NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned, sizeof(unaligned));
+    NWB_MEMCPY(alignedOriginal.data(), alignedOriginal.size(), aligned.data(), sizeof(aligned));
+    NWB_MEMCPY(unalignedOriginal.data(), unalignedOriginal.size(), unaligned.data(), sizeof(unaligned));
     const SIMDMatrixDouble matrix = MatrixDoubleTranslation(0.25, 0.0, 0.0);
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &unaligned[0].value);
-    EXPECT_EQ(NWB_MEMCMP(aligned, alignedOriginal.data(), sizeof(aligned)), 0);
+    EXPECT_EQ(NWB_MEMCMP(aligned.data(), alignedOriginal.data(), sizeof(aligned)), 0);
     for(usize index = 0u; index < LengthOf(aligned); ++index)
-        EXPECT_EQ(unaligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 0.5)))) << index;
+        EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.5)) << index;
 
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&unaligned[0].value), sizeof(UnalignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(unaligned), matrix).get(), &unaligned[0].value);
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3U*>(&unaligned[0].value), sizeof(UnalignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
     EXPECT_EQ(VectorDouble3TransformCoordStream(MakeNotNull(&aligned[0].value), sizeof(AlignedRecord), MakeNotNull<const Double3*>(&aligned[0].value), sizeof(AlignedRecord), LengthOf(aligned), matrix).get(), &aligned[0].value);
     for(usize index = 0u; index < LengthOf(aligned); ++index){
-        EXPECT_EQ(aligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 1.25)))) << index;
-        EXPECT_EQ(unaligned[index].value.x, VectorDoubleGetX(VectorDoubleMultiplyAddExpression(VectorDoubleReplicate(0.25), VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleReplicate(0x1p+40 + 0.75)))) << index;
-        EXPECT_EQ(aligned[index].value.y, VectorDoubleGetX(VectorDoubleMultiply(VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(index)), VectorDoubleSplatOne()), VectorDoubleReplicate(0x1p-40)))) << index;
+        EXPECT_EQ(aligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 1.25)) << index;
+        EXPECT_EQ(unaligned[index].value.x, 0.25 * static_cast<f64>(index) + (0x1p+40 + 0.75)) << index;
+        EXPECT_EQ(aligned[index].value.y, (static_cast<f64>(index) - 1.0) * 0x1p-40) << index;
         EXPECT_EQ(aligned[index].value.z, 1.0 + 0x1p-52) << index;
         const auto alignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&aligned[index]));
         const auto unalignedBytes = MakeNotNull(reinterpret_cast<const u8*>(&unaligned[index]));
@@ -192,16 +192,16 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
 
     struct PairRecord{
         Double2 value;
-        u64 gap[4];
+        Array<u64, 4> gap{};
     };
-    PairRecord pairs[2]{};
-    NWB_MEMSET(pairs, 0xa5, sizeof(pairs));
+    Array<PairRecord, 2> pairs{};
+    NWB_MEMSET(pairs.data(), 0xa5, sizeof(pairs));
     for(usize index = 0u; index < LengthOf(pairs); ++index){
         StoreDouble(SIMDVectorDouble{ 0x1p+40 + 0.25, 1.0 + 0x1p-52, Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN }, pairs[index].value);
         NWB_MEMCPY(reinterpret_cast<u8*>(&pairs[index].value) + 2u * sizeof(f64), sizeof(pairs[index].value) - 2u * sizeof(f64), &poison, sizeof(poison));
     }
     Array<u8, sizeof(pairs)> pairOriginal{};
-    NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs, sizeof(pairs));
+    NWB_MEMCPY(pairOriginal.data(), pairOriginal.size(), pairs.data(), sizeof(pairs));
     EXPECT_EQ(VectorDouble2TransformCoordStream(MakeNotNull(&pairs[0].value), sizeof(PairRecord), MakeNotNull<const Double2*>(&pairs[0].value), sizeof(PairRecord), LengthOf(pairs), matrix).get(), &pairs[0].value);
     for(usize index = 0u; index < LengthOf(pairs); ++index){
         EXPECT_EQ(pairs[index].value.x, 0x1p+40 + 0.5) << index;
@@ -213,13 +213,13 @@ TEST(Math, DoubleTransformStreamsPreservePaddedStridesDuringAlignedUnalignedAndI
 }
 
 TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
-    const u64 firstBits[]{ 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
-    const u64 differences[]{ 0x0000000000000001u, 0x0000000100000000u };
+    const Array<u64, 4> firstBits = { 0x0123456789abcdefu, 0x8000000000000000u, 0x7ff800009abcdef0u, 0xfedcba9876543210u };
+    const Array<u64, 2> differences = { 0x0000000000000001u, 0x0000000100000000u };
     const SIMDVectorDouble first = VectorDoubleSetInt(firstBits[0], firstBits[1], firstBits[2], firstBits[3]);
     for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
         for(const u64 difference : differences){
             const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, firstBits[changedLane] ^ difference, changedLane);
-            const SIMDVectorDouble equality[]{ VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
+            const Array<SIMDVectorDouble, 2> equality = { VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
             for(const SIMDVectorDouble mask : equality){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max) << changedLane << ':' << difference << ':' << lane;
@@ -229,56 +229,56 @@ TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
 }
 
 TEST(Math, DoubleSingleConversionsRetainSubnormalsAndSignsAndRoundHalfUlpTiesEven){
-    volatile f64 runtimeInputs[][4]{
+    Array<Array<volatile f64, 4u>, 3u> runtimeInputs = {{
         { Limit<f64>::s_Max, -Limit<f64>::s_Max, -0.0, 0.0 },
         { 1.0 + 0x1p-24, 1.0 + 0x1.8p-23, -1.0 - 0x1p-24, -1.0 - 0x1.8p-23 },
         { 0x1p-150, 0x1.8p-149, -0x1p-150, -0x1.8p-149 },
-    };
+    }};
     const SIMDVectorSingle overflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[0][0], runtimeInputs[0][1], runtimeInputs[0][2], runtimeInputs[0][3]));
-    const u32 overflowExpected[]{ 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
+    const Array<u32, 4> overflowExpected = { 0x7f800000u, 0xff800000u, 0x80000000u, 0u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(overflow, lane), overflowExpected[lane]) << lane;
 
-    const u32 subnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
-    volatile u32 runtimeSubnormalBits[]{ 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+    const Array<u32, 4> subnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
+    Array<volatile u32, 4u> runtimeSubnormalBits = { 1u, 0x80000001u, 0x007fffffu, 0x807fffffu };
     const SIMDVectorSingle subnormals = VectorSetInt(runtimeSubnormalBits[0], runtimeSubnormalBits[1], runtimeSubnormalBits[2], runtimeSubnormalBits[3]);
     const SIMDVectorDouble widened = ConvertVectorSingleToDouble(subnormals);
-    const f64 widenedExpected[]{ 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
+    const Array<f64, 4> widenedExpected = { 0x1p-149, -0x1p-149, 0x1.fffffcp-127, -0x1.fffffcp-127 };
     const SIMDVectorSingle narrowed = ConvertVectorDoubleToSingle(widened);
     for(usize lane = 0u; lane < 4u; ++lane){
         EXPECT_EQ(VectorDoubleGetIntByIndex(widened, lane), BitCast<u64>(widenedExpected[lane])) << lane;
         EXPECT_EQ(VectorGetIntByIndex(narrowed, lane), subnormalBits[lane]) << lane;
     }
 
-    volatile u32 runtimeZeroBits[]{ 0x80000000u, 0u, 0x80000000u, 0u };
+    Array<volatile u32, 4u> runtimeZeroBits = { 0x80000000u, 0u, 0x80000000u, 0u };
     const SIMDVectorDouble signedZeros = ConvertVectorSingleToDouble(VectorSetInt(runtimeZeroBits[0], runtimeZeroBits[1], runtimeZeroBits[2], runtimeZeroBits[3]));
-    const u64 zeroExpected[]{ 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
+    const Array<u64, 4> zeroExpected = { 0x8000000000000000u, 0u, 0x8000000000000000u, 0u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorDoubleGetIntByIndex(signedZeros, lane), zeroExpected[lane]) << lane;
 
     const SIMDVectorSingle rounded = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[1][0], runtimeInputs[1][1], runtimeInputs[1][2], runtimeInputs[1][3]));
-    const u32 roundedExpected[]{ 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
+    const Array<u32, 4> roundedExpected = { 0x3f800000u, 0x3f800002u, 0xbf800000u, 0xbf800002u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(rounded, lane), roundedExpected[lane]) << lane;
 
     const SIMDVectorSingle underflow = ConvertVectorDoubleToSingle(VectorDoubleSet(runtimeInputs[2][0], runtimeInputs[2][1], runtimeInputs[2][2], runtimeInputs[2][3]));
-    const u32 underflowExpected[]{ 0u, 2u, 0x80000000u, 0x80000002u };
+    const Array<u32, 4> underflowExpected = { 0u, 2u, 0x80000000u, 0x80000002u };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(underflow, lane), underflowExpected[lane]) << lane;
 }
 
 TEST(Math, SingleRuntimePermutationsPreserveNaNPayloadsSignedZeroAndSubnormalBits){
-    const u32 bits[]{ 0xffc01234u, 0x80000000u, 1u, 0x7f800001u, 0u, 0x7fc05678u, 0x807fffffu, Limit<u32>::s_Max };
+    const Array<u32, 8> bits = { 0xffc01234u, 0x80000000u, 1u, 0x7f800001u, 0u, 0x7fc05678u, 0x807fffffu, Limit<u32>::s_Max };
     const SIMDVectorSingle first = VectorSetInt(bits[0], bits[1], bits[2], bits[3]);
     const SIMDVectorSingle second = VectorSetInt(bits[4], bits[5], bits[6], bits[7]);
     for(u32 code = 0u; code < 256u; ++code){
-        volatile u32 controls[]{ code & 3u, (code >> 2u) & 3u, (code >> 4u) & 3u, (code >> 6u) & 3u };
+        Array<volatile u32, 4u> controls = { code & 3u, (code >> 2u) & 3u, (code >> 4u) & 3u, (code >> 6u) & 3u };
         const SIMDVectorSingle result = VectorSwizzle(first, controls[0], controls[1], controls[2], controls[3]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
     }
     for(u32 code = 0u; code < 4096u; ++code){
-        volatile u32 controls[]{ code & 7u, (code >> 3u) & 7u, (code >> 6u) & 7u, (code >> 9u) & 7u };
+        Array<volatile u32, 4u> controls = { code & 7u, (code >> 3u) & 7u, (code >> 6u) & 7u, (code >> 9u) & 7u };
         const SIMDVectorSingle result = VectorPermute(first, second, controls[0], controls[1], controls[2], controls[3]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(VectorGetIntByIndex(result, lane), bits[controls[lane]]) << code << ':' << lane;
@@ -289,16 +289,13 @@ TEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutI
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
 
-    struct alignas(16) MatrixRecord{
+    struct alignas(16){
         u32 prefix{};
         Float33U value{};
     } record;
-    volatile u32 runtimeBits[]{ 0x80000000u, 1u, 0x7fc01234u, 0x80000000u, 0x7f800001u, 0x807fffffu, 0xff800000u, 0u, 0xffc05678u };
+    Array<volatile u32, 9u> runtimeBits = { 0x80000000u, 1u, 0x7fc01234u, 0x80000000u, 0x7f800001u, 0x807fffffu, 0xff800000u, 0u, 0xffc05678u };
     for(usize lane = 0u; lane < 9u; ++lane)
         record.value.raw[lane] = BitCast<f32>(runtimeBits[lane]);
     ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
@@ -310,19 +307,19 @@ TEST(Math, UnalignedFloat33LoadRetainsNegativeZeroAndSignalingNaNPayloadWithoutI
             EXPECT_EQ(VectorGetIntByIndex(matrix.v[row], lane), runtimeBits[row * 3u + lane]) << row << ':' << lane;
         EXPECT_EQ(VectorGetIntW(matrix.v[row]), 0u) << row;
     }
-    const u32 lastRow[]{ 0u, 0u, 0u, BitCast<u32>(1.0f) };
+    const Array<u32, 4> lastRow = { 0u, 0u, 0u, BitCast<u32>(1.0f) };
     for(usize lane = 0u; lane < 4u; ++lane)
         EXPECT_EQ(VectorGetIntByIndex(matrix.v[3], lane), lastRow[lane]) << lane;
 }
 
 TEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelectedRawBits){
-    const u32 choices[]{ 0u, 1u, 0x80000000u, Limit<u32>::s_Max };
-    const u32 left[]{ 0x80000000u, 1u, 0x7f800001u, 0xffc01234u };
-    const u32 right[]{ 0u, 0x807fffffu, 0x7fc05678u, Limit<u32>::s_Max };
+    const Array<u32, 4> choices = { 0u, 1u, 0x80000000u, Limit<u32>::s_Max };
+    const Array<u32, 4> left = { 0x80000000u, 1u, 0x7f800001u, 0xffc01234u };
+    const Array<u32, 4> right = { 0u, 0x807fffffu, 0x7fc05678u, Limit<u32>::s_Max };
     const SIMDVectorSingle first = VectorSetInt(left[0], left[1], left[2], left[3]);
     const SIMDVectorSingle second = VectorSetInt(right[0], right[1], right[2], right[3]);
     for(u32 code = 0u; code < 256u; ++code){
-        volatile u32 controls[]{ choices[code & 3u], choices[(code >> 2u) & 3u], choices[(code >> 4u) & 3u], choices[(code >> 6u) & 3u] };
+        Array<volatile u32, 4u> controls = { choices[code & 3u], choices[(code >> 2u) & 3u], choices[(code >> 4u) & 3u], choices[(code >> 6u) & 3u] };
         const SIMDVectorSingle control = VectorSelectControl(controls[0], controls[1], controls[2], controls[3]);
         const SIMDVectorSingle selected = VectorSelect(first, second, control);
         const SIMDVectorDouble doubleControl = VectorDoubleSelectControl(controls[0], controls[1], controls[2], controls[3]);
@@ -338,24 +335,24 @@ TEST(Math, SelectionControlTreatsHighBitUnsignedValuesAsTrueAndPreservesSelected
 TEST(Math, DoubleRuntimePermutationsRetainNonfiniteAndRawBitsAcrossPairs){
     const SIMDVectorDouble first = VectorDoubleSetInt(0xfff8000012345678u, 0x8000000000000000u, 0x0123456789abcdefu, 0x7ff0000000000001u);
     const SIMDVectorDouble second = VectorDoubleSetInt(0u, 0x7ff800009abcdef0u, 0xfedcba9876543210u, Limit<u64>::s_Max);
-    volatile u32 swizzleControls[][4]{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } };
-    const u64 swizzleExpected[][4]{
+    Array<Array<volatile u32, 4u>, 3u> swizzleControls = {{ { 3u, 1u, 0u, 2u }, { 2u, 0u, 3u, 1u }, { 1u, 3u, 1u, 3u } }};
+    const Array<Array<u64, 4>, 3> swizzleExpected = {{
         { 0x7ff0000000000001u, 0x8000000000000000u, 0xfff8000012345678u, 0x0123456789abcdefu },
         { 0x0123456789abcdefu, 0xfff8000012345678u, 0x7ff0000000000001u, 0x8000000000000000u },
         { 0x8000000000000000u, 0x7ff0000000000001u, 0x8000000000000000u, 0x7ff0000000000001u }
-    };
+    }};
     for(usize index = 0u; index < LengthOf(swizzleExpected); ++index){
         const SIMDVectorDouble result = VectorDoubleSwizzle(first, swizzleControls[index][0], swizzleControls[index][1], swizzleControls[index][2], swizzleControls[index][3]);
         for(usize lane = 0u; lane < 4u; ++lane)
             EXPECT_EQ(VectorDoubleGetIntByIndex(result, lane), swizzleExpected[index][lane]) << index << ':' << lane;
     }
 
-    volatile u32 permuteControls[][4]{ { 7u, 0u, 6u, 1u }, { 3u, 4u, 2u, 5u }, { 5u, 3u, 4u, 0u } };
-    const u64 permuteExpected[][4]{
+    Array<Array<volatile u32, 4u>, 3u> permuteControls = {{ { 7u, 0u, 6u, 1u }, { 3u, 4u, 2u, 5u }, { 5u, 3u, 4u, 0u } }};
+    const Array<Array<u64, 4>, 3> permuteExpected = {{
         { Limit<u64>::s_Max, 0xfff8000012345678u, 0xfedcba9876543210u, 0x8000000000000000u },
         { 0x7ff0000000000001u, 0u, 0x0123456789abcdefu, 0x7ff800009abcdef0u },
         { 0x7ff800009abcdef0u, 0x7ff0000000000001u, 0u, 0xfff8000012345678u }
-    };
+    }};
     for(usize index = 0u; index < LengthOf(permuteExpected); ++index){
         const SIMDVectorDouble result = VectorDoublePermute(first, second, permuteControls[index][0], permuteControls[index][1], permuteControls[index][2], permuteControls[index][3]);
         for(usize lane = 0u; lane < 4u; ++lane)

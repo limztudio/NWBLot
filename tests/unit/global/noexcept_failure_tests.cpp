@@ -117,9 +117,7 @@ struct ThrowingFixedVectorSwap{
     u32 value = 0u;
 };
 
-void swap(ThrowingFixedVectorSwap& lhs, ThrowingFixedVectorSwap& rhs){
-    static_cast<void>(lhs);
-    static_cast<void>(rhs);
+void swap([[maybe_unused]] ThrowingFixedVectorSwap& lhs, [[maybe_unused]] ThrowingFixedVectorSwap& rhs){
     throw s_ElementSwapFailure;
 }
 
@@ -509,8 +507,8 @@ TEST(NoexceptFailureTests, ReferenceOwnerComparisonResultConversionUnwindsThroug
 
 TEST(NoexceptFailureTests, PodAddressAndMutableBufferGetterFailuresPropagateBeforeReading){
     using namespace __hidden_noexcept_failure_tests;
-    const u8 bytes[sizeof(ThrowingPodAddress)] = {};
-    const BinaryByteView source{ bytes, sizeof(bytes) };
+    const Array<u8, sizeof(ThrowingPodAddress)> bytes = {};
+    const BinaryByteView source{ bytes.data(), bytes.size() };
     usize offset = 0u;
     static_assert(!noexcept(ReadPOD<ThrowingPodAddress>(source, offset)));
     EXPECT_THROW(EXPECT_TRUE(ReadPOD<ThrowingPodAddress>(source, offset)), u32);

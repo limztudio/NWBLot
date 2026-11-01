@@ -6,8 +6,10 @@
 
 
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
+#include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_csg/frame_state.h>
 
 
@@ -44,7 +46,6 @@ namespace Scene{
 
 namespace ECSRenderDetail{
     struct MeshFrameBindingSnapshot;
-    struct MeshViewGpuData;
 };
 
 
@@ -53,7 +54,6 @@ namespace ECSRenderDetail{
 
 class CsgShapeRegistry;
 class IMaterialSurfaceLookup;
-class RendererCsgState;
 class RendererShaderSystem;
 class RendererMeshSystem;
 
@@ -63,7 +63,15 @@ class RendererMeshSystem;
 
 class RendererCsgSystem final : NoCopy{
 public:
-    RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem)noexcept;
+    RendererCsgSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, CsgShapeRegistry& csgShapeRegistry, RendererCsgState& csgState, RendererShaderSystem& shaderSystem, RendererMeshSystem& meshSystem)noexcept
+        : m_arena(arena)
+        , m_world(world)
+        , m_graphics(graphics)
+        , m_csgShapeRegistry(csgShapeRegistry)
+        , m_csgState(csgState)
+        , m_shaderSystem(shaderSystem)
+        , m_meshSystem(meshSystem)
+    {}
 
 
 public:
@@ -117,7 +125,7 @@ public:
         const NWB::Impl::Scene::TransformComponent* transform,
         u32 frameWidth,
         u32 frameHeight,
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState,
+        const MeshViewGpuData* csgWorkRegionMeshViewState,
         CsgFrameGpuData& csgFrameData
     )const;
 

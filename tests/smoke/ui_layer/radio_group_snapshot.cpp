@@ -99,7 +99,7 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
     u32 focusCode = 0u;
     u32 focusScope = 0u;
     u32 rootButton = 0u;
-    constexpr u32 s_RootSlots[]{ 0u, 2u, 3u };
+    constexpr Array<u32, 3> s_RootSlots = { 0u, 2u, 3u };
     for(const HitTarget& target : input.targets()){
         u32 code = 0u;
         if(!target.control.valid() && target.activatable){
@@ -152,7 +152,7 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(context, m_snapshot.values, m_snapshot.sequence);
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(m_snapshot.values, m_snapshot.sequence, context);
 }
 
 

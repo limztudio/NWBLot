@@ -19,13 +19,11 @@
 
 namespace __hidden_tangent_frame_tests{
 
-using namespace NWB::Core::Mesh;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
+using namespace NWB::Core::Mesh;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,15 +81,14 @@ Vector<TangentFrameRebuildVertex> TangentFrameFixture::MakeFlatQuadVertices(){
 
 TEST(Mesh, DegenerateUvsUseStableTangentFallback){
     Vector<TangentFrameRebuildVertex> vertices = TangentFrameFixture::MakeFlatQuadVertices();
-    const Vector<u32> indices = NWB::Tests::MakeQuadTriangleIndices();
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
-    const auto result = RebuildTangentFrames(scratchArena, indices, vertices);
+    const auto result = RebuildTangentFrames(scratchArena, NWB::Tests::s_QuadTriangleIndices, vertices);
     ASSERT_TRUE(result);
     EXPECT_EQ(result->rebuiltVertexCount, vertices.size());
-    EXPECT_EQ(result->degenerateUvTriangleCount, s_ExpectedDualCount);
+    EXPECT_EQ(result->degenerateUvTriangleCount, 2u);
     EXPECT_EQ(result->fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
@@ -108,9 +105,8 @@ TEST(Mesh, RejectsDegenerateTangentFrameTriangle){
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
-    const Vector<u32> indices = NWB::Tests::MakeTriangleIndices();
 
-    EXPECT_FALSE(RebuildTangentFrames(scratchArena, indices, vertices));
+    EXPECT_FALSE(RebuildTangentFrames(scratchArena, NWB::Tests::s_TriangleIndices, vertices));
 }
 
 

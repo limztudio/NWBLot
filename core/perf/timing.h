@@ -170,9 +170,9 @@ public:
     [[nodiscard]] b8 valid()const noexcept{ return m_recorder != nullptr; }
     [[nodiscard]] const TimingStats& stats(const Name& scopeName)const noexcept;
     [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const noexcept;
-    [[nodiscard]] usize scopeCount()const noexcept;
-    [[nodiscard]] TimingScopeId scopeAt(usize index)const noexcept;
-    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept{ return m_recorder ? m_recorder->scopeCount() : 0u; }
+    [[nodiscard]] TimingScopeId scopeAt(const usize index)const noexcept{ return m_recorder ? m_recorder->scopeAt(index) : TimingScopeId{}; }
+    [[nodiscard]] Name scopeNameAt(const usize index)const noexcept{ return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone; }
     [[nodiscard]] const TimingStats& statsAt(usize index)const noexcept;
 
 

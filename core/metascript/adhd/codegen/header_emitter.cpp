@@ -108,7 +108,7 @@ MString HeaderEmitter::emitHeader(const TranslationUnit& unit, const MStringView
             CollectExternalForwardDeclClasses(*callable.returnType, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses);
         for(const ParamDecl& p : callable.params){
             if(p.type)
-                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, true, 0u, externalForwardClasses);
+                CollectExternalForwardDeclClasses(*p.type, m_symbols, outerTemplateParams, innerTemplateParams, externalForwardClasses, true);
         }
     };
     for(const TypeAliasDecl* aliasDecl : unit.typeAliases){

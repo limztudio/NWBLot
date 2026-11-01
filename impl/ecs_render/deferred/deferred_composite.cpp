@@ -5,6 +5,7 @@
 #include "deferred_system.h"
 
 #include <impl/ecs_render/deferred/deferred_graph_private.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
@@ -12,8 +13,7 @@
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
-#include <impl/assets/graphics/deferred/presentation_constants.h>
-#include <impl/assets_graphics/deferred/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -35,32 +35,15 @@ namespace __hidden_deferred_composite{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CompositePushConstants{
-    u32 resourceSlots = 0u;
-    u32 refractionResources = 0u;
-    u32 opaqueReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
-    u32 glassReflectionSlot = Core::GpuDescriptorHandle::s_Invalid;
-    u32 reflectionDebugView = 0u;
-};
-static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u);
-
-inline constexpr f32 s_CompositeDefaultShoulder = 0.65f;
-
-
-struct PresentPushConstants{
-    u32 resourceSlots = 0u;
-    u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
-    u32 toneMap = NWB_DEFERRED_TONE_MAP_REINHARD;
-    f32 exposure = 1.f;
-    f32 shoulder = s_CompositeDefaultShoulder;
-    u32 outputLayerSlot = Core::GpuDescriptorHandle::s_Invalid;
-};
-static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 6u);
+static_assert(sizeof(DeferredCompositePushConstants) == sizeof(u32) * 5u);
+static_assert(sizeof(DeferredPresentPushConstants) == sizeof(u32) * 6u);
 
 
 struct DeferredCompositeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     // The deferred system, the frame targets, and the timing ticket are required: the pass always records against this frame's targets.
     struct Payload{
         RendererDeferredSystem& deferredSystem;
@@ -71,8 +54,7 @@ struct DeferredCompositeGraphTask{
 
 
 public:
-    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        static_cast<void>(context);
+    [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
         return ECSRenderDetail::RecordDeferredGraphTask(payload, commandList, [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
             return deferredSystem.renderDeferredComposite(taskCommandList, targets, payload.reflectionInputs);
         });
@@ -100,7 +82,7 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
     if(!m_deferredState.m_compositeComputeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredCompositePushConstants)));
 
         auto compositeComputeBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
         if(compositeComputeBindingLayoutResult)
@@ -116,7 +98,7 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
     if(!m_deferredState.m_presentBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(DeferredPresentPushConstants)));
 
         auto presentBindingLayoutResult = device.createBindingLayout(bindingLayoutDesc);
         if(presentBindingLayoutResult)
@@ -134,13 +116,13 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader<ComputeShader>(m_deferredState.m_compositeComputeShader, &DeferredSubsystem::compositeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS"))
+    if(!m_shaderSystem.loadShader<ComputeShader>(&DeferredSubsystem::compositeCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeCS", m_deferredState.m_compositeComputeShader))
         return false;
 
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
 
-    if(!m_shaderSystem.loadShader<PixelShader>(m_deferredState.m_presentPixelShader, &DeferredSubsystem::compositePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS"))
+    if(!m_shaderSystem.loadShader<PixelShader>(&DeferredSubsystem::compositePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredPresentPS", m_deferredState.m_presentPixelShader))
         return false;
 
     return true;
@@ -229,13 +211,11 @@ b8 RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandLis
     computeState.setPipeline(m_deferredState.m_compositeComputePipeline.get());
     commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_compositeComputePipeline);
-    const __hidden_deferred_composite::CompositePushConstants pushConstants{
+    const DeferredCompositePushConstants pushConstants = ResolveDeferredCompositePushConstants(
         targets.bindless.slotsBufferDescriptor.slot(),
-        targets.avboit.refractionFramebuffer ? 1u : 0u,
-        reflectionInputs.opaqueRadianceSlot,
-        reflectionInputs.glassRadianceSlot,
-        static_cast<u32>(reflectionInputs.debugView)
-    };
+        targets.avboit.refractionFramebuffer != nullptr,
+        reflectionInputs
+    );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     const u32 groupCountX = (targets.width + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;
     const u32 groupCountY = (targets.height + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;
@@ -275,18 +255,16 @@ b8 RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandList,
 
     commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *m_deferredState.m_presentPipeline);
-    const __hidden_deferred_composite::PresentPushConstants pushConstants{
-        .resourceSlots = targets.bindless.slotsBufferDescriptor.slot(),
-        .presentationMode = m_graphics.isHDR10OutputActive() ? NWB_DEFERRED_PRESENTATION_HDR10 : NWB_DEFERRED_PRESENTATION_SDR,
-        .toneMap = m_deferredState.m_presentationSettings.toneMap,
-        .exposure = m_deferredState.m_presentationSettings.exposure,
-        .shoulder = m_deferredState.m_presentationSettings.shoulder,
-        .outputLayerSlot = outputLayerImage.valid() ? outputLayerImage.slot() : Core::GpuDescriptorHandle::s_Invalid,
-    };
+    const DeferredPresentPushConstants pushConstants = ResolveDeferredPresentPushConstants(
+        targets.bindless.slotsBufferDescriptor.slot(),
+        m_graphics.isHDR10OutputActive(),
+        m_deferredState.m_presentationSettings,
+        outputLayerImage.valid() ? outputLayerImage.slot() : Core::GpuDescriptorHandle::s_Invalid
+    );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
+    drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
     commandList.endRenderPass();
     return !commandList.isRenderPassActive();

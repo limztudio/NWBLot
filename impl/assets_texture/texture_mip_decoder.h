@@ -39,10 +39,6 @@ public:
 
 class TextureMipDecoder final : NoCopy{
 public:
-    TextureMipDecoder()noexcept;
-
-
-public:
     [[nodiscard]] Expected<TextureDecodedMipUpload> decode(const Texture& textureAsset, const TextureMipLevel& mip, u32 mipLevel, Core::Format::Enum format, Core::Alloc::ScratchArena& arena);
 
 

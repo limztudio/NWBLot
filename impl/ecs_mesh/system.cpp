@@ -27,20 +27,6 @@ MeshSystem::MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     readAccess<SkinnedMeshBindingComponent>();
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSystem::update(Core::ECS::World& world, f32 delta)noexcept{
-    static_cast<void>(world);
-    static_cast<void>(delta);
-    return {};
-}
-
-MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)noexcept{
-    return m_world.tryGetComponent<MeshComponent>(entity);
-}
-
-const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const noexcept{
-    return m_world.tryGetComponent<MeshComponent>(entity);
-}
-
 Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(const Core::ECS::EntityID entity)const noexcept{
     const MeshComponent* mesh = findMesh(entity);
     if(!mesh || !mesh->mesh.valid())

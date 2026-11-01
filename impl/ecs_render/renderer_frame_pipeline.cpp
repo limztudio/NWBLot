@@ -4,7 +4,7 @@
 
 #include "renderer_frame_pipeline.h"
 
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 
@@ -23,7 +23,7 @@ namespace __hidden_renderer_frame_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = { RendererGpuTimingScope::s_AvboitDepthWarp.identity, RendererGpuTimingScope::s_AvboitIntegration.identity, };
+static constexpr Array<Name, 2> s_DeferredTaskTimingFeedbackScopes = { RendererGpuTimingScope::s_AvboitDepthWarp.identity, RendererGpuTimingScope::s_AvboitIntegration.identity, };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = { RendererGpuTiming
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, ShaderPathResolveCallback shaderPathResolver)
+RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback shaderPathResolver)
     : m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
@@ -65,7 +65,7 @@ RendererFramePipeline::RendererFramePipeline(Core::Alloc::GlobalArena& arena, Co
     , m_reflectionSystem(arena, graphics, m_shaderSystem)
     , m_avboitSystem(arena, graphics, m_avboitState, m_shaderSystem, m_materialSystem, m_csgSystem)
     , m_raytracingSystem(arena, world, graphics, m_shaderSystem, m_meshSystem, m_materialSystem, m_rayTracingState, m_opticalVolumes, m_csgShapeRegistry)
-    , m_deferredTaskTimingFeedback(arena, graphics, NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes), LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes))
+    , m_deferredTaskTimingFeedback(arena, graphics, __hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)
@@ -86,8 +86,16 @@ RendererFramePipeline::~RendererFramePipeline(){
     m_deferredTaskTimingFeedback.deactivate();
 }
 
-Expected<RefractionStatistics> RendererFramePipeline::tryGetLatestRefractionStatistics()const noexcept{
-    return m_raytracingSystem.tryGetLatestRefractionStatistics();
+void RendererFramePipeline::setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{
+    m_activeSceneSubsystems = subsystems;
+    m_shaderSystem.setActiveSceneSubsystems(subsystems);
+}
+
+b8 RendererFramePipeline::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
+    if(!ValidateSurfelGiQualitySettings(settings))
+        return false;
+    m_surfelGiQualitySettings = settings;
+    return true;
 }
 
 b8 RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings)noexcept{
@@ -97,12 +105,19 @@ b8 RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settin
     return true;
 }
 
-Expected<ReflectionStatistics> RendererFramePipeline::tryGetLatestReflectionStatistics()const noexcept{
-    return m_reflectionSystem.tryGetLatestStatistics();
-}
-
-b8 RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings)noexcept{
-    return m_deferredSystem.setPresentationSettings(settings);
+void RendererFramePipeline::setFrameLaggedAsyncLightingEnabled(const b8 enabled)noexcept{
+    if(m_frameLaggedAsyncLightingEnabled == enabled)
+        return;
+    // Proof that disabling the mode returned to the current-frame path: set when turning off, cleared by the next accepted normal frame.
+    m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
+    if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
+        m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
+        m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
+    }
+    m_frameLaggedAsyncLightingEnabled = enabled;
+    m_laggedLightingReport = LaggedLightingReport::Unreported;
+    m_laggedLightingReportGeneration = 0u;
+    resetLaggedLightingHistoryReadTracking();
 }
 
 Core::GpuTaskGraphRuntimeStatistics RendererFramePipeline::deferredTaskGraphRuntimeStatistics()const noexcept{
@@ -134,18 +149,14 @@ void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
     m_shadowPreparePersistentState.reset();
 }
 
-void RendererFramePipeline::invalidateLaggedLightingHistorySubmission()noexcept{
-    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryWriterDrainGeneration = 0u;
 }
 
 void RendererFramePipeline::resetLaggedLightingHistoryReadTracking()noexcept{
     invalidateLaggedLightingHistorySubmission();
     m_laggedLightingHistoryGeneration = 0u;
-}
-
-void RendererFramePipeline::invalidateLaggedLightingHistoryWriterDrain()noexcept{
-    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
-    m_laggedLightingHistoryWriterDrainGeneration = 0u;
 }
 
 void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{

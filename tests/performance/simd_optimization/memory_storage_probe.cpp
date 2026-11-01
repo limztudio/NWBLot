@@ -2,23 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/floating_point_environment.h>
+#include <tests/common/simd_memory_guard_fixture.h>
+
 #include <global/allocation_size.h>
+#include <global/array.h>
 #include <global/atomic.h>
+#include <global/floating_point_environment.h>
+#include <global/process.h>
 #include <global/simd/memory.h>
 #include <global/simd/type.h>
 #include <global/simd/vector.h>
-#include <global/timer.h>
+#include <global/span.h>
 #include <global/text_utils.h>
-
-#include <iostream>
-#include <new>
+#include <global/timer.h>
 
 #if defined(NWB_PLATFORM_LINUX)
-#include <signal.h>
-#include <sys/mman.h>
 #include <sys/wait.h>
-#include <unistd.h>
 #endif
 
 
@@ -31,6 +30,15 @@ namespace __hidden_memory_storage_probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using NWB::Tests::ExitOnAbort;
+#if defined(NWB_PLATFORM_LINUX)
+using NWB::Tests::GuardedBytes;
+#endif
+using NWB::Tests::PatternByte;
+using NWB::Tests::s_SIMDMemoryAbortExitCode;
+using NWB::Tests::s_SIMDMemoryHandlerFailureExitCode;
+using NWB::Tests::s_SIMDMemoryReturnedExitCode;
+
 constexpr AStringView s_QualifyOption = "--qualify";
 constexpr AStringView s_BenchCopyOption = "--bench-copy";
 constexpr AStringView s_BenchEqualityFirstWordOption = "--bench-equality-first-word";
@@ -38,9 +46,11 @@ constexpr AStringView s_BenchEqualityFirstWordOption = "--bench-equality-first-w
 inline constexpr usize s_Alignment = 64u;
 inline constexpr usize s_StreamingBytes = 64u * 1024u * 1024u;
 inline constexpr u8 s_Poison = 0xA5u;
-inline constexpr int s_AbortExit = 81;
-inline constexpr usize s_QualifyLengths[]{ 0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u, 65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 5120u, 8191u, 8192u, 8193u, 16384u, };
-inline constexpr usize s_BenchLengths[]{ 16u, 31u, 32u, 33u, 64u, 128u, 129u, 256u, 512u, 1024u, 2048u, 4096u, 5120u, 8191u, 8192u };
+inline constexpr Array<usize, 36> s_QualifyLengths = {
+    0u, 1u, 2u, 3u, 7u, 8u, 9u, 15u, 16u, 17u, 31u, 32u, 33u, 47u, 48u, 49u, 63u, 64u,
+    65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 5120u, 8191u, 8192u, 8193u, 16384u,
+};
+inline constexpr Array<usize, 15> s_BenchLengths = { 16u, 31u, 32u, 33u, 64u, 128u, 129u, 256u, 512u, 1024u, 2048u, 4096u, 5120u, 8191u, 8192u };
 volatile u64 g_Checksum = 0u;
 
 
@@ -53,15 +63,12 @@ struct AlignedBytes final{
 
 
 public:
-    explicit AlignedBytes(usize count)
+    explicit AlignedBytes(const usize count)
         : storage(MakeNotNull(::operator new(count, AlignValT{ s_Alignment })))
         , data(MakeNotNull(::new(storage.get()) u8[count]))
     {}
     ~AlignedBytes()noexcept{ ::operator delete(storage.get(), AlignValT{ s_Alignment }); }
     AlignedBytes(const AlignedBytes&) = delete;
-
-
-public:
     AlignedBytes& operator=(const AlignedBytes&) = delete;
 };
 
@@ -69,10 +76,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr u8 PatternByte(usize index)noexcept{ return static_cast<u8>((index * 37u + (index >> 8u) * 13u + 11u) & 0xFFu); }
-
 // Candidate changes only the internal AVX alignment choice.
-NWB_INLINE void CandidateCopy(void* destination, usize capacity, const void* source, usize count)noexcept{
+NWB_INLINE void CandidateCopy(const void* source, usize count, const usize capacity, void* destination)noexcept{
 #if defined(NWB_HAS_AVX)
     if(count == 0u)
         return;
@@ -165,8 +170,8 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 CheckRange(const u8* bytes, usize length, usize start, usize count, usize sourceStart)noexcept{
-    for(usize index = 0u; index < length; ++index){
+[[nodiscard]] b8 CheckRange(const Span<const u8> bytes, const usize start, const usize count, const usize sourceStart)noexcept{
+    for(usize index = 0u; index < bytes.size(); ++index){
         const u8 expected = index >= start && index - start < count ? PatternByte(sourceStart + index - start) : s_Poison;
         if(bytes[index] != expected)
             return false;
@@ -183,8 +188,8 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
         for(usize sourceOffset = 0u; sourceOffset < 128u; sourceOffset += 16u){
             for(usize destinationOffset = 0u; destinationOffset < 128u; destinationOffset += 16u){
                 NWB_MEMSET(destination.data.get(), s_Poison, s_Bytes);
-                CandidateCopy(destination.data.get() + destinationOffset, count, source.data.get() + sourceOffset, count);
-                if(!CheckRange(destination.data.get(), s_Bytes, destinationOffset, count, sourceOffset))
+                CandidateCopy(source.data.get() + sourceOffset, count, count, destination.data.get() + destinationOffset);
+                if(!CheckRange(Span<const u8>(destination.data.get(), s_Bytes), destinationOffset, count, sourceOffset))
                     return false;
             }
         }
@@ -198,74 +203,38 @@ NWB_INLINE b8 CandidateEqualFirstWord(const NotNull<const u64*> lhs, const NotNu
             for(usize index = 0u; index < s_Bytes; ++index)
                 destination.data.get()[index] = PatternByte(index);
             const usize destinationStart = destinationFirst ? 0u : count, sourceStart = destinationFirst ? count : 0u;
-            CandidateCopy(destination.data.get() + destinationStart, count, destination.data.get() + sourceStart, count);
+            CandidateCopy(destination.data.get() + sourceStart, count, count, destination.data.get() + destinationStart);
             for(usize index = 0u; index < count; ++index){
                 if(destination.data.get()[destinationStart + index] != PatternByte(sourceStart + index))
                     return false;
             }
         }
     }
-    CandidateCopy(nullptr, 0u, nullptr, 0u);
-    CandidateCopy(destination.data.get() + 1u, 0u, source.data.get() + 3u, 0u);
+    CandidateCopy(nullptr, 0u, 0u, nullptr);
+    CandidateCopy(source.data.get() + 3u, 0u, 0u, destination.data.get() + 1u);
     return true;
 }
 
 #if defined(NWB_PLATFORM_LINUX)
-struct GuardedBytes final{
-    void* mapping = nullptr;
-    u8* data = nullptr;
-    u8* lowerGuard = nullptr;
-    u8* upperGuard = nullptr;
-    usize pageBytes = 0u;
-    usize accessibleBytes = 0u;
-    usize mappingBytes = 0u;
-
-
-public:
-    GuardedBytes()noexcept{
-        const isize systemPageBytes = static_cast<isize>(sysconf(_SC_PAGESIZE));
-        if(systemPageBytes <= 0)
-            ::abort();
-        pageBytes = static_cast<usize>(systemPageBytes);
-        accessibleBytes = pageBytes * 4u;
-        mappingBytes = pageBytes * 6u;
-        mapping = mmap(nullptr, mappingBytes, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if(mapping == MAP_FAILED || mprotect(static_cast<u8*>(mapping) + pageBytes, accessibleBytes, PROT_READ | PROT_WRITE) != 0)
-            ::abort();
-        data = ::new(static_cast<u8*>(mapping) + pageBytes) u8[accessibleBytes];
-        lowerGuard = static_cast<u8*>(mapping);
-        upperGuard = data + accessibleBytes;
-    }
-    ~GuardedBytes()noexcept{
-        if(munmap(mapping, mappingBytes) != 0)
-            ::abort();
-    }
-    GuardedBytes(const GuardedBytes&) = delete;
-
-
-public:
-    GuardedBytes& operator=(const GuardedBytes&) = delete;
-};
-
-static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
-
-[[nodiscard]] b8 RejectedBeforeAccess(void* destination, usize capacity, const void* source, usize count)noexcept{
+[[nodiscard]] b8 RejectedBeforeAccess(const void* source, const usize count, const usize capacity, void* destination)noexcept{
     const pid_t child = fork();
     if(child < 0)
         return false;
     if(child == 0){
         if(signal(SIGABRT, ExitOnAbort) == SIG_ERR)
-            _exit(82);
-        CandidateCopy(destination, capacity, source, count);
-        _exit(83);
+            _exit(s_SIMDMemoryHandlerFailureExitCode);
+        CandidateCopy(source, count, capacity, destination);
+        _exit(s_SIMDMemoryReturnedExitCode);
     }
     int status = 0;
-    return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_AbortExit;
+    return waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == s_SIMDMemoryAbortExitCode;
 }
 
 [[nodiscard]] b8 QualifyProtectedRanges()noexcept{
     GuardedBytes source, destination;
-    if(source.accessibleBytes < s_QualifyLengths[sizeof(s_QualifyLengths) / sizeof(s_QualifyLengths[0]) - 1u])
+    if(source.data == nullptr || destination.data == nullptr)
+        return false;
+    if(source.accessibleBytes < s_QualifyLengths[s_QualifyLengths.size() - 1u])
         return false;
     for(usize index = 0u; index < source.accessibleBytes; ++index)
         source.data[index] = PatternByte(index);
@@ -275,8 +244,8 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
                 NWB_MEMSET(destination.data, s_Poison, destination.accessibleBytes);
                 const usize sourceStart = sourceAtEnd ? (source.accessibleBytes - count) & ~usize{ 15u } : 0u;
                 const usize destinationStart = destinationAtEnd ? (destination.accessibleBytes - count) & ~usize{ 15u } : 0u;
-                CandidateCopy(destination.data + destinationStart, count, source.data + sourceStart, count);
-                if(!CheckRange(destination.data, destination.accessibleBytes, destinationStart, count, sourceStart))
+                CandidateCopy(source.data + sourceStart, count, count, destination.data + destinationStart);
+                if(!CheckRange(Span<const u8>(destination.data, destination.accessibleBytes), destinationStart, count, sourceStart))
                     return false;
             }
         }
@@ -294,18 +263,18 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
                 return false;
         }
     }
-    CandidateCopy(source.lowerGuard, 0u, destination.upperGuard, 0u);
+    CandidateCopy(destination.upperGuard, 0u, 0u, source.lowerGuard);
     if(
-        !RejectedBeforeAccess(destination.lowerGuard, 15u, source.upperGuard, 16u)
-        || !RejectedBeforeAccess(nullptr, 16u, source.upperGuard, 16u)
-        || !RejectedBeforeAccess(destination.lowerGuard, 16u, nullptr, 16u)
-        || !RejectedBeforeAccess(destination.lowerGuard, 32u, destination.lowerGuard, 32u)
-        || !RejectedBeforeAccess(destination.lowerGuard, 32u, destination.lowerGuard + 16u, 32u)
-        || !RejectedBeforeAccess(destination.lowerGuard + 16u, 32u, destination.lowerGuard, 32u)
+        !RejectedBeforeAccess(source.upperGuard, 16u, 15u, destination.lowerGuard)
+        || !RejectedBeforeAccess(source.upperGuard, 16u, 16u, nullptr)
+        || !RejectedBeforeAccess(nullptr, 16u, 16u, destination.lowerGuard)
+        || !RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard)
+        || !RejectedBeforeAccess(destination.lowerGuard + 16u, 32u, 32u, destination.lowerGuard)
+        || !RejectedBeforeAccess(destination.lowerGuard, 32u, 32u, destination.lowerGuard + 16u)
     )
         return false;
     for(usize offset = 1u; offset < 16u; ++offset){
-        if(!RejectedBeforeAccess(destination.lowerGuard + offset, 16u, source.upperGuard, 16u) || !RejectedBeforeAccess(destination.lowerGuard, 16u, source.upperGuard + offset, 16u))
+        if(!RejectedBeforeAccess(source.upperGuard, 16u, 16u, destination.lowerGuard + offset) || !RejectedBeforeAccess(source.upperGuard + offset, 16u, 16u, destination.lowerGuard))
             return false;
     }
     return true;
@@ -317,19 +286,24 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     const auto original = HoldFloatingPointExceptions();
     if(!original)
         return false;
-    alignas(64) u64 lhs[8]{}, rhs[8]{};
+    alignas(64) Array<u64, 8> lhs = {};
+    alignas(64) Array<u64, 8> rhs = {};
     b8 valid = true;
-    constexpr u64 s_Patterns[]{ 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
+    constexpr Array<u64, 6> s_Patterns = { 0u, ~u64{ 0u }, 0x8000000000000000ull, 0x7FF0000000000001ull, 0x0000000000000001ull, 0x0123456789ABCDEFull };
     for(const u64 pattern : s_Patterns){
         for(usize offset = 0u; offset < 4u; ++offset){
             for(usize lane = 0u; lane < 4u; ++lane)
                 lhs[offset + lane] = rhs[offset + lane] = pattern ^ static_cast<u64>(lane);
-            if(!CandidateEqual(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || !CandidateEqualFirstWord(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)))
+            if(!CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)) || !CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset)))
                 valid = false;
             for(usize lane = 0u; lane < 4u; ++lane){
                 for(u32 bit = 0u; bit < 64u; ++bit){
                     rhs[offset + lane] ^= u64{ 1u } << bit;
-                    if(CandidateEqual(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || CandidateEqualFirstWord(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)) || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs + offset), MakeNotNull(rhs + offset)))
+                    if(
+                        CandidateEqual(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                        || CandidateEqualFirstWord(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                        || MathTypeDetail::EqualElements<u64, 4u>(MakeNotNull(lhs.data() + offset), MakeNotNull(rhs.data() + offset))
+                    )
                         valid = false;
                     rhs[offset + lane] ^= u64{ 1u } << bit;
                 }
@@ -341,9 +315,9 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
     // Opaque call targets prevent either predicate from being removed between the pre-existing flag and its observation.
     b8(*volatile wideFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqual;
     b8(*volatile firstWordFunction)(NotNull<const u64*>, NotNull<const u64*>)noexcept = CandidateEqualFirstWord;
-    const b8 wideEqual = wideFunction(MakeNotNull(lhs), MakeNotNull(rhs));
+    const b8 wideEqual = wideFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
     const i32 wideFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
-    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs), MakeNotNull(rhs));
+    const b8 firstWordEqual = firstWordFunction(MakeNotNull(lhs.data()), MakeNotNull(rhs.data()));
     const i32 firstWordFlags = TestFloatingPointExceptions(FE_ALL_EXCEPT);
     if(!wideEqual || !firstWordEqual || wideFlags != FE_DIVBYZERO || firstWordFlags != FE_DIVBYZERO)
         valid = false;
@@ -358,13 +332,13 @@ static void ExitOnAbort(int)noexcept{ _exit(s_AbortExit); }
 
 // Hot operations inline into the batch so per-call vzeroupper/ABI overhead does not substitute for the production callsite behavior.
 template<b8 Candidate, usize FixedCount = 0u>
-NWB_NOINLINE void CopyBatch(u8* destination, const u8* source, usize slots, usize stride, usize bytes, usize iterations)noexcept{
+NWB_NOINLINE void CopyBatch(const u8* source, const usize slots, const usize stride, const usize bytes, const usize iterations, u8* destination)noexcept{
     usize slot = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
         AtomicSignalFence(MemoryOrder::seq_cst);
         const usize count = FixedCount != 0u ? FixedCount : bytes;
         if constexpr(Candidate)
-            CandidateCopy(destination + slot * stride, count, source + slot * stride, count);
+            CandidateCopy(source + slot * stride, count, count, destination + slot * stride);
         else
             SIMDMemoryCopy(destination + slot * stride, count, source + slot * stride, count);
         if(++slot == slots)
@@ -373,7 +347,7 @@ NWB_NOINLINE void CopyBatch(u8* destination, const u8* source, usize slots, usiz
 }
 
 template<b8 Candidate, b8 FirstWord = false>
-NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
+NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     usize slot = 0u;
     u64 total = 0u;
     for(usize iteration = 0u; iteration < iterations; ++iteration){
@@ -392,26 +366,26 @@ NWB_NOINLINE u64 EqualityBatch(const u64* lhs, const u64* rhs, usize slots, usiz
     return total;
 }
 
-using CopyBatchFunction = void(*)(u8*, const u8*, usize, usize, usize, usize)noexcept;
+using CopyBatchFunction = void(*)(const u8*, usize, usize, usize, usize, u8*)noexcept;
 using EqualityBatchFunction = u64(*)(const u64*, const u64*, usize, usize, usize)noexcept;
 
-[[nodiscard]] f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<u8*> destination, const NotNull<const u8*> source, usize slots, usize stride, usize bytes, usize iterations)noexcept{
+[[nodiscard]] f64 TimeCopy(const NotNull<CopyBatchFunction> function, const NotNull<const u8*> source, const usize slots, const usize stride, const usize bytes, const usize iterations, const NotNull<u8*> destination)noexcept{
     const Timer start = TimerNow();
-    function.get()(destination.get(), source.get(), slots, stride, bytes, iterations);
+    function.get()(source.get(), slots, stride, bytes, iterations, destination.get());
     const Timer end = TimerNow();
     g_Checksum = g_Checksum + destination.get()[(iterations - 1u) % slots * stride];
-    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
+    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-[[nodiscard]] f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, usize slots, usize stride, usize iterations)noexcept{
+[[nodiscard]] f64 TimeEquality(const NotNull<EqualityBatchFunction> function, const u64* lhs, const u64* rhs, const usize slots, const usize stride, const usize iterations)noexcept{
     const Timer start = TimerNow();
     const u64 result = function.get()(lhs, rhs, slots, stride, iterations);
     const Timer end = TimerNow();
     g_Checksum = g_Checksum + result;
-    return VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(DurationInNS<f64>(end, start)), VectorDoubleReplicate(static_cast<f64>(iterations))));
+    return DurationInNS<f64>(end, start) / static_cast<f64>(iterations);
 }
 
-void BenchCopy(usize samples){
+void BenchCopy(const usize samples){
     NWB_COUT << "kind,cache,bytes,source_offset,destination_offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
     for(const b8 streaming : { false, true }){
         for(const usize bytes : s_BenchLengths){
@@ -428,19 +402,19 @@ void BenchCopy(usize samples){
             const auto candidate = MakeNotNull<CopyBatchFunction>(bytes == 5120u ? CopyBatch<true, 5120u> : CopyBatch<true>);
             for(const usize sourceOffset : { 16u, 32u }){
                 for(const usize destinationOffset : { 16u, 32u }){
-                    baseline.get()(destination.data.get() + destinationOffset, source.data.get() + sourceOffset, slots, stride, bytes, 1024u);
-                    candidate.get()(destination.data.get() + destinationOffset, source.data.get() + sourceOffset, slots, stride, bytes, 1024u);
+                    baseline.get()(source.data.get() + sourceOffset, slots, stride, bytes, 1024u, destination.data.get() + destinationOffset);
+                    candidate.get()(source.data.get() + sourceOffset, slots, stride, bytes, 1024u, destination.data.get() + destinationOffset);
                     for(usize sample = 0u; sample < samples; ++sample){
                         f64 baselineNs, candidateNs;
                         if((sample & 1u) == 0u){
-                            baselineNs = TimeCopy(baseline, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
-                            candidateNs = TimeCopy(candidate, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
+                            baselineNs = TimeCopy(baseline, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
+                            candidateNs = TimeCopy(candidate, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
                         }
                         else{
-                            candidateNs = TimeCopy(candidate, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
-                            baselineNs = TimeCopy(baseline, MakeNotNull(destination.data.get() + destinationOffset), MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations);
+                            candidateNs = TimeCopy(candidate, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
+                            baselineNs = TimeCopy(baseline, MakeNotNull(source.data.get() + sourceOffset), slots, stride, bytes, iterations, MakeNotNull(destination.data.get() + destinationOffset));
                         }
-                        const f64 candidateOverBaseline = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateNs), VectorDoubleReplicate(baselineNs)));
+                        const f64 candidateOverBaseline = candidateNs / baselineNs;
                         NWB_COUT << (bytes == 5120u ? "copy_fixed" : "copy_dynamic") << ',' << (streaming ? "streaming" : "warm") << ',' << bytes << ',' << sourceOffset << ',' << destinationOffset << ',' << sample << ',';
                         NWB_COUT << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
                         NWB_COUT.flush();
@@ -451,7 +425,7 @@ void BenchCopy(usize samples){
     }
 }
 
-void BenchEquality(usize samples, b8 firstWord){
+void BenchEquality(const usize samples, const b8 firstWord){
     const auto candidate = MakeNotNull<EqualityBatchFunction>(firstWord ? EqualityBatch<true, true> : EqualityBatch<true>);
     NWB_COUT << "kind,cache,case,offset,sample,baseline_ns,candidate_ns,candidate_over_baseline\n";
     for(const b8 streaming : { false, true }){
@@ -487,9 +461,9 @@ void BenchEquality(usize samples, b8 firstWord){
                         candidateNs = TimeEquality(candidate, lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
                         baselineNs = TimeEquality(MakeNotNull<EqualityBatchFunction>(EqualityBatch<false>), lhs.get() + offset, rhs.get() + offset, slots, 8u, s_Iterations);
                     }
-                    constexpr StringView s_FirstWordCases[]{ "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
+                    constexpr Array<StringView, 5> s_FirstWordCases = { "equal", "word0_mismatch", "word1_mismatch", "word2_mismatch", "word3_mismatch" };
                     const StringView caseName = firstWord ? s_FirstWordCases[comparisonCase] : comparisonCase == 0u ? "equal" : comparisonCase == 1u ? "early_mismatch" : "late_mismatch";
-                    const f64 candidateOverBaseline = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(candidateNs), VectorDoubleReplicate(baselineNs)));
+                    const f64 candidateOverBaseline = candidateNs / baselineNs;
                     NWB_COUT << "equality," << (streaming ? "streaming" : "warm") << ',' << caseName << ',' << offset * sizeof(u64) << ',' << sample << ',' << baselineNs << ',' << candidateNs << ',' << candidateOverBaseline << '\n';
                     NWB_COUT.flush();
                 }

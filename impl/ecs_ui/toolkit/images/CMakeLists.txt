@@ -13,3 +13,4 @@ target_sources(nwb_ui_images PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/*.ixx"
 )
 target_link_libraries(nwb_ui_images PUBLIC nwb_assets_texture nwb_assets_ui_skin)
+

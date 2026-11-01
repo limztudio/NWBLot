@@ -23,7 +23,12 @@ NWB_IMPL_UI_BEGIN
 // Hard-line LTR geometry interpolates grapheme caret stops inside ligatures; it does not provide wrap or paragraph bidi.
 class EditBoxView final{
 public:
-    explicit EditBoxView(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit EditBoxView(Core::Alloc::GlobalArena& arena)noexcept
+        : m_arena(&arena)
+        , m_display(arena)
+        , m_mapping(arena)
+        , m_geometry(arena)
+    {}
     EditBoxView(EditBoxView&&)noexcept = default;
     EditBoxView(const EditBoxView&) = delete;
 

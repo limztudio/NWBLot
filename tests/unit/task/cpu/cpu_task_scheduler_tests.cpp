@@ -16,8 +16,6 @@ namespace __hidden_cpu_task_scheduler_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
 using namespace CpuTaskSchedulerTestSupport;
 
 
@@ -79,7 +77,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     Atomic<u32> total{ 0u };
     Atomic<u32> retirementsSeenByDependent{ 0u };
     Atomic<b8> rejected{ false };
-    CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
+    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
     ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
     const auto cpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)]() mutable{
         const auto secondCpuTaskAdmission = scheduler.submit([&scheduler, &grandchildGate, &retirements, &total, &rejected, &parentCapture, childCapture = LifetimeProbe(retirements, 13u)]() mutable{
@@ -105,7 +103,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     );
     ASSERT_TRUE(fourthCpuTaskAdmission);
     const auto dependent = *fourthCpuTaskAdmission;
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(grandchildGate.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(grandchildGate.entered, s_GateTimeoutMS));
     EXPECT_FALSE(scheduler.isComplete(parent));
     EXPECT_FALSE(scheduler.isComplete(dependent));
     EXPECT_EQ(retirements.load(), 0u);
@@ -123,14 +121,14 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     TaskGate unrelatedGate;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
+    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
     CpuTaskScope unrelated(scheduler);
     CpuTaskScope owned(scheduler);
     ScopeExit releaseUnrelated([&]()noexcept{ unrelatedGate.open(); });
     const auto unrelatedTaskAdmission = unrelated.submit([&]()noexcept{ unrelatedGate.block(); });
     ASSERT_TRUE(unrelatedTaskAdmission);
     const auto unrelatedTask = *unrelatedTaskAdmission;
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(unrelatedGate.entered, s_GateTimeoutMS));
     Atomic<b8> ownedFinished{ false };
     const auto cpuTaskAdmission = owned.submit([&]()noexcept{ ownedFinished.store(true, MemoryOrder::release); });
     EXPECT_TRUE(cpuTaskAdmission);
@@ -176,7 +174,7 @@ TEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCoopera
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
-    Atomic<u32> visited[35u]{};
+    Array<Atomic<u32>, 35u> visited{};
     const auto cpuTaskAdmission = scheduler.submit([&](){
         EXPECT_TRUE((scheduler.parallelFor(0u, 5u, 1u, [&](const usize outer){
             EXPECT_TRUE((scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner)noexcept{
@@ -221,7 +219,7 @@ TEST(CpuTaskSchedulerTests, MainThreadTasksSubmittedByWorkersExecuteOnlyOnTheSch
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(published, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(published, s_GateTimeoutMS));
     EXPECT_EQ(invocations.load(), 0u);
     scheduler.wait(parent);
     EXPECT_FALSE(rejected.load());

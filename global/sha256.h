@@ -8,6 +8,7 @@
 #include "binary.h"
 #include "expected.h"
 #include "not_null.h"
+#include "numeric_text.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,34 +51,33 @@ inline constexpr u32 s_FirstByteShift = 24u;
 inline constexpr u32 s_SecondByteShift = 16u;
 inline constexpr u32 s_ThirdByteShift = 8u;
 
-inline void UnpackBlockWords(const u8 (&block)[s_BlockByteCount], u32* const outWords)noexcept{
+inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
     for(u32 index = 0u; index < s_BlockWordCount; ++index){
-        const auto bytes = MakeNotNull(block + index * s_WordByteCount);
+        const auto bytes = MakeNotNull(block.data() + index * s_WordByteCount);
         outWords[index] = (static_cast<u32>(bytes.get()[0u]) << s_FirstByteShift) | (static_cast<u32>(bytes.get()[1u]) << s_SecondByteShift) | (static_cast<u32>(bytes.get()[2u]) << s_ThirdByteShift) | static_cast<u32>(bytes.get()[3u]);
     }
 }
 
-template<typename DigestT, u32 StateWordCount, void (*CompressFn)(u32 (&)[StateWordCount], const u8 (&)[s_BlockByteCount])>
-[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const u32 (&initialState)[StateWordCount])noexcept{
+template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const Array<u8, s_BlockByteCount>&)>
+[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const Array<u32, StateWordCount>& initialState)noexcept{
     static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
 
-    u32 state[StateWordCount];
-    NWB_MEMCPY(state, sizeof(state), initialState, sizeof(state));
-    u8 block[s_BlockByteCount];
+    Array<u32, StateWordCount> state = initialState;
+    Array<u8, s_BlockByteCount> block = {};
     usize offset = 0u;
-    while(input.size() - offset >= sizeof(block)){
-        NWB_MEMCPY(block, sizeof(block), input.data() + offset, sizeof(block));
+    while(input.size() - offset >= block.size()){
+        NWB_MEMCPY(block.data(), block.size(), input.data() + offset, block.size());
         CompressFn(state, block);
-        offset += sizeof(block);
+        offset += block.size();
     }
     const usize remainder = input.size() - offset;
-    NWB_MEMSET(block, 0, sizeof(block));
+    NWB_MEMSET(block.data(), 0, block.size());
     if(remainder > 0u)
-        NWB_MEMCPY(block, sizeof(block), input.data() + offset, remainder);
+        NWB_MEMCPY(block.data(), block.size(), input.data() + offset, remainder);
     block[remainder] = s_PaddingMarker;
     if(remainder >= s_LengthFieldOffset){
         CompressFn(state, block);
-        NWB_MEMSET(block, 0, sizeof(block));
+        NWB_MEMSET(block.data(), 0, block.size());
     }
     const u64 bitCount = static_cast<u64>(input.size()) * s_BitsPerByte;
     for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
@@ -136,7 +136,7 @@ inline constexpr u32 s_RoundSigma1RotateC = 25u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_RoundConstants[s_RoundCount] = {
+inline constexpr Array<u32, s_RoundCount> s_RoundConstants = {
     0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u, 0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
     0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u, 0x72be5d74u, 0x80deb1feu, 0x9bdc06a7u, 0xc19bf174u,
     0xe49b69c1u, 0xefbe4786u, 0x0fc19dc6u, 0x240ca1ccu, 0x2de92c6fu, 0x4a7484aau, 0x5cb0a9dcu, 0x76f988dau,
@@ -147,7 +147,7 @@ inline constexpr u32 s_RoundConstants[s_RoundCount] = {
     0x748f82eeu, 0x78a5636fu, 0x84c87814u, 0x8cc70208u, 0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u,
 };
 
-inline constexpr u32 s_InitialState[s_StateWordCount] = { 0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au, 0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u };
+inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au, 0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -157,13 +157,15 @@ inline constexpr u32 s_InitialState[s_StateWordCount] = { 0x6a09e667u, 0xbb67ae8
     return (value >> count) | (value << (s_WordBits - count));
 }
 
-inline void Compress(u32 (&state)[s_StateWordCount], const u8 (&block)[s_BlockByteCount])noexcept{
-    u32 words[s_RoundCount];
-    ShaBe32Detail::UnpackBlockWords(block, words);
+inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, s_BlockByteCount>& block)noexcept{
+    Array<u32, s_RoundCount> words = {};
+    ShaBe32Detail::UnpackBlockWords(block, words.data());
     for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 a = words[index - s_ScheduleLagSigma0];
         const u32 b = words[index - s_ScheduleLagSigma1];
-        words[index] = words[index - s_ScheduleLagPrevious] + (Rotate(a, s_ScheduleSigma0RotateA) ^ Rotate(a, s_ScheduleSigma0RotateB) ^ (a >> s_ScheduleSigma0Shift)) + words[index - s_ScheduleLagAdded] + (Rotate(b, s_ScheduleSigma1RotateA) ^ Rotate(b, s_ScheduleSigma1RotateB) ^ (b >> s_ScheduleSigma1Shift));
+        const u32 sigma0 = Rotate(a, s_ScheduleSigma0RotateA) ^ Rotate(a, s_ScheduleSigma0RotateB) ^ (a >> s_ScheduleSigma0Shift);
+        const u32 sigma1 = Rotate(b, s_ScheduleSigma1RotateA) ^ Rotate(b, s_ScheduleSigma1RotateB) ^ (b >> s_ScheduleSigma1Shift);
+        words[index] = words[index - s_ScheduleLagPrevious] + sigma0 + words[index - s_ScheduleLagAdded] + sigma1;
     }
     u32 a = state[0u], b = state[1u], c = state[2u], d = state[3u];
     u32 e = state[4u], f = state[5u], g = state[6u], h = state[7u];

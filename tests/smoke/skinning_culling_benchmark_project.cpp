@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 #include "gpu_pass_timing_probe.h"
@@ -50,6 +51,7 @@ using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::LoadSmokeSkeletonBindJoints;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentFlag;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
+using NWB::Tests::Smoke::TickSmokeWorld;
 
 namespace BenchmarkMode{
     enum Enum : u8{
@@ -104,7 +106,7 @@ static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
 static constexpr StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
-static constexpr BenchmarkCase s_BenchmarkCases[] = {
+static constexpr Array<BenchmarkCase, 12> s_BenchmarkCases = {{
     { BenchmarkMode::NoCulling, BenchmarkView::Front },
     { BenchmarkMode::NoCulling, BenchmarkView::Back },
     { BenchmarkMode::NoCulling, BenchmarkView::Close },
@@ -117,8 +119,8 @@ static constexpr BenchmarkCase s_BenchmarkCases[] = {
     { BenchmarkMode::FrustumCone, BenchmarkView::Back },
     { BenchmarkMode::FrustumCone, BenchmarkView::Close },
     { BenchmarkMode::FrustumCone, BenchmarkView::Far },
-};
-static constexpr usize s_BenchmarkCaseCount = LengthOf(s_BenchmarkCases);
+}};
+static constexpr usize s_BenchmarkCaseCount = s_BenchmarkCases.size();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -272,7 +274,7 @@ class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks
 public:
     explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(s_ProjectName, {}, context))
         , m_entities(context.objectArena)
         , m_bindJoints(context.objectArena)
         , m_staticPreview(ReadSmokeEnvironmentFlag(s_StaticPreviewEnv))
@@ -290,7 +292,7 @@ public:
         if(m_gpuTimingEnabled)
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        auto bindJoints = LoadSmokeSkeletonBindJoints(m_context.objectArena, m_context.assetManager, s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true);
+        auto bindJoints = LoadSmokeSkeletonBindJoints(s_BenchmarkModel, s_ProjectName, s_ModelSkeletonObject, true, m_context.objectArena, m_context.assetManager);
         if(!bindJoints){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
@@ -339,7 +341,7 @@ public:
 
         SyncSmokeModelRuntimes(*m_world);
         for(const NWB::Core::ECS::EntityID owner : modelOwners){
-            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(*m_world, owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton);
+            const NWB::Core::ECS::EntityID skeletonEntity = FindSpawnedModelObject(owner, s_ModelSkeletonObject, NWB::Impl::ModelObjectKind::Skeleton, *m_world);
             if(!skeletonEntity.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
                 requestQuit();
@@ -384,13 +386,10 @@ public:
         }
 
         if(m_staticPreview){
-            m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
+            m_totalTimeSeconds = m_totalTimeSeconds + static_cast<f64>(safeDelta);
             animatePoses();
-            const auto updated = m_world->tick(safeDelta);
-            if(!updated){
-                NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+            if(!TickSmokeWorld(safeDelta, *m_world))
                 return false;
-            }
             ++m_caseRenderedFrames;
             return true;
         }
@@ -399,13 +398,10 @@ public:
         if(m_finished)
             return true;
 
-        m_totalTimeSeconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_totalTimeSeconds), VectorDoubleReplicate(static_cast<f64>(safeDelta))));
+        m_totalTimeSeconds = m_totalTimeSeconds + static_cast<f64>(safeDelta);
         animatePoses();
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
-        }
         ++m_caseRenderedFrames;
         return true;
     }

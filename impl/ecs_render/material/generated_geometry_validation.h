@@ -25,7 +25,7 @@ namespace ECSRenderDetail{
 
 
 template<typename Plan, typename AcceptMode>
-[[nodiscard]] b8 CaptureAliasFreeGeneratedGeometryDraws(Plan& plan, const MaterialPassDrawItemsView& source, Core::Alloc::ScratchArena& scratchArena, AcceptMode acceptMode){
+[[nodiscard]] b8 CaptureAliasFreeGeneratedGeometryDraws(const MaterialPassDrawItemsView& source, AcceptMode acceptMode, Plan& plan, Core::Alloc::ScratchArena& scratchArena){
     plan.drawItems.reserve(source.computeDrawItems.size());
     plan.outputBuffers.reserve(source.computeDrawItems.size());
     plan.outputLayouts.reserve(source.computeDrawItems.size());
@@ -48,29 +48,50 @@ template<typename Plan, typename AcceptMode>
     return true;
 }
 
+[[nodiscard]] b8 MatchesRetainedGeneratedGeometryOutputs(
+    b8 captured,
+    Span<const MaterialPassDrawItem> drawItems,
+    Span<const Core::BufferHandle> outputBuffers,
+    Span<const GeneratedGeometryOutputLayout> outputLayouts,
+    Span<const u32> outputHeapSlots
+)noexcept;
 
-[[nodiscard]] NWB_INLINE b8 MatchesRetainedGeneratedGeometryOutputs(
-    const b8 captured,
-    const Span<const MaterialPassDrawItem> drawItems,
-    const Span<const Core::BufferHandle> outputBuffers,
-    const Span<const GeneratedGeometryOutputLayout> outputLayouts,
-    const Span<const u32> outputHeapSlots
-)noexcept{
-    if(!captured || outputBuffers.size() != drawItems.size() || outputLayouts.size() != drawItems.size() || outputHeapSlots.size() != drawItems.size())
-        return false;
-    for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
-        const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
-        if(
-            !mesh.emulationVertexBuffer
-            || !mesh.emulationVertexHeapHandle.valid()
-            || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-            || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
-            || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
-        )
-            return false;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AliasFreeComputeEmulationGraphPlan{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
+    using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
+
+
+public:
+    DrawItemVector drawItems;
+    BufferVector outputBuffers;
+    OutputLayoutVector outputLayouts;
+    HeapSlotVector outputHeapSlots;
+    b8 captured = false;
+
+
+public:
+    explicit AliasFreeComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)noexcept
+        : drawItems(arena)
+        , outputBuffers(arena)
+        , outputLayouts(arena)
+        , outputHeapSlots(arena)
+    {}
+
+
+public:
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, Core::Alloc::ScratchArena& scratchArena);
+
+    [[nodiscard]] b8 matches()const noexcept{
+        return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
-    return true;
-}
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

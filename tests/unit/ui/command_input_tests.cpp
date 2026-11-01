@@ -107,7 +107,7 @@ protected:
 
 TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameCommand){
     const HitTarget host = Control();
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
     const InputSource first{ 1u, 5u };
     const InputSource second{ 2u, 5u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Down)).routing.commandConsumed);
@@ -143,9 +143,9 @@ TEST_F(UiCommandInputTests, TwoControllersRetainIndependentOwnersForTheSameComma
 
 TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissionAcrossProfileReplacement){
     const HitTarget host = Control();
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
     const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Down, InputSelectionPolicy::Shift, true, true };
-    ASSERT_TRUE(m_router.setBindings(&initial, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
     InputEvent resolved;
     const auto dispatchResult1 = send(Key(InputEventType::KeyDown, true));
     EXPECT_TRUE(dispatchResult1.routing.commandConsumed);
@@ -155,7 +155,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     EXPECT_TRUE(resolved.edit);
     EXPECT_TRUE(resolved.allowText);
     const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::Up, InputSelectionPolicy::None, false };
-    ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
     m_router.restoreDefaultBindings();
     const auto dispatchResult2 = send(Key(InputEventType::KeyDown));
     EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
@@ -181,7 +181,7 @@ TEST_F(UiCommandInputTests, HeldPhysicalPressPinsCommandSelectionAndEditAdmissio
     ASSERT_TRUE(actionResult2);
     action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
-    ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
     const auto dispatchResult4 = send(Key(InputEventType::KeyDown));
     EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
     resolved = dispatchResult4.event;
@@ -199,7 +199,7 @@ TEST_F(UiCommandInputTests, AnUnconsumedInitialPressCannotClaimUiAfterFocusAppea
     const InputSource source{ 1u, 1u };
     EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate)).routing.commandConsumed);
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_FALSE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
     EXPECT_FALSE(m_router.ownsSource(source));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
@@ -214,7 +214,7 @@ TEST_F(UiCommandInputTests, AnUnconsumedInitialPressCannotClaimUiAfterFocusAppea
 
 TEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTargetReturns){
     const HitTarget host = Control();
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
     const InputSource source{ 3u, 9u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     ControlAction action;
@@ -222,7 +222,7 @@ TEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTarget
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
     m_router.invalidateTarget(host.id);
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 2u));
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down, true)).routing.commandConsumed);
     EXPECT_FALSE(take(host));
     EXPECT_TRUE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
@@ -235,7 +235,7 @@ TEST_F(UiCommandInputTests, RetiredControlOwnerCannotReviveWhenTheExactOldTarget
 TEST_F(UiCommandInputTests, RetiredEditorCannotBorrowAHeldCommandAfterReturningWithItsOldIdentity){
     HitTarget editor = Target();
     editor.textEditable = true;
-    ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
     const InputSource source{ 3u, 9u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, source, InputCommand::Left));
@@ -243,7 +243,7 @@ TEST_F(UiCommandInputTests, RetiredEditorCannotBorrowAHeldCommandAfterReturningW
     resolved = dispatchResult1.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     m_router.invalidateTarget(editor.id);
-    ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 2u));
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, source, InputCommand::Left, true));
     EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
     resolved = dispatchResult2.event;
@@ -262,8 +262,8 @@ TEST_F(UiCommandInputTests, HeldEditingCommandCannotMoveToAnotherFocusedEditor){
     second.textEditable = true;
     second.focusOnCommit = false;
     second.rectangle.x = 100.0f;
-    const HitTarget targets[]{ first, second };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    const Array<HitTarget, 2> targets = { first, second };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     const InputSource edit{ 3u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
@@ -294,8 +294,8 @@ TEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVert
     editor.commandOwner = host.id;
     editor.commandOwnerDeclarationGeneration = host.declarationGeneration;
     editor.commandControl = host.control;
-    const HitTarget targets[]{ editor, host };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    const Array<HitTarget, 2> targets = { editor, host };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     const InputSource submit{ 4u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept));
@@ -328,7 +328,7 @@ TEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVert
     resolved = dispatchResult3.event;
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     m_router.invalidateTarget(host.id);
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 2u));
     const auto dispatchResult4 = send(Command(InputEventType::CommandDown, submit, InputCommand::Accept, true));
     EXPECT_TRUE(dispatchResult4.routing.commandConsumed);
     resolved = dispatchResult4.event;
@@ -338,13 +338,13 @@ TEST_F(UiCommandInputTests, DelegatedAcceptStillReachesEditorSubmissionWhileVert
 
 TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCancelPendingSubmissions){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputSource held{ 5u, 1u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
     m_router.clearFocus();
     EXPECT_TRUE(m_router.ownsSource(held));
     EXPECT_TRUE(send(Command(InputEventType::CommandUp, held, InputCommand::None)).routing.commandConsumed);
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, held, InputCommand::Activate)).routing.commandConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
     EXPECT_TRUE(m_router.ownsSource(held));
@@ -366,9 +366,9 @@ TEST_F(UiCommandInputTests, ClearFocusAndNativeLossRetainReleaseOwnershipButCanc
 
 TEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBeforeProcessing){
     const HitTarget host = Control();
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
     const InputKeyBinding initial{ Core::Key::W, 0, 0, InputCommand::Left };
-    ASSERT_TRUE(m_router.setBindings(&initial, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
     InputEvent first;
     InputEvent release;
     InputEvent second;
@@ -376,7 +376,7 @@ TEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBefor
     ASSERT_TRUE(firstResult);
     first = *firstResult;
     const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::Right };
-    ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
     const auto releaseResult = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
     ASSERT_TRUE(releaseResult);
     release = *releaseResult;
@@ -404,7 +404,7 @@ TEST_F(UiCommandInputTests, QueuedReleaseSeparatesOldAndNewBindingSnapshotsBefor
 TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBeforeEditingOrNavigation){
     HitTarget editor = Target();
     editor.textEditable = true;
-    ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
     const InputSource edit{ 7u, 1u };
     InputEvent resolved;
     const auto dispatchResult1 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left));
@@ -413,7 +413,7 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
     EXPECT_TRUE(m_router.canEditCommand(resolved));
     EXPECT_TRUE(send({ .type = InputEventType::FocusLost }).routing.commandConsumed);
     EXPECT_FALSE(send({ .type = InputEventType::FocusGained }).routing.commandConsumed);
-    ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 2u));
     EXPECT_TRUE(m_router.focus().valid());
     const auto dispatchResult2 = send(Command(InputEventType::CommandDown, edit, InputCommand::Left, true));
     EXPECT_TRUE(dispatchResult2.routing.commandConsumed);
@@ -433,8 +433,8 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
     HitTarget button = Target(2u);
     button.focusOnCommit = false;
     button.rectangle.x = 100.0f;
-    const HitTarget targets[]{ editor, button };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    const Array<HitTarget, 2> targets = { editor, button };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     const InputSource traverse{ 7u, 2u };
     EXPECT_FALSE(send(Command(InputEventType::CommandDown, traverse, InputCommand::FocusNext, true)).routing.commandConsumed);
     EXPECT_EQ(m_router.focus(), editor.id);
@@ -453,9 +453,9 @@ TEST_F(UiCommandInputTests, OrphanRepeatsAfterNativeLossAndResetNeedReleaseBefor
 
 TEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExistingOwners){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     InputEvent output;
-    const InputSource invalidSources[]{ {}, { 1u, 0u } };
+    const Array<InputSource, 2> invalidSources = {{ {}, { 1u, 0u } }};
     for(const InputSource source : invalidSources){
         EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(Command(InputEventType::CommandDown, source, InputCommand::Activate))));
     }
@@ -477,7 +477,7 @@ TEST_F(UiCommandInputTests, MalformedCommandSourcesRejectWithoutChangingExisting
 
 TEST_F(UiCommandInputTests, ExplicitDeviceTerminationPreservesAnotherProvidersHeldSubmit){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputSource first{ 31u, 7u };
     const InputSource second{ 32u, 7u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
@@ -494,7 +494,7 @@ TEST_F(UiCommandInputTests, ExplicitDeviceTerminationPreservesAnotherProvidersHe
 
 TEST_F(UiCommandInputTests, ExactSourceCapacityRejectsOverflowWithoutLosingReleaseOrRebindingState){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     for(usize index = 0u; index < s_InputMaxSources; ++index){
         EXPECT_TRUE(send(Command(InputEventType::CommandDown, { 1u, index + 1u }, InputCommand::Left)).routing.commandConsumed);
     }
@@ -515,7 +515,7 @@ TEST_F(UiCommandInputTests, ExactSourceCapacityRejectsOverflowWithoutLosingRelea
 
 TEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmittedSource){
     const HitTarget host = Control();
-    ASSERT_TRUE(m_router.commitTargets(&host, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&host, 1u), 1u));
     const InputSource source{ 8u, 8u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Down)).routing.commandConsumed);
     for(usize index = 0u; index < s_InputMaxEvents; ++index)
@@ -534,7 +534,7 @@ TEST_F(UiCommandInputTests, FullEventQueueCannotReleaseOrChangeAnAlreadyAdmitted
 TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesNotRepeatOrActivate){
     HitTarget target = Target();
     target.contextMenu = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputSource source{ 9u, 9u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::ContextMenu)).routing.commandConsumed);
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, source, InputCommand::Activate, true)).routing.commandConsumed);
@@ -546,7 +546,7 @@ TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesN
     action = *actionResult;
     EXPECT_EQ(action.origin, InputActionSource::Command);
     EXPECT_FLOAT_EQ(action.position.x, target.rectangle.x);
-    EXPECT_FLOAT_EQ(action.position.y, VectorGetX(VectorAdd(VectorReplicate(target.rectangle.y), VectorReplicate(target.rectangle.height))));
+    EXPECT_FLOAT_EQ(action.position.y, target.rectangle.y + target.rectangle.height);
     EXPECT_FALSE(m_router.consumeContextMenu(target.id, target.declarationGeneration));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(send(Command(InputEventType::CommandUp, source, InputCommand::None)).routing.commandConsumed);
@@ -554,7 +554,7 @@ TEST_F(UiCommandInputTests, DirectContextMenuReleaseCopiesAcceptedAnchorAndDoesN
 
 TEST_F(UiCommandInputTests, IndependentControllerSubmitReleasesDoNotTransferOrRepeat){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputSource first{ 1u, 8u };
     const InputSource second{ 2u, 8u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, first, InputCommand::Activate)).routing.commandConsumed);
@@ -579,8 +579,8 @@ TEST_F(UiCommandInputTests, SubmitCannotReviveWhenFocusReturnsToTheOriginalDecla
     HitTarget second = Target(2u);
     second.focusOnCommit = false;
     second.rectangle.x = 100.0f;
-    const HitTarget targets[]{ first, second };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    const Array<HitTarget, 2> targets = { first, second };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     const InputSource activate{ 5u, 5u };
     const InputSource traverse{ 5u, 6u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, activate, InputCommand::Activate)).routing.commandConsumed);
@@ -598,7 +598,7 @@ TEST_F(UiCommandInputTests, EditorCancelRetiresAllSubmitSourcesButKeepsTheirRele
     HitTarget editor = Target();
     editor.textEditable = true;
     editor.activatable = false;
-    ASSERT_TRUE(m_router.commitTargets(&editor, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&editor, 1u), 1u));
     const InputSource first{ 2u, 1u };
     const InputSource second{ 3u, 1u };
     const InputSource cancel{ 2u, 2u };
@@ -627,12 +627,12 @@ TEST_F(UiCommandInputTests, EditorCancelRetiresAllSubmitSourcesButKeepsTheirRele
 
 TEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndProfileChanges){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputKeyBinding initial{ Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Activate };
-    ASSERT_TRUE(m_router.setBindings(&initial, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&initial, 1u)));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, true)).routing.commandConsumed);
     const InputKeyBinding replacement{ Core::Key::W, 0, 0, InputCommand::FocusNext };
-    ASSERT_TRUE(m_router.setBindings(&replacement, 1u));
+    ASSERT_TRUE(m_router.setBindings(Span(&replacement, 1u)));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
     const auto release = m_router.queue(UiTestSupport::NativeInput(Key(InputEventType::KeyUp)));
     ASSERT_TRUE(release);
@@ -643,7 +643,7 @@ TEST_F(UiCommandInputTests, CustomSubmitBindingPinsItsReleaseAcrossModifierAndPr
 
 TEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedCommand){
     const HitTarget target = Target();
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     const InputSource released{ 41u, 1u };
     const InputSource held{ 41u, 2u };
     EXPECT_TRUE(send(Command(InputEventType::CommandDown, released, InputCommand::Activate)).routing.commandConsumed);
@@ -653,7 +653,7 @@ TEST_F(UiCommandInputTests, QueuedReleaseDiscardedByResetRetiresOnlyTheReleasedC
     EXPECT_FALSE(m_router.ownsSource(released));
     EXPECT_TRUE(m_router.ownsSource(held));
     EXPECT_TRUE(m_router.actions().empty());
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     EXPECT_FALSE(m_router.pressed(target.id));
     const auto fresh = send(Command(InputEventType::CommandDown, released, InputCommand::Activate));
     EXPECT_FALSE(fresh.event.repeat);

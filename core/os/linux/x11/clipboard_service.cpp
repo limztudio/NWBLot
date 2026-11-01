@@ -24,7 +24,6 @@ namespace __hidden_x11_clipboard_service{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_WarningEventName = "warning";
 static constexpr StringView s_LifecycleCategory = "x11_clipboard_lifecycle";
 
 
@@ -57,8 +56,15 @@ X11ClipboardService::~X11ClipboardService()noexcept{
     if(m_ownerWindow){
         X11CheckedOperation operation(m_display);
         XDestroyWindow(&m_display, m_ownerWindow);
-        if(!operation.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard_service::s_WarningEventName, .category = __hidden_x11_clipboard_service::s_LifecycleCategory, .message = "X11 clipboard: owner window destruction failed", .file = __FILE__, .line = __LINE__, });
+        if(!operation.succeeded()){
+            CaptureDiagnosticEvent(DiagnosticEventRecord{
+                .event = DiagnosticEventName::s_Warning,
+                .category = __hidden_x11_clipboard_service::s_LifecycleCategory,
+                .message = "X11 clipboard: owner window destruction failed",
+                .file = __FILE__,
+                .line = __LINE__,
+            });
+        }
     }
 }
 
@@ -217,8 +223,15 @@ void X11ClipboardService::releaseOperation(){
     if(m_operationWindow){
         X11CheckedOperation checked(m_display);
         XDestroyWindow(&m_display, m_operationWindow);
-        if(!checked.succeeded())
-            CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_x11_clipboard_service::s_WarningEventName, .category = __hidden_x11_clipboard_service::s_LifecycleCategory, .message = "X11 clipboard: request window destruction failed", .file = __FILE__, .line = __LINE__, });
+        if(!checked.succeeded()){
+            CaptureDiagnosticEvent(DiagnosticEventRecord{
+                .event = DiagnosticEventName::s_Warning,
+                .category = __hidden_x11_clipboard_service::s_LifecycleCategory,
+                .message = "X11 clipboard: request window destruction failed",
+                .file = __FILE__,
+                .line = __LINE__,
+            });
+        }
     }
     m_operationWindow = 0u;
     m_operationToken = {};

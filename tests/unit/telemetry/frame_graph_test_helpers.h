@@ -27,6 +27,8 @@ Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(const u64 planGener
 
 Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics()noexcept;
 
+[[nodiscard]] Telemetry::FrameGraphRuntimeStatistics OwnerStatistics(const u32 packetCount)noexcept;
+
 Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueRuntimeStatistics(const u16 queueIndex)noexcept;
 
 void BuildTestPhysicalQueueRuntimeStatistics(Telemetry::TelemetryArena& arena, Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& records);

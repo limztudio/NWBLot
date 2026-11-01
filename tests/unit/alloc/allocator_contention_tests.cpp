@@ -42,8 +42,8 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
     constexpr usize s_IterationsPerThread = 32768u;
     constexpr usize s_AllocationBytes = 128u;
     static constexpr Name s_OwnerName("tests/global/shared_owner_allocation_churn");
-    WorkerResult results[s_ThreadCount];
-    Thread workers[s_ThreadCount];
+    Array<WorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
     Latch workersReady(s_ThreadCount);
     Latch start(1u);
 
@@ -103,9 +103,9 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
     const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
     static constexpr Name s_OwnerName("tests/persistent_arena/shared_cross_thread_churn");
     NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
-    u8* handoffs[s_ThreadCount] = {};
-    PersistentArenaWorkerResult results[s_ThreadCount];
-    Thread workers[s_ThreadCount];
+    Array<u8*, s_ThreadCount> handoffs = {};
+    Array<PersistentArenaWorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
     Latch workersReady(s_ThreadCount);
     Latch start(1u);
     Latch handoffsReady(s_ThreadCount);
@@ -206,8 +206,8 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
     const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
     static constexpr Name s_OwnerName("tests/persistent_arena/shared_reallocation_churn");
     NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
-    PersistentArenaWorkerResult results[s_ThreadCount];
-    Thread workers[s_ThreadCount];
+    Array<PersistentArenaWorkerResult, s_ThreadCount> results;
+    Array<Thread, s_ThreadCount> workers;
     Latch workersReady(s_ThreadCount);
     Latch start(1u);
 

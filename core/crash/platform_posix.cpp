@@ -10,12 +10,8 @@
 #include <global/process_execution.h>
 #include <global/scope_exit.h>
 
-#include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <string.h>
 #include <ucontext.h>
 #include <unistd.h>
 
@@ -47,11 +43,10 @@ inline constexpr usize s_SignalStackSize = 256u * 1024u;
 inline constexpr int s_AndroidEmergencyFileMode = 0644;
 inline constexpr int s_FirstNonStdioFileDescriptor = STDERR_FILENO + 1;
 inline constexpr int s_HandlerExecFailureExitCode = 127;
-inline constexpr u64 s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr usize s_AArch64FramePointerRegisterIndex = 29u;
 inline constexpr usize s_MaxFramePointerWalkBytes = 8u * 1024u * 1024u;
 
-alignas(MaxAlign) static u8 g_SignalStack[s_SignalStackSize] = {};
+alignas(MaxAlign) static Array<u8, s_SignalStackSize> g_SignalStack = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -123,8 +118,8 @@ static void CaptureFramePointerCallstack(CrashDetail::CrashDumpRequestOptions& o
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
 // Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
 [[nodiscard]] static b8 CaptureEhFrameCallstack(CrashDetail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
-    void* unwoundAddresses[CrashDetail::s_MaxCallstackFrames];
-    const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(CrashDetail::s_MaxCallstackFrames));
+    Array<void*, CrashDetail::s_MaxCallstackFrames> unwoundAddresses;
+    const int unwoundFrameCount = backtrace(unwoundAddresses.data(), static_cast<int>(CrashDetail::s_MaxCallstackFrames));
     if(unwoundFrameCount <= 0)
         return false;
 
@@ -148,8 +143,8 @@ static void CaptureFramePointerCallstack(CrashDetail::CrashDumpRequestOptions& o
 }
 
 static void WarmUpUnwinder()noexcept{
-    void* warmUpAddresses[CrashDetail::s_MaxCallstackFrames];
-    const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(CrashDetail::s_MaxCallstackFrames));
+    Array<void*, CrashDetail::s_MaxCallstackFrames> warmUpAddresses;
+    const int warmedFrameCount = backtrace(warmUpAddresses.data(), static_cast<int>(CrashDetail::s_MaxCallstackFrames));
     if(warmedFrameCount <= 0)
         return;
 }
@@ -223,7 +218,7 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 
 [[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> InstallSignalHandlers()noexcept{
     stack_t stack = {};
-    stack.ss_sp = g_SignalStack;
+    stack.ss_sp = g_SignalStack.data();
     stack.ss_size = sizeof(g_SignalStack);
     if(sigaltstack(&stack, &CrashDetail::g_State.previousSignalStack) != 0)
         return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::InstallSignalStack, errno));
@@ -255,15 +250,15 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 
 #if defined(NWB_PLATFORM_ANDROID)
 [[nodiscard]] static Expected<void, CrashDetail::PlatformFailure> OpenAndroidEmergencyFile()noexcept{
-    const AStringView directory(CrashDetail::g_State.spoolDirectoryText);
+    const AStringView directory(CrashDetail::g_State.spoolDirectoryText.data());
     const AStringView filename(PackageNames::s_AndroidEmergencyRequestFileName);
-    char emergencyPath[CrashDetail::s_MaxPathText] = {};
+    Array<char, CrashDetail::s_MaxPathText> emergencyPath = {};
     if(directory.empty() || directory.size() + 1u + filename.size() >= sizeof(emergencyPath))
         return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::OpenEmergencyFile, ENAMETOOLONG));
     CopyFixedBuffer(emergencyPath, directory);
     AppendFixedBuffer(emergencyPath, "/");
     AppendFixedBuffer(emergencyPath, filename);
-    const int descriptor = open(emergencyPath, O_CREAT | O_APPEND | O_WRONLY | O_CLOEXEC, s_AndroidEmergencyFileMode);
+    const int descriptor = open(emergencyPath.data(), O_CREAT | O_APPEND | O_WRONLY | O_CLOEXEC, s_AndroidEmergencyFileMode);
     if(descriptor < 0)
         return MakeUnexpected(NativeFailure(CrashDetail::PlatformOperation::OpenEmergencyFile, errno));
     CrashDetail::g_State.emergencyWriteFd = descriptor;
@@ -299,17 +294,8 @@ static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* s
 }
 
 [[noreturn]] static void FailChild(const int startupDescriptor, const int error)noexcept{
-    const auto* cursor = reinterpret_cast<const u8*>(&error);
-    usize remaining = sizeof(error);
-    while(remaining != 0u){
-        const ssize_t written = write(startupDescriptor, cursor, remaining);
-        if(written < 0 && errno == EINTR)
-            continue;
-        if(written <= 0)
-            _exit(s_HandlerExecFailureExitCode);
-        cursor += static_cast<usize>(written);
-        remaining -= static_cast<usize>(written);
-    }
+    if(!WriteAllFileDescriptor(startupDescriptor, &error, sizeof(error)))
+        _exit(s_HandlerExecFailureExitCode);
     _exit(s_HandlerExecFailureExitCode);
 }
 
@@ -463,9 +449,7 @@ namespace CrashDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpContextStorage& storage)noexcept{
-    static_cast<void>(storage);
-
+void CaptureManualDumpContext([[maybe_unused]] CrashDumpRequestOptions& outOptions, [[maybe_unused]] ManualDumpContextStorage& storage)noexcept{
 #if defined(__x86_64__) || defined(__aarch64__)
     void* stackPointer = nullptr;
 #if defined(__x86_64__)
@@ -477,9 +461,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 #endif
 }
 
-CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, const u32 waitMilliseconds)noexcept{
-    static_cast<void>(waitMilliseconds);
-
+CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, [[maybe_unused]] const u32 waitMilliseconds)noexcept{
     // Re-entrancy guard + writer serialization, matching Win32: a fault inside the transport bails, and one faulting thread owns the channel.
     // Async-safe (atomic CAS, no Futex).
     static thread_local b8 s_InTransport = false;
@@ -513,11 +495,8 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 }
 
 template<typename ArenaT>
-Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath, Alloc::ScratchArena& scratchArena, PlatformCleanupObservations& observations)noexcept{
-    static_cast<void>(scratchArena);
+Expected<void, PlatformFailure> StartDesktopHandler([[maybe_unused]] const ::Path<ArenaT>& handlerExecutablePath, [[maybe_unused]] Alloc::ScratchArena& scratchArena, [[maybe_unused]] PlatformCleanupObservations& observations)noexcept{
 #if defined(NWB_PLATFORM_ANDROID)
-    static_cast<void>(handlerExecutablePath);
-    static_cast<void>(observations);
     return {};
 #elif defined(NWB_PLATFORM_LINUX)
     using namespace __hidden_crash_posix;
@@ -527,9 +506,9 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
         return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, EINVAL));
     if(access(handlerExecutablePath.c_str(), X_OK) != 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::ExecHandler, errno));
-    int request[2u] = { -1, -1 };
-    int ack[2u] = { -1, -1 };
-    int startup[2u] = { -1, -1 };
+    Array<int, 2u> request = { -1, -1 };
+    Array<int, 2u> ack = { -1, -1 };
+    Array<int, 2u> startup = { -1, -1 };
     pid_t child = -1;
     ScopeExit rollback([&]()noexcept{
         for(int& descriptor : request)
@@ -544,11 +523,11 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
             g_State.platformRestorePending = true;
         }
     });
-    if(socketpair(AF_UNIX, SOCK_STREAM, 0, request) != 0)
+    if(socketpair(AF_UNIX, SOCK_STREAM, 0, request.data()) != 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::CreateRequestChannel, errno));
-    if(pipe(ack) != 0)
+    if(pipe(ack.data()) != 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::CreateAckChannel, errno));
-    if(pipe(startup) != 0)
+    if(pipe(startup.data()) != 0)
         return MakeUnexpected(NativeFailure(PlatformOperation::CreateStartupChannel, errno));
     if(!SetCloseOnExec(request[0u]) || !SetCloseOnExec(ack[0u]) || !SetCloseOnExec(startup[0u]) || !SetCloseOnExec(startup[1u]))
         return MakeUnexpected(NativeFailure(PlatformOperation::SetDescriptorFlags, errno));
@@ -563,11 +542,11 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
         }
         if(!SilenceChildProcess(request[1u], ack[1u], startup[1u]))
             FailChild(startup[1u], errno);
-        char requestText[s_HandlerArgumentTextCapacity] = {};
-        char ackText[s_HandlerArgumentTextCapacity] = {};
+        Array<char, s_HandlerArgumentTextCapacity> requestText = {};
+        Array<char, s_HandlerArgumentTextCapacity> ackText = {};
         AppendUnsignedToFixedBuffer(requestText, static_cast<u64>(request[1u]));
         AppendUnsignedToFixedBuffer(ackText, static_cast<u64>(ack[1u]));
-        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), requestText, s_AckFdArgument.data(), ackText, nullptr);
+        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), requestText.data(), s_AckFdArgument.data(), ackText.data(), nullptr);
         FailChild(startup[1u], errno);
     }
     for(const NotNull<int*> descriptor : { MakeNotNull(&request[1u]), MakeNotNull(&ack[1u]), MakeNotNull(&startup[1u]) }){
@@ -631,8 +610,6 @@ Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<ArenaT>& handle
     rollback.release();
     return {};
 #else
-    static_cast<void>(handlerExecutablePath);
-    static_cast<void>(observations);
     return MakeUnexpected(PlatformFailure{ PlatformOperation::CreateProcess, PlatformErrorDomain::Contract, 1u });
 #endif
 }
@@ -701,7 +678,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
             observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
             pending = true;
         }
-        else if((current.ss_flags & SS_DISABLE) == 0 && current.ss_sp == g_SignalStack){
+        else if((current.ss_flags & SS_DISABLE) == 0 && current.ss_sp == g_SignalStack.data()){
             if(sigaltstack(&g_State.previousSignalStack, nullptr) != 0){
                 observations.record(NativeFailure(PlatformOperation::RestoreSignalStack, errno));
                 pending = true;

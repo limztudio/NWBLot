@@ -63,7 +63,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return handle;
 }
 
-[[nodiscard]] b8 EnsureHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] b8 EnsureHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return IsHeapHandle(inOutHandle, descriptorClass);
 
@@ -74,7 +74,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
     return true;
 }
 
-[[nodiscard]] b8 ReplaceHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] b8 ReplaceHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
     if(!acquired)
         return false;
@@ -90,6 +90,13 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     if(handle.valid())
         heap.free(handle);
     handle = Core::GpuDescriptorHandle::Invalid();
+}
+
+Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept{
+    Core::ComputeState state;
+    state.setPipeline(pipeline.get());
+    // Set 0 is push-only; keep it so heap sets retain layout indices.
+    return state;
 }
 
 // Binned-SAH BVH over indices[lo, hi); node 0 is root. Splits on the min SAH boundary, median on coincident centroids.
@@ -120,10 +127,10 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     }
 
     // Per-axis bins: AABB, count, summed leaf cost. s_SceneBvhSahBinCount bins keeps the grid cache-resident.
-    SIMDVectorSingle binMin[s_SceneBvhSahBinCount];
-    SIMDVectorSingle binMax[s_SceneBvhSahBinCount];
-    f32 binCost[s_SceneBvhSahBinCount];
-    u32 binCount[s_SceneBvhSahBinCount];
+    Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMin;
+    Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMax;
+    Array<f32, s_SceneBvhSahBinCount> binCost;
+    Array<u32, s_SceneBvhSahBinCount> binCount;
 
     b8 anyAxisValid = false;
     u32 bestAxis = 0u;
@@ -131,12 +138,12 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     f32 bestCost = s_RayTracingFiniteInfinity;
 
     for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
-        const SIMDVectorSingle loExtent = VectorReplicate(VectorGetByIndex(centroidMin, axis));
-        const SIMDVectorSingle extent = VectorSubtract(VectorReplicate(VectorGetByIndex(centroidMax, axis)), loExtent);
-        if(VectorGetX(extent) <= 0.0f)
+        const f32 loExtent = VectorGetByIndex(centroidMin, axis);
+        const f32 extent = VectorGetByIndex(centroidMax, axis) - loExtent;
+        if(extent <= 0.0f)
             continue; // coincident centroids on this axis -> binning cannot split it
         anyAxisValid = true;
-        const SIMDVectorSingle invExtent = VectorDivide(VectorReplicate(static_cast<f32>(s_SceneBvhSahBinCount)), extent);
+        const f32 invExtent = static_cast<f32>(s_SceneBvhSahBinCount) / extent;
 
         for(u32 b = 0u; b < s_SceneBvhSahBinCount; ++b){
             binMin[b] = VectorReplicate(s_RayTracingFiniteInfinity);
@@ -146,35 +153,35 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         }
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const SIMDVectorSingle c = VectorReplicate(primitiveBounds[instance].centroid.raw[axis]);
-            u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
+            const f32 c = primitiveBounds[instance].centroid.raw[axis];
+            u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
             binMin[b] = VectorMin(binMin[b], LoadFloat(primitiveBounds[instance].aabbMin));
             binMax[b] = VectorMax(binMax[b], LoadFloat(primitiveBounds[instance].aabbMax));
-            binCost[b] = VectorGetX(VectorAdd(VectorReplicate(binCost[b]), VectorReplicate(static_cast<f32>(instanceLeafCost[instance]))));
+            binCost[b] += static_cast<f32>(instanceLeafCost[instance]);
             ++binCount[b];
         }
 
         // Right-to-left suffix stats make every boundary's right side exact; then sweep left building the prefix SAH.
-        SIMDVectorSingle suffixMin[s_SceneBvhSahBinCount];
-        SIMDVectorSingle suffixMax[s_SceneBvhSahBinCount];
-        f32 suffixCost[s_SceneBvhSahBinCount];
-        u32 suffixCount[s_SceneBvhSahBinCount];
+        Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMin;
+        Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMax;
+        Array<f32, s_SceneBvhSahBinCount> suffixCost;
+        Array<u32, s_SceneBvhSahBinCount> suffixCount;
         {
             SIMDVectorSingle accMin = VectorReplicate(s_RayTracingFiniteInfinity);
             SIMDVectorSingle accMax = VectorReplicate(-s_RayTracingFiniteInfinity);
-            SIMDVectorSingle accCost = VectorZero();
+            f32 accCost = 0.0f;
             u32 accCount = 0u;
             for(u32 b = s_SceneBvhSahBinCount; b >= 1u; --b){
                 const u32 idx = b - 1u;
                 accMin = VectorMin(accMin, binMin[idx]);
                 accMax = VectorMax(accMax, binMax[idx]);
-                accCost = VectorAdd(accCost, VectorReplicate(binCost[idx]));
+                accCost += binCost[idx];
                 accCount += binCount[idx];
                 suffixMin[idx] = accMin;
                 suffixMax[idx] = accMax;
-                suffixCost[idx] = VectorGetX(accCost);
+                suffixCost[idx] = accCost;
                 suffixCount[idx] = accCount;
             }
         }
@@ -183,28 +190,26 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         // The parent AABB is the bin union (suffix 0); same-slice comparison folds out the divisor, minimizing the raw cost.
         const SIMDVectorSingle parentMin = suffixMin[0u];
         const SIMDVectorSingle parentMax = suffixMax[0u];
-        const SIMDVectorSingle parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
+        const f32 parentArea = VectorGetX(AabbTests::SurfaceArea(parentMin, parentMax));
 
         SIMDVectorSingle leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
         SIMDVectorSingle leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
-        SIMDVectorSingle leftCost = VectorZero();
+        f32 leftCost = 0.0f;
         u32 leftCount = 0u;
         for(u32 k = 1u; k < s_SceneBvhSahBinCount; ++k){
             const u32 b = k - 1u;
             leftMin = VectorMin(leftMin, binMin[b]);
             leftMax = VectorMax(leftMax, binMax[b]);
-            leftCost = VectorAdd(leftCost, VectorReplicate(binCost[b]));
+            leftCost += binCost[b];
             leftCount += binCount[b];
 
             const u32 rightCount = suffixCount[k];
             if(leftCount == 0u || rightCount == 0u)
                 continue; // boundary puts every instance on one side -> not a real split
 
-            const SIMDVectorSingle leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
-            const SIMDVectorSingle rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
-            // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
-            const SIMDVectorSingle sahCostLanes = VectorMultiplyAdd(leftArea, leftCost, VectorMultiplyAdd(rightArea, VectorReplicate(suffixCost[k]), VectorMultiply(parentArea, VectorReplicate(s_SceneBvhSahTraversalCost))));
-            const f32 cost = VectorGetX(sahCostLanes);
+            const f32 leftArea = VectorGetX(AabbTests::SurfaceArea(leftMin, leftMax));
+            const f32 rightArea = VectorGetX(AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]));
+            const f32 cost = parentArea * s_SceneBvhSahTraversalCost + leftArea * leftCost + rightArea * suffixCost[k];
             if(cost < bestCost){
                 bestCost = cost;
                 bestAxis = axis;
@@ -216,14 +221,14 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     u32 mid;
     if(anyAxisValid){
         // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
-        const SIMDVectorSingle loExtent = VectorReplicate(VectorGetByIndex(centroidMin, bestAxis));
-        const SIMDVectorSingle extent = VectorSubtract(VectorReplicate(VectorGetByIndex(centroidMax, bestAxis)), loExtent);
-        const SIMDVectorSingle invExtent = VectorDivide(VectorReplicate(static_cast<f32>(s_SceneBvhSahBinCount)), extent);
+        const f32 loExtent = VectorGetByIndex(centroidMin, bestAxis);
+        const f32 extent = VectorGetByIndex(centroidMax, bestAxis) - loExtent;
+        const f32 invExtent = static_cast<f32>(s_SceneBvhSahBinCount) / extent;
         mid = lo;
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const SIMDVectorSingle c = VectorReplicate(primitiveBounds[instance].centroid.raw[bestAxis]);
-            u32 b = static_cast<u32>(VectorGetX(VectorMultiply(VectorSubtract(c, loExtent), invExtent)));
+            const f32 c = primitiveBounds[instance].centroid.raw[bestAxis];
+            u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
             if(b < bestBin){
@@ -248,18 +253,6 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     node.rightChild = rightChild;
     node.containsTransparentOccluder = nodes[leftChild].containsTransparentOccluder || nodes[rightChild].containsTransparentOccluder;
     return nodeIndex;
-}
-
-// Per-instance shadow-occluder record (transmittance id + transparent flag), appended in push order for by-id index.
-// Caller supplies the constants context; builders fill geometry slots after.
-[[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(const MaterialSurfaceInfo& materialInfo, const u32 materialConstantByteOffset, const u32 meshInstanceIndex)noexcept{
-    NwbRtInstanceMaterialGpu material;
-    material.surfaceDispatchId = materialInfo.surfaceDispatchId;
-    material.shadingModelId = materialInfo.shadingModelId;
-    material.flags = (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None) | (materialInfo.refractive ? RtInstanceMaterialFlag::Refractive : RtInstanceMaterialFlag::None);
-    material.materialConstantByteOffset = materialConstantByteOffset;
-    material.meshInstanceIndex = meshInstanceIndex;
-    return material;
 }
 
 

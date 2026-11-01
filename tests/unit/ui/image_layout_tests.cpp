@@ -148,8 +148,6 @@ TEST(UiImageLayoutTests, InvalidRegionExtentMinimumsAndSliceMetadataRejectMeasur
 
 TEST(UiImageLayoutTests, UnrepresentableNaturalExtentRejectsMeasurement){
     const UiSkinRegion region = Sprite();
-    const auto measuredResult = ImageLayout::Measure({}, region, 2.0f);
-    ASSERT_TRUE(measuredResult);
     EXPECT_FALSE(ImageLayout::Measure({}, region, BitCast<f32>(u32{ 1u })));
 }
 

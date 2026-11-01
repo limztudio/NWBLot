@@ -3,7 +3,6 @@
 
 
 #include <pipeline/asset_builder/build.h>
-#include <pipeline/asset_builder/build_inputs.h>
 
 #include <core/task/cpu/scheduler.h>
 
@@ -26,12 +25,6 @@ static constexpr AStringView s_ANwb = "a.nwb";
 static constexpr AStringView s_Assets = "assets";
 static constexpr AStringView s_Project = "project";
 static constexpr AStringView s_AssetsANwb = "assets/a.nwb";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +91,7 @@ TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
     EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
     EXPECT_EQ(m_logger.errorCount(), 1u);
 
-    ASSERT_TRUE(m_options.assetType.assign(Builder::s_GraphicsAssetBuildType));
+    ASSERT_TRUE(m_options.assetType.assign(Assets::AssetsVolumeCookDetail::s_AssetVolumeName));
     EXPECT_FALSE(Builder::BuildAssets(m_options));
     EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
     EXPECT_EQ(m_logger.errorCount(), 2u);
@@ -127,7 +120,7 @@ TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
     addInput("assets/part/nested");
     addInput("assets/empty");
     ASSERT_TRUE(select());
-    ASSERT_EQ(m_files.size(), s_ExpectedDualCount);
+    ASSERT_EQ(m_files.size(), 2u);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filenameView()), s_ANwb);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filenameView()), "c.nwb");
 }
@@ -138,11 +131,11 @@ TEST_F(BuildInputSelection, RejectedInputsLeaveDiscoveredFilesIntact){
     addInput(s_AssetsANwb);
     addInput("outside");
     EXPECT_FALSE(select());
-    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
+    EXPECT_EQ(m_files.size(), 2u);
     m_options.inputs.clear();
     addInput("assets/missing.nwb");
     EXPECT_FALSE(select());
-    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
+    EXPECT_EQ(m_files.size(), 2u);
     m_options.inputs.clear();
     addInput("assets/empty");
     ASSERT_TRUE(select());
@@ -155,7 +148,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     addInput("assets/Case");
     ASSERT_TRUE(select());
 #if defined(NWB_PLATFORM_WINDOWS)
-    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
+    EXPECT_EQ(m_files.size(), 2u);
 #else
     ASSERT_EQ(m_files.size(), 1u);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filenameView()), s_ANwb);

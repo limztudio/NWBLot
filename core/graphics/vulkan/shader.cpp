@@ -38,7 +38,7 @@ namespace __hidden_vulkan_shader{
     words.resize(wordCount);
     NWB_MEMCPY(words.data(), binarySize, binary, binarySize);
 
-    if(!IsValidSpirvModuleWords(words.data(), words.size())){
+    if(!IsValidSpirvModuleWords(words)){
         return MakeUnexpected(Failure{});
     }
 
@@ -49,8 +49,8 @@ namespace __hidden_vulkan_shader{
     return words.size() * sizeof(u32);
 }
 
-inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveShaderEntryPoint(const u32* words, const usize wordCount, const AStringView entryName, const ShaderType::Mask shaderType, const AStringView errorContext){
-    const auto lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType);
+inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveShaderEntryPoint(const Span<const u32> words, const AStringView entryName, const ShaderType::Mask shaderType, const AStringView errorContext){
+    const auto lookupResult = ResolveSpirvEntryPointName(words, entryName, shaderType);
     if(lookupResult)
         return lookupResult;
 
@@ -136,7 +136,7 @@ Expected<ShaderHandle> ShaderLibrary::getShader(const AStringView entryName, Sha
     NWB_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
 
-    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library");
+    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords, entryName, shaderType, "shader library");
     if(!entryPointName){
         return MakeUnexpected(Failure{});
     }
@@ -178,7 +178,7 @@ Expected<ShaderHandle> Device::createShader(const ShaderDesc& d, const void* bin
     }
     shader->m_spirvWords = Move(*words);
 
-    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), d.entryName, d.shaderType, "standalone shader");
+    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords, d.entryName, d.shaderType, "standalone shader");
     if(!entryPointName){
         return MakeUnexpected(Failure{});
     }

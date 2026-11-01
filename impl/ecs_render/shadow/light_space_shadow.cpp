@@ -25,8 +25,7 @@ NWB_IMPL_BEGIN
 Expected<u32> LightSpaceShadowDrawCount(const Span<const LightSpaceShadowCaster> casters)noexcept{
     u64 drawCount = 0u;
     for(const LightSpaceShadowCaster& caster : casters){
-        const u32 meshletCount = caster.meshletCount;
-        drawCount += meshletCount == 0u ? 1u : meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW + (meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
+        drawCount += LightSpaceCasterDrawCount(caster.meshletCount);
         if(drawCount > Limit<u32>::s_Max)
             return MakeUnexpected(Failure{});
     }
@@ -41,12 +40,7 @@ b8 RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSetti
     if(!ValidateSoftwareShadowSettings(settings))
         return false;
     auto& state = m_lightSpaceShadow;
-    if(
-        state.m_settings.backend == settings.backend && state.m_settings.coverage == settings.coverage
-        && state.m_settings.blockerSearch == settings.blockerSearch && state.m_settings.captureCadence == settings.captureCadence
-        && state.m_settings.directionalResolution == settings.directionalResolution
-        && state.m_settings.pointResolution == settings.pointResolution && state.m_settings.memoryBudgetBytes == settings.memoryBudgetBytes
-    )
+    if(SameSoftwareShadowSettings(state.m_settings, settings))
         return true;
     state.m_settings = settings;
     state.m_captureHistory.invalidate();
@@ -71,15 +65,11 @@ void RendererRayTracingSystem::acceptLightSpaceShadowCapture(const LightSpaceCap
     auto& state = m_lightSpaceShadow;
     if(!prepared || !state.m_captureHistory.accept(ticket))
         return;
-    const u32 requiredReuses = state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? s_ShadowCaptureReuseLimitTwoFrames : s_ShadowCaptureReuseLimitOneFrame;
+    const u32 requiredReuses = ResolveSoftwareShadowRequiredReuses(state.m_settings.captureCadence);
     if(ticket.reuse && !state.m_captureReuseLogged && state.m_captureHistory.acceptedReuseAge() == requiredReuses){
         state.m_captureReuseLogged = true;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: accepted light-space capture reuse (cadence={})"), static_cast<u32>(state.m_settings.captureCadence) + 1u);
     }
-}
-
-void RendererRayTracingSystem::invalidateLightSpaceShadowCapture()noexcept{
-    m_lightSpaceShadow.m_captureHistory.invalidate();
 }
 
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
@@ -117,12 +107,12 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     if(!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace || !state.m_sceneEligible))
         return;
     // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
-    SceneLightGpuData lights[NWB_SCENE_MAX_LIGHTS];
-    f32 causticImportance[NWB_SCENE_MAX_LIGHTS] = {};
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, NWB_SCENE_MAX_LIGHTS, lights, causticImportance);
+    Array<SceneLightGpuData, NWB_SCENE_MAX_LIGHTS> lights{};
+    Array<f32, NWB_SCENE_MAX_LIGHTS> causticImportance{};
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, lights, causticImportance);
     for(u32 index = 0u; index < lightCount; ++index)
         state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
-    const auto planResult = buildLightSpaceShadowPlan(Span<const SceneLightGpuData>(lights, lightCount));
+    const auto planResult = buildLightSpaceShadowPlan(Span<const SceneLightGpuData>(lights.data(), lightCount));
     if(!planResult)
         return;
     const LightSpacePlan& plan = *planResult;
@@ -147,8 +137,7 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
             continue;
         if(requestCount == requests.size())
             return MakeUnexpected(Failure{});
-        const auto type = light.params.y < ECSRenderDetail::s_LightTypeDirectionalMax ? Scene::LightType::Directional : light.params.y < ECSRenderDetail::s_LightTypePointMax ? Scene::LightType::Point : Scene::LightType::Spot;
-        requests[requestCount++] = { index, static_cast<u32>(light.params.z), state.m_csg.snapshot.hasCsg && type == Scene::LightType::Spot ? Scene::LightType::Point : type, true };
+        requests[requestCount++] = { index, static_cast<u32>(light.params.z), ResolveLightSpaceLightRequestType(light.params.y, state.m_csg.snapshot.hasCsg), true };
     }
     SoftwareShadowSettings settings = state.m_settings;
     if(state.m_csg.snapshot.hasCsg){
@@ -160,10 +149,10 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(con
     const auto drawCount = LightSpaceShadowDrawCount(state.m_casters);
     if(!drawCount)
         return MakeUnexpected(drawCount.error());
-    auto plan = BuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg);
-    if(!plan || plan->viewCount == 0u)
+    LightSpacePlan plan;
+    if(!TryBuildLightSpacePlan(settings, Span<const LightSpaceLightRequest>(requests.data(), requestCount), m_graphics.getDevice().getMaxStorageBufferRange(), *drawCount, state.m_csg.snapshot.hasCsg, plan) || plan.viewCount == 0u)
         return MakeUnexpected(Failure{});
-    return Move(*plan);
+    return Move(plan);
 }
 
 // Graph declaration can change the admitted light list, but never creates or grows its GPU resources.
@@ -257,8 +246,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const Span<const SceneLi
     }
     auto& diagnostics = state.m_diagnostics;
     snapshot.diagnostics = state.m_csg.snapshot.hasCsg ? &diagnostics : nullptr;
-    constexpr u32 s_DiagnosticInterval = 60u;
-    if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid() && (diagnostics.acceptedFrame == 0u || diagnostics.frameIndex - diagnostics.acceptedFrame >= s_DiagnosticInterval)){
+    if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid() && (diagnostics.acceptedFrame == 0u || diagnostics.frameIndex - diagnostics.acceptedFrame >= s_LightSpaceDiagnosticInterval)){
         snapshot.diagnosticReadback = diagnostics.readback;
         snapshot.diagnosticFrame = diagnostics.frameIndex;
     }

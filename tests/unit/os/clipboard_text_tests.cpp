@@ -23,7 +23,7 @@ using namespace NWB::Core;
 TEST(ClipboardText, Utf8RejectsMalformedUnicodeAndEmbeddedNull){
     EXPECT_EQ(ValidateClipboardUtf8Text({}), ClipboardStatus::Success);
     EXPECT_EQ(ValidateClipboardUtf8Text("\xF4\x8F\xBF\xBF"), ClipboardStatus::Success);
-    const AStringView invalid[]{ "\x80", "\xC0\xAF", "\xE0\x80\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xF0\x9F", AStringView("before\0after", 12u), };
+    const Array<AStringView, 7u> invalid = { "\x80", "\xC0\xAF", "\xE0\x80\xAF", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xF0\x9F", AStringView("before\0after", 12u), };
     for(const AStringView text : invalid)
         EXPECT_EQ(ValidateClipboardUtf8Text(text), ClipboardStatus::InvalidText);
 }

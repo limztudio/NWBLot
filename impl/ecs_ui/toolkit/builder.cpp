@@ -4,6 +4,7 @@
 
 #include "builder.h"
 
+#include "images/skin_region_geometry.h"
 #include "widgets/selectable_paint.h"
 
 #include <global/simd/vector_arithmetic.h>
@@ -30,7 +31,6 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_popupFrames(arena)
     , m_textLanguage(s_TextDefaultLanguage, arena)
 {
-    constexpr usize s_MaxNestedPopupFrames = s_InputMaxPopups - 1u;
     m_popupFrames.reserve(s_MaxNestedPopupFrames);
     for(usize frameIndex = 0u; frameIndex < s_MaxNestedPopupFrames; ++frameIndex)
         m_popupFrames.push_back(Core::MakeGlobalUnique<BuilderScopeFrame>(m_arena, m_arena));
@@ -88,14 +88,6 @@ b8 Builder::endPanel(){
     return combosPainted;
 }
 
-b8 Builder::beginRow(const AStringView stableKey, const ContainerOptions& options){
-    return beginContainer(stableKey, LayoutDirection::Row, options);
-}
-
-b8 Builder::beginColumn(const AStringView stableKey, const ContainerOptions& options){
-    return beginContainer(stableKey, LayoutDirection::Column, options);
-}
-
 b8 Builder::endContainer()noexcept{
     if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
         m_context.fail();
@@ -103,10 +95,6 @@ b8 Builder::endContainer()noexcept{
     }
     m_scope->m_stack.pop_back();
     return m_context.popScope();
-}
-
-b8 Builder::label(const AStringView stableKey, const StringView text, const WidgetOptions& options){
-    return addItem(stableKey, text, WidgetKind::Label, options).has_value();
 }
 
 b8 Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
@@ -123,6 +111,15 @@ b8 Builder::checkbox(const AStringView stableKey, const StringView text, b8& che
         checked = !checked;
     (*item)->checked = checked;
     return changed;
+}
+
+b8 Builder::selectable(const AStringView stableKey, const StringView text, const b8 selected, const WidgetOptions& options){
+    const auto item = addItem(stableKey, text, WidgetKind::Selectable, options);
+    if(!item)
+        return false;
+    (*item)->selectableStyle = m_listStyle.row;
+    (*item)->checked = selected;
+    return m_context.takeActivation((*item)->state, (*item)->enabled);
 }
 
 void Builder::reset()noexcept{
@@ -212,7 +209,7 @@ TooltipStyle& Builder::tooltipStyle()noexcept{
     return m_tooltipStyle;
 }
 
-void Builder::setEditHost(IEditBoxHost* host)noexcept{
+void Builder::setEditHost(IEditBoxHost* const host)noexcept{
     if(declarationBlocked())
         m_context.fail();
     else
@@ -233,12 +230,8 @@ void Builder::setPointerBusy(const b8 busy)noexcept{
         m_pointerBusy = busy;
 }
 
-ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
-    return { text, StringView(m_textLanguage.data(), m_textLanguage.size()), fontSize, m_textScriptTag, TextDirection::LeftToRight };
-}
-
 b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= s_ContextMaxScopeDepth || !m_context.declare(stableKey, WidgetKind::Container)){
+    if(panelDeclarationBlocked() || m_scope->m_stack.size() >= s_ContextMaxScopeDepth || !m_context.declare(stableKey, WidgetKind::Container)){
         m_context.fail();
         return false;
     }
@@ -260,7 +253,7 @@ b8 Builder::beginContainer(const AStringView stableKey, const LayoutDirection::E
 }
 
 Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked()){
         m_context.fail();
         return MakeUnexpected(Failure{});
     }
@@ -309,35 +302,41 @@ Expected<NotNull<Builder::Item*>> Builder::addItem(const AStringView stableKey, 
         item.padding = { VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     }
     else if(kind == WidgetKind::Checkbox){
-        const Name names[]{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
-        SIMDVectorSingle checkboxExtent = VectorReplicate(m_style.checkboxExtent);
+        const Array<Name, 4> names{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
+        f32 checkboxExtent = m_style.checkboxExtent;
         if(!region(m_style.checkbox, m_style.checkbox)){
             m_context.fail();
             return MakeUnexpected(Failure{});
         }
         for(const auto& name : names){
             const UiSkinRegion& skinRegion = *MakeNotNull(region(name, m_style.checkbox));
-            const SIMDVectorSingle regionMinimum = VectorSet(skinRegion.minimumWidth, skinRegion.minimumHeight, 0.0f, 0.0f);
-            checkboxExtent = VectorSplatX(VectorMax(checkboxExtent, VectorMax(regionMinimum, VectorSplatY(regionMinimum))));
+            checkboxExtent = ResolveUiSkinSquareExtent(checkboxExtent, skinRegion);
         }
+        const SIMDVectorSingle checkboxExtentVector = VectorReplicate(checkboxExtent);
         const SIMDVectorSingle measuredSize = VectorSelect(VectorZero(), measured, s_SIMDMaskXY);
-        const SIMDVectorSingle content = VectorMax(measuredSize, VectorSelect(measuredSize, checkboxExtent, s_SIMDMaskY));
-        measured = VectorAdd(content, VectorAdd(VectorSelect(VectorZero(), checkboxExtent, s_SIMDMaskX), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
-        item.checkboxExtent = VectorGetX(checkboxExtent);
+        const SIMDVectorSingle content = VectorMax(measuredSize, VectorSelect(measuredSize, checkboxExtentVector, s_SIMDMaskY));
+        measured = VectorAdd(content, VectorAdd(VectorSelect(VectorZero(), checkboxExtentVector, s_SIMDMaskX), VectorSet(m_style.gap, 0.0f, 0.0f, 0.0f)));
+        item.checkboxExtent = checkboxExtent;
     }
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
     const SIMDVectorSingle intrinsic = VectorSelect(minimum, measured, VectorGreater(measured, minimum));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
+    if(!addItemNode(description, item))
+        return MakeUnexpected(Failure{});
+    m_scope->m_items.push_back(Move(item));
+    return MakeNotNull(&m_scope->m_items.back());
+}
+
+b8 Builder::addItemNode(const LayoutNodeDesc& description, Item& item){
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
-        return MakeUnexpected(Failure{});
+        return false;
     }
     item.node = *admittedNode;
-    m_scope->m_items.push_back(Move(item));
-    return MakeNotNull(&m_scope->m_items.back());
+    return true;
 }
 
 const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const noexcept{
@@ -347,8 +346,17 @@ const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)
     return found ? found : m_skin->findRegion(fallback);
 }
 
+Insets Builder::resolveRegionsPadding(const Insets& initial, const Span<const Name> names, const Name& fallback)const noexcept{
+    Insets result = initial;
+    for(const Name& name : names){
+        if(const UiSkinRegion* skinRegion = region(name, fallback))
+            result = MaxUiPadding(result, skinRegion->padding);
+    }
+    return result;
+}
+
 void Builder::loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept{
-    const Name names[]{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
+    const Array<Name, 4> names{ m_style.button, m_style.buttonHover, m_style.buttonPressed, m_style.buttonDisabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_style.button);
         if(!skinRegion)
@@ -358,6 +366,11 @@ void Builder::loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& paddin
         const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
         padding = VectorSelect(paddingCandidate, padding, VectorGreater(padding, paddingCandidate));
     }
+}
+
+SIMDVectorSingle Builder::loadVisibleClip(const SIMDVectorSingle clip)const noexcept{
+    const DisplayMetrics& display = m_paint.displayMetrics();
+    return IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
 }
 
 

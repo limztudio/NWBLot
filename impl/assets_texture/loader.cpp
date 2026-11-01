@@ -5,9 +5,7 @@
 #include "loader.h"
 
 #include "texture_mip_decoder.h"
-#include <impl/assets_texture/types.adhd.h>
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -58,60 +56,60 @@ static void InitializeBasisTranscoder(){
     s_BasisTranscoderInitialized.store(true, MemoryOrder::release);
 }
 
-[[nodiscard]] static b8 SupportsTextureFormat(Core::Device& device, const Core::Format::Enum format)noexcept{
+[[nodiscard]] static b8 SupportsTextureFormat(const Core::Format::Enum format, Core::Device& device)noexcept{
     return (device.queryFormatSupport(format) & s_RequiredTextureFormatSupport) == s_RequiredTextureFormatSupport;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectUploadFormat(Core::Device& device, const Texture& textureAsset)noexcept{
+[[nodiscard]] static Core::Format::Enum SelectUploadFormat(const Texture& textureAsset, Core::Device& device)noexcept{
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4){
         if(textureAsset.alphaMode() == TextureAlphaMode::Opaque){
-            if(SupportsTextureFormat(device, Core::Format::ASTC_4x4_FLOAT))
+            if(SupportsTextureFormat(Core::Format::ASTC_4x4_FLOAT, device))
                 return Core::Format::ASTC_4x4_FLOAT;
-            if(SupportsTextureFormat(device, Core::Format::BC6H_UFLOAT))
+            if(SupportsTextureFormat(Core::Format::BC6H_UFLOAT, device))
                 return Core::Format::BC6H_UFLOAT;
         }
-        return SupportsTextureFormat(device, Core::Format::RGBA16_FLOAT) ? Core::Format::RGBA16_FLOAT : Core::Format::UNKNOWN;
+        return SupportsTextureFormat(Core::Format::RGBA16_FLOAT, device) ? Core::Format::RGBA16_FLOAT : Core::Format::UNKNOWN;
     }
     if(textureAsset.payloadFormat() != TexturePayloadFormat::UastcLdr4x4)
         return Core::Format::UNKNOWN;
 
-    if(SupportsTextureFormat(device, Core::Format::ASTC_4x4_UNORM))
+    if(SupportsTextureFormat(Core::Format::ASTC_4x4_UNORM, device))
         return Core::Format::ASTC_4x4_UNORM;
 
-    if(SupportsTextureFormat(device, Core::Format::BC7_UNORM))
+    if(SupportsTextureFormat(Core::Format::BC7_UNORM, device))
         return Core::Format::BC7_UNORM;
 
-    return SupportsTextureFormat(device, Core::Format::RGBA8_UNORM) ? Core::Format::RGBA8_UNORM : Core::Format::UNKNOWN;
+    return SupportsTextureFormat(Core::Format::RGBA8_UNORM, device) ? Core::Format::RGBA8_UNORM : Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat)noexcept{
-    if(failedFormat == Core::Format::ASTC_4x4_FLOAT && SupportsTextureFormat(device, Core::Format::BC6H_UFLOAT))
+[[nodiscard]] static Core::Format::Enum SelectHdrOpaqueUploadFallback(const Core::Format::Enum failedFormat, Core::Device& device)noexcept{
+    if(failedFormat == Core::Format::ASTC_4x4_FLOAT && SupportsTextureFormat(Core::Format::BC6H_UFLOAT, device))
         return Core::Format::BC6H_UFLOAT;
-    if(failedFormat != Core::Format::RGBA16_FLOAT && SupportsTextureFormat(device, Core::Format::RGBA16_FLOAT))
+    if(failedFormat != Core::Format::RGBA16_FLOAT && SupportsTextureFormat(Core::Format::RGBA16_FLOAT, device))
         return Core::Format::RGBA16_FLOAT;
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(Core::Device& device, const Core::Format::Enum failedFormat)noexcept{
-    if(failedFormat == Core::Format::ASTC_4x4_UNORM && SupportsTextureFormat(device, Core::Format::BC7_UNORM))
+[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(const Core::Format::Enum failedFormat, Core::Device& device)noexcept{
+    if(failedFormat == Core::Format::ASTC_4x4_UNORM && SupportsTextureFormat(Core::Format::BC7_UNORM, device))
         return Core::Format::BC7_UNORM;
-    if(failedFormat != Core::Format::RGBA8_UNORM && SupportsTextureFormat(device, Core::Format::RGBA8_UNORM))
+    if(failedFormat != Core::Format::RGBA8_UNORM && SupportsTextureFormat(Core::Format::RGBA8_UNORM, device))
         return Core::Format::RGBA8_UNORM;
     return Core::Format::UNKNOWN;
 }
 
 [[nodiscard]] static Expected<CreatedTexture> CreateTextureWithFormatFallback(
-    Core::GraphicsRuntime& graphics,
     const Core::TextureDesc& textureDesc,
-    Core::Device& device,
     const Core::Format::Enum failedFormat,
-    Core::Format::Enum (&selectFallback)(Core::Device&, Core::Format::Enum)noexcept
+    Core::Format::Enum (&selectFallback)(Core::Format::Enum, Core::Device&)noexcept,
+    Core::GraphicsRuntime& graphics,
+    Core::Device& device
 ){
     Core::TextureDesc fallbackDesc = textureDesc;
     Core::Format::Enum format = failedFormat;
     Expected<Core::TextureHandle> texture = MakeUnexpected(Failure{});
     for(;;){
-        const Core::Format::Enum fallbackFormat = selectFallback(device, format);
+        const Core::Format::Enum fallbackFormat = selectFallback(format, device);
         if(fallbackFormat == Core::Format::UNKNOWN)
             break;
         fallbackDesc.setFormat(fallbackFormat);
@@ -121,10 +119,6 @@ static void InitializeBasisTranscoder(){
             return CreatedTexture{ Move(*texture), format };
     }
     return MakeUnexpected(texture.error());
-}
-
-[[nodiscard]] static Core::GraphicsRuntime::TextureUploadRegion MakeMipUploadRegion(const NotNull<const u8*> data, const usize dataSize, const usize rowPitch, const usize sliceByteCount, const u32 arraySlice, const u32 mipLevel)noexcept{
-    return Core::GraphicsRuntime::TextureUploadRegion{ .data = data.get(), .dataSize = dataSize, .rowPitch = rowPitch, .depthPitch = sliceByteCount, .arraySlice = arraySlice, .mipLevel = mipLevel, };
 }
 
 [[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension)noexcept{
@@ -155,11 +149,10 @@ static void InitializeBasisTranscoder(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName){
-    const TStringView owner = ownerName;
+b8 TextureAssetLoader::Create(const Texture& textureAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, TextureGpuResource& outResource){
     NWB_ASSERT(!outResource.valid());
     if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner);
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), ownerName);
         return false;
     }
     // Texture::loadBinary already validated the cooked payload; keep a debug-only invariant here.
@@ -168,13 +161,13 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap"), owner, ConvertString(textureAsset.virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
-    Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset);
+    Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(textureAsset, device);
     if(format == Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'"), owner, ConvertString(textureAsset.virtualPath().resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'"), ownerName, ConvertString(textureAsset.virtualPath().resolvedText()));
         return false;
     }
 
@@ -207,11 +200,11 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
         && ((textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 && format != Core::Format::RGBA8_UNORM) || (textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4 && textureAsset.alphaMode() == TextureAlphaMode::Opaque))
     ){
         auto fallbackResult = __hidden_texture_loader::CreateTextureWithFormatFallback(
-            graphics,
             textureDesc,
-            device,
             format,
-            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 ? __hidden_texture_loader::SelectLdrUploadFallback : __hidden_texture_loader::SelectHdrOpaqueUploadFallback
+            textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4 ? __hidden_texture_loader::SelectLdrUploadFallback : __hidden_texture_loader::SelectHdrOpaqueUploadFallback,
+            graphics,
+            device
         );
         if(fallbackResult){
             format = fallbackResult->format;
@@ -221,7 +214,7 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
             textureResult = MakeUnexpected(fallbackResult.error());
     }
     if(!textureResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
     Core::TextureHandle texture = Move(*textureResult);
@@ -251,33 +244,40 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
         NWB_ASSERT(!decoded.bytes.empty() && decoded.rowPitch != 0u && decoded.sliceByteCount != 0u && mip.sliceCount != 0u);
 
         if(textureAsset.dimension() == TextureDimension::Texture3D){
-            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(MakeNotNull(decoded.bytes.data()), decoded.bytes.size(), decoded.rowPitch, decoded.sliceByteCount, 0u, static_cast<u32>(mipIndex)));
+            uploadRegions.push_back(Core::GraphicsRuntime::TextureUploadRegion{
+                .data = decoded.bytes.data(),
+                .dataSize = decoded.bytes.size(),
+                .rowPitch = decoded.rowPitch,
+                .depthPitch = decoded.sliceByteCount,
+                .arraySlice = 0u,
+                .mipLevel = static_cast<u32>(mipIndex),
+            });
             continue;
         }
 
         for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-            uploadRegions.emplace_back(__hidden_texture_loader::MakeMipUploadRegion(
-                MakeNotNull(decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount),
-                decoded.sliceByteCount,
-                decoded.rowPitch,
-                decoded.sliceByteCount,
-                sliceIndex,
-                static_cast<u32>(mipIndex)
-            ));
+            uploadRegions.push_back(Core::GraphicsRuntime::TextureUploadRegion{
+                .data = decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount,
+                .dataSize = decoded.sliceByteCount,
+                .rowPitch = decoded.rowPitch,
+                .depthPitch = decoded.sliceByteCount,
+                .arraySlice = sliceIndex,
+                .mipLevel = static_cast<u32>(mipIndex),
+            });
         }
     }
 
     // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
     const Expected<Core::GpuDescriptorHandle> sampledImageHandleResult = heap.allocate(descriptorClass);
     if(!sampledImageHandleResult){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
     const Core::GpuDescriptorHandle sampledImageHandle = *sampledImageHandleResult;
     Core::GpuDescriptorRetirementGuard releaseDescriptor(heap, sampledImageHandle);
 
     if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, textureDimension))){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
 
@@ -293,7 +293,7 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
         .hasPhysicalInitialState = true,
     }
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, ConvertString(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), ownerName, ConvertString(imageName.resolvedText()));
         return false;
     }
 
@@ -305,19 +305,18 @@ b8 TextureAssetLoader::Create(TextureGpuResource& outResource, const Texture& te
     return true;
 }
 
-b8 TextureAssetLoader::Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName){
-    const TStringView owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner))
+b8 TextureAssetLoader::Load(const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, const TStringView ownerName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, TextureGpuResource& outResource){
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, ownerName))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
 
-    auto loadedAsset = assetManager.loadTypedSync<Texture>(textureVirtualPath, owner);
+    auto loadedAsset = assetManager.loadTypedSync<Texture>(textureVirtualPath, ownerName);
     const Texture* loadedTexture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedTexture)
         return false;
 
-    return Create(outResource, *loadedTexture, debugName, graphics, owner);
+    return Create(*loadedTexture, debugName, ownerName, graphics, outResource);
 }
 
 void TextureAssetLoader::Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics){

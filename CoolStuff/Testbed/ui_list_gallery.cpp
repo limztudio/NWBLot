@@ -7,6 +7,8 @@
 
 #include <core/common/log.h>
 
+#include <global/numeric_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,8 +25,7 @@ Expected<u64> UiListSource::indexOf(const u64 keyValue)const noexcept{
     return keyValue - 1u;
 }
 
-Expected<u64> UiListSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    static_cast<void>(reverse);
+Expected<u64> UiListSource::findEnabled(const u64 start, [[maybe_unused]] const b8 reverse)const noexcept{
     if(start >= rowCount())
         return MakeUnexpected(Failure{});
     return start;
@@ -32,25 +33,19 @@ Expected<u64> UiListSource::findEnabled(const u64 start, const b8 reverse)const 
 
 StringView UiListSource::text(const u64 index)const noexcept{
     constexpr usize s_MaxDecimalDigits = 20u;
-    constexpr u64 s_DecimalRadix = 10u;
     constexpr usize s_RowPrefixLength = 4u;
-    u64 remaining = key(index);
-    if(remaining == 0u)
+    const u64 rowKey = key(index);
+    if(rowKey == 0u)
         return {};
     m_label[0] = 'R';
     m_label[1] = 'o';
     m_label[2] = 'w';
     m_label[3] = ' ';
     Array<char, s_MaxDecimalDigits> digits{};
-    usize count = 0u;
-    do{
-        digits[count] = static_cast<char>('0' + remaining % s_DecimalRadix);
-        ++count;
-        remaining /= s_DecimalRadix;
-    }while(remaining != 0u);
-    for(usize offset = 0u; offset < count; ++offset)
-        m_label[s_RowPrefixLength + offset] = digits[count - 1u - offset];
-    return { m_label.data(), s_RowPrefixLength + count };
+    const AStringView formatted = FormatDecimal(static_cast<usize>(rowKey), digits);
+    for(usize offset = 0u; offset < formatted.size(); ++offset)
+        m_label[s_RowPrefixLength + offset] = formatted[offset];
+    return { m_label.data(), s_RowPrefixLength + formatted.size() };
 }
 
 
@@ -79,6 +74,9 @@ void UiListGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom virtual list declaration failed"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

@@ -41,15 +41,6 @@ b8 InputRouter::pressed(const WidgetId id)const noexcept{
     return false;
 }
 
-b8 InputRouter::currentCommandFocus(const CommandSource& source)const noexcept{
-    const auto& owner = source.focusOwner;
-    const HitTarget* focused = findTarget(owner.target, owner.declarationGeneration);
-    return
-        m_windowFocused && source.consumed && owner.target.valid() && m_focus == owner.target && m_focusDeclaration == owner.declarationGeneration
-        && focused != nullptr && focused->focusable && isInteractive(*focused) && focused->popup == owner.popup && focused->control == owner.control
-    ;
-}
-
 void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& source, InputRoutingResult& result){
     if(!currentCommandFocus(source))
         return;
@@ -64,7 +55,7 @@ void InputRouter::releaseCommand(const InputEvent& event, const CommandSource& s
     if(source.controlOwner.host.valid()){
         if(currentControlCommandOwner(source)){
             const HitTarget& host = *MakeNotNull(findTarget(source.controlOwner.host, source.controlOwner.declarationGeneration));
-            appendControlAction(result, host, focused, ControlActionKind::Submit, 0.0);
+            appendControlAction(host, focused, ControlActionKind::Submit, 0.0, result);
         }
     }
     else if(focused.activatable)

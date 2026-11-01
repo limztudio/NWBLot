@@ -63,7 +63,20 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const GpuComparableTimestampRange* const packetEnvelopes, const usize packetEnvelopeCount, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics){
+Expected<u64> TryComputeGpuTimestampOverlap(const GpuComparableTimestampRange& first, const GpuComparableTimestampRange& second)noexcept{
+    if(!first.valid() || !second.valid() || first.physicalQueue.deviceGeneration != second.physicalQueue.deviceGeneration || first.secondsPerTick != second.secondsPerTick)
+        return MakeUnexpected(Failure{});
+
+    const u64 overlapBegin = Max(first.beginTicks, second.beginTicks);
+    const u64 overlapEnd = Min(first.endTicks, second.endTicks);
+    return overlapEnd > overlapBegin ? overlapEnd - overlapBegin : 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Span<const GpuComparableTimestampRange> packetEnvelopes, Alloc::ScratchArena& scratchArena, GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics){
     using namespace __hidden_gpu_timing_metrics;
 
     const auto reject = [&]()noexcept{
@@ -73,10 +86,12 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     GpuPacketEnvelopeMetrics metrics;
     outQueueMetrics.clear();
 
+    const usize packetEnvelopeCount = packetEnvelopes.size();
+    const GpuComparableTimestampRange* const packetEnvelopeData = packetEnvelopes.data();
     const auto eventCapacity = TryMultiply<usize>(packetEnvelopeCount, s_TimestampEventsPerEnvelope);
     if(!eventCapacity)
         return MakeUnexpected(Failure{});
-    if(packetEnvelopeCount == 0u || !packetEnvelopes)
+    if(packetEnvelopeCount == 0u || !packetEnvelopeData)
         return MakeUnexpected(Failure{});
 
     const usize queueCapacity = Min(packetEnvelopeCount, static_cast<usize>(Limit<u16>::s_Max));
@@ -90,10 +105,10 @@ Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(const Gp
     sortedRanges.reserve(packetEnvelopeCount);
     events.reserve(*eventCapacity);
 
-    const f64 secondsPerTick = packetEnvelopes[0u].secondsPerTick;
-    const u16 deviceGeneration = packetEnvelopes[0u].physicalQueue.deviceGeneration;
+    const f64 secondsPerTick = packetEnvelopeData[0u].secondsPerTick;
+    const u16 deviceGeneration = packetEnvelopeData[0u].physicalQueue.deviceGeneration;
     for(usize envelopeIndex = 0u; envelopeIndex < packetEnvelopeCount; ++envelopeIndex){
-        const GpuComparableTimestampRange& range = packetEnvelopes[envelopeIndex];
+        const GpuComparableTimestampRange& range = packetEnvelopeData[envelopeIndex];
         if(!range.valid() || range.secondsPerTick != secondsPerTick || range.physicalQueue.deviceGeneration != deviceGeneration)
             return reject();
         sortedRanges.push_back(range);

@@ -14,15 +14,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererShaderSystem::RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept
-    : m_graphics(graphics)
-    , m_assetManager(assetManager)
-    , m_shaderPathResolver(shaderPathResolver)
-{}
+b8 RendererShaderSystem::hasShaderArchiveStage(const Name& shaderAssetName, const AStringView variantName, const Name& stageName)const{
+    return m_shaderPathResolver(shaderAssetName, variantName, stageName).has_value();
+}
 
-
-void RendererShaderSystem::invalidateResources()noexcept{
-    m_deferredCompositeVertexShader.reset();
+b8 RendererShaderSystem::loadDeferredCompositeVertexShader(){
+    return loadShader<VertexShader>(&DeferredSubsystem::compositeVs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_DeferredCompositeVS", m_deferredCompositeVertexShader);
 }
 
 

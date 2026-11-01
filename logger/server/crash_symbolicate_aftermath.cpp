@@ -7,7 +7,7 @@
 #include <core/crash/package_names.h>
 
 #if defined(NWB_WITH_AFTERMATH)
-#include <core/common/aftermath_runtime.h>
+#include <core/crash/aftermath_runtime.h>
 
 #include <global/diagnostics.h>
 #include <global/limit.h>
@@ -75,7 +75,7 @@ struct AftermathDecoder{
 
 public:
     [[nodiscard]] Expected<void, AftermathLoadFailure> load(Core::Alloc::ScratchArena& scratchArena){
-        const auto opened = library.open(scratchArena, Core::Common::s_AftermathRuntimeName);
+        const auto opened = library.open(scratchArena, Core::Crash::s_AftermathRuntimeName);
         if(!opened)
             return MakeUnexpected(AftermathLoadFailure{ .operation = s_AftermathLoadRuntimeOperation, .native = opened.error(), });
 
@@ -105,7 +105,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, const CrashScratchPath& packageDirectory, CrashReportText& outReport){
+void AppendAftermathGpuDumpSummary(const CrashScratchPath& packageDirectory, [[maybe_unused]] Core::Alloc::ScratchArena& scratchArena, CrashReportText& outReport){
     const CrashScratchPath dumpPath = packageDirectory / CrashNames::s_AftermathGpuDumpFileName;
     const auto regularDump = IsRegularFile(dumpPath);
     if(!regularDump){
@@ -117,7 +117,6 @@ void AppendAftermathGpuDumpSummary(Core::Alloc::ScratchArena& scratchArena, cons
         return;
 
 #if !defined(NWB_WITH_AFTERMATH)
-    static_cast<void>(scratchArena);
     outReport += s_AftermathSectionHeader;
     outReport += s_AftermathSkippedReport;
 #else

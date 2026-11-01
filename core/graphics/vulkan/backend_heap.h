@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Heap final : public RefCounter<GraphicsResource>, NoCopy{
+class Heap final : public RefCounter<GraphicsResource>{
     friend class Buffer;
     friend class Device;
     friend class Texture;

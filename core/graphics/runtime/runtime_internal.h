@@ -50,23 +50,23 @@ using GraphTaskDeclaration = GraphicsRuntime::StandaloneTaskGraphDeclaration;
 
 [[nodiscard]] Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
-    StandaloneGraphWorkspacePool& workspaces,
-    void* userData,
     NotNull<GraphTaskDeclaration> declareTask,
+    void* userData,
+    StandaloneGraphWorkspacePool& workspaces,
     GpuPhysicalQueueId requiredTerminalQueue = {},
     CpuTaskScheduler* readyFrontierScheduler = nullptr,
     GpuTimingRecorder* timingRecorder = nullptr,
     GpuTimingFrameTransaction* frameTimingTransaction = nullptr
 );
 [[nodiscard]] b8 SubmitGraphOwnedSetupUpload(
-    QueueSubmissionToken& inOutUploadToken,
-    StandaloneGraphWorkspacePool& workspaces,
     const GraphicsRuntime& graphics,
     ResourceQueueSharing::Mask queueSharing,
     CommandQueue::Enum consumerQueue,
-    void* userData,
     NotNull<GraphTaskDeclaration> declareTask,
-    GpuPhysicalQueueId requiredTerminalQueue = {}
+    GpuPhysicalQueueId requiredTerminalQueue,
+    void* userData,
+    StandaloneGraphWorkspacePool& workspaces,
+    QueueSubmissionToken& outUploadToken
 );
 [[nodiscard]] b8 SubmitGraphOwnedFrameTimingReset(const GraphicsRuntime& graphics, StandaloneGraphWorkspacePool& workspaces, GpuTimingRecorder& timing);
 

@@ -3,9 +3,6 @@
 
 
 #include "router.h"
-#include "../rect_math.h"
-
-#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,10 +177,7 @@ b8 InputRouter::moveFocusForTraversal(const b8 reverse){
     for(usize offset = 1u; offset <= m_targets.size(); ++offset){
         const usize index = anchor == m_targets.size() ? (reverse ? m_targets.size() - offset : offset - 1u) : (reverse ? (anchor + m_targets.size() - offset) % m_targets.size() : (anchor + offset) % m_targets.size());
         const HitTarget& target = m_targets[index];
-        if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid())
-            continue;
-        const SIMDVectorSingle visibleBounds = IntersectRectBoundsValue(VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height));
-        if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)
+        if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid() || !HasVisibleBounds(target))
             continue;
         nextFocus = target.id;
         nextDeclaration = target.declarationGeneration;

@@ -34,7 +34,6 @@ constexpr AStringView s_HeldFileSuffix = ".held";
 constexpr AStringView s_StageDirectory = "stage";
 constexpr AStringView s_BackupDirectory = "backup";
 
-constexpr u32 s_ThirdElementIndex = 2u;
 constexpr i32 s_PublishLogFailure = 47;
 
 
@@ -425,10 +424,10 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         hash.qwords[0u] = 7u;
     hashes[0u].qwords[s_NameHashLaneCount - 1u] = 30u;
     hashes[1u].qwords[s_NameHashLaneCount - 1u] = 10u;
-    hashes[s_ThirdElementIndex].qwords[s_NameHashLaneCount - 1u] = 20u;
+    hashes[2u].qwords[s_NameHashLaneCount - 1u] = 20u;
     const Array<u8, 3u> payload{ 4u, 5u, 6u };
     ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[0u]), payload));
-    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[s_ThirdElementIndex]), payload));
+    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[2u]), payload));
     ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[1u]), nullptr, 0u));
     ASSERT_TRUE(filesystem->flush());
 
@@ -439,13 +438,13 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
     actual.reserve(static_cast<usize>(m_desc.segmentSize));
     const Array<VolumeIndexEntryDisk, 3u> records{
         VolumeIndexEntryDisk{ hashes[1u], 518u, 0u },
-        VolumeIndexEntryDisk{ hashes[s_ThirdElementIndex], 515u, 3u },
+        VolumeIndexEntryDisk{ hashes[2u], 515u, 3u },
         VolumeIndexEntryDisk{ hashes[0u], 512u, 3u }
     };
     const Path segmentPath = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
     const auto verifyImage = [&](const usize firstRecord){
         VolumeHeaderDisk header{};
-        NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic));
+        header.magic = FilesystemVolumeDetail::s_VolumeMagic;
         header.segmentSize = m_desc.segmentSize;
         header.metadataBytes = m_desc.metadataSize;
         header.fileCount = records.size() - firstRecord;

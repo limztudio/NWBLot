@@ -58,15 +58,14 @@ public:
     b8 loadBinary(Span<const u8> binary);
     [[nodiscard]] b8 validatePayload()const;
 
+
 public:
     void setMesh(const Core::Assets::AssetRef<Mesh>& mesh)noexcept{ m_mesh = mesh; }
 
     void setSkeleton(const Core::Assets::AssetRef<Skeleton>& skeleton)noexcept{ m_skeleton = skeleton; }
 
-    void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept{
-        m_influences = Move(influences);
-        m_inverseBindMatrices = Move(inverseBindMatrices);
-    }
+    void setPayload(InfluenceVector&& influences, InverseBindMatrixVector&& inverseBindMatrices)noexcept;
+
 
 public:
     [[nodiscard]] const Core::Assets::AssetRef<Mesh>& mesh()const noexcept{ return m_mesh; }

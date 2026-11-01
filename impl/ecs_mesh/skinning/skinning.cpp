@@ -8,11 +8,9 @@
 
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
-#include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -41,7 +39,7 @@ b8 MeshSkinningSystem::prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& 
     return true;
 }
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList){
     if(!plan.hasActiveSkin)
         return false;
 
@@ -108,7 +106,7 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningDeformation(const MeshSkinningGra
     return true;
 }
 
-b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList){
     if(!plan.updatesMeshletBounds)
         return false;
 

@@ -3,9 +3,8 @@
 
 
 #include "selectable_paint.h"
-#include "../builder.h"
-#include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
-#include "../rect_math.h"
+
+#include <impl/ecs_ui/toolkit/rect_math.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -24,7 +23,12 @@ Expected<SelectableMetrics> SelectablePainter::Measure(const UiSkin& skin, const
     if(!IsBoundedUiPadding(style.padding))
         return MakeUnexpected(Failure{});
     SelectableMetrics metrics{ style.padding, {} };
-    const Name states[][2]{ { style.normal, style.fallback }, { style.hover, style.hoverFallback }, { style.selected, style.selectedFallback }, { style.disabled, style.disabledFallback } };
+    const Array<Array<Name, 2>, 4> states{ {
+        { style.normal, style.fallback },
+        { style.hover, style.hoverFallback },
+        { style.selected, style.selectedFallback },
+        { style.disabled, style.disabledFallback },
+    } };
     for(const auto& state : states){
         const UiSkinRegion* region = skin.findRegion(state[0]);
         if(!region)
@@ -35,10 +39,7 @@ Expected<SelectableMetrics> SelectablePainter::Measure(const UiSkin& skin, const
         const Point minimum{ region->minimumWidth, region->minimumHeight };
         if(!IsBoundedUiPadding(padding) || !IsValidUiExtent(minimum))
             return MakeUnexpected(Failure{});
-        const SIMDVectorSingle currentPadding = VectorSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom);
-        const SIMDVectorSingle candidatePadding = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
-        const SIMDVectorSingle maximumPadding = VectorSelect(candidatePadding, currentPadding, VectorGreater(currentPadding, candidatePadding));
-        metrics.padding = { VectorGetX(maximumPadding), VectorGetY(maximumPadding), VectorGetZ(maximumPadding), VectorGetW(maximumPadding) };
+        metrics.padding = MaxUiPadding(metrics.padding, padding);
         const SIMDVectorSingle currentMinimum = VectorSet(metrics.minimum.x, metrics.minimum.y, 0.0f, 0.0f);
         const SIMDVectorSingle candidateMinimum = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
         const SIMDVectorSingle maximumMinimum = VectorSelect(candidateMinimum, currentMinimum, VectorGreater(currentMinimum, candidateMinimum));
@@ -66,46 +67,18 @@ b8 SelectablePainter::Paint(
     b8 painted = paint.drawRegion(region->name, bounds);
     if(painted && flags.enabled && flags.focused && skin.findRegion(style.focus))
         painted = paint.drawRegion(style.focus, bounds);
-    const SIMDVectorSingle content = InsetRectValue(VectorSet(bounds.x, bounds.y, bounds.width, bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-    const SIMDVectorSingle verticalOffset = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorAndInt(VectorSwizzle<2, 3, 2, 3>(content), s_SIMDMaskY), VectorSet(0.0f, textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
-    const SIMDVectorSingle textOrigin = VectorAdd(content, verticalOffset);
+    const SIMDVectorSingle content = InsetRectValue(LoadRect(bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
+    const f32 verticalOffset = Max(0.0f, (VectorGetW(content) - textBounds.height) * s_RectCenterFraction);
+    const SIMDVectorSingle textOrigin = VectorAdd(content, VectorSet(0.0f, verticalOffset, 0.0f, 0.0f));
     const SIMDVectorSingle alignedOrigin = VectorSubtract(VectorSwizzle<0, 1, 0, 1>(textOrigin), VectorSet(textBounds.x, textBounds.y, textBounds.x, textBounds.y));
     const Point origin{ VectorGetX(alignedOrigin), VectorGetY(alignedOrigin) };
-    paint.pushClip({ VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) });
+    paint.pushClip(StoreRect(content));
     if(painted)
         painted = text.paint(paint, layout, origin, flags.enabled ? textColor : disabledTextColor);
     const b8 textPopped = paint.popClip();
     const b8 rowPopped = paint.popClip();
     const b8 clipPopped = paint.popClip();
     return painted && textPopped && rowPopped && clipPopped;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Builder::selectable(const AStringView stableKey, const StringView text, const b8 selected, const WidgetOptions& options){
-    const auto item = addItem(stableKey, text, WidgetKind::Selectable, options);
-    if(!item)
-        return false;
-    (*item)->selectableStyle = m_listStyle.row;
-    (*item)->checked = selected;
-    return m_context.takeActivation((*item)->state, (*item)->enabled);
-}
-
-b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
-    const InputRouter& input = m_context.input();
-    const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
-    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))), item.selectableStyle, flags, item.style.text, item.style.disabledText))
-        return false;
-    HitTarget target;
-    target.rectangle = box.rectangle;
-    target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
-    target.enabled = item.enabled;
-    target.focusable = item.enabled;
-    target.activatable = item.enabled;
-    target.contextMenu = item.contextMenu;
-    return m_context.addTarget(item.state, target);
 }
 
 

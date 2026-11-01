@@ -16,9 +16,6 @@ namespace __hidden_cpu_task_scheduler_cancellation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
 using namespace CpuTaskSchedulerTestSupport;
 
 
@@ -41,10 +38,10 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     EXPECT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         EXPECT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(occupied.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(occupied.entered, s_GateTimeoutMS));
     Atomic<u32> cursor{ 0u };
-    u32 order[3u]{};
-    const CpuTaskPriority::Enum priorities[3u] = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
+    Array<u32, 3u> order{};
+    const Array<CpuTaskPriority::Enum, 3u> priorities = { CpuTaskPriority::Background, CpuTaskPriority::Normal, CpuTaskPriority::Critical };
     for(u32 index = 0u; index < 3u; ++index){
         CpuTaskOptions options;
         options.priority = priorities[index];
@@ -57,9 +54,9 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     scheduler.wait();
     EXPECT_FALSE(occupied.expired.load());
     EXPECT_EQ(cursor.load(), 3u);
-    EXPECT_EQ(order[0u], s_ExpectedDualCount);
+    EXPECT_EQ(order[0u], 2u);
     EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[s_ThirdElementIndex], 0u);
+    EXPECT_EQ(order[2u], 0u);
 }
 
 
@@ -73,7 +70,7 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     const auto predecessorTaskAdmission = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)]()noexcept{ invoked += capture.value; });
     ASSERT_TRUE(predecessorTaskAdmission);
     const auto predecessor = *predecessorTaskAdmission;
-    const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)]()noexcept{ invoked += capture.value; }, predecessor);
+    const auto dependentTaskAdmission = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 2u)]()noexcept{ invoked += capture.value; }, predecessor);
     ASSERT_TRUE(dependentTaskAdmission);
     const auto dependent = *dependentTaskAdmission;
     scope.cancel();
@@ -82,8 +79,8 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     scheduler.wait(dependent);
     scope.wait();
     EXPECT_EQ(invoked, 0u);
-    EXPECT_EQ(retired.load(), s_ExpectedDualCount);
-    EXPECT_EQ(scheduler.statistics().canceledTasks, s_ExpectedDualCount);
+    EXPECT_EQ(retired.load(), 2u);
+    EXPECT_EQ(scheduler.statistics().canceledTasks, 2u);
     EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
 }
 
@@ -106,7 +103,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     });
     ASSERT_TRUE(cpuTaskAdmission);
     const auto parent = *cpuTaskAdmission;
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(parentGate.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(parentGate.entered, s_GateTimeoutMS));
     const auto continuationTaskAdmission = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
     ASSERT_TRUE(continuationTaskAdmission);
     const auto continuation = *continuationTaskAdmission;
@@ -117,7 +114,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     EXPECT_FALSE(parentGate.expired.load());
     EXPECT_EQ(childInvocations.load(), 0u);
     EXPECT_EQ(continuationInvocations.load(), 0u);
-    EXPECT_GE(scheduler.statistics().canceledTasks, s_ExpectedDualCount);
+    EXPECT_GE(scheduler.statistics().canceledTasks, 2u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
@@ -127,7 +124,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     DeadlineGuard deadline;
     TaskGate preferredGate;
     TaskGate spillGate;
-    CpuTaskScheduler scheduler(s_ExpectedDualCount);
+    CpuTaskScheduler scheduler(2u);
     ScopeExit releaseWorkers([&]()noexcept{ preferredGate.open(); spillGate.open(); });
     const auto workers = scheduler.statistics();
     if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
@@ -141,7 +138,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     EXPECT_TRUE(cpuTaskAdmission);
     if(cpuTaskAdmission)
         EXPECT_TRUE(cpuTaskAdmission->valid());
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(preferredGate.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(preferredGate.entered, s_GateTimeoutMS));
     const auto secondCpuTaskAdmission = scheduler.submit([&]()noexcept{
         spillAffinity = scheduler.currentWorkerAffinity();
         spillGate.block();
@@ -149,7 +146,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     EXPECT_TRUE(secondCpuTaskAdmission);
     if(secondCpuTaskAdmission)
         EXPECT_TRUE(secondCpuTaskAdmission->valid());
-    EXPECT_TRUE(CpuTaskTestSupport::WaitUntil(spillGate.entered, s_GateTimeoutMS));
+    EXPECT_TRUE(WaitUntil(spillGate.entered, s_GateTimeoutMS));
     preferredGate.open();
     spillGate.open();
     scheduler.wait();

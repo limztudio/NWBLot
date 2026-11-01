@@ -7,7 +7,6 @@
 #include <impl/ecs_ui/toolkit/layout/validation.adhd.h>
 
 #include <global/simd/vector.h>
-#include <global/simd/vector_clamp_ordered.h>
 #include <global/simplemath.h>
 
 
@@ -26,78 +25,29 @@ namespace __hidden_ui_slider_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The default key step is one hundredth of the range.
-inline constexpr f64 s_DefaultKeyStepDivisor = 100.0;
-// Halving each bound keeps the span finite when maximum - minimum overflows.
-inline constexpr f64 s_OverflowGuardScale = 0.5;
-inline constexpr u32 s_PageStepCount = 10u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 ValidRange(const f64 minimum, const f64 maximum)noexcept{
-    return IsFinite(minimum) && IsFinite(maximum) && minimum <= maximum;
-}
-
-[[nodiscard]] static b8 SameRect(const Rect& lhs, const Rect& rhs)noexcept{
-    return BitCast<u32>(lhs.x) == BitCast<u32>(rhs.x) && BitCast<u32>(lhs.y) == BitCast<u32>(rhs.y) && BitCast<u32>(lhs.width) == BitCast<u32>(rhs.width) && BitCast<u32>(lhs.height) == BitCast<u32>(rhs.height);
-}
-
-[[nodiscard]] static b8 ValidPlacement(const SliderPlacement& placement)noexcept{
-    return
-        IsPreciseUiRect(placement.bounds) && IsPreciseUiRect(placement.clip) && IsPreciseUiRect(placement.travelBounds)
-        && IsPreciseUiRect(placement.track) && IsPreciseUiRect(placement.centerTravel) && IsPreciseUiRect(placement.thumb)
-        && IsValidUiExtent(placement.thumbExtent)
-        && placement.thumbExtent.x == placement.thumb.width && placement.thumbExtent.y == placement.thumb.height
-        && placement.thumbExtent.x <= placement.travelBounds.width && placement.thumbExtent.y <= placement.travelBounds.height
-        && placement.centerTravel.width <= placement.travelBounds.width
-        && placement.centerTravel.height <= placement.travelBounds.height
-        && placement.track.width <= placement.travelBounds.width && placement.track.height <= placement.travelBounds.height
-    ;
-}
-
-[[nodiscard]] static b8 SamePlacement(const SliderPlacement& lhs, const SliderPlacement& rhs)noexcept{
-    return
-        SameRect(lhs.bounds, rhs.bounds) && SameRect(lhs.clip, rhs.clip) && SameRect(lhs.travelBounds, rhs.travelBounds)
-        && SameRect(lhs.track, rhs.track) && SameRect(lhs.centerTravel, rhs.centerTravel)
-        && BitCast<u32>(lhs.thumbExtent.x) == BitCast<u32>(rhs.thumbExtent.x)
-        && BitCast<u32>(lhs.thumbExtent.y) == BitCast<u32>(rhs.thumbExtent.y)
-    ;
-}
-
-[[nodiscard]] static b8 ValidGesture(const PointerGesture& gesture)noexcept{
-    return
-        gesture.id.valid() && gesture.updateSequence != 0u && gesture.state <= PointerGestureState::Completed
-        && IsFinite(gesture.origin.x) && IsFinite(gesture.origin.y)
-        && IsFinite(gesture.position.x) && IsFinite(gesture.position.y)
-        && IsPreciseUiRect(gesture.targetRectangle) && IsPreciseUiRect(gesture.referenceRectangle)
-    ;
-}
-
-[[nodiscard]] static SIMDVectorDouble KeyStep(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble configuredStep)noexcept{
-    if(VectorDoubleGetIntX(VectorDoubleGreater(configuredStep, VectorDoubleZero())) != 0u)
+[[nodiscard]] static constexpr f64 KeyStep(const f64 minimum, const f64 maximum, const f64 configuredStep)noexcept{
+    if(configuredStep > 0.0)
         return configuredStep;
-    const SIMDVectorDouble span = VectorDoubleSubtract(maximum, minimum);
-    if(IsFinite(VectorDoubleGetX(span))){
-        const SIMDVectorDouble step = VectorDoubleDivide(span, VectorDoubleReplicate(s_DefaultKeyStepDivisor));
-        return VectorDoubleSelect(step, span, VectorDoubleEqual(step, VectorDoubleZero()));
+    const f64 span = maximum - minimum;
+    if(IsFinite(span)){
+        const f64 step = span / s_SliderDefaultKeyStepDivisor;
+        return step == 0.0 ? span : step;
     }
-    return VectorDoubleSubtract(VectorDoubleDivide(maximum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)), VectorDoubleDivide(minimum, VectorDoubleReplicate(s_DefaultKeyStepDivisor)));
+    return (maximum / s_SliderDefaultKeyStepDivisor) - (minimum / s_SliderDefaultKeyStepDivisor);
 }
 
-[[nodiscard]] static SIMDVectorDouble StepValue(const SIMDVectorDouble value, const SIMDVectorDouble minimum, const SIMDVectorDouble maximum, const SIMDVectorDouble step, const b8 increasing)noexcept{
-    const SIMDVectorDouble current = VectorDoubleClampOrdered(value, minimum, maximum);
+[[nodiscard]] static constexpr f64 StepValue(const f64 value, const f64 minimum, const f64 maximum, const f64 step, const b8 increasing)noexcept{
+    const f64 current = Clamp(value, minimum, maximum);
     if(increasing){
-        const SIMDVectorDouble distance = VectorDoubleSubtract(maximum, current);
-        if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
+        const f64 distance = maximum - current;
+        if(step >= distance)
             return maximum;
-        return VectorDoubleClampOrdered(VectorDoubleAdd(current, step), minimum, maximum);
+        return Clamp(current + step, minimum, maximum);
     }
-    const SIMDVectorDouble distance = VectorDoubleSubtract(current, minimum);
-    if(VectorDoubleGetIntX(VectorDoubleGreaterOrEqual(step, distance)) != 0u)
+    const f64 distance = current - minimum;
+    if(step >= distance)
         return minimum;
-    return VectorDoubleClampOrdered(VectorDoubleSubtract(current, step), minimum, maximum);
+    return Clamp(current - step, minimum, maximum);
 }
 
 
@@ -110,74 +60,57 @@ inline constexpr u32 s_PageStepCount = 10u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 SliderBehavior::Validate(const SliderOptions& options)noexcept{
-    return
-        __hidden_ui_slider_behavior::ValidRange(options.minimum, options.maximum)
-        && IsFinite(options.keyStep) && options.keyStep >= 0.0
-        && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f
-        && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f)
-        && IsFinite(options.height) && options.height >= 0.0f
-    ;
-}
-
 Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
-    using namespace __hidden_ui_slider_behavior;
-    if(!ValidRange(minimum, maximum) || !IsFinite(value))
+    if(!IsValidSliderRange(minimum, maximum) || !IsFinite(value))
         return MakeUnexpected(Failure{});
-    SIMDVectorDouble normalizedValue = VectorDoubleZero();
+    f64 normalizedValue = 0.0;
     if(minimum != maximum && value > minimum){
         if(value >= maximum)
-            normalizedValue = VectorDoubleSplatOne();
+            normalizedValue = 1.0;
         else{
-            const SIMDVectorDouble span = VectorDoubleSubtract(VectorDoubleReplicate(maximum), VectorDoubleReplicate(minimum));
-            if(IsFinite(VectorDoubleGetX(span)))
-                normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(value), VectorDoubleReplicate(minimum)), span);
+            const f64 span = maximum - minimum;
+            if(IsFinite(span))
+                normalizedValue = (value - minimum) / span;
             else{
-                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(s_OverflowGuardScale));
-                normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleSplatX(scaled), VectorDoubleSplatY(scaled)), VectorDoubleSubtract(VectorDoubleSplatZ(scaled), VectorDoubleSplatW(scaled)));
+                const SIMDVectorDouble scaled = VectorDoubleMultiply(VectorDoubleSet(value, minimum, maximum, minimum), VectorDoubleReplicate(s_SliderOverflowGuardScale));
+                normalizedValue = (VectorDoubleGetX(scaled) - VectorDoubleGetY(scaled)) / (VectorDoubleGetZ(scaled) - VectorDoubleGetW(scaled));
             }
         }
     }
-    if(!IsFinite(VectorDoubleGetX(normalizedValue)))
+    if(!IsFinite(normalizedValue))
         return MakeUnexpected(Failure{});
-    return VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
+    return normalizedValue > 0.0 ? Min(1.0, normalizedValue) : 0.0;
 }
 
 Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
-    using namespace __hidden_ui_slider_behavior;
-    if(!ValidRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
+    if(!IsValidSliderRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return MakeUnexpected(Failure{});
-    const SIMDVectorDouble lower = VectorDoubleReplicate(minimum);
-    const SIMDVectorDouble upper = VectorDoubleReplicate(maximum);
-    const SIMDVectorDouble fraction = VectorDoubleReplicate(normalized);
-    SIMDVectorDouble value = lower;
+    f64 value = minimum;
     if(normalized == 1.0)
-        value = upper;
+        value = maximum;
     else if(normalized > 0.0 && minimum != maximum){
         if(minimum < 0.0 && maximum > 0.0){
-            const SIMDVectorDouble lowerWeight = VectorDoubleSubtract(VectorDoubleSplatOne(), fraction);
-            value = VectorDoubleAdd(VectorDoubleMultiply(lower, lowerWeight), VectorDoubleMultiply(upper, fraction));
+            const f64 lowerWeight = 1.0 - normalized;
+            value = minimum * lowerWeight + maximum * normalized;
         }
         else{
-            const SIMDVectorDouble span = VectorDoubleSubtract(upper, lower);
-            value = VectorDoubleAdd(lower, VectorDoubleMultiply(span, fraction));
+            const f64 span = maximum - minimum;
+            value = minimum + span * normalized;
         }
-        value = VectorDoubleClampOrdered(value, lower, upper);
+        value = Clamp(value, minimum, maximum);
     }
-    const f64 result = VectorDoubleGetX(value);
-    if(!IsFinite(result))
+    if(!IsFinite(value))
         return MakeUnexpected(Failure{});
-    return result;
+    return value;
 }
 
 b8 SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
-    using namespace __hidden_ui_slider_behavior;
-    if(!Validate(options) || !ValidPlacement(placement))
+    if(!IsValidSliderOptions(options) || !IsValidSliderPlacement(placement))
         return false;
     const b8 changed = !state.m_admitted || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
-        || !SamePlacement(state.m_admission, placement);
+        || !SameSliderPlacementGeometry(state.m_admission, placement);
     if(!changed)
         return true;
     state.advanceRevision();
@@ -196,7 +129,7 @@ b8 SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const
 b8 SliderBehavior::Apply(SliderState& state, SliderResult& result, const SliderOptions& options, const ControlAction& action)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
-        !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
+        !IsValidSliderOptions(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
@@ -210,38 +143,35 @@ b8 SliderBehavior::Apply(SliderState& state, SliderResult& result, const SliderO
         result = accepted;
         return true;
     }
-    const SIMDVectorDouble lower = VectorDoubleReplicate(options.minimum);
-    const SIMDVectorDouble upper = VectorDoubleReplicate(options.maximum);
-    SIMDVectorDouble step = VectorDoubleZero();
-    SIMDVectorDouble nextValue = VectorDoubleReplicate(state.m_value);
+    f64 step = 0.0;
+    f64 value = state.m_value;
     switch(action.kind){
     case ControlActionKind::Left:
     case ControlActionKind::Down:
-        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
-        nextValue = StepValue(nextValue, lower, upper, step, false);
+        step = KeyStep(options.minimum, options.maximum, options.keyStep);
+        value = StepValue(value, options.minimum, options.maximum, step, false);
         break;
     case ControlActionKind::Right:
     case ControlActionKind::Up:
-        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
-        nextValue = StepValue(nextValue, lower, upper, step, true);
+        step = KeyStep(options.minimum, options.maximum, options.keyStep);
+        value = StepValue(value, options.minimum, options.maximum, step, true);
         break;
     case ControlActionKind::PageDown:
     case ControlActionKind::PageUp:
-        step = KeyStep(lower, upper, VectorDoubleReplicate(options.keyStep));
-        for(u32 index = 0u; index < s_PageStepCount; ++index)
-            nextValue = StepValue(nextValue, lower, upper, step, action.kind == ControlActionKind::PageUp);
+        step = KeyStep(options.minimum, options.maximum, options.keyStep);
+        for(u32 index = 0u; index < s_SliderPageStepCount; ++index)
+            value = StepValue(value, options.minimum, options.maximum, step, action.kind == ControlActionKind::PageUp);
         break;
     case ControlActionKind::Home:
-        nextValue = lower;
+        value = options.minimum;
         break;
     case ControlActionKind::End:
-        nextValue = upper;
+        value = options.maximum;
         break;
     default:
         result = accepted;
         return true;
     }
-    const f64 value = VectorDoubleGetX(nextValue);
     if(!IsFinite(value))
         return false;
     accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(value);
@@ -252,13 +182,12 @@ b8 SliderBehavior::Apply(SliderState& state, SliderResult& result, const SliderO
 }
 
 b8 SliderBehavior::Seek(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
-    using namespace __hidden_ui_slider_behavior;
     if(
-        !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
+        !IsValidSliderOptions(options) || !state.m_admitted || !IsValidSliderGesture(gesture) || gesture.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
-        || !SameRect(gesture.referenceRectangle, state.m_admission.centerTravel)
+        || !EqualUiRect(gesture.referenceRectangle, state.m_admission.centerTravel)
     )
         return false;
     SliderResult accepted = result;
@@ -268,8 +197,8 @@ b8 SliderBehavior::Seek(SliderState& state, SliderResult& result, const SliderOp
         result = accepted;
         return true;
     }
-    const SIMDVectorDouble normalizedValue = VectorDoubleDivide(VectorDoubleSubtract(VectorDoubleReplicate(gesture.position.x), VectorDoubleReplicate(gesture.referenceRectangle.x)), VectorDoubleReplicate(gesture.referenceRectangle.width));
-    const f64 normalized = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
+    const f64 normalizedValue = (static_cast<f64>(gesture.position.x) - static_cast<f64>(gesture.referenceRectangle.x)) / static_cast<f64>(gesture.referenceRectangle.width);
+    const f64 normalized = normalizedValue > 0.0 ? Min(1.0, normalizedValue) : 0.0;
     const auto value = Interpolate(options.minimum, options.maximum, normalized);
     if(!value)
         return false;
@@ -284,14 +213,13 @@ b8 SliderBehavior::Seek(SliderState& state, SliderResult& result, const SliderOp
 }
 
 b8 SliderBehavior::Drag(SliderState& state, SliderResult& result, const SliderOptions& options, const PointerGesture& gesture)noexcept{
-    using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(
-        !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
+        !IsValidSliderOptions(options) || !state.m_admitted || !IsValidSliderGesture(gesture) || gesture.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
-        || !SameRect(gesture.referenceRectangle, state.m_admission.travelBounds)
+        || !EqualUiRect(gesture.referenceRectangle, state.m_admission.travelBounds)
         || gesture.targetRectangle.width != state.m_admission.thumbExtent.x
         || gesture.targetRectangle.height != state.m_admission.thumbExtent.y || !IsFinite(baseline)
     )
@@ -316,8 +244,8 @@ b8 SliderBehavior::Drag(SliderState& state, SliderResult& result, const SliderOp
         const auto normalized = Normalize(options.minimum, options.maximum, baseline);
         if(!normalized)
             return false;
-        const SIMDVectorDouble normalizedValue = VectorDoubleAdd(VectorDoubleReplicate(*normalized), VectorDoubleDivide(VectorDoubleSplatY(travelDelta), VectorDoubleSplatX(travelDelta)));
-        const f64 dragged = VectorDoubleGetX(VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), normalizedValue), VectorDoubleGreater(normalizedValue, VectorDoubleZero())));
+        const f64 normalizedValue = *normalized + delta / travel;
+        const f64 dragged = normalizedValue > 0.0 ? Min(1.0, normalizedValue) : 0.0;
         const auto interpolated = Interpolate(options.minimum, options.maximum, dragged);
         if(!interpolated)
             return false;

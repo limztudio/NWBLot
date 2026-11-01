@@ -132,14 +132,14 @@ TEST(CurrentMathContractBoundaries, OrientedBoxTransformationAppliesTheNewRotati
 TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPlaneAndRetainsClosedDegenerateContacts){
     const BoundingBox box(Float3U(0.0f, 0.0f, 0.0f), Float3U(1.0f, 1.0f, 1.0f));
     const BoundingOrientedBox oriented(Float3U(0.0f, 0.0f, 0.0f), Float3U(1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 1.0f));
-    const SIMDVectorSingle triangles[][3]{
+    const Array<Array<SIMDVectorSingle, 3u>, 5u> triangles = {{
         { VectorSet(4.0f, 0.0f, 0.0f, 0.0f), VectorSet(0.0f, 4.0f, 0.0f, 0.0f), VectorSet(0.0f, 0.0f, 4.0f, 0.0f) },
         { VectorSet(1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, -1.0f, 0.0f), VectorSet(1.0f, 0.0f, 1.0f, 0.0f) },
         { VectorSet(-2.0f, 0.0f, 0.0f, 0.0f), VectorSet(2.0f, 0.0f, 0.0f, 0.0f), VectorSet(2.0f, 0.0f, 0.0f, 0.0f) },
         { VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f) },
         { VectorSet(1.2f, 1.0f, 0.0f, 0.0f), VectorSet(1.0f, 1.2f, 0.0f, 0.0f), VectorSet(1.0f, 1.2f, 0.0f, 0.0f) },
-    };
-    constexpr b8 s_Expected[]{ false, true, true, true, false };
+    }};
+    constexpr Array<b8, 5u> s_Expected = { false, true, true, true, false };
     for(usize index = 0u; index < LengthOf(triangles); ++index){
         SCOPED_TRACE(index);
         EXPECT_EQ(box.intersects(triangles[index][0], triangles[index][1], triangles[index][2]), s_Expected[index]);
@@ -148,13 +148,13 @@ TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPla
 
     const BoundingDoubleBox doubleBox(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 1.0));
     const BoundingDoubleOrientedBox doubleOriented(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 1.0), Double4(0.0, 0.0, 0.0, 1.0));
-    const SIMDVectorDouble doubleTriangles[][3]{
+    const Array<Array<SIMDVectorDouble, 3u>, 5u> doubleTriangles = {{
         { SIMDVectorDouble{ 4.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 0.0, 4.0, 0.0, 0.0 }, SIMDVectorDouble{ 0.0, 0.0, 4.0, 0.0 } },
         { SIMDVectorDouble{ 1.0, -1.0, -1.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.0, -1.0, 0.0 }, SIMDVectorDouble{ 1.0, 0.0, 1.0, 0.0 } },
         { SIMDVectorDouble{ -2.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 2.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 2.0, 0.0, 0.0, 0.0 } },
         { SIMDVectorDouble{ 1.0, 1.0, 1.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.0, 1.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.0, 1.0, 0.0 } },
         { SIMDVectorDouble{ 1.2, 1.0, 0.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.2, 0.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.2, 0.0, 0.0 } },
-    };
+    }};
     for(usize index = 0u; index < LengthOf(doubleTriangles); ++index){
         SCOPED_TRACE(index);
         EXPECT_EQ(doubleBox.intersects(doubleTriangles[index][0], doubleTriangles[index][1], doubleTriangles[index][2]), s_Expected[index]);
@@ -169,7 +169,7 @@ TEST(CurrentMathContractBoundaries, ShearedSphereContainsATransformedSurfacePoin
     shear.v[0] = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
     BoundingSphere transformed;
     source.transform(transformed, shear);
-    const f32 diagonal = VectorGetX(VectorDivide(VectorSplatOne(), VectorSqrt(VectorReplicate(2.0f))));
+    const f32 diagonal = 1.0f / Sqrt(2.0f);
     const SIMDVectorSingle point = Vector3Transform(VectorSet(diagonal, diagonal, 0.0f, 1.0f), shear);
     EXPECT_NE(transformed.contains(point), ContainmentType::Disjoint);
     const SIMDMatrix srt = MatrixMultiply(MatrixTranslation(7.0f, -11.0f, 5.0f), MatrixScaling(2.0f, 3.0f, 4.0f));
@@ -183,7 +183,7 @@ TEST(CurrentMathContractBoundaries, ShearedSphereContainsATransformedSurfacePoin
     doubleShear.v[0] = SIMDVectorDouble{ 1.0, 1.0, 0.0, 0.0 };
     BoundingDoubleSphere doubleTransformed;
     doubleSource.transform(doubleTransformed, doubleShear);
-    const f64 doubleDiagonal = VectorDoubleGetX(VectorDoubleDivide(VectorDoubleSplatOne(), VectorDoubleSqrt(VectorDoubleReplicate(2.0))));
+    const f64 doubleDiagonal = 1.0 / Sqrt(2.0);
     const SIMDVectorDouble doublePoint = VectorDouble3Transform(SIMDVectorDouble{ doubleDiagonal, doubleDiagonal, 0.0, 1.0 }, doubleShear);
     EXPECT_NE(doubleTransformed.contains(doublePoint), ContainmentType::Disjoint);
     const SIMDMatrixDouble doubleSrt = MatrixDoubleMultiply(MatrixDoubleTranslation(7.0, -11.0, 5.0), MatrixDoubleScaling(2.0, 3.0, 4.0));
@@ -225,12 +225,12 @@ TEST(CurrentMathContractBoundaries, FrustumTransformationAppliesTheNewRotationAf
     BoundingFrustum fromMatrix;
     source.transform(fromSrt, 1.0f, rotation, VectorZero());
     source.transform(fromMatrix, MatrixRotationQuaternion(rotation));
-    Float3U sourceCorners[BoundingFrustum::s_CornerCount];
-    Float3U srtCorners[BoundingFrustum::s_CornerCount];
-    Float3U matrixCorners[BoundingFrustum::s_CornerCount];
-    source.getCorners(sourceCorners);
-    fromSrt.getCorners(srtCorners);
-    fromMatrix.getCorners(matrixCorners);
+    Array<Float3U, BoundingFrustum::s_CornerCount> sourceCorners{};
+    Array<Float3U, BoundingFrustum::s_CornerCount> srtCorners{};
+    Array<Float3U, BoundingFrustum::s_CornerCount> matrixCorners{};
+    source.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(sourceCorners.data()));
+    fromSrt.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(srtCorners.data()));
+    fromMatrix.getCorners(*reinterpret_cast<Float3U(*)[BoundingFrustum::s_CornerCount]>(matrixCorners.data()));
     for(usize index = 0u; index < BoundingFrustum::s_CornerCount; ++index){
         SCOPED_TRACE(index);
         const SIMDVectorSingle expected = Vector3Rotate(LoadFloat(sourceCorners[index]), rotation);
@@ -246,12 +246,12 @@ TEST(CurrentMathContractBoundaries, FrustumTransformationAppliesTheNewRotationAf
     BoundingDoubleFrustum doubleFromMatrix;
     doubleSource.transform(doubleFromSrt, 1.0, doubleRotation, VectorDoubleZero());
     doubleSource.transform(doubleFromMatrix, MatrixDoubleRotationQuaternion(doubleRotation));
-    Double3U doubleSourceCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    Double3U doubleSrtCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    Double3U doubleMatrixCorners[BoundingDoubleFrustum::s_DoubleCornerCount];
-    doubleSource.getCorners(doubleSourceCorners);
-    doubleFromSrt.getCorners(doubleSrtCorners);
-    doubleFromMatrix.getCorners(doubleMatrixCorners);
+    Array<Double3U, BoundingDoubleFrustum::s_DoubleCornerCount> doubleSourceCorners{};
+    Array<Double3U, BoundingDoubleFrustum::s_DoubleCornerCount> doubleSrtCorners{};
+    Array<Double3U, BoundingDoubleFrustum::s_DoubleCornerCount> doubleMatrixCorners{};
+    doubleSource.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleSourceCorners.data()));
+    doubleFromSrt.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleSrtCorners.data()));
+    doubleFromMatrix.getCorners(*reinterpret_cast<Double3U(*)[BoundingDoubleFrustum::s_DoubleCornerCount]>(doubleMatrixCorners.data()));
     for(usize index = 0u; index < BoundingDoubleFrustum::s_DoubleCornerCount; ++index){
         SCOPED_TRACE(index);
         const SIMDVectorDouble expected = VectorDouble3Rotate(LoadDouble(doubleSourceCorners[index]), doubleRotation);
@@ -278,7 +278,7 @@ TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotat
     ASSERT_EQ(doubleSource.contains(doubleSourcePoint), ContainmentType::Contains);
     for(i32 sign = -1; sign <= 1; sign += 2){
         SCOPED_TRACE(sign);
-        const SIMDMatrix matrix = MatrixScaling(VectorGetX(VectorScale(VectorReplicate(static_cast<f32>(sign)), 2.0f)), 1.0f, 1.0f);
+        const SIMDMatrix matrix = MatrixScaling(static_cast<f32>(sign) * 2.0f, 1.0f, 1.0f);
         ASSERT_TRUE(MatrixDecompose(matrix));
         BoundingOrientedBox transformed;
         source.transform(transformed, matrix);
@@ -286,7 +286,7 @@ TEST(CurrentMathContractBoundaries, NonuniformOrientedBoxTransformBoundsItsRotat
         const SIMDVectorSingle expectedExtents = sign > 0 ? VectorSet(2.5f, 3.5f, 1.0f, 0.0f) : VectorSet(3.5f, 2.5f, 1.0f, 0.0f);
         ExpectSingleDirectionNear(LoadFloat(transformed.extents), expectedExtents);
 
-        const SIMDMatrixDouble doubleMatrix = MatrixDoubleScaling(VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(static_cast<f64>(sign)), 2.0)), 1.0, 1.0);
+        const SIMDMatrixDouble doubleMatrix = MatrixDoubleScaling(static_cast<f64>(sign) * 2.0, 1.0, 1.0);
         ASSERT_TRUE(MatrixDoubleDecompose(doubleMatrix));
         BoundingDoubleOrientedBox doubleTransformed;
         doubleSource.transform(doubleTransformed, doubleMatrix);
@@ -329,13 +329,10 @@ TEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAnd
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
-    const SIMDVectorDouble inputs[]{
-        { 1.0, 0.2, -0.3, 0.1 }, { 0.2, 1.0, -0.3, 0.1 }, { 0.2, -0.3, 1.0, 0.1 }, { 0.2, -0.3, 0.1, 1.0 },
-        { 0.5, 0.5, 0.5, 0.5 }, { 0.5 + 0x1p-40, 0.5, 0.5, 0.5 }, { 0.5, 0.5 + 0x1p-40, 0.5, 0.5 }, { 0.5, 0.5, 0.5 + 0x1p-40, 0.5 }, { 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
+    NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    const Array<SIMDVectorDouble, 9u> inputs = {
+        SIMDVectorDouble{ 1.0, 0.2, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, 1.0, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 1.0, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 0.1, 1.0 },
+        SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5 + 0x1p-40, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5 + 0x1p-40, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5 + 0x1p-40, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
     };
     volatile u64 unusedBits = 0x7ff0000000000001u;
     for(usize index = 0u; index < LengthOf(inputs); ++index){

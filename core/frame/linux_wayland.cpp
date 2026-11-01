@@ -29,7 +29,6 @@
 #include <wayland-client.h>
 #include <xdg-shell-client-protocol.h>
 #pragma pop_macro("interface")
-#include <cerrno>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,28 +87,8 @@ public:
 };
 
 
-static wl_display* GetWaylandDisplay(const Common::LinuxFrame& frameData)noexcept{
-    return reinterpret_cast<wl_display*>(frameData.nativeDisplay());
-}
-
-static void SetWaylandDisplay(Common::LinuxFrame& frameData, wl_display* display)noexcept{
-    frameData.nativeDisplay() = display;
-}
-
-static void SetWaylandSurface(Common::LinuxFrame& frameData, wl_surface* surface)noexcept{
-    frameData.nativeWindowHandle() = static_cast<u64>(reinterpret_cast<usize>(surface));
-}
-
-static WaylandContext* GetWaylandContext(const Common::LinuxFrame& frameData)noexcept{
-    return static_cast<WaylandContext*>(frameData.nativeState());
-}
-
-static void SetWaylandContext(Common::LinuxFrame& frameData, WaylandContext* context)noexcept{
-    frameData.nativeState() = context;
-}
-
 static void ApplyBufferScale(WaylandContext& context, i32 value){
-    context.bufferScale = ClampBufferScale(value);
+    context.bufferScale = Max(value, 1);
     if(context.surface)
         wl_surface_set_buffer_scale(context.surface, context.bufferScale);
     context.input.observeSurface(context.surface, context.bufferScale);
@@ -121,95 +100,31 @@ static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale)noexce
     if(logicalDimension <= 0)
         return 0;
 
-    const u64 pixels = static_cast<u64>(logicalDimension) * static_cast<u64>(ClampBufferScale(bufferScale));
+    const u64 pixels = static_cast<u64>(logicalDimension) * static_cast<u64>(Max(bufferScale, 1));
     if(pixels > static_cast<u64>(s_MaxU16))
         return static_cast<u16>(s_MaxU16);
 
     return static_cast<u16>(pixels);
 }
 
-static void DestroyWaylandContext(Common::LinuxFrame& frameData)noexcept{
-    WaylandContext* context = GetWaylandContext(frameData);
-    if(!context){
-        SetWaylandDisplay(frameData, nullptr);
-        SetWaylandSurface(frameData, nullptr);
-        frameData.setActive(false);
-        return;
-    }
+static void OnOutputGeometry(
+    [[maybe_unused]] void* data,
+    [[maybe_unused]] wl_output* output,
+    [[maybe_unused]] i32 x,
+    [[maybe_unused]] i32 y,
+    [[maybe_unused]] i32 physicalWidth,
+    [[maybe_unused]] i32 physicalHeight,
+    [[maybe_unused]] i32 subpixel,
+    [[maybe_unused]] const char* make,
+    [[maybe_unused]] const char* model,
+    [[maybe_unused]] i32 transform
+)noexcept{}
 
-    GlobalUniquePtr<WaylandContext> contextOwner(context, ArenaDeleter<WaylandContext, Alloc::GlobalArena>(context->frame.projectObjectArena()));
+static void OnOutputMode([[maybe_unused]] void* data, [[maybe_unused]] wl_output* output, [[maybe_unused]] u32 flags, [[maybe_unused]] i32 width, [[maybe_unused]] i32 height, [[maybe_unused]] i32 refresh)noexcept{}
 
-    context->input.destroy();
+static void OnOutputDone([[maybe_unused]] void* data, [[maybe_unused]] wl_output* output)noexcept{}
 
-    if(context->output){
-        wl_output_destroy(context->output);
-        context->output = nullptr;
-    }
-    if(context->toplevel){
-        xdg_toplevel_destroy(context->toplevel);
-        context->toplevel = nullptr;
-    }
-    if(context->xdgSurface){
-        xdg_surface_destroy(context->xdgSurface);
-        context->xdgSurface = nullptr;
-    }
-    if(context->surface){
-        wl_surface_destroy(context->surface);
-        context->surface = nullptr;
-    }
-    if(context->wmBase){
-        xdg_wm_base_destroy(context->wmBase);
-        context->wmBase = nullptr;
-    }
-    if(context->compositor){
-        wl_compositor_destroy(context->compositor);
-        context->compositor = nullptr;
-    }
-    if(context->registry){
-        wl_registry_destroy(context->registry);
-        context->registry = nullptr;
-    }
-    if(context->display){
-        wl_display_disconnect(context->display);
-        context->display = nullptr;
-    }
-
-    SetWaylandContext(frameData, nullptr);
-    SetWaylandDisplay(frameData, nullptr);
-    SetWaylandSurface(frameData, nullptr);
-    frameData.setActive(false);
-}
-
-static void OnOutputGeometry(void* data, wl_output* output, i32 x, i32 y, i32 physicalWidth, i32 physicalHeight, i32 subpixel, const char* make, const char* model, i32 transform)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(output);
-    static_cast<void>(x);
-    static_cast<void>(y);
-    static_cast<void>(physicalWidth);
-    static_cast<void>(physicalHeight);
-    static_cast<void>(subpixel);
-    static_cast<void>(make);
-    static_cast<void>(model);
-    static_cast<void>(transform);
-}
-
-static void OnOutputMode(void* data, wl_output* output, u32 flags, i32 width, i32 height, i32 refresh)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(output);
-    static_cast<void>(flags);
-    static_cast<void>(width);
-    static_cast<void>(height);
-    static_cast<void>(refresh);
-}
-
-static void OnOutputDone(void* data, wl_output* output)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(output);
-}
-
-static void OnOutputScale(void* data, wl_output* output, i32 factor){
-    static_cast<void>(output);
-
+static void OnOutputScale(void* data, [[maybe_unused]] wl_output* output, i32 factor){
     auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     ApplyBufferScale(context, factor);
 }
@@ -256,13 +171,11 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
     }
 }
 
-static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
-    static_cast<void>(registry);
+static void OnRegistryGlobalRemove(void* data, [[maybe_unused]] wl_registry* registry, u32 name){
     MakeNotNull(static_cast<WaylandContext*>(data))->input.removeSeat(name);
 }
 
-static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial)noexcept{
-    static_cast<void>(data);
+static void OnWmBasePing([[maybe_unused]] void* data, xdg_wm_base* wmBase, u32 serial)noexcept{
     xdg_wm_base_pong(wmBase, serial);
 }
 
@@ -283,9 +196,7 @@ static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 seria
         wl_surface_commit(context.surface);
 }
 
-static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states)noexcept{
-    static_cast<void>(toplevel);
-
+static void OnToplevelConfigure(void* data, [[maybe_unused]] xdg_toplevel* toplevel, i32 width, i32 height, wl_array* states)noexcept{
     auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     auto& frameData = context.frame.data<Common::LinuxFrame>();
 
@@ -309,9 +220,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
     frameData.setActive(activated);
 }
 
-static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
-    static_cast<void>(toplevel);
-
+static void OnToplevelClose(void* data, [[maybe_unused]] xdg_toplevel* toplevel){
     auto& context = *MakeNotNull(static_cast<WaylandContext*>(data));
     context.frame.input().pointerCaptureLost();
     context.frame.input().pointerLeave();
@@ -325,20 +234,11 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
 }
 
 #if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
-static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 width, i32 height)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(toplevel);
-    static_cast<void>(width);
-    static_cast<void>(height);
-}
+static void OnToplevelConfigureBounds([[maybe_unused]] void* data, [[maybe_unused]] xdg_toplevel* toplevel, [[maybe_unused]] i32 width, [[maybe_unused]] i32 height)noexcept{}
 #endif
 
 #if defined(XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
-static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_array* capabilities)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(toplevel);
-    static_cast<void>(capabilities);
-}
+static void OnToplevelWmCapabilities([[maybe_unused]] void* data, [[maybe_unused]] xdg_toplevel* toplevel, [[maybe_unused]] wl_array* capabilities)noexcept{}
 #endif
 
 static const wl_registry_listener s_RegistryListener = { &OnRegistryGlobal, &OnRegistryGlobalRemove, };
@@ -453,7 +353,7 @@ b8 InitWaylandFrame(Frame& frame){
         return false;
     }
     auto& context = *contextOwner;
-    SetWaylandContext(frameData, &context);
+    frameData.nativeState() = &context;
     contextOwner.release();
 
     context.display = wl_display_connect(nullptr);
@@ -463,7 +363,7 @@ b8 InitWaylandFrame(Frame& frame){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland display connection failed"));
         return false;
     }
-    SetWaylandDisplay(frameData, context.display);
+    frameData.nativeDisplay() = context.display;
 
     if(!context.input.createKeymapContext()){
         CleanupWaylandFrame(frame);
@@ -515,7 +415,7 @@ b8 InitWaylandFrame(Frame& frame){
         return false;
     }
     ApplyBufferScale(context, context.bufferScale);
-    SetWaylandSurface(frameData, context.surface);
+    frameData.nativeWindowHandle() = static_cast<u64>(reinterpret_cast<usize>(context.surface));
 
     context.xdgSurface = xdg_wm_base_get_xdg_surface(context.wmBase, context.surface);
     if(!context.xdgSurface){
@@ -580,7 +480,7 @@ b8 InitWaylandFrame(Frame& frame){
 }
 
 Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& frame){
-    WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
+    auto* const context = static_cast<WaylandContext*>(frame.data<Common::LinuxFrame>().nativeState());
     NWB_FATAL_ASSERT(context && context->display);
     auto service = CreateWaylandClipboardService(frame.projectObjectArena(), *context->display);
     if(service)
@@ -589,7 +489,7 @@ Expected<GlobalUniquePtr<IClipboardService>> CreateWaylandFrameClipboard(Frame& 
 }
 
 Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& frame){
-    WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
+    auto* const context = static_cast<WaylandContext*>(frame.data<Common::LinuxFrame>().nativeState());
     NWB_FATAL_ASSERT(context && context->display && context->surface);
     auto service = CreateWaylandTextInputService(frame.projectObjectArena(), *context->display, *context->surface);
     if(service)
@@ -599,7 +499,7 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& 
 
 b8 ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
-    if(wl_display* const display = GetWaylandDisplay(frameData)){
+    if(auto* const display = static_cast<wl_display*>(frameData.nativeDisplay())){
         if(const auto flushed = FlushDisplay(*display); !flushed){
             NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland show display flush failed; native_domain=POSIX native_code={}"), flushed.error());
             return false;
@@ -610,7 +510,7 @@ b8 ShowWaylandFrame(Frame& frame){
 
 b8 RunWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
-    auto* context = GetWaylandContext(frameData);
+    auto* context = static_cast<WaylandContext*>(frameData.nativeState());
     if(!context || !context->display){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland backend is not initialized"));
         return false;
@@ -662,7 +562,56 @@ b8 RunWaylandFrame(Frame& frame){
 }
 
 void CleanupWaylandFrame(Frame& frame)noexcept{
-    DestroyWaylandContext(frame.data<Common::LinuxFrame>());
+    auto& frameData = frame.data<Common::LinuxFrame>();
+    auto* context = static_cast<WaylandContext*>(frameData.nativeState());
+    if(!context){
+        frameData.nativeDisplay() = nullptr;
+        frameData.nativeWindowHandle() = 0u;
+        frameData.setActive(false);
+        return;
+    }
+
+    GlobalUniquePtr<WaylandContext> contextOwner(context, ArenaDeleter<WaylandContext, Alloc::GlobalArena>(context->frame.projectObjectArena()));
+
+    context->input.destroy();
+
+    if(context->output){
+        wl_output_destroy(context->output);
+        context->output = nullptr;
+    }
+    if(context->toplevel){
+        xdg_toplevel_destroy(context->toplevel);
+        context->toplevel = nullptr;
+    }
+    if(context->xdgSurface){
+        xdg_surface_destroy(context->xdgSurface);
+        context->xdgSurface = nullptr;
+    }
+    if(context->surface){
+        wl_surface_destroy(context->surface);
+        context->surface = nullptr;
+    }
+    if(context->wmBase){
+        xdg_wm_base_destroy(context->wmBase);
+        context->wmBase = nullptr;
+    }
+    if(context->compositor){
+        wl_compositor_destroy(context->compositor);
+        context->compositor = nullptr;
+    }
+    if(context->registry){
+        wl_registry_destroy(context->registry);
+        context->registry = nullptr;
+    }
+    if(context->display){
+        wl_display_disconnect(context->display);
+        context->display = nullptr;
+    }
+
+    frameData.nativeState() = nullptr;
+    frameData.nativeDisplay() = nullptr;
+    frameData.nativeWindowHandle() = 0u;
+    frameData.setActive(false);
 }
 
 

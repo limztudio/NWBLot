@@ -13,6 +13,15 @@ const u32 s_SkeletonBinaryMagic = 0x534B4C31u; // SKL1
 const Name s_AssetsSkeletonLoadBinaryArena = "impl/assets_skeleton/load_binary";
 const Name s_AssetsSkeletonSerializeArena = "impl/assets_skeleton/serialize";
 
+const StringView s_SkeletonJointsField = "joints";
+const StringView s_SkeletonNameField = "name";
+const StringView s_SkeletonParentField = "parent";
+const StringView s_SkeletonLocalBindPoseField = "local_bind_pose";
+const StringView s_SkeletonMetaKind = "Skeleton";
+const StringView s_SkeletonJointMetaKind = "Skeleton joint meta";
+const StringView s_SkeletonJointDiagnosticPrefix = "Skeleton joint";
+const StringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
+
 [reflect]
 class SkeletonJoint{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
@@ -39,6 +48,29 @@ class SkeletonJointBinary{
     public u32 padding0 = 0u;
     public Array<u32, 2> padding1;
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+b8 IsValidSkeletonHeaderBinary(in SkeletonHeaderBinary header){
+    return header.padding0 == 0u && header.jointCount <= 0xFFFFFFFFul;
+}
+
+b8 IsValidSkeletonJointBinaryPadding(in SkeletonJointBinary jointBinary){
+    return jointBinary.padding0 == 0u && jointBinary.padding1[0u] == 0u && jointBinary.padding1[1u] == 0u;
+}
+
+SkeletonJointBinary PackSkeletonJointBinary(in NameHash nameHash, in SkeletonJoint joint){
+    SkeletonJointBinary jointBinary;
+    jointBinary.nameHash = nameHash;
+    jointBinary.parentIndex = joint.parentIndex;
+    jointBinary.localBindPose = joint.localBindPose;
+    return jointBinary;
+}
+
+SkeletonJoint UnpackSkeletonJointBinary(in SkeletonJointBinary jointBinary){
+    SkeletonJoint joint;
+    joint.parentIndex = jointBinary.parentIndex;
+    joint.localBindPose = jointBinary.localBindPose;
+    return joint;
 }
 
 

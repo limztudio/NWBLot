@@ -20,6 +20,47 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+QueueFamilySharingInfo ResolveQueueFamilySharing(const ResourceQueueSharing::Mask sharing, const VulkanContext& context)noexcept{
+    QueueFamilySharingInfo result;
+    const u8 sharingBits = static_cast<u8>(sharing);
+    const auto appendFamily = [&result](const i32 familyIndex)noexcept{
+        if(familyIndex == s_InvalidQueueFamilyIndex)
+            return;
+        for(u32 index = 0u; index < result.familyIndexCount; ++index){
+            if(result.familyIndices[index] == static_cast<u32>(familyIndex))
+                return;
+        }
+        NWB_ASSERT(result.familyIndexCount < result.familyIndices.size());
+        result.familyIndices[result.familyIndexCount] = static_cast<u32>(familyIndex);
+        ++result.familyIndexCount;
+    };
+
+    if(sharingBits & static_cast<u8>(ResourceQueueSharing::Graphics)){
+        appendFamily(context.graphicsQueueFamilyIndex);
+        appendFamily(context.auxiliaryGraphicsQueueFamilyIndex);
+    }
+    if((sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute)) && context.asyncComputeLaneEnabled){
+        appendFamily(context.asyncComputeQueueFamilyIndex);
+        appendFamily(context.auxiliaryAsyncComputeQueueFamilyIndex);
+    }
+    if((sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer)) && context.transferQueueEnabled){
+        appendFamily(context.transferQueueFamilyIndex);
+        appendFamily(context.auxiliaryTransferQueueFamilyIndex);
+    }
+
+    if(result.familyIndexCount < s_MinConcurrentSharingQueueFamilyCount){
+        result.familyIndexCount = 0u;
+        return result;
+    }
+
+    result.mode = VK_SHARING_MODE_CONCURRENT;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
     return getPrimaryPhysicalQueue(queue).index;
 }
@@ -67,6 +108,11 @@ Expected<GpuQueueTimelineSnapshot> Device::getQueueTimelineSnapshot(const GpuPhy
     return snapshot;
 }
 
+b8 Device::supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
+    const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
+    return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == s_CompleteTimestampValidBits;
+}
+
 GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     if(!getPhysicalQueueInfo(queue))
         return {};
@@ -98,7 +144,6 @@ Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
     const u32 index = static_cast<u32>(queueType);
     return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
 }
-
 
 Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())

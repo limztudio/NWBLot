@@ -42,25 +42,25 @@ struct FrameExecuteStateLifecycleSet final : NoCopy{
     // Build the sparse candidate after recording; commit on Shadow Preparation accept.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate;
     Core::Alloc::ScratchArena normalExecutionScratchArena;
-    Core::TextureHandle shadowVisibilityReturnTextures[s_SinglePersistentResourceCapacity];
+    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> shadowVisibilityReturnTextures;
     // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
     LightSpaceShadowSnapshot lightSpaceShadowResources;
-    Core::TextureHandle shadowComputeScratchTextures[s_ShadowComputeScratchTextureCapacity];
-    Core::BufferHandle shadowComputeScratchBuffers[s_ShadowComputeScratchBufferCapacity];
+    Array<Core::TextureHandle, s_ShadowComputeScratchTextureCapacity> shadowComputeScratchTextures;
+    Array<Core::BufferHandle, s_ShadowComputeScratchBufferCapacity> shadowComputeScratchBuffers;
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate;
-    Core::TextureHandle causticsComputeScratchTextures[s_CausticsComputeScratchTextureCapacity];
-    Core::TextureHandle causticIrradianceTextures[s_SinglePersistentResourceCapacity];
+    Array<Core::TextureHandle, s_CausticsComputeScratchTextureCapacity> causticsComputeScratchTextures;
+    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> causticIrradianceTextures;
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate;
-    Core::TextureHandle surfelIrradianceReturnTextures[s_SinglePersistentResourceCapacity];
-    Core::BufferHandle surfelGiCounterBuffers[s_SinglePersistentResourceCapacity];
-    Core::TextureHandle surfelGiComputeScratchTextures[s_SinglePersistentResourceCapacity];
-    Core::BufferHandle surfelGiComputeScratchBuffers[s_SurfelGiComputeScratchBufferCapacity];
+    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> surfelIrradianceReturnTextures;
+    Array<Core::BufferHandle, s_SinglePersistentResourceCapacity> surfelGiCounterBuffers;
+    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> surfelGiComputeScratchTextures;
+    Array<Core::BufferHandle, s_SurfelGiComputeScratchBufferCapacity> surfelGiComputeScratchBuffers;
     Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate;
-    Core::TextureHandle hardwareCausticAccumulatorTextures[s_SinglePersistentResourceCapacity];
+    Array<Core::TextureHandle, s_SinglePersistentResourceCapacity> hardwareCausticAccumulatorTextures;
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate;
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate;
@@ -71,8 +71,8 @@ struct FrameExecuteStateLifecycleSet final : NoCopy{
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext surfelGiStateLifecycle;
     FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle;
     FrameExecuteLifecycle::DeferredLightingStateLifecycleContext deferredLightingStateLifecycle;
-    Core::GpuTaskGraphTaskRecordedCallback recordedCallbacks[s_CallbackCapacity] = {};
-    Core::GpuTaskGraphTaskAcceptedCallback acceptedCallbacks[s_CallbackCapacity] = {};
+    Array<Core::GpuTaskGraphTaskRecordedCallback, s_CallbackCapacity> recordedCallbacks = {};
+    Array<Core::GpuTaskGraphTaskAcceptedCallback, s_CallbackCapacity> acceptedCallbacks = {};
     usize recordedCallbackCount = 0u;
     usize acceptedCallbackCount = 0u;
 

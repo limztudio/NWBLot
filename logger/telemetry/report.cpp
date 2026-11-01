@@ -5,7 +5,6 @@
 #include "report.h"
 
 #include "report_dot.h"
-#include "report_json.h"
 #include "memory_report.h"
 
 #include <core/telemetry/diagnostic.h>
@@ -13,7 +12,6 @@
 
 #include <global/bit.h>
 #include <global/csv_text.h>
-#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,19 +23,12 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Telemetry = Core::Telemetry;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace TelemetryReportDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_UnknownReportField = "unknown";
 static constexpr u64 s_TimingSecondsExponentMask = 0x7FF0000000000000ull;
 static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
@@ -46,9 +37,14 @@ static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText){
+    NameDetail::HashToDebugString(outIdentityText.data(), outIdentityText.size(), name.hash());
+    return AStringView(outIdentityText.data(), NameDetail::s_DebugHashTextLength);
+}
+
+[[nodiscard]] usize EventKindBucket(const Core::Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
-    return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
+    return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Core::Telemetry::EventKind::Unknown);
 }
 
 void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex)noexcept{
@@ -65,11 +61,37 @@ void RecordFrameRange(TelemetryReportSummary& summary, const u64 frameIndex)noex
         summary.maxFrameIndex = frameIndex;
 }
 
-void AppendPerfCsvHeader(AString<TelemetryArena>& out){
-    out += "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
+[[nodiscard]] AStringView EventKindText(const Core::Telemetry::EventKind::Enum kind)noexcept{
+    switch(kind){
+    case Core::Telemetry::EventKind::TextLog:
+        return "textLog";
+    case Core::Telemetry::EventKind::Diagnostic:
+        return "diagnostic";
+    case Core::Telemetry::EventKind::PerfFrame:
+        return "perfFrame";
+    case Core::Telemetry::EventKind::FrameGraphFrame:
+        return "frameGraphFrame";
+    case Core::Telemetry::EventKind::MemoryFrame:
+        return "memoryFrame";
+    case Core::Telemetry::EventKind::Unknown:
+    default:
+        return s_UnknownReportField;
+    }
 }
 
-void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingSource::Enum source, const Telemetry::PerfTimingPayload& payload){
+[[nodiscard]] AStringView PerfTimingSourceText(const Core::Telemetry::PerfTimingSource::Enum source)noexcept{
+    switch(source){
+    case Core::Telemetry::PerfTimingSource::Cpu:
+        return "cpu";
+    case Core::Telemetry::PerfTimingSource::Gpu:
+        return "gpu";
+    case Core::Telemetry::PerfTimingSource::Unknown:
+    default:
+        return s_UnknownReportField;
+    }
+}
+
+void AppendPerfCsvRow(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::PerfTimingSource::Enum source, const Core::Telemetry::PerfTimingPayload& payload){
     out += PerfTimingSourceText(source);
     out += ',';
     AppendCsvCell(out, payload.scopeText);
@@ -87,13 +109,13 @@ void AppendPerfCsvRow(AString<TelemetryArena>& out, const Telemetry::PerfTimingS
     );
 }
 
-void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPayload& payload)noexcept{
+void AddTiming(TelemetryReportSummary& summary, const Core::Telemetry::PerfTimingPayload& payload)noexcept{
 #pragma STDC FENV_ACCESS ON
-    if(payload.source == Telemetry::PerfTimingSource::Cpu){
+    if(payload.source == Core::Telemetry::PerfTimingSource::Cpu){
         ++summary.cpuTimingEventCount;
         summary.cpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.cpuTimingSecondsValid){
-            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.cpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
+            const f64 total = summary.cpuTimingSeconds + payload.stats.seconds;
             if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
                 summary.cpuTimingSeconds = total;
             else
@@ -102,11 +124,11 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
         if(payload.stats.seconds > summary.maxCpuTimingSeconds)
             summary.maxCpuTimingSeconds = payload.stats.seconds;
     }
-    else if(payload.source == Telemetry::PerfTimingSource::Gpu){
+    else if(payload.source == Core::Telemetry::PerfTimingSource::Gpu){
         ++summary.gpuTimingEventCount;
         summary.gpuTimingSampleCount += payload.stats.sampleCount;
         if(summary.gpuTimingSecondsValid){
-            const f64 total = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(summary.gpuTimingSeconds), VectorDoubleReplicate(payload.stats.seconds)));
+            const f64 total = summary.gpuTimingSeconds + payload.stats.seconds;
             if((BitCast<u64>(total) & s_TimingSecondsExponentMask) != s_TimingSecondsExponentMask)
                 summary.gpuTimingSeconds = total;
             else
@@ -117,7 +139,7 @@ void AddTiming(TelemetryReportSummary& summary, const Telemetry::PerfTimingPaylo
     }
 }
 
-void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphPayload& payload)noexcept{
+void AddFrameGraph(TelemetryReportSummary& summary, const Core::Telemetry::FrameGraphPayload& payload)noexcept{
     ++summary.frameGraphFrameCount;
     summary.frameGraphNodeCount += payload.nodes.size();
     summary.frameGraphEdgeCount += payload.edges.size();
@@ -127,10 +149,6 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
         summary.maxFrameGraphNodeCount = nodeCount;
     if(edgeCount > summary.maxFrameGraphEdgeCount)
         summary.maxFrameGraphEdgeCount = edgeCount;
-}
-
-[[nodiscard]] usize EstimatePerfCsvReserve(const usize eventCount)noexcept{
-    return s_PerfCsvFixedReserveBytes + eventCount * s_PerfCsvBytesPerEvent;
 }
 
 
@@ -143,43 +161,13 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
-    switch(kind){
-    case Telemetry::EventKind::TextLog:
-        return "textLog";
-    case Telemetry::EventKind::Diagnostic:
-        return "diagnostic";
-    case Telemetry::EventKind::PerfFrame:
-        return "perfFrame";
-    case Telemetry::EventKind::FrameGraphFrame:
-        return "frameGraphFrame";
-    case Telemetry::EventKind::MemoryFrame:
-        return "memoryFrame";
-    case Telemetry::EventKind::Unknown:
-    default:
-        return TelemetryReportDetail::s_UnknownReportField;
-    }
-}
-
-AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)noexcept{
-    switch(source){
-    case Telemetry::PerfTimingSource::Cpu:
-        return "cpu";
-    case Telemetry::PerfTimingSource::Gpu:
-        return "gpu";
-    case Telemetry::PerfTimingSource::Unknown:
-    default:
-        return TelemetryReportDetail::s_UnknownReportField;
-    }
-}
-
-Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, Core::Alloc::ScratchArena& scratchArena){
+Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView& events, Core::Telemetry::TelemetryArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!events.valid())
         return MakeUnexpected(Failure{});
 
     TelemetryReport report(arena);
-    report.perfCsv.reserve(TelemetryReportDetail::EstimatePerfCsvReserve(events.eventCount()));
-    TelemetryReportDetail::AppendPerfCsvHeader(report.perfCsv);
+    report.perfCsv.reserve(TelemetryReportDetail::s_PerfCsvFixedReserveBytes + events.eventCount() * TelemetryReportDetail::s_PerfCsvBytesPerEvent);
+    report.perfCsv += "source,scope,publish_frame,seconds,min_seconds,max_seconds,last_seconds,sample_count,first_sample_frame,last_sample_frame\n";
 
     report.summary.eventCount = events.eventCount();
     AString<Core::Alloc::ScratchArena> memoryRecords(scratchArena);
@@ -190,26 +178,26 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
     frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){
-        const Telemetry::EventRecord& event = *MakeNotNull(events.eventAt(i));
+        const Core::Telemetry::EventRecord& event = *MakeNotNull(events.eventAt(i));
 
         ++report.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event.header.kind)];
         TelemetryReportDetail::RecordFrameRange(report.summary, event.header.frameIndex);
 
         switch(event.header.kind){
-        case Telemetry::EventKind::TextLog: {
-            const auto payload = Telemetry::ParseTextLogPayload(event.payload.data(), event.payload.size());
+        case Core::Telemetry::EventKind::TextLog: {
+            const auto payload = Core::Telemetry::ParseTextLogPayload(event.payload.data(), event.payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
-        case Telemetry::EventKind::Diagnostic: {
-            const auto payload = Telemetry::ParseDiagnosticPayload(event.payload.data(), event.payload.size());
+        case Core::Telemetry::EventKind::Diagnostic: {
+            const auto payload = Core::Telemetry::ParseDiagnosticPayload(event.payload.data(), event.payload.size());
             if(!payload)
                 ++report.summary.parseFailureCount;
             break;
         }
-        case Telemetry::EventKind::PerfFrame: {
-            const auto payload = Telemetry::ParsePerfTimingPayload(event.payload.data(), event.payload.size());
+        case Core::Telemetry::EventKind::PerfFrame: {
+            const auto payload = Core::Telemetry::ParsePerfTimingPayload(event.payload.data(), event.payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;
@@ -223,8 +211,8 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
             }
             break;
         }
-        case Telemetry::EventKind::MemoryFrame: {
-            const auto payload = Telemetry::ParsePerfMemoryPayload(event.payload.data(), event.payload.size());
+        case Core::Telemetry::EventKind::MemoryFrame: {
+            const auto payload = Core::Telemetry::ParsePerfMemoryPayload(event.payload.data(), event.payload.size());
             if(!payload){
                 ++report.summary.parseFailureCount;
                 break;
@@ -233,10 +221,10 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
             AppendTelemetryMemoryRecordJson(memoryRecords, *payload, event.header.streamId);
             break;
         }
-        case Telemetry::EventKind::FrameGraphFrame: {
+        case Core::Telemetry::EventKind::FrameGraphFrame: {
             TelemetryReportDetail::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
             record.streamId = event.header.streamId;
-            auto payload = Telemetry::ParseFrameGraphPayload(arena, scratchArena, event.payload.data(), event.payload.size());
+            auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, scratchArena, event.payload.data(), event.payload.size());
             if(!payload){
                 frameGraphs.pop_back();
                 ++report.summary.parseFailureCount;
@@ -251,7 +239,7 @@ Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Tele
         }
     }
 
-    TelemetryReportDetail::BuildTimedGraphsDot(scratchArena, frameGraphs, timingByFrameAndScope, report.graph);
+    TelemetryReportDetail::BuildTimedGraphsDot(frameGraphs, timingByFrameAndScope, scratchArena, report.graph);
     TelemetryReportDetail::BuildJson(report.summary, frameGraphs, memoryRecords, report.json);
     return report;
 }

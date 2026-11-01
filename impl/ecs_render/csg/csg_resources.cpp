@@ -4,9 +4,8 @@
 
 #include "csg_system.h"
 
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
-#include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_csg/module.h>
 
 #include <core/common/log.h>
@@ -28,7 +27,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 ReserveCsgStructuredBuffer(Core::GraphicsRuntime& graphics, const usize requiredCount, const usize elementByteSize, const Name& debugName, Core::BufferHandle& buffer, usize& inOutCapacity){
+[[nodiscard]] static b8 ReserveCsgStructuredBuffer(const usize requiredCount, const usize elementByteSize, const Name& debugName, Core::GraphicsRuntime& graphics, Core::BufferHandle& buffer, usize& inOutCapacity){
     if(requiredCount == 0u)
         return true;
     if(buffer && inOutCapacity >= requiredCount)
@@ -60,7 +59,7 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass){
+[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(const Core::GpuDescriptorClass::Enum descriptorClass, Core::Device& device, Core::Buffer& buffer){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return MakeUnexpected(Failure{});
@@ -79,7 +78,7 @@ namespace __hidden_csg_resources{
 }
 
 [[nodiscard]] static b8 ReplaceCsgStorageBufferHeapHandle(Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
-    const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer);
+    const auto acquired = AcquireCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, device, buffer);
     if(!acquired){
         // The buffer was replaced; drop the stale handle for a later retry.
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -96,10 +95,10 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static b8 EnsureCsgBufferHeapHandle(Core::Device& device, const Core::GpuDescriptorClass::Enum descriptorClass, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
+[[nodiscard]] static b8 EnsureCsgBufferHeapHandle(const Core::GpuDescriptorClass::Enum descriptorClass, Core::Device& device, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
     if(inOutHandle.valid())
         return inOutHandle.descriptorClass() == descriptorClass;
-    const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, descriptorClass);
+    const auto acquired = AcquireCsgBufferHeapHandle(descriptorClass, device, buffer);
     if(!acquired)
         return false;
     inOutHandle = *acquired;
@@ -115,6 +114,92 @@ namespace __hidden_csg_resources{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 CsgGraphResourceSnapshot::bindingValid()const noexcept{
+    return
+        receiverRanges
+        && cutters
+        && clipContextSlots
+        && intervalSampleState
+        && receiverRangeHeapHandle.valid()
+        && receiverRangeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && cutterHeapHandle.valid()
+        && cutterHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && clipContextSlotsHeapHandle.valid()
+        && clipContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && intervalSampleStateHeapHandle.valid()
+        && intervalSampleStateHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+    ;
+}
+
+b8 CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuDataView& csgFrameData)const noexcept{
+    if(!csgFrameData.hasWork())
+        return true;
+
+    return bindingValid() && receiverRangeCapacity >= csgFrameData.receiverRanges.size() && cutterCapacity >= csgFrameData.cutters.size();
+}
+
+Expected<u32> CsgGraphResourceSnapshot::findClipContextHeapSlot()const noexcept{
+    if(!clipContextSlotsHeapHandle.valid())
+        return MakeUnexpected(Failure{});
+
+    return clipContextSlotsHeapHandle.slot();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererCsgState::invalidateResources()noexcept{
+    m_clipBindingLayout.reset();
+    m_intervalPeelBindingLayout.reset();
+    m_receiverSpanBuildBindingLayout.reset();
+    m_intervalCombineBindingLayout.reset();
+    m_intervalPeelComputeShader.reset();
+    m_receiverSpanBuildComputeShader.reset();
+    m_intervalCombineComputeShader.reset();
+    m_intervalCapFillPixelShader.reset();
+    m_refractionCapFillPixelShader.reset();
+    m_intervalPeelPipeline.reset();
+    m_receiverSpanBuildPipeline.reset();
+    m_intervalCombinePipeline.reset();
+    m_intervalCapFillPipeline.reset();
+    m_refractionCapFillPipeline.reset();
+    m_receiverRangeBuffer.reset();
+    m_cutterBuffer.reset();
+    m_clipContextSlotsBuffer.reset();
+    m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_intervalSampleStateBuffer.reset();
+    m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_frameStateCacheSignature = CsgFrameStateCacheSignature{};
+    m_frameStateCache = CsgFrameState{};
+    m_receiverRangeBufferCapacity = 0u;
+    m_cutterBufferCapacity = 0u;
+    m_frameStateCacheValid = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererCsgSystem::invalidateResources(){
+    releaseCsgClipContextHeapHandles();
+    m_csgState.invalidateResources();
+}
 
 b8 RendererCsgSystem::createCsgClipResources(){
     auto& device = m_graphics.getDevice();
@@ -151,8 +236,8 @@ b8 RendererCsgSystem::createCsgClipResources(){
         }
     }
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, Core::GpuDescriptorClass::UniformBuffer, *m_csgState.m_clipContextSlotsBuffer.get(), m_csgState.m_clipContextSlotsHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(device, Core::GpuDescriptorClass::UniformBuffer, *m_csgState.m_intervalSampleStateBuffer.get(), m_csgState.m_intervalSampleStateHeapHandle)
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::UniformBuffer, device, *m_csgState.m_clipContextSlotsBuffer.get(), m_csgState.m_clipContextSlotsHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::UniformBuffer, device, *m_csgState.m_intervalSampleStateBuffer.get(), m_csgState.m_intervalSampleStateHeapHandle)
     )
         return false;
 
@@ -161,7 +246,7 @@ b8 RendererCsgSystem::createCsgClipResources(){
 
 b8 RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, rangeCount, sizeof(CsgReceiverRangeGpuData), ECSRenderDetail::s_CsgReceiverRangeBufferName, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity)){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(rangeCount, sizeof(CsgReceiverRangeGpuData), s_CsgReceiverRangeBufferName, m_graphics, m_csgState.m_receiverRangeBuffer, m_csgState.m_receiverRangeBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
         return false;
     }
@@ -175,7 +260,7 @@ b8 RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCou
 
 b8 RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
-    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(m_graphics, cutterCount, sizeof(CsgCutterGpuData), ECSRenderDetail::s_CsgCutterBufferName, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity)){
+    if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(cutterCount, sizeof(CsgCutterGpuData), s_CsgCutterBufferName, m_graphics, m_csgState.m_cutterBuffer, m_csgState.m_cutterBufferCapacity)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
         return false;
     }
@@ -195,8 +280,8 @@ b8 RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, c
     if(!reserveCsgReceiverRangeBufferCapacity(receiverRangeCount) || !reserveCsgCutterBufferCapacity(cutterCount))
         return false;
     if(
-        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), Core::GpuDescriptorClass::StorageBuffer, *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)
-        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(m_graphics.getDevice(), Core::GpuDescriptorClass::StorageBuffer, *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, m_graphics.getDevice(), *m_csgState.m_receiverRangeBuffer.get(), m_csgState.m_receiverRangeBufferHeapHandle)
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(Core::GpuDescriptorClass::StorageBuffer, m_graphics.getDevice(), *m_csgState.m_cutterBuffer.get(), m_csgState.m_cutterBufferHeapHandle)
         || !m_csgState.m_clipContextSlotsBuffer || !m_csgState.m_clipContextSlotsHeapHandle.valid()
         || !m_csgState.m_intervalSampleStateBuffer || !m_csgState.m_intervalSampleStateHeapHandle.valid()
     ){
@@ -245,13 +330,14 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
         return MakeUnexpected(Failure{});
 
     // Freeze indirections now; later records must not see another generation.
-    contextSlots.receiverRanges = csgResources.receiverRangeHeapHandle.slot();
-    contextSlots.cutters = csgResources.cutterHeapHandle.slot();
-    contextSlots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
-    contextSlots.meshInstances = frameBindings.instanceHeapHandle.slot();
-    contextSlots.deferredBindlessResources = targets.bindless.slotsBufferDescriptor.slot();
-    contextSlots.intervalSampleState = csgResources.intervalSampleStateHeapHandle.slot();
-    return contextSlots;
+    return ResolveCsgClipContextSlots(
+        csgResources.receiverRangeHeapHandle.slot(),
+        csgResources.cutterHeapHandle.slot(),
+        frameBindings.materialTypedHeapHandle.slot(),
+        frameBindings.instanceHeapHandle.slot(),
+        targets.bindless.slotsBufferDescriptor.slot(),
+        csgResources.intervalSampleStateHeapHandle.slot()
+    );
 }
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){

@@ -136,7 +136,7 @@ void UiSliderSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiSliderSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    PaintSmokeValueMarkers(context, m_snapshot.values, m_snapshot.bits, m_snapshot.sequence);
+    PaintSmokeValueMarkers(m_snapshot.values, m_snapshot.bits, m_snapshot.sequence, context);
 }
 
 

@@ -78,12 +78,12 @@ static constexpr u32 s_FramebufferCaptureDefaultFrameCount = 360u;
 static constexpr u32 s_SRGBClearEdgeWidth = 6u;
 static constexpr u32 s_SRGBClearEdgeHeight = 4u;
 static constexpr u32 s_SRGBClearEdgeBytesPerPixel = 4u;
-static constexpr NWB::Core::Color s_SRGBClearEdgeColors[]{
+static constexpr Array<NWB::Core::Color, 4> s_SRGBClearEdgeColors = {{
     { BitCast<f32>(BitCast<u32>(0.0031308f) - 1u), 0.0031308f, BitCast<f32>(BitCast<u32>(0.0031308f) + 1u), 0.25f },
     { BitCast<f32>(BitCast<u32>(0.21404114f) - 1u), 0.21404114f, BitCast<f32>(BitCast<u32>(0.21404114f) + 1u), 0.5f },
     { 0.25f, 0.5f, 0.75f, 1.0f },
     { -0.25f, 1.25f, 0.0f, -0.5f },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +117,7 @@ public:
     [[nodiscard]] static b8 Record(const Payload& payload, NWB::Core::CommandList& commands, const NWB::Core::GpuTaskRecordContext& context){
         if(!payload.destination || context.commandIrCapture)
             return false;
-        for(u32 index = 0u; index < LengthOf(s_SRGBClearEdgeColors); ++index)
+        for(u32 index = 0u; index < s_SRGBClearEdgeColors.size(); ++index)
             commands.clearTextureRectFloat(*payload.destination, NWB::Core::TextureSubresourceSet(0u, 1u, 0u, 1u), NWB::Core::Rect(static_cast<i32>(index + 1u), static_cast<i32>(index + 2u), 1, 3), s_SRGBClearEdgeColors[index]);
         return !commands.commandRecordingFailed();
     }
@@ -165,22 +165,22 @@ struct SRGBClearEdgeInputs{
     if(!initialized)
         return MakeUnexpected(Failure{});
 
-    const GpuTaskResourceUse clearUse[]{
+    const Array<GpuTaskResourceUse, 1> clearUse = {{
         { .resource = *texture, .range = { .textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
-    };
+    }};
     const auto bounded = graph.addTask<SRGBClearEdgeTask>(
-        GpuTaskDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.bounded")).setMarkerLabel("Clear bounded sRGB edge strips").setDependencies(&*initialized, 1u).setResourceUses(clearUse, LengthOf(clearUse)),
+        GpuTaskDesc{}.setIdentity(Name("tests.smoke.texture.srgb_edges.bounded")).setMarkerLabel("Clear bounded sRGB edge strips").setDependencies(Span(&*initialized, 1u)).setResourceUses(clearUse),
         SRGBClearEdgeTask::Payload{ inputs.texture }
     );
     if(!bounded)
         return MakeUnexpected(Failure{});
 
-    const GpuTaskResourceUse readbackUses[]{
+    const Array<GpuTaskResourceUse, 2> readbackUses = {{
         { .resource = *texture, .range = { .textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u) }, .requiredState = ResourceStates::CopySource, .access = GpuTaskResourceAccess::Read },
         { .resource = *readback, .range = {}, .requiredState = ResourceStates::Unknown, .access = GpuTaskResourceAccess::Write },
-    };
+    }};
     return graph.addTask<SRGBClearEdgeReadbackTask>(
-        GpuTaskDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("Read back sRGB clear edge pixels").setDependencies(&*bounded, 1u).setResourceUses(readbackUses, LengthOf(readbackUses)),
+        GpuTaskDesc{}.setIdentity(Name(s_ReadbackResourcePath)).setMarkerLabel("Read back sRGB clear edge pixels").setDependencies(Span(&*bounded, 1u)).setResourceUses(readbackUses),
         SRGBClearEdgeReadbackTask::Payload{ inputs.texture, inputs.readback }
     );
 }
@@ -219,8 +219,8 @@ struct SRGBClearEdgeInputs{
         const auto bytes = MakeNotNull(static_cast<const u8*>(mapping->data));
         for(u32 y = 0u; y < s_SRGBClearEdgeHeight; ++y){
             for(u32 x = 0u; x < s_SRGBClearEdgeWidth; ++x){
-                u8 expected[]{ 0u, 0u, 0u, 255u };
-                if(x > 0u && x <= LengthOf(s_SRGBClearEdgeColors) && y > 0u && y < 3u){
+                Array<u8, 4> expected = { 0u, 0u, 0u, 255u };
+                if(x > 0u && x <= s_SRGBClearEdgeColors.size() && y > 0u && y < 3u){
                     const Color& color = s_SRGBClearEdgeColors[x - 1u];
                     expected[0] = ExpectedSRGBClearByte(color.r, true);
                     expected[1] = ExpectedSRGBClearByte(color.g, true);
@@ -247,7 +247,7 @@ class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeRenderWorldOrDie(s_ProjectName, context))
     {
         m_captureConfigurationValid = configureFramebufferCapture();
     }
@@ -263,21 +263,21 @@ public:
         if(!VerifySRGBClearEdges(m_context.graphics))
             return false;
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_CameraHeight, s_CameraDistance, s_CameraPitch, *m_world);
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), s_DirectionalLightIntensity);
 
         // Use an untextured white floor to isolate indirect color bounce from the sphere.
-        m_whiteGround = CreateTintedStaticMeshEntity(*m_world, s_GroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f));
+        m_whiteGround = CreateTintedStaticMeshEntity(s_GroundPlaneMesh, s_WhiteGroundMaterial, s_WhiteGroundMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(3.25f, 1.0f, 3.25f, 0.0f), *m_world);
         // Place the UV-mapped sphere just above the white floor.
         m_texturedSphere = CreateTintedStaticMeshEntity(
-            *m_world,
             s_TexturedSphereMesh,
             s_TextureMaterial,
             s_TextureMaterialInterface,
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
             Float4(0.0f, 1.16f, 0.15f, 0.0f),
             Float4(1.1f, 1.1f, 1.1f, 0.0f),
-            s_TextureRuntimeTintParameter
+            s_TextureRuntimeTintParameter,
+            *m_world
         );
         NWB_FATAL_ASSERT_MSG(activeCamera.valid() && directionalLight.valid() && m_whiteGround.valid() && m_texturedSphere.valid(), NWB_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere"));
 
@@ -291,20 +291,13 @@ public:
     }
 
     virtual b8 onUpdate(const f32 delta)override{
-        if(m_framebufferCapture)
-            m_framebufferCapture->update();
-        const auto updated = m_world->tick(delta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        return true;
+        return NWB::Tests::Smoke::TickSmokeWorldWithCapture(delta, *m_world, m_framebufferCapture);
     }
 
 
 private:
     b8 configureFramebufferCapture(){
-        auto capture = ConfigureSmokeFramebufferCapture(m_context, s_ProjectName, s_FramebufferCaptureDefaultFrameCount);
+        auto capture = ConfigureSmokeFramebufferCapture(s_ProjectName, s_FramebufferCaptureDefaultFrameCount, {}, m_context);
         if(!capture)
             return false;
         m_framebufferCapture = Move(*capture);

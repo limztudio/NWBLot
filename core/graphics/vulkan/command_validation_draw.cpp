@@ -100,7 +100,7 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state){
         Buffer* buffer = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
     };
-    BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount]{};
+    Array<BufferStateEntry, s_MaxVertexAttributes + s_GraphicsExtraBufferStateCount> requiredBufferStates{};
     u32 requiredBufferStateCount = 0u;
 
     const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](Buffer* const buffer, const ResourceStates::Mask requiredState)noexcept -> b8{

@@ -88,8 +88,6 @@ struct GpuTaskGraphNormalExecutionDesc{
 
 // Submission telemetry. Wait counts follow the same elision/merge rules as Device::executeCommandLists().
 struct GpuTaskGraphSubmissionStatistics{
-    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
-
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
@@ -110,9 +108,9 @@ struct GpuTaskGraphSubmissionStatistics{
     usize inheritedTimelineWaitElisionCount = 0u;
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
-    usize nativeSubmissionCountByQueueClass[s_QueueClassCount] = {};
-    usize nativeCommandListCountByQueueClass[s_QueueClassCount] = {};
-    usize timelineWaitCountByQueueClass[s_QueueClassCount] = {};
+    Array<usize, s_QueueClassCount> nativeSubmissionCountByQueueClass{};
+    Array<usize, s_QueueClassCount> nativeCommandListCountByQueueClass{};
+    Array<usize, s_QueueClassCount> timelineWaitCountByQueueClass{};
     f64 submissionSeconds = 0.0;
 
 
@@ -242,6 +240,7 @@ private:
         b8 nativeSubmissionRejected = false;
     };
 
+
 private:
     class SubmissionWriterReservation final : NoCopy{
     public:
@@ -293,6 +292,7 @@ private:
         b8 m_composite = false;
     };
 
+
 private:
     struct NativeSubmissionInfo{
         usize commandListCount = 0u;
@@ -330,16 +330,7 @@ private:
 
 
 private:
-    [[nodiscard]] static b8 WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
-        if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
-            return true;
-        if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
-            if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
-                return true;
-            TerminateInvariant();
-        }
-        return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
-    }
+    [[nodiscard]] static b8 WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
 
 
 public:
@@ -422,6 +413,13 @@ private:
 
 
     [[nodiscard]] Expected<SubmissionExceptionClosing> beginSubmissionExceptionClosingWithinSubmissionOperation(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
+    void armSubmissionExceptionClosingWithinSubmissionOperation(
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskGraph& graph,
+        b8& inoutArmed,
+        u64& outRecordingAttemptGeneration,
+        GpuGraphSubmissionBinding& outSubmissionBinding
+    )noexcept;
     [[nodiscard]] b8 submissionExceptionClosingResolved(const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
     void completeSubmissionExceptionClosingWithinSubmissionOperation(
         GpuTaskGraph& graph,

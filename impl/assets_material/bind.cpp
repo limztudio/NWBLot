@@ -23,80 +23,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_assets_material_bind{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ItemT>
-[[nodiscard]] const ItemT* FindNamedBindItem(const Span<const ItemT> items, const AStringView itemName)noexcept{
-    for(const auto& item : items){
-        if(AStringView(item.name) == itemName)
-            return &item;
-    }
-    return nullptr;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const MaterialBindStruct* MaterialBindEntry::findStruct(const AStringView typeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindStruct>(structs, typeName);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView attributeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
-}
-
 AStringView MaterialBindField::defaultArgument()const noexcept{
-    const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_DefaultAttribute);
+    const MaterialBindAttribute* attribute = findAttribute(s_MaterialDefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindField>(fields, fieldName);
-}
-
-const MaterialBindAttribute* MaterialBindStruct::findAttribute(const AStringView attributeName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindAttribute>(attributes, attributeName);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView instanceName)const noexcept{
-    return __hidden_assets_material_bind::FindNamedBindItem<MaterialBindInstance>(instances, instanceName);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void MaterialBindTypedLayout::reset()noexcept{
-    bindEntry = nullptr;
-    layoutHash = 0u;
-    typedLayoutBlocks.clear();
-    typedLayoutFields.clear();
-    typedBlockBytes.clear();
-    blockLookup.clear();
-    parameterLookup.clear();
 }
 
 
@@ -123,26 +52,6 @@ Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey)noexcept{
-    return UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, parameterKey);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Expected<MaterialBindEntry> ParseMaterialBindSource(const Path& bindFilePath, MaterialCookArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena, scratchArena);
-    if(!doc)
-        return MakeUnexpected(Failure{});
-
-    return MaterialBindDetail::ParseMaterialBindSource(bindFilePath, *doc, arena, scratchArena);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, u64& outLayoutHash, Material::TypedLayoutBlockVector& outBlocks, Material::TypedLayoutFieldVector& outFields, Material::TypedBlockByteVector& outBlockBytes){
     outLayoutHash = layout.layoutHash;
     outBlocks.reserve(layout.typedLayoutBlocks.size());
@@ -160,7 +69,7 @@ void CopyMaterialBindTypedLayoutDefaults(const MaterialBindTypedLayout& layout, 
 b8 ApplyMaterialBindTypedLayoutParameters(const MaterialBindTypedLayout& layout, const Name& materialName, const MaterialBindParameterMap& parameters, Material::TypedBlockByteVector& inOutBlockBytes, Material::ResourceReferenceVector& outResourceReferences){
     outResourceReferences.clear();
     for(const auto& [parameterName, parameterValue] : parameters){
-        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(layout, materialName, parameterName, parameterValue, inOutBlockBytes, outResourceReferences))
+        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(layout, materialName, parameterName, parameterValue, outResourceReferences, inOutBlockBytes))
             return false;
     }
 

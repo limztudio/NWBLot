@@ -12,14 +12,13 @@
 #include "cook_metadata.h"
 #include "cook_source_streams.h"
 #include "cook_stream_reorder.h"
-#include "cook_ref_encoding.h"
+#include "meshlet_ref_encode.h"
 #include "cook_meshlets.h"
 #include "binary_payload_io.h"
-#include "binary_payload.h"
 #include "meshlet_triangle_indices.h"
 #include "cook_topology.h"
 
-#include <core/alloc/scratch.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 
 
@@ -38,65 +37,14 @@ namespace __hidden_assets_mesh_cook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ParseSourceMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
-    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(discoveredFile, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
+static b8 ParseSourceMeshMeta(const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, MeshCookEntry& outEntry){
+    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(nwbFilePath, asset, s_MeshMetaKind, outEntry.positions.get_allocator().arena(), scratchArena);
     if(!streamsResult)
         return false;
 
     SourceMeshStreams& streams = *streamsResult;
     MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
-    return MeshCookMeshlets::BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
-}
-
-static b8 ValidateMeshAssetFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
-    return Core::Assets::ValidateMetadataAssetFields(
-        discoveredFile.filePath,
-        asset,
-        s_MeshMetaText,
-        {
-            MeshCookMetadata::s_PositionsFieldNameView,
-            MeshCookMetadata::s_NormalsFieldNameView,
-            MeshCookMetadata::s_TangentsFieldNameView,
-            MeshCookMetadata::s_Uv0FieldNameView,
-            MeshCookMetadata::s_ColorsFieldNameView,
-            MeshCookMetadata::s_VertexRefsFieldNameView,
-            MeshCookMetadata::s_IndicesFieldNameView,
-        }
-    );
-}
-
-static Expected<MeshCookEntry> ParseMeshMeta(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset,
-    const Name& virtualPath,
-    Core::Assets::AssetArena& arena,
-    Core::CpuTaskScheduler& cpuScheduler,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    MeshCookEntry entry(arena);
-
-    if(!Core::Assets::CheckMetadataAssetMap(discoveredFile.filePath, asset, s_MeshMetaText))
-        return MakeUnexpected(Failure{});
-
-    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, discoveredFile.filePath, s_MeshMetaText))
-        return MakeUnexpected(Failure{});
-    if(!ValidateMeshAssetFields(discoveredFile, asset))
-        return MakeUnexpected(Failure{});
-    if(!ParseSourceMeshMeta(discoveredFile, asset, cpuScheduler, scratchArena, entry))
-        return MakeUnexpected(Failure{});
-    return entry;
-}
-
-static Expected<MeshCookEntry> ParseMeshMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(discoveredFile.filePath, doc, s_MeshMetaText);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseMeshMeta(discoveredFile, **asset, virtualPath, arena, cpuScheduler, scratchArena);
+    return MeshCookMeshlets::BuildMeshlets(nwbFilePath, s_MeshMetaKind, streams.indices, cpuScheduler, scratchArena, outEntry);
 }
 
 
@@ -118,22 +66,41 @@ Expected<MeshCookEntry> ParseMeshCookMetadata(
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    const auto discoveredFile = MeshCookMetadata::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath);
-    if(!discoveredFile)
-        return MakeUnexpected(Failure{});
-    return __hidden_assets_mesh_cook::ParseMeshMeta(*discoveredFile, doc, arena, cpuScheduler, scratchArena);
+    return Core::Assets::ParseCookMetadataDocument<MeshCookEntry>(
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        doc,
+        s_MeshMetaText,
+        [&nwbFilePath, &arena, &cpuScheduler, &scratchArena](const Name virtualPath, const Core::Metascript::Value& asset){
+            return ParseMeshCookMetadata(virtualPath, nwbFilePath, asset, arena, cpuScheduler, scratchArena);
+        },
+        scratchArena
+    );
 }
 
 Expected<MeshCookEntry> ParseMeshCookMetadata(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
-    DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
-    discoveredFile.filePath = nwbFilePath;
-    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, arena, cpuScheduler, scratchArena);
+    MeshCookEntry entry(arena);
+
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_MeshMetaText))
+        return MakeUnexpected(Failure{});
+
+    if(!Core::Assets::AssignCookEntryVirtualPath(virtualPath, nwbFilePath, s_MeshMetaText, entry))
+        return MakeUnexpected(Failure{});
+    if(!Core::Assets::ValidateMetadataAssetFields(nwbFilePath, asset, s_MeshMetaText, &MeshCookMetadata::IsAllowedMeshAssetField))
+        return MakeUnexpected(Failure{});
+    if(!__hidden_assets_mesh_cook::ParseSourceMeshMeta(nwbFilePath, asset, cpuScheduler, scratchArena, entry))
+        return MakeUnexpected(Failure{});
+    return entry;
 }
 
 Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
     if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
         return MakeUnexpected(Failure{});
-    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, s_MeshMetaKind))
+    if(!EncodeMeshletRefDeltas(meshEntry.meshletPositionStreamRefs, meshEntry.meshletAttributeStreamRefs, false, [&](const usize meshletIndex, const TStringView reason){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}"), s_MeshMetaKind, ConvertString(meshEntry.virtualPath.resolvedText()), meshletIndex, reason);
+        return false;
+    }, meshEntry.meshlets, meshEntry.meshletPositionRefDeltas, meshEntry.meshletAttributeRefDeltas))
         return MakeUnexpected(Failure{});
 
     const auto triangleIndices = BuildMeshletTriangleIndices(meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas, meshEntry.meshletPrimitiveIndices, meshEntry.positions.size(), scratchArena);
@@ -174,40 +141,40 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FillMeshBaseHeader(MeshBinaryHeader& header, const Mesh& mesh)noexcept{
-    header.meshClass = mesh.meshClass();
-    header.positionCount = static_cast<u64>(mesh.positionStream().size());
-    header.normalCount = static_cast<u64>(mesh.normalStream().size());
-    header.tangentCount = static_cast<u64>(mesh.tangentStream().size());
-    header.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
-    header.colorCount = static_cast<u64>(mesh.colorStream().size());
-    header.meshletCount = static_cast<u64>(mesh.meshlets().size());
-    header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
-    header.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size());
-    header.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size());
-    header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
-    header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
+void FillMeshBaseHeader(const Mesh& mesh, MeshBinaryHeader& outHeader)noexcept{
+    outHeader.meshClass = mesh.meshClass();
+    outHeader.positionCount = static_cast<u64>(mesh.positionStream().size());
+    outHeader.normalCount = static_cast<u64>(mesh.normalStream().size());
+    outHeader.tangentCount = static_cast<u64>(mesh.tangentStream().size());
+    outHeader.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
+    outHeader.colorCount = static_cast<u64>(mesh.colorStream().size());
+    outHeader.meshletCount = static_cast<u64>(mesh.meshlets().size());
+    outHeader.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
+    outHeader.meshletPositionRefDeltaByteCount = static_cast<u64>(mesh.meshletPositionRefDeltas().size());
+    outHeader.meshletAttributeRefDeltaByteCount = static_cast<u64>(mesh.meshletAttributeRefDeltas().size());
+    outHeader.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
+    outHeader.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
 }
 
-[[nodiscard]] b8 AppendMeshAttributeStreams(Core::Assets::AssetBytes& outBinary, const Mesh& mesh, const TStringView failureContext){
+[[nodiscard]] b8 AppendMeshAttributeStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){
     return
-        Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, s_PositionsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, s_NormalsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, s_TangentsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, s_Uv0StreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, s_ColorsStreamLabel)
+        Core::Assets::AppendVectorPayload(mesh.positionStream(), failureContext, s_PositionsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.normalStream(), failureContext, s_NormalsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.tangentStream(), failureContext, s_TangentsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.uv0Stream(), failureContext, s_Uv0StreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.colorStream(), failureContext, s_ColorsStreamLabel, outBinary)
     ;
 }
 
-[[nodiscard]] b8 AppendMeshletStreams(Core::Assets::AssetBytes& outBinary, const Mesh& mesh, const TStringView failureContext){
+[[nodiscard]] b8 AppendMeshletStreams(const Mesh& mesh, const TStringView failureContext, Core::Assets::AssetBytes& outBinary){
     return
-        Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, s_MeshletsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel)
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel)
+        Core::Assets::AppendVectorPayload(mesh.meshlets(), failureContext, s_MeshletsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.meshletBounds(), failureContext, s_MeshletBoundsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.meshletPositionRefDeltas(), failureContext, s_MeshletPositionRefDeltasStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.meshletAttributeRefDeltas(), failureContext, s_MeshletAttributeRefDeltasStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.meshletLocalVertexRefs(), failureContext, s_MeshletLocalVertexRefsStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.meshletPrimitiveIndices(), failureContext, s_MeshletPrimitiveIndicesStreamLabel, outBinary)
+        && Core::Assets::AppendVectorPayload(mesh.solidTriangleWords(), failureContext, s_SolidTriangleWordsStreamLabel, outBinary)
     ;
 }
 
@@ -231,20 +198,20 @@ b8 MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::As
         return false;
 
     usize reserveBytes = sizeof(MeshBinaryHeader);
-    const b8 canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(reserveBytes, mesh);
+    const b8 canReserve = MeshAssetBinaryPayload::AddMeshBaseReserveBytes(mesh, reserveBytes);
 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
 
     MeshBinaryHeader header;
-    MeshAssetBinaryPayload::FillMeshBaseHeader(header, mesh);
+    MeshAssetBinaryPayload::FillMeshBaseHeader(mesh, header);
     AppendPOD(outBinary, header);
 
     const TStringView serializeFailureContext = MeshBinaryPayload::s_MeshSerializeContext;
-    if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(outBinary, mesh, serializeFailureContext))
+    if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(mesh, serializeFailureContext, outBinary))
         return false;
-    return MeshAssetBinaryPayload::AppendMeshletStreams(outBinary, mesh, serializeFailureContext);
+    return MeshAssetBinaryPayload::AppendMeshletStreams(mesh, serializeFailureContext, outBinary);
 }
 
 

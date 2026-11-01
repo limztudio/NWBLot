@@ -36,8 +36,6 @@ static constexpr AStringView s_MaterialBindIncludes = "material_bind_includes";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -70,17 +68,17 @@ TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedI
     );
     u64 beforeChecksum = 0u;
     u64 afterChecksum = 0u;
-    const auto dependencyResult4 = shaderCook.computeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
+    const auto dependencyResult4 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(dependencyResult4);
     beforeChecksum = dependencyResult4->checksum;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
-    const auto dependencyResult3 = shaderCook.computeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
+    const auto dependencyResult3 = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, includeDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(dependencyResult3);
     afterChecksum = dependencyResult3->checksum;
     EXPECT_NE(beforeChecksum, afterChecksum);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    static constexpr AStringView s_UnplannedIncludes[] = { "#define GENERATED_INCLUDE \"tracked.slangi\"\n#include GENERATED_INCLUDE\n", "#include_next \"tracked.slangi\"\n", "#import \"tracked.slangi\"\n", };
+    static constexpr Array<AStringView, 3u> s_UnplannedIncludes = { "#define GENERATED_INCLUDE \"tracked.slangi\"\n#include GENERATED_INCLUDE\n", "#include_next \"tracked.slangi\"\n", "#import \"tracked.slangi\"\n", };
     for(const AStringView source : s_UnplannedIncludes){
         SCOPED_TRACE(source);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, source));
@@ -120,17 +118,17 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
     u64 firstChecksum = 0u;
     u64 secondChecksum = 0u;
-    const auto dependencyResult2 = shaderCook.computeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
+    const auto dependencyResult2 = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult2);
     firstChecksum = dependencyResult2->checksum;
-    const auto dependencyResult1 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
+    const auto dependencyResult1 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult1);
     secondChecksum = dependencyResult1->checksum;
     EXPECT_EQ(firstChecksum, secondChecksum);
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(secondGeneratedInclude, "changed generated include\n"));
     u64 changedChecksum = 0u;
-    const auto dependencyResult0 = shaderCook.computeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
+    const auto dependencyResult0 = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, includeDirectories, { { secondGeneratedRoot, s_MaterialBindIncludes } }, scratchArena);
     ASSERT_TRUE(dependencyResult0);
     changedChecksum = dependencyResult0->checksum;
     EXPECT_NE(firstChecksum, changedChecksum);
@@ -143,7 +141,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-    EXPECT_FALSE(shaderCook.computeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena));
+    EXPECT_FALSE(Impl::ShaderCook::ComputeDependencyChecksum(unaliasedDependencies, includeDirectories, { { firstGeneratedRoot, s_MaterialBindIncludes } }, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the declared dependency root aliases")));
 #endif
 
@@ -180,27 +178,27 @@ TEST(AssetsGraphics, ShaderDependencyChecksumIncludesOrderedSearchRootsWithSameF
     for(const Path& dependency : firstDependencies)
         EXPECT_NE(FindIf(secondDependencies.begin(), secondDependencies.end(), [&dependency](const Path& path)noexcept{ return path == dependency; }), secondDependencies.end());
 
-    const auto firstFileUnion = shaderCook.computeDependencyChecksum(firstDependencies, noDirectories, { { root, "source" } }, scratchArena);
-    const auto secondFileUnion = shaderCook.computeDependencyChecksum(secondDependencies, noDirectories, { { root, "source" } }, scratchArena);
+    const auto firstFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, noDirectories, { { root, "source" } }, scratchArena);
+    const auto secondFileUnion = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, noDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(firstFileUnion);
     ASSERT_TRUE(secondFileUnion);
     EXPECT_EQ(firstFileUnion->checksum, secondFileUnion->checksum);
-    const auto firstSearch = shaderCook.computeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
-    const auto secondSearch = shaderCook.computeDependencyChecksum(secondDependencies, secondDirectories, { { root, "source" } }, scratchArena);
+    const auto firstSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+    const auto secondSearch = Impl::ShaderCook::ComputeDependencyChecksum(secondDependencies, secondDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(firstSearch);
     ASSERT_TRUE(secondSearch);
     EXPECT_NE(firstSearch->checksum, secondSearch->checksum);
     firstDirectories.push_back(root.parentPath());
-    const auto externalSearch = shaderCook.computeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+    const auto externalSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(externalSearch);
     EXPECT_NE(externalSearch->checksum, firstSearch->checksum);
     // Unused case-only search roots keep their exact spelling even on case-insensitive hosts.
     firstDirectories.clear();
     firstDirectories.push_back(root / "CaseOnly");
-    const auto upperCaseSearch = shaderCook.computeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+    const auto upperCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
     firstDirectories.clear();
     firstDirectories.push_back(root / "caseonly");
-    const auto lowerCaseSearch = shaderCook.computeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
+    const auto lowerCaseSearch = Impl::ShaderCook::ComputeDependencyChecksum(firstDependencies, firstDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(upperCaseSearch);
     ASSERT_TRUE(lowerCaseSearch);
     EXPECT_NE(upperCaseSearch->checksum, lowerCaseSearch->checksum);
@@ -225,8 +223,8 @@ TEST(AssetsGraphics, ShaderDependencyChecksumPreservesPhysicalPathCaseAcrossAlia
     Impl::ShaderCook::CookVector<Path> lowerDependencies(testArena.arena);
     upperDependencies.push_back(upperPath);
     lowerDependencies.push_back(lowerPath);
-    const auto upperKey = shaderCook.computeDependencyChecksum(upperDependencies, noDirectories, { { firstRoot, "source" } }, scratchArena);
-    const auto lowerKey = shaderCook.computeDependencyChecksum(lowerDependencies, noDirectories, { { secondRoot, "source" } }, scratchArena);
+    const auto upperKey = Impl::ShaderCook::ComputeDependencyChecksum(upperDependencies, noDirectories, { { firstRoot, "source" } }, scratchArena);
+    const auto lowerKey = Impl::ShaderCook::ComputeDependencyChecksum(lowerDependencies, noDirectories, { { secondRoot, "source" } }, scratchArena);
     ASSERT_TRUE(upperKey);
     ASSERT_TRUE(lowerKey);
     EXPECT_NE(upperKey->checksum, lowerKey->checksum);
@@ -261,10 +259,10 @@ TEST(AssetsGraphics, ShaderDependencyCollectionRetainsCaseDistinctPhysicalInputs
     ASSERT_EQ(dependencies.size(), 3u);
     EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&upperPath](const Path& path)noexcept{ return path == upperPath; }), dependencies.end());
     EXPECT_NE(FindIf(dependencies.begin(), dependencies.end(), [&lowerPath](const Path& path)noexcept{ return path == lowerPath; }), dependencies.end());
-    const auto firstKey = shaderCook.computeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
+    const auto firstKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(firstKey);
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(lowerPath, "static const uint lowerValue = 3;\n"));
-    const auto changedKey = shaderCook.computeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
+    const auto changedKey = Impl::ShaderCook::ComputeDependencyChecksum(dependencies, noDirectories, { { root, "source" } }, scratchArena);
     ASSERT_TRUE(changedKey);
     EXPECT_NE(firstKey->checksum, changedKey->checksum);
     EXPECT_TRUE(RemoveAllIfExists(root));

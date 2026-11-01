@@ -7,7 +7,7 @@
 
 #include <impl/ecs_scene/components.adhd.h>
 
-#include <cstddef>
+#include <core/ecs/world.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +31,13 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0u, "Tr
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] NWB_INLINE SIMDMatrix LoadTransformMatrix(const TransformComponent& transform)noexcept{
+    return MatrixAffineTransformation(LoadFloat(transform.scale), VectorZero(), LoadFloat(transform.rotation), LoadFloat(transform.position));
+}
+
+[[nodiscard]] SIMDMatrix LoadEntityTransformMatrix(Core::ECS::World& world, Core::ECS::EntityID entity)noexcept;
+void StoreDecomposedTransform(const MatrixDecomposition& decomposition, TransformComponent& transform)noexcept;
 
 // Calculation rows are right, up, forward, and position/depth bias; never retained as scene storage.
 [[nodiscard]] SIMDMatrix BuildDefaultSceneViewBasis()noexcept;

@@ -30,28 +30,6 @@ namespace __hidden_ui_text_service_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SmallestPositiveSubnormalBits = 1u;
-inline constexpr u32 s_SmallestNegativeSubnormalBits = 0x80000001u;
-inline constexpr f64 s_SdfMinimumFilterWidth = 0.001;
-inline constexpr f64 s_SdfEncodedHalfRange = 128.0;
-inline constexpr f64 s_SdfHalfFilterScale = 0.5;
-inline constexpr f64 s_HalfTexel = 0.5;
-inline constexpr f64 s_HalfPixel = 0.5;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static f32 RoundMeasuredBound(const f64 value, const b8 upper)noexcept{
-    const f32 rounded = static_cast<f32>(value);
-    if(upper ? static_cast<f64>(rounded) >= value : static_cast<f64>(rounded) <= value)
-        return rounded;
-    if(rounded == 0.0f)
-        return BitCast<f32>(upper ? s_SmallestPositiveSubnormalBits : s_SmallestNegativeSubnormalBits);
-    const u32 bits = BitCast<u32>(rounded);
-    return BitCast<f32>((upper == (rounded > 0.0f)) ? bits + 1u : bits - 1u);
-}
-
 [[nodiscard]] static Expected<SIMDVectorDoubleResult> MeasuredRectangle(const SIMDVectorDouble minimum, const SIMDVectorDouble maximum)noexcept{
     const f64 left = VectorDoubleGetX(minimum);
     const f64 top = VectorDoubleGetY(minimum);
@@ -59,18 +37,18 @@ inline constexpr f64 s_HalfPixel = 0.5;
     const f64 bottom = VectorDoubleGetY(maximum);
     if(!IsFinite(left) || !IsFinite(top) || !IsFinite(right) || !IsFinite(bottom) || left < -Limit<f32>::s_Max || top < -Limit<f32>::s_Max || right > Limit<f32>::s_Max || bottom > Limit<f32>::s_Max || right < left || bottom < top)
         return MakeUnexpected(Failure{});
-    const f32 x = RoundMeasuredBound(left, false);
-    const f32 y = RoundMeasuredBound(top, false);
-    const SIMDVectorDouble size = VectorDoubleSubtract(VectorDoubleSet(RoundMeasuredBound(right, true), RoundMeasuredBound(bottom, true), 0.0, 0.0), VectorDoubleSet(x, y, 0.0, 0.0));
+    const f32 x = RoundMeasuredTextBound(left, false);
+    const f32 y = RoundMeasuredTextBound(top, false);
+    const SIMDVectorDouble size = VectorDoubleSubtract(VectorDoubleSet(RoundMeasuredTextBound(right, true), RoundMeasuredTextBound(bottom, true), 0.0, 0.0), VectorDoubleSet(x, y, 0.0, 0.0));
     const f64 width = VectorDoubleGetX(size);
     const f64 height = VectorDoubleGetY(size);
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
-    const f32 roundedWidth = RoundMeasuredBound(width, true);
-    const f32 roundedHeight = RoundMeasuredBound(height, true);
+    const f32 roundedWidth = RoundMeasuredTextBound(width, true);
+    const f32 roundedHeight = RoundMeasuredTextBound(height, true);
     if(
         !IsFinite(roundedWidth) || roundedWidth < 0.0f || !IsFinite(roundedHeight) || roundedHeight < 0.0f
-        || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(x), VectorReplicate(roundedWidth)))) || !IsFinite(VectorGetX(VectorAdd(VectorReplicate(y), VectorReplicate(roundedHeight))))
+        || !IsFinite(x + roundedWidth) || !IsFinite(y + roundedHeight)
     )
         return MakeUnexpected(Failure{});
     return SIMDVectorDoubleResult{ VectorDoubleSet(x, y, roundedWidth, roundedHeight) };
@@ -119,14 +97,11 @@ inline constexpr f64 s_HalfPixel = 0.5;
     }
     // Bilinear directional slopes are bounded by adjacent-texel differences, including helper lanes outside the visible quad.
     // The shader decodes distance = (encoded - 128) * spread / 128, then uses max(fwidth(distance), 0.001).
-    const SIMDVectorDouble horizontalStep = VectorDoubleSelect(VectorDoubleZero(), physicalStep, s_DoubleSIMDMaskX);
-    const SIMDVectorDouble verticalStep = VectorDoubleSwizzle<1, 2, 3, 3>(physicalStep);
-    const SIMDVectorDouble verticalDerivative = VectorDoubleMultiply(VectorDoubleSet(gradientY, 0.0, 0.0, 0.0), verticalStep);
-    const SIMDVectorDouble derivative = VectorDoubleMultiplyAddExpression(VectorDoubleSet(gradientX, 0.0, 0.0, 0.0), horizontalStep, verticalDerivative);
-    const SIMDVectorDouble minimumDerivative = VectorDoubleDivide(VectorDoubleReplicate(s_SdfMinimumFilterWidth * s_SdfEncodedHalfRange), VectorDoubleReplicate(binding.spreadPixels));
-    const SIMDVectorDouble halfWidth = VectorDoubleMultiply(VectorDoubleReplicate(s_SdfHalfFilterScale), VectorDoubleMax(derivative, minimumDerivative));
+    const f64 derivative = static_cast<f64>(gradientX) * physicalStepX + static_cast<f64>(gradientY) * physicalStepY;
+    const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / static_cast<f64>(binding.spreadPixels);
+    const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
     const SIMDVectorDouble glyphSize = VectorDoubleSet(glyph.width, glyph.height, 0.0, 0.0);
-    const SIMDVectorDouble halfTexel = VectorDoubleSet(s_HalfTexel, s_HalfTexel, 0.0, 0.0);
+    const SIMDVectorDouble halfTexel = VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0);
     SIMDVectorDouble supportMinimum = glyphSize;
     SIMDVectorDouble supportMaximum = VectorDoubleZero();
     b8 visible = false;
@@ -137,7 +112,7 @@ inline constexpr f64 s_HalfPixel = 0.5;
             const u32 x0 = glyph.x + x == 0u ? 0u : glyph.x + x - 1u;
             const u32 x1 = Min(binding.width - 1u, glyph.x + x);
             const i32 maximum = Max(Max(sample(x0, y0), sample(x1, y0)), Max(sample(x0, y1), sample(x1, y1)));
-            if(VectorDoubleGetIntX(VectorDoubleLess(VectorDoubleAdd(VectorDoubleReplicate(static_cast<f64>(maximum)), halfWidth), VectorDoubleReplicate(s_SdfEncodedHalfRange))) != 0u)
+            if(static_cast<f64>(maximum) + halfWidth < s_TextSdfEncodedHalfRange)
                 continue;
             // Texel centers lie at n + 0.5; retain exactly the candidate cell's intersection with the drawn plane.
             const SIMDVectorDouble position = VectorDoubleSet(x, y, 0.0, 0.0);
@@ -155,6 +130,24 @@ inline constexpr f64 s_HalfPixel = 0.5;
     const SIMDVectorDouble minimum = VectorDoubleMultiplyAddExpression(supportMinimum, scale, origin);
     const SIMDVectorDouble maximum = VectorDoubleMultiplyAddExpression(supportMaximum, scale, origin);
     return MeasuredRectangle(minimum, maximum);
+}
+
+struct RasterMetrics{
+    f32 physicalSize = 0.0f;
+    f32 rasterPpem = 0.0f;
+    f32 rasterScale = 0.0f;
+    u32 pixelSize = 0u;
+};
+
+[[nodiscard]] static Expected<RasterMetrics> ResolveRasterMetrics(const f32 fontSize, const DisplayMetrics& display)noexcept{
+    if(!IsValidTextFontSize(fontSize) || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+        return MakeUnexpected(Failure{});
+    const f32 physicalSize = fontSize * Max(display.pixelScaleX, display.pixelScaleY);
+    const f32 rasterPpem = Ceil(physicalSize);
+    if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+        return MakeUnexpected(Failure{});
+    const f32 rasterScale = rasterPpem / fontSize;
+    return RasterMetrics{ physicalSize, rasterPpem, rasterScale, static_cast<u32>(rasterPpem) };
 }
 
 struct PreparedGlyph{
@@ -177,16 +170,14 @@ struct PreparedGlyph{
 
 Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetrics& display){
     using namespace __hidden_ui_text_service_paint;
-    if(layout.lines().empty() || !IsFinite(layout.fontSize()) || layout.fontSize() < 1.0f / s_TextFixedPointScale || layout.fontSize() > s_TextMaxFontSize || !IsFinite(display.pixelScaleX) || !IsFinite(display.pixelScaleY) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
+    if(layout.lines().empty())
         return MakeUnexpected(Failure{});
-    const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), VectorMax(VectorSet(display.pixelScaleX, display.pixelScaleY, 1.0f, 1.0f), VectorSet(display.pixelScaleY, display.pixelScaleX, 1.0f, 1.0f)));
-    const f32 physicalSize = VectorGetX(physicalSizes);
-    const SIMDVectorSingle rasterPpemVector = VectorCeiling(physicalSizes);
-    const f32 rasterPpem = VectorGetX(rasterPpemVector);
-    if(!IsFinite(rasterPpem) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
+    const auto rasterMetrics = ResolveRasterMetrics(layout.fontSize(), display);
+    if(!rasterMetrics)
         return MakeUnexpected(Failure{});
-    const f32 rasterScale = VectorGetX(VectorDivide(rasterPpemVector, VectorReplicate(layout.fontSize())));
-    const u32 pixelSize = static_cast<u32>(rasterPpem);
+    const f32 physicalSize = rasterMetrics->physicalSize;
+    const f32 rasterScale = rasterMetrics->rasterScale;
+    const u32 pixelSize = rasterMetrics->pixelSize;
     const Point logical = layout.measure();
     const Rect ink = layout.inkBounds();
     const SIMDVectorDouble inkOrigin = VectorDoubleSet(ink.x, ink.y, 0.0, 0.0);
@@ -211,7 +202,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
                 return MakeUnexpected(Failure{});
             const AtlasGlyph* cached = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
             const Expected<Rect> raster = cached
-                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), VectorGetX(VectorNegate(VectorReplicate(static_cast<f32>(cached->bearingY)))), cached->pixels.width, cached->pixels.height })
+                ? Expected<Rect>(Rect{ static_cast<f32>(cached->bearingX), -static_cast<f32>(cached->bearingY), cached->pixels.width, cached->pixels.height })
                 : glyph.face->rasterBounds(glyph.glyphId, pixelSize);
             if(!raster)
                 return MakeUnexpected(Failure{});
@@ -222,7 +213,7 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
             const SIMDVectorDouble pixelOrigin = VectorDoubleSet(raster->x, raster->y, 0.0, 0.0);
             const SIMDVectorDouble pixelEnd = VectorDoubleAdd(pixelOrigin, VectorDoubleSet(raster->width, raster->height, 0.0, 0.0));
             // CoverageRectangle snaps the bitmap origin to the nearest physical pixel; every translation phase differs by at most half a pixel on each axis.
-            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(s_HalfPixel, s_HalfPixel, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
+            const SIMDVectorDouble snap = VectorDoubleDivide(VectorDoubleSet(s_TextHalfPixel, s_TextHalfPixel, 0.0, 0.0), VectorDoubleSet(display.pixelScaleX, display.pixelScaleY, 1.0, 1.0));
             first = VectorDoubleSubtract(VectorDoubleAdd(origin, VectorDoubleDivide(pixelOrigin, scale)), snap);
             last = VectorDoubleAdd(VectorDoubleAdd(origin, VectorDoubleDivide(pixelEnd, scale)), snap);
         }
@@ -237,18 +228,8 @@ Expected<Rect> TextService::measure(const TextLayout& layout, const DisplayMetri
 
 b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
-    const SIMDVectorSingle pixelScales = VectorMax(VectorSet(metrics.pixelScaleX, metrics.pixelScaleY, 1.0f, 1.0f), VectorSet(metrics.pixelScaleY, metrics.pixelScaleX, 1.0f, 1.0f));
-    const SIMDVectorSingle physicalSizes = VectorMultiply(VectorReplicate(layout.fontSize()), pixelScales);
-    const f32 physicalSize = VectorGetX(physicalSizes);
-    const SIMDVectorSingle rasterPpemVector = VectorCeiling(physicalSizes);
-    const f32 rasterPpem = VectorGetX(rasterPpemVector);
-    if(
-        layout.lines().empty() || !IsFinite(layout.fontSize())
-        || layout.fontSize() < 1.0f / s_TextFixedPointScale || layout.fontSize() > s_TextMaxFontSize
-        || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsFinite(rasterPpem)
-        || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32 || !IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b)
-        || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
-    )
+    const auto rasterMetrics = __hidden_ui_text_service_paint::ResolveRasterMetrics(layout.fontSize(), metrics);
+    if(layout.lines().empty() || !rasterMetrics || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsValidPaintColor(color))
         return false;
     const Rect clip = paint.currentClip();
     const TextGlyphIntersection::Enum clipStatus = TextGlyphVisibility::Intersect(clip, clip);
@@ -256,8 +237,10 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
         return false;
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
-    const u32 pixelSize = static_cast<u32>(rasterPpem);
-    const f32 rasterScale = VectorGetX(VectorDivide(rasterPpemVector, VectorReplicate(layout.fontSize())));
+    const f32 physicalSize = rasterMetrics->physicalSize;
+    const f32 rasterPpem = rasterMetrics->rasterPpem;
+    const u32 pixelSize = rasterMetrics->pixelSize;
+    const f32 rasterScale = rasterMetrics->rasterScale;
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
@@ -349,7 +332,7 @@ b8 TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLe
                 m_pages.push_back(Move(page));
         }
     }
-    if(!paint.prepareImages(m_pages.data(), m_pages.size(), m_sdfPages.data(), m_sdfPages.size()))
+    if(!paint.prepareImages(m_pages, m_sdfPages))
         return false;
     for(const auto& glyph : prepared){
         const b8 drawn = glyph.sdfPage ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color) : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color);

@@ -76,13 +76,16 @@ static b8 ExtractEntityDependencies(const Core::Assets::CookDependencyItemContex
 }
 
 static b8 RegisterEntityCookEntry(Core::Assets::CookEntryRegistry& registry){
-    Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<EntityCookEntry, EntityAsset, EntityAssetCodec>(
-        registry,
         s_EntityAssetKindLabel,
-        &ParseCookEntryDocument<EntityCookEntry, &ParseEntityCookMetadata, s_EntityDiagnosticPrefix>,
-        &ParseCookEntryValue<EntityCookEntry, &ParseEntityCookMetadata>,
-        &BuildEntityAsset
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseCookMetadataDocument<EntityCookEntry, &ParseEntityCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_EntityDiagnosticPrefix, context.cookArena, context.scratchArena);
+        },
+        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+            return ParseEntityCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+        },
+        &BuildEntityAsset,
+        registry
     );
 }
 
@@ -99,11 +102,15 @@ static b8 ExtractProjectDependencies(const Core::Assets::CookDependencyItemConte
 
 static b8 RegisterProjectCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ProjectCookEntry, ProjectAsset, ProjectAssetCodec>(
-        registry,
         s_ProjectAssetKindLabel,
-        &ParseCookEntryDocument<ProjectCookEntry, &ParseProjectCookMetadata, s_ProjectDiagnosticPrefix>,
-        &ParseCookEntryValue<ProjectCookEntry, &ParseProjectCookMetadata>,
-        &BuildProjectAsset
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseCookMetadataDocument<ProjectCookEntry, &ParseProjectCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_ProjectDiagnosticPrefix, context.cookArena, context.scratchArena);
+        },
+        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+            return ParseProjectCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+        },
+        &BuildProjectAsset,
+        registry
     );
 }
 
@@ -143,19 +150,20 @@ static b8 ExtractSceneDependencies(const Core::Assets::CookDependencyItemContext
 }
 
 static b8 RegisterSceneCookEntry(Core::Assets::CookEntryRegistry& registry){
-    Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return Core::Assets::RegisterDocumentValueCookEntry<SceneCookEntry, SceneAsset, SceneAssetCodec>(
-        registry,
         s_SceneAssetKindLabel,
-        &ParseCookEntryDocument<SceneCookEntry, &ParseSceneCookMetadata, s_SceneDiagnosticPrefix>,
-        &ParseCookEntryValue<SceneCookEntry, &ParseSceneCookMetadata>,
-        &BuildSceneAsset
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseCookMetadataDocument<SceneCookEntry, &ParseSceneCookMetadata>(assetRoot, virtualRoot, nwbFilePath, doc, s_SceneDiagnosticPrefix, context.cookArena, context.scratchArena);
+        },
+        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+            return ParseSceneCookMetadata(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+        },
+        &BuildSceneAsset,
+        registry
     );
 }
 
 static b8 RegisterSceneCookDependencies(Core::Assets::CookDependencyRegistry& registry){
-    Core::Assets::RegisterCompositeRootAssetType(EntityAsset::AssetTypeName());
-    Core::Assets::RegisterCompositeRootAssetType(SceneAsset::AssetTypeName());
     return
         registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
         && registry.registerType(TransformComponentAsset::AssetTypeName(), &ExtractLeafComponentDependencies<TransformComponentCookEntry, &ParseTransformComponentCookMetadata, s_TransformDiagnosticPrefix>, IComponent::AssetTypeName())

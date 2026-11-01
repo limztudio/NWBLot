@@ -52,3 +52,4 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_target_properties(nwb_crash_handler PROPERTIES WIN32_EXECUTABLE ON)
     endif()
 endif()
+

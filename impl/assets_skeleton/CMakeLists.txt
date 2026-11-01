@@ -30,7 +30,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/*.inl"
         "${CMAKE_CURRENT_LIST_DIR}/*.ipp"
     )
-    target_link_libraries(nwb_assets_skeleton_cook PUBLIC nwb_assets nwb_assets_skeleton_types)
+    target_link_libraries(nwb_assets_skeleton_cook PUBLIC nwb_assets nwb_assets_cook nwb_assets_skeleton_types)
     target_compile_definitions(nwb_assets_skeleton_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_skeleton_volume_entry)
@@ -40,3 +40,4 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_skeleton_volume_entry PRIVATE nwb_assets_skeleton_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_skeleton_volume_entry PRIVATE NWB_COOK=1)
 endif()
+

@@ -28,7 +28,7 @@ namespace __hidden_task_graph_queue_partial_dag_tests{
 
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
-using namespace Graphics::GpuTaskGraphCompilerDetail;
+using namespace Core::GpuTaskGraphCompilerDetail;
 
 namespace Shape{
     enum Enum : u8{
@@ -46,14 +46,14 @@ namespace Shape{
 };
 
 
-void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Shape::Enum shape, Graphics::Alloc::ScratchArena& scratch){
+void DeclareGraph(Core::GpuTaskGraph& graph, const usize taskCount, const Shape::Enum shape, Core::Alloc::ScratchArena& scratch){
     constexpr usize s_LayerSize = 16u;
     u64 generation = 0u;
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        const Core::GpuTaskGraph::DeclarationReadView view(graph);
         generation = view.generation();
     }
-    Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> dependencies(scratch);
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> dependencies(scratch);
     dependencies.reserve(taskCount);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         dependencies.clear();
@@ -77,16 +77,16 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
             for(usize offset = 0u; offset < s_LayerSize; ++offset)
                 addDependency(previousLayer + offset);
         }
-        Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::Count);
+        Core::GpuTaskSchedulingHint scheduling;
+        scheduling.cost = static_cast<Core::GpuTaskCostHint::Enum>(taskIndex % Core::GpuTaskCostHint::Count);
         scheduling.mergeWithPrevious = shape == Shape::MergedPairs && taskIndex % 2u != 0u;
         const b8 graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
-        char identityText[32u] = {};
+        Array<char, 32u> identityText = {};
         const auto derivedNameResult = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
         ASSERT_TRUE(derivedNameResult);
-        const auto taskResult = AddTaskWithCommands(graph, *derivedNameResult, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, dependencies.data(), dependencies.size());
+        const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, Span(dependencies.data(), dependencies.size()), graph);
         ASSERT_TRUE(taskResult);
-        const Graphics::GpuTaskId task = *taskResult;
+        const Core::GpuTaskId task = *taskResult;
         ASSERT_TRUE(task.valid());
     }
 }
@@ -97,34 +97,34 @@ void CheckIndexedScores(const Shape::Enum shape){
     constexpr usize s_TaskCount = TaskCount;
     SCOPED_TRACE(shape);
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
     ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, s_TaskCount, shape, declarationScratch));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(declarationScratch, graph, analysis));
-    Graphics::GpuPhysicalQueueInfo auxiliary = GraphicsQueue(311u);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, declarationScratch, analysis));
+    Core::GpuPhysicalQueueInfo auxiliary = GraphicsQueue(311u);
     auxiliary.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(17u), DedicatedComputeQueue(29u), auxiliary };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+    Array<Core::GpuPhysicalQueueInfo, 3u> queues = { GraphicsQueue(17u), DedicatedComputeQueue(29u), auxiliary };
+    const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
+    const Core::GpuTaskGraph::DeclarationReadView view(graph);
     ASSERT_EQ(view.taskCount(), s_TaskCount);
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+    Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
     GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-    Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> assignments(testArena.arena);
-    Graphics::GraphicsVector<u32> indices(s_TaskCount, Limit<u32>::s_Max, testArena.arena);
-    for(const Graphics::GpuTaskId task : analysis.topologicalOrder()){
+    Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
+    Core::GraphicsVector<u32> indices(s_TaskCount, Limit<u32>::s_Max, testArena.arena);
+    for(const Core::GpuTaskId task : analysis.topologicalOrder()){
         indices[task.index] = static_cast<u32>(assignments.size());
         const auto queue = queues[task.index % LengthOf(queues)].id;
         assignments.push_back({ .task = task, .initialQueue = queue, .queue = queue, .score = {} });
     }
     scoringData.rebuildAssignmentLoads(assignments, topology);
-    Vector<GpuTaskQueuePlacementGroup, Graphics::Alloc::ScratchArena> groups(scratch);
+    Vector<GpuTaskQueuePlacementGroup, Core::Alloc::ScratchArena> groups(scratch);
     ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, scratch, groups));
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
-    Vector<Array<b8, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
+    Vector<Array<b8, s_TaskCount>, Core::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
     for(const auto& edge : analysis.schedulingEdges())
         reachable[edge.producer.index][edge.consumer.index] = true;
     for(usize intermediate = 0u; intermediate < s_TaskCount; ++intermediate)
@@ -137,7 +137,7 @@ void CheckIndexedScores(const Shape::Enum shape){
             EXPECT_EQ(reachability.transitivelyIndependent(view.taskAt(source).id, view.taskAt(destination).id), source != destination && !reachable[source][destination] && !reachable[destination][source]);
         }
     }
-    const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Graphics::GpuPhysicalQueueId queue)noexcept{
+    const auto referenceOverlap = [&](const GpuTaskQueuePlacementGroup& group, const Core::GpuPhysicalQueueId queue)noexcept{
         u64 overlap = 0u;
         for(usize row = 0u; row < assignments.size(); ++row){
             if(row >= group.assignmentOffset && row - group.assignmentOffset < group.assignmentCount)
@@ -159,14 +159,14 @@ void CheckIndexedScores(const Shape::Enum shape){
         for(const auto& candidate : queues){
             for(usize row = 0u; row < assignments.size(); ++row){
                 const auto& task = assignments[row].task;
-                const Graphics::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(task.index), candidate);
+                const Core::GpuQueueAssignmentScore score = BuildQueueAssignmentScore(view, analysis, assignments, indices, topology, reachability, scoringData, view.taskAt(task.index), candidate);
                 GpuTaskQueuePlacementGroup singleton;
                 singleton.assignmentOffset = row;
                 singleton.assignmentCount = 1u;
                 EXPECT_EQ(score.overlap, referenceOverlap(singleton, candidate.id));
             }
             for(const auto& group : groups){
-                const Graphics::GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(view, analysis, assignments, indices, topology, reachability, scoringData, group, candidate);
+                const Core::GpuQueueAssignmentScore score = BuildQueuePlacementGroupScore(view, analysis, assignments, indices, topology, reachability, scoringData, group, candidate);
                 EXPECT_EQ(score.overlap, referenceOverlap(group, candidate.id));
             }
         }
@@ -183,7 +183,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     Swap(queues[0u], queues[2u]);
     scoringData.rebuildAssignmentLoads(assignments, topology);
     expectScores();
-    Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> empty(testArena.arena);
+    Core::GraphicsVector<Core::GpuTaskQueueAssignment> empty(testArena.arena);
     scoringData.rebuildAssignmentLoads(empty, topology);
     EXPECT_EQ(scoringData.m_totalAssignedCost, 0u);
     scoringData.rebuildAssignmentLoads(assignments, topology);
@@ -192,13 +192,13 @@ void CheckIndexedScores(const Shape::Enum shape){
 
 
 TEST(GpuTaskQueueScoring, PartialDagMultiwordScoresPreserveIndependentCostsAfterMoves){
-    constexpr Shape::Enum s_Shapes[] = { Shape::OneEdge, Shape::DisjointPairs, Shape::ConnectedBranches, Shape::DenseLayers, Shape::MergedPairs };
+    constexpr Array<Shape::Enum, 5u> s_Shapes = { Shape::OneEdge, Shape::DisjointPairs, Shape::ConnectedBranches, Shape::DenseLayers, Shape::MergedPairs };
     for(const Shape::Enum shape : s_Shapes)
         ASSERT_NO_FATAL_FAILURE(CheckIndexedScores(shape));
 }
 
 TEST(GpuTaskQueueScoring, CompactedPartialDagScoresPreserveMixedCostsAcrossMovesAndRebuilds){
-    constexpr Shape::Enum s_Shapes[] = { Shape::OneEdge, Shape::DisjointPairs, Shape::ReversedPairs, Shape::DenseLayers, Shape::MergedPairs, };
+    constexpr Array<Shape::Enum, 5u> s_Shapes = { Shape::OneEdge, Shape::DisjointPairs, Shape::ReversedPairs, Shape::DenseLayers, Shape::MergedPairs, };
     for(const Shape::Enum shape : s_Shapes)
         ASSERT_NO_FATAL_FAILURE(CheckIndexedScores<513u>(shape));
 }
@@ -210,20 +210,20 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
         usize m_taskCount;
         Shape::Enum m_shape;
     };
-    constexpr StorageCase s_Cases[] = {
+    constexpr Array<StorageCase, 11u> s_Cases = {{
         { 16u, Shape::DisjointPairs }, { 64u, Shape::DisjointPairs },
         { 130u, Shape::DisjointPairs }, { 256u, Shape::DisjointPairs }, { 257u, Shape::DisjointPairs },
         { 382u, Shape::FanOut }, { 382u, Shape::FanIn }, { 513u, Shape::ReversedPairs },
         { 4032u, Shape::DenseLayers }, { 4033u, Shape::DenseLayers }, { 4097u, Shape::DenseLayers },
-    };
+    }};
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
     constexpr usize s_BoundsBudgetDivisor = 32u;
     constexpr usize s_ReachabilityVectorCount = 4u;
     usize emptyVectorBookkeepingBytes = 0u;
     {
         // Debug STL modes can allocate container bookkeeping through the arena even for empty vectors.
-        Graphics::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
-        const Vector<u64, Graphics::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
+        Core::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
+        const Vector<u64, Core::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
         emptyVectorBookkeepingBytes = bookkeepingScratch.memoryStats().usedBytes;
     }
     const usize reachabilityBookkeepingBytes = s_ReachabilityVectorCount * emptyVectorBookkeepingBytes;
@@ -231,13 +231,13 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
         SCOPED_TRACE(testCase.m_taskCount);
         SCOPED_TRACE(testCase.m_shape);
         TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+        Core::GpuTaskGraph graph(testArena.arena);
+        Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
         ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, testCase.m_taskCount, testCase.m_shape, declarationScratch));
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+        Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+        const Core::GpuTaskGraph::DeclarationReadView view(graph);
+        Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
         GpuTaskSchedulingReachability reachability(scratch);
         ASSERT_EQ(scratch.memoryStats().usedBytes, reachabilityBookkeepingBytes);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
@@ -264,19 +264,19 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
 TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFailedState){
     constexpr usize s_TaskCount = 513u;
     constexpr usize s_LayerSize = 16u;
-    constexpr Shape::Enum s_Shapes[] = { Shape::ReversedPairs, Shape::DenseLayers, Shape::OneEdge, Shape::Independent, Shape::TotalOrder, Shape::ReversedPairs, };
+    constexpr Array<Shape::Enum, 6u> s_Shapes = { Shape::ReversedPairs, Shape::DenseLayers, Shape::OneEdge, Shape::Independent, Shape::TotalOrder, Shape::ReversedPairs, };
     TestArena testArena;
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+    Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
-    Graphics::GpuTaskId previousTask;
+    Core::GpuTaskId previousTask;
     for(const Shape::Enum shape : s_Shapes){
         SCOPED_TRACE(shape);
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+        Core::GpuTaskGraph graph(testArena.arena);
+        Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
         ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, s_TaskCount, shape, declarationScratch));
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        ASSERT_TRUE(Analyze(scratch, graph, analysis));
-        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, scratch, analysis));
+        const Core::GpuTaskGraph::DeclarationReadView view(graph);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
         const auto expectedReach = [&](const usize source, const usize destination)noexcept{
             if(source == destination)
@@ -301,11 +301,11 @@ TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFaile
         EXPECT_FALSE(reachability.transitivelyIndependent(previousTask, view.taskAt(0u).id));
         previousTask = view.taskAt(0u).id;
     }
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
     ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, s_TaskCount, Shape::ReversedPairs, declarationScratch));
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-    Graphics::GpuTaskGraphAnalysis invalidAnalysis(testArena.arena);
+    const Core::GpuTaskGraph::DeclarationReadView view(graph);
+    Core::GpuTaskGraphAnalysis invalidAnalysis(testArena.arena);
     EXPECT_FALSE(BuildGpuTaskSchedulingReachability(view, invalidAnalysis, reachability));
     EXPECT_FALSE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
     EXPECT_FALSE(reachability.transitivelyIndependent(view.taskAt(0u).id, view.taskAt(1u).id));
@@ -313,21 +313,21 @@ TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFaile
 
 TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAssignment){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
     ASSERT_NO_FATAL_FAILURE(DeclareGraph(graph, 4u, Shape::OneEdge, declarationScratch));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(declarationScratch, graph, analysis));
-    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, declarationScratch, analysis));
+    const Core::GpuTaskGraph::DeclarationReadView view(graph);
+    const Array<Core::GpuPhysicalQueueInfo, 2u> queues = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
+    Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
     GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-    Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> assignments(testArena.arena);
-    Graphics::GraphicsVector<u32> indices(4u, Limit<u32>::s_Max, testArena.arena);
-    constexpr usize s_AssignedTasks[] = { 0u, 3u };
+    Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
+    Core::GraphicsVector<u32> indices(4u, Limit<u32>::s_Max, testArena.arena);
+    constexpr Array<usize, 2u> s_AssignedTasks = { 0u, 3u };
     for(const usize taskIndex : s_AssignedTasks){
         indices[taskIndex] = static_cast<u32>(assignments.size());
         assignments.push_back({ .task = view.taskAt(taskIndex).id, .initialQueue = queues[1u].id, .queue = queues[1u].id, .score = {}, });
@@ -346,37 +346,37 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     constexpr usize s_TaskCount = 129u;
-    constexpr b8 s_BuildReachabilityCases[] = { false, true };
+    constexpr Array<b8, 2u> s_BuildReachabilityCases = { false, true };
     for(const b8 buildReachability : s_BuildReachabilityCases){
         SCOPED_TRACE(buildReachability);
         TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::GpuTaskId preceding;
+        Core::GpuTaskGraph graph(testArena.arena);
+        Core::GpuTaskId preceding;
         for(usize index = 0u; index < s_TaskCount; ++index){
-            char identityText[32u] = {};
-            Graphics::GpuTaskSchedulingHint scheduling;
-            scheduling.cost = Graphics::GpuTaskCostHint::Large;
+            Array<char, 32u> identityText = {};
+            Core::GpuTaskSchedulingHint scheduling;
+            scheduling.cost = Core::GpuTaskCostHint::Large;
             const auto derivedNameResult = DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText));
             ASSERT_TRUE(derivedNameResult);
-            const auto precedingTaskAdmission = AddTaskWithCommands(graph, *derivedNameResult, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? &preceding : nullptr, preceding.valid() ? 1u : 0u);
+            const auto precedingTaskAdmission = AddTaskWithCommands(*derivedNameResult, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? Span(&preceding, 1u) : Span<const Core::GpuTaskId>{}, graph);
             ASSERT_TRUE(precedingTaskAdmission);
             preceding = *precedingTaskAdmission;
             ASSERT_TRUE(preceding.valid());
         }
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        ASSERT_TRUE(Analyze(operationScratchArena, graph, analysis));
-        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+        Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, operationScratchArena, analysis));
+        const Core::GpuTaskGraph::DeclarationReadView view(graph);
+        Core::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
         GpuTaskSchedulingReachability reachability(scratch);
         if(buildReachability){
             ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
             ASSERT_FALSE(reachability.mayContainIndependentTasks());
         }
-        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(77u) };
-        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = buildReachability ? 2u : 1u };
+        const Array<Core::GpuPhysicalQueueInfo, 2u> queues = { GraphicsQueue(), DedicatedComputeQueue(77u) };
+        const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = buildReachability ? 2u : 1u };
         GpuTaskQueueScoringData scoringData(view, analysis, reachability, {}, scratch);
-        Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> assignments(testArena.arena);
-        Graphics::GraphicsVector<u32> indices(testArena.arena);
+        Core::GraphicsVector<Core::GpuTaskQueueAssignment> assignments(testArena.arena);
+        Core::GraphicsVector<u32> indices(testArena.arena);
         assignments.reserve(s_TaskCount);
         indices.reserve(s_TaskCount);
         for(usize index = 0u; index < s_TaskCount; ++index){

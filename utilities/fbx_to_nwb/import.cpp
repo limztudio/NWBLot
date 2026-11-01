@@ -42,14 +42,14 @@ Expected<MeshBuildResult> BuildMesh(
     }
 
     b8 usedDefaultUvs = false;
-    FbxSourceMeshStreams::ReserveSourceMeshStreams(result.mesh, *estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshStreams(*estimatedTriangleCorners, wantsSkinning, result.mesh);
     SourceMeshBuildContext meshContext{ result.mesh, scratchArena };
-    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, *estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(*estimatedTriangleCorners, wantsSkinning, meshContext);
 
     usize maxFaceTriangles = 0u;
     for(const usize instanceIndex : selection)
         maxFaceTriangles = Max(maxFaceTriangles, static_cast<usize>(instances[instanceIndex].mesh->max_face_triangles));
-    const auto triangleIndexCapacity = TryMultiply<usize>(maxFaceTriangles, s_TriangleIndexCount);
+    const auto triangleIndexCapacity = TryMultiply<usize>(maxFaceTriangles, Impl::s_MeshletTriangleIndexCount);
     if(!triangleIndexCapacity){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return MakeUnexpected(Failure{});
@@ -81,9 +81,9 @@ Expected<MeshBuildResult> BuildMesh(
         return MakeUnexpected(Failure{});
     }
     if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
-        if(!FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh, scratchArena))
+        if(!FbxSourceMeshStreams::DropSourceMeshTangents(scratchArena, result.mesh))
             return MakeUnexpected(Failure{});
-        const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs, scratchArena);
+        const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(usedDefaultUvs, scratchArena, result.mesh);
         if(!tangentReport)
             return MakeUnexpected(Failure{});
         result.tangentReport = *tangentReport;
@@ -98,7 +98,7 @@ Expected<MeshBuildResult> BuildMesh(
         result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    if(!CanonicalizeSourceMeshStreams(result.mesh, cpuScheduler, scratchArena))
+    if(!CanonicalizeSourceMeshStreams(cpuScheduler, scratchArena, result.mesh))
         return MakeUnexpected(Failure{});
     return result;
 }

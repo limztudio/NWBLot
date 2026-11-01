@@ -88,7 +88,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution, const b8 requiresComparableTimestamps){
+Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, const GpuTimingSampleAttribution attribution, const b8 requiresComparableTimestamps, Device& device, CommandList& commandList){
     GpuTimingScope scope;
     GpuTimingSubmissionTicket* ticket = nullptr;
     QueueSubmissionToken resetSubmission;
@@ -176,8 +176,8 @@ Expected<GpuTimingScope> GpuTimingRecorder::beginScope(const Name& scopeName, De
     return scope;
 }
 
-Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(const Name& scopeName, Device& device, CommandList& commandList, const GpuTimingSampleAttribution attribution){
-    auto scope = beginScope(scopeName, device, commandList, attribution, false);
+Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(const Name& scopeName, const GpuTimingSampleAttribution attribution, Device& device, CommandList& commandList){
+    auto scope = beginScope(scopeName, attribution, false, device, commandList);
     if(!scope)
         return MakeUnexpected(Failure{});
     // The frame transaction owns this reservation until the accepted end packet.

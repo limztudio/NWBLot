@@ -34,13 +34,13 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
     payload.materialFrameStatesGraphOwned = inputs.materialFrameStatesGraphOwned;
     payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
 
-    const Core::GpuTaskResourceUse resourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 3u> resourceUses = {
         ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
         ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
         ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
     };
     constexpr usize s_ProducerResourceSetUseCapacity = 3u;
-    Core::GpuTaskResourceSetUse opaqueComputeEmulationResourceSetUses[s_ProducerResourceSetUseCapacity] = {};
+    Array<Core::GpuTaskResourceSetUse, s_ProducerResourceSetUseCapacity> opaqueComputeEmulationResourceSetUses = {};
     usize opaqueComputeEmulationResourceSetUseCount = 0u;
     opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid()){
@@ -59,9 +59,9 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareRegular(
         .setIdentity(Name("render.graphics_prefix.opaque_compute_emulation"))
         .setMarkerLabel("Opaque Compute Emulation")
         .setScheduling(opaqueComputeEmulationScheduling)
-        .setDependencies(&dependency, 1u)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-        .setResourceSetUses(opaqueComputeEmulationResourceSetUses, opaqueComputeEmulationResourceSetUseCount)
+        .setDependencies({ &dependency, 1u })
+        .setResourceUses(resourceUses)
+        .setResourceSetUses({ opaqueComputeEmulationResourceSetUses.data(), opaqueComputeEmulationResourceSetUseCount })
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask >(opaqueComputeEmulationDesc, Move(payload));
     if(!taskResult){
@@ -90,7 +90,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
     payload.materialGeometryStatesGraphOwned = inputs.materialGeometryStatesGraphOwned;
 
     // The compute pipeline shares CSG's clip context. Receiver-event images stay G-buffer raster outputs, absent here.
-    const Core::GpuTaskResourceUse resourceUses[] = {
+    const Array<Core::GpuTaskResourceUse, 8u> resourceUses = {
         ReadUse(inputs.resources.meshView, Core::ResourceStates::ConstantBuffer),
         ReadBufferUse(inputs.resources.materialInstances, inputs.materialInstanceRange),
         ReadBufferUse(inputs.resources.materialTyped, inputs.materialTypedRange),
@@ -101,7 +101,7 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
         ReadUse(inputs.resources.currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
     constexpr usize s_ProducerResourceSetUseCapacity = 3u;
-    Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationResourceSetUses[s_ProducerResourceSetUseCapacity] = {};
+    Array<Core::GpuTaskResourceSetUse, s_ProducerResourceSetUseCapacity> opaqueCsgReceiverComputeEmulationResourceSetUses = {};
     usize opaqueCsgReceiverComputeEmulationResourceSetUseCount = 0u;
     opaqueCsgReceiverComputeEmulationResourceSetUses[opaqueCsgReceiverComputeEmulationResourceSetUseCount++] = inputs.materialGeometrySetUse;
     if(inputs.materialSampledTextureSetUse.resourceSet.valid()){
@@ -120,9 +120,9 @@ Expected<Core::GpuTaskId> OpaqueComputeEmulationProducerBuilder::declareCsgRecei
         .setIdentity(Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation"))
         .setMarkerLabel("Opaque CSG Receiver Compute Emulation")
         .setScheduling(opaqueCsgReceiverComputeEmulationScheduling)
-        .setDependencies(&dependency, 1u)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-        .setResourceSetUses(opaqueCsgReceiverComputeEmulationResourceSetUses, opaqueCsgReceiverComputeEmulationResourceSetUseCount)
+        .setDependencies({ &dependency, 1u })
+        .setResourceUses(resourceUses)
+        .setResourceSetUses({ opaqueCsgReceiverComputeEmulationResourceSetUses.data(), opaqueCsgReceiverComputeEmulationResourceSetUseCount })
     ;
     const auto taskResult = m_graph.addTask< ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask >(opaqueCsgReceiverComputeEmulationDesc, Move(payload));
     if(!taskResult){

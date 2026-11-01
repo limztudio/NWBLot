@@ -33,17 +33,18 @@ private:
     using BufferIndex = HashSet<NotNull<Core::Buffer*>, Core::Alloc::ScratchArena>;
 
 
-private:
-    static constexpr usize s_InlineBufferCount = 32u;
-
-
 public:
-    MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)noexcept;
+    MeshSkinningStateBufferCollector(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)noexcept
+        : m_buffers(outBuffers)
+        , m_scratchArena(scratchArena)
+    {
+        m_buffers.clear();
+    }
     MeshSkinningStateBufferCollector(MeshSkinningStateBufferCollector&&) = delete;
 
 
 public:
-    void collect(const MeshSkinningRuntimeInstance* instance, const MeshSkinningStateBufferResources& resources);
+    void collect(const MeshSkinningRuntimeInstance& instance, const MeshSkinningStateBufferResources& resources);
 
 
 private:
@@ -54,7 +55,7 @@ private:
 private:
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& m_buffers;
     Core::Alloc::ScratchArena& m_scratchArena;
-    Core::Buffer* m_inlineBuffers[s_InlineBufferCount] = {};
+    Array<Core::Buffer*, s_SkinningLiveStateInlineBufferCount> m_inlineBuffers{};
     usize m_inlineCount = 0u;
     Optional<BufferIndex> m_index;
 };

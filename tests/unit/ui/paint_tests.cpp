@@ -4,6 +4,7 @@
 
 #include <impl/ecs_ui/toolkit/paint.h>
 
+#include <tests/common/floating_point_environment_guard.h>
 #include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
 
@@ -148,11 +149,8 @@ TEST_F(UiPaintTests, NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios){
 #pragma STDC FENV_ACCESS ON
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
-    ScopeExit restoreEnvironment([&]()noexcept{
-        if(!SetFloatingPointEnvironment(*originalEnvironment))
-            NWB_ASSERT(false);
-    });
-    const UiSkinSliceInsets borders[]{ {}, { 4u, 0u, 8u, 0u }, { 0u, 6u, 0u, 2u } };
+    Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
+    const Array<UiSkinSliceInsets, 3> borders{ UiSkinSliceInsets{}, UiSkinSliceInsets{ 4u, 0u, 8u, 0u }, UiSkinSliceInsets{ 0u, 6u, 0u, 2u } };
     for(usize index = 0u; index < LengthOf(borders); ++index){
         SCOPED_TRACE(index);
         UiSkin::RegionVector regions(m_arena);

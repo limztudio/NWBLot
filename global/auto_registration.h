@@ -8,6 +8,7 @@
 #include "containers.h"
 #include "name.h"
 #include "not_null.h"
+#include "range_traits.h"
 #include "sync.h"
 
 
@@ -134,21 +135,11 @@ template<typename QueueT, typename ContextT, typename FunctionVectorT, typename 
     && []()constexpr noexcept{
         using Range = FunctionVectorT;
         if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-            using Returned = decltype(*DeclVal<Iterator&>());
-            using Value = Decay_T<Returned>;
+            using Traits = RangeTraits<Range>;
+            using Value = typename Traits::Value;
             using Item = const Value&;
             return
-                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-                && IsNothrowDestructible_V<Iterator>
-                && IsNothrowDestructible_V<Sentinel>
-                && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-                && noexcept(++DeclVal<Iterator&>())
-                && noexcept(*DeclVal<Iterator&>())
-                && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
-                && IsNothrowDestructible_V<Value>
+                Traits::IsNothrowTraversal(true)
                 && []()constexpr noexcept{
                     if constexpr(AutoRegistrationDetail::CollectedFactory<Value>::s_Nullable)
                         return noexcept(static_cast<b8>(!DeclVal<Item>()));
@@ -190,21 +181,11 @@ inline void RegisterAutoFactoryProducts(const FactoryVectorT& factories, CreateP
     && []()constexpr noexcept{
         using Range = const FactoryVectorT;
         if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-            using Returned = decltype(*DeclVal<Iterator&>());
-            using Value = Decay_T<Returned>;
+            using Traits = RangeTraits<Range>;
+            using Value = typename Traits::Value;
             using Item = const Value&;
             return
-                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-                && IsNothrowDestructible_V<Iterator>
-                && IsNothrowDestructible_V<Sentinel>
-                && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-                && noexcept(++DeclVal<Iterator&>())
-                && noexcept(*DeclVal<Iterator&>())
-                && (!IsReference_V<Returned> || IsNothrowConvertible_V<Returned, Value>)
-                && IsNothrowDestructible_V<Value>
+                Traits::IsNothrowTraversal(true)
                 && []()constexpr noexcept{
                     if constexpr(AutoRegistrationDetail::CollectedFactory<Value>::s_Nullable)
                         return noexcept(static_cast<b8>(DeclVal<Item>() == nullptr));

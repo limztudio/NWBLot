@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_graph_test_utils.h"
+
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -22,6 +24,7 @@ namespace __hidden_task_graph_import_index_tests{
 
 
 using namespace NWB;
+using Tests::TaskGraphTestUtils::IndexedName;
 
 struct GraphStamp{
     u64 generation;
@@ -32,11 +35,6 @@ struct GraphStamp{
 
 [[nodiscard]] static Core::GpuGraphResourceDesc ResourceDescription(const Name& identity, Core::GpuGraphResourceType::Enum type)noexcept{
     return Core::GpuGraphResourceDesc{}.setIdentity(identity).setMarkerLabel("Graph Import Index Resource").setType(type).setInitialState(Core::ResourceStates::Unknown);
-}
-
-[[nodiscard]] static Expected<Name> IndexedName(const Name& prefix, const usize index){
-    char text[32u] = {};
-    return DeriveName(prefix, FormatDecimal(index, text));
 }
 
 [[nodiscard]] static GraphStamp ReadStamp(const Core::GpuTaskGraph& graph){
@@ -75,7 +73,7 @@ public:
             genericDescriptions[index] = ResourceDescription(*resourceNameResult, Core::GpuGraphResourceType::HazardDomain);
             const auto secondResourceNameResult = IndexedName(Name("tests/graph_import_index/set"), index);
             ASSERT_TRUE(secondResourceNameResult);
-            setDescriptions[index].setIdentity(*secondResourceNameResult).setMarkerLabel("Graph Import Index Set").setMembers(&resources[index], 1u);
+            setDescriptions[index].setIdentity(*secondResourceNameResult).setMarkerLabel("Graph Import Index Set").setMembers(Span(&resources[index], 1u));
         }
     }
 };
@@ -102,7 +100,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
         context.resources[index] = *resourceTaskAdmission;
         ASSERT_TRUE(context.resources[index].valid());
         EXPECT_EQ(context.resources[index].index, index);
-        const auto setTaskAdmission = context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities.back()).setMarkerLabel("Binary Identity Set").setMembers(&context.resources[index], 1u));
+        const auto setTaskAdmission = context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(identities.back()).setMarkerLabel("Binary Identity Set").setMembers(Span(&context.resources[index], 1u)));
         ASSERT_TRUE(setTaskAdmission);
         context.sets[index] = *setTaskAdmission;
         ASSERT_TRUE(context.sets[index].valid());
@@ -119,7 +117,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
                 EXPECT_EQ(*gpuTaskAdmission, context.resources[index]);
         }
         {
-            const auto secondGpuTaskAdmission = context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(equalIdentity).setMarkerLabel("Later Binary Identity Label").setMembers(&context.resources[index], 1u));
+            const auto secondGpuTaskAdmission = context.graph.importResourceSet(Core::GpuGraphResourceSetDesc{}.setIdentity(equalIdentity).setMarkerLabel("Later Binary Identity Label").setMembers(Span(&context.resources[index], 1u)));
             EXPECT_TRUE(secondGpuTaskAdmission);
             if(secondGpuTaskAdmission)
                 EXPECT_EQ(*secondGpuTaskAdmission, context.sets[index]);
@@ -156,7 +154,7 @@ TEST(TaskGraphImportIndex, ManySetsReuseOnlyTheirOriginalOrderedMembersAndRetain
             if(gpuTaskAdmission)
                 EXPECT_EQ(*gpuTaskAdmission, context.sets[selected]);
         }
-        description.setMembers(&context.resources[(selected + 1u) % s_Count], 1u);
+        description.setMembers(Span(&context.resources[(selected + 1u) % s_Count], 1u));
         EXPECT_FALSE(context.graph.importResourceSet(description).has_value());
     }
     ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, before));

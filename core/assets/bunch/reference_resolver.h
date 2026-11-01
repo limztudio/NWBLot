@@ -13,7 +13,6 @@
 
 #include "cook.h"
 
-#include <global/allocation_size.h>
 #include <global/not_null.h>
 
 
@@ -37,8 +36,7 @@ inline constexpr Name s_MetadataDeclarationTypeName("metadata");
 inline constexpr TStringView s_AssetBunchDiagnosticPrefix = NWB_TEXT("Asset bunch");
 inline constexpr TStringView s_CompositeAssetDiagnosticPrefix = NWB_TEXT("Composite asset");
 
-using ScratchString = AString<ScratchArena>;
-using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
+using ScratchNameHashSet = HashSet<NameHash, Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +52,7 @@ using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, Equ
 class DeclarationLookup final : NoCopy{
 private:
     using Declaration = Core::Metascript::Document::Declaration;
-    using LookupTable = HashMap<AStringView, NotNull<const Declaration*>, ScratchArena>;
+    using LookupTable = HashMap<AStringView, NotNull<const Declaration*>, Alloc::ScratchArena>;
 
 
 private:
@@ -62,7 +60,7 @@ private:
 
 
 public:
-    [[nodiscard]] static Expected<DeclarationLookup, NameTextError::Enum> Create(const Core::Metascript::Document& doc, ScratchArena& scratchArena);
+    [[nodiscard]] static Expected<DeclarationLookup, NameTextError::Enum> Create(const Core::Metascript::Document& doc, Alloc::ScratchArena& scratchArena);
 
 
 private:
@@ -88,7 +86,7 @@ struct ItemVirtualPath{
     ScratchString text;
 };
 
-[[nodiscard]] Expected<ItemVirtualPath> BuildItemVirtualPath(AStringView baseVirtualPath, AStringView variableName, ScratchArena& scratchArena);
+[[nodiscard]] Expected<ItemVirtualPath> BuildItemVirtualPath(AStringView baseVirtualPath, AStringView variableName, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +100,7 @@ public:
         const DeclarationLookup& inDeclarations,
         AStringView inBaseVirtualPath,
         const ScratchNameHashSet& inAssetVariableHashes,
-        ScratchArena& inScratchArena
+        Alloc::ScratchArena& inScratchArena
     );
 
 
@@ -152,7 +150,7 @@ private:
     const DeclarationLookup& m_declarations;
     AStringView m_baseVirtualPath;
     const ScratchNameHashSet& m_assetVariableHashes;
-    ScratchArena& m_scratchArena;
+    Alloc::ScratchArena& m_scratchArena;
     ScratchNameHashSet m_resolvingVariableHashes;
 };
 

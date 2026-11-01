@@ -40,11 +40,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedConstantRangeMap shadowConstantTypedRanges(0, ECSRenderDetail::MaterialTypedConstantRangeMap::hasher(), ECSRenderDetail::MaterialTypedConstantRangeMap::key_equal(), scratchArena);
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(0, ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(), ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(), scratchArena);
-    struct InstanceWorldBounds{
-        Float3U minimum = {};
-        Float3U maximum = {};
-    };
-    Vector<InstanceWorldBounds, Core::Alloc::ScratchArena> instanceWorldBounds{ scratchArena };
+    Vector<RayTracingInstanceWorldBounds, Core::Alloc::ScratchArena> instanceWorldBounds{ scratchArena };
     instances.reserve(candidateCount);
     instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
@@ -104,21 +100,21 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            const auto indexHandle = AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, meshResult->meshResources.triangleIndexBuffer);
+            const auto indexHandle = AcquireMeshHeapHandle(meshResult->meshResources.triangleIndexBuffer, heap, m_rayTracingState.m_hwMeshHeapHandleCache);
             if(!indexHandle){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
 
                 return false;
             }
-            const auto attributeHandle = AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, meshResult->meshResources.attributeBuffer);
+            const auto attributeHandle = AcquireMeshHeapHandle(meshResult->meshResources.attributeBuffer, heap, m_rayTracingState.m_hwMeshHeapHandleCache);
             if(!attributeHandle){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
 
                 return false;
             }
-            const auto positionHandle = AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, meshResult->meshResources.positionBuffer);
+            const auto positionHandle = AcquireMeshHeapHandle(meshResult->meshResources.positionBuffer, heap, m_rayTracingState.m_hwMeshHeapHandleCache);
             if(!positionHandle){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
@@ -168,7 +164,14 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             if(!materialContext)
                 return false;
             shadowInstance = materialContext->instance;
-            instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialContext->constantByteOffset, meshInstanceIndex);
+            instanceMaterial = ResolveInstanceShadowMaterialData(
+                materialInfo->surfaceDispatchId,
+                materialInfo->shadingModelId,
+                materialInfo->transparent,
+                materialInfo->refractive,
+                materialContext->constantByteOffset,
+                meshInstanceIndex
+            );
         }
         if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
             contentComplete = false;
@@ -185,11 +188,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
 
         const b8 transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         const b8 refractive = (instanceMaterial.flags & RtInstanceMaterialFlag::Refractive) != 0u;
-        instanceDesc.setInstanceMask(
-            NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
-            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u)
-            | (refractive ? NWB_RT_REFRACTIVE_INSTANCE_MASK : 0u)
-        );
+        instanceDesc.setInstanceMask(ResolveRayTracingInstanceMask(transparent, refractive));
         const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
         const SIMDVectorSingle localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
         const SIMDVectorSingle localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
@@ -224,7 +223,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         SIMDVectorSingle opticalMin = VectorZero();
         SIMDVectorSingle opticalMax = VectorZero();
         b8 opticalBoundsValid = false;
-        InstanceWorldBounds worldBounds;
+        RayTracingInstanceWorldBounds worldBounds;
         if(!meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh && meshResult->meshResources.csgLocalBounds.valid()){
             const auto bounds = ComputeOpticalWorldBounds(objectToWorld, localMin, localMax);
             if(bounds){
@@ -261,7 +260,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         instanceWorldBounds.push_back(worldBounds);
     }
 
-    if(!FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
+    if(!FinishLightSpaceCsgGather(m_csgShapeRegistry, m_lightSpaceShadow.m_csg, m_world, scratchArena))
         return false;
     const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
     if(csg.hasCsg){
@@ -271,7 +270,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
             if((csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
                 continue;
             const b8 transparent = (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
-            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_CSG_INSTANCE_MASK | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
+            instances[index].setInstanceMask(ResolveRayTracingCsgInstanceMask(transparent));
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
             m_lightSpaceShadow.m_casters[index].csg = true;
         }
@@ -300,8 +299,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     }
 
     if(staticScene && opticalScene.boundsCompleteExceptRuntime && !csg.hasCsg && allInstanceBoundsValid && refractiveInstanceCount == 1u && singleRefractiveInstanceIndex < instances.size()){
-        constexpr f32 s_RefractionCertifiedBoundsMargin = 0.016f;
-        const InstanceWorldBounds& targetBounds = instanceWorldBounds[singleRefractiveInstanceIndex];
+        const RayTracingInstanceWorldBounds& targetBounds = instanceWorldBounds[singleRefractiveInstanceIndex];
         const SIMDVectorSingle margin = VectorReplicate(s_RefractionCertifiedBoundsMargin);
         const SIMDVectorSingle expandedMin = VectorSubtract(LoadFloat(targetBounds.minimum), margin);
         const SIMDVectorSingle expandedMax = VectorAdd(LoadFloat(targetBounds.maximum), margin);
@@ -309,7 +307,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         for(usize index = 0u; index < instanceWorldBounds.size(); ++index){
             if(index == singleRefractiveInstanceIndex)
                 continue;
-            const InstanceWorldBounds& otherBounds = instanceWorldBounds[index];
+            const RayTracingInstanceWorldBounds& otherBounds = instanceWorldBounds[index];
             const SIMDVectorSingle separatedAxes = VectorOrInt(VectorLess(expandedMax, LoadFloat(otherBounds.minimum)), VectorLess(LoadFloat(otherBounds.maximum), expandedMin));
             if((VectorMoveMask(separatedAxes) & VectorComponentMask::s_XYZ) == 0u){
                 isolated = false;
@@ -330,7 +328,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         && m_rayTracingState.m_tlasStaticSceneHash == tlasStaticSceneHash
         && m_rayTracingState.m_tlas
         && m_rayTracingState.m_tlasMaxInstances >= instances.size()
-        && IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)
+        && RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)
     ;
     if(!staticScene || !canReuseTlas)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
@@ -342,7 +340,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
         accelStructDesc.setTopLevelMaxInstances(capacity);
         accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
         accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-        accelStructDesc.setDebugName(Name("scene_tlas"));
+        accelStructDesc.setDebugName(s_SceneTlasDebugName);
 
         auto& device = m_graphics.getDevice();
         auto tlasResult = device.createAccelStruct(accelStructDesc);
@@ -363,7 +361,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     }
 
     // Allocate a heap block only for a new TLAS generation.
-    if(!IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)){
+    if(!RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)){
         if(m_rayTracingState.m_tlasHeapHandle.valid()){
             heap.free(m_rayTracingState.m_tlasHeapHandle);
             m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
@@ -388,7 +386,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
-    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
+    const u64 hwMaterialContextHash = ECSRenderDetail::ComputeShadowMaterialContextHash(instanceMaterials, shadowInstanceData, shadowMaterialTypedBytes);
     u64 gatheredMaterialContentHash = hwMaterialContextHash;
     const b8 canReuseHwMaterialContext =
         staticScene

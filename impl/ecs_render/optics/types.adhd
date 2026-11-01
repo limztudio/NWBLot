@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/shared/frame_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RtOpticalSceneFlagBoundsValid = 1u;
+const u32 s_RtOpticalBoundaryUnspecified = 0u;
+
+[serialize]
+class RayTracingOpticalRuntimeInputGpu{
+    public f32x3x4 objectToWorld(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 localBoundsSlot = s_RtInvalidSlot;
+    public u32 instanceIndex = 0u;
+    public Array<u32, 2u> reserved;
+}
+
+[serialize]
+class RayTracingOpticalSceneHeaderGpu{
+    public f32x3u boundsMin(0.0f, 0.0f, 0.0f);
+    public u32 transparentCount = 0u;
+    public f32x3u boundsMax(0.0f, 0.0f, 0.0f);
+    public u32 flags = s_RtOpticalSceneFlagBoundsValid;
+}
+
+[serialize]
+class RayTracingOpticalInstanceGpu{
+    public u32 entityId = 0u;
+    public i32 mediumPriority = 0;
+    public u32 boundaryMode = s_RtOpticalBoundaryUnspecified;
+    public u32 flags = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class OpticalWorldBoundsData{
+    public f32x4 minimum(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maximum(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+b8 TryComputeOpticalWorldBounds(in f32x4 row0, in f32x4 row1, in f32x4 row2, in f32x4 localMin, in f32x4 localMax, mut OpticalWorldBoundsData outBounds){
+    outBounds = OpticalWorldBoundsData();
+    b8 valid = false;
+    native(in row0, in row1, in row2, in localMin, in localMax, mut outBounds, mut valid){
+        constexpr f64 s_UnitRoundoff = 0x1p-24;
+        constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
+        constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
+        const SIMDVectorSingle localMinVec = VectorAndInt(LoadFloat(localMin), s_SIMDMask3);
+        const SIMDVectorSingle localMaxVec = VectorAndInt(LoadFloat(localMax), s_SIMDMask3);
+        if(VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) && VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ) && Vector3LessOrEqual(localMinVec, localMaxVec)){
+            const SIMDVectorSingle row0Vec = LoadFloat(row0);
+            const SIMDVectorSingle row1Vec = LoadFloat(row1);
+            const SIMDVectorSingle row2Vec = LoadFloat(row2);
+            if(VectorIsFinite(row0Vec, VectorComponentMask::s_XYZW) && VectorIsFinite(row1Vec, VectorComponentMask::s_XYZW) && VectorIsFinite(row2Vec, VectorComponentMask::s_XYZW)){
+                const SIMDMatrix columns = MatrixTranspose(SIMDMatrix{ .v = { row0Vec, row1Vec, row2Vec, VectorZero() } });
+                SIMDVectorSingle laneMin = VectorReplicate(Limit<f32>::s_Infinity);
+                SIMDVectorSingle laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
+                SIMDVectorSingle laneMagnitude = VectorZero();
+                constexpr u32 s_BoxCornerCount = 8u;
+                constexpr u32 s_CornerMaxXBit = 1u;
+                constexpr u32 s_CornerMaxYBit = 2u;
+                constexpr u32 s_CornerMaxZBit = 4u;
+                b8 cornersFinite = true;
+                for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
+                    const SIMDVectorSingle selectX = ((corner & s_CornerMaxXBit) != 0u) ? localMaxVec : localMinVec;
+                    const SIMDVectorSingle selectY = ((corner & s_CornerMaxYBit) != 0u) ? localMaxVec : localMinVec;
+                    const SIMDVectorSingle selectZ = ((corner & s_CornerMaxZBit) != 0u) ? localMaxVec : localMinVec;
+                    SIMDVectorSingle point = VectorSelect(selectX, selectY, s_SIMDMaskY);
+                    point = VectorSelect(point, selectZ, s_SIMDMaskZ);
+                    const SIMDVectorSingle x = VectorSplatX(point);
+                    const SIMDVectorSingle y = VectorSplatY(point);
+                    const SIMDVectorSingle z = VectorSplatZ(point);
+                    SIMDVectorSingle cornerVec = VectorMultiply(columns.v[0], x);
+                    cornerVec = VectorMultiplyAdd(columns.v[1], y, cornerVec);
+                    cornerVec = VectorMultiplyAdd(columns.v[2], z, cornerVec);
+                    cornerVec = VectorAdd(cornerVec, columns.v[3]);
+                    if(!VectorIsFinite(cornerVec, VectorComponentMask::s_XYZ)){
+                        cornersFinite = false;
+                        break;
+                    }
+                    laneMin = VectorMin(laneMin, cornerVec);
+                    laneMax = VectorMax(laneMax, cornerVec);
+                    laneMagnitude = VectorMax(laneMagnitude, VectorAbs(cornerVec));
+                }
+                if(cornersFinite){
+                    const SIMDVectorSingle magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
+                    const SIMDVectorSingle marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
+                    const SIMDVectorSingle minimum = VectorSubtract(laneMin, marginVec);
+                    const SIMDVectorSingle maximum = VectorAdd(laneMax, marginVec);
+                    if(VectorIsFinite(minimum, VectorComponentMask::s_XYZ) && VectorIsFinite(maximum, VectorComponentMask::s_XYZ)){
+                        StoreFloat(VectorAndInt(minimum, s_SIMDMask3), outBounds.minimum);
+                        StoreFloat(VectorAndInt(maximum, s_SIMDMask3), outBounds.maximum);
+                        valid = true;
+                    }
+                }
+            }
+        }
+    }
+    return valid;
+}
+
+const usize s_OpticalBoundsUseCapacity = 8u;
+
+[serialize]
+class OpticalBoundsFinalizePushConstants{
+    public u32 sourceSceneSlot = 0u;
+    public u32 runtimeInputsSlot = 0u;
+    public u32 outputSceneSlot = 0u;
+    public u32 instanceCount = 0u;
+    public u32 runtimeCount = 0u;
+    public u32 staticBoundsComplete = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -22,12 +22,6 @@ namespace __hidden_font_atlas_binary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_QwordHighWordShift = 32u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Span<const u8> bytes, usize& cursor)noexcept{
     FontAtlasGlyph glyph;
     const auto glyphId = ReadU32LittleEndian(bytes, cursor);
@@ -110,7 +104,7 @@ static constexpr u32 s_QwordHighWordShift = 32u;
         const auto high = ReadU32LittleEndian(bytes, cursor);
         if(!high)
             return MakeUnexpected(high.error());
-        lane = static_cast<u64>(*low) | (static_cast<u64>(*high) << s_QwordHighWordShift);
+        lane = PackFontAtlasQword(*low, *high);
     }
     payload.font.virtualPath = Name(identity);
     if(!ReadBytes(bytes, sizeof(payload.fontSha256.bytes), cursor, payload.fontSha256.bytes))
@@ -163,7 +157,15 @@ static constexpr u32 s_QwordHighWordShift = 32u;
     const auto tableCount = ReadU32LittleEndian(bytes, cursor);
     if(!tableCount)
         return MakeUnexpected(tableCount.error());
-    if(*glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > s_FontAtlasMaxPositioningTableCount || *raster > FontAtlasRasterMode::Bitmap)
+    if(
+        *glyphCount == 0u
+        || *glyphCount > s_FontAtlasMaxGlyphCount
+        || *glyphCount != payload.sourceGlyphCount
+        || *groupCount == 0u
+        || *groupCount > s_FontAtlasMaxGroupCount
+        || *tableCount > s_FontAtlasMaxPositioningTableCount
+        || *raster > FontAtlasRasterMode::Bitmap
+    )
         return MakeUnexpected(Failure{});
     payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
     const u64 minimumRemaining = static_cast<u64>(*glyphCount) * s_FontAtlasBinaryGlyphBytes + static_cast<u64>(*groupCount) * s_FontAtlasBinaryGroupHeaderBytes + static_cast<u64>(*tableCount) * s_FontAtlasBinaryTableHeaderBytes;
@@ -260,8 +262,8 @@ Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(const FontAtlasPayl
     AppendU32LittleEndian(binary, s_FontAtlasDistanceEncoding);
     AppendU32LittleEndian(binary, 0u);
     for(const u64 lane : payload.font.name().hash().qwords){
-        AppendU32LittleEndian(binary, static_cast<u32>(lane));
-        AppendU32LittleEndian(binary, static_cast<u32>(lane >> s_QwordHighWordShift));
+        AppendU32LittleEndian(binary, UnpackFontAtlasLowWord(lane));
+        AppendU32LittleEndian(binary, UnpackFontAtlasHighWord(lane));
     }
     binary.insert(binary.end(), payload.fontSha256.bytes, payload.fontSha256.bytes + sizeof(payload.fontSha256.bytes));
     AppendU32LittleEndian(binary, payload.faceIndex);

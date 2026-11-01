@@ -4,9 +4,6 @@
 
 #include "mesh_requests.h"
 
-#include <global/allocation_size.h>
-#include <global/hash_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,58 +14,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_runtime_mesh_requests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr usize s_IndexBucketsPerRequest = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-usize RuntimeMeshRequestSet::KeyHash::operator()(const Key& key)const noexcept{
-    usize hash = Hasher<NameHash>{}(key.name);
-    HashCombine(hash, key.version);
-    return hash;
-}
-
 usize RuntimeMeshRequestSet::KeyHash::operator()(const Lookup& key)const noexcept{
     usize hash = Hasher<NameHash>{}(key.name);
     HashCombine(hash, key.version);
     return hash;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Key& rhs)const noexcept{
-    return lhs.version == rhs.version && lhs.name == rhs.name;
-}
-
-b8 RuntimeMeshRequestSet::KeyEqual::operator()(const Key& lhs, const Lookup& rhs)const noexcept{
-    return lhs.version == rhs.version && lhs.name == rhs.name;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RuntimeMeshRequestSet::RuntimeMeshRequestSet(Core::Alloc::ScratchArena& scratchArena, const usize expectedRequestCount)
     : m_scratchArena(scratchArena)
     , m_expectedRequestCount(expectedRequestCount)
 {
-    if(expectedRequestCount > s_InlineCapacity)
-        m_index.emplace(SizeOf<__hidden_runtime_mesh_requests::s_IndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
+    if(expectedRequestCount > s_RuntimeMeshRequestInlineCapacity)
+        m_index.emplace(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(expectedRequestCount), KeyHash{}, KeyEqual{}, m_scratchArena);
 }
 
 void RuntimeMeshRequestSet::add(const Name& meshKey, const u64 version){
@@ -77,20 +34,52 @@ void RuntimeMeshRequestSet::add(const Name& meshKey, const u64 version){
     if(!m_index){
         if(findInline(meshKey.identityHash(), version) < m_inlineCount)
             return;
-        if(m_inlineCount < s_InlineCapacity){
-            m_inlineEntries[m_inlineCount] = Entry{ { meshKey.identityHash(), version }, false };
+        if(m_inlineCount < s_RuntimeMeshRequestInlineCapacity){
+            m_inlineEntries[m_inlineCount] = Entry(Key(meshKey.identityHash(), version), false);
             ++m_inlineCount;
             ++m_remainingCount;
             return;
         }
         promoteIndex();
     }
-    if(m_index->try_emplace(Key{ meshKey.identityHash(), version }, false).second)
+    if(m_index->try_emplace(Key(meshKey.identityHash(), version), false).second)
         ++m_remainingCount;
 }
 
+void RuntimeMeshRequestSet::markLive(const Name& meshKey, const u64 version)noexcept{
+    if(!meshKey)
+        return;
+    if(m_index){
+        markIndexedLive(meshKey, version);
+        return;
+    }
+    const usize index = findInline(meshKey.identityHash(), version);
+    if(index < m_inlineCount && !m_inlineEntries[index].found){
+        m_inlineEntries[index].found = true;
+        --m_remainingCount;
+    }
+}
+
+b8 RuntimeMeshRequestSet::containsLive(const Name& meshKey, const u64 version)const noexcept{
+    if(!meshKey)
+        return false;
+    if(m_index)
+        return containsIndexedLive(meshKey, version);
+    const usize index = findInline(meshKey.identityHash(), version);
+    return index < m_inlineCount && m_inlineEntries[index].found;
+}
+
+usize RuntimeMeshRequestSet::findInline(const NameHash& name, const u64 version)const noexcept{
+    for(usize index = 0u; index < m_inlineCount; ++index){
+        const Key& key = m_inlineEntries[index].key;
+        if(key.version == version && key.name == name)
+            return index;
+    }
+    return m_inlineCount;
+}
+
 void RuntimeMeshRequestSet::promoteIndex(){
-    Index index(SizeOf<__hidden_runtime_mesh_requests::s_IndexBucketsPerRequest>(Max(m_expectedRequestCount, s_InlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
+    Index index(SizeOf<s_RuntimeMeshIndexBucketsPerRequest>(Max(m_expectedRequestCount, s_RuntimeMeshRequestInlineCapacity + 1u)), KeyHash{}, KeyEqual{}, m_scratchArena);
     for(usize entryIndex = 0u; entryIndex < m_inlineCount; ++entryIndex){
         const Entry& entry = m_inlineEntries[entryIndex];
         index[entry.key] = entry.found;

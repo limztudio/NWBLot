@@ -41,8 +41,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 start()noexcept;
-    [[nodiscard]] inline u16 port()const noexcept{ return m_port; }
+    [[nodiscard]] b8 start(u16& outPort)noexcept;
 
     [[nodiscard]] inline u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
 
@@ -50,7 +49,6 @@ public:
 private:
     MHD_Daemon* m_daemon = nullptr;
     Atomic<u32> m_requestCount = 0u;
-    u16 m_port = 0u;
     Atomic<b8> m_delayedFirstRequest = false;
 };
 
@@ -58,16 +56,13 @@ private:
 MHD_Result ShutdownCaptureServer::RequestCallback(
     void* const serverContext,
     MHD_Connection* const connection,
-    const char* const url,
+    const char* const,
     const char* const method,
-    const char* const version,
-    const char* const uploadData,
+    const char* const,
+    const char* const,
     size_t* const uploadDataSize,
     void** const connectionContext
 )noexcept{
-    static_cast<void>(url);
-    static_cast<void>(version);
-    static_cast<void>(uploadData);
 
     if(!serverContext || !connection || !method || !uploadDataSize || !connectionContext)
         return MHD_NO;
@@ -88,8 +83,8 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
         SleepMS(s_FirstRequestDelayMilliseconds);
     server.m_requestCount.fetch_add(1u, MemoryOrder::release);
 
-    static char s_EmptyResponse[] = "";
-    MHD_Response* const response = MHD_create_response_from_buffer(0u, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
+    static Array<char, 1u> s_EmptyResponse = {};
+    MHD_Response* const response = MHD_create_response_from_buffer(0u, s_EmptyResponse.data(), MHD_RESPMEM_PERSISTENT);
     if(!response)
         return MHD_NO;
 
@@ -107,7 +102,7 @@ ShutdownCaptureServer::~ShutdownCaptureServer()noexcept{
 }
 
 
-b8 ShutdownCaptureServer::start()noexcept{
+b8 ShutdownCaptureServer::start(u16& outPort)noexcept{
     if(m_daemon)
         return false;
 
@@ -134,7 +129,7 @@ b8 ShutdownCaptureServer::start()noexcept{
         return false;
     }
 
-    m_port = ntohs(boundAddress.sin_port);
+    outPort = ntohs(boundAddress.sin_port);
     return true;
 }
 
@@ -144,11 +139,12 @@ b8 ShutdownCaptureServer::start()noexcept{
 
 TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
     ShutdownCaptureServer server;
-    ASSERT_TRUE(server.start());
+    u16 port = 0u;
+    ASSERT_TRUE(server.start(port));
 
     {
         NWB::Log::Client client;
-        const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", server.port());
+        const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", port);
         ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
 
         for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){

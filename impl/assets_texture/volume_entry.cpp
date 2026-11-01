@@ -28,16 +28,15 @@ namespace __hidden_assets_texture_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<TextureCookEntry> ParseTextureDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseTextureCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
 static b8 RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
-        registry,
+    return Core::Assets::RegisterDocumentValueCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
         s_TextureAssetKindLabel,
-        &ParseTextureDocument,
-        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildTextureAsset(entry, arena); },
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseTextureCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+        },
+        nullptr,
+        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildTextureAsset(Move(entry), arena); },
+        registry,
         false
     );
 }

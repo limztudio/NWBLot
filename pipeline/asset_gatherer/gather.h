@@ -35,6 +35,7 @@ public:
 };
 
 
+[[nodiscard]] b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] b8 GatherAssets(const AssetGatherOptions& options);
 
 

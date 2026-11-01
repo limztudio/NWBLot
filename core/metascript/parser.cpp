@@ -37,15 +37,6 @@ constexpr usize s_DocumentReaderChunkBytes = 4096u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Document::Document(MetaArena& arena)
-    : m_arena(arena)
-    , m_variables(0, MStringHash(), MStringEqual(), arena)
-    , m_declarations(arena)
-    , m_structs(0, MStringHash(), MStringEqual(), arena)
-    , m_errors(arena)
-{}
-
-
 b8 Document::parse(MStringView source, IIncludeResolver* includeResolver){
     m_errors.clear();
     m_variables.clear();
@@ -75,21 +66,21 @@ b8 Document::parse(IMetaReader& reader, IIncludeResolver* includeResolver){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_DocumentReaderScratch, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
     BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
     buffer.reserve(__hidden_metascript_parser::s_DocumentReaderChunkBytes);
-    MChar chunk[__hidden_metascript_parser::s_DocumentReaderChunkBytes];
+    Array<MChar, __hidden_metascript_parser::s_DocumentReaderChunkBytes> chunk{};
 
     for(;;){
-        const auto bytesRead = reader.read(chunk, __hidden_metascript_parser::s_DocumentReaderChunkBytes);
+        const auto bytesRead = reader.read(chunk.data(), chunk.size());
         if(!bytesRead){
             m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
             return false;
         }
         if(*bytesRead == 0u)
             break;
-        if(*bytesRead > __hidden_metascript_parser::s_DocumentReaderChunkBytes){
+        if(*bytesRead > chunk.size()){
             m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
             return false;
         }
-        buffer.append(chunk, *bytesRead);
+        buffer.append(chunk.data(), *bytesRead);
     }
 
     return parse(MStringView(buffer.data(), buffer.size()), includeResolver);

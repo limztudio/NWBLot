@@ -34,39 +34,7 @@ constexpr AStringView s_EditBoxFontPath = "tests/ui/edit_box/font";
 constexpr Name s_FontScratchArenaName("tests/ui/fonts/operation_scratch");
 constexpr AStringView s_LatinFontFileName = "latin.font";
 
-class FixtureShaper final : public ITextShaper{
-public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
-        ShapedRun run(m_arena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        if(request.text == "ffi")
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
-        else if(request.text == "A\xcc\x81" "B"){
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, {} });
-            run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { 10.0f, 0.0f }, {} });
-        }
-        else if(request.text == "\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab")
-            run.glyphs.push_back({ {}, 1u, 0u, 9u, {}, { 12.0f, 0.0f }, {} });
-        else{
-            NWB::Tests::UiFixtureText::AppendCodePointGlyphs(run, request.text);
-            if(request.direction == TextDirection::RightToLeft){
-                NWB::Tests::UiFixtureText::ReverseGlyphs(run);
-            }
-        }
-        return run;
-    }
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-};
+using NWB::Tests::UiFixtureText::FixtureShaper;
 
 class EditBoxLayoutTests : public testing::Test{
 public:
@@ -127,7 +95,7 @@ TEST_F(EditBoxLayoutTests, LigaturesExposeEachGraphemeCaretAndPartialSelection){
     ASSERT_EQ(m_view.caretStops().size(), 4u);
     for(usize index = 0u; index < 4u; ++index){
         EXPECT_EQ(m_view.caretStops()[index].committedByte, index);
-        EXPECT_FLOAT_EQ(m_view.caretStops()[index].x, VectorGetX(VectorMultiply(VectorReplicate(static_cast<f32>(index)), VectorReplicate(10.0f))));
+        EXPECT_FLOAT_EQ(m_view.caretStops()[index].x, static_cast<f32>(index) * 10.0f);
     }
     ASSERT_TRUE(place());
     EXPECT_FLOAT_EQ(m_placement.caret.x, 30.0f);
@@ -190,7 +158,7 @@ TEST_F(EditBoxLayoutTests, PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUn
     EXPECT_FLOAT_EQ(selection->width, 10.0f);
     EXPECT_FLOAT_EQ(preedit->x, 20.0f);
     EXPECT_FLOAT_EQ(preedit->width, 20.0f);
-    EXPECT_FLOAT_EQ(VectorGetX(VectorMin(VectorReplicate(m_placement.caret.width), VectorReplicate(preedit->height))), 1.0f);
+    EXPECT_FLOAT_EQ(Min(m_placement.caret.width, preedit->height), 1.0f);
     const Expected<usize> hit = m_view.hitTest({ 39.0f, 24.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 2u);
@@ -227,7 +195,7 @@ TEST_F(EditBoxLayoutTests, HorizontalScrollFollowsCaretAndClampsWhenTextShrinks)
     EXPECT_FLOAT_EQ(m_placement.content.x, 13.0f);
     EXPECT_FLOAT_EQ(m_placement.content.width, 20.0f);
     EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
-    EXPECT_FLOAT_EQ(VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.x), VectorReplicate(m_placement.caret.width))), 33.0f);
+    EXPECT_FLOAT_EQ(m_placement.caret.x + m_placement.caret.width, 33.0f);
     ASSERT_TRUE(m_model.move(EditMove::Home));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place(20.0f, 41.0f));
@@ -356,7 +324,7 @@ TEST_F(EditBoxLayoutTests, EmptyPreeditSelectionStillPaintsItsUnderlineAndRestor
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
     const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
-    ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
+    ASSERT_TRUE(service.setFonts(fontScratchArena, Span(&source, 1u)));
     ASSERT_TRUE(m_model.beginComposition());
     ASSERT_TRUE(m_model.updateComposition("IME", 3u, 3u));
     ASSERT_TRUE(m_view.snapshot(m_model));
@@ -395,7 +363,7 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);
     const FontSource source{ Core::Assets::AssetRef<Font>(s_EditBoxFontPath), font, 1u };
-    ASSERT_TRUE(service.setFonts(fontScratchArena, &source, 1u));
+    ASSERT_TRUE(service.setFonts(fontScratchArena, Span(&source, 1u)));
     ASSERT_TRUE(m_model.setText("ffi"));
     ASSERT_TRUE(m_model.setSelection(1u, 2u));
     ASSERT_TRUE(m_view.snapshot(m_model));
@@ -415,7 +383,7 @@ TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDispl
         const auto snapshot = paint.freeze();
         ASSERT_FALSE(snapshot.glyphPages().empty());
         ASSERT_FALSE(snapshot.vertices().empty());
-        const f32 boundsRight = VectorGetX(VectorAdd(VectorReplicate(m_placement.bounds.x), VectorReplicate(m_placement.bounds.width)));
+        const f32 boundsRight = m_placement.bounds.x + m_placement.bounds.width;
         for(const Vertex& vertex : snapshot.vertices()){
             EXPECT_GE(vertex.position.x, m_placement.bounds.x);
             EXPECT_LE(vertex.position.x, boundsRight);

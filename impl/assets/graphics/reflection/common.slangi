@@ -38,10 +38,10 @@ static const float NWB_REFLECTION_SURFACE_BIAS_DISTANCE_SCALE = 1e-5;
 struct NwbReflectionParameters{
     // The leading std140 lane is one immutable vector: width, height, trace mode, hardware route enabled.
     uint4 dimensionsAndRoute;
-#define NWB_REFLECTION_UINT_FIELD(name, value) uint name;
+#define NWB_REFLECTION_UINT_FIELD(name) uint name;
     NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(NWB_REFLECTION_UINT_FIELD)
 #undef NWB_REFLECTION_UINT_FIELD
-#define NWB_REFLECTION_FLOAT_FIELD(name, value) float name;
+#define NWB_REFLECTION_FLOAT_FIELD(name) float name;
     NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_FLOAT_FIELD)
 #undef NWB_REFLECTION_FLOAT_FIELD
 };

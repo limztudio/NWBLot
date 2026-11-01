@@ -38,9 +38,9 @@ public:
 
 
 public:
-    void reverse()noexcept{ m_reversed = !m_reversed; ++m_revision; }
+    void reverse()noexcept;
 
-    void replace()noexcept{ ++m_generation; ++m_revision; }
+    void replace()noexcept;
 
     void beginFrame()noexcept{ m_labelReads = 0u; }
 

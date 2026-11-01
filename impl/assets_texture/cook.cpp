@@ -33,64 +33,85 @@ namespace __hidden_texture_cook{
 
 [[nodiscard]] static Expected<Texture::MipLevelVector> BuildMipLevels(const TextureCookEntry& entry, Core::Assets::AssetArena& arena){
     if(
-        !IsValidTexturePayloadFormat(entry.payloadFormat) || !IsValidTextureDimension(entry.dimension) || entry.width == 0u || entry.height == 0u || entry.depth == 0u
-        || (entry.dimension != TextureDimension::Texture3D && entry.depth != 1u) || (entry.dimension == TextureDimension::TextureCube && entry.width != entry.height)
+        !IsValidTexturePayloadFormat(entry.payloadFormat)
+        || !TextureFormat::IsValidTextureResolution(entry.dimension, entry.width, entry.height, entry.depth)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: invalid texture format or resolution."));
         return MakeUnexpected(Failure{});
     }
-    const auto completeMipCount = TextureFormat::ComputeCompleteMipCount(entry.dimension, entry.width, entry.height, entry.depth);
-    if(!completeMipCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: resolution cannot describe a complete mip chain."));
+
+    auto levels = TextureFormat::BuildMipChainLayout(
+        entry.payloadFormat,
+        entry.dimension,
+        entry.width,
+        entry.height,
+        entry.depth,
+        Texture::MipLevelVector(arena),
+        [](const TextureFormat::MipLevelLayout& level)noexcept -> TextureMipLevel{
+            return BuildTextureMipLevel(
+                level.width,
+                level.height,
+                level.blockCountX,
+                level.blockCountY,
+                level.offsetBytes,
+                level.sizeBytes,
+                level.sliceCount
+            );
+        }
+    );
+    if(!levels){
+        switch(levels.error().failure){
+        case TextureFormat::MipChainLayoutFailure::InvalidMipChain:
+            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: resolution cannot describe a complete mip chain."));
+            break;
+        case TextureFormat::MipChainLayoutFailure::BlockLayoutOverflow:
+        case TextureFormat::MipChainLayoutFailure::SliceCountInvalid:
+        case TextureFormat::MipChainLayoutFailure::ByteSizeOverflow:
+            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip {} block layout exceeds supported limits."), levels.error().mipIndex);
+            break;
+        case TextureFormat::MipChainLayoutFailure::OffsetOverflow:
+        default:
+            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip byte offsets overflow."));
+            break;
+        }
         return MakeUnexpected(Failure{});
     }
 
-    Texture::MipLevelVector levels(arena);
-    levels.reserve(*completeMipCount);
-    u32 width = entry.width;
-    u32 height = entry.height;
-    u32 depth = entry.depth;
-    u64 offset = 0u;
-    for(u32 level = 0u; level < *completeMipCount; ++level){
-        const auto layout = TextureFormat::ComputeMipPlaneBlockLayout(entry.payloadFormat, width, height);
-        const auto slices = TextureFormat::ComputeMipSliceCount(entry.dimension, depth);
-        if(!layout || !slices || layout->planeByteCount > Limit<u64>::s_Max / *slices){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip {} block layout exceeds supported limits."), level);
-            return MakeUnexpected(Failure{});
-        }
-        const u64 byteCount = layout->planeByteCount * *slices;
-        if(byteCount > Limit<u64>::s_Max - offset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: mip byte offsets overflow."));
-            return MakeUnexpected(Failure{});
-        }
-        TextureMipLevel mip;
-        mip.width = width;
-        mip.height = height;
-        mip.blockCountX = layout->blocksX;
-        mip.blockCountY = layout->blocksY;
-        mip.offsetBytes = offset;
-        mip.sizeBytes = byteCount;
-        mip.sliceCount = *slices;
-        levels.push_back(mip);
-        offset += byteCount;
-        width = width > 1u ? width >> 1u : 1u;
-        height = height > 1u ? height >> 1u : 1u;
-        if(entry.dimension == TextureDimension::Texture3D)
-            depth = depth > 1u ? depth >> 1u : 1u;
+    const TextureMipLevel& lastMip = levels->back();
+    const u64 primaryByteCount = lastMip.offsetBytes + lastMip.sizeBytes;
+    const auto expectedBytes = TextureFormat::ComputeExpectedPayloadByteCount(primaryByteCount, entry.alphaMode);
+    if(!expectedBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: separate alpha byte count overflows."));
+        return MakeUnexpected(Failure{});
     }
-    u64 expectedBytes = offset;
-    if(entry.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
-        if(offset > Limit<u64>::s_Max - expectedBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: separate alpha byte count overflows."));
-            return MakeUnexpected(Failure{});
-        }
-        expectedBytes += offset;
-    }
-    if(expectedBytes != static_cast<u64>(entry.payloadBytes.size())){
+    if(*expectedBytes != static_cast<u64>(entry.payloadBytes.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture cook: raw texture byte count does not match the declared mip and alpha layout."));
         return MakeUnexpected(Failure{});
     }
-    return levels;
+    return Move(*levels);
+}
+
+[[nodiscard]] static Expected<Texture> FinalizeTextureAsset(
+    const TextureCookEntry& textureEntry,
+    Texture::MipLevelVector&& mipLevels,
+    Core::Assets::AssetBytes&& payload,
+    Core::Assets::AssetArena& arena
+){
+    Texture asset(arena, textureEntry.virtualPath);
+    asset.setPayload(
+        textureEntry.width,
+        textureEntry.height,
+        Move(mipLevels),
+        Move(payload),
+        textureEntry.dimension,
+        textureEntry.depth,
+        textureEntry.payloadFormat,
+        textureEntry.alphaMode,
+        textureEntry.alphaConstantUnorm8
+    );
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure{});
+    return asset;
 }
 
 
@@ -159,11 +180,17 @@ Expected<Texture> BuildTextureAsset(const TextureCookEntry& textureEntry, Core::
     if(!mipLevels)
         return MakeUnexpected(Failure{});
     Core::Assets::AssetBytes payload(textureEntry.payloadBytes.begin(), textureEntry.payloadBytes.end(), arena);
-    Texture asset(arena, textureEntry.virtualPath);
-    asset.setPayload(textureEntry.width, textureEntry.height, Move(*mipLevels), Move(payload), textureEntry.dimension, textureEntry.depth, textureEntry.payloadFormat, textureEntry.alphaMode, textureEntry.alphaConstantUnorm8);
-    if(!asset.validatePayload())
+    return __hidden_texture_cook::FinalizeTextureAsset(textureEntry, Move(*mipLevels), Move(payload), arena);
+}
+
+Expected<Texture> BuildTextureAsset(TextureCookEntry&& textureEntry, Core::Assets::AssetArena& arena){
+    auto mipLevels = __hidden_texture_cook::BuildMipLevels(textureEntry, arena);
+    if(!mipLevels)
         return MakeUnexpected(Failure{});
-    return asset;
+    Core::Assets::AssetBytes payload = &textureEntry.payloadBytes.get_allocator().arena() == &arena
+        ? Move(textureEntry.payloadBytes)
+        : Core::Assets::AssetBytes(textureEntry.payloadBytes.begin(), textureEntry.payloadBytes.end(), arena);
+    return __hidden_texture_cook::FinalizeTextureAsset(textureEntry, Move(*mipLevels), Move(payload), arena);
 }
 
 

@@ -28,12 +28,12 @@ class UiRadioGroupSource final : public UiImmutableListSource<UiRadioGroupSource
     friend class UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>;
 
 
-private:
-    static constexpr Array<StringView, s_RadioGroupLabelCount> s_Labels{ "Balanced", "High quality", "Unavailable" };
-
-
 public:
     using UiImmutableListSource<UiRadioGroupSource, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>::UiImmutableListSource;
+
+
+private:
+    static constexpr Array<StringView, s_RadioGroupLabelCount> s_Labels{ "Balanced", "High quality", "Unavailable" };
 };
 
 class UiRadioGroupGallery final : NoCopy{
@@ -45,6 +45,9 @@ private:
     UiRadioGroupSource m_source;
     NWB::Impl::Ui::RadioGroupState m_state;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

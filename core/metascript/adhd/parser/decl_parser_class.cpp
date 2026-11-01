@@ -235,6 +235,10 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
         if(!applyCallableAttributes(attributes, *dtor))
             return false;
+        if(dtor->isReflect){
+            m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
+            return false;
+        }
         if(!parseDestructorEmptyParams("expected '(' for destructor"))
             return false;
         if(!parseClassMemberCallableBody(*dtor, "expected '{' or ';' after destructor declaration"))
@@ -257,6 +261,10 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
 
             if(!applyCallableAttributes(attributes, *ctor))
                 return false;
+            if(ctor->isReflect){
+                m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
+                return false;
+            }
             if(!parseConstructorParamsAndRejectInitList(ctor->params))
                 return false;
             if(!parseClassMemberCallableBody(*ctor, "expected '{' or ';' after constructor declaration"))

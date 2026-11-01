@@ -114,10 +114,6 @@ template<typename RecordT>
     return true;
 }
 
-[[nodiscard]] static GpuCommandIrRecordContext EncodeContext(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
-    return GpuCommandIrRecordContext{ .taskIndex = record.task.index, .packetIndex = record.packet.index, .queueIndex = record.queue.index, .queueDeviceGeneration = record.queue.deviceGeneration, };
-}
-
 [[nodiscard]] static GpuCommandIrTextureSlice EncodeTextureSlice(const TextureSlice& slice)noexcept{
     return GpuCommandIrTextureSlice{ .x = slice.x, .y = slice.y, .z = slice.z, .width = slice.width, .height = slice.height, .depth = slice.depth, .mipLevel = slice.mipLevel, .arraySlice = slice.arraySlice, };
 }
@@ -126,54 +122,11 @@ template<typename RecordT>
     return GpuCommandIrTextureSubresourceSet{ .baseMipLevel = subresources.baseMipLevel, .numMipLevels = subresources.numMipLevels, .baseArraySlice = subresources.baseArraySlice, .numArraySlices = subresources.numArraySlices, };
 }
 
-[[nodiscard]] static GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
-    return GpuCommandIrRect{ .minX = rect.minX, .maxX = rect.maxX, .minY = rect.minY, .maxY = rect.maxY, };
-}
-
-[[nodiscard]] static GpuCommandIrFloatColor EncodeColor(const Color& color)noexcept{
-    return GpuCommandIrFloatColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
-}
-
-[[nodiscard]] static GpuCommandIrUIntColor EncodeColor(const UIntColor& color)noexcept{
-    return GpuCommandIrUIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
-}
-
-[[nodiscard]] static GpuCommandIrIntColor EncodeColor(const IntColor& color)noexcept{
-    return GpuCommandIrIntColor{ .r = color.r, .g = color.g, .b = color.b, .a = color.a, };
-}
-
-template<typename RecordT>
-static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept(
-    noexcept(NWB_MEMSET(&DeclVal<RecordT&>(), 0, sizeof(RecordT)))
-    && noexcept(DeclVal<RecordT&>().header.opcode = DeclVal<const GpuCommandIrWireOpcode::Enum&>())
-    && noexcept(DeclVal<RecordT&>().header.byteSize = static_cast<u16>(sizeof(RecordT)))
-){
-    static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
-    NWB_MEMSET(&record, 0, sizeof(record));
-    record.header.opcode = opcode;
-    record.header.byteSize = static_cast<u16>(sizeof(record));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GraphicsArena& arena)noexcept
-    : m_arena(arena)
-    , m_bytes(arena)
-{}
-
-GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept
-    : m_arena(other.m_arena)
-    , m_bytes(Move(other.m_bytes))
-    , m_rasterOwners(Exchange(other.m_rasterOwners, nullptr))
-{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -448,6 +401,7 @@ b8 GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
 
 b8 GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record){
     using namespace __hidden_gpu_command_ir_capture;
+    using namespace GpuCommandIrDetail;
 
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:{

@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MVector<ParseError>& errors){
+b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, const b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
     b8 ok = true;
 
     switch(expr.kind){
@@ -97,9 +97,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
                 reportError(errors, expr.span, "cannot mutate 'in' reference member");
                 ok = false;
             }
-            else if(m_parallelDepth > 0u && field && field->type && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(field->type->name))){
-                reportError(errors, expr.span, "shared 'mut' access to non-thread-safe member container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
-                ok = false;
+            else if(field && field->type && IsNonThreadSafeContainer(m_symbols.resolveBaseTypeName(field->type->name))){
+                if(m_inLambda)
+                    m_activeLambdaMutatesContainer = true;
+                if(m_parallelDepth > 0u){
+                    reportError(errors, expr.span, "shared 'mut' access to non-thread-safe member container inside 'parallel' or 'parallel_for' is prohibited; use Parallel* containers or disjoint element indexing");
+                    ok = false;
+                }
             }
         }
         break;
@@ -114,7 +118,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
                 if(!validateThisAccess(ownerClass, expr.span, scope, errors))
                     ok = false;
             }
-            else if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, false, errors)){
+            else if(expr.lhs && !checkExpr(ownerClass, scope, false, method, *expr.lhs, errors)){
                 ok = false;
             }
             const ClassDecl* accessedCls = nullptr;
@@ -157,16 +161,25 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
         break;
     }
     case ExprKind::MemberAccess:{
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, isMutationTarget, errors))
+        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
+            const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if(IsNumericScalarType(resolvedBaseType) && expr.lhs->callTemplateArgs.empty() && (expr.text == "min" || expr.text == "max")){
+                if(isMutationTarget){
+                    reportError(errors, expr.span, "cannot mutate a scalar type limit constant");
+                    ok = false;
+                }
+                break;
+            }
+            if(m_symbols.hasTypeSymbol(resolvedBaseType) || IsBuiltinTypeName(resolvedBaseType)){
+                reportError(errors, expr.span, "cannot use '.' member access on a type name; use 'TypeName::Entry' for enum/flag values or an instance variable");
+                ok = false;
+                break;
+            }
+        }
+        if(expr.lhs && !checkExpr(ownerClass, scope, isMutationTarget, method, *expr.lhs, errors))
             ok = false;
 
         if(expr.lhs){
-            if(expr.lhs->kind == ExprKind::Identifier && !FindScopedVar(scope, expr.lhs->text) && !m_symbols.findGlobalConstant(expr.lhs->text)){
-                if(m_symbols.hasTypeSymbol(m_symbols.resolveBaseTypeName(expr.lhs->text))){
-                    reportError(errors, expr.span, "cannot use '.' member access on a type name; use 'TypeName::Entry' for enum/flag values or an instance variable");
-                    ok = false;
-                }
-            }
             if(expr.lhs->derefNotNull){
                 expr.lhs->derefNotNull = false;
                 expr.isPointerMemberAccess = true;
@@ -245,7 +258,11 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
         if(lhsBaseType != "Map" && lhsBaseType != "HashMap")
             m_parallelDepth = 0u;
         u32 vecIdxLanes = 0u;
-        if(SymbolTable::IsSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
+        if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(lhsBaseType); simdVecInfo && simdVecInfo->isMixed){
+            reportError(errors, expr.span, "dynamic indexing '[]' is not supported on mixed float/integer SIMD vector types; use explicit .x/.y/.z/.w lane access");
+            ok = false;
+        }
+        else if(SymbolTable::IsSimdVectorType(lhsBaseType, vecIdxLanes) || SymbolTable::IsUnalignedVectorType(lhsBaseType, vecIdxLanes))
             expr.isVectorRawIndex = true;
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const ClassDecl* opDeclCls = nullptr;
@@ -263,10 +280,10 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             if(!customOpIdx->params.empty() && customOpIdx->params[0].mode == ParamPassingMode::Mut)
                 rhsNeedsMut = true;
         }
-        if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
+        if(expr.lhs && !checkExpr(ownerClass, scope, lhsNeedsMut, method, *expr.lhs, errors))
             ok = false;
         m_parallelDepth = savedParallelDepth;
-        if(expr.rhs && !checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
+        if(expr.rhs && !checkExpr(ownerClass, scope, rhsNeedsMut, method, *expr.rhs, errors))
             ok = false;
 
         const TypeRef* indexedElemType = inferExprTypeRef(ownerClass, &method, expr, scope);
@@ -286,7 +303,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
         break;
     }
     case ExprKind::Call:
-        if(!checkCallExpr(ownerClass, method, expr, scope, isMutationTarget, errors))
+        if(!checkCallExpr(ownerClass, scope, isMutationTarget, method, expr, errors))
             ok = false;
         break;
     case ExprKind::Unary:{
@@ -298,9 +315,13 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             const b8 recvIsConst = isReceiverConst(ownerClass, method, *expr.lhs, scope);
             const ClassDecl* opDeclCls = nullptr;
             const MethodDecl* opMethod = resolveCustomOperator(ownerClass, &method, lhsTypeRef, lhsType, opSym, 0u, recvIsConst, &opDeclCls);
-            if(expr.op == TokenType::Tilde){
-                if(const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType); lhsEnum && !lhsEnum->isFlag){
+            if(const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType)){
+                if(expr.op == TokenType::Tilde && !lhsEnum->isFlag){
                     reportError(errors, expr.span, "bitwise '~' is only supported on 'flag' types, not 'enum' types");
+                    ok = false;
+                }
+                else if(expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus){
+                    reportError(errors, expr.span, "increment and decrement operators are not supported on 'enum' or 'flag' types");
                     ok = false;
                 }
             }
@@ -316,7 +337,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
                 if(!opMethod->isConst)
                     mutates = true;
             }
-            if(!checkExpr(ownerClass, method, *expr.lhs, scope, mutates, errors))
+            if(!checkExpr(ownerClass, scope, mutates, method, *expr.lhs, errors))
                 ok = false;
         }
         const TypeRef* unaryRetType = inferExprTypeRef(ownerClass, &method, expr, scope);
@@ -334,7 +355,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             reportError(errors, expr.span, "cannot pass temporary or rvalue expression to a 'mut' target");
             ok = false;
         }
-        if(!checkBinaryExpr(ownerClass, method, expr, scope, errors))
+        if(!checkBinaryExpr(ownerClass, scope, method, expr, errors))
             ok = false;
         break;
     case ExprKind::Cast:
@@ -352,7 +373,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             }
         }
         if(expr.lhs){
-            if(!checkExpr(ownerClass, method, *expr.lhs, scope, false, errors))
+            if(!checkExpr(ownerClass, scope, false, method, *expr.lhs, errors))
                 ok = false;
             const MStringView srcType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
             if(!srcType.empty() && m_symbols.findInterface(srcType)){
@@ -392,7 +413,7 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
             reportError(errors, expr.span, "cannot pass lambda temporary to a 'mut' target");
             ok = false;
         }
-        if(!checkLambdaExpr(ownerClass, method, expr, scope, errors))
+        if(!checkLambdaExpr(ownerClass, scope, method, expr, errors))
             ok = false;
         break;
     default:
@@ -407,20 +428,20 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr,
 }
 
 b8 TypeChecker::applyInterfaceRefRebind(
-    ClassDecl* ownerClass,
-    MethodDecl& method,
-    Expr& assignExpr,
+    const ClassDecl* ownerClass,
+    const MethodDecl& method,
     const TypeRef* targetType,
     const ParamPassingMode::Enum targetRefMode,
     const Span<const ScopedVarInfo> scope,
     const MStringView errorMessage,
-    b8& outRhsNeedsMut,
-    MVector<ParseError>& errors
+    Expr& assignExpr,
+    MVector<ParseError>& errors,
+    b8& inOutRhsNeedsMut
 ){
     assignExpr.lhs->derefNotNull = false;
     assignExpr.isNotNullRebind = true;
     if(targetRefMode == ParamPassingMode::Mut)
-        outRhsNeedsMut = true;
+        inOutRhsNeedsMut = true;
     const MStringView baseTypeName = targetType ? m_symbols.resolveBaseTypeName(targetType->name) : MStringView{};
     if(assignExpr.rhs && !baseTypeName.empty() && m_symbols.findInterface(baseTypeName)){
         return verifyConcreteClassImplementsInterface(ownerClass, method, *assignExpr.rhs, targetType, scope, assignExpr.span, errorMessage, errors);
@@ -428,7 +449,7 @@ b8 TypeChecker::applyInterfaceRefRebind(
     return true;
 }
 
-b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, const Span<const ScopedVarInfo> scope, MVector<ParseError>& errors){
+b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors){
     b8 ok = true;
 
     const b8 isAssign = IsCompoundOrSimpleAssignment(expr.op);
@@ -495,14 +516,14 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
                 lhsNeedsMut = false;
                 if(expr.lhs->lhs){
                     const b8 savedDeref = expr.lhs->lhs->derefNotNull;
-                    if(!checkExpr(ownerClass, method, *expr.lhs->lhs, scope, true, errors))
+                    if(!checkExpr(ownerClass, scope, true, method, *expr.lhs->lhs, errors))
                         ok = false;
                     expr.lhs->lhs->derefNotNull = savedDeref;
                 }
             }
         }
     }
-    if(expr.lhs && !checkExpr(ownerClass, method, *expr.lhs, scope, lhsNeedsMut, errors))
+    if(expr.lhs && !checkExpr(ownerClass, scope, lhsNeedsMut, method, *expr.lhs, errors))
         ok = false;
     b8 rhsInClassArenaCtx = false;
     if(lhsThisField){
@@ -514,13 +535,13 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
-                expr,
                 lhsThisField->type,
                 fieldRefMode,
                 scope,
                 "cannot bind interface reference member to concrete class that does not implement the interface",
-                rhsNeedsMut,
-                errors
+                expr,
+                errors,
+                rhsNeedsMut
             )){
                 ok = false;
             }
@@ -536,13 +557,13 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
-                expr,
                 lhsLocal->type,
                 localRefMode,
                 scope,
                 "cannot rebind interface reference to concrete class that does not implement the interface",
-                rhsNeedsMut,
-                errors
+                expr,
+                errors,
+                rhsNeedsMut
             )){
                 ok = false;
             }
@@ -570,13 +591,13 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
             if(!applyInterfaceRefRebind(
                 ownerClass,
                 method,
-                expr,
                 lhsMemberOrIndexTypeRef,
                 lhsRefMode,
                 scope,
                 "cannot rebind interface reference to concrete class that does not implement the interface",
-                rhsNeedsMut,
-                errors
+                expr,
+                errors,
+                rhsNeedsMut
             )){
                 ok = false;
             }
@@ -588,7 +609,7 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
         const b8 savedClassArenaCtx = m_inClassArenaContext;
         if(rhsInClassArenaCtx)
             m_inClassArenaContext = true;
-        if(!checkExpr(ownerClass, method, *expr.rhs, scope, rhsNeedsMut, errors))
+        if(!checkExpr(ownerClass, scope, rhsNeedsMut, method, *expr.rhs, errors))
             ok = false;
         m_inClassArenaContext = savedClassArenaCtx;
         if(expr.op == TokenType::Equal && expr.lhs && expr.lhs->kind == ExprKind::ThisMember && IsEscapingMutCaptureLambda(expr.rhs, scope)){
@@ -599,6 +620,8 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
     if(expr.lhs && expr.rhs){
         const MStringView lhsType = inferExprTypeName(ownerClass, &method, *expr.lhs, scope);
         const MStringView rhsType = inferExprTypeName(ownerClass, &method, *expr.rhs, scope);
+        const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType);
+        const EnumDecl* rhsEnum = m_symbols.findEnum(rhsType);
         if(
             expr.op == TokenType::Pipe
             || expr.op == TokenType::Ampersand
@@ -607,21 +630,37 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr&
             || expr.op == TokenType::AmpersandEqual
             || expr.op == TokenType::CaretEqual
         ){
-            const EnumDecl* lhsEnum = m_symbols.findEnum(lhsType);
-            const EnumDecl* rhsEnum = m_symbols.findEnum(rhsType);
             if((lhsEnum && !lhsEnum->isFlag) || (!m_symbols.findClass(lhsType) && rhsEnum && !rhsEnum->isFlag)){
                 reportError(errors, expr.span, "bitwise operators are only supported on 'flag' types, not 'enum' types");
                 ok = false;
             }
+            else if(lhsEnum && rhsEnum && lhsEnum != rhsEnum){
+                reportError(errors, expr.span, "cannot combine values of two different 'flag' types in a bitwise operation");
+                ok = false;
+            }
+        }
+        else if(
+            lhsEnum && (
+                expr.op == TokenType::PlusEqual
+                || expr.op == TokenType::MinusEqual
+                || expr.op == TokenType::StarEqual
+                || expr.op == TokenType::SlashEqual
+                || expr.op == TokenType::PercentEqual
+                || expr.op == TokenType::LessLessEqual
+                || expr.op == TokenType::GreaterGreaterEqual
+            )
+        ){
+            reportError(errors, expr.span, "arithmetic and shift compound assignment operators are not supported on 'enum' or 'flag' types");
+            ok = false;
         }
         if(lhsType == "Path")
-            markStringToPathAdaptation(ownerClass, &method, *expr.rhs, scope);
+            markStringToPathAdaptation(ownerClass, &method, scope, *expr.rhs);
     }
 
     return ok;
 }
 
-b8 TypeChecker::isReceiverConst(ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, const Span<const ScopedVarInfo> scope)const noexcept{
+b8 TypeChecker::isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, const Span<const ScopedVarInfo> scope)const noexcept{
     if(recv.kind == ExprKind::Identifier){
         if(const ScopedVarInfo* local = FindScopedVar(scope, recv.text)){
             if(local->mode == ParamPassingMode::In || local->isConst)

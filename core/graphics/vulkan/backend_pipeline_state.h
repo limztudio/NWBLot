@@ -77,7 +77,7 @@ inline void AttachPipelineBindingState(VkGraphicsPipelineCreateInfo& pipelineInf
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GraphicsPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
+class GraphicsPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState{
     friend class Device;
     friend class CommandList;
 
@@ -108,7 +108,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ComputePipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
+class ComputePipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState{
     friend class Device;
     friend class CommandList;
 
@@ -136,7 +136,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshletPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
+class MeshletPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState{
     friend class Device;
     friend class CommandList;
 

@@ -90,7 +90,7 @@ public:
 
         for(u32 index = 0u; index < m_phaseCount; ++index){
             if(m_phases[index].scope.index == scope.index && m_phases[index].scope.generation == scope.generation){
-                m_phases[index].seconds = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_phases[index].seconds), VectorDoubleReplicate(seconds)));
+                m_phases[index].seconds += seconds;
                 return;
             }
         }
@@ -160,11 +160,6 @@ b8 GraphicsRuntime::runFrame(){
     return true;
 }
 
-void GraphicsRuntime::animate(f64 elapsedTime){
-    for(const auto renderPass : m_renderPasses)
-        renderPass->animate(static_cast<f32>(elapsedTime));
-}
-
 b8 GraphicsRuntime::prepareFramePreamble(){
     auto& device = getDevice();
     if(device.requiresRecreation()){
@@ -196,10 +191,6 @@ b8 GraphicsRuntime::prepareFramePreamble(){
     }
 
     return true;
-}
-
-Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::render(){
-    return renderWithPhaseTiming(nullptr);
 }
 
 Expected<void, CpuTaskAdmissionError::Enum> GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
@@ -261,10 +252,6 @@ b8 GraphicsRuntime::shouldRenderUnfocused()const{
             return true;
     }
     return false;
-}
-
-b8 GraphicsRuntime::animateRenderPresent(){
-    return animateRenderPresentInternal(nullptr);
 }
 
 b8 GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
@@ -432,7 +419,7 @@ b8 GraphicsRuntime::registerCpuTimingScopes(){
         const Name& name;
         Perf::TimingScopeId& id;
     };
-    const ScopeRegistration registrations[] = {
+    const Array<ScopeRegistration, 10> registrations = {{
         { __hidden_graphics_runtime_frame::s_GraphicsFrameCpuTimingScope, m_frameTimingScope },
         { __hidden_graphics_runtime_frame::s_GraphicsAnimateCpuTimingScope, m_animateTimingScope },
         { __hidden_graphics_runtime_frame::s_GraphicsBeginFrameCpuTimingScope, m_beginFrameTimingScope },
@@ -443,7 +430,7 @@ b8 GraphicsRuntime::registerCpuTimingScopes(){
         { __hidden_graphics_runtime_frame::s_GraphicsRenderCpuTimingScope, m_renderTimingScope },
         { __hidden_graphics_runtime_frame::s_GraphicsPresentCpuTimingScope, m_presentTimingScope },
         { __hidden_graphics_runtime_frame::s_GraphicsGarbageCollectCpuTimingScope, m_garbageCollectTimingScope },
-    };
+    }};
     for(const ScopeRegistration& registration : registrations){
         if(registration.id.valid())
             continue;

@@ -10,6 +10,8 @@
 #include <core/assets/ref.h>
 #include <core/ecs/system.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,8 +87,7 @@ using ModelObjectRendererCallback = Function<void(Core::ECS::World& world, Core:
 
 struct ModelObjectRendererHooks{
     ModelObjectRendererCallback apply;
-    const Core::ECS::ComponentAccess* accesses = nullptr;
-    usize accessCount = 0u;
+    Span<const Core::ECS::ComponentAccess> accesses;
 };
 
 
@@ -113,9 +114,10 @@ private:
     [[nodiscard]] b8 spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
     [[nodiscard]] b8 spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
     [[nodiscard]] b8 spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
+    [[nodiscard]] Core::ECS::Entity createSpawnedObjectEntity(Core::ECS::EntityID owner, Name objectName, const SkeletonJointMatrix& localTransform, ModelObjectKind::Enum kind);
+    [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const noexcept;
     [[nodiscard]] Expected<void, Core::CpuTaskAdmissionError::Enum> updateModelObjectTransforms();
     void updateStaticMeshAttachments();
-    [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const noexcept;
 
 
 private:

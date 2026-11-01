@@ -31,10 +31,10 @@ public:
     {}
 };
 
-static constexpr GraphemeCase s_ConformanceCases[] = {
+static constexpr Array<GraphemeCase, 766> s_ConformanceCases = {{
 #include "edit_grapheme_cases_0.inc"
 #include "edit_grapheme_cases_1.inc"
-};
+}};
 
 class UiEditGraphemeTests : public EditFixture{};
 

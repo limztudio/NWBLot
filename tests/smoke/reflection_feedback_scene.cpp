@@ -88,7 +88,7 @@ b8 ReflectionFeedbackScene::applyMutation()noexcept{
 
 Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale, const f32 f0, const b8 horizontal){
     using namespace __hidden_reflection_feedback_scene;
-    const auto entity = CreateTintedStaticMeshEntity(m_world, s_Plane, s_Opaque, s_Interface, color, position, scale);
+    const auto entity = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, color, position, scale, m_world);
     if(!entity.valid())
         return entity;
     if(!horizontal){
@@ -97,9 +97,9 @@ Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, co
     }
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(0.f);
-    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)))
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::f16x3, Impl::PackMaterialInstanceBytes(Span<const Half>(packedF0.raw, 3u))))
         return Core::ECS::s_InvalidEntityId;
-    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))))
+    if(!Impl::SetMaterialMutableParameter(m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::f16, Impl::PackMaterialInstanceValue(packedRoughness)))
         return Core::ECS::s_InvalidEntityId;
     return entity;
 }

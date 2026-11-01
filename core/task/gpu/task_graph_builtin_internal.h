@@ -7,6 +7,8 @@
 
 #include "task_graph.h"
 
+#include <global/range_traits.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,20 +76,12 @@ public:
 };
 
 template<typename Copy>
-struct CopiesTaskBase{
+struct CopiesTaskBase : public SingletonTokenTaskBase<CopiesPayloadBase<Copy>>{
     struct Payload : public CopiesPayloadBase<Copy>{
         explicit Payload(GraphicsArena& arena)noexcept
             : CopiesPayloadBase<Copy>(arena)
         {}
     };
-
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(PublishAcceptedToken(payload.acceptedToken, token))){
-        PublishAcceptedToken(payload.acceptedToken, token);
-    }
-
-    static void Discarded(Payload& payload)noexcept(noexcept(ClearAcceptedToken(payload.acceptedToken))){
-        ClearAcceptedToken(payload.acceptedToken);
-    }
 };
 
 template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
@@ -96,19 +90,10 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
     && []()constexpr noexcept{
         using Range = RemoveReference_T<decltype((DeclVal<const Payload&>().copies))>;
         if constexpr(requires(Range& values){ values.begin(); values.end(); }){
-            using Iterator = RemoveCVRef_T<decltype(DeclVal<Range&>().begin())>;
-            using Sentinel = RemoveCVRef_T<decltype(DeclVal<Range&>().end())>;
-            using Returned = decltype(*DeclVal<Iterator&>());
-            using Item = const RemoveReference_T<Returned>&;
+            using Traits = RangeTraits<Range>;
+            using Item = typename Traits::Item;
             return
-                noexcept(DeclVal<void(*)(Iterator)noexcept>()(DeclVal<Range&>().begin()))
-                && noexcept(DeclVal<void(*)(Sentinel)noexcept>()(DeclVal<Range&>().end()))
-                && IsNothrowDestructible_V<Iterator>
-                && IsNothrowDestructible_V<Sentinel>
-                && noexcept(static_cast<b8>(DeclVal<Iterator&>() != DeclVal<Sentinel&>()))
-                && noexcept(++DeclVal<Iterator&>())
-                && noexcept(*DeclVal<Iterator&>())
-                && noexcept(DeclVal<void(*)(Item)noexcept>()(*DeclVal<Iterator&>()))
+                Traits::IsNothrowTraversal(false)
                 && noexcept(static_cast<b8>(!DeclVal<CaptureCopyFn&>()(DeclVal<const GpuTaskRecordContext&>(), DeclVal<Item>())))
                 && noexcept(static_cast<b8>(!DeclVal<EmitCopyFn&>()(DeclVal<CommandList&>(), DeclVal<Item>())))
             ;
@@ -137,8 +122,6 @@ template<typename Payload, typename CaptureCopyFn, typename EmitCopyFn>
 }
 
 [[nodiscard]] b8 UploadTextureTaskCanMaterializeRetainedState(const TextureDesc& resourceDesc, ResourceStates::Mask graphInitialState, ResourceStates::Mask externalFinalState, ResourceStates::Mask uploadFinalState)noexcept;
-
-[[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, u32 arraySlice, u32 mipLevel, usize rowPitch, usize depthPitch, TextureUploadAspect::Enum aspect)noexcept;
 
 [[nodiscard]] inline b8 BuiltinDeclarationHasNoCallerResourceUses(const GpuTaskDesc& desc)noexcept{
     return !desc.resourceUses && desc.resourceUseCount == 0u && !desc.resourceSetUses && desc.resourceSetUseCount == 0u;

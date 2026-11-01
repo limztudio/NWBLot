@@ -93,51 +93,6 @@ public:
     }
 
 
-private:
-    template<typename T, typename... Args>
-    T& addComponent(EntityID entityId, Args&&... args){
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        ComponentPool<T>& pool = assurePool<T>();
-        if(T* existing = pool.tryGet(entityId))
-            return *existing;
-
-        const ComponentTypeId typeId = ComponentType<T>();
-        addEntityComponentType(entityId, typeId, pool);
-        ScopeExit rollbackType([this, entityId, typeId]()noexcept{ removeEntityComponentType(entityId, typeId); });
-        T& component = pool.add(entityId, Forward<Args>(args)...);
-        rollbackType.release();
-        return component;
-    }
-
-    template<typename T>
-    void removeComponent(EntityID entityId)noexcept(noexcept(DeclVal<ComponentPool<T>&>().remove(entityId))){
-        if(!m_entityManager.alive(entityId))
-            return;
-
-        auto* pool = getPool<T>();
-        if(pool && pool->remove(entityId))
-            removeEntityComponentType(entityId, ComponentType<T>());
-    }
-
-    template<typename T>
-    T& getComponent(EntityID entityId)noexcept{
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        return requirePool<T>().get(entityId);
-    }
-
-    template<typename T>
-    const T& getComponent(EntityID entityId)const noexcept{
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        return requirePool<T>().get(entityId);
-    }
-
-    template<typename T>
-    b8 hasComponent(EntityID entityId)const noexcept{
-        auto* pool = getPool<T>();
-        return pool ? pool->has(entityId) : false;
-    }
-
-
 public:
     template<typename T, typename... Args>
     T& addSystem(Args&&... args){
@@ -152,8 +107,6 @@ public:
         m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });
         return ref;
     }
-
-    void removeSystem(ISystem& system);
 
     template<typename T>
     T* getSystem()noexcept{
@@ -214,6 +167,49 @@ public:
 
 
 private:
+    template<typename T, typename... Args>
+    T& addComponent(EntityID entityId, Args&&... args){
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        ComponentPool<T>& pool = assurePool<T>();
+        if(T* existing = pool.tryGet(entityId))
+            return *existing;
+
+        const ComponentTypeId typeId = ComponentType<T>();
+        addEntityComponentType(entityId, typeId, pool);
+        ScopeExit rollbackType([this, entityId, typeId]()noexcept{ removeEntityComponentType(entityId, typeId); });
+        T& component = pool.add(entityId, Forward<Args>(args)...);
+        rollbackType.release();
+        return component;
+    }
+
+    template<typename T>
+    void removeComponent(EntityID entityId)noexcept(noexcept(DeclVal<ComponentPool<T>&>().remove(entityId))){
+        if(!m_entityManager.alive(entityId))
+            return;
+
+        auto* pool = getPool<T>();
+        if(pool && pool->remove(entityId))
+            removeEntityComponentType(entityId, ComponentType<T>());
+    }
+
+    template<typename T>
+    T& getComponent(EntityID entityId)noexcept{
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        return requirePool<T>().get(entityId);
+    }
+
+    template<typename T>
+    const T& getComponent(EntityID entityId)const noexcept{
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        return requirePool<T>().get(entityId);
+    }
+
+    template<typename T>
+    b8 hasComponent(EntityID entityId)const noexcept{
+        auto* pool = getPool<T>();
+        return pool ? pool->has(entityId) : false;
+    }
+
     b8 alive(EntityID entityId)const noexcept{ return m_entityManager.alive(entityId); }
 
     template<typename T>

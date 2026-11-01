@@ -17,13 +17,6 @@ namespace __hidden_scope_exit_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct ScopeExitFailure{};
 
 struct CleanupState{
@@ -70,21 +63,21 @@ TEST(ScopeExit, ReleaseIsIdempotentAndDestroysTheOwnedCallable){
 
 
 TEST(ScopeExit, UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure){
-    u32 order[3u] = {};
+    Array<u32, 3u> order = {};
     u32 count = 0u;
     const auto operation = [&](){
         ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
-        ScopeExit second([&]()noexcept{ order[count] = s_ExpectedDualCount; ++count; });
+        ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
         ScopeExit released([&]()noexcept{ order[count] = 3u; ++count; });
         released.release();
 
         throw ScopeExitFailure{};
     };
     EXPECT_THROW(operation(), ScopeExitFailure);
-    EXPECT_EQ(count, s_ExpectedDualCount);
-    EXPECT_EQ(order[0u], s_ExpectedDualCount);
+    EXPECT_EQ(count, 2u);
+    EXPECT_EQ(order[0u], 2u);
     EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[s_ThirdElementIndex], 0u);
+    EXPECT_EQ(order[2u], 0u);
 }
 
 TEST(ScopeExit, ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind){

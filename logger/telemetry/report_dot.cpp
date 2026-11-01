@@ -4,8 +4,6 @@
 
 #include "report_dot.h"
 
-#include "report.h"
-
 #include <global/dot_text.h>
 #include <global/hash_utils.h>
 #include <global/simd/vector.h>
@@ -26,7 +24,6 @@ namespace TelemetryReportDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr StringView s_UnknownReportField = "unknown";
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
 static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
 static constexpr usize s_TimedGraphDotBytesPerNode = 768u;
@@ -39,7 +36,7 @@ static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FrameGraphOwnerStatisticsRange::advance(const Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept{
+void FrameGraphOwnerStatisticsRange::advance(const Core::Telemetry::FrameGraphPayload& graph, const u32 ownerNodeIndex)noexcept{
     physicalQueueBegin = physicalQueueEnd;
     while(physicalQueueEnd < graph.physicalQueueRuntimeStatistics.size() && graph.physicalQueueRuntimeStatistics[physicalQueueEnd].ownerNodeIndex == ownerNodeIndex)
         ++physicalQueueEnd;
@@ -63,10 +60,10 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] usize EstimateTimedGraphDotReserve(const Telemetry::FrameGraphPayload& graph)noexcept{
+[[nodiscard]] usize EstimateTimedGraphDotReserve(const Core::Telemetry::FrameGraphPayload& graph)noexcept{
     usize labelBytes = 0u;
     usize runtimeStatisticsBytes = 0u;
-    for(const Telemetry::FrameGraphNodePayload& node : graph.nodes){
+    for(const Core::Telemetry::FrameGraphNodePayload& node : graph.nodes){
         labelBytes += node.label.size();
         if(node.runtimeStatistics.present)
             runtimeStatisticsBytes += s_TimedGraphDotRuntimeStatisticsBytes;
@@ -86,89 +83,88 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Telemetry::FrameGraphNodePayload& node, char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]){
-    NameDetail::HashToDebugString(identityText, sizeof(identityText), node.name.hash());
-    return AStringView(identityText, NameDetail::s_DebugHashTextLength);
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(const Core::Telemetry::FrameGraphNodePayload& node, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText){
+    return FormatNameIdentityText(node.name, outIdentityText);
 }
 
-[[nodiscard]] AStringView FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphNodeShape(const Core::Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
-    case Telemetry::FrameGraphNodeKind::Resource:
+    case Core::Telemetry::FrameGraphNodeKind::Resource:
         return "ellipse";
-    case Telemetry::FrameGraphNodeKind::External:
+    case Core::Telemetry::FrameGraphNodeKind::External:
         return "diamond";
-    case Telemetry::FrameGraphNodeKind::Pass:
-    case Telemetry::FrameGraphNodeKind::Unknown:
+    case Core::Telemetry::FrameGraphNodeKind::Pass:
+    case Core::Telemetry::FrameGraphNodeKind::Unknown:
     default:
         return "box";
     }
 }
 
-[[nodiscard]] AStringView FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphNodeKindText(const Core::Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
-    case Telemetry::FrameGraphNodeKind::Pass:
+    case Core::Telemetry::FrameGraphNodeKind::Pass:
         return "pass";
-    case Telemetry::FrameGraphNodeKind::Resource:
+    case Core::Telemetry::FrameGraphNodeKind::Resource:
         return "resource";
-    case Telemetry::FrameGraphNodeKind::External:
+    case Core::Telemetry::FrameGraphNodeKind::External:
         return "external";
-    case Telemetry::FrameGraphNodeKind::Unknown:
+    case Core::Telemetry::FrameGraphNodeKind::Unknown:
     default:
         return s_UnknownReportField;
     }
 }
 
-[[nodiscard]] AStringView FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphEdgeLabel(const Core::Telemetry::FrameGraphEdgeKind::Enum kind)noexcept{
     switch(kind){
-    case Telemetry::FrameGraphEdgeKind::Reads:
+    case Core::Telemetry::FrameGraphEdgeKind::Reads:
         return "reads";
-    case Telemetry::FrameGraphEdgeKind::Writes:
+    case Core::Telemetry::FrameGraphEdgeKind::Writes:
         return "writes";
-    case Telemetry::FrameGraphEdgeKind::DependsOn:
+    case Core::Telemetry::FrameGraphEdgeKind::DependsOn:
         return "dependsOn";
-    case Telemetry::FrameGraphEdgeKind::Unknown:
+    case Core::Telemetry::FrameGraphEdgeKind::Unknown:
     default:
         return "";
     }
 }
 
-[[nodiscard]] AStringView FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueClassText(const Core::Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
     switch(queueClass){
-    case Telemetry::FrameGraphQueueClass::Graphics:
+    case Core::Telemetry::FrameGraphQueueClass::Graphics:
         return "graphics";
-    case Telemetry::FrameGraphQueueClass::Compute:
+    case Core::Telemetry::FrameGraphQueueClass::Compute:
         return "compute";
-    case Telemetry::FrameGraphQueueClass::Transfer:
+    case Core::Telemetry::FrameGraphQueueClass::Transfer:
         return "transfer";
-    case Telemetry::FrameGraphQueueClass::Unknown:
+    case Core::Telemetry::FrameGraphQueueClass::Unknown:
     default:
         return s_UnknownReportField;
     }
 }
 
-[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(const Core::Telemetry::FrameGraphQueueAssignmentReason::Enum reason)noexcept{
     switch(reason){
-    case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
+    case Core::Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
         return "requiredGraphics";
-    case Telemetry::FrameGraphQueueAssignmentReason::Conservative:
+    case Core::Telemetry::FrameGraphQueueAssignmentReason::Conservative:
         return "conservative";
-    case Telemetry::FrameGraphQueueAssignmentReason::Scored:
+    case Core::Telemetry::FrameGraphQueueAssignmentReason::Scored:
         return "scored";
-    case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
+    case Core::Telemetry::FrameGraphQueueAssignmentReason::Unknown:
     default:
         return s_UnknownReportField;
     }
 }
 
-[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(const Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
     switch(acceptance){
-    case Telemetry::FrameGraphQueueAssignmentAcceptance::First:
+    case Core::Telemetry::FrameGraphQueueAssignmentAcceptance::First:
         return "first";
-    case Telemetry::FrameGraphQueueAssignmentAcceptance::Unchanged:
+    case Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Unchanged:
         return "unchanged";
-    case Telemetry::FrameGraphQueueAssignmentAcceptance::Changed:
+    case Core::Telemetry::FrameGraphQueueAssignmentAcceptance::Changed:
         return "changed";
-    case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
+    case Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
         return "notAccepted";
     default:
         return s_UnknownReportField;
@@ -179,31 +175,31 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
+[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(const Core::Telemetry::FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
     switch(decision){
-    case Telemetry::FrameGraphTaskPacketizationDecision::FirstTask:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::FirstTask:
         return "firstTask";
-    case Telemetry::FrameGraphTaskPacketizationDecision::MergeNotRequested:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::MergeNotRequested:
         return "mergeNotRequested";
-    case Telemetry::FrameGraphTaskPacketizationDecision::TaskForcesBoundary:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::TaskForcesBoundary:
         return "taskForcesBoundary";
-    case Telemetry::FrameGraphTaskPacketizationDecision::QueueChanged:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::QueueChanged:
         return "queueChanged";
-    case Telemetry::FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::PrecedingTaskForcesBoundary:
         return "precedingTaskForcesBoundary";
-    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeIneligible:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeIneligible:
         return "scoredMergeIneligible";
-    case Telemetry::FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency:
         return "mergeRequiresExplicitImmediateDependency";
-    case Telemetry::FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::CrossQueueConsumerFrontier:
         return "crossQueueConsumerFrontier";
-    case Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit:
         return "mergedExplicit";
-    case Telemetry::FrameGraphTaskPacketizationDecision::MergedFrontierScored:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::MergedFrontierScored:
         return "mergedFrontierScored";
-    case Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::ScoredMergeDomainMismatch:
         return "scoredMergeDomainMismatch";
-    case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
+    case Core::Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
     default:
         return s_UnknownReportField;
     }
@@ -213,7 +209,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendFrameGraphPhysicalQueueDot(AString<TelemetryArena>& out, const AStringView prefix, const Telemetry::FrameGraphPhysicalQueueId& queue){
+void AppendFrameGraphPhysicalQueueDot(AString<Core::Telemetry::TelemetryArena>& out, const AStringView prefix, const Core::Telemetry::FrameGraphPhysicalQueueId& queue){
     if(!queue.valid()){
         StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
         return;
@@ -222,7 +218,7 @@ void AppendFrameGraphPhysicalQueueDot(AString<TelemetryArena>& out, const AStrin
     StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, queue.index, prefix, queue.deviceGeneration);
 }
 
-void AppendFrameGraphQueueAssignmentDot(AString<TelemetryArena>& out, const Telemetry::FrameGraphQueueAssignment& assignment){
+void AppendFrameGraphQueueAssignmentDot(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::FrameGraphQueueAssignment& assignment){
     if(!assignment.present){
         out += ", queue_assignment=\"none\"";
         return;
@@ -254,7 +250,7 @@ void AppendFrameGraphQueueAssignmentDot(AString<TelemetryArena>& out, const Tele
     );
 }
 
-void AppendFrameGraphCompiledTaskDot(AString<TelemetryArena>& out, const Telemetry::FrameGraphCompiledTask& compiledTask){
+void AppendFrameGraphCompiledTaskDot(AString<Core::Telemetry::TelemetryArena>& out, const Core::Telemetry::FrameGraphCompiledTask& compiledTask){
     if(!compiledTask.present){
         out += ", compiled_task=\"none\"";
         return;
@@ -266,8 +262,8 @@ void AppendFrameGraphCompiledTaskDot(AString<TelemetryArena>& out, const Telemet
 }
 
 void AppendFrameGraphRuntimeStatisticsDot(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    AString<Core::Telemetry::TelemetryArena>& out,
+    const Core::Telemetry::FrameGraphRuntimeStatistics& statistics,
     const usize physicalQueueRuntimeStatisticsCount,
     const usize packetSubmissionStatisticsCount,
     const b8 physicalQueueRuntimeStatisticsPresent,
@@ -299,8 +295,8 @@ void AppendFrameGraphRuntimeStatisticsDot(
 
 // Join timing by exact frame and scope Name; retain every graph, stable identity, and opaque producer flag.
 // Timing and graph streams may differ.
-void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<TelemetryArena>& out){
-    const Telemetry::FrameGraphPayload& graph = record.payload;
+void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGraphReportRecord& record, const usize graphIndex, const GraphTimingMap& timing, AString<Core::Telemetry::TelemetryArena>& out){
+    const Core::Telemetry::FrameGraphPayload& graph = record.payload;
     StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
     StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
     out += "  rankdir=LR;\n";
@@ -309,8 +305,8 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
     AString<Core::Alloc::ScratchArena> timedLabel(scratchArena);
     FrameGraphOwnerStatisticsRange ownerRange;
     for(usize i = 0u; i < graph.nodes.size(); ++i){
-        const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
-        char identityText[NameDetail::s_DebugHashTextLength + 1u];
+        const Core::Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
+        Array<char, NameDetail::s_DebugHashTextLength + 1u> identityText;
         const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
 
         const GraphTimingKey timingKey{ graph.frameIndex, node.name };
@@ -322,7 +318,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
             timedLabel.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
             timedLabel.append(labelView.data(), labelView.size());
             timedLabel += '\n';
-            StringAppendFormat(timedLabel, "{:.3f} ms", VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(timed.value()), s_MillisecondsPerSecond)));
+            StringAppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
 
             AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }
@@ -342,7 +338,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
         out += "];\n";
     }
 
-    for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
+    for(const Core::Telemetry::FrameGraphEdgePayload& edge : graph.edges){
         StringAppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
         AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
         StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(edge.flags));
@@ -351,7 +347,7 @@ void AppendTimedGraphDot(Core::Alloc::ScratchArena& scratchArena, const FrameGra
     out += "}\n";
 }
 
-void BuildTimedGraphsDot(Core::Alloc::ScratchArena& scratchArena, const Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, AString<TelemetryArena>& out){
+void BuildTimedGraphsDot(const Span<const FrameGraphReportRecord> graphs, const GraphTimingMap& timing, Core::Alloc::ScratchArena& scratchArena, AString<Core::Telemetry::TelemetryArena>& out){
     out.clear();
     out.reserve(EstimateTimedGraphsDotReserve(graphs));
     for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){

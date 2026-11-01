@@ -9,6 +9,9 @@
 
 #include <core/alloc/scratch.h>
 
+#include <global/allocation_size.h>
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,16 +25,17 @@ NWB_IMPL_BEGIN
 // One liveness query owns identities and flags; no state survives the prune.
 class RuntimeMeshRequestSet final : NoCopy{
 private:
-    struct Key{
-        NameHash name;
-        u64 version;
-    };
+    using Key = RuntimeMeshRequestKey;
+    using Entry = RuntimeMeshRequestEntry;
+
+
+private:
     struct Lookup{
         const NameHash& name;
         u64 version;
     };
     struct KeyHash{
-        [[nodiscard]] usize operator()(const Key& key)const noexcept;
+        [[nodiscard]] usize operator()(const Key& key)const noexcept{ return key.hash(); }
         [[nodiscard]] usize operator()(const Lookup& key)const noexcept;
     };
     struct KeyEqual{
@@ -39,21 +43,13 @@ private:
 
 
     public:
-        [[nodiscard]] b8 operator()(const Key& lhs, const Key& rhs)const noexcept;
-        [[nodiscard]] b8 operator()(const Key& lhs, const Lookup& rhs)const noexcept;
-    };
-    struct Entry{
-        Key key;
-        b8 found;
+        [[nodiscard]] b8 operator()(const Key& lhs, const Key& rhs)const noexcept{ return lhs == rhs; }
+        [[nodiscard]] b8 operator()(const Key& lhs, const Lookup& rhs)const noexcept{ return lhs.version == rhs.version && lhs.name == rhs.name; }
     };
 
 
 private:
     using Index = HashMap<Key, b8, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
-
-
-private:
-    static constexpr usize s_InlineCapacity = 32u;
 
 
 public:
@@ -63,41 +59,15 @@ public:
 
 public:
     void add(const Name& meshKey, u64 version);
-    void markLive(const Name& meshKey, u64 version)noexcept{
-        if(!meshKey)
-            return;
-        if(m_index){
-            markIndexedLive(meshKey, version);
-            return;
-        }
-        const usize index = findInline(meshKey.identityHash(), version);
-        if(index < m_inlineCount && !m_inlineEntries[index].found){
-            m_inlineEntries[index].found = true;
-            --m_remainingCount;
-        }
-    }
+    void markLive(const Name& meshKey, u64 version)noexcept;
 
-    [[nodiscard]] b8 containsLive(const Name& meshKey, u64 version)const noexcept{
-        if(!meshKey)
-            return false;
-        if(m_index)
-            return containsIndexedLive(meshKey, version);
-        const usize index = findInline(meshKey.identityHash(), version);
-        return index < m_inlineCount && m_inlineEntries[index].found;
-    }
+    [[nodiscard]] b8 containsLive(const Name& meshKey, u64 version)const noexcept;
 
     [[nodiscard]] b8 complete()const noexcept{ return m_remainingCount == 0u; }
 
 
 private:
-    [[nodiscard]] usize findInline(const NameHash& name, const u64 version)const noexcept{
-        for(usize index = 0u; index < m_inlineCount; ++index){
-            const Key& key = m_inlineEntries[index].key;
-            if(key.version == version && key.name == name)
-                return index;
-        }
-        return m_inlineCount;
-    }
+    [[nodiscard]] usize findInline(const NameHash& name, u64 version)const noexcept;
     void promoteIndex();
     void markIndexedLive(const Name& meshKey, u64 version)noexcept;
     [[nodiscard]] b8 containsIndexedLive(const Name& meshKey, u64 version)const noexcept;
@@ -106,7 +76,7 @@ private:
 private:
     Core::Alloc::ScratchArena& m_scratchArena;
     usize m_expectedRequestCount;
-    Entry m_inlineEntries[s_InlineCapacity];
+    Array<Entry, s_RuntimeMeshRequestInlineCapacity> m_inlineEntries{};
     usize m_inlineCount = 0u;
     usize m_remainingCount = 0u;
     Optional<Index> m_index;

@@ -46,7 +46,7 @@ TEST_F(UiMultilineViewTests, SnapshotOwnsMultilineModeTextAndCrossLineSelection)
     EXPECT_EQ(m_view.selectionRange().begin, 1u);
     EXPECT_EQ(m_view.selectionRange().end, 4u);
     ASSERT_TRUE(place());
-    ExpectRect(m_placement.caret, { 20.0f, 32.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 20.0f, 32.0f, 1.0f, 12.0f });
 }
 
 TEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrHits){
@@ -79,14 +79,14 @@ TEST_F(UiMultilineViewTests, EmptyAndTrailingHardLinesKeepDistinctCaretRows){
     EXPECT_EQ(m_view.caretGeometry().lines()[3u].byteBegin, 7u);
     EXPECT_FLOAT_EQ(m_view.layout().measure().y, 48.0f);
     ASSERT_TRUE(place());
-    ExpectRect(m_placement.caret, { 10.0f, 56.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 56.0f, 1.0f, 12.0f });
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 20.0f);
     ASSERT_TRUE(m_model.setText(""));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
     ASSERT_EQ(m_view.caretStops().size(), 1u);
     ASSERT_EQ(m_view.caretGeometry().lines().size(), 1u);
-    ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
 }
 
 TEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine){
@@ -119,7 +119,7 @@ TEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets
     EXPECT_EQ(m_view.caretStops()[5u].committedByte, 5u);
     EXPECT_FLOAT_EQ(m_view.caretStops()[5u].x, 10.0f);
     ASSERT_TRUE(place());
-    ExpectRect(m_placement.caret, { 30.0f, 32.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 30.0f, 32.0f, 1.0f, 12.0f });
     const Expected<usize> hit = m_view.hitTest({ 21.0f, 38.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 5u);
@@ -141,7 +141,7 @@ TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrap
     EXPECT_EQ(m_view.selectionRange().end, 7u);
     EXPECT_EQ(m_view.displayCaret(), 7u);
     ASSERT_TRUE(place());
-    ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
     const Expected<usize> hit = m_view.hitTest({ 20.0f, 62.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, 5u);
@@ -150,7 +150,7 @@ TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrap
     EXPECT_TRUE(m_view.composing());
     EXPECT_EQ(m_view.displayCaret(), 7u);
     ASSERT_TRUE(place());
-    ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
 }
 
 TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeOrShrink){
@@ -159,8 +159,8 @@ TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeO
     ASSERT_TRUE(place(20.0f, 12.0f));
     EXPECT_FLOAT_EQ(m_placement.scroll, 51.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
-    ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
-    const Expected<usize> hit = m_view.hitTest({ m_placement.caret.x, VectorGetX(VectorAdd(VectorReplicate(m_placement.caret.y), VectorReplicate(6.0f))) }, m_placement);
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
+    const Expected<usize> hit = m_view.hitTest({ m_placement.caret.x, m_placement.caret.y + 6.0f }, m_placement);
     ASSERT_TRUE(hit);
     EXPECT_EQ(*hit, m_model.caret());
     const Point previous{ m_placement.scroll, m_placement.scrollY };
@@ -182,9 +182,9 @@ TEST_F(UiMultilineViewTests, PaddingAndOuterClipIntersectWithoutChangingLogicalL
     const auto arranged = m_view.arrange({ 10.0f, 20.0f, 100.0f, 40.0f }, { 8.0f, 4.0f, 8.0f, 4.0f }, { 30.0f, 22.0f, 20.0f, 40.0f }, Point{});
     ASSERT_TRUE(arranged);
     m_placement = *arranged;
-    ExpectRect(m_placement.frameClip, { 30.0f, 22.0f, 20.0f, 38.0f });
-    ExpectRect(m_placement.clip, { 30.0f, 24.0f, 20.0f, 32.0f });
-    ExpectRect(m_placement.caret, { 38.0f, 36.0f, 1.0f, 12.0f });
+    UiPaintAssertions::ExpectRect(m_placement.frameClip, { 30.0f, 22.0f, 20.0f, 38.0f });
+    UiPaintAssertions::ExpectRect(m_placement.clip, { 30.0f, 24.0f, 20.0f, 32.0f });
+    UiPaintAssertions::ExpectRect(m_placement.caret, { 38.0f, 36.0f, 1.0f, 12.0f });
     EXPECT_FLOAT_EQ(m_view.caretGeometry().lines()[1u].top, 12.0f);
 }
 
@@ -290,7 +290,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedH
     CollectSolidRects(*snapshot, style.selection, selected);
     ASSERT_EQ(selected.size(), 3u);
     for(u32 line = 0u; line < 3u; ++line){
-        EXPECT_FLOAT_EQ(selected[line].y, VectorGetX(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(m_view.caretGeometry().lines()[line].top))));
+        EXPECT_FLOAT_EQ(selected[line].y, m_placement.textOrigin.y + m_view.caretGeometry().lines()[line].top);
         EXPECT_FLOAT_EQ(selected[line].height, m_view.caretGeometry().lines()[line].height);
     }
     EXPECT_FLOAT_EQ(selected[1u].x, m_placement.textOrigin.x);
@@ -324,7 +324,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine)
     ASSERT_EQ(underlines.size(), 3u);
     for(u32 index = 0u; index < 3u; ++index){
         const EditCaretLine& line = m_view.caretGeometry().lines()[index + 1u];
-        EXPECT_FLOAT_EQ(underlines[index].y, VectorGetX(VectorSubtract(VectorAdd(VectorAdd(VectorReplicate(m_placement.textOrigin.y), VectorReplicate(line.top)), VectorReplicate(line.height)), VectorReplicate(1.0f))));
+        EXPECT_FLOAT_EQ(underlines[index].y, m_placement.textOrigin.y + line.top + line.height - 1.0f);
         EXPECT_FLOAT_EQ(underlines[index].height, 1.0f);
     }
     EXPECT_FLOAT_EQ(underlines[1u].width, 1.0f);

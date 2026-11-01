@@ -4,6 +4,8 @@
 
 #include "deform_edit.h"
 
+#include "deform_cap_builder.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,46 +16,103 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ScratchArena = Core::Alloc::ScratchArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 CsgDeformViability CheckCsgDeformCutsViability(
-    Core::Alloc::ScratchArena& scratchArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    const usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    const usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    const usize cutCount,
+    ScratchArena& scratchArena,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options
 ){
-    CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
-    const auto result = CsgDeformPipeline::RebuildSequentialCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, vertices, triangles);
+    CsgDeformVertexVector<ScratchArena> vertices(scratchArena);
+    CsgDeformTriangleVector<ScratchArena> triangles(scratchArena);
+    const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, vertices, triangles);
     return result ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok } : CsgDeformViability{ false, result.error().reason };
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    const usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    const usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    const usize cutCount,
+    ScratchArena& scratchArena,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
-    CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
+    CsgDeformVertexVector<ScratchArena>& outVertices,
+    CsgDeformTriangleVector<ScratchArena>& outTriangles
 ){
-    return CsgDeformPipeline::RebuildSequentialCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, outVertices, outTriangles);
+    const usize inputVertexCount = inputVertices.size();
+    const usize inputTriangleCount = inputTriangles.size();
+    const usize cutCount = cuts.size();
+    CsgDeformStats stats;
+    outVertices.clear();
+    outTriangles.clear();
+    stats.inputVertexCount = static_cast<u32>(inputVertexCount);
+    stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
+    if(inputVertexCount == 0u || inputTriangleCount == 0u)
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::EmptyInput, stats));
+    if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles)
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::TooLarge, stats));
+    if(!CsgDeformValidOptions(options))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidCutter, stats));
+    if(!IsFiniteCsgDeformVertices(inputVertices))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
+    if(!CsgDeformValidTopology(inputTriangles, inputVertexCount))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::InvalidTopology, stats));
+
+    const SIMDVectorSingle epsilon = VectorReplicate(Max(options.distanceEpsilon, s_MinEpsilon));
+    outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
+    outTriangles.reserve(inputTriangleCount * s_KeptReserveMultiplier + cutCount * s_RebuildReservePerCut);
+    for(const CsgDeformVertex& vertex : inputVertices)
+        outVertices.push_back(vertex);
+    for(const CsgDeformTriangle& triangle : inputTriangles)
+        outTriangles.push_back(triangle);
+
+    CsgDeformTriangleVector<ScratchArena> scratchKept(scratchArena);
+    Vector<f32, ScratchArena> scratchDistances(scratchArena);
+    Vector<CsgDeformCutLoopEdge, ScratchArena> scratchEdges(scratchArena);
+
+    u32 appliedCuts = 0u;
+    u32 capTriangles = 0u;
+    for(const CsgDeformCutDesc& cut : cuts){
+        if(!cut.active)
+            continue;
+        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, scratchKept, scratchDistances, outVertices, outTriangles);
+        if(!clipped)
+            return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
+        ++appliedCuts;
+        if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
+            const auto reason = outTriangles.empty() ? CsgDeformViabilityReason::NoKeptGeometry : CsgDeformViabilityReason::TooLarge;
+            return MakeUnexpected(MakeCsgDeformFailure(reason, stats));
+        }
+        if(options.fillCaps){
+            const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, scratchEdges, outVertices, outTriangles);
+            if(!cutCaps)
+                return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::CapLoopFailed, stats));
+            capTriangles += *cutCaps;
+        }
+    }
+
+    if(outVertices.empty() || outTriangles.empty())
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NoKeptGeometry, stats));
+    if(!IsFiniteCsgDeformVertices(outVertices))
+        return MakeUnexpected(MakeCsgDeformFailure(CsgDeformViabilityReason::NonFiniteInput, stats));
+    stats.outputVertexCount = static_cast<u32>(outVertices.size());
+    stats.outputTriangleCount = static_cast<u32>(outTriangles.size());
+    stats.appliedCutCount = appliedCuts;
+    stats.capTriangleCount = capTriangles;
+    return stats;
 }
 
 Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
+    ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
-    NotNull<const CsgDeformVertex*> inputVertices,
-    const usize inputVertexCount,
-    NotNull<const CsgDeformTriangle*> inputTriangles,
-    const usize inputTriangleCount,
-    const CsgDeformCutDesc* cuts,
-    const usize cutCount,
+    const Span<const CsgDeformVertex> inputVertices,
+    const Span<const CsgDeformTriangle> inputTriangles,
+    const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
@@ -63,9 +122,9 @@ Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     outVertices.clear();
     outTriangles.clear();
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
-    CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputVertexCount, inputTriangles, inputTriangleCount, cuts, cutCount, options, previewVertices, previewTriangles);
+    CsgDeformVertexVector<ScratchArena> previewVertices(scratchArena);
+    CsgDeformTriangleVector<ScratchArena> previewTriangles(scratchArena);
+    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
     if(!preview)
         return MakeUnexpected(preview.error());
     outVertices.reserve(previewVertices.size());

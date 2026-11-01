@@ -37,8 +37,21 @@ public:
 
 private:
     [[nodiscard]] Expected<Core::GpuGraphResourceId> importBuffer(const Core::BufferHandle& buffer, AStringView label);
-    [[nodiscard]] Expected<Core::GpuGraphPipelineId> importComputePipeline(const Core::ComputePipelineHandle& pipeline, Name identity, AStringView label);
+    [[nodiscard]] Expected<Core::GpuGraphPipelineId> importComputePipeline(const Core::ComputePipelineHandle& pipeline, const Name identity, const AStringView label){
+        return m_graph.importComputePipeline(pipeline, Core::GpuGraphPipelineDesc{}.setIdentity(identity).setMarkerLabel(label).setType(Core::GpuGraphPipelineType::Compute));
+    }
     [[nodiscard]] b8 importPlanResources(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
+    [[nodiscard]] b8 declareUploadTask(
+        const MeshSkinningRuntimeInstance& instance,
+        AStringView identitySuffix,
+        AStringView markerLabel,
+        BinaryByteView data,
+        usize dataAlignment,
+        Core::GpuGraphResourceId destination,
+        Core::ResourceStates::Mask finalState,
+        TStringView retainErrorLabel,
+        TStringView declareErrorLabel
+    );
     [[nodiscard]] b8 declareBindlessSlotsUpload(const MeshSkinningRuntimeInstance& instance, const RuntimeResources& resources, MeshSkinningGraphDispatchPlan& plan);
     [[nodiscard]] b8 declareRestToSkinnedCopy(const MeshSkinningRuntimeInstance& instance, const MeshSkinningGraphDispatchPlan& plan);
     [[nodiscard]] b8 declareJointPaletteUpload(const MeshSkinningRuntimeInstance& instance, Span<const SkeletonJointMatrix> jointPaletteUpload, const MeshSkinningGraphDispatchPlan& plan);

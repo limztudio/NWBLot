@@ -131,7 +131,7 @@ TEST(AssetsUiSkinRegionIndex, ReplacementAcrossSmallSkinBoundaryDoesNotKeepStale
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> owner;
     UiSkin skin(owner.arena, Name(s_SkinPath));
-    constexpr u32 s_Counts[]{ 128u, 129u, 128u };
+    constexpr Array<u32, 3u> s_Counts = { 128u, 129u, 128u };
     Name previous = s_NameNone;
     for(u32 stage = 0u; stage < LengthOf(s_Counts); ++stage){
         UiSkin::RegionVector regions(owner.arena);

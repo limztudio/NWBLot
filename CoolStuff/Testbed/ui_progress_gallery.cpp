@@ -7,8 +7,6 @@
 
 #include <core/common/log.h>
 
-#include <global/simd/vector.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,14 +26,17 @@ void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::All
         return;
     b8 valid = ui.label(s_TitleKey, "Skinned progress bar");
     if(ui.button("advance", "Advance by 25%"))
-        m_fraction = m_fraction >= 1.0 ? 0.0 : VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(m_fraction), VectorDoubleReplicate(s_AdvanceFraction)));
+        m_fraction = m_fraction >= 1.0 ? 0.0 : m_fraction + s_AdvanceFraction;
     valid = ui.progress(s_AmountKey, m_fraction) && valid;
-    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(m_fraction), s_PercentScale)));
+    const auto caption = StringFormat(scratchArena, "Completed: {:.0f}%", m_fraction * s_PercentScale);
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom progress declaration failed"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TESTBED_END

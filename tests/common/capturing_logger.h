@@ -52,54 +52,15 @@ public:
         record(str, type);
     }
 
-    [[nodiscard]] u32 messageCount()const noexcept{
-        ScopedLock lock(m_mutex);
-        return m_messageCount;
-    }
+    [[nodiscard]] u32 messageCount()const noexcept;
+    [[nodiscard]] u32 errorCount()const noexcept;
+    [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept;
+    [[nodiscard]] b8 sawMessageContaining(TStringView text)const noexcept;
+    [[nodiscard]] b8 sawErrorContaining(TStringView text)const noexcept;
 
-    [[nodiscard]] u32 errorCount()const noexcept{
-        ScopedLock lock(m_mutex);
-        return m_errorCount;
-    }
-
-    [[nodiscard]] Core::Common::LogType::Enum lastType()const noexcept{
-        ScopedLock lock(m_mutex);
-        return m_lastType;
-    }
-
-    [[nodiscard]] b8 sawMessageContaining(const TStringView text)const noexcept{
-        ScopedLock lock(m_mutex);
-
-        for(const LogString& message : m_messages){
-            if(message.find(text) != LogString::npos)
-                return true;
-        }
-        return false;
-    }
-
-    [[nodiscard]] b8 sawErrorContaining(const TStringView text)const noexcept{
-        ScopedLock lock(m_mutex);
-
-        for(const LogString& error : m_errors){
-            if(error.find(text) != LogString::npos)
-                return true;
-        }
-        return false;
-    }
 
 private:
-    void record(const TStringView str, const Core::Common::LogType::Enum type){
-        ScopedLock lock(m_mutex);
-
-        ++m_messageCount;
-        m_lastType = type;
-        m_messages.emplace_back(str, m_arena);
-
-        if(type == Core::Common::LogType::Error){
-            ++m_errorCount;
-            m_errors.emplace_back(str, m_arena);
-        }
-    }
+    void record(TStringView str, Core::Common::LogType::Enum type);
 
 
 private:

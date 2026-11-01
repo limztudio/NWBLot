@@ -21,25 +21,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StateTracker::StateTracker(const VulkanContext& context)
-    : m_permanentTextureStates(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
-    , m_permanentBufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
-    , m_attemptPermanentTextures(context.objectArena)
-    , m_attemptPermanentBuffers(context.objectArena)
-    , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
-    , m_bufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
-    , m_textureUavBarriers(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
-    , m_bufferUavBarriers(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
-    , m_context(context)
-{}
-
-StateTracker::~StateTracker()noexcept{}
-
-void StateTracker::reset()noexcept{
-    m_textureStates.clear();
-    m_bufferStates.clear();
-}
-
 void StateTracker::beginRecordingAttempt()noexcept{
     NWB_ASSERT(!m_recordingAttemptActive);
     m_attemptPermanentTextures.clear();
@@ -112,14 +93,6 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
             m_attemptPermanentBuffers.pop_back();
         NWB_ASSERT(false);
     }
-}
-
-b8 StateTracker::isPermanentTexture(Texture& texture)const noexcept{
-    return m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
-}
-
-b8 StateTracker::isPermanentBuffer(Buffer& buffer)const noexcept{
-    return m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
 }
 
 ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const noexcept{

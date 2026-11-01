@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
 
@@ -37,7 +37,7 @@ b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
         snapshotComboQuery(frame);
         return comboMatches(frame);
     }
-    const auto declared = m_context.declarePart(field, "query", WidgetKind::EditBox);
+    const auto declared = m_context.declarePart(field, s_WidgetPartQuery, WidgetKind::EditBox);
     if(!declared)
         return false;
     const WidgetState editor = **declared;
@@ -52,7 +52,7 @@ b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
     result.valid = true;
     result.focused = m_context.input().focus() == editor.id;
     if(m_editHost)
-        result = m_editHost->editInPopup(editor, query, item.editOptions, frame.popupToken);
+        result = m_editHost->editInPopup(editor, item.editOptions, frame.popupToken, query);
     if(!result.valid)
         return false;
     frame.queryChanged = result.textChanged;
@@ -75,7 +75,7 @@ b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
         return false;
     if(!frame.open)
         return true;
-    if(!prepareEditBox(item, query, state.m_editor, result))
+    if(!prepareEditBox(result, query, state.m_editor, item))
         return false;
     frame.editor = static_cast<u32>(m_scope->m_comboEditors.size());
     m_scope->m_comboEditors.push_back(Move(item));
@@ -99,10 +99,9 @@ b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
         return false;
     const Item& item = m_scope->m_comboEditors[frame.editor];
-    const SIMDVectorSingle measured = VectorAdd(VectorAdd(VectorSet(content.rectangle.width, item.editView.visualBounds().height, 0.0f, 0.0f), VectorSet(0.0f, item.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, item.padding.bottom, 0.0f, 0.0f));
-    const SIMDVectorSingle querySize = VectorMin(VectorMax(VectorSet(content.rectangle.width, frame.queryHeight, 0.0f, 0.0f), measured), VectorSet(content.rectangle.width, content.rectangle.height, 0.0f, 0.0f));
+    const f32 measuredHeight = (item.editView.visualBounds().height + item.padding.top) + item.padding.bottom;
     LayoutBox box = content;
-    box.rectangle.height = VectorGetY(querySize);
+    box.rectangle.height = Min(Max(frame.queryHeight, measuredHeight), content.rectangle.height);
     HitTarget navigation;
     if(frame.options.enabled && !item.editView.composing()){
         navigation.commandOwner = frame.rows.id;
@@ -111,11 +110,9 @@ b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
     }
     if(!paintEditBox(item, box, &navigation))
         return false;
-    const SIMDVectorSingle extent = VectorMin(VectorReplicate(content.rectangle.height), VectorAdd(VectorReplicate(box.rectangle.height), VectorReplicate(frame.queryGap)));
-    const SIMDVectorSingle contentOrigin = VectorAdd(VectorSet(content.rectangle.x, content.rectangle.y, 0.0f, 0.0f), VectorSelect(VectorZero(), extent, s_SIMDMaskY));
-    const SIMDVectorSingle contentSize = VectorSubtract(VectorSet(content.rectangle.width, content.rectangle.height, 0.0f, 0.0f), VectorSelect(VectorZero(), extent, s_SIMDMaskY));
-    content.rectangle.y = VectorGetY(contentOrigin);
-    content.rectangle.height = VectorGetY(contentSize);
+    const f32 extent = Min(content.rectangle.height, box.rectangle.height + frame.queryGap);
+    content.rectangle.y += extent;
+    content.rectangle.height -= extent;
     return comboMatches(frame);
 }
 

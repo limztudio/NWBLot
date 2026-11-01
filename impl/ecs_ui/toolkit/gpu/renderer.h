@@ -6,7 +6,7 @@
 
 
 #include <impl/assets_scene/asset.h>
-#include <impl/assets_ui_skin/subsystem.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.h>
 
 #include <core/assets/manager.h>
@@ -23,7 +23,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GpuRendererState;
+class GpuRendererState;
 
 // Main-thread owner. Resource invalidation follows the caller's joined GPU/graph teardown boundary.
 class GpuRenderer final : public Core::IGpuTaskGraphOutputLayerContributor, NoCopy{

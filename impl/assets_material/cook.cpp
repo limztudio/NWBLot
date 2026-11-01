@@ -200,36 +200,15 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     AppendPOD(outBinary, material.typedLayoutHash());
     AppendPOD(outBinary, static_cast<u32>(material.typedLayoutBlocks().size()));
     AppendPOD(outBinary, static_cast<u32>(material.typedLayoutFields().size()));
-    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
-        MaterialTypedLayoutBlockBinary blockBinary;
-        blockBinary.blockNameHash = block.blockName.hash();
-        blockBinary.blockClass = static_cast<u32>(block.blockClass);
-        blockBinary.fieldBegin = block.fieldBegin;
-        blockBinary.fieldCount = block.fieldCount;
-        blockBinary.byteSize = block.byteSize;
-        AppendPOD(outBinary, blockBinary);
-    }
-    for(const MaterialTypedLayoutField& field : material.typedLayoutFields()){
-        MaterialTypedLayoutFieldBinary fieldBinary;
-        fieldBinary.fieldNameHash = field.fieldName.hash();
-        fieldBinary.fieldType = static_cast<u32>(field.fieldType);
-        fieldBinary.offset = field.offset;
-        fieldBinary.defaultValue = field.defaultValue;
-        AppendPOD(outBinary, fieldBinary);
-    }
+    for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks())
+        AppendPOD(outBinary, PackMaterialTypedLayoutBlockBinary(block));
+    for(const MaterialTypedLayoutField& field : material.typedLayoutFields())
+        AppendPOD(outBinary, PackMaterialTypedLayoutFieldBinary(field));
     AppendPOD(outBinary, static_cast<u32>(material.typedBlockBytes().size()));
     AppendBytesNoReserveUnchecked(outBinary, material.typedBlockBytes().data(), material.typedBlockBytes().size());
     AppendPOD(outBinary, static_cast<u32>(material.resourceReferences().size()));
-    for(const MaterialResourceReference& resourceReference : material.resourceReferences()){
-        const Name& resourceName = resourceReference.resourceKind == MaterialResourceKind::SampledImage2D ? resourceReference.textureAsset.name() : resourceReference.samplerAsset.name();
-        MaterialResourceReferenceBinary resourceReferenceBinary;
-        resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
-        resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
-        resourceReferenceBinary.resourceNameHash = resourceName.hash();
-        resourceReferenceBinary.resourceKind = static_cast<u32>(resourceReference.resourceKind);
-        resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
-        AppendPOD(outBinary, resourceReferenceBinary);
-    }
+    for(const MaterialResourceReference& resourceReference : material.resourceReferences())
+        AppendPOD(outBinary, PackMaterialResourceReferenceBinary(resourceReference));
     AppendPOD(outBinary, material.stageShaderCount());
 
     const Material::StageShaderArray& stageShaders = material.stageShaders();
@@ -245,14 +224,7 @@ b8 MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         AppendPOD(outBinary, shaderAsset.name().hash());
     }
 
-    u32 materialFlags = 0u;
-    if(material.transparent())
-        materialFlags |= MaterialFlag::Transparent;
-    if(material.twoSided())
-        materialFlags |= MaterialFlag::TwoSided;
-    if(material.refractive())
-        materialFlags |= MaterialFlag::Refractive;
-    AppendPOD(outBinary, materialFlags);
+    AppendPOD(outBinary, PackMaterialFlags(material.transparent(), material.twoSided(), material.refractive()));
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.surfaceDispatchId());
 

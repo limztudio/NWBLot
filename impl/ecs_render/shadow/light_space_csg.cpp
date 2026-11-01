@@ -5,7 +5,6 @@
 #include "light_space_csg.h"
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-#include <impl/assets/graphics/bvh/constants.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -38,7 +37,7 @@ u64 BuildLightSpaceCsgCaptureIdentity(
         Fnv64AppendValue(identity, instances[index].translation.w);
         Fnv64AppendValue(identity, instances[index].geometryHeapSlots);
     }
-    Fnv64AppendBuffer(identity, materialBytes.data(), materialBytes.size());
+    Fnv64AppendBuffer(identity, materialBytes);
     Fnv64AppendValue(identity, textures.size());
     for(const Core::TextureHandle& texture : textures)
         Fnv64AppendValue(identity, texture.get());
@@ -120,22 +119,31 @@ void AppendLightSpaceCsgReceiver(
     StoreFloat(worldMax, receiver.worldMax);
     state.receivers.push_back(receiver);
 
-    LightSpaceCsgInstanceGpu instance;
-    StoreFloat(worldToObject, instance.worldToObject);
-    instance.primitiveCount = mesh.meshletPrimitiveIndexCount / NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    if(mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid()){
-        instance.runtimeBoundsSlot = mesh.runtimeLocalBoundsHeapHandle.slot();
+    Float34 worldToObjectData{};
+    Float4 localMinData;
+    Float4 localMaxData;
+    StoreFloat(worldToObject, worldToObjectData);
+    StoreFloat(localMin, localMinData);
+    StoreFloat(localMax, localMaxData);
+    const b8 hasRuntimeBounds = mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid();
+    if(hasRuntimeBounds)
         state.dynamicBounds.push_back(mesh.runtimeLocalBoundsBuffer);
-    }
-    if(!state.hardware && mesh.swBvhNodeHeapHandle.valid())
-        instance.meshRootSlot = mesh.swBvhNodeHeapHandle.slot();
-    StoreFloat(localMin, instance.localMin);
-    StoreFloat(localMax, instance.localMax);
+    const LightSpaceCsgInstanceGpu instance = BuildLightSpaceCsgInstanceGpu(
+        worldToObjectData,
+        mesh.meshletPrimitiveIndexCount,
+        hasRuntimeBounds,
+        hasRuntimeBounds ? mesh.runtimeLocalBoundsHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
+        state.hardware,
+        mesh.swBvhNodeHeapHandle.valid(),
+        mesh.swBvhNodeHeapHandle.valid() ? mesh.swBvhNodeHeapHandle.slot() : s_LightSpaceInvalidGpuDescriptorSlot,
+        localMinData,
+        localMaxData
+    );
     state.instances.push_back(instance);
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
-b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena){
+b8 FinishLightSpaceCsgGather(const CsgShapeRegistry& registry, LightSpaceCsgState& state, Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena){
     if(!state.gathering)
         return true;
     if(state.receivers.size() != state.instances.size())
@@ -157,8 +165,7 @@ b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world,
             ++activeReceiverCount;
     }
     const usize activeReceiverBytes = static_cast<usize>(activeReceiverCount) * sizeof(u32);
-    constexpr usize s_HeaderBytes = NWB_CSG_RAY_CONTEXT_BYTES;
-    const usize activeReceiverOffset = s_HeaderBytes + rangeBytes + cutterBytes + instanceBytes;
+    const usize activeReceiverOffset = NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes + cutterBytes + instanceBytes;
     usize totalBytes = activeReceiverOffset + activeReceiverBytes;
     if(totalBytes > Limit<u32>::s_Max)
         return false;
@@ -176,17 +183,20 @@ b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world,
         totalBytes += words.size_bytes();
     }
     state.bytes.resize(totalBytes);
-    const u32 header[] = {
-        static_cast<u32>(state.instances.size()), static_cast<u32>(s_HeaderBytes),
-        static_cast<u32>(s_HeaderBytes + rangeBytes), static_cast<u32>(state.snapshot.cutters.size()),
-        static_cast<u32>(s_HeaderBytes + rangeBytes + cutterBytes), static_cast<u32>(activeReceiverOffset), activeReceiverCount, 0u,
-    };
-    static_assert(sizeof(header) == s_HeaderBytes);
-    NWB_MEMCPY(state.bytes.data(), state.bytes.size(), header, sizeof(header));
-    NWB_MEMCPY(state.bytes.data() + s_HeaderBytes, rangeBytes, state.snapshot.receiverRanges.data(), rangeBytes);
+    const LightSpaceCsgContextHeader header = BuildLightSpaceCsgContextHeader(
+        state.instances.size(),
+        rangeBytes,
+        cutterBytes,
+        state.snapshot.cutters.size(),
+        activeReceiverOffset,
+        activeReceiverCount
+    );
+    static_assert(sizeof(header) == NWB_CSG_RAY_CONTEXT_BYTES);
+    NWB_MEMCPY(state.bytes.data(), state.bytes.size(), &header, sizeof(header));
+    NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES, rangeBytes, state.snapshot.receiverRanges.data(), rangeBytes);
     if(cutterBytes != 0u)
-        NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
-    NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
+        NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
+    NWB_MEMCPY(state.bytes.data() + NWB_CSG_RAY_CONTEXT_BYTES + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
     usize activeOffset = activeReceiverOffset;
     usize maskOffset = membershipOffset;
     for(u32 index = 0u; index < static_cast<u32>(state.snapshot.receiverRanges.size()); ++index){
@@ -196,12 +206,12 @@ b8 FinishLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world,
         activeOffset += sizeof(index);
         const Span<const u32> words = state.solidTriangleMasks[index];
         const u32 offset = static_cast<u32>(maskOffset);
-        const usize rangeOffset = s_HeaderBytes + index * sizeof(CsgShadowReceiverRangeGpu) + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
+        const usize rangeOffset = NWB_CSG_RAY_CONTEXT_BYTES + index * sizeof(CsgShadowReceiverRangeGpu) + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
         NWB_MEMCPY(state.bytes.data() + rangeOffset, sizeof(offset), &offset, sizeof(offset));
         NWB_MEMCPY(state.bytes.data() + maskOffset, words.size_bytes(), words.data(), words.size_bytes());
         maskOffset += words.size_bytes();
     }
-    Fnv64AppendBuffer(state.snapshot.identity, reinterpret_cast<const u8*>(state.instances.data()), instanceBytes);
+    Fnv64AppendBuffer(state.snapshot.identity, Span<const u8>(static_cast<const u8*>(static_cast<const void*>(state.instances.data())), instanceBytes));
     if(!state.limitationLogged){
         for(const auto& range : state.snapshot.receiverRanges){
             if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) == 0u)

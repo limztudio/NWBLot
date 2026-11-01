@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
 
@@ -33,11 +32,11 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!anchorBox || !background || !contextMenuMatches(frame))
         return false;
-    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(anchorBox->clip)));
+    const Rect clip = visibleClip(anchorBox->clip);
     if(
         !anchor.enabled || clip.width <= 0.0f || clip.height <= 0.0f
-        || anchorBox->rectangle.x >= VectorGetX(VectorAdd(VectorReplicate(clip.x), VectorReplicate(clip.width))) || anchorBox->rectangle.y >= VectorGetX(VectorAdd(VectorReplicate(clip.y), VectorReplicate(clip.height)))
-        || VectorGetX(VectorAdd(VectorReplicate(anchorBox->rectangle.x), VectorReplicate(anchorBox->rectangle.width))) <= clip.x || VectorGetX(VectorAdd(VectorReplicate(anchorBox->rectangle.y), VectorReplicate(anchorBox->rectangle.height))) <= clip.y
+        || anchorBox->rectangle.x >= clip.x + clip.width || anchorBox->rectangle.y >= clip.y + clip.height
+        || anchorBox->rectangle.x + anchorBox->rectangle.width <= clip.x || anchorBox->rectangle.y + anchorBox->rectangle.height <= clip.y
     ){
         frame.state->close();
         m_context.discardPopupScope(frame.popupToken);
@@ -64,10 +63,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
             m_context.fail();
         return false;
     }
-    const SIMDVectorSingle firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top, frame.popupStyle.padding.right, frame.popupStyle.padding.bottom);
-    const SIMDVectorSingle secondPadding = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
-    const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
+    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);
     m_paint.pushClip(placement->bounds);
     const b8 backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
     const b8 popped = m_paint.popClip();
@@ -80,8 +76,8 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         item.state = frame.rows;
         item.list = frame.list;
         LayoutBox box;
-        const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-        box.rectangle = { VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
+        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
+        box.rectangle = StoreRect(inset);
         box.clip = placement->bounds;
         painted = paintList(item, box) && contextMenuMatches(frame);
     }

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "material_validation.h"
+#include "shader_cook_plan.h"
 
 #include <core/graphics/shader_stage_names.h>
 #include <core/common/log.h>
@@ -35,15 +35,15 @@ using namespace AssetsGraphicsCookDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static b8 ValidateMaterialVariant(ShaderCook& shaderCook, const MaterialCookEntry& materialEntry, const PreparedShaderEntry& preparedShaderEntry, const Name& stageName, ScratchArena& scratchArena){
+static b8 ValidateMaterialVariant(const MaterialCookEntry& materialEntry, const PreparedShaderEntry& preparedShaderEntry, const Name& stageName, Core::Assets::ScratchArena& scratchArena){
     if(materialEntry.shaderVariant.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant"), ConvertString(AStringView(materialEntry.virtualPath)));
         return false;
     }
     const AStringView requestedVariant(materialEntry.shaderVariant.data(), materialEntry.shaderVariant.size());
 
-    const ScratchString contextLabel = StringFormat(scratchArena, "{} [{}]", AStringView(materialEntry.virtualPath), stageName.resolvedText());
-    return shaderCook.validateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
+    const Core::Assets::ScratchString contextLabel = StringFormat(scratchArena, "{} [{}]", AStringView(materialEntry.virtualPath), stageName.resolvedText());
+    return ShaderCook::ValidateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
 }
 
 
@@ -62,8 +62,8 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, ScratchArena& scratchArena){
-    HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, ScratchArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> preparedShaderLookup(0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), scratchArena);
+b8 ValidateMaterials(const Span<const PreparedShaderEntry> preparedEntries, const Span<const MaterialCookEntry> materialEntries, Core::Assets::ScratchArena& scratchArena){
+    HashMap<ShaderStageKey, NotNull<const PreparedShaderEntry*>, Core::Assets::ScratchArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> preparedShaderLookup(0, Hasher<ShaderStageKey>(), EqualTo<ShaderStageKey>(), scratchArena);
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         const auto shaderName = ToName(preparedEntry.entry.name);
@@ -97,14 +97,14 @@ b8 ValidateMaterials(ShaderCook& shaderCook, const Span<const PreparedShaderEntr
                 return false;
             }
 
-            if(!__hidden_material_validation::ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, scratchArena))
+            if(!__hidden_material_validation::ValidateMaterialVariant(materialEntry, *foundShader.value(), stageName, scratchArena))
                 return false;
 
             // Only the pixel surface hook requires the material interface; the shared mesh stage has none.
             if(shaderType == Core::ShaderType::PixelStage){
                 hasInterfaceStage = true;
                 const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;
-                const CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
+                const Core::Assets::CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
                 if(!shaderMaterialInterface){
                     NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' " "does not include a generated material bind")
                         , ConvertString(AStringView(materialEntry.virtualPath))

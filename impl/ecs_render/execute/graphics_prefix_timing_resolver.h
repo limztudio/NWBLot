@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 
 #include <core/graphics/gpu_timing_types.h>
 #include <core/task/gpu/compiled_graph.h>
@@ -27,39 +28,26 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Graphics-prefix timing resolution owns packet-merge checks plus ticket rebinding.
-struct GraphicsPrefixTimingResolutionResult{
-    usize uniquePacketCount = 0u;
-    b8 bindingsValid = true;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GraphicsPrefixTimingResolver final : NoCopy{
 public:
-    static constexpr usize s_TimingTaskCount = 8u;
-
-
-public:
-    explicit GraphicsPrefixTimingResolver(NotNull<RendererFramePipeline*> pipeline)noexcept;
+    explicit GraphicsPrefixTimingResolver(const RendererFramePipeline& pipeline)noexcept
+        : m_pipeline(pipeline)
+    {}
 
 
 public:
     void resolve(
         const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        Core::GpuTimingSubmissionTicket* const* ownedTickets,
-        usize ticketCount,
-        Core::GpuTimingSubmissionTicket** timingTickets,
-        Core::GpuTaskId* timingTasks,
+        Span<Core::GpuTimingSubmissionTicket* const> ownedTickets,
+        Span<Core::GpuTimingSubmissionTicket*> timingTickets,
+        Span<Core::GpuTaskId> timingTasks,
         b8& asyncSpansOnePacket,
         GraphicsPrefixTimingResolutionResult& outResult
     )const noexcept;
 
 
 private:
-    NotNull<RendererFramePipeline*> m_pipeline;
+    const RendererFramePipeline& m_pipeline;
 };
 
 

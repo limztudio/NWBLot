@@ -11,8 +11,6 @@
 #include <global/simd/vector.h>
 #include <global/thread.h>
 
-#include <fstream>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +26,7 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
 using LogBytes = Vector<u8, LogArena>;
 
 inline constexpr StringView s_TelemetryUploadEndpoint = "/telemetry";
+inline constexpr StringView s_CrashUploadTokenOption = "--crash-upload-token";
 inline constexpr i32 s_LocalTimeYearBase = 1900;
 inline constexpr i32 s_LocalTimeMonthBase = 1;
 
@@ -42,10 +41,10 @@ namespace ArgCommand{
         LogPort,
     };
 };
-inline constexpr StringView s_ArgCmd[] = { "-a,--logaddress", "-p,--logport", };
+inline constexpr Array<StringView, 2u> s_ArgCmd = { "-a,--logaddress", "-p,--logport", };
 inline constexpr u16 s_DefaultLogServerPort = 7117u;
 inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
-inline constexpr StringView s_ArgDesc[] = { "Log server address", "Log server port", };
+inline constexpr Array<StringView, 2u> s_ArgDesc = { "Log server address", "Log server port", };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +75,7 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline TStringView MessageTypeToString(Core::Common::LogType::Enum type)noexcept{
+[[nodiscard]] constexpr TStringView MessageTypeToString(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::Info:
         return NWB_TEXT("INFO");
@@ -96,7 +95,7 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
     return s_UnknownLogLevelName;
 }
 
-[[nodiscard]] inline b8 MessageTypeWritesToErrorStream(Core::Common::LogType::Enum type)noexcept{
+[[nodiscard]] constexpr b8 MessageTypeWritesToErrorStream(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::CriticalWarning:
     case Core::Common::LogType::Assert:
@@ -108,7 +107,7 @@ inline constexpr TStringView s_MalformedMessagePayloadError = NWB_TEXT("Received
     }
 }
 
-[[nodiscard]] inline b8 IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
+[[nodiscard]] constexpr b8 IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
     switch(type){
     case Core::Common::LogType::Info:
     case Core::Common::LogType::EssentialInfo:
@@ -297,26 +296,13 @@ public:
     }
 
 
-protected:
-    inline b8 tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
-
-    void stopWorker(){
-        const b8 alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
-
-        if(!alreadyStopping)
-            MakeNotNull(checked_cast<T*>(this))->internalDestroy();
-        if(m_thread.joinable())
-            m_thread.join();
-    }
-
-
 public:
-    inline LogArena& arena()noexcept{ return m_arena; }
+    LogArena& arena()noexcept{ return m_arena; }
 
 
 public:
     template<typename... Args>
-    inline b8 init(Args&&... args){
+    b8 init(Args&&... args){
         if constexpr(requires{ T::GlobalInit(); }){
             if(!T::s_GlobalInit){
                 if(!T::GlobalInit())
@@ -336,19 +322,32 @@ public:
 
 
 public:
-    inline void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
+    void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(Move(str), m_arena);
-        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
-    inline void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
+    void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
 
-    inline void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
+    void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
-        return MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+        MakeNotNull(checked_cast<T*>(this))->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+    }
+
+
+protected:
+    b8 tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
+
+    void stopWorker(){
+        const b8 alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
+
+        if(!alreadyStopping)
+            MakeNotNull(checked_cast<T*>(this))->internalDestroy();
+        if(m_thread.joinable())
+            m_thread.join();
     }
 
 
@@ -374,10 +373,10 @@ private:
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self.m_lastUpdateTime);
             if(elapsedSeconds < UpdateIntervalSeconds){
                 // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
-                const SIMDVectorSingle remainingSeconds = VectorSubtract(VectorReplicate(UpdateIntervalSeconds), VectorReplicate(elapsedSeconds));
+                const f32 remainingSeconds = UpdateIntervalSeconds - elapsedSeconds;
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
-                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(VectorGetX(VectorCeiling(VectorScale(remainingSeconds, s_MillisecondsPerSecondF)))));
+                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(remainingSeconds * s_MillisecondsPerSecondF)));
                 SleepMS(sleepMilliseconds);
                 continue;
             }
@@ -398,9 +397,9 @@ public:
 
 
 protected:
-    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); }
+    void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); }
 
-    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T>::m_messageQueue.emplace(data); }
+    void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); }
 
 
 private:
@@ -442,15 +441,15 @@ public:
 
 
 protected:
-    [[nodiscard]] inline b8 workerCanExit()const noexcept{ return true; }
+    [[nodiscard]] b8 workerCanExit()const noexcept{ return true; }
 
     void internalDestroy()noexcept{ m_semaphore.release(); }
 
 
 protected:
-    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
+    void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
 
-    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); m_semaphore.release(); }
+    void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:

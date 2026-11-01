@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -39,38 +41,17 @@ static constexpr InputSource s_Contact{ 13u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position, const b8 hoverCapable = false, const PointerIntent::Enum intent = PointerIntent::Activate)noexcept{
-    PointerInput input;
-    input.source = source;
-    input.phase = phase;
-    input.intent = intent;
-    input.position = position;
-    input.hoverCapable = hoverCapable;
-    return input;
-}
+using UiTestSupport::Pointer;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiPointerHitTests : public testing::Test{
+class UiPointerHitTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerHitTests()
-        : m_arena(Name("tests/ui/pointer_hit"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/pointer_hit"))
     {}
-
-
-protected:
-    [[nodiscard]] InputRoutingResult send(const PointerInput& input){
-        EXPECT_TRUE(m_router.queuePointer(input));
-        return m_router.process();
-    }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
 };
 
 
@@ -78,7 +59,7 @@ protected:
 
 
 TEST_F(UiPointerHitTests, VisibleOwnedPartCannotBypassItsClippedHostOrDisabledOverlaps){
-    HitTarget targets[]{ Target(1u), Target(2u), Target(3u), Target(4u), Target(5u) };
+    Array<HitTarget, 5> targets{ Target(1u), Target(2u), Target(3u), Target(4u), Target(5u) };
     targets[1u].paintOrder = 20u;
     targets[1u].clip = { 40.0f, 40.0f, 10.0f, 10.0f };
     targets[2u].paintOrder = 100u;
@@ -91,7 +72,7 @@ TEST_F(UiPointerHitTests, VisibleOwnedPartCannotBypassItsClippedHostOrDisabledOv
     targets[4u].focusable = false;
     targets[4u].paintOrder = Limit<u32>::s_Max;
     targets[4u].value = 27u;
-    ASSERT_TRUE(m_router.commitTargets(targets, 5u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 5u), 1u));
     EXPECT_EQ(m_router.hitTest({ 40.0f, 40.0f }), targets[1u].id);
     EXPECT_EQ(m_router.hitTest({ 50.0f, 45.0f }), targets[0u].id);
     EXPECT_EQ(m_router.hitTest({ 45.0f, 50.0f }), targets[0u].id);
@@ -104,7 +85,7 @@ TEST_F(UiPointerHitTests, VisibleOwnedPartCannotBypassItsClippedHostOrDisabledOv
     EXPECT_FALSE(m_router.consumeControlAction(targets[3u].id, 7u, targets[3u].control));
 
     targets[3u].clip.width = 100.0f;
-    ASSERT_TRUE(m_router.commitTargets(targets, 5u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 5u), 2u));
     EXPECT_EQ(m_router.hover(), targets[4u].id);
     ASSERT_TRUE(send(Pointer(PointerPhase::Press, s_Cursor, { 45.0f, 45.0f }, true)).pointerConsumed);
     EXPECT_EQ(m_router.capture(), targets[4u].id);
@@ -130,8 +111,8 @@ TEST_F(UiPointerHitTests, OutsideTouchDismissalRefreshesAnIndependentCursorsPopu
         HitTarget popup = Target(100u, scope.bounds);
         popup.popup = scope.token;
         popup.layer = scope.layer;
-        const HitTarget targets[]{ base, popup };
-        ASSERT_TRUE(router.commitTargets(targets, 2u, 1u, &scope, 1u));
+        const Array<HitTarget, 2> targets{ base, popup };
+        ASSERT_TRUE(router.commitTargets(Span(targets.data(), 2u), 1u, Span(&scope, 1u)));
         ASSERT_TRUE(router.queuePointer(Pointer(PointerPhase::Move, s_Cursor, { 50.0f, 50.0f }, true)));
         ASSERT_EQ(router.process().hover, popup.id);
         const u64 hovered = router.hoverActivityGeneration();
@@ -147,7 +128,7 @@ TEST_F(UiPointerHitTests, OutsideTouchDismissalRefreshesAnIndependentCursorsPopu
         const auto reason = router.consumePopupDismissal(scope.token);
         ASSERT_TRUE(reason);
         EXPECT_EQ(*reason, PopupDismissReason::OutsideClick);
-        ASSERT_TRUE(router.commitTargets(&base, 1u, 2u));
+        ASSERT_TRUE(router.commitTargets(Span(&base, 1u), 2u));
         EXPECT_EQ(router.hover(), base.id);
         ASSERT_TRUE(router.queuePointer(Pointer(PointerPhase::Release, s_Contact, { 10.0f, 10.0f }, false, intent)));
         EXPECT_TRUE(router.process().pointerConsumed);
@@ -156,8 +137,8 @@ TEST_F(UiPointerHitTests, OutsideTouchDismissalRefreshesAnIndependentCursorsPopu
 }
 
 TEST_F(UiPointerHitTests, HoverProviderChangesAndLayoutRelocationCannotReuseAnOlderTarget){
-    HitTarget targets[]{ Target(1u, { 0.0f, 0.0f, 60.0f, 100.0f }), Target(2u, { 70.0f, 0.0f, 60.0f, 100.0f }) };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    Array<HitTarget, 2> targets{ Target(1u, { 0.0f, 0.0f, 60.0f, 100.0f }), Target(2u, { 70.0f, 0.0f, 60.0f, 100.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     ASSERT_EQ(send(Pointer(PointerPhase::Move, s_Cursor, { 20.0f, 20.0f }, true)).hover, targets[0u].id);
     const u64 initial = m_router.hoverActivityGeneration();
     ASSERT_EQ(send(Pointer(PointerPhase::Move, s_OtherCursor, { 20.0f, 20.0f }, true)).hover, targets[0u].id);
@@ -167,14 +148,14 @@ TEST_F(UiPointerHitTests, HoverProviderChangesAndLayoutRelocationCannotReuseAnOl
 
     targets[0u].rectangle.x = 70.0f;
     targets[1u].rectangle.x = 0.0f;
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 2u));
     EXPECT_EQ(m_router.hover(), targets[1u].id);
     const u64 relocated = m_router.hoverActivityGeneration();
     EXPECT_GT(relocated, initial);
     ASSERT_EQ(send(Pointer(PointerPhase::Move, s_OtherCursor, { 20.0f, 20.0f }, true)).hover, targets[1u].id);
     EXPECT_EQ(m_router.hoverActivityGeneration(), relocated);
     targets[1u].declarationGeneration = 8u;
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 3u));
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 3u));
     EXPECT_EQ(m_router.hover(), targets[1u].id);
     EXPECT_GT(m_router.hoverActivityGeneration(), relocated);
     EXPECT_FALSE(send(Pointer(PointerPhase::Leave, s_OtherCursor, { 20.0f, 20.0f }, true)).hover.valid());
@@ -182,8 +163,8 @@ TEST_F(UiPointerHitTests, HoverProviderChangesAndLayoutRelocationCannotReuseAnOl
 }
 
 TEST_F(UiPointerHitTests, CrossTargetTouchDragKeepsCaptureWhileAnotherCursorRefreshesHover){
-    const HitTarget targets[]{ Target(1u, { 0.0f, 0.0f, 60.0f, 100.0f }), Target(2u, { 70.0f, 0.0f, 60.0f, 100.0f }) };
-    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    const Array<HitTarget, 2> targets{ Target(1u, { 0.0f, 0.0f, 60.0f, 100.0f }), Target(2u, { 70.0f, 0.0f, 60.0f, 100.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(Span(targets.data(), 2u), 1u));
     ASSERT_EQ(send(Pointer(PointerPhase::Move, s_Cursor, { 20.0f, 20.0f }, true)).hover, targets[0u].id);
     ASSERT_TRUE(send(Pointer(PointerPhase::Press, s_Contact, { 80.0f, 20.0f })).pointerConsumed);
     ASSERT_EQ(m_router.capture(), targets[1u].id);

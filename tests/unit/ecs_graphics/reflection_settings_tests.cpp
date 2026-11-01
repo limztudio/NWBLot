@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
 
 #include <global/limit.h>
@@ -123,6 +124,17 @@ TEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadi
     settings = ReflectionSettings{};
     settings.environmentBottom.z = Limit<f32>::s_Infinity;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
+}
+
+TEST(ReflectionSettings, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget){
+    ReflectionFrameSnapshot snapshot;
+    snapshot.parameters.hardwareEnabled = 1u;
+    snapshot.parameters.maxHardwareRays = 0u;
+    EXPECT_FALSE(snapshot.hasHardwareWork());
+    snapshot.parameters.maxHardwareRays = 1u;
+    EXPECT_TRUE(snapshot.hasHardwareWork());
+    snapshot.parameters.hardwareEnabled = 0u;
+    EXPECT_FALSE(snapshot.hasHardwareWork());
 }
 
 

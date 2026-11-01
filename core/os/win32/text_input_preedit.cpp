@@ -37,7 +37,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
         m_pendingPreeditHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    char bytes[s_Utf8MaxSequenceBytes];
+    Array<char, s_Utf8MaxSequenceBytes> bytes;
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();
@@ -45,7 +45,7 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(const Text
     if(length > s_TextInputMaxEventTextBytes - m_preeditText.size())
         return TextInputAdmission::TooLarge;
     m_utf8Text.assign(m_preeditText.data(), m_preeditText.size());
-    m_utf8Text.insert(m_preeditCaretByte, bytes, length);
+    m_utf8Text.insert(m_preeditCaretByte, bytes.data(), length);
     const usize caret = m_preeditCaretByte + (advanceCaret ? length : 0u);
     return publishCompositionPreedit(token, m_utf8Text, caret, caret);
 }

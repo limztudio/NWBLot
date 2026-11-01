@@ -6,9 +6,14 @@
 
 
 #include "expected.h"
+#include "platform.h"
 #include "type.h"
 
+#include <cerrno>
 #include <cfenv>
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <cfloat>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

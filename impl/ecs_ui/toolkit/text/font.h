@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include "types.h"
 #include "baked_atlas.h"
 
+#include <impl/ecs_ui/toolkit/global.h>
+#include <impl/ecs_ui/toolkit/text/types.adhd.h>
 #include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/assets_font/asset.h>
 
@@ -28,21 +29,6 @@ struct FontSource{
     const Font& font;
     u64 generation = 0u;
     const FontAtlas* atlas = nullptr;
-};
-
-struct GlyphCoverageBounds{
-    Rect ink{};
-    b8 known = false;
-};
-
-struct RawShapedGlyph{
-    u32 glyphId = 0u;
-    u32 byteBegin = 0u;
-    u32 byteEnd = 0u;
-    Point offset;
-    Point advance;
-    Rect ink;
-    GlyphCoverageBounds coverage{};
 };
 
 struct GlyphBitmap{

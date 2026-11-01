@@ -52,30 +52,17 @@ HitTarget Part(const HitTarget& host, const u64 id, const Rect& rectangle, const
     return target;
 }
 
-InputEvent Pointer(const InputEventType::Enum type, const Point& position = { 10.0f, 10.0f })noexcept{
-    InputEvent event;
-    event.type = type;
-    event.position = position;
-    return event;
-}
-
-InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const b8 repeat = false)noexcept{
-    InputEvent event;
-    event.type = type;
-    event.key = key;
-    event.repeat = repeat;
-    return event;
-}
+using UiTestSupport::Key;
+using UiTestSupport::Pointer;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiControlInputTests : public testing::Test{
+class UiControlInputTests : public UiTestSupport::RouterTestFixture{
 public:
     UiControlInputTests()
-        : m_arena(Name("tests/ui/control_input"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/control_input"))
     {
         m_targets[0u] = Host();
         m_targets[1u] = Part(m_targets[0u], 2u, { 0.0f, 0.0f, 80.0f, 20.0f }, 100000u);
@@ -88,20 +75,10 @@ public:
 
 
 protected:
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-        return m_router.process();
-    }
-
     [[nodiscard]] InputRoutingResult wheel(const f64 delta = -1.0, const Point& position = { 10.0f, 10.0f }){
         InputEvent event = Pointer(InputEventType::PointerWheel, position);
         event.scrollY = delta;
         return send(event);
-    }
-
-    void click(const Point& position = { 10.0f, 10.0f }){
-        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, position)).pointerConsumed);
-        EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, position)).pointerConsumed);
     }
 
     void focus(){
@@ -120,8 +97,6 @@ protected:
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Array<HitTarget, 3u> m_targets;
 };
 
@@ -130,7 +105,7 @@ protected:
 
 
 TEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 5u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 5u));
     EXPECT_TRUE(wheel(-0.25).pointerConsumed);
     EXPECT_FALSE(m_router.focus().valid());
     m_targets[0u].scrollStep = 120.0;
@@ -150,13 +125,13 @@ TEST_F(UiControlInputTests, OverlappingUnrelatedControlBlocksUnderlyingWheelRout
     cover.navigable = false;
     cover.scrollable = false;
     const Array<HitTarget, 4u> targets{ m_targets[0u], m_targets[1u], m_targets[2u], cover };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u));
     EXPECT_TRUE(wheel().pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
 TEST_F(UiControlInputTests, HorizontalOnlyWheelIsConsumedWithoutVerticalMutation){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     InputEvent event = Pointer(InputEventType::PointerWheel);
     event.scrollX = 2.0;
     EXPECT_TRUE(send(event).pointerConsumed);
@@ -166,7 +141,7 @@ TEST_F(UiControlInputTests, HorizontalOnlyWheelIsConsumedWithoutVerticalMutation
 }
 
 TEST_F(UiControlInputTests, SceneHeldPrimarySequenceCannotStartScrollingWhenPointerCrossesList){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_FALSE(send(Pointer(InputEventType::PrimaryDown, { 200.0f, 180.0f })).pointerConsumed);
     EXPECT_FALSE(wheel().pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -175,7 +150,7 @@ TEST_F(UiControlInputTests, SceneHeldPrimarySequenceCannotStartScrollingWhenPoin
 }
 
 TEST_F(UiControlInputTests, NavigationCopiesAcceptedPageSizeAndSubmissionDoesNotRepeat){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     m_targets[0u].pageRows = 30u;
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::PageDown)).commandConsumed);
@@ -204,7 +179,7 @@ TEST_F(UiControlInputTests, NavigationCopiesAcceptedPageSizeAndSubmissionDoesNot
 TEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList){
     HitTarget second = Host(4u, 140.0f);
     const Array<HitTarget, 2u> targets{ m_targets[0u], second };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ControlAction action;
@@ -224,7 +199,7 @@ TEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList){
 }
 
 TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcceptance){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     click();
     EXPECT_TRUE(wheel().pointerConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
@@ -242,7 +217,7 @@ TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcce
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     click();
     ControlAction action;
     const auto actionResult = take();
@@ -252,21 +227,21 @@ TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcce
 }
 
 TEST_F(UiControlInputTests, CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
     revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
 TEST_F(UiControlInputTests, ReplacedRowDeclarationRejectsItsQueuedClickWhileHostWheelSurvives){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     click();
     EXPECT_TRUE(wheel().pointerConsumed);
     ++m_targets[1u].declarationGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     ControlAction action;
     const auto actionResult1 = take();
     ASSERT_TRUE(actionResult1);
@@ -283,7 +258,7 @@ TEST_F(UiControlInputTests, ReplacedRowDeclarationRejectsItsQueuedClickWhileHost
 }
 
 TEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     click();
     EXPECT_TRUE(wheel().pointerConsumed);
     m_router.invalidateTarget(m_targets[1u].id);
@@ -297,7 +272,7 @@ TEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelS
 }
 
 TEST_F(UiControlInputTests, HostRetirementRemovesPartsAndGesturesButPreservesHeldOwnership){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     click();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
@@ -310,7 +285,7 @@ TEST_F(UiControlInputTests, HostRetirementRemovesPartsAndGesturesButPreservesHel
 }
 
 TEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResize){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture gesture;
     const auto gestureResult1 = m_router.consumePointerGesture(m_targets[2u].id, 7u);
@@ -321,7 +296,7 @@ TEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResi
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 100.0f);
     m_targets[2u].gestureMaximum = 1000.0;
     m_targets[2u].gestureReference.height = 150.0f;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_TRUE(send(Pointer(InputEventType::PointerMove, { 95.0f, 50.0f })).pointerConsumed);
     const auto gestureResult2 = m_router.consumePointerGesture(m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult2);
@@ -332,49 +307,49 @@ TEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResi
 }
 
 TEST_F(UiControlInputTests, ChangedThumbEpochRejectsAQueuedCompletedGesture){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 95.0f, 30.0f })).pointerConsumed);
     revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_FALSE(m_router.consumePointerGesture(m_targets[2u].id, 7u));
 }
 
 TEST_F(UiControlInputTests, FocusHintRestoresReplacedHostOnlyAtMatchingAcceptance){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     revise();
     m_targets[0u].focusOnCommit = true;
     m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
     EXPECT_FALSE(m_router.focus().valid());
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u, nullptr, 0u, m_router.focusLossGeneration()));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u, {}, m_router.focusLossGeneration()));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
 TEST_F(UiControlInputTests, FocusHintCannotStealAnotherFocusOrSurviveDelayedFocusLoss){
     HitTarget second = Host(4u, 140.0f);
-    ASSERT_TRUE(m_router.commitTargets(&second, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&second, 1u), 1u));
     click({ 150.0f, 30.0f });
     m_targets[0u].focusOnCommit = true;
     const Array<HitTarget, 2u> targets{ m_targets[0u], second };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 2u));
     EXPECT_EQ(m_router.focus(), second.id);
     const u64 preparedFocusLoss = m_router.focusLossGeneration();
     const InputRoutingResult lost = send({ .position = {} , .type = InputEventType::FocusLost});
     EXPECT_TRUE(lost.commandConsumed);
     const InputRoutingResult gained = send({ .position = {} , .type = InputEventType::FocusGained});
     EXPECT_FALSE(gained.commandConsumed);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u, nullptr, 0u, preparedFocusLoss));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u, {}, preparedFocusLoss));
     EXPECT_FALSE(m_router.focus().valid());
 }
 
 TEST_F(UiControlInputTests, RepeatedNavigationDoesNotJumpToAcceptedReplacementEpoch){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     revise();
     m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -387,10 +362,10 @@ TEST_F(UiControlInputTests, RepeatedNavigationDoesNotJumpToAcceptedReplacementEp
 }
 
 TEST_F(UiControlInputTests, InvalidOwnerReferencesRejectAtomicPublicationAndPreserveActions){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     click();
     ++m_targets[1u].ownerDeclarationGeneration;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     ControlAction action;
@@ -400,39 +375,39 @@ TEST_F(UiControlInputTests, InvalidOwnerReferencesRejectAtomicPublicationAndPres
 }
 
 TEST_F(UiControlInputTests, MalformedControlMetadataRejectsPublicationBeforeChangingFocus){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     const HitTarget host = m_targets[0u];
     m_targets[0u].control.contentRevision = 0u;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     m_targets[0u] = host;
     m_targets[0u].scrollStep = Limit<f64>::s_QuietNaN;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     m_targets[0u] = host;
     m_targets[0u].pageRows = 0u;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     m_targets[0u] = host;
     m_targets[0u].gestureMaximum = -1.0;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     EXPECT_EQ(m_router.focus(), host.id);
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
 }
 
 TEST_F(UiControlInputTests, MissingDisabledOrFocusablePartOwnerIsRejected){
-    EXPECT_FALSE(m_router.commitTargets(&m_targets[1u], 1u, 1u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&m_targets[1u], 1u), 1u));
     m_targets[0u].enabled = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[0u].enabled = true;
     m_targets[1u].focusable = true;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[1u].focusable = false;
     ++m_targets[1u].control.instanceGeneration;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(m_router.targets().empty());
 }
 
 TEST_F(UiControlInputTests, InvalidWheelCoordinatesAndDeltasNeverReachAcceptedActions){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     InputEvent event = Pointer(InputEventType::PointerWheel);
     event.scrollY = Limit<f64>::s_QuietNaN;
     EXPECT_FALSE(m_router.queue(UiTestSupport::NativeInput(event)));
@@ -446,7 +421,7 @@ TEST_F(UiControlInputTests, InvalidWheelCoordinatesAndDeltasNeverReachAcceptedAc
 }
 
 TEST_F(UiControlInputTests, BoundedControlActionsUseOneSharedSequenceAndOverflowOncePerProcess){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     for(usize index = 0u; index < s_InputMaxControlActions; ++index)
         EXPECT_FALSE(wheel().activationOverflow);
     EXPECT_TRUE(wheel().activationOverflow);
@@ -470,14 +445,14 @@ TEST_F(UiControlInputTests, BoundedControlActionsUseOneSharedSequenceAndOverflow
 }
 
 TEST_F(UiControlInputTests, FocusLossCancelsActionsAndResetDoesNotRestartTheirSequence){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(wheel().pointerConsumed);
     const u64 previousSequence = m_router.controlActions()[0u].id.sequence;
     focus();
     EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     m_router.reset();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(wheel().pointerConsumed);
     ControlAction action;
     const auto actionResult = take();
@@ -504,7 +479,7 @@ TEST_F(UiControlInputTests, AcceptedPopupMaskOwnsWheelAndListFocusAboveLowerHost
     upper.layer = popup.layer;
     upper.paintOrder = 1u;
     const Array<HitTarget, 3u> targets{ m_targets[0u], barrier, upper };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u, &popup, 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u, Span(&popup, 1u)));
     EXPECT_EQ(m_router.focus(), upper.id);
     EXPECT_TRUE(wheel().pointerConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -536,15 +511,15 @@ TEST_F(UiControlInputTests, ClosingPopupBlocksFocusHintAndHeldNavigationCannotRe
     upper.paintOrder = 1u;
     m_targets[0u].focusOnCommit = true;
     Array<HitTarget, 3u> targets{ m_targets[0u], barrier, upper };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u, &popup, 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u, Span(&popup, 1u)));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     m_router.closePopup(popup.token);
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 2u, &popup, 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 2u, Span(&popup, 1u)));
     EXPECT_FALSE(m_router.focus().valid());
     ++popup.token.openGeneration;
     targets[1u].popup = popup.token;
     targets[2u].popup = popup.token;
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 3u, &popup, 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, Span(&popup, 1u)));
     EXPECT_EQ(m_router.focus(), upper.id);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -556,12 +531,12 @@ TEST_F(UiControlInputTests, ActivationAlsoFencesItsCopiedControlEpoch){
     target.navigable = false;
     target.scrollable = false;
     target.activatable = true;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 1u));
     click();
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_EQ(m_router.actions()[0u].control, target.control);
     ++target.control.instanceGeneration;
-    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&target, 1u), 2u));
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
@@ -573,7 +548,7 @@ TEST_F(UiControlInputTests, ControlActivationAndGestureActionsShareOneMonotonicS
     button.scrollable = false;
     button.activatable = true;
     const Array<HitTarget, 4u> targets{ m_targets[0u], m_targets[1u], m_targets[2u], button };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u));
     click({ 150.0f, 10.0f });
     ASSERT_EQ(m_router.actions().size(), 1u);
     const u64 activationSequence = m_router.actions()[0u].id.sequence;
@@ -596,21 +571,21 @@ TEST_F(UiControlInputTests, NativeUnfocusedAcceptanceCannotApplyAControlFocusHin
     const InputRoutingResult lost = send({ .position = {} , .type = InputEventType::FocusLost});
     EXPECT_FALSE(lost.commandConsumed);
     m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u, nullptr, 0u, m_router.focusLossGeneration()));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u, {}, m_router.focusLossGeneration()));
     EXPECT_FALSE(m_router.focus().valid());
 }
 
 TEST_F(UiControlInputTests, RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenReturns){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     const ControlToken original = m_targets[0u].control;
     revise();
     m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     for(auto& target : m_targets)
         target.control = original;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -623,7 +598,7 @@ TEST_F(UiControlInputTests, RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenR
 }
 
 TEST_F(UiControlInputTests, GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture initial;
     const auto initialResult = m_router.consumePointerGesture(m_targets[2u].id, 7u);
@@ -655,21 +630,21 @@ TEST_F(UiControlInputTests, GestureUpdateSequenceOrdersLatestMotionAfterAnInterv
 
 TEST_F(UiControlInputTests, EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage){
     m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Escape)).commandConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Escape)).commandConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     const ControlToken original = m_targets[0u].control;
     revise();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     for(auto& target : m_targets)
         target.control = original;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 4u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 4u));
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);

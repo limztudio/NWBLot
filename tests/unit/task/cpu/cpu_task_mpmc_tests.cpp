@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cpu_task_scheduler_test_support.h"
+
 #include <core/task/cpu/scheduler.h>
 
 #include <global/sync.h>
@@ -21,8 +23,9 @@ namespace __hidden_cpu_task_mpmc_tests{
 
 
 constexpr u32 s_WatchdogTimeoutMS = 12000u;
-constexpr u32 s_PollIntervalMS = 1u;
 using namespace NWB::Core;
+using CpuTaskSchedulerTestSupport::DeadlineGuard;
+using CpuTaskSchedulerTestSupport::s_PollIntervalMS;
 
 inline constexpr u32 s_WorkerCount = 4u;
 inline constexpr u32 s_ExternalProducerCount = 4u;
@@ -34,49 +37,29 @@ inline constexpr u32 s_GateTimeoutMS = 4000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeadlineGuard final{
-public:
-    DeadlineGuard()
-        : m_watchdog([](const StopToken& stop)noexcept{
-            const Timer begin = TimerNow();
-            while(!stop.stop_requested()){
-                if(DurationInMS<u64>(TimerNow(), begin) >= __hidden_cpu_task_mpmc_tests::s_WatchdogTimeoutMS)
-                    TerminateInvariant();
-                SleepMS(__hidden_cpu_task_mpmc_tests::s_PollIntervalMS);
-            }
-        }
-        )
-    {}
-
-
-private:
-    JoiningThread m_watchdog;
-};
-
-
 template<typename Predicate>
 [[nodiscard]] b8 WaitUntil(const Predicate& predicate)noexcept(noexcept(static_cast<b8>(!predicate()))){
     const Timer begin = TimerNow();
     while(!predicate()){
         if(DurationInMS<u64>(TimerNow(), begin) >= s_GateTimeoutMS)
             return false;
-        SleepMS(__hidden_cpu_task_mpmc_tests::s_PollIntervalMS);
+        SleepMS(s_PollIntervalMS);
     }
     return true;
 }
 
 
 struct ProducerState{
+    Array<Array<CpuTaskHandle, s_TasksPerProducer>, s_ProducerCount> handles{};
+    Array<Atomic<u32>, s_ProducerCount * s_TasksPerProducer * 4u> visits{};
+    Atomic<u32> ready{ 0u };
+    Atomic<u32> workerMask{ 0u };
+    Atomic<u32> consumedPrefixMask{ 0u };
+    Array<Atomic<b8>, s_ProducerCount> published{};
     Atomic<b8> start{ false };
     Atomic<b8> expired{ false };
     Atomic<b8> rejected{ false };
     Atomic<b8> invalidOrder{ false };
-    Atomic<u32> ready{ 0u };
-    Atomic<u32> workerMask{ 0u };
-    Atomic<u32> consumedPrefixMask{ 0u };
-    Atomic<b8> published[s_ProducerCount]{};
-    CpuTaskHandle handles[s_ProducerCount][s_TasksPerProducer]{};
-    Atomic<u32> visits[s_ProducerCount * s_TasksPerProducer * 4u]{};
 };
 
 
@@ -158,14 +141,14 @@ void Produce(CpuTaskScheduler& scheduler, CpuTaskScope& scope, ProducerState& st
 
 TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOrRepeatingTasks){
     using namespace __hidden_cpu_task_mpmc_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     ProducerState state;
     CpuTaskSchedulerConfig config;
     config.workerCount = s_WorkerCount;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
-    JoiningThread producers[s_ExternalProducerCount];
+    Array<JoiningThread, s_ExternalProducerCount> producers;
     ScopeExit stopProducers([&]()noexcept{
         state.start.store(true, MemoryOrder::release);
         for(auto& producer : producers){
@@ -217,7 +200,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
 
 TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPumps){
     using namespace __hidden_cpu_task_mpmc_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     constexpr u32 s_JoinKinds = 3u;
     const ThreadId owner = QueryCurrentThreadId();
     Atomic<u32> ready{ 0u };
@@ -228,13 +211,13 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
     Atomic<b8> expired{ false };
     Atomic<b8> rejected{ false };
     Atomic<b8> wrongThread{ false };
-    Atomic<u32> visits[s_ExternalProducerCount * s_TasksPerProducer]{};
+    Array<Atomic<u32>, s_ExternalProducerCount * s_TasksPerProducer> visits{};
     CpuTaskSchedulerConfig config;
     config.workerCount = s_WorkerCount;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
-    JoiningThread producers[s_ExternalProducerCount];
+    Array<JoiningThread, s_ExternalProducerCount> producers;
     ScopeExit stopProducers([&]()noexcept{
         start.store(true, MemoryOrder::release);
         scheduler.drain();
@@ -316,7 +299,7 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
 
 TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedulerJoins){
     using namespace __hidden_cpu_task_mpmc_tests;
-    DeadlineGuard deadline;
+    DeadlineGuard deadline(false, s_WatchdogTimeoutMS);
     constexpr u32 s_JoinKinds = 3u;
     constexpr u32 s_Rounds = 32u;
     CpuTaskScheduler scheduler(0u);
@@ -331,7 +314,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
         Atomic<b8> expired{ false };
         Atomic<u32> entered{ 0u };
         Atomic<u32> finished{ 0u };
-        JoiningThread waiters[s_JoinKinds];
+        Array<JoiningThread, s_JoinKinds> waiters;
         ScopeExit finishWaiters([&]()noexcept{
             start.store(true, MemoryOrder::release);
             scope.cancel();

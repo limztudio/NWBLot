@@ -6,8 +6,9 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
+#include <core/alloc/scratch.h>
 #include <core/task/gpu/compiled_graph.h>
 
 #include <global/span.h>
@@ -32,8 +33,15 @@ class RendererFramePipeline;
 // Records the optional tasks that follow accepted presentation: the surfel counter readback and the lagged lighting-history copy.
 class FrameExecutePresentTails final : NoCopy{
 public:
-    FrameExecutePresentTails(RendererFramePipeline& renderer, FrameExecuteRecovery& recovery, const Core::GpuCompiledGraph::ReadView& compiledPlan, const Core::QueueSubmissionToken& finalPresentationSubmissionToken)noexcept
+    FrameExecutePresentTails(
+        RendererFramePipeline& renderer,
+        Core::Alloc::ScratchArena& scratchArena,
+        FrameExecuteRecovery& recovery,
+        const Core::GpuCompiledGraph::ReadView& compiledPlan,
+        const Core::QueueSubmissionToken& finalPresentationSubmissionToken
+    )noexcept
         : m_renderer(renderer)
+        , m_scratchArena(scratchArena)
         , m_recovery(recovery)
         , m_compiledPlan(compiledPlan)
         , m_finalPresentationSubmissionToken(finalPresentationSubmissionToken)
@@ -48,6 +56,7 @@ public:
 
 private:
     RendererFramePipeline& m_renderer;
+    Core::Alloc::ScratchArena& m_scratchArena;
     FrameExecuteRecovery& m_recovery;
     const Core::GpuCompiledGraph::ReadView& m_compiledPlan;
     const Core::QueueSubmissionToken& m_finalPresentationSubmissionToken;

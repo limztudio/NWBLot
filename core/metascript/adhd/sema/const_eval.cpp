@@ -20,6 +20,29 @@ namespace __hidden_adhd_const_eval{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] constexpr b8 TryEvaluateIntegerScalarLimit(const MStringView scalarType, const MStringView member, i64& outVal)noexcept{
+    if(member == "min"){
+        if(scalarType == "i8"){ outVal = Limit<i8>::s_Min; return true; }
+        if(scalarType == "i16"){ outVal = Limit<i16>::s_Min; return true; }
+        if(scalarType == "i32"){ outVal = Limit<i32>::s_Min; return true; }
+        if(scalarType == "i64" || scalarType == "isize"){ outVal = Limit<i64>::s_Min; return true; }
+        if(scalarType == "u8" || scalarType == "u16" || scalarType == "u32" || scalarType == "u64" || scalarType == "usize"){ outVal = 0; return true; }
+        return false;
+    }
+    if(member == "max"){
+        if(scalarType == "i8"){ outVal = Limit<i8>::s_Max; return true; }
+        if(scalarType == "i16"){ outVal = Limit<i16>::s_Max; return true; }
+        if(scalarType == "i32"){ outVal = Limit<i32>::s_Max; return true; }
+        if(scalarType == "i64" || scalarType == "isize"){ outVal = Limit<i64>::s_Max; return true; }
+        if(scalarType == "u8"){ outVal = static_cast<i64>(Limit<u8>::s_Max); return true; }
+        if(scalarType == "u16"){ outVal = static_cast<i64>(Limit<u16>::s_Max); return true; }
+        if(scalarType == "u32"){ outVal = static_cast<i64>(Limit<u32>::s_Max); return true; }
+        if(scalarType == "u64" || scalarType == "usize"){ outVal = static_cast<i64>(Limit<u64>::s_Max); return true; }
+        return false;
+    }
+    return false;
+}
+
 [[nodiscard]] b8 IsValidConstTemplateArgGlobal(const Stmt* globalConst, const SymbolTable& symbols)noexcept{
     if(!globalConst || !globalConst->varType)
         return false;
@@ -62,22 +85,22 @@ namespace __hidden_adhd_const_eval{
     case TokenType::Minus: outVal = lhsVal - rhsVal; return true;
     case TokenType::Star: outVal = lhsVal * rhsVal; return true;
     case TokenType::Slash:
-        if(rhsVal == 0)
+        if(rhsVal == 0 || (lhsVal == Limit<i64>::s_Min && rhsVal == -1))
             return false;
         outVal = lhsVal / rhsVal;
         return true;
     case TokenType::Percent:
         if(rhsVal == 0)
             return false;
-        outVal = lhsVal % rhsVal;
+        outVal = (lhsVal == Limit<i64>::s_Min && rhsVal == -1) ? 0 : (lhsVal % rhsVal);
         return true;
     case TokenType::LessLess:
-        if(rhsVal < 0 || rhsVal >= 63)
+        if(rhsVal < 0 || rhsVal >= 64)
             return false;
         outVal = static_cast<i64>(static_cast<u64>(lhsVal) << static_cast<u64>(rhsVal));
         return true;
     case TokenType::GreaterGreater:
-        if(rhsVal < 0 || rhsVal >= 63)
+        if(rhsVal < 0 || rhsVal >= 64)
             return false;
         outVal = lhsVal >> rhsVal;
         return true;
@@ -87,6 +110,14 @@ namespace __hidden_adhd_const_eval{
     default: return false;
     }
 }
+
+struct ActiveEnumEvalContext{
+    const EnumDecl* enumDecl = nullptr;
+    const i64* evaluatedValues = nullptr;
+    usize evaluatedCount = 0u;
+};
+
+inline thread_local const ActiveEnumEvalContext* s_ActiveEnumCtx = nullptr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,22 +158,47 @@ b8 IsValidScopedEnumTemplateArg(MStringView text, const SymbolTable& symbols, co
 b8 TryEvaluateEnumEntryConstant(const EnumDecl& ed, const MStringView targetEntry, const SymbolTable& symbols, const u32 depth, i64& outVal)noexcept{
     if(depth > 16u)
         return false;
+    if(__hidden_adhd_const_eval::s_ActiveEnumCtx && __hidden_adhd_const_eval::s_ActiveEnumCtx->enumDecl == &ed){
+        for(usize k = 0u; k < __hidden_adhd_const_eval::s_ActiveEnumCtx->evaluatedCount; ++k){
+            if(ed.entries[k].name == targetEntry){
+                outVal = __hidden_adhd_const_eval::s_ActiveEnumCtx->evaluatedValues[k];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    constexpr usize s_MaxCachedEntries = 256u;
+    Array<i64, s_MaxCachedEntries> cachedValues{};
+    const __hidden_adhd_const_eval::ActiveEnumEvalContext* prevCtx = __hidden_adhd_const_eval::s_ActiveEnumCtx;
+    __hidden_adhd_const_eval::ActiveEnumEvalContext localCtx{ &ed, cachedValues.data(), 0u };
+
     i64 nextSeq = 0;
     usize flagBitIndex = 0u;
-    for(const EnumEntry& entry : ed.entries){
+    for(usize idx = 0u; idx < ed.entries.size(); ++idx){
+        const EnumEntry& entry = ed.entries[idx];
         i64 curVal = 0;
         if(entry.valueExpr){
-            if(!TryEvaluateExprConstant(entry.valueExpr, symbols, depth + 1u, &ed, curVal))
+            localCtx.evaluatedCount = idx < s_MaxCachedEntries ? idx : s_MaxCachedEntries;
+            __hidden_adhd_const_eval::s_ActiveEnumCtx = &localCtx;
+            const b8 evalOk = TryEvaluateExprConstant(entry.valueExpr, symbols, depth + 1u, &ed, curVal);
+            __hidden_adhd_const_eval::s_ActiveEnumCtx = prevCtx;
+            if(!evalOk)
                 return false;
-            nextSeq = curVal + 1;
+            nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);
         }
         else if(ed.isFlag){
-            curVal = static_cast<i64>(usize(1) << flagBitIndex++);
-            nextSeq = curVal + 1;
+            if(flagBitIndex >= 64u)
+                return false;
+            curVal = static_cast<i64>(u64(1) << flagBitIndex++);
+            nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);
         }
         else{
-            curVal = nextSeq++;
+            curVal = nextSeq;
+            nextSeq = static_cast<i64>(static_cast<u64>(nextSeq) + 1u);
         }
+        if(idx < s_MaxCachedEntries)
+            cachedValues[idx] = curVal;
         if(entry.name == targetEntry){
             outVal = curVal;
             return true;
@@ -162,6 +218,12 @@ b8 TryEvaluateExprConstant(const Expr* expr, const SymbolTable& symbols, const u
     case ExprKind::BoolLiteral:
         outVal = (expr->text == "true") ? 1 : 0;
         return true;
+    case ExprKind::MemberAccess:{
+        if(!expr->lhs || expr->lhs->kind != ExprKind::Identifier || !expr->lhs->callTemplateArgs.empty() || symbols.findGlobalConstant(expr->lhs->text))
+            return false;
+        const MStringView resolvedBaseType = symbols.resolveBaseTypeName(expr->lhs->text);
+        return __hidden_adhd_const_eval::TryEvaluateIntegerScalarLimit(resolvedBaseType, expr->text, outVal);
+    }
     case ExprKind::ScopeAccess:{
         if(expr->scopeChain.size() != 2u)
             return false;
@@ -317,6 +379,13 @@ b8 TryEvaluateTextConstant(MStringView text, const SymbolTable& symbols, const u
     MStringView scopedEntryName;
     if(IsValidScopedEnumTemplateArg(text, symbols, &scopedEnum, &scopedEntryName))
         return TryEvaluateEnumEntryConstant(*scopedEnum, scopedEntryName, symbols, depth, outVal);
+
+    if(const usize dotPos = text.find('.'); dotPos != MStringView::npos && dotPos > 0u){
+        const MStringView lhsIdent = TrimView(text.substr(0u, dotPos));
+        const MStringView rhsMember = TrimView(text.substr(dotPos + 1u));
+        if(!symbols.findGlobalConstant(lhsIdent) && __hidden_adhd_const_eval::TryEvaluateIntegerScalarLimit(symbols.resolveBaseTypeName(lhsIdent), rhsMember, outVal))
+            return true;
+    }
 
     if(contextEnum && TryEvaluateEnumEntryConstant(*contextEnum, text, symbols, depth, outVal))
         return true;

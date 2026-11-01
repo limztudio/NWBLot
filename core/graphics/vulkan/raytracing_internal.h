@@ -30,6 +30,9 @@ inline constexpr TStringView s_SphereVertexInputName = NWB_TEXT("sphere vertex")
 inline constexpr TStringView s_SphereIndexInputName = NWB_TEXT("sphere index");
 inline constexpr TStringView s_LssVertexInputName = NWB_TEXT("LSS vertex");
 inline constexpr TStringView s_LssIndexInputName = NWB_TEXT("LSS index");
+inline constexpr VkBufferUsageFlags s_AccelStructBuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+inline constexpr VkBufferUsageFlags s_MicromapStorageUsage = VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+inline constexpr u32 s_MaxPositionTruncateBitCount = 32u;
 
 using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena>;
 using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena>;
@@ -37,6 +40,9 @@ using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpher
 using BlasRangeInfoVector = Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchArena>;
 using BlasPrimitiveCountVector = Vector<uint32_t, Alloc::ScratchArena>;
 using BlasTransformOffsetVector = Vector<usize, Alloc::ScratchArena>;
+using OpacityMicromapGeometryVector = Vector<VkAccelerationStructureTrianglesOpacityMicromapEXT, Alloc::ScratchArena>;
+using OpacityMicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
+using OpacityMicromapUsageOffsetVector = Vector<usize, Alloc::ScratchArena>;
 
 struct BlasGeometryScratch{
     BlasGeometryVector geometries;

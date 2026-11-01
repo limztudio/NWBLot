@@ -94,7 +94,7 @@ TEST_F(FloatModelTests, RejectionAndInvalidBlurRestoreCanonicalCurrentValue){
 TEST_F(FloatModelTests, OverflowUnderflowAndNonfiniteSpellingsNeverClamp){
     ASSERT_TRUE(m_model.setValue(1.25));
     const FloatBounds bounds{ -10.0, 10.0, NumericBoundsPolicy::Clamp };
-    const AStringView drafts[]{ "1e309", "1e-9999", "nan", "-inf", "x", "-" };
+    const Array<AStringView, 6> drafts = { "1e309", "1e-9999", "nan", "-inf", "x", "-" };
     for(const AStringView text : drafts){
         SCOPED_TRACE(text);
         ASSERT_TRUE(m_model.setDraft(text));
@@ -123,7 +123,7 @@ TEST_F(FloatModelTests, NonfiniteExternalAssignmentsPreserveEveryExistingDraftFi
 }
 
 TEST_F(FloatModelTests, ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExactBits){
-    const u64 patterns[]{
+    const Array<u64, 9> patterns = {
         0x0000000000000001ull, 0x8000000000000001ull, 0x000fffffffffffffull, 0x0010000000000000ull,
         0x3fefffffffffffffull, 0x3ff0000000000001ull,
         0x4340000000000001ull, 0x7fefffffffffffffull, 0xffefffffffffffffull

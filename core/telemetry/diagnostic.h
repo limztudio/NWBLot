@@ -68,7 +68,7 @@ struct DiagnosticPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
+[[nodiscard]] b8 BuildDiagnosticPayload(const DiagnosticEventRecord& record, TelemetryArena& arena, TelemetryBytes& outPayload);
 [[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(const void* payload, usize payloadBytes)noexcept;
 [[nodiscard]] b8 RecordDiagnostic(Recorder& recorder, const DiagnosticEventRecord& record, u64 frameIndex = 0u, u32 streamId = 0u);
 

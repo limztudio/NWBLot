@@ -7,7 +7,6 @@
 #include "smoke_environment.h"
 
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/reflection/timing_names.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>

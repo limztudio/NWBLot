@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
+
+#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -78,7 +80,7 @@ private:
 
 RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDataSource& source, RadioGroupState& state, const RadioGroupOptions& options){
     RadioGroupResult result;
-    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked() || !m_skin){
         m_context.fail();
         return result;
     }
@@ -159,17 +161,28 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     LayoutNodeDesc description;
     description.width = options.width;
     description.intrinsicSize = frame.m_metrics.contentSize;
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
+    if(!addItemNode(description, item)){
         result.valid = false;
-        m_context.fail();
         return result;
     }
-    item.node = *admittedNode;
     m_scope->m_radioGroups.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     result.valid = true;
     return result;
+}
+
+b8 Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
+    // Repeat the stamp fence to catch a one-shot metadata mutation from the final count callback.
+    for(u32 pass = 0u; pass < s_RadioGroupStampFencePassCount; ++pass){
+        if(
+            !radioGroupStateMatches(frame)
+            || frame.m_source.instanceGeneration() != frame.m_choices.sourceGeneration || !radioGroupStateMatches(frame)
+            || frame.m_source.revision() != frame.m_choices.sourceRevision || !radioGroupStateMatches(frame)
+            || frame.m_source.rowCount() != frame.m_choices.count || !radioGroupStateMatches(frame)
+        )
+            return false;
+    }
+    return true;
 }
 
 b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
@@ -199,20 +212,18 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
     const UiSkinRegion* mark = region(frame.m_style.mark, frame.m_style.markFallback);
     if(!normal || !checked || !mark || !IsFinite(m_skin->referenceDensity()) || m_skin->referenceDensity() <= 0.0f)
         return false;
-    const UiSkinRegion* states[] = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
-    const SIMDVectorSingle referenceDensity = VectorReplicate(m_skin->referenceDensity());
-    SIMDVectorSingle indicatorExtent = VectorReplicate(frame.m_style.indicatorExtent);
+    const Array<const UiSkinRegion*, 5u> states = { normal, checked, m_skin->findRegion(frame.m_style.hover), m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
+    const SIMDVectorDouble referenceDensity = VectorDoubleReplicate(m_skin->referenceDensity());
+    f32 indicatorExtent = frame.m_style.indicatorExtent;
     for(const UiSkinRegion* skinRegion : states){
         if(!skinRegion)
             continue;
-        const SIMDVectorSingle sliceSize = VectorSet(static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.left) + skinRegion->sliceInsets.right), static_cast<f32>(static_cast<u64>(skinRegion->sliceInsets.top) + skinRegion->sliceInsets.bottom), 0.0f, 0.0f);
-        const SIMDVectorSingle logicalSize = VectorDivide(sliceSize, referenceDensity);
-        const SIMDVectorSingle regionMinimum = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
-        const SIMDVectorSingle minimum = VectorMax(regionMinimum, VectorSplatY(regionMinimum));
-        const SIMDVectorSingle sliceMinimum = VectorMax(logicalSize, VectorSplatY(logicalSize));
-        indicatorExtent = VectorMax(indicatorExtent, VectorMax(minimum, sliceMinimum));
+        const auto minimum = LoadUiSkinMinimumSize(*skinRegion, referenceDensity);
+        if(!minimum)
+            return false;
+        indicatorExtent = Max(indicatorExtent, Max(VectorGetX(minimum->value), VectorGetY(minimum->value)));
     }
-    frame.m_style.indicatorExtent = VectorGetX(indicatorExtent);
+    frame.m_style.indicatorExtent = indicatorExtent;
     const Point maximumLabel{ VectorGetX(maximumLabelSize), VectorGetY(maximumLabelSize) };
     const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)

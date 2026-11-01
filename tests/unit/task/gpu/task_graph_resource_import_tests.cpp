@@ -32,25 +32,25 @@ using TaskGraphTestUtils::TestArena;
 
 TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
     constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
-    constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {
-        static_cast<Graphics::ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit),
-        static_cast<Graphics::ResourceQueueSharing::Mask>(static_cast<u8>(Graphics::ResourceQueueSharing::Graphics) | s_UnknownQueueSharingBit),
+    constexpr Array<Core::ResourceQueueSharing::Mask, 2u> s_InvalidQueueSharingMasks = {
+        static_cast<Core::ResourceQueueSharing::Mask>(s_UnknownQueueSharingBit),
+        static_cast<Core::ResourceQueueSharing::Mask>(static_cast<u8>(Core::ResourceQueueSharing::Graphics) | s_UnknownQueueSharingBit),
     };
-    constexpr Graphics::GpuGraphResourceType::Enum s_MetadataResourceTypes[] = { Graphics::GpuGraphResourceType::Texture, Graphics::GpuGraphResourceType::Buffer, Graphics::GpuGraphResourceType::AccelStruct, Graphics::GpuGraphResourceType::HazardDomain, };
-    const auto expectRejectedWithoutMutation = [](const Graphics::GpuGraphResourceType::Enum resourceType, const Graphics::ResourceQueueSharing::Mask queueSharing, const b8 useHazardDomainWrapper){
+    constexpr Array<Core::GpuGraphResourceType::Enum, 4u> s_MetadataResourceTypes = { Core::GpuGraphResourceType::Texture, Core::GpuGraphResourceType::Buffer, Core::GpuGraphResourceType::AccelStruct, Core::GpuGraphResourceType::HazardDomain, };
+    const auto expectRejectedWithoutMutation = [](const Core::GpuGraphResourceType::Enum resourceType, const Core::ResourceQueueSharing::Mask queueSharing, const b8 useHazardDomainWrapper){
         TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceDesc desc = Graphics::GpuGraphResourceDesc{}
+        Core::GpuTaskGraph graph(testArena.arena);
+        const Core::GpuGraphResourceDesc desc = Core::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/task_graph/invalid_queue_sharing_metadata"))
             .setMarkerLabel("Invalid Queue Sharing Metadata")
             .setType(resourceType)
-            .setInitialState(resourceType == Graphics::GpuGraphResourceType::HazardDomain ? Graphics::ResourceStates::Unknown : Graphics::ResourceStates::Common)
+            .setInitialState(resourceType == Core::GpuGraphResourceType::HazardDomain ? Core::ResourceStates::Unknown : Core::ResourceStates::Common)
             .setQueueSharing(queueSharing)
         ;
         usize resourceCount = 0u;
         u64 declarationRevision = 0u;
         {
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+            const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
             resourceCount = declarations.resourceCount();
             declarationRevision = declarations.declarationRevision();
         }
@@ -58,19 +58,19 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
         const auto resource = useHazardDomainWrapper ? graph.importHazardDomain(desc) : graph.importResource(desc);
 
         EXPECT_FALSE(resource.has_value());
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_EQ(declarations.resourceCount(), resourceCount);
         EXPECT_EQ(declarations.declarationRevision(), declarationRevision);
         ExpectMemoryStatsEqual(memoryStats, testArena.arena.memoryStats());
     };
 
-    for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
+    for(const Core::ResourceQueueSharing::Mask queueSharing : s_InvalidQueueSharingMasks){
         SCOPED_TRACE(static_cast<u32>(queueSharing));
-        for(const Graphics::GpuGraphResourceType::Enum resourceType : s_MetadataResourceTypes){
+        for(const Core::GpuGraphResourceType::Enum resourceType : s_MetadataResourceTypes){
             SCOPED_TRACE(static_cast<u32>(resourceType));
             expectRejectedWithoutMutation(resourceType, queueSharing, false);
         }
-        expectRejectedWithoutMutation(Graphics::GpuGraphResourceType::HazardDomain, queueSharing, true);
+        expectRejectedWithoutMutation(Core::GpuGraphResourceType::HazardDomain, queueSharing, true);
     }
 }
 

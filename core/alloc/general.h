@@ -53,9 +53,7 @@ public:
         return (align <= 1) ? CoreRealloc(p, size, &m_memoryStats) : CoreReallocAligned(p, size, align, &m_memoryStats);
     }
 
-    inline void deallocate(void* p, usize align, usize size)noexcept{
-        static_cast<void>(size);
-
+    inline void deallocate(void* p, usize align, [[maybe_unused]] usize size)noexcept{
         if(align <= 1)
             CoreFree(p, &m_memoryStats);
         else

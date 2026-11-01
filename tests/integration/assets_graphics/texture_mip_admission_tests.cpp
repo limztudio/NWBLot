@@ -29,7 +29,6 @@ namespace __hidden_texture_mip_admission_tests{
 
 
 using TestArena = AssetsGraphicsFixture::TestArena;
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 
 static constexpr usize s_MipCount = 3u;
 static constexpr usize s_PrimaryPayloadBytes = 96u;
@@ -52,11 +51,11 @@ static Core::Assets::AssetBytes BuildPartialBlockTextureBinary(TestArena& testAr
     header.payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     header.payloadByteCount = s_PrimaryPayloadBytes;
     AppendPOD(binary, header);
-    const ::TextureBinaryPayload::MipLevelBinary mips[]{
+    const Array<::TextureBinaryPayload::MipLevelBinary, 3u> mips = {{
         { 7u, 5u, 1u, 2u, 2u, 0u, 0u, 64u },
         { 3u, 2u, 1u, 1u, 1u, 0u, 64u, 16u },
         { 1u, 1u, 1u, 1u, 1u, 0u, 80u, 16u },
-    };
+    }};
     for(const auto& mip : mips)
         AppendPOD(binary, mip);
     for(usize byteIndex = 0u; byteIndex < s_PrimaryPayloadBytes; ++byteIndex)
@@ -115,7 +114,7 @@ TEST(AssetsGraphics, TextureCodecRejectsPayloadFormatNarrowingWithoutReplacingPu
         SCOPED_TRACE(payloadFormat);
         Core::Assets::AssetBytes malformed(original);
         NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, payloadFormat), sizeof(payloadFormat), &payloadFormat, sizeof(payloadFormat));
-        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), malformed));
+        EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
         EXPECT_FALSE(texture.loadBinary(malformed));
         Core::Assets::AssetBytes retained(testArena.arena);
         ASSERT_TRUE(codec.serialize(texture, retained));
@@ -139,7 +138,7 @@ TEST(AssetsGraphics, TextureCodecRejectsOpaqueValueInConstantAlphaModeWithoutRep
     Core::Assets::AssetBytes malformed(original);
     const u32 opaqueConstantInfo = static_cast<u32>(TextureAlphaMode::ConstantUnorm8) | (TextureFormat::s_OpaqueAlphaUnorm8 << ::TextureBinaryPayload::s_AlphaInfoConstantShift);
     NWB_MEMCPY(malformed.data() + offsetof(::TextureBinaryPayload::HeaderBinary, alphaInfo), sizeof(opaqueConstantInfo), &opaqueConstantInfo, sizeof(opaqueConstantInfo));
-    EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), malformed));
+    EXPECT_FALSE(codec.deserialize(texture.virtualPath(), malformed, testArena.arena));
     EXPECT_FALSE(texture.loadBinary(malformed));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("constant alpha must be below opaque alpha")));
     Core::Assets::AssetBytes retained(testArena.arena);
@@ -160,14 +159,14 @@ TEST(AssetsGraphics, TextureMipAdmissionRejectsCorruptRecordsAndRetainsExactEnco
         usize fieldOffset;
         u32 value;
     };
-    const Corruption corruptions[]{
+    const Array<Corruption, 6u> corruptions = {{
         { offsetof(::TextureBinaryPayload::MipLevelBinary, reserved), 1u },
         { offsetof(::TextureBinaryPayload::MipLevelBinary, width), 8u },
         { offsetof(::TextureBinaryPayload::MipLevelBinary, blockCountX), 3u },
         { offsetof(::TextureBinaryPayload::MipLevelBinary, sliceCount), 2u },
         { offsetof(::TextureBinaryPayload::MipLevelBinary, offsetBytes), 1u },
         { offsetof(::TextureBinaryPayload::MipLevelBinary, sizeBytes), 48u },
-    };
+    }};
     for(const Corruption& corruption : corruptions){
         Core::Assets::AssetBytes malformed(validBinary.begin(), validBinary.end(), testArena.arena);
         NWB_MEMCPY(malformed.data() + sizeof(::TextureBinaryPayload::HeaderBinary) + corruption.fieldOffset, sizeof(corruption.value), &corruption.value, sizeof(corruption.value));

@@ -35,7 +35,7 @@ struct TextureDescription{
 
 class UiImageSourceTests : public testing::Test{
 protected:
-    static void Install(Texture& texture, const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes)noexcept{
+    static void Install(const TextureDescription& description, Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes, Texture& texture)noexcept{
         texture.setPayload(description.width, description.height, Move(mips), Move(bytes), description.dimension, description.depth, description.format, description.alphaMode, description.alphaConstant);
     }
 
@@ -71,7 +71,7 @@ protected:
         bytes.resize(static_cast<usize>(byteCount));
         for(usize index = 0u; index < bytes.size(); ++index)
             bytes[index] = static_cast<u8>(static_cast<u32>(description.seed) + index * 17u);
-        Install(texture, description, Move(mips), Move(bytes));
+        Install(description, Move(mips), Move(bytes), texture);
         return true;
     }
 
@@ -254,7 +254,7 @@ TEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload){
     Texture::MipLevelVector mips(m_inputArena);
     mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
     Core::Assets::AssetBytes bytes(m_inputArena);
-    Install(texture, {}, Move(mips), Move(bytes));
+    Install({}, Move(mips), Move(bytes), texture);
     EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
 }
 
@@ -276,7 +276,7 @@ TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUs
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
         Core::Assets::AssetBytes bytes(m_inputArena);
         bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
-        Install(texture, description, Move(mips), Move(bytes));
+        Install(description, Move(mips), Move(bytes), texture);
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
@@ -298,7 +298,7 @@ TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
         case 5u: mips[0u].sliceCount = 2u; break;
         case 6u: mips.push_back(mips.back()); break;
         }
-        Install(texture, {}, Move(mips), Move(bytes));
+        Install({}, Move(mips), Move(bytes), texture);
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
@@ -326,7 +326,7 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
             break;
         case 5u: description.alphaConstant = 77u; break;
         }
-        Install(texture, description, Move(mips), Move(bytes));
+        Install(description, Move(mips), Move(bytes), texture);
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
@@ -344,7 +344,7 @@ TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAccepte
     Core::Assets::AssetBytes bytes(m_inputArena);
     bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
     bytes.pop_back();
-    Install(texture, {}, Move(mips), Move(bytes));
+    Install({}, Move(mips), Move(bytes), texture);
     EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
     EXPECT_EQ(accepted->generation(), generation);
     EXPECT_EQ(accepted->identity().name(), texture.virtualPath());

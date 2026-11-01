@@ -11,6 +11,20 @@ const u64 s_MeshObjectFirstVertexIndex = 1ull;
 const u64 s_MeshMaxU32Value = 4294967295ull;
 const u64 s_MeshAddressableBytes = 4294967296ull;
 const Name s_MeshViewBufferName = "ecs_render/mesh_view_data";
+const StringView s_MeshViewName = "render.deferred.mesh_view";
+const StringView s_MeshViewLabel = "Mesh View";
+
+const StringView s_PositionsBufferName = ":positions";
+const StringView s_NormalsBufferName = ":normals";
+const StringView s_TangentsBufferName = ":tangents";
+const StringView s_Uv0BufferName = ":uv0";
+const StringView s_ColorsBufferName = ":colors";
+const StringView s_MeshletsBufferName = ":meshlets";
+const StringView s_MeshletBoundsBufferName = ":meshlet_bounds";
+const StringView s_MeshletPositionRefDeltasBufferName = ":meshlet_position_ref_deltas";
+const StringView s_MeshletAttributeRefDeltasBufferName = ":meshlet_attribute_ref_deltas";
+const StringView s_MeshletLocalVertexRefsBufferName = ":meshlet_local_vertex_refs";
+const StringView s_MeshletPrimitiveIndicesBufferName = ":meshlet_primitive_indices";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +95,180 @@ b8 TryResolveObjectGeometryCacheLayout(in u64 localVertexRefByteSize, in u32 pri
     outLayout.indexByteOffset = cast<u32>(indexByteOffset);
     outLayout.indexCount = primitiveIndexCount;
     return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[serialize]
+class MeshViewGpuData{
+    public MeshViewGpuData(){
+        this.frustumPlanes[0] = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        this.frustumPlanes[1] = f32x4(-1.0f, 0.0f, 0.0f, 0.0f);
+        this.frustumPlanes[2] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        this.frustumPlanes[3] = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+        this.frustumPlanes[4] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        this.frustumPlanes[5] = f32x4(0.0f, 0.0f, -1.0f, 10000.0f);
+    }
+
+    public f32x4x4 worldToClip(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4x4 clipToWorld(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 cameraPosition(0.0f, 0.0f, 0.0f, 1.0f);
+    public Array<f32x4, 6u> frustumPlanes;
+}
+
+class MeshViewBufferUpload{
+    public MeshViewGpuData viewState;
+    public b8 uploadRequired = false;
+}
+
+f32x4x4 BuildWorldToClipMatrix(in f32x4 positionDepthBias, in f32x4 right, in f32x4 up, in f32x4 forward, in f32x4 projection){
+    const f32 tx = -dot(positionDepthBias.xyz, right.xyz);
+    const f32 ty = -dot(positionDepthBias.xyz, up.xyz);
+    const f32 tz = -dot(positionDepthBias.xyz, forward.xyz) + positionDepthBias.w;
+    const f32x4x4 worldToView(
+        right.x, right.y, right.z, tx,
+        up.x, up.y, up.z, ty,
+        forward.x, forward.y, forward.z, tz,
+        0.0f, 0.0f, 0.0f, 1.0f
+    );
+    const f32x4x4 viewToClip(
+        projection.x, 0.0f, 0.0f, 0.0f,
+        0.0f, projection.y, 0.0f, 0.0f,
+        0.0f, 0.0f, projection.z, projection.w,
+        0.0f, 0.0f, 1.0f, 0.0f
+    );
+    return mul(viewToClip, worldToView);
+}
+
+f32x4 BuildMeshViewFrustumPlaneFromPointNormal(in f32x4 normal, in f32x4 point){
+    const f32 lengthSquared = lengthSq(normal.xyz);
+    f32x4 unitNormal(0.0f, 0.0f, 1.0f, 0.0f);
+    if(isFinite(lengthSquared) && lengthSquared > 0.0f){
+        const f32x4 scaled = normal * rsqrt(f32x4(lengthSquared));
+        unitNormal = f32x4(scaled.x, scaled.y, scaled.z, 0.0f);
+    }
+    return f32x4(unitNormal.x, unitNormal.y, unitNormal.z, -dot(unitNormal.xyz, point.xyz));
+}
+
+f32x4 BuildViewFrustumSidePlaneVector(in f32x4 forward, in f32x4 side, in f32x4 tanHalfAngle, in f32x4 cameraPosition){
+    const f32x4 rawNormal = forward * tanHalfAngle + side;
+    return BuildMeshViewFrustumPlaneFromPointNormal(f32x4(rawNormal.x, rawNormal.y, rawNormal.z, 0.0f), cameraPosition);
+}
+
+void BuildMeshViewFrustumVectors(
+    mut f32x4 outCameraPosition,
+    mut f32x4 outLeftPlane,
+    mut f32x4 outRightPlane,
+    mut f32x4 outBottomPlane,
+    mut f32x4 outTopPlane,
+    mut f32x4 outNearPlane,
+    mut f32x4 outFarPlane,
+    in f32x4 positionDepthBias,
+    in f32x4 right,
+    in f32x4 up,
+    in f32x4 forward,
+    in f32x4 tanHalfVertical,
+    in f32x4 tanHalfHorizontal,
+    in f32x4 nearPlane,
+    in f32x4 farPlane
+){
+    const f32x4 negForward = -forward;
+    const f32x4 offsetPos = negForward * f32x4(positionDepthBias.w) + positionDepthBias;
+    const f32x4 cameraPosition(offsetPos.x, offsetPos.y, offsetPos.z, 1.0f);
+    outCameraPosition = cameraPosition;
+
+    outLeftPlane = BuildViewFrustumSidePlaneVector(forward, right, tanHalfHorizontal, cameraPosition);
+    outRightPlane = BuildViewFrustumSidePlaneVector(forward, -right, tanHalfHorizontal, cameraPosition);
+    outBottomPlane = BuildViewFrustumSidePlaneVector(forward, up, tanHalfVertical, cameraPosition);
+    outTopPlane = BuildViewFrustumSidePlaneVector(forward, -up, tanHalfVertical, cameraPosition);
+
+    const f32x4 nearRaw = forward * nearPlane + cameraPosition;
+    const f32x4 farRaw = forward * farPlane + cameraPosition;
+    const f32x4 nearPoint(nearRaw.x, nearRaw.y, nearRaw.z, 0.0f);
+    const f32x4 farPoint(farRaw.x, farRaw.y, farRaw.z, 0.0f);
+    outNearPlane = BuildMeshViewFrustumPlaneFromPointNormal(forward, nearPoint);
+    outFarPlane = BuildMeshViewFrustumPlaneFromPointNormal(negForward, farPoint);
+}
+
+MeshViewGpuData BuildMeshViewGpuData(
+    in f32x4 rightRow,
+    in f32x4 upRow,
+    in f32x4 forwardRow,
+    in f32x4 positionDepthBias,
+    in f32x4 projectionParams,
+    in f32 tanHalfVerticalFov,
+    in f32 aspectRatio,
+    in f32 nearPlane,
+    in f32 farPlane
+){
+    MeshViewGpuData state;
+    const f32x4 right(rightRow.x, rightRow.y, rightRow.z, 0.0f);
+    const f32x4 up(upRow.x, upRow.y, upRow.z, 0.0f);
+    const f32x4 forward(forwardRow.x, forwardRow.y, forwardRow.z, 0.0f);
+    const f32x4 tanHalfV(tanHalfVerticalFov);
+    const f32x4 tanHalfH(tanHalfVerticalFov * aspectRatio);
+    const f32x4 nearVec(nearPlane);
+    const f32x4 farVec(farPlane);
+
+    const f32x4x4 worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
+    state.worldToClip = worldToClip;
+    state.clipToWorld = inverse(worldToClip);
+
+    f32x4 cameraPosition(0.0f);
+    f32x4 leftPlane(0.0f);
+    f32x4 rightPlane(0.0f);
+    f32x4 bottomPlane(0.0f);
+    f32x4 topPlane(0.0f);
+    f32x4 nearPlaneVec(0.0f);
+    f32x4 farPlaneVec(0.0f);
+    BuildMeshViewFrustumVectors(
+        cameraPosition,
+        leftPlane,
+        rightPlane,
+        bottomPlane,
+        topPlane,
+        nearPlaneVec,
+        farPlaneVec,
+        positionDepthBias,
+        right,
+        up,
+        forward,
+        tanHalfV,
+        tanHalfH,
+        nearVec,
+        farVec
+    );
+    state.cameraPosition = cameraPosition;
+    state.frustumPlanes[0] = leftPlane;
+    state.frustumPlanes[1] = rightPlane;
+    state.frustumPlanes[2] = bottomPlane;
+    state.frustumPlanes[3] = topPlane;
+    state.frustumPlanes[4] = nearPlaneVec;
+    state.frustumPlanes[5] = farPlaneVec;
+    return state;
+}
+
+InstanceGpuData BuildInstanceGpuData(
+    in EntityID entity,
+    in b8 hasTransform,
+    in f32x4 position,
+    in f32x4 rotation,
+    in f32x4 scale,
+    in u32 mutableByteOffset
+){
+    InstanceGpuData data;
+    if(hasTransform){
+        data.rotation = rotation;
+        data.translation = f32x3_u32(position.x, position.y, position.z, mutableByteOffset);
+        data.scale = f32x3_u32(scale.x, scale.y, scale.z, entity.id);
+    }
+    else{
+        data.translation.w = mutableByteOffset;
+        data.scale.w = entity.id;
+    }
+    return data;
 }
 
 

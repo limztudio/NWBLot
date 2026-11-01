@@ -149,22 +149,22 @@ inline VmaVulkanFunctions BuildVmaVulkanFunctions(const VulkanContext& context)n
 
 inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator)noexcept{
     static_assert(sizeof(VmaAllocator) == sizeof(VulkanAllocatorHandle));
-    return reinterpret_cast<VmaAllocator>(allocator);
+    return static_cast<VmaAllocator>(static_cast<void*>(allocator));
 }
 
 inline VulkanAllocatorHandle ToVulkanAllocatorHandle(const VmaAllocator allocator)noexcept{
     static_assert(sizeof(VulkanAllocatorHandle) == sizeof(VmaAllocator));
-    return reinterpret_cast<VulkanAllocatorHandle>(allocator);
+    return static_cast<VulkanAllocatorHandle>(static_cast<void*>(allocator));
 }
 
 inline VmaAllocation ToVmaAllocation(const VulkanAllocationHandle allocation)noexcept{
     static_assert(sizeof(VmaAllocation) == sizeof(VulkanAllocationHandle));
-    return reinterpret_cast<VmaAllocation>(allocation);
+    return static_cast<VmaAllocation>(static_cast<void*>(allocation));
 }
 
 inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation allocation)noexcept{
     static_assert(sizeof(VulkanAllocationHandle) == sizeof(VmaAllocation));
-    return reinterpret_cast<VulkanAllocationHandle>(allocation);
+    return static_cast<VulkanAllocationHandle>(static_cast<void*>(allocation));
 }
 
 [[nodiscard]] inline Expected<void*, VkResult> MapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){

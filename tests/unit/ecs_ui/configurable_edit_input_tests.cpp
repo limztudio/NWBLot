@@ -41,7 +41,7 @@ protected:
 TEST_F(UiConfigurableEditInputTests, EmptyKeyboardProfileLeavesNativeTextAndExplicitCommandsAvailable){
     ASSERT_TRUE(m_model.setText("abc"));
     ASSERT_TRUE(activate());
-    ASSERT_TRUE(m_context.input().setBindings(nullptr, 0u));
+    ASSERT_TRUE(m_context.input().setBindings({}));
     ASSERT_TRUE(key(Core::Key::Left));
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.caret(), 3u);
@@ -57,9 +57,9 @@ TEST_F(UiConfigurableEditInputTests, CopiedCommandRetainsItsMeaningAfterTheBindi
     ASSERT_TRUE(activate());
     const Ui::InputKeyBinding left{ .key = Core::Key::F8, .command = Ui::InputCommand::Left };
     const Ui::InputKeyBinding erase{ .key = Core::Key::F8, .command = Ui::InputCommand::Backspace };
-    ASSERT_TRUE(m_context.input().setBindings(&left, 1u));
+    ASSERT_TRUE(m_context.input().setBindings(Span(&left, 1u)));
     ASSERT_TRUE(key(Core::Key::F8));
-    ASSERT_TRUE(m_context.input().setBindings(&erase, 1u));
+    ASSERT_TRUE(m_context.input().setBindings(Span(&erase, 1u)));
     EXPECT_EQ(m_model.caret(), 3u);
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.text(), "abc");

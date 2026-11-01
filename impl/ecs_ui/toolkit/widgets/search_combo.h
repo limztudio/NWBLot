@@ -38,7 +38,11 @@ class SearchComboState final : NoCopy{
 
 
 public:
-    explicit SearchComboState(Core::Alloc::GlobalArena& arena);
+    explicit SearchComboState(Core::Alloc::GlobalArena& arena)
+        : m_arena(arena)
+        , m_query(arena)
+        , m_filteredQuery(arena)
+    {}
     SearchComboState(SearchComboState&&) = delete;
 
 

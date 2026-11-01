@@ -6,8 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <cerrno>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WaylandTextInputService::WaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, wl_surface& surface)
+WaylandTextInputService::WaylandTextInputService(Alloc::GlobalArena& arena, wl_display& display, [[maybe_unused]] wl_surface& surface)
     : QueuedTextInputService(arena)
     , m_display(display)
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -27,11 +25,7 @@ WaylandTextInputService::WaylandTextInputService(Alloc::GlobalArena& arena, wl_d
     , m_pendingPreedit(arena)
     , m_pendingCommit(arena)
 #endif
-{
-#if !defined(NWB_OS_WITH_TEXT_INPUT_V3)
-    static_cast<void>(surface);
-#endif
-}
+{}
 
 WaylandTextInputService::~WaylandTextInputService()noexcept{
     releaseDevice();
@@ -110,13 +104,13 @@ b8 WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
 #endif
     if(codePoint < s_UnicodeSpace || codePoint == s_UnicodeDelete)
         return true;
-    char bytes[s_Utf8MaxSequenceBytes];
+    Array<char, s_Utf8MaxSequenceBytes> bytes;
     const auto length = EncodeTextInputCodePoint(codePoint, bytes);
     if(!length){
         nativeFailure();
         return true;
     }
-    const TextInputAdmission::Enum status = emitCommit(token, AStringView(bytes, *length));
+    const TextInputAdmission::Enum status = emitCommit(token, AStringView(bytes.data(), *length));
     if(status != TextInputAdmission::Accepted && status != TextInputAdmission::InvalidSession)
         nativeFailure();
     return true;
@@ -131,7 +125,7 @@ TextInputCapabilities WaylandTextInputService::capabilities()const noexcept{
 #endif
 }
 
-TextInputAdmission::Enum WaylandTextInputService::startNativeSession(const TextInputSessionToken token, const TextInputSessionDesc& desc){
+TextInputAdmission::Enum WaylandTextInputService::startNativeSession(const TextInputSessionToken token, [[maybe_unused]] const TextInputSessionDesc& desc){
     if(!m_keyboardFocused || !m_seat)
         return TextInputAdmission::Unavailable;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -157,7 +151,6 @@ TextInputAdmission::Enum WaylandTextInputService::startNativeSession(const TextI
     else
 #endif
     {
-        static_cast<void>(desc);
         m_nativeToken = token;
     }
     return TextInputAdmission::Accepted;
@@ -183,7 +176,7 @@ void WaylandTextInputService::endNativeSession(const TextInputSessionToken token
     m_enabled = false;
 }
 
-TextInputAdmission::Enum WaylandTextInputService::updateNativeCaret(const TextInputRect caret){
+TextInputAdmission::Enum WaylandTextInputService::updateNativeCaret([[maybe_unused]] const TextInputRect caret){
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_enabled && m_input && m_entered){
         if(m_waitingForCurrentSerial){
@@ -194,13 +187,17 @@ TextInputAdmission::Enum WaylandTextInputService::updateNativeCaret(const TextIn
         commitState(m_nativeToken, m_wireState.revision());
         return flush() ? TextInputAdmission::Accepted : TextInputAdmission::NativeFailure;
     }
-#else
-    static_cast<void>(caret);
 #endif
     return TextInputAdmission::Accepted;
 }
 
-void WaylandTextInputService::updateNativeSurrounding(const AStringView text, const usize anchorByte, const usize caretByte, const u64 revision, const TextInputChangeCause::Enum cause){
+void WaylandTextInputService::updateNativeSurrounding(
+    [[maybe_unused]] const AStringView text,
+    [[maybe_unused]] const usize anchorByte,
+    [[maybe_unused]] const usize caretByte,
+    [[maybe_unused]] const u64 revision,
+    [[maybe_unused]] const TextInputChangeCause::Enum cause
+){
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_enabled && m_input && m_entered){
         if(m_waitingForCurrentSerial){
@@ -214,12 +211,6 @@ void WaylandTextInputService::updateNativeSurrounding(const AStringView text, co
         if(!flush())
             nativeFailure();
     }
-#else
-    static_cast<void>(text);
-    static_cast<void>(anchorByte);
-    static_cast<void>(caretByte);
-    static_cast<void>(revision);
-    static_cast<void>(cause);
 #endif
 }
 

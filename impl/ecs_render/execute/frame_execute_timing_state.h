@@ -30,8 +30,6 @@ struct RendererAvboitTaskGraphValidation;
 
 // GPU timing tickets, measures, and clear-timing bindings for one deferred frame. Members point at each other, so the state stays in place.
 struct FrameExecuteTimingState final : NoCopy{
-    static constexpr usize s_GraphicsPrefixTimingTicketCount = static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Count);
-
     // Prefix stages start separate; shared packets rebind to one ticket.
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket;
     Core::GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket;
@@ -42,8 +40,8 @@ struct FrameExecuteTimingState final : NoCopy{
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket;
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket;
     Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket;
-    Core::GpuTimingSubmissionTicket* graphicsPrefixTimingTickets[s_GraphicsPrefixTimingTicketCount];
-    Core::GpuTimingSubmissionTicket* const graphicsPrefixOwnedTimingTickets[s_GraphicsPrefixTimingTicketCount];
+    Array<Core::GpuTimingSubmissionTicket*, s_GraphicsPrefixTimingTaskCount> graphicsPrefixTimingTickets;
+    Array<Core::GpuTimingSubmissionTicket*, s_GraphicsPrefixTimingTaskCount> graphicsPrefixOwnedTimingTickets;
     // AsyncPrefix is valid only when the endpoints share one submission.
     b8 asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
@@ -107,12 +105,11 @@ public:
     [[nodiscard]] Expected<usize> bindNormalTimingTickets(
         const RendererFramePipeline& renderer,
         const Core::GpuCompiledGraph::ReadView& compiledPlan,
-        const Core::GpuTaskId (&graphicsPrefixTimingTasks)[s_GraphicsPrefixTimingTicketCount],
+        Span<const Core::GpuTaskId> graphicsPrefixTimingTasks,
         usize graphicsPrefixUniquePacketCount,
         const RendererAvboitTaskGraphValidation& avboitValidation,
         b8 hardwareShadowSupported,
-        usize ticketCapacity,
-        Core::GpuTaskGraphTaskTimingTicket* tickets
+        Span<Core::GpuTaskGraphTaskTimingTicket> tickets
     );
 };
 

@@ -5,11 +5,13 @@
 #pragma once
 
 
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_shader/loader.h>
 
 #include <core/assets/global.h>
 #include <core/graphics/rhi/shader.h>
+#include <core/graphics/shader_archive.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +69,11 @@ using RendererShaderPathResolveCallback = Function< Expected<Name>(const Name& s
 
 class RendererShaderSystem final : NoCopy{
 public:
-    RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept;
+    RendererShaderSystem(Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, RendererShaderPathResolveCallback& shaderPathResolver)noexcept
+        : m_graphics(graphics)
+        , m_assetManager(assetManager)
+        , m_shaderPathResolver(shaderPathResolver)
+    {}
 
 
 public:
@@ -87,21 +93,31 @@ public:
         return ref.valid() ? ref.name() : s_NameNone;
     }
 
-    void invalidateResources()noexcept;
+    void invalidateResources()noexcept{ m_deferredCompositeVertexShader.reset(); }
     template<typename TShader, typename SubsystemT>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] b8 loadShader(Core::ShaderHandle& outShader, const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] b8 loadShader(const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, Core::ShaderHandle& outShader){
+        return loadShader<TShader>(member, variantName, debugName, nullptr, outShader);
+    }
+    template<typename TShader, typename SubsystemT>
+        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+    [[nodiscard]] b8 loadShader(const Core::Assets::AssetRef<TShader> SubsystemT::* member, const AStringView variantName, const Name& debugName, const Name* archiveStageName, Core::ShaderHandle& outShader){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
         const Name resolvedShaderName = resolveSubsystemAsset<SubsystemT>(member);
         if(!resolvedShaderName)
             return false;
-        return loadShader<TShader>(outShader, resolvedShaderName, variantName, debugName, archiveStageName);
+        return loadShader<TShader>(resolvedShaderName, variantName, debugName, archiveStageName, outShader);
     }
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] b8 loadShader(Core::ShaderHandle& outShader, const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName = nullptr){
+    [[nodiscard]] b8 loadShader(const Name& shaderAssetName, const AStringView variantName, const Name& debugName, Core::ShaderHandle& outShader){
+        return loadShader<TShader>(shaderAssetName, variantName, debugName, nullptr, outShader);
+    }
+    template<typename TShader>
+        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+    [[nodiscard]] b8 loadShader(const Name& shaderAssetName, const AStringView variantName, const Name& debugName, const Name* archiveStageName, Core::ShaderHandle& outShader){
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        return ShaderAssetLoader::Load<TShader>(outShader, shaderAssetName, variantName, debugName, m_graphics, m_assetManager, m_shaderPathResolver, s_RendererAssetOwnerName, archiveStageName);
+        return ShaderAssetLoader::Load<TShader>(shaderAssetName, variantName, debugName, s_RendererAssetOwnerName, m_graphics, m_assetManager, m_shaderPathResolver, outShader, archiveStageName);
     }
 
     [[nodiscard]] b8 hasShaderArchiveStage(const Name& shaderAssetName, AStringView variantName, const Name& stageName)const;

@@ -32,6 +32,10 @@ enum<u8> ScrollAxis{
 }
 
 const u32 s_ScrollAxisCount = 2u;
+// Bar value rows 0..2 carry data; row 3 is padding.
+const u32 s_ScrollbarValueRowCount = 3u;
+// Each axis can add a reservation once, then both axes are rechecked.
+const u32 s_ScrollbarReservationPassLimit = 3u;
 
 // Activation values of the track parts before and after each scrollbar thumb.
 const u32 s_TextAreaScrollHorizontalBefore = 1u;
@@ -70,6 +74,21 @@ class ScrollPlacement{
     public u64 endRow = 0u;
     public u64 rowCount = 0u;
     public b8 scrollbarVisible = false;
+}
+
+b8 IsValidScrollRange(in f64 contentHeight, in f64 viewportHeight){
+    return isFinite(contentHeight) && contentHeight >= 0.0 && isFinite(viewportHeight) && viewportHeight >= 0.0;
+}
+
+b8 SameScrollbarPlacementGeometry(in ScrollbarPlacement first, in ScrollbarPlacement second){
+    // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
+    return EqualUiRect(first.track, second.track)
+        && first.thumb.width == second.thumb.width
+        && first.thumb.height == second.thumb.height
+        && first.contentExtent == second.contentExtent
+        && first.viewportExtent == second.viewportExtent
+        && first.maximum == second.maximum
+        && first.visible == second.visible;
 }
 
 

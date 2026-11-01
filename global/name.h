@@ -86,11 +86,13 @@ private:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::CopyDebugName(m_debugName, NameDetail::s_DebugNameCapacity, text);
+        NameDetail::CopyDebugName(m_debugName.data(), NameDetail::s_DebugNameCapacity, text);
 #endif
         if(!IsConstantEvaluated())
             NameDetail::RecordNameSymbolText(m_hash, text);
     }
+
+
 public:
     constexpr Name()noexcept
         : m_hash{}
@@ -101,7 +103,7 @@ public:
         , m_hasSymbolText(false)
 #endif
     {}
-    constexpr Name(std::nullptr_t)noexcept
+    constexpr Name(Nullptr)noexcept
         : Name()
     {}
     constexpr Name(const char* str)noexcept
@@ -114,7 +116,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
+        CopyCanonical(m_debugName.data(), NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     constexpr Name(const wchar* str)noexcept
@@ -127,7 +129,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
+        CopyCanonical(m_debugName.data(), NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     explicit Name(const NameHash& hash)noexcept
@@ -140,7 +142,7 @@ public:
 #endif
     {
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        NameDetail::HashToDebugString(m_debugName, NameDetail::s_DebugNameCapacity, m_hash);
+        NameDetail::HashToDebugString(m_debugName.data(), NameDetail::s_DebugNameCapacity, m_hash);
 #endif
     }
     explicit constexpr Name(const NameText<char> text)
@@ -155,10 +157,10 @@ public:
     [[nodiscard]] constexpr explicit operator b8()const noexcept{
         return !NameDetail::IsZeroHash(m_hash);
     }
-    // Binary identity access never records or resolves symbol text, including cooker builds.
 
 
 public:
+    // Binary identity access never records or resolves symbol text, including cooker builds.
     [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
 
     [[nodiscard]] constexpr const NameHash& hash()const{
@@ -174,18 +176,18 @@ public:
         recordStoredSymbolText();
 #endif
 #if defined(NWB_DEBUG)
-        const AStringView text(m_debugName, sizeof(m_debugName));
+        const AStringView text(m_debugName.data(), m_debugName.size());
         return text.substr(0u, text.find('\0'));
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        if(NameDetail::ResolveNameSymbolText(buf, NameDetail::s_SymbolTextBufferLength, m_hash)){
+        if(NameDetail::ResolveNameSymbolText(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
-            const AStringView text(buf, NameDetail::s_SymbolTextBufferLength);
+            const AStringView text(buf.data(), NameDetail::s_SymbolTextBufferLength);
             return text.substr(0u, text.find('\0'));
         }
 
-        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf, NameDetail::s_DebugHashTextLength);
+        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), NameDetail::s_DebugHashTextLength);
 #endif
     }
 
@@ -194,27 +196,27 @@ public:
         recordStoredSymbolText();
 #endif
 #if defined(NWB_DEBUG)
-        return m_debugName;
+        return m_debugName.data();
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        if(NameDetail::ResolveNameSymbolText(buf, NameDetail::s_SymbolTextBufferLength, m_hash)){
+        if(NameDetail::ResolveNameSymbolText(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash)){
             buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
-            return buf;
+            return buf.data();
         }
 
-        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
-        return buf;
+        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return buf.data();
 #endif
     }
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const noexcept{
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-        return AStringView(m_debugName);
+        return AStringView(m_debugName.data());
 #else
         auto& buf = NameDetail::NextSymbolTextBuffer();
-        NameDetail::HashToDebugString(buf, NameDetail::s_SymbolTextBufferLength, m_hash);
-        return AStringView(buf, NameDetail::s_DebugHashTextLength);
+        NameDetail::HashToDebugString(buf.data(), NameDetail::s_SymbolTextBufferLength, m_hash);
+        return AStringView(buf.data(), NameDetail::s_DebugHashTextLength);
 #endif
     }
 
@@ -223,7 +225,7 @@ private:
 #if defined(NWB_BUILD_SYMBOLS)
     constexpr void recordStoredSymbolText()const{
         if(!IsConstantEvaluated())
-            NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName, sizeof(m_debugName)), m_hasSymbolText);
+            NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName.data(), m_debugName.size()), m_hasSymbolText);
     }
 #endif
 
@@ -231,7 +233,7 @@ private:
 private:
     NameHash m_hash;
 #if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
-    char m_debugName[NameDetail::s_DebugNameCapacity];
+    Array<char, NameDetail::s_DebugNameCapacity> m_debugName;
 #endif
 #if defined(NWB_BUILD_SYMBOLS)
     b8 m_hasSymbolText;
@@ -270,19 +272,9 @@ template<typename CharT>
         return MakeUnexpected(name.error());
     return Optional<Name>{ Move(*name) };
 }
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToName(const BasicString<CharT, ArenaT>& text){
-    return ToName(BasicStringView<CharT>(text));
-}
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.data();
-        text.size();
-    }
+template<StringViewConvertible StringT>
 [[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToName(const StringT& text){
-    using CharT = typename StringT::value_type;
-    return ToName(BasicStringView<CharT>(text.data(), text.size()));
+    return ToName(AsBasicStringView(text));
 }
 
 

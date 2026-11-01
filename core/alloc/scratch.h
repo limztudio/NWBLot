@@ -223,7 +223,7 @@ public:
         if(chunk.tryResizeLifoTop(MakeNotNull(p), size)){
             m_memoryStats.recordReallocation(oldSize, size);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk, nullptr);
+                cacheEmptyChunk(bucket, chunk);
             return p;
         }
 
@@ -235,7 +235,7 @@ public:
         if(chunk.tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocation(oldSize);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk, bucket.active);
+                cacheEmptyChunk(bucket, chunk, *MakeNotNull(bucket.active));
         }
         return next;
     }
@@ -257,7 +257,7 @@ public:
         if(chunk.tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);
             if(chunk.m_remaining == chunk.m_size)
-                cacheEmptyChunk(bucket, chunk, nullptr);
+                cacheEmptyChunk(bucket, chunk);
         }
     }
 
@@ -298,23 +298,25 @@ private:
         return chunk;
     }
 
-    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk* newer)noexcept{
+    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk)noexcept{
         NWB_ASSERT(chunk.m_remaining == chunk.m_size);
-        if(newer){
-            NWB_ASSERT(newer->m_next == &chunk);
-            newer->m_next = chunk.m_next;
-        }
-        else{
-            NWB_ASSERT(bucket.active == &chunk);
-            bucket.active = chunk.m_next;
-        }
+        NWB_ASSERT(bucket.active == &chunk);
+        bucket.active = chunk.m_next;
+        chunk.m_next = bucket.cached;
+        bucket.cached = &chunk;
+    }
+
+    void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk& newer)noexcept{
+        NWB_ASSERT(chunk.m_remaining == chunk.m_size);
+        NWB_ASSERT(newer.m_next == &chunk);
+        newer.m_next = chunk.m_next;
         chunk.m_next = bucket.cached;
         bucket.cached = &chunk;
     }
 
 
 private:
-    ChunkWrapper m_bucket[FloorLog2(s_MaxAlignSize) + 1];
+    Array<ChunkWrapper, FloorLog2(s_MaxAlignSize) + 1> m_bucket;
 };
 
 

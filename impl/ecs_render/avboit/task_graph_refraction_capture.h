@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -38,7 +39,6 @@ namespace ECSRenderDetail{
 
 struct CsgGraphResourceSnapshot;
 struct MeshFrameBindingSnapshot;
-struct MeshViewGpuData;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ namespace RendererTaskGraphDetail{
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    const MeshViewGpuData& meshViewState,
     Core::GpuTaskId dependency,
     b8 enabled,
     DeferredFrameTargets& targets,

@@ -29,13 +29,6 @@ constexpr u32 s_PollIntervalMS = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels){
     using namespace NWB::Core;
     CpuTaskScheduler scheduler(0u);
@@ -58,8 +51,8 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     scheduler.wait(task);
     scope.wait();
     scheduler.wait();
-    CpuTaskProfileEvent events[16u];
-    const usize count = scheduler.readProfileEvents(events, 16u);
+    Array<CpuTaskProfileEvent, 16u> events{};
+    const usize count = scheduler.readProfileEvents(events.data(), 16u);
     u32 queued = 0u;
     u32 executed = 0u;
     u32 handleJoins = 0u;
@@ -98,8 +91,8 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
                 ++schedulerJoins;
         }
     }
-    EXPECT_EQ(queued, s_ExpectedDualCount);
-    EXPECT_EQ(executed, s_ExpectedDualCount);
+    EXPECT_EQ(queued, 2u);
+    EXPECT_EQ(executed, 2u);
     EXPECT_EQ(handleJoins, 1u);
     EXPECT_EQ(scopeJoins, 1u);
     EXPECT_EQ(schedulerJoins, 1u);
@@ -118,8 +111,8 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     const auto first = *firstTaskAdmission;
     ASSERT_TRUE(first.valid());
     scheduler.wait(first);
-    CpuTaskProfileEvent events[8u];
-    ASSERT_EQ(scheduler.readProfileEvents(events, s_ExpectedDualCount), s_ExpectedDualCount);
+    Array<CpuTaskProfileEvent, 8u> events{};
+    ASSERT_EQ(scheduler.readProfileEvents(events.data(), 2u), 2u);
     EXPECT_EQ(events[0u].kind, CpuTaskProfileKind::QueueDelay);
     EXPECT_EQ(events[1u].kind, CpuTaskProfileKind::Execution);
     const auto secondTaskAdmission = scheduler.submit([]()noexcept{});
@@ -127,11 +120,11 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     const auto second = *secondTaskAdmission;
     ASSERT_TRUE(second.valid());
     scheduler.wait(second);
-    ASSERT_EQ(scheduler.readProfileEvents(events, 8u), 4u);
+    ASSERT_EQ(scheduler.readProfileEvents(events.data(), 8u), 4u);
     EXPECT_EQ(events[0u].kind, CpuTaskProfileKind::HandleJoin);
     EXPECT_EQ(events[0u].task.generation, first.generation);
     EXPECT_EQ(events[1u].kind, CpuTaskProfileKind::QueueDelay);
-    EXPECT_EQ(events[s_ThirdElementIndex].kind, CpuTaskProfileKind::Execution);
+    EXPECT_EQ(events[2u].kind, CpuTaskProfileKind::Execution);
     EXPECT_EQ(events[3u].kind, CpuTaskProfileKind::HandleJoin);
     EXPECT_EQ(events[3u].task.generation, second.generation);
     const auto thirdTaskAdmission = scheduler.submit([]()noexcept{});
@@ -144,9 +137,9 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     EXPECT_EQ(scheduler.statistics().profilePendingEvents, 4u);
     EXPECT_EQ(scheduler.statistics().profileDroppedEvents, 1u);
     EXPECT_EQ(scheduler.readProfileEvents(nullptr, 4u), 0u);
-    EXPECT_EQ(scheduler.readProfileEvents(events, 0u), 0u);
-    EXPECT_EQ(scheduler.readProfileEvents(events, 8u), 4u);
-    EXPECT_EQ(scheduler.readProfileEvents(events, 8u), 0u);
+    EXPECT_EQ(scheduler.readProfileEvents(events.data(), 0u), 0u);
+    EXPECT_EQ(scheduler.readProfileEvents(events.data(), 8u), 4u);
+    EXPECT_EQ(scheduler.readProfileEvents(events.data(), 8u), 0u);
 }
 
 TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
@@ -156,7 +149,7 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
     scheduler.setProfiling(true, 1u);
     const auto cpuTaskAdmission = scheduler.submit([&](){
         scheduler.setProfiling(false);
-        scheduler.setProfiling(true, s_ExpectedDualCount);
+        scheduler.setProfiling(true, 2u);
         const auto childTaskAdmission = scheduler.submit([]()noexcept{});
         ASSERT_TRUE(childTaskAdmission);
         child = *childTaskAdmission;
@@ -170,13 +163,13 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
     const auto oldReady = *oldReadyTaskAdmission;
     ASSERT_TRUE(oldReady.valid());
     scheduler.wait(parent);
-    CpuTaskProfileEvent events[16u];
-    const usize count = scheduler.readProfileEvents(events, 16u);
+    Array<CpuTaskProfileEvent, 16u> events{};
+    const usize count = scheduler.readProfileEvents(events.data(), 16u);
     u32 executed = 0u;
     u32 queued = 0u;
     for(usize index = 0u; index < count; ++index){
         const auto& event = events[index];
-        EXPECT_EQ(event.frameIndex, s_ExpectedDualCount);
+        EXPECT_EQ(event.frameIndex, 2u);
         EXPECT_GT(event.captureEpoch, 1u);
         EXPECT_NE(event.task.index, parent.index);
         if(event.kind == CpuTaskProfileKind::Execution)
@@ -186,10 +179,10 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
             EXPECT_EQ(event.task.index, child.index);
         }
     }
-    EXPECT_EQ(executed, s_ExpectedDualCount);
+    EXPECT_EQ(executed, 2u);
     EXPECT_EQ(queued, 1u);
     scheduler.setProfiling(false);
-    EXPECT_EQ(scheduler.readProfileEvents(events, 16u), 0u);
+    EXPECT_EQ(scheduler.readProfileEvents(events.data(), 16u), 0u);
     EXPECT_FALSE(scheduler.statistics().profileEnabled);
 }
 
@@ -207,8 +200,8 @@ TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){
     const auto task = *taskAdmission;
     ASSERT_TRUE(task.valid());
     second.wait(task);
-    CpuTaskProfileEvent events[8u];
-    const usize count = second.readProfileEvents(events, 8u);
+    Array<CpuTaskProfileEvent, 8u> events{};
+    const usize count = second.readProfileEvents(events.data(), 8u);
     ASSERT_GT(count, 0u);
     for(usize index = 0u; index < count; ++index)
         EXPECT_EQ(events[index].label, s_NameNone);
@@ -233,7 +226,7 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     Atomic<b8> started{ false };
     Atomic<u32> callbacks{ 0u };
     CpuTaskSchedulerConfig config;
-    config.workerCount = s_ExpectedDualCount;
+    config.workerCount = 2u;
     config.heterogeneous = false;
     config.profileEventCapacity = 16u;
     CpuTaskScheduler scheduler(config);
@@ -258,8 +251,8 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
             EXPECT_TRUE(cpuTaskAdmission->valid());
     }
     while(callbacks.load(MemoryOrder::acquire) != 256u){
-        CpuTaskProfileEvent events[8u];
-        const usize count = scheduler.readProfileEvents(events, 8u);
+        Array<CpuTaskProfileEvent, 8u> events{};
+        const usize count = scheduler.readProfileEvents(events.data(), 8u);
         for(usize index = 0u; index < count; ++index){
             EXPECT_EQ(events[index].captureEpoch, events[0u].captureEpoch);
             EXPECT_GT(events[index].captureEpoch, 0u);
@@ -278,8 +271,8 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     const auto probe = *probeTaskAdmission;
     ASSERT_TRUE(probe.valid());
     scheduler.wait(probe);
-    CpuTaskProfileEvent events[16u];
-    const usize count = scheduler.readProfileEvents(events, 16u);
+    Array<CpuTaskProfileEvent, 16u> events{};
+    const usize count = scheduler.readProfileEvents(events.data(), 16u);
     EXPECT_GT(count, 0u);
     for(usize index = 0u; index < count; ++index)
         EXPECT_EQ(events[index].frameIndex, 1000u);
@@ -291,10 +284,10 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     constexpr usize s_ScopeCount = 3u;
     constexpr u64 s_Frame = 19u;
     CpuTaskScheduler scheduler(0u);
-    const Name names[s_ScopeCount] = { Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope") };
+    const Array<Name, s_ScopeCount> names = { Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope") };
     CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
     CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
-    CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[s_ThirdElementIndex]));
+    CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[2u]));
     const auto taskAdmission = completed.submit([]()noexcept{});
     ASSERT_TRUE(taskAdmission);
     const auto task = *taskAdmission;
@@ -313,8 +306,8 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     empty.wait();
     completed.wait();
     canceled.wait();
-    CpuTaskProfileEvent events[s_ScopeCount];
-    ASSERT_EQ(scheduler.readProfileEvents(events, s_ScopeCount), s_ScopeCount);
+    Array<CpuTaskProfileEvent, s_ScopeCount> events{};
+    ASSERT_EQ(scheduler.readProfileEvents(events.data(), s_ScopeCount), s_ScopeCount);
     for(usize index = 0u; index < s_ScopeCount; ++index){
         EXPECT_EQ(events[index].kind, CpuTaskProfileKind::ScopeJoin);
         EXPECT_EQ(events[index].label, names[index]);

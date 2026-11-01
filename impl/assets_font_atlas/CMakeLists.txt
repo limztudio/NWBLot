@@ -4,7 +4,7 @@ nwb_target_adhd_sources(nwb_assets_font_atlas_types
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
-target_link_libraries(nwb_assets_font_atlas_types PUBLIC nwb_assets)
+target_link_libraries(nwb_assets_font_atlas_types PUBLIC nwb_assets nwb_assets_font_types)
 
 set(_nwb_font_atlas_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
@@ -41,3 +41,4 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_font_atlas_volume_entry PRIVATE nwb_assets_font_atlas_cook nwb_assets_font_cook nwb_assets_cook)
     target_compile_definitions(nwb_assets_font_atlas_volume_entry PRIVATE NWB_COOK=1)
 endif()
+

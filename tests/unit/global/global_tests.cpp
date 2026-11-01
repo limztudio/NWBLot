@@ -57,24 +57,17 @@ static constexpr WStringView s_ValueFormatTrailingWide = L"value {}.trailing";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static u32 s_DiagnosticEventCaptureCount = 0u;
 static AStringView s_DiagnosticEventName = {};
 static AStringView s_DiagnosticEventCategory = {};
 static AStringView s_DiagnosticEventExpression = {};
 static AStringView s_DiagnosticEventMessage = {};
 static AStringView s_DiagnosticEventFile = {};
-static char s_DiagnosticEventNameText[s_MaxEventTextBytes] = {};
-static char s_DiagnosticEventCategoryText[s_MaxEventTextBytes] = {};
-static char s_DiagnosticEventExpressionText[s_MaxEventTextBytes] = {};
-static char s_DiagnosticEventMessageText[s_MaxEventTextBytes] = {};
-static char s_DiagnosticEventFileText[s_MaxEventTextBytes] = {};
+static Array<char, s_MaxEventTextBytes> s_DiagnosticEventNameText = {};
+static Array<char, s_MaxEventTextBytes> s_DiagnosticEventCategoryText = {};
+static Array<char, s_MaxEventTextBytes> s_DiagnosticEventExpressionText = {};
+static Array<char, s_MaxEventTextBytes> s_DiagnosticEventMessageText = {};
+static Array<char, s_MaxEventTextBytes> s_DiagnosticEventFileText = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,11 +94,11 @@ static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     CopyFixedBuffer(s_DiagnosticEventExpressionText, record.expression);
     CopyFixedBuffer(s_DiagnosticEventMessageText, record.message);
     CopyFixedBuffer(s_DiagnosticEventFileText, record.file);
-    s_DiagnosticEventName = AStringView(s_DiagnosticEventNameText);
-    s_DiagnosticEventCategory = AStringView(s_DiagnosticEventCategoryText);
-    s_DiagnosticEventExpression = AStringView(s_DiagnosticEventExpressionText);
-    s_DiagnosticEventMessage = AStringView(s_DiagnosticEventMessageText);
-    s_DiagnosticEventFile = AStringView(s_DiagnosticEventFileText);
+    s_DiagnosticEventName = AStringView(s_DiagnosticEventNameText.data());
+    s_DiagnosticEventCategory = AStringView(s_DiagnosticEventCategoryText.data());
+    s_DiagnosticEventExpression = AStringView(s_DiagnosticEventExpressionText.data());
+    s_DiagnosticEventMessage = AStringView(s_DiagnosticEventMessageText.data());
+    s_DiagnosticEventFile = AStringView(s_DiagnosticEventFileText.data());
 }
 
 
@@ -145,7 +138,7 @@ public:
 TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOverrun){
     struct Storage{
         char first = 'a';
-        char buffer[s_UsizeDecimalDigitCount]{};
+        Array<char, s_UsizeDecimalDigitCount> buffer{};
         char last = 'z';
     };
     struct Case{
@@ -154,14 +147,14 @@ TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOver
     };
     static_assert(sizeof(usize) == sizeof(u32) || sizeof(usize) == sizeof(u64));
     constexpr AStringView s_MaxValueText = sizeof(usize) == sizeof(u64) ? "18446744073709551615" : "4294967295";
-    const Case cases[]{
-        { 0u, "0" },
-        { 1u, "1" },
-        { 9u, "9" },
-        { 10u, "10" },
-        { 99u, "99" },
-        { 100u, "100" },
-        { Limit<usize>::s_Max, s_MaxValueText },
+    const Array<Case, 7u> cases = {
+        Case{ 0u, "0" },
+        Case{ 1u, "1" },
+        Case{ 9u, "9" },
+        Case{ 10u, "10" },
+        Case{ 99u, "99" },
+        Case{ 100u, "100" },
+        Case{ Limit<usize>::s_Max, s_MaxValueText },
     };
     for(const auto& testCase : cases){
         SCOPED_TRACE(testCase.value);
@@ -169,7 +162,7 @@ TEST(Global, DecimalFormattingUsesExactMinimumStorageWithoutEmptySentinelsOrOver
         static_assert(noexcept(FormatDecimal(usize{}, storage.buffer)));
         const AStringView text = FormatDecimal(testCase.value, storage.buffer);
         EXPECT_EQ(text, testCase.expected);
-        EXPECT_EQ(text.data(), storage.buffer);
+        EXPECT_EQ(text.data(), storage.buffer.data());
         EXPECT_FALSE(text.empty());
         EXPECT_EQ(storage.first, 'a');
         EXPECT_EQ(storage.last, 'z');
@@ -195,7 +188,7 @@ TEST(Global, ExhaustedPodReadsPreserveCursor){
 }
 
 TEST(Global, MultiplicationDistinguishesOverflowSignedBoundariesAndSuccessfulZero){
-    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount));
+    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, 2u));
     EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Min, -1));
     EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Max, 2));
     constexpr auto s_Zero = ::TryMultiply<u64>(0u, Limit<u64>::s_Max);
@@ -243,16 +236,16 @@ TEST(Global, NumericParsersRespectViewBoundsAndRejectEmptyInput){
 }
 
 TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
-    constexpr char s_Text[] = { 'a', 'b', 'c', 'd', 'e', 'f' };
-    char text[5u] = {};
-    CopyFixedBuffer(text, AStringView(s_Text, 3u));
-    EXPECT_EQ(AStringView(text), AStringView("abc"));
-    AppendFixedBuffer(text, AStringView(s_Text + 3u, 2u));
-    EXPECT_EQ(AStringView(text), AStringView("abcd"));
-    CopyFixedBuffer(text, AStringView(s_Text, sizeof(s_Text)));
-    EXPECT_EQ(AStringView(text), AStringView("abcd"));
+    constexpr Array<char, 6u> s_Text = { 'a', 'b', 'c', 'd', 'e', 'f' };
+    Array<char, 5u> text = {};
+    CopyFixedBuffer(text, AStringView(s_Text.data(), 3u));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abc"));
+    AppendFixedBuffer(text, AStringView(s_Text.data() + 3u, 2u));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abcd"));
+    CopyFixedBuffer(text, AStringView(s_Text.data(), sizeof(s_Text)));
+    EXPECT_EQ(AStringView(text.data()), AStringView("abcd"));
     CopyFixedBuffer(text, {});
-    EXPECT_TRUE(AStringView(text).empty());
+    EXPECT_TRUE(AStringView(text.data()).empty());
 }
 
 
@@ -268,16 +261,16 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
     ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
     values.reserve(6u);
     queue.copyTo(values);
-    ASSERT_EQ(values.size(), s_ExpectedDualCount);
+    ASSERT_EQ(values.size(), 2u);
     EXPECT_EQ(values[0u], 7u);
     EXPECT_EQ(values[1u], 19u);
 
     queue.appendUnique(23u, equal);
-    EXPECT_EQ(values.size(), s_ExpectedDualCount);
+    EXPECT_EQ(values.size(), 2u);
 
     queue.copyTo(values);
     ASSERT_EQ(values.size(), 3u);
-    EXPECT_EQ(values[s_ThirdElementIndex], 23u);
+    EXPECT_EQ(values[2u], 23u);
 }
 
 TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
@@ -286,7 +279,7 @@ TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
     ::Vector<LinuxProcessMemoryMapEntry, NWB::Core::Alloc::ScratchArena> entries(scratchArena);
     entries.reserve(2u);
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
-    ASSERT_EQ(entries.size(), s_ExpectedDualCount);
+    ASSERT_EQ(entries.size(), 2u);
     const auto first = FindLinuxProcessMemoryMapForAddress(entries, 0x1000u);
     const auto last = FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu);
     ASSERT_TRUE(first);
@@ -297,7 +290,7 @@ TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
 }
 
 TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
-    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / s_ExpectedDualCount) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
+    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
 }
 
 TEST(Global, CheckedDivideUpRejectsZeroDivisor){
@@ -305,16 +298,16 @@ TEST(Global, CheckedDivideUpRejectsZeroDivisor){
 }
 
 TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
-    const char bytes[]{ static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
-    const AStringView text(bytes, LengthOf(bytes));
+    const Array<char, 4u> bytes = { static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
+    const AStringView text(bytes.data(), bytes.size());
     const auto decoded = DecodeUtf8CodePoint(text);
     ASSERT_TRUE(decoded);
     EXPECT_EQ(decoded->byteCount, 4);
     EXPECT_EQ(decoded->codePoint, 0x1F600u);
     for(usize size = 0u; size < text.size(); ++size)
         EXPECT_FALSE(DecodeUtf8CodePoint(text.substr(0u, size)));
-    const char overlong[]{ static_cast<char>(0xC0), static_cast<char>(0x80) };
-    EXPECT_FALSE(DecodeUtf8CodePoint(AStringView(overlong, LengthOf(overlong))));
+    const Array<char, 2u> overlong = { static_cast<char>(0xC0), static_cast<char>(0x80) };
+    EXPECT_FALSE(DecodeUtf8CodePoint(AStringView(overlong.data(), overlong.size())));
 }
 
 TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
@@ -353,21 +346,21 @@ TEST(Global, TruncatedStringReadsDoNotAdvanceCursor){
 
 TEST(Global, RejectedACompactStringAssignResetsText){
     ACompactString compact("seed");
-    const char textWithNull[] = { 'a', '\0', 'b' };
+    const Array<char, 3u> textWithNull = { 'a', '\0', 'b' };
 
-    EXPECT_FALSE(compact.assign(AStringView(textWithNull, sizeof(textWithNull))));
+    EXPECT_FALSE(compact.assign(AStringView(textWithNull.data(), textWithNull.size())));
     EXPECT_TRUE(compact.empty());
     EXPECT_TRUE(compact.view().empty());
     EXPECT_EQ(compact.c_str()[0], '\0');
 }
 
 TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
-    wchar oversized[WCompactString::s_MaxLength + s_ExpectedDualCount] = {};
+    Array<wchar, WCompactString::s_MaxLength + 2u> oversized = {};
     for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
         oversized[i] = L'a';
 
     WCompactString rejected(L"unchanged");
-    EXPECT_FALSE(rejected.assign(WStringView(oversized, WCompactString::s_MaxLength + 1u)));
+    EXPECT_FALSE(rejected.assign(WStringView(oversized.data(), WCompactString::s_MaxLength + 1u)));
     EXPECT_TRUE(rejected.empty());
 }
 
@@ -440,7 +433,7 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     ::Vector<u16, NWB::Core::Alloc::ScratchArena> source(scratchArena);
     source.reserve(3u);
     source.push_back(1u);
-    source.push_back(s_ExpectedDualCount);
+    source.push_back(2u);
     source.push_back(static_cast<u16>(0xBEEFu));
 
     ASSERT_TRUE(AppendBinaryVectorPayload(binary, source));
@@ -461,12 +454,12 @@ TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     ::Vector<u8, NWB::Core::Alloc::ScratchArena> vectorBinary(scratchArena);
     vectorBinary.reserve(6u);
-    const u16 values[] = { 4u, 5u, 6u };
+    const Array<u16, 3u> values = { 4u, 5u, 6u };
     for(const u16 value : values)
         AppendPOD(vectorBinary, value);
 
     usize vectorCursor = 0u;
-    FixedVector<u16, s_ExpectedDualCount> tooSmall;
+    FixedVector<u16, 2u> tooSmall;
     EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, 3u, vectorCursor, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
@@ -483,7 +476,7 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
     ::Vector<u32, NWB::Core::Alloc::ScratchArena> parsed(scratchArena);
     parsed.reserve(4u);
     parsed.push_back(0xAABBCCDDu);
-    EXPECT_EQ(ReadBinaryVectorPayload(truncated, s_ExpectedDualCount, cursor, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
+    EXPECT_EQ(ReadBinaryVectorPayload(truncated, 2u, cursor, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -493,17 +486,17 @@ TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
     ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
     values.reserve(3u);
     values.push_back(1u);
-    values.push_back(s_ExpectedDualCount);
+    values.push_back(2u);
     values.push_back(3u);
 
     AppendTriviallyCopyableVector(values, values);
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
-    EXPECT_EQ(values[1u], s_ExpectedDualCount);
-    EXPECT_EQ(values[s_ThirdElementIndex], 3u);
+    EXPECT_EQ(values[1u], 2u);
+    EXPECT_EQ(values[2u], 3u);
     EXPECT_EQ(values[3u], 1u);
-    EXPECT_EQ(values[4u], s_ExpectedDualCount);
+    EXPECT_EQ(values[4u], 2u);
     EXPECT_EQ(values[5u], 3u);
 }
 
@@ -512,39 +505,39 @@ TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
     ::Vector<u32, NWB::Core::Alloc::ScratchArena> values(scratchArena);
     values.reserve(4u);
     values.push_back(1u);
-    values.push_back(s_ExpectedDualCount);
+    values.push_back(2u);
     values.push_back(3u);
     values.push_back(4u);
 
-    const U32VectorView middle{ values.data() + 1u, s_ExpectedDualCount };
+    const U32VectorView middle{ values.data() + 1u, 2u };
     AppendTriviallyCopyableVector(values, middle);
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
-    EXPECT_EQ(values[1u], s_ExpectedDualCount);
-    EXPECT_EQ(values[s_ThirdElementIndex], 3u);
+    EXPECT_EQ(values[1u], 2u);
+    EXPECT_EQ(values[2u], 3u);
     EXPECT_EQ(values[3u], 4u);
-    EXPECT_EQ(values[4u], s_ExpectedDualCount);
+    EXPECT_EQ(values[4u], 2u);
     EXPECT_EQ(values[5u], 3u);
 
     const U32VectorView assignedMiddle{ values.data() + 1u, 3u };
     AssignTriviallyCopyableVector(values, assignedMiddle);
 
     EXPECT_EQ(values.size(), 3u);
-    EXPECT_EQ(values[0u], s_ExpectedDualCount);
+    EXPECT_EQ(values[0u], 2u);
     EXPECT_EQ(values[1u], 3u);
-    EXPECT_EQ(values[s_ThirdElementIndex], 4u);
+    EXPECT_EQ(values[2u], 4u);
 }
 
 
 #if !defined(_MSC_VER)
 TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
-    char truncatedText[4] = {};
-    EXPECT_NE(NWB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
-    EXPECT_STREQ(truncatedText, "abc");
+    Array<char, 4u> truncatedText = {};
+    EXPECT_NE(NWB_STRCPY(truncatedText.data(), sizeof(truncatedText), "abcdef"), 0);
+    EXPECT_STREQ(truncatedText.data(), "abc");
 
-    char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
-    EXPECT_NE(NWB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
+    Array<char, 4u> nullTerminatedText = { 'a', 'b', 'c', 'd' };
+    EXPECT_NE(NWB_STRCAT(nullTerminatedText.data(), sizeof(nullTerminatedText), "e"), 0);
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 }
 #endif
@@ -593,28 +586,28 @@ TEST(Global, UnicodeAndAsciiHelpersRejectSurrogatesOverlongsAndInvalidIdentifier
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xD800u, 0xDC00u), 0x10000u);
     EXPECT_EQ(DecodeUtf16SurrogatePair(0xDBFFu, 0xDFFFu), s_UnicodeMaxCodePoint);
 
-    const char bomPrefixed[] = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
-    EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed, sizeof(bomPrefixed))));
-    EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed, 2u)));
+    const Array<char, 4u> bomPrefixed = { static_cast<char>(0xEF), static_cast<char>(0xBB), static_cast<char>(0xBF), 'a' };
+    EXPECT_TRUE(HasUtf8Bom(AStringView(bomPrefixed.data(), bomPrefixed.size())));
+    EXPECT_FALSE(HasUtf8Bom(AStringView(bomPrefixed.data(), 2u)));
 
-    char encoded[s_Utf8MaxSequenceBytes] = {};
+    Array<char, s_Utf8MaxSequenceBytes> encoded = {};
     EXPECT_FALSE(EncodeUtf8CodePoint(0xD800u, encoded));
     EXPECT_FALSE(EncodeUtf8CodePoint(s_UnicodeMaxCodePoint + 1u, encoded));
     const auto encodedBytes = EncodeUtf8CodePoint(s_UnicodeMaxCodePoint, encoded);
     ASSERT_TRUE(encodedBytes);
     ASSERT_EQ(*encodedBytes, 4u);
-    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 0u));
-    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 1u));
-    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 4u));
-    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded, sizeof(encoded)), 5u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 0u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 1u));
+    EXPECT_TRUE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 4u));
+    EXPECT_FALSE(IsUtf8ScalarBoundary(AStringView(encoded.data(), encoded.size()), 5u));
 
-    const auto decoded = DecodeUtf8Scalar(AStringView(encoded, sizeof(encoded)));
+    const auto decoded = DecodeUtf8Scalar(AStringView(encoded.data(), encoded.size()));
     ASSERT_TRUE(decoded);
     EXPECT_EQ(decoded->codePoint, s_UnicodeMaxCodePoint);
     EXPECT_EQ(decoded->byteCount, 4);
-    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded, 3u)));
-    const char surrogateBytes[] = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
-    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes, sizeof(surrogateBytes))));
+    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(encoded.data(), 3u)));
+    const Array<char, 3u> surrogateBytes = { static_cast<char>(0xED), static_cast<char>(0xA0), static_cast<char>(0x80) };
+    EXPECT_FALSE(DecodeUtf8Scalar(AStringView(surrogateBytes.data(), surrogateBytes.size())));
 
     EXPECT_FALSE(IsAsciiIdentifier(AStringView()));
     EXPECT_FALSE(IsAsciiIdentifier(AStringView("9abc")));
@@ -629,19 +622,19 @@ TEST(Global, FilesystemStreamAndStageHelpersRejectInvalidAndTruncatedInputs){
     const Path<NWB::Core::Alloc::ScratchArena> stageDir(scratchArena, "global_test_artifacts/stage_edge_test");
     ASSERT_TRUE(EnsureEmptyDirectory(stageDir));
     const auto stagedFile = stageDir / "payload.bin";
-    const u8 payload[] = { 0x10u, 0x20u, 0x30u, 0x40u };
+    const Array<u8, 4u> payload = { 0x10u, 0x20u, 0x30u, 0x40u };
     b8 created = false;
-    ASSERT_TRUE(StageNewBinaryFileDurable(stagedFile, payload, sizeof(payload), created));
+    ASSERT_TRUE(StageNewBinaryFileDurable(stagedFile, payload.data(), payload.size(), created));
     EXPECT_TRUE(created);
-    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload)));
-    const u8 mismatched[] = { 0x10u, 0x20u, 0x30u, 0x41u };
-    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, mismatched, sizeof(mismatched)));
-    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload) - 1u));
-    EXPECT_FALSE(StageNewBinaryFileDurable(stagedFile, mismatched, sizeof(mismatched), created));
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size()));
+    const Array<u8, 4u> mismatched = { 0x10u, 0x20u, 0x30u, 0x41u };
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, mismatched.data(), mismatched.size()));
+    EXPECT_FALSE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size() - 1u));
+    EXPECT_FALSE(StageNewBinaryFileDurable(stagedFile, mismatched.data(), mismatched.size(), created));
     EXPECT_FALSE(created);
-    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, sizeof(payload)));
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), payload.size()));
     ASSERT_TRUE(ResizeFile(stagedFile, 2u));
-    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload, 2u));
+    EXPECT_TRUE(VerifyBinaryFileBytes(stagedFile, payload.data(), 2u));
     ASSERT_TRUE(RemoveAllIfExists(stageDir));
 }
 

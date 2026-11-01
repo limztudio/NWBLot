@@ -43,7 +43,7 @@ inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 #endif
 
 template<usize Count>
-[[nodiscard]] static b8 DurationsAreOrdinary(const SIMDVectorDouble(&durations)[Count])noexcept{
+[[nodiscard]] static b8 DurationsAreOrdinary(const Array<SIMDVectorDouble, Count>& durations)noexcept{
 #if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON64)
     for(const SIMDVectorDouble pack : durations){
         if(HasExceptionalDurationPack(pack))
@@ -56,7 +56,7 @@ template<usize Count>
 }
 
 template<usize Count>
-[[nodiscard]] static b8 DurationsAreValid(const SIMDVectorDouble(&durations)[Count])noexcept{
+[[nodiscard]] static b8 DurationsAreValid(const Array<SIMDVectorDouble, Count>& durations)noexcept{
 #pragma STDC FENV_ACCESS ON
     for(const SIMDVectorDouble pack : durations){
         if(__builtin_reduce_or(pack < SIMDVectorDouble{}) != 0)
@@ -368,7 +368,7 @@ template<typename StatisticsT>
     if(!__hidden_frame_graph_statistics_validators::RuntimeStatisticsCountsAreValid(statistics))
         return false;
 
-    const f64 durations[] = {
+    const Array<f64, 21u> durations = {
         statistics.compile.declarationSeconds,
         statistics.compile.analysisSeconds,
         statistics.compile.validationSeconds,
@@ -410,7 +410,7 @@ template<typename StatisticsT>
     if(!__hidden_frame_graph_statistics_validators::PhysicalQueueSubmissionCountsAreValid(statistics))
         return false;
 
-    const f64 durations[] = { recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds, submission.submissionSeconds, };
+    const Array<f64, 5u> durations = { recording.commandListAcquisitionSeconds, recording.graphBarrierRecordingSeconds, recording.taskRecordSeconds, recording.recordingSeconds, submission.submissionSeconds, };
     for(const f64 duration : durations){
         if(duration < 0.0 || !IsFinite(duration))
             return false;
@@ -440,7 +440,7 @@ template<typename StatisticsT>
 }
 
 b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-    const SIMDVectorDouble durations[] = {
+    const Array<SIMDVectorDouble, 6u> durations = {
         VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
         VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds),
@@ -458,7 +458,7 @@ b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statist
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-    const SIMDVectorDouble durations[] = {
+    const Array<SIMDVectorDouble, 2u> durations = {
         VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
         VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
     };
@@ -476,7 +476,7 @@ b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueue
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    const SIMDVectorDouble durations[] = {
+    const Array<SIMDVectorDouble, 7u> durations = {
         VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
         VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds),

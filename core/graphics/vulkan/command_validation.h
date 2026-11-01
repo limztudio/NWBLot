@@ -38,49 +38,11 @@ namespace VulkanDetail{
     }
 }
 
-[[nodiscard]] inline b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept{
-    if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY) || !IsFinite(viewport.minZ) || !IsFinite(viewport.maxZ))
-        return false;
-    if(viewport.maxX <= viewport.minX || viewport.maxY < viewport.minY || viewport.minZ < 0.0f || viewport.minZ > 1.0f || viewport.maxZ < 0.0f || viewport.maxZ > 1.0f)
-        return false;
+[[nodiscard]] b8 IsViewportValid(const Viewport& viewport, const VkPhysicalDeviceLimits& limits)noexcept;
 
-    const SIMDVectorSingle extent = viewport.extent();
-    const f32 width = VectorGetX(extent);
-    const f32 height = VectorGetY(extent);
-    return
-        static_cast<f64>(width) <= static_cast<f64>(limits.maxViewportDimensions[0u])
-        && static_cast<f64>(height) <= static_cast<f64>(limits.maxViewportDimensions[1u])
-        && viewport.minX >= limits.viewportBoundsRange[0u]
-        && viewport.maxX <= limits.viewportBoundsRange[1u]
-        && viewport.minY >= limits.viewportBoundsRange[0u]
-        && viewport.maxY <= limits.viewportBoundsRange[1u]
-    ;
-}
+[[nodiscard]] b8 IsImplicitScissorValid(const Viewport& viewport)noexcept;
 
-[[nodiscard]] inline b8 IsImplicitScissorValid(const Viewport& viewport)noexcept{
-    if(!IsFinite(viewport.minX) || !IsFinite(viewport.maxX) || !IsFinite(viewport.minY) || !IsFinite(viewport.maxY))
-        return false;
-
-    const SIMDVectorSingle viewportBounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
-    const SIMDVectorSingle flooredBounds = VectorFloor(viewportBounds);
-    const SIMDVectorSingle ceiledBounds = VectorCeiling(viewportBounds);
-    const f64 minX = static_cast<f64>(VectorGetX(flooredBounds));
-    const f64 maxX = static_cast<f64>(VectorGetY(ceiledBounds));
-    const f64 minY = static_cast<f64>(VectorGetZ(flooredBounds));
-    const f64 maxY = static_cast<f64>(VectorGetW(ceiledBounds));
-    return minX >= 0.0 && minY >= 0.0 && maxX >= minX && maxY >= minY && maxX <= static_cast<f64>(Limit<i32>::s_Max) && maxY <= static_cast<f64>(Limit<i32>::s_Max);
-}
-
-[[nodiscard]] inline Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept{
-    if(!IsImplicitScissorValid(viewport))
-        return MakeUnexpected(Failure{});
-
-    const Rect rect = Rect::FromViewport(viewport);
-    VkRect2D scissor{};
-    scissor.offset = { rect.minX, rect.minY };
-    scissor.extent = { static_cast<u32>(rect.maxX - rect.minX), static_cast<u32>(rect.maxY - rect.minY) };
-    return scissor;
-}
+[[nodiscard]] Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept;
 
 [[nodiscard]] constexpr b8 TextureSubresourceRangesOverlap(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
     const u64 lhsMipEnd = static_cast<u64>(lhs.baseMipLevel) + lhs.numMipLevels;
@@ -172,12 +134,7 @@ struct RenderPassAttachmentOperations{
     return { ConvertRenderPassLoadAction(actions.loadAction), ConvertRenderPassStoreAction(actions.storeAction), };
 }
 
-[[nodiscard]] inline b8 IsPipelineColorAttachmentFormatClassValid(const Format::Enum format)noexcept{
-    if(ConvertFormat(format) == VK_FORMAT_UNDEFINED)
-        return false;
-    const FormatInfo& formatInfo = GetFormatInfo(format);
-    return !formatInfo.hasDepth && !formatInfo.hasStencil;
-}
+[[nodiscard]] b8 IsPipelineColorAttachmentFormatClassValid(Format::Enum format)noexcept;
 
 [[nodiscard]] constexpr b8 IsStridedBufferRangeValid(const BufferDesc& desc, const u64 bindingOffsetBytes, const u32 firstElement, const u32 elementCount, const u32 elementStrideBytes, const u32 requiredElementBytes)noexcept{
     if(elementCount == 0u)
@@ -242,7 +199,7 @@ struct RenderPassAttachmentOperations{
     return drawCount != 0u && drawCount <= maximumDrawCount && (drawCount == 1u || multiDrawIndirectEnabled);
 }
 
-[[nodiscard]] constexpr b8 AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const u32 (&maximumGroupCounts)[3], const u32 maximumTotalGroupCount)noexcept{
+[[nodiscard]] constexpr b8 AreMeshDispatchGroupCountsValid(const u32 groupsX, const u32 groupsY, const u32 groupsZ, const Array<u32, 3>& maximumGroupCounts, const u32 maximumTotalGroupCount)noexcept{
     if(groupsX == 0u || groupsY == 0u || groupsZ == 0u || groupsX > maximumGroupCounts[0u] || groupsY > maximumGroupCounts[1u] || groupsZ > maximumGroupCounts[2u])
         return false;
 
@@ -251,13 +208,11 @@ struct RenderPassAttachmentOperations{
 }
 
 struct MeshDispatchLimits{
-    const u32 (&maximumGroupCounts)[3];
+    Array<u32, 3> maximumGroupCounts = {};
     u32 maximumTotalGroupCount = 0u;
 };
 
-[[nodiscard]] inline MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, const b8 taskShaderActive)noexcept{
-    return taskShaderActive ? MeshDispatchLimits{ properties.maxTaskWorkGroupCount, properties.maxTaskWorkGroupTotalCount } : MeshDispatchLimits{ properties.maxMeshWorkGroupCount, properties.maxMeshWorkGroupTotalCount };
-}
+[[nodiscard]] MeshDispatchLimits GetMeshDispatchLimits(const VkPhysicalDeviceMeshShaderPropertiesEXT& properties, b8 taskShaderActive)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

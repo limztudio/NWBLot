@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/shared/task_graph_stage.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,57 +24,11 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
-struct GeneratedGeometryEquivalenceKey{
-    Name meshKey = s_NameNone;
-    Name material = s_NameNone;
-    const Core::Buffer* outputBuffer = nullptr;
-    u32 instanceIndex = 0u;
-    u32 materialConstantByteOffset = 0u;
-    u32 shadingModelId = 0u;
-    u32 outputHeapSlot = 0u;
-    u32 emulationIndexByteOffset = 0u;
-    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    b8 indexedGeometryOutput = false;
-
-
-public:
-    [[nodiscard]] b8 matches(const MaterialPassDrawItem& drawItem)const noexcept{
-        return
-            drawItem.meshKey == meshKey
-            && drawItem.pipelineKey.material == material
-            && drawItem.pipelineKey.pass == pass
-            && drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None
-            && drawItem.instanceIndex == instanceIndex
-            && drawItem.materialConstantByteOffset == materialConstantByteOffset
-            && drawItem.shadingModelId == shadingModelId
-            && drawItem.meshResources.emulationVertexBuffer.get() == outputBuffer
-            && drawItem.meshResources.emulationVertexHeapHandle.valid()
-            && drawItem.meshResources.emulationVertexHeapHandle.slot() == outputHeapSlot
-            && drawItem.meshResources.emulationIndexByteOffset == emulationIndexByteOffset
-            && drawItem.pipelineResources.indexedGeometryOutput == indexedGeometryOutput
-        ;
-    }
-};
-
-[[nodiscard]] inline GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(const MaterialPassDrawItem& drawItem)noexcept{
-    GeneratedGeometryEquivalenceKey key{};
-    key.meshKey = drawItem.meshKey;
-    key.material = drawItem.pipelineKey.material;
-    key.pass = drawItem.pipelineKey.pass;
-    key.instanceIndex = drawItem.instanceIndex;
-    key.materialConstantByteOffset = drawItem.materialConstantByteOffset;
-    key.shadingModelId = drawItem.shadingModelId;
-    key.outputBuffer = drawItem.meshResources.emulationVertexBuffer.get();
-    key.outputHeapSlot = drawItem.meshResources.emulationVertexHeapHandle.valid() ? drawItem.meshResources.emulationVertexHeapHandle.slot() : 0u;
-    key.emulationIndexByteOffset = drawItem.meshResources.emulationIndexByteOffset;
-    key.indexedGeometryOutput = drawItem.pipelineResources.indexedGeometryOutput;
-    return key;
-}
+[[nodiscard]] GeneratedGeometryEquivalenceKey MakeGeneratedGeometryEquivalenceKey(const MaterialPassDrawItem& drawItem)noexcept;
 
 struct RegularSharedComputeEmulationGraphPlan{
-    MaterialPassDrawItem drawItems[s_SharedComputeEmulationMaximumDrawCount] = {};
-    GeneratedGeometryEquivalenceKey equivalenceKeys[s_SharedComputeEmulationMaximumDrawCount] = {};
+    Array<MaterialPassDrawItem, s_SharedComputeEmulationMaximumDrawCount> drawItems{};
+    Array<GeneratedGeometryEquivalenceKey, s_SharedComputeEmulationMaximumDrawCount> equivalenceKeys{};
     Core::BufferHandle outputBuffer;
     usize drawCount = 0u;
     u32 outputHeapSlot = 0u;
@@ -82,54 +36,9 @@ struct RegularSharedComputeEmulationGraphPlan{
 
 
 public:
-    void reset()noexcept{
-        for(MaterialPassDrawItem& drawItem : drawItems)
-            drawItem = {};
-        for(GeneratedGeometryEquivalenceKey& key : equivalenceKeys)
-            key = {};
-        outputBuffer = nullptr;
-        outputHeapSlot = 0u;
-        drawCount = 0u;
-        captured = false;
-    }
-
-    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, const usize allowedMaxDrawCount)noexcept{
-        reset();
-        if(!IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount) || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount)
-            return false;
-
-        drawCount = sourceDrawItems.computeDrawItems.size();
-        for(usize drawIndex = 0u; drawIndex < drawCount; ++drawIndex){
-            const MaterialPassDrawItem& drawItem = sourceDrawItems.computeDrawItems[drawIndex];
-            if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
-                return false;
-
-            const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            if(!mesh.emulationVertexBuffer || !mesh.emulationVertexHeapHandle.valid())
-                return false;
-
-            if(drawIndex == 0u){
-                outputBuffer = mesh.emulationVertexBuffer;
-                outputHeapSlot = mesh.emulationVertexHeapHandle.slot();
-            }
-            else if(mesh.emulationVertexBuffer.get() != outputBuffer.get() || mesh.emulationVertexHeapHandle.slot() != outputHeapSlot)
-                return false;
-
-            drawItems[drawIndex] = drawItem;
-            equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(drawItem);
-        }
-        captured = static_cast<b8>(outputBuffer);
-        return captured;
-    }
-
-    [[nodiscard]] b8 matches(const usize drawIndex)const noexcept{
-        if(!captured || drawIndex >= drawCount || !outputBuffer)
-            return false;
-
-        const MaterialPassDrawItem& drawItem = drawItems[drawIndex];
-        const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        return mesh.emulationVertexBuffer && mesh.emulationVertexHeapHandle.valid() && mesh.emulationVertexBuffer.get() == outputBuffer.get() && mesh.emulationVertexHeapHandle.slot() == outputHeapSlot && equivalenceKeys[drawIndex].matches(drawItem);
-    }
+    void reset()noexcept;
+    [[nodiscard]] b8 capture(const MaterialPassDrawItemsView& sourceDrawItems, usize allowedMaxDrawCount)noexcept;
+    [[nodiscard]] b8 matches(usize drawIndex)const noexcept;
 };
 
 

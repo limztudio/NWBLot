@@ -3,7 +3,6 @@
 
 
 #include "system.h"
-#include "resource_names.h"
 #include "skin_payload.h"
 
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
@@ -11,7 +10,6 @@
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -146,7 +144,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
             return MakeUnexpected(Failure{});
         }
 
-        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer<MeshSkinningInfluenceGpu>(m_graphics, *skinBufferName, *skinInfluences, NWB_TEXT("skin influence"));
+        auto skinBufferResult = __hidden_resources::SetupStructuredBuffer<MeshSkinningInfluenceGpu>(m_graphics, skinBufferName, *skinInfluences, NWB_TEXT("skin influence"));
         if(!skinBufferResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return MakeUnexpected(Failure{});
@@ -159,7 +157,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
             .setByteSize(static_cast<u64>(jointCount) * sizeof(SkeletonJointMatrix))
             .setStructStride(sizeof(SkeletonJointMatrix))
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(*jointPaletteBufferName)
+            .setDebugName(jointPaletteBufferName)
             .setInitialState(Core::ResourceStates::Common)
         ;
         auto jointPaletteBufferResult = m_graphics.createBuffer(jointPaletteBufferDesc);
@@ -180,7 +178,7 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(MeshSkinningRuntimeInsta
         .setByteSize(sizeof(MeshSkinningBindlessResourceSlots))
         .setIsConstantBuffer(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(*bindlessSlotsBufferName)
+        .setDebugName(bindlessSlotsBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     auto bindlessResourceSlotsBufferResult = m_graphics.createBuffer(bindlessSlotsBufferDesc);
@@ -215,17 +213,7 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRunt
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
-    if(
-        !resources.bindlessResourceSlotsBuffer
-        || !instance.restPositionBuffer || !instance.skinnedPositionBuffer
-        || !instance.restNormalBuffer || !instance.skinnedNormalBuffer
-        || !instance.restTangentBuffer || !instance.skinnedTangentBuffer
-        || !instance.meshletDescBuffer || !instance.meshletPositionRefDeltaBuffer
-        || !instance.meshletAttributeRefDeltaBuffer || !instance.attributeSkinBuffer
-        || !instance.meshletLocalVertexRefBuffer || !instance.meshletPrimitiveIndexBuffer
-        || !instance.meshletBoundsBuffer
-        || !instance.meshletLocalBoundsBuffer || !instance.localBoundsBuffer
-    ){
+    if(!resources.bindlessResourceSlotsBuffer || !instance.hasPersistentComputeBuffers()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
         return false;
     }

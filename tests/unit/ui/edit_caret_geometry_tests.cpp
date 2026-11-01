@@ -33,11 +33,11 @@ TEST_F(EditCaretFixture, HardLinesRetainEmptyAndTrailingLineStops){
     ASSERT_TRUE(adoptText("ab\n\nc\n"));
     ASSERT_EQ(m_geometry.lines().size(), 4u);
     ASSERT_EQ(m_geometry.caretStops().size(), 7u);
-    const usize begin[]{ 0u, 3u, 4u, 6u };
-    const usize end[]{ 2u, 3u, 5u, 6u };
-    const usize breakEnd[]{ 3u, 4u, 6u, 6u };
-    const u32 first[]{ 0u, 3u, 4u, 6u };
-    const u32 count[]{ 3u, 1u, 2u, 1u };
+    const Array<usize, 4> begin = { 0u, 3u, 4u, 6u };
+    const Array<usize, 4> end = { 2u, 3u, 5u, 6u };
+    const Array<usize, 4> breakEnd = { 3u, 4u, 6u, 6u };
+    const Array<u32, 4> first = { 0u, 3u, 4u, 6u };
+    const Array<u32, 4> count = { 3u, 1u, 2u, 1u };
     for(u32 index = 0u; index < 4u; ++index){
         const EditCaretLine& line = m_geometry.lines()[index];
         EXPECT_EQ(line.byteBegin, begin[index]);
@@ -152,8 +152,8 @@ TEST_F(EditCaretFixture, PreeditOnlyLinesFallBackToTheClosestCommittedReplacemen
 }
 
 TEST_F(EditCaretFixture, PreeditOnlyFallbackCannotSelectUnrelatedCommittedPrefixOrSuffixStops){
-    const EditCaretMapping entries[]{ { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u }, { 4u, 8u }, { 5u, 9u }, { 6u, 10u } };
-    m_mapping.assign(entries, entries + 7u);
+    const Array<EditCaretMapping, 7> entries = {{ { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u }, { 4u, 8u }, { 5u, 9u }, { 6u, 10u } }};
+    m_mapping.assign(entries.begin(), entries.end());
     ASSERT_TRUE(adopt("ABCX\nY\nZEF", 6u));
     ASSERT_EQ(m_geometry.lines()[1u].stopCount, 0u);
     Expected<usize> byte = m_geometry.hitTest({ 0.0f, 13.0f });
@@ -257,17 +257,17 @@ TEST_F(EditCaretFixture, MismatchedSourceFailurePreservesBothPriorGeometryAndCan
 
 TEST_F(EditCaretFixture, MappingEndpointOrderAndBoundsFailuresPreservePriorGeometry){
     ASSERT_TRUE(adoptText("abc", EditTextMode::SingleLine));
-    const EditCaretMapping bad[][4u]{
-        { { 1u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u } },
-        { { 0u, 1u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u } },
-        { { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 2u, 3u } },
-        { { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 2u } },
-        { { 0u, 0u }, { 2u, 1u }, { 1u, 2u }, { 3u, 3u } },
-        { { 0u, 0u }, { 1u, 2u }, { 2u, 1u }, { 3u, 3u } },
-        { { 0u, 0u }, { 4u, 1u }, { 4u, 2u }, { 3u, 3u } }
-    };
+    const Array<Array<EditCaretMapping, 4>, 7> bad = {{
+        {{ { 1u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u } }},
+        {{ { 0u, 1u }, { 1u, 1u }, { 2u, 2u }, { 3u, 3u } }},
+        {{ { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 2u, 3u } }},
+        {{ { 0u, 0u }, { 1u, 1u }, { 2u, 2u }, { 3u, 2u } }},
+        {{ { 0u, 0u }, { 2u, 1u }, { 1u, 2u }, { 3u, 3u } }},
+        {{ { 0u, 0u }, { 1u, 2u }, { 2u, 1u }, { 3u, 3u } }},
+        {{ { 0u, 0u }, { 4u, 1u }, { 4u, 2u }, { 3u, 3u } }}
+    }};
     for(const auto& entries : bad){
-        m_mapping.assign(entries, entries + 4u);
+        m_mapping.assign(entries.begin(), entries.end());
         EXPECT_FALSE(adopt("abc", 3u, EditTextMode::SingleLine));
         EXPECT_EQ(m_geometry.layout().utf8(), "abc");
         ASSERT_EQ(m_geometry.caretStops().size(), 4u);
@@ -302,7 +302,7 @@ TEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeom
     ASSERT_TRUE(rtl);
     ASSERT_TRUE(identityMapping(s_Text));
     EXPECT_FALSE(m_geometry.adoptLayout(Move(*rtl), s_Text, m_mapping, 3u, EditTextMode::SingleLine));
-    const ShaperFault::Enum faults[]{ ShaperFault::LeadingGap, ShaperFault::TrailingGap, ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
+    const Array<ShaperFault::Enum, 4> faults = { ShaperFault::LeadingGap, ShaperFault::TrailingGap, ShaperFault::Overlap, ShaperFault::InconsistentGlyphEnd };
     for(const auto fault : faults){
         SCOPED_TRACE(fault);
         m_shaper.fault = fault;
@@ -420,7 +420,7 @@ TEST_F(EditCaretFixture, VariableLineHeightsDetermineCaretAndHitBoundaries){
 
 TEST_F(EditCaretFixture, InvalidCoordinatesAndCaretOffsetsRejectQueries){
     ASSERT_TRUE(adoptText("e\xcc\x81\nx"));
-    const Point invalid[]{ { Limit<f32>::s_QuietNaN, 0.0f }, { 0.0f, Limit<f32>::s_Infinity } };
+    const Array<Point, 2> invalid = {{ { Limit<f32>::s_QuietNaN, 0.0f }, { 0.0f, Limit<f32>::s_Infinity } }};
     for(const Point point : invalid)
         EXPECT_FALSE(m_geometry.hitTest(point));
     EXPECT_FALSE(m_geometry.verticalTarget(2u, true, 10.0f));

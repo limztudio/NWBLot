@@ -4,8 +4,6 @@
 
 #include "assets_graphics_fixture.h"
 
-#include <impl/assets_shader/binary_payload.h>
-
 #include <gtest/gtest.h>
 
 
@@ -19,12 +17,6 @@ NWB_BEGIN
 
 
 namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,8 +46,6 @@ static constexpr AStringView s_Main = "main";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -169,10 +159,10 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> pixelAsset;
     UniquePtr<Core::Assets::IAsset> computeAsset;
-    auto pixelAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(testArena, outputDirectory, pixelPath, 3u);
+    auto pixelAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, pixelPath, 3u, testArena);
     ASSERT_TRUE(pixelAssetLoadResult);
     pixelAsset = Move(*pixelAssetLoadResult);
-    auto computeAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(testArena, outputDirectory, computePath, 3u);
+    auto computeAssetLoadResult = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(outputDirectory, computePath, 3u, testArena);
     ASSERT_TRUE(computeAssetLoadResult);
     computeAsset = Move(*computeAssetLoadResult);
     EXPECT_EQ(logger.errorCount(), 0u);
@@ -185,8 +175,8 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
 
     const Impl::PixelShaderAssetCodec pixelCodec;
     const Impl::ComputeShaderAssetCodec computeCodec;
-    EXPECT_FALSE(pixelCodec.deserialize(testArena.arena, pixelPath, computeBinary));
-    EXPECT_FALSE(computeCodec.deserialize(testArena.arena, computePath, pixelBinary));
+    EXPECT_FALSE(pixelCodec.deserialize(pixelPath, computeBinary, testArena.arena));
+    EXPECT_FALSE(computeCodec.deserialize(computePath, pixelBinary, testArena.arena));
 
     Impl::PixelShader pixel(testArena.arena, pixelPath);
     Impl::ComputeShader compute(testArena.arena, computePath);
@@ -255,15 +245,15 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     auto recordsLoadResult = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsLoadResult);
     records = Move(*recordsLoadResult);
-    ASSERT_EQ(records.size(), s_ExpectedDualCount);
-    const Name shaderNames[] = { Name(s_ProjectShadersStandalonePs), Name(s_ExactEntryPointShaderPath) };
+    ASSERT_EQ(records.size(), 2u);
+    const Array<Name, 2u> shaderNames = { Name(s_ProjectShadersStandalonePs), Name(s_ExactEntryPointShaderPath) };
     for(const Name& shaderName : shaderNames){
         Name virtualPath;
         const auto virtualPathResult4 = NWB::Core::ShaderArchive::FindVirtualPath(records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
         ASSERT_TRUE(virtualPathResult4);
         virtualPath = *virtualPathResult4;
         UniquePtr<NWB::Core::Assets::IAsset> shader;
-        auto shaderLoadResult = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(testArena, outputDirectory, virtualPath, 3u);
+        auto shaderLoadResult = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(outputDirectory, virtualPath, 3u, testArena);
         ASSERT_TRUE(shaderLoadResult);
         shader = Move(*shaderLoadResult);
         EXPECT_FALSE(static_cast<const NWB::Impl::PixelShader&>(*shader).bytecode().empty());
@@ -281,7 +271,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     auto recordsLoadResult2 = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
     ASSERT_TRUE(recordsLoadResult2);
     records = Move(*recordsLoadResult2);
-    ASSERT_EQ(records.size(), s_ExpectedDualCount);
+    ASSERT_EQ(records.size(), 2u);
     u64 preservedChecksum = 0u;
     auto preservedChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_Ps));
     ASSERT_TRUE(preservedChecksumLoadResult);
@@ -325,7 +315,7 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCle
     const Expected<Name> shaderPathResult = Core::ShaderArchive::BuildVirtualPathName(Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
     ASSERT_TRUE(shaderPathResult);
     const Name& shaderPath = *shaderPathResult;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(testArena, outputDirectory, shaderPath, s_ExpectedDualCount));
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, shaderPath, 2u, testArena));
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / s_ShadersDirectory / "bom_compiler_probe_ps.slang", "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n"));
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
@@ -362,7 +352,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
         ASSERT_TRUE(shaderVirtualPathResult);
         const Name& shaderVirtualPath = *shaderVirtualPathResult;
         UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
-        auto loadedShaderLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(testArena, outputDirectory, shaderVirtualPath, s_ExpectedDualCount);
+        auto loadedShaderLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(outputDirectory, shaderVirtualPath, 2u, testArena);
         ASSERT_TRUE(loadedShaderLoadResult2);
         loadedShader = Move(*loadedShaderLoadResult2);
         if(loadedShader){
@@ -373,11 +363,11 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
             NWB::Core::GraphicsVector<u32> words(testArena.arena);
             words.resize(shader.bytecode().size() / sizeof(u32));
             NWB_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
-            const auto entryPointResult11 = NWB::Core::ResolveSpirvEntryPointName(words.data(), words.size(), AStringView(shader.entryPoint()), NWB::Core::ShaderType::Pixel);
+            const auto entryPointResult11 = NWB::Core::ResolveSpirvEntryPointName(words, AStringView(shader.entryPoint()), NWB::Core::ShaderType::Pixel);
             ASSERT_TRUE(entryPointResult11);
             resolvedEntryPoint = *entryPointResult11;
             EXPECT_EQ(resolvedEntryPoint, s_MainCase);
-            const auto entryPointResult12 = NWB::Core::ResolveSpirvEntryPointName(words.data(), words.size(), s_Main, NWB::Core::ShaderType::Pixel);
+            const auto entryPointResult12 = NWB::Core::ResolveSpirvEntryPointName(words, s_Main, NWB::Core::ShaderType::Pixel);
             ASSERT_FALSE(entryPointResult12);
             EXPECT_EQ(entryPointResult12.error(), NWB::Core::SpirvEntryPointLookupResult::NotFound);
 
@@ -388,7 +378,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
     EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
-[[nodiscard]] static Expected<Path> FindSingleShaderBytecodeCachePath(TestArena& testArena, const Path& cacheDirectory){
+[[nodiscard]] static Expected<Path> FindSingleShaderBytecodeCachePath(const Path& cacheDirectory, TestArena& testArena){
     Path path(testArena.arena);
 
     const auto cacheEntries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
@@ -431,7 +421,7 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
     const Path assetRoot = root / s_AssetsDirectory;
     ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    const auto bytecodeCachePath = FindSingleShaderBytecodeCachePath(testArena, root / s_CacheDirectory);
+    const auto bytecodeCachePath = FindSingleShaderBytecodeCachePath(root / s_CacheDirectory, testArena);
     ASSERT_TRUE(bytecodeCachePath);
     Core::Assets::AssetBytes originalBytes(testArena.arena);
     ASSERT_TRUE(ReadBinaryFile(*bytecodeCachePath, originalBytes));
@@ -447,17 +437,17 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
     ASSERT_TRUE(computePathResult);
     const Name& computePath = *computePathResult;
     UniquePtr<Core::Assets::IAsset> computeAsset;
-    auto computeAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(testArena, computeOutput, computePath, s_ExpectedDualCount);
+    auto computeAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(computeOutput, computePath, 2u, testArena);
     ASSERT_TRUE(computeAssetLoadResult2);
     computeAsset = Move(*computeAssetLoadResult2);
     const auto& compute = static_cast<const Impl::ComputeShader&>(*computeAsset);
     const Expected<Name> pixelPathResult = Core::ShaderArchive::BuildVirtualPathName(Name(s_ProjectShadersStandalonePs), Core::ShaderArchive::s_DefaultVariant, Name(s_Ps));
     ASSERT_TRUE(pixelPathResult);
     const Name& pixelPath = *pixelPathResult;
-    static constexpr AStringView s_CorruptionNames[] = { "magic", "truncated", "malformed tail", "wrong physical stage" };
+    static constexpr Array<AStringView, 4u> s_CorruptionNames = { "magic", "truncated", "malformed tail", "wrong physical stage" };
     Core::Assets::AssetBytes corrupted(testArena.arena);
     Core::Assets::AssetBytes repaired(testArena.arena);
-    for(usize corruption = 0u; corruption < LengthOf(s_CorruptionNames); ++corruption){
+    for(usize corruption = 0u; corruption < s_CorruptionNames.size(); ++corruption){
         SCOPED_TRACE(s_CorruptionNames[corruption]);
         corrupted.assign(originalBytes.begin(), originalBytes.end());
         switch(corruption){
@@ -483,7 +473,7 @@ TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCa
         resolvedEntryPoint = *entryPointResult13;
         EXPECT_EQ(resolvedEntryPoint, s_Main);
         UniquePtr<Core::Assets::IAsset> pixelAsset;
-        auto pixelAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(testArena, outputDirectory, pixelPath, s_ExpectedDualCount);
+        auto pixelAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(outputDirectory, pixelPath, 2u, testArena);
         ASSERT_TRUE(pixelAssetLoadResult2);
         pixelAsset = Move(*pixelAssetLoadResult2);
         const auto& pixel = static_cast<const Impl::PixelShader&>(*pixelAsset);

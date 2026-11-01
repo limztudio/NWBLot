@@ -25,13 +25,9 @@ NWB_IMPL_BEGIN
 void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    Slot* slot = matchingSlot(key);
-    if(!slot || !slot->reserved || slot->inFlight)
+    Slot* slot = beginAcceptWithinLock(key, token, hardwareReady);
+    if(!slot)
         return;
-    slot->reserved = false;
-    slot->inFlight = true;
-    slot->metadata.acceptedToken = token;
-    slot->metadata.hardwareReady = hardwareReady;
     slot->metadata.opticalTransportEnabled = slot->metadata.opticalTransportEnabled && hardwareReady;
     if(history){
         slot->metadata.historyEpoch = history->epoch;
@@ -54,118 +50,70 @@ void ReflectionStatisticsState::accept(const StatisticsReservationKey& key, cons
     }
 }
 
-void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const u32* counters)noexcept{
-    NothrowScopedLock lock(m_mutex);
-
-    Slot* slot = beginCompleteWithinLock(key, token);
-    if(!slot)
-        return;
-    if(counters && slot->metadata.sequence > m_latest.sequence){
-        m_latest = slot->metadata;
-        m_latest.candidates = counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)];
-        m_latest.hardwareRays = counters[NWB_REFLECTION_COUNTER_HARDWARE_RAYS / sizeof(u32)];
-        m_latest.exteriorEligibleRays = counters[NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS / sizeof(u32)];
-        m_latest.hardwareHits = counters[NWB_REFLECTION_COUNTER_HARDWARE_HITS / sizeof(u32)];
-        m_latest.opaquePixels = counters[NWB_REFLECTION_COUNTER_OPAQUE_PIXELS / sizeof(u32)];
-        m_latest.glassPixels = counters[NWB_REFLECTION_COUNTER_GLASS_PIXELS / sizeof(u32)];
-        m_latest.fallbackPixels = counters[NWB_REFLECTION_COUNTER_FALLBACK_PIXELS / sizeof(u32)];
-        m_latest.screenAttempts = counters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
-        m_latest.screenHits = counters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
-        m_latest.queryBudgetUnits = counters[NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS / sizeof(u32)];
-        m_latest.physicalQueries = slot->metadata.csgHardwareEnabled ? counters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : m_latest.queryBudgetUnits;
-        m_latest.bootstrapEvents = counters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
-        m_latest.transparentPaths = counters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
-        m_latest.unsupportedPaths = counters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];
-        m_latest.limitedPaths = counters[NWB_REFLECTION_COUNTER_LIMITED_PATHS / sizeof(u32)];
-        m_latest.ambiguousPaths = counters[NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS / sizeof(u32)];
-        m_latest.tirEvents = counters[NWB_REFLECTION_COUNTER_TIR_EVENTS / sizeof(u32)];
-        m_latest.mediumOverflowPaths = counters[NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS / sizeof(u32)];
-        m_latest.potentialReceivers = counters[NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS / sizeof(u32)];
-        m_latest.screenReturns = counters[NWB_REFLECTION_COUNTER_SCREEN_RETURNS / sizeof(u32)];
-        m_latest.feedbackBypassedPixels = counters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
-        m_latest.feedbackProbeTiles = counters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
-        constexpr u32 s_CounterHighWordShiftBits = 32u;
-        m_latest.screenIterations = static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)]) | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << s_CounterHighWordShiftBits);
-        m_latest.screenLimitMisses = counters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
-    }
-    *slot = {};
+void ReflectionStatisticsState::complete(const StatisticsReservationKey& key, const Core::QueueSubmissionToken& token, const Span<const u32> counters)noexcept{
+    constexpr usize s_RequiredCounterCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
+    completeSlot<s_RequiredCounterCount>(
+        key,
+        token,
+        counters,
+        [](ReflectionStatistics& latest, const ReflectionStatistics& metadata, const Span<const u32> completedCounters)noexcept{
+            latest.candidates = completedCounters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)];
+            latest.hardwareRays = completedCounters[NWB_REFLECTION_COUNTER_HARDWARE_RAYS / sizeof(u32)];
+            latest.exteriorEligibleRays = completedCounters[NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS / sizeof(u32)];
+            latest.hardwareHits = completedCounters[NWB_REFLECTION_COUNTER_HARDWARE_HITS / sizeof(u32)];
+            latest.opaquePixels = completedCounters[NWB_REFLECTION_COUNTER_OPAQUE_PIXELS / sizeof(u32)];
+            latest.glassPixels = completedCounters[NWB_REFLECTION_COUNTER_GLASS_PIXELS / sizeof(u32)];
+            latest.fallbackPixels = completedCounters[NWB_REFLECTION_COUNTER_FALLBACK_PIXELS / sizeof(u32)];
+            latest.screenAttempts = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
+            latest.screenHits = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
+            latest.queryBudgetUnits = completedCounters[NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS / sizeof(u32)];
+            latest.physicalQueries = metadata.csgHardwareEnabled ? completedCounters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : latest.queryBudgetUnits;
+            latest.bootstrapEvents = completedCounters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
+            latest.transparentPaths = completedCounters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
+            latest.unsupportedPaths = completedCounters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];
+            latest.limitedPaths = completedCounters[NWB_REFLECTION_COUNTER_LIMITED_PATHS / sizeof(u32)];
+            latest.ambiguousPaths = completedCounters[NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS / sizeof(u32)];
+            latest.tirEvents = completedCounters[NWB_REFLECTION_COUNTER_TIR_EVENTS / sizeof(u32)];
+            latest.mediumOverflowPaths = completedCounters[NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS / sizeof(u32)];
+            latest.potentialReceivers = completedCounters[NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS / sizeof(u32)];
+            latest.screenReturns = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_RETURNS / sizeof(u32)];
+            latest.feedbackBypassedPixels = completedCounters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
+            latest.feedbackProbeTiles = completedCounters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
+            const u64 screenIterationsLow = static_cast<u64>(completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)]);
+            const u64 screenIterationsHigh = static_cast<u64>(completedCounters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]);
+            latest.screenIterations = screenIterationsLow | (screenIterationsHigh << s_ReflectionCounterHighWordShiftBits);
+            latest.screenLimitMisses = completedCounters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
+        }
+    );
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Expected<ReflectionStatisticsControlHandle> CreateReflectionStatisticsControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    return CreateStatisticsControl<ReflectionStatisticsControl>(arena, deviceGeneration);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void ReflectionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady, const ReflectionHistoryOutcome* history, const ReflectionFeedbackOutcome* feedback)noexcept{
-    if(m_control && m_key.valid())
-        m_control->accept(m_key, token, hardwareReady, history, feedback);
-    m_key = {};
-    m_control = nullptr;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReflectionStatisticsReadback::ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
-    : m_arena(arena)
-    , m_graphics(graphics)
-{}
-
-void ReflectionStatisticsReadback::invalidateResources()noexcept{
-    if(m_control)
-        m_control->reset(0u);
-    for(Core::BufferHandle& buffer : m_buffers)
-        buffer = nullptr;
-}
 
 b8 ReflectionStatisticsReadback::prepareResources(){
     if(m_buffers[0])
         return true;
-    const u16 deviceGeneration = m_graphics.getDevice().getDeviceGeneration();
-    if(!m_control){
-        auto controlResult = CreateReflectionStatisticsControl(m_arena, deviceGeneration);
-        if(!controlResult){
-            NWB_LOGGER_ERROR(NWB_TEXT("Reflection statistics: failed to allocate readback control"));
-            return false;
-        }
-        m_control = Move(*controlResult);
-    }
-    static constexpr Name s_Names[] = { Name("engine/reflection/statistics_readback_0"), Name("engine/reflection/statistics_readback_1"), Name("engine/reflection/statistics_readback_2"), };
-    auto buffers = ECSRenderDetail::CreateStatisticsReadbackBuffers(m_graphics, NWB_REFLECTION_COUNTER_SIZE, s_Names);
-    if(!buffers)
-        return false;
-    m_control->reset(deviceGeneration);
-    for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index)
-        m_buffers[index] = Move((*buffers)[index]);
-    return true;
+    static constexpr Array<Name, s_StatisticsReadbackSlotCount> s_Names = { s_ReflectionStatisticsReadback0Name, s_ReflectionStatisticsReadback1Name, s_ReflectionStatisticsReadback2Name, };
+    return ECSRenderDetail::PrepareStatisticsReadbackControlAndBuffers<NWB_REFLECTION_COUNTER_SIZE>(
+        s_Names,
+        NWB_TEXT("Reflection statistics: failed to allocate readback control"),
+        m_arena,
+        m_graphics,
+        m_control,
+        m_buffers
+    );
 }
 
 void ReflectionStatisticsReadback::pollCompleted(){
-    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFLECTION_COUNTER_SIZE>(m_control, m_graphics, m_buffers, NWB_TEXT("Reflection statistics: failed to map a completed readback"));
-}
-
-Expected<ReflectionStatistics> ReflectionStatisticsReadback::tryGetLatestStatistics()const noexcept{
-    if(!m_control)
-        return MakeUnexpected(Failure{});
-    return m_control->tryGetLatestStatistics();
+    ECSRenderDetail::PollCompletedStatisticsReadback<NWB_REFLECTION_COUNTER_SIZE>(m_buffers, NWB_TEXT("Reflection statistics: failed to map a completed readback"), m_control, m_graphics);
 }
 
 ReflectionStatisticsReadbackSnapshot ReflectionStatisticsReadback::snapshot(const ReflectionStatistics& metadata)const noexcept{
     ReflectionStatisticsReadbackSnapshot result;
     if(!m_control || !m_buffers[0])
         return result;
-    result.control = m_control;
-    result.metadata = metadata;
-    for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index)
-        result.buffers[index] = m_buffers[index];
+    populateSnapshot(metadata, result);
     return result;
 }
 

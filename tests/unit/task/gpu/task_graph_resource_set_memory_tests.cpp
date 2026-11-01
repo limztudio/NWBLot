@@ -54,7 +54,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
     members.clear();
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
-        char text[32u] = {};
+        Array<char, 32u> text = {};
         const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
         if(!identityNameResult)
             return false;
@@ -71,7 +71,7 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
 }
 
 [[nodiscard]] static Core::GpuGraphResourceSetDesc SetDescription(const Name& identity, const Span<const Core::GpuGraphResourceId> members, const usize count)noexcept{
-    return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Members").setMembers(members.data(), count);
+    return Core::GpuGraphResourceSetDesc{}.setIdentity(identity).setMarkerLabel("Resource Set Memory Members").setMembers(Span(members.data(), count));
 }
 
 static void ExpectDeclarationState(const Core::GpuTaskGraph& graph, const u64 revision, const usize setCount){
@@ -94,7 +94,7 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
         ASSERT_TRUE(FillResources(graph, 64u, members));
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
-            char text[32u] = {};
+            Array<char, 32u> text = {};
             const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
             ASSERT_TRUE(identityNameResult);
             const Name identity = *identityNameResult;
@@ -137,7 +137,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             const ArenaMemoryStats heapBefore = HeapBackingMemoryStats();
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
-                char text[32u] = {};
+                Array<char, 32u> text = {};
                 const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
                 ASSERT_TRUE(identityNameResult);
                 const Name identity = *identityNameResult;
@@ -213,7 +213,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
             EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
             members.back() = saved;
-            char text[32u] = {};
+            Array<char, 32u> text = {};
             const auto acceptedIdentityNameResult = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
             ASSERT_TRUE(acceptedIdentityNameResult);
             const Name acceptedIdentity = *acceptedIdentityNameResult;

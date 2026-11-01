@@ -50,10 +50,10 @@ namespace TextureAssetLoader{
 // LDR UASTC uses ASTC 4x4 when available, then BC7, otherwise portable RGBA8.
 // Opaque HDR UASTC uses ASTC HDR 4x4, then BC6H, then RGBA16_FLOAT.
 // HDR with flat/companion alpha decodes into RGBA16_FLOAT; one descriptor owns the full RGBA result.
-[[nodiscard]] b8 Create(TextureGpuResource& outResource, const Texture& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, const TStringView ownerName);
+[[nodiscard]] b8 Create(const Texture& textureAsset, const Name& debugName, TStringView ownerName, Core::GraphicsRuntime& graphics, TextureGpuResource& outResource);
 
 // Loads a cooked Texture asset through the normal asset manager, then delegates to Create().
-[[nodiscard]] b8 Load(TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, const TStringView ownerName);
+[[nodiscard]] b8 Load(const Core::Assets::AssetRef<Texture>& textureAsset, const Name& debugName, TStringView ownerName, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, TextureGpuResource& outResource);
 
 // Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.
 void Release(TextureGpuResource& inOutResource, Core::GraphicsRuntime& graphics);

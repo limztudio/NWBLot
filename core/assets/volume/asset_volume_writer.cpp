@@ -10,9 +10,6 @@
 
 #include "asset_volume_writer.h"
 
-#include "cook_paths.h"
-
-#include <core/filesystem/volume_build.h>
 #include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
 #include <core/common/log.h>
@@ -33,17 +30,30 @@ namespace __hidden_asset_volume_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
-
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 static constexpr u64 s_SegmentGrowthFactor = 2ull;
+static constexpr char s_StagedVolumePathTokenSeparator = '_';
+static constexpr usize s_StagedVolumePathTokenSeparatorCount = 2u;
+static constexpr usize s_StagedVolumePathHashDigits = sizeof(u64) * 2u;
 
 static_assert(AssetsVolumeCookDetail::s_AssetVolumeName.size() <= ACompactString::s_MaxLength, "asset volume name must fit ACompactString");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] static Core::Filesystem::StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName, ScratchArena& scratchArena){
+    const ScratchString volumeSafeName = BuildCanonicalSafeCacheName(scratchArena, volumeName);
+    ScratchString stageToken{scratchArena};
+    stageToken.reserve(volumeSafeName.size() + configurationSafeName.size() + s_StagedVolumePathTokenSeparatorCount + s_StagedVolumePathHashDigits);
+    stageToken += volumeSafeName;
+    stageToken += s_StagedVolumePathTokenSeparator;
+    stageToken += configurationSafeName;
+    stageToken += s_StagedVolumePathTokenSeparator;
+    AppendHexU64(ComputeFnv64Text(PathToString(scratchArena, outputDirectory)), stageToken);
+    return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
+}
 
 static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount)noexcept{
     if(fileCount == 0)
@@ -128,7 +138,7 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& arena, const ResolvedCookPaths& resolvedPaths, const AStringView configurationSafeName, const AssetVolumePackManifest& manifest, ScratchArena& scratchArena){
+Expected<AssetVolumeWriteResult> WriteAssetVolume(const ResolvedCookPaths& resolvedPaths, const AStringView configurationSafeName, const AssetVolumePackManifest& manifest, Core::Alloc::GlobalArena& arena, ScratchArena& scratchArena){
     AssetVolumeWriteResult result;
 
     if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest))
@@ -138,7 +148,7 @@ Expected<AssetVolumeWriteResult> WriteAssetVolume(Core::Alloc::GlobalArena& aren
     if(!volumeConfig)
         return MakeUnexpected(Failure{});
 
-    const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(resolvedPaths.outputDirectory, volumeConfig->volumeName, configurationSafeName, scratchArena);
+    const Core::Filesystem::StagedDirectoryPaths stagedVolumePaths = __hidden_asset_volume_writer::BuildStagedVolumePaths(resolvedPaths.outputDirectory, volumeConfig->volumeName, configurationSafeName, scratchArena);
     if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, s_AssetVolumeLogPrefix, Core::Filesystem::s_StageDirectoryLabel))
         return MakeUnexpected(Failure{});
     Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, s_AssetVolumeLogPrefix);

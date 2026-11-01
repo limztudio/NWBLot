@@ -7,6 +7,7 @@
 
 #include "module.h"
 #include "backend_forward.h"
+#include "backend_core_context.h"
 
 #include <core/graphics/rhi/resource_state_handoff_key.h>
 #include <core/task/cpu/scheduler.h>
@@ -14,9 +15,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 
@@ -29,7 +29,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class BindingLayout final : public RefCounter<GraphicsResource>, NoCopy{
+class BindingLayout final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
 
@@ -43,6 +43,7 @@ public:
     [[nodiscard]] const BindingLayoutDesc* getDescription()const noexcept{ return m_isBindless ? nullptr : &m_desc; }
 
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const noexcept{ return m_isBindless ? &m_bindlessDesc : nullptr; }
+
 
 public:
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
@@ -76,7 +77,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
+class AccelStruct final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
     friend class DescriptorBufferManager;
@@ -131,7 +132,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
+class OpacityMicromap final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
     friend class TrackedCommandBuffer;
@@ -209,20 +210,38 @@ private:
 
 
 public:
-    StateTracker(const VulkanContext& context);
-    ~StateTracker()noexcept;
+    StateTracker(const VulkanContext& context)
+        : m_permanentTextureStates(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
+        , m_permanentBufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
+        , m_attemptPermanentTextures(context.objectArena)
+        , m_attemptPermanentBuffers(context.objectArena)
+        , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
+        , m_bufferStates(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
+        , m_textureUavBarriers(0, Hasher<NotNull<Texture*>>(), EqualTo<NotNull<Texture*>>(), context.objectArena)
+        , m_bufferUavBarriers(0, Hasher<NotNull<Buffer*>>(), EqualTo<NotNull<Buffer*>>(), context.objectArena)
+        , m_context(context)
+    {}
+    ~StateTracker()noexcept{}
 
 
 public:
-    void reset()noexcept;
+    void reset()noexcept{
+        m_textureStates.clear();
+        m_bufferStates.clear();
+    }
     void beginRecordingAttempt()noexcept;
     void commitRecordingAttempt()noexcept;
     void rollbackRecordingAttempt()noexcept;
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
-    [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept;
-    [[nodiscard]] b8 isPermanentBuffer(Buffer& buffer)const noexcept;
+    [[nodiscard]] b8 isPermanentTexture(Texture& texture)const noexcept{
+        return m_permanentTextureStates.find(MakeNotNull(&texture)) != m_permanentTextureStates.end();
+    }
+
+    [[nodiscard]] b8 isPermanentBuffer(Buffer& buffer)const noexcept{
+        return m_permanentBufferStates.find(MakeNotNull(&buffer)) != m_permanentBufferStates.end();
+    }
     [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const noexcept;
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const noexcept;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const noexcept;

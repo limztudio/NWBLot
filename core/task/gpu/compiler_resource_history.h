@@ -51,13 +51,16 @@ private:
 
 
 public:
-    TrackedResourceStateHistory(Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states, usize resourceCount, u64 graphGeneration, Alloc::ScratchArena& scratchArena);
+    TrackedResourceStateHistory(usize resourceCount, u64 graphGeneration, Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states, Alloc::ScratchArena& scratchArena);
+    TrackedResourceStateHistory(Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states, const usize resourceCount, const u64 graphGeneration, Alloc::ScratchArena& scratchArena)
+        : TrackedResourceStateHistory(resourceCount, graphGeneration, states, scratchArena)
+    {}
 
 
 public:
     [[nodiscard]] b8 append(const TrackedCompiledResourceState& state);
-    [[nodiscard]] b8 validFor(const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& states)const noexcept{
-        return &states == &m_states && states.size() == m_links.size();
+    [[nodiscard]] b8 validFor(const Span<const TrackedCompiledResourceState> states)const noexcept{
+        return states.data() == m_states.data() && states.size() == m_states.size() && states.size() == m_links.size();
     }
 
     [[nodiscard]] b8 validResource(const GpuGraphResourceId resource)const noexcept{

@@ -64,17 +64,8 @@ template<typename DispatchFn>
     return true;
 }
 
-inline void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
-
-inline void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept{
-    if(payload.timingFeedback)
-        payload.timingFeedback->discardRecording(payload.timingAttribution);
-    payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
-}
+void AcceptAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload, const Core::QueueSubmissionToken& token)noexcept;
+void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

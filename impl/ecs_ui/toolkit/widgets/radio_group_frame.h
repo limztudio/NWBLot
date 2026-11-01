@@ -6,7 +6,7 @@
 
 
 #include "radio_group.h"
-#include "../text/layout.h"
+#include <impl/ecs_ui/toolkit/text/layout.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +31,11 @@ private:
 
 
 public:
-    RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept;
+    RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept
+        : m_source(source)
+        , m_state(state)
+        , m_labels(arena)
+    {}
 
 
 private:

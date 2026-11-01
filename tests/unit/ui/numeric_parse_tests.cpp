@@ -31,15 +31,15 @@ struct ParseCase{
 
 
 TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxRetainErrorClassification){
-    const ParseCase cases[]{
-        { "", NumericParseStatus::Incomplete }, { "  ", NumericParseStatus::Incomplete },
-        { "+", NumericParseStatus::Incomplete }, { "-", NumericParseStatus::Incomplete },
-        { " + ", NumericParseStatus::Incomplete }, { "--1" }, { "+-1" }, { "1 2" }, { "1,000" },
-        { "1_000" }, { "0x10" }, { "1.0" }, { "1e2" }, { "12x" }, { "nan" }, { "inf" },
-        { "\xE2\x88\x92" "1" }, { "\xD9\xA1" }, { "\xC2\xA0" "1" },
-        { AStringView("1\0", 2u) }, { "999999999999999999999999x" },
-        { "9223372036854775808", NumericParseStatus::OutOfRange },
-        { "-9223372036854775809", NumericParseStatus::OutOfRange }
+    const Array<ParseCase, 23> cases{
+        ParseCase{ "", NumericParseStatus::Incomplete }, ParseCase{ "  ", NumericParseStatus::Incomplete },
+        ParseCase{ "+", NumericParseStatus::Incomplete }, ParseCase{ "-", NumericParseStatus::Incomplete },
+        ParseCase{ " + ", NumericParseStatus::Incomplete }, ParseCase{ "--1" }, ParseCase{ "+-1" }, ParseCase{ "1 2" }, ParseCase{ "1,000" },
+        ParseCase{ "1_000" }, ParseCase{ "0x10" }, ParseCase{ "1.0" }, ParseCase{ "1e2" }, ParseCase{ "12x" }, ParseCase{ "nan" }, ParseCase{ "inf" },
+        ParseCase{ "\xE2\x88\x92" "1" }, ParseCase{ "\xD9\xA1" }, ParseCase{ "\xC2\xA0" "1" },
+        ParseCase{ AStringView("1\0", 2u) }, ParseCase{ "999999999999999999999999x" },
+        ParseCase{ "9223372036854775808", NumericParseStatus::OutOfRange },
+        ParseCase{ "-9223372036854775809", NumericParseStatus::OutOfRange }
     };
     for(const ParseCase& test : cases){
         SCOPED_TRACE(test.text);
@@ -54,10 +54,10 @@ TEST(UiNumericParseTests, IntegerConversionPreservesSignedBoundsAndLargeExactVal
         AStringView text;
         i64 value = 0;
     };
-    const CompleteCase cases[]{
-        { "9007199254740993", 9007199254740993ll },
-        { "-9223372036854775808", Limit<i64>::s_Min },
-        { "+9223372036854775807", Limit<i64>::s_Max }
+    const Array<CompleteCase, 3> cases{
+        CompleteCase{ "9007199254740993", 9007199254740993ll },
+        CompleteCase{ "-9223372036854775808", Limit<i64>::s_Min },
+        CompleteCase{ "+9223372036854775807", Limit<i64>::s_Max }
     };
     for(const CompleteCase& test : cases){
         SCOPED_TRACE(test.text);
@@ -68,17 +68,17 @@ TEST(UiNumericParseTests, IntegerConversionPreservesSignedBoundsAndLargeExactVal
 }
 
 TEST(UiNumericParseTests, FloatPrefixesAndMalformedSyntaxAreClassifiedBeforeConversion){
-    const ParseCase cases[]{
-        { "", NumericParseStatus::Incomplete }, { "  ", NumericParseStatus::Incomplete },
-        { "+", NumericParseStatus::Incomplete }, { "-", NumericParseStatus::Incomplete },
-        { ".", NumericParseStatus::Incomplete }, { "+.", NumericParseStatus::Incomplete },
-        { "-.", NumericParseStatus::Incomplete }, { "1e", NumericParseStatus::Incomplete },
-        { "1e+", NumericParseStatus::Incomplete }, { "1.e-", NumericParseStatus::Incomplete },
-        { "e" }, { ".e1" }, { "1..0" }, { "1e--2" }, { "1e+x" }, { "1e2x" },
-        { "1 2" }, { "1,2" }, { "1_2" }, { "0x1p2" }, { "nan" }, { "NaN" },
-        { "inf" }, { "-infinity" }, { "\xC2\xA0" "1" }, { AStringView("1\0", 2u) },
-        { "1e99999x" }, { "1e309", NumericParseStatus::OutOfRange },
-        { "1e-9999", NumericParseStatus::OutOfRange }, { "2e308", NumericParseStatus::OutOfRange }
+    const Array<ParseCase, 30> cases{
+        ParseCase{ "", NumericParseStatus::Incomplete }, ParseCase{ "  ", NumericParseStatus::Incomplete },
+        ParseCase{ "+", NumericParseStatus::Incomplete }, ParseCase{ "-", NumericParseStatus::Incomplete },
+        ParseCase{ ".", NumericParseStatus::Incomplete }, ParseCase{ "+.", NumericParseStatus::Incomplete },
+        ParseCase{ "-.", NumericParseStatus::Incomplete }, ParseCase{ "1e", NumericParseStatus::Incomplete },
+        ParseCase{ "1e+", NumericParseStatus::Incomplete }, ParseCase{ "1.e-", NumericParseStatus::Incomplete },
+        ParseCase{ "e" }, ParseCase{ ".e1" }, ParseCase{ "1..0" }, ParseCase{ "1e--2" }, ParseCase{ "1e+x" }, ParseCase{ "1e2x" },
+        ParseCase{ "1 2" }, ParseCase{ "1,2" }, ParseCase{ "1_2" }, ParseCase{ "0x1p2" }, ParseCase{ "nan" }, ParseCase{ "NaN" },
+        ParseCase{ "inf" }, ParseCase{ "-infinity" }, ParseCase{ "\xC2\xA0" "1" }, ParseCase{ AStringView("1\0", 2u) },
+        ParseCase{ "1e99999x" }, ParseCase{ "1e309", NumericParseStatus::OutOfRange },
+        ParseCase{ "1e-9999", NumericParseStatus::OutOfRange }, ParseCase{ "2e308", NumericParseStatus::OutOfRange }
     };
     for(const ParseCase& test : cases){
         SCOPED_TRACE(test.text);
@@ -93,7 +93,7 @@ TEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit){
         AStringView text;
         f64 value = 0.0;
     };
-    const CompleteCase cases[]{ { "-0", -0.0 }, { "-0.0", -0.0 }, { "-0e100", -0.0 } };
+    const Array<CompleteCase, 3> cases{ CompleteCase{ "-0", -0.0 }, CompleteCase{ "-0.0", -0.0 }, CompleteCase{ "-0e100", -0.0 } };
     for(const CompleteCase& test : cases){
         SCOPED_TRACE(test.text);
         const auto parsed = ParseFloatDraft(test.text);
@@ -103,18 +103,18 @@ TEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit){
 }
 
 TEST(UiNumericParseTests, EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhitespaceIsInvalid){
-    const char whitespace[]{ ' ', '\t', '\n', '\r', '\f', '\v' };
+    const Array<char, 6> whitespace{ ' ', '\t', '\n', '\r', '\f', '\v' };
     for(const char edge : whitespace){
-        const char trimmed[]{ edge, '+', '7', edge };
-        const auto integer = ParseIntegerDraft({ trimmed, 4u });
-        const auto floating = ParseFloatDraft({ trimmed, 4u });
+        const Array<char, 4> trimmed{ edge, '+', '7', edge };
+        const auto integer = ParseIntegerDraft({ trimmed.data(), 4u });
+        const auto floating = ParseFloatDraft({ trimmed.data(), 4u });
         ASSERT_TRUE(integer);
         ASSERT_TRUE(floating);
         EXPECT_EQ(*integer, 7);
         EXPECT_EQ(*floating, 7.0);
-        const char interior[]{ '1', edge, '2' };
-        const auto invalidInteger = ParseIntegerDraft({ interior, 3u });
-        const auto invalidFloat = ParseFloatDraft({ interior, 3u });
+        const Array<char, 3> interior{ '1', edge, '2' };
+        const auto invalidInteger = ParseIntegerDraft({ interior.data(), 3u });
+        const auto invalidFloat = ParseFloatDraft({ interior.data(), 3u });
         ASSERT_FALSE(invalidInteger);
         ASSERT_FALSE(invalidFloat);
         EXPECT_EQ(invalidInteger.error(), NumericParseStatus::Invalid);

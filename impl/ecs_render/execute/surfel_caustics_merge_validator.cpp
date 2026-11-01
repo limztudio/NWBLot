@@ -16,14 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SurfelCausticsMergeValidator::SurfelCausticsMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept
-    : m_pipeline(pipeline)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void SurfelCausticsMergeValidator::validate(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     Core::GpuTaskId causticsTask,
@@ -31,7 +23,7 @@ void SurfelCausticsMergeValidator::validate(
     b8 captureLaggedLightingHistory,
     SurfelCausticsMergeValidationResult& outResult
 )const noexcept{
-    RendererFramePipeline& pipeline = *m_pipeline;
+    const RendererFramePipeline& pipeline = m_pipeline;
     outResult = SurfelCausticsMergeValidationResult{};
     outResult.hardwareCausticsQueue = compiledPlan.queueInfoForTask(pipeline.m_deferredHardwareCausticsTask);
     outResult.surfelGiQueue = compiledPlan.queueInfoForTask(pipeline.m_deferredSurfelGiTask);
@@ -77,11 +69,13 @@ void SurfelCausticsMergeValidator::validate(
     outResult.causticPhotonMergedIntoCausticsPacket = pipeline.m_deferredCausticPhotonTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticPhotonTask, causticsTask);
     outResult.causticGeometryMergedIntoCausticsPacket = pipeline.m_deferredCausticGeometryTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticGeometryTask, causticsTask);
     outResult.causticResolvePrepareMergedIntoCausticsPacket = pipeline.m_deferredCausticResolvePrepareTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolvePrepareTask, causticsTask);
-    outResult.causticResolveWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveWaveletTask, causticsTask);
-    outResult.causticResolveSecondWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveSecondWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveSecondWaveletTask, causticsTask);
-    outResult.causticResolveThirdWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveThirdWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveThirdWaveletTask, causticsTask);
-    outResult.causticResolveFourthWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveFourthWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveFourthWaveletTask, causticsTask);
-    outResult.causticResolveFifthWaveletMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveFifthWaveletTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveFifthWaveletTask, causticsTask);
+    outResult.causticResolveWaveletsMergedIntoCausticsPacket = true;
+    for(const Core::GpuTaskId waveletTask : pipeline.m_deferredCausticResolveWaveletTasks){
+        if(!waveletTask.valid() || !compiledPlan.tasksSharePacket(waveletTask, causticsTask)){
+            outResult.causticResolveWaveletsMergedIntoCausticsPacket = false;
+            break;
+        }
+    }
     outResult.causticResolveUpsampleMergedIntoCausticsPacket = pipeline.m_deferredCausticResolveUpsampleTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticResolveUpsampleTask, causticsTask);
     outResult.causticIrradianceClearMergedIntoCausticsPacket = pipeline.m_deferredCausticIrradianceClearTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_deferredCausticIrradianceClearTask, causticsTask);
     // Keep the bootstrap clear in the producer packet; no hidden writers.

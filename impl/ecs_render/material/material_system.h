@@ -8,7 +8,9 @@
 #include <impl/ecs_render/material/material_surface_lookup.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/material/renderer_material_state.h>
+#include <impl/ecs_render/material/sampled_texture_collection.h>
+#include <impl/ecs_render/avboit/avboit_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
 
@@ -60,18 +62,9 @@ NWB_IMPL_BEGIN
 
 namespace ECSRenderDetail{
     struct CsgGraphResourceSnapshot;
-    struct MeshViewGpuData;
-};
-
-struct MaterialInstanceOverrideField{
-    const MaterialTypedLayoutField& field;
-    u32 blockByteBegin = 0u;
-    b8 mutableBlock = false;
 };
 
 class CsgShapeRegistry;
-template<typename OutputArena>
-class MaterialSampledTextureCollector;
 class RendererMaterialState;
 class RendererShaderSystem;
 class RendererMeshSystem;
@@ -104,7 +97,18 @@ public:
         RendererMeshSystem& meshSystem,
         RendererCsgSystem& csgSystem,
         const RendererOpticalVolumeSelection& opticalVolumes
-    )noexcept;
+    )noexcept
+        : m_arena(arena)
+        , m_world(world)
+        , m_graphics(graphics)
+        , m_assetManager(assetManager)
+        , m_csgShapeRegistry(csgShapeRegistry)
+        , m_materialState(materialState)
+        , m_shaderSystem(shaderSystem)
+        , m_meshSystem(meshSystem)
+        , m_csgSystem(csgSystem)
+        , m_opticalVolumes(opticalVolumes)
+    {}
 
 
 public:
@@ -160,7 +164,7 @@ public:
         const CsgFrameState& csgFrameState,
         RendererResourceLookupMode::Enum lookupMode,
         // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
-        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState,
+        const MeshViewGpuData* csgWorkRegionMeshViewState,
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
         CsgFrameGpuData& csgFrameData,
@@ -183,21 +187,35 @@ public:
         ECSRenderDetail::MaterialTypedByteContentRangeMap& inOutMutableRanges
     );
     void pruneMaterialInstanceMutableCache()noexcept;
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept;
-    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
+    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassMeshResourceSnapshot& mesh, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)const noexcept{
+        return mesh.valid() && frameBindings.bindingValid();
+    }
+    [[nodiscard]] b8 materialPassDrawResourcesReady(const MaterialPassDrawItemsView& drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+        return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings) && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings) && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings);
+    }
     [[nodiscard]] b8 meshMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
-    [[nodiscard]] b8 indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
+    [[nodiscard]] b8 indexedMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept{
+        return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
+    }
     [[nodiscard]] b8 computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
     // Resolves persistent sampled textures selected by frozen draws.
     // Missing cached resources reject collection; asset and descriptor creation belong to preparation.
-    [[nodiscard]] b8 appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const;
-    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const;
-    [[nodiscard]] b8 prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept;
-    [[nodiscard]] b8 prepareMeshMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
+    [[nodiscard]] b8 appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
+        return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
+    }
+    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const{
+        return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, scratchArena);
+    }
+    [[nodiscard]] b8 prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
+        return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
+    }
+    [[nodiscard]] b8 prepareMeshMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept{
+        return prepareMaterialPassResourceBindingsImpl(drawItems, false);
+    }
     [[nodiscard]] b8 prepareIndexedMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
-    [[nodiscard]] b8 prepareComputeMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept;
-    [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, b8 twoSided, b8 meshletConeCullScaleSafe)const noexcept;
-    [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const noexcept;
+    [[nodiscard]] b8 prepareComputeMaterialPassResourceBindings(Span<const MaterialPassDrawItem> drawItems)noexcept{
+        return prepareMaterialPassResourceBindingsImpl(drawItems, true);
+    }
     void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
     [[nodiscard]] b8 setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh, const MaterialPassPipelineResourceSnapshot& pipelineResources);

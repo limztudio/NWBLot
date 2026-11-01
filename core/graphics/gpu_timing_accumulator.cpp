@@ -33,13 +33,13 @@ b8 GpuTimingAccumulator::setCaptureEnabled(const b8 enabled, const u64 subscript
 void GpuTimingAccumulator::collect(
     Device& device,
     GpuTimingRecorder& recorder,
+    Alloc::ScratchArena& scratchArena,
+    SampleDispatchVector& completedSamples,
+    GpuTimingSinkSampleVector& performanceSamples,
     const u32 epoch,
     const u64 performanceCaptureEpoch,
     const u64 subscriptionIdentityLimit,
-    const b8 publishPerformanceSamples,
-    Alloc::ScratchArena& scratchArena,
-    SampleDispatchVector& completedSamples,
-    GpuTimingSinkSampleVector& performanceSamples
+    const b8 publishPerformanceSamples
 ){
     if(m_pendingAcceptedQueryCount == 0u)
         return;
@@ -178,10 +178,6 @@ void GpuTimingAccumulator::discardFrameReset()noexcept{
         // An inline-reset-capable position still performs its own device-timeline reset.
         record.deviceReady = false;
     }
-}
-
-void GpuTimingAccumulator::requestQueries(const u32 queryCount)noexcept{
-    m_requestedQueryCount = Max(m_requestedQueryCount, queryCount);
 }
 
 b8 GpuTimingAccumulator::materializeRequestedQueries(Device& device){

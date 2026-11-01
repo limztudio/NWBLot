@@ -72,7 +72,7 @@ public:
         m_handle = ::LoadLibrary(nativeName.c_str());
         if(!m_handle){
             const DWORD error = GetLastError();
-            return MakeUnexpected(SharedLibraryFailure{ .code = ErrorCode(static_cast<i32>(error), std::system_category()), });
+            return MakeUnexpected(SharedLibraryFailure{ .code = ErrorCode(static_cast<i32>(error), SystemCategory()), });
         }
 #else
         m_handle = ::dlopen(nativeName.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -122,7 +122,7 @@ private:
         void* const symbol = reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(m_handle), nativeSymbolName.c_str()));
         if(!symbol){
             const DWORD error = GetLastError();
-            return MakeUnexpected(SharedLibraryFailure{ .code = ErrorCode(static_cast<i32>(error), std::system_category()), });
+            return MakeUnexpected(SharedLibraryFailure{ .code = ErrorCode(static_cast<i32>(error), SystemCategory()), });
         }
 #else
         // dlsym requires clearing old loader state to distinguish a null symbol value from an actual lookup failure.

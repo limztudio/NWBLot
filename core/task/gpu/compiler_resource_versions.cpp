@@ -161,10 +161,6 @@ namespace __hidden_gpu_task_graph_compiler_resource_versions{
 
 
 class FrozenResourceVersionReachability final : NoCopy{
-private:
-    static constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
-
 public:
     explicit FrozenResourceVersionReachability(Alloc::ScratchArena& scratchArena)noexcept
         : m_incomingOffsets(scratchArena)
@@ -178,7 +174,7 @@ public:
 
 public:
     [[nodiscard]] b8 build(const Span<const GpuTaskDependencyEdge> edges, const usize taskCount, const usize maximumRowCount){
-        m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
+        m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / GpuTaskGraphCompilerDetail::s_BitsPerWord + 1u;
         if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
             return false;
 
@@ -212,15 +208,15 @@ public:
             m_rows.emplace_back(m_scratchArena);
             Vector<u64, Alloc::ScratchArena>& row = m_rows.back();
             row.resize(m_wordsPerRow, 0u);
-            row[destination.index / s_BitsPerWord] |= static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
+            row[destination.index / GpuTaskGraphCompilerDetail::s_BitsPerWord] |= static_cast<u64>(1u) << (destination.index % GpuTaskGraphCompilerDetail::s_BitsPerWord);
             m_pending.clear();
             m_pending.push_back(destination.index);
             for(usize pendingIndex = 0u; pendingIndex < m_pending.size(); ++pendingIndex){
                 const u32 consumerIndex = m_pending[pendingIndex];
                 for(usize edgeIndex = m_incomingOffsets[consumerIndex]; edgeIndex < m_incomingOffsets[consumerIndex + 1u]; ++edgeIndex){
                     const u32 producerIndex = m_incomingProducers[edgeIndex];
-                    const usize producerWord = producerIndex / s_BitsPerWord;
-                    const u64 producerMask = static_cast<u64>(1u) << (producerIndex % s_BitsPerWord);
+                    const usize producerWord = producerIndex / GpuTaskGraphCompilerDetail::s_BitsPerWord;
+                    const u64 producerMask = static_cast<u64>(1u) << (producerIndex % GpuTaskGraphCompilerDetail::s_BitsPerWord);
                     if((row[producerWord] & producerMask) != 0u)
                         continue;
                     row[producerWord] |= producerMask;
@@ -230,8 +226,8 @@ public:
             rowIndex = newRowIndex;
         }
         const Vector<u64, Alloc::ScratchArena>& row = m_rows[rowIndex];
-        const u64 mask = static_cast<u64>(1u) << (source.index % s_BitsPerWord);
-        return (row[source.index / s_BitsPerWord] & mask) != 0u;
+        const u64 mask = static_cast<u64>(1u) << (source.index % GpuTaskGraphCompilerDetail::s_BitsPerWord);
+        return (row[source.index / GpuTaskGraphCompilerDetail::s_BitsPerWord] & mask) != 0u;
     }
 
 

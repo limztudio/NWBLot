@@ -42,9 +42,9 @@ struct SkinReference{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName);
-[[nodiscard]] b8 AppendMeshReplacements(TextReplacements& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena);
-void ApplyTextReplacements(ScratchString& inOutSource, Span<TextReplacement> replacements);
+[[nodiscard]] Expected<SkinReference> FindSkinForMesh(const Core::Metascript::Document& doc, AStringView meshVariableName);
+[[nodiscard]] b8 AppendMeshReplacements(AStringView source, AStringView variableName, const SourceMeshStreamCounts& before, const SourceMeshStreams& after, Core::Alloc::ScratchArena& scratchArena, TextReplacements& inOutReplacements);
+void ApplyTextReplacements(Span<TextReplacement> inOutReplacements, ScratchString& inOutSource);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

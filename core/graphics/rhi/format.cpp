@@ -3,6 +3,9 @@
 
 
 #include "format.h"
+#include "resource.h"
+
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,7 +26,7 @@ static constexpr int s_UnknownFormatBlockY = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr FormatInfo s_FormatInfo[Format::Count] = {
+static constexpr Array<FormatInfo, Format::Count> s_FormatInfo = {{
     { Format::UNKNOWN              , "UNKNOWN", __hidden_graphics_format::s_UnknownFormatBlockX, __hidden_graphics_format::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
@@ -143,7 +146,7 @@ static constexpr FormatInfo s_FormatInfo[Format::Count] = {
     { Format::ASTC_12x12_UNORM     , "ASTC_12x12_UNORM"     , 16, 12, FormatKind::Normalized  , true , true , true , true , false, false, false, false },
     { Format::ASTC_12x12_UNORM_SRGB, "ASTC_12x12_UNORM_SRGB", 16, 12, FormatKind::Normalized  , true , true , true , true , false, false, false, true  },
     { Format::ASTC_12x12_FLOAT     , "ASTC_12x12_FLOAT"     , 16, 12, FormatKind::Float       , true , true , true , true , false, false, true , false },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -155,51 +158,6 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
         return s_FormatInfo[static_cast<u32>(Format::UNKNOWN)];
 
     return s_FormatInfo[static_cast<u32>(format)];
-}
-
-u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept{
-    return formatInfo.blockSize;
-}
-
-u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
-    switch(formatInfo.format){
-    case Format::ASTC_5x4_UNORM:
-    case Format::ASTC_5x4_UNORM_SRGB:
-    case Format::ASTC_5x4_FLOAT:
-        return 4u;
-
-    case Format::ASTC_6x5_UNORM:
-    case Format::ASTC_6x5_UNORM_SRGB:
-    case Format::ASTC_6x5_FLOAT:
-    case Format::ASTC_8x5_UNORM:
-    case Format::ASTC_8x5_UNORM_SRGB:
-    case Format::ASTC_8x5_FLOAT:
-    case Format::ASTC_10x5_UNORM:
-    case Format::ASTC_10x5_UNORM_SRGB:
-    case Format::ASTC_10x5_FLOAT:
-        return 5u;
-
-    case Format::ASTC_8x6_UNORM:
-    case Format::ASTC_8x6_UNORM_SRGB:
-    case Format::ASTC_8x6_FLOAT:
-    case Format::ASTC_10x6_UNORM:
-    case Format::ASTC_10x6_UNORM_SRGB:
-    case Format::ASTC_10x6_FLOAT:
-        return 6u;
-
-    case Format::ASTC_10x8_UNORM:
-    case Format::ASTC_10x8_UNORM_SRGB:
-    case Format::ASTC_10x8_FLOAT:
-        return 8u;
-
-    case Format::ASTC_12x10_UNORM:
-    case Format::ASTC_12x10_UNORM_SRGB:
-    case Format::ASTC_12x10_FLOAT:
-        return 10u;
-
-    default:
-        return formatInfo.blockSize;
-    }
 }
 
 Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(const FormatInfo& formatInfo, const TextureUploadAspect::Enum requestedAspect)noexcept{
@@ -249,6 +207,65 @@ Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(const FormatInf
     if(layout.blockWidth == 0u || layout.blockHeight == 0u || layout.bytesPerBlock == 0u)
         return MakeUnexpected(Failure{});
     return layout;
+}
+
+Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, const u32 arraySlice, const u32 mipLevel, const usize rowPitch, const usize depthPitch, const TextureUploadAspect::Enum aspect)noexcept{
+    if(
+        textureDesc.width == 0u
+        || textureDesc.height == 0u
+        || textureDesc.depth == 0u
+        || textureDesc.mipLevels == 0u
+        || textureDesc.arraySize == 0u
+        || textureDesc.sampleCount != 1u
+        || mipLevel >= textureDesc.mipLevels
+        || mipLevel >= sizeof(u32) * s_BitsPerByte
+        || arraySlice >= textureDesc.arraySize
+        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count)
+    )
+        return MakeUnexpected(Failure{});
+
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    const auto aspectLayout = GetTextureUploadAspectLayout(formatInfo, aspect);
+    if(!aspectLayout)
+        return MakeUnexpected(Failure{});
+
+    const u32 width = Max<u32>(1u, textureDesc.width >> mipLevel);
+    const u32 height = Max<u32>(1u, textureDesc.height >> mipLevel);
+    const u32 depth = textureDesc.dimension == TextureDimension::Texture3D ? Max<u32>(1u, textureDesc.depth >> mipLevel) : 1u;
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout->blockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout->blockHeight));
+    if(blockCountX > Limit<u64>::s_Max / aspectLayout->bytesPerBlock)
+        return MakeUnexpected(Failure{});
+
+    const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
+    const u64 effectiveRowPitch = rowPitch != 0u ? static_cast<u64>(rowPitch) : naturalRowPitch;
+    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0u || blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
+        return MakeUnexpected(Failure{});
+
+    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
+    const u64 effectiveDepthPitch = depthPitch != 0u ? static_cast<u64>(depthPitch) : packedSlicePitch;
+    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0u)
+        return MakeUnexpected(Failure{});
+
+    // The native texture-copy contract uses 32-bit texel pitch fields in CommandList::writeTexture.
+    // Validate them at declaration time so an accepted graph upload cannot lower to a native no-op after the command list rejects it.
+    const u64 bufferRowBlocks = effectiveRowPitch / aspectLayout->bytesPerBlock;
+    const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
+    if(
+        bufferRowBlocks > Limit<u64>::s_Max / aspectLayout->blockWidth
+        || bufferImageBlocks > Limit<u64>::s_Max / aspectLayout->blockHeight
+        || bufferRowBlocks * aspectLayout->blockWidth > Limit<u32>::s_Max
+        || bufferImageBlocks * aspectLayout->blockHeight > Limit<u32>::s_Max
+    )
+        return MakeUnexpected(Failure{});
+
+    if(depth > 1u && static_cast<u64>(depth - 1u) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
+        return MakeUnexpected(Failure{});
+
+    const u64 requiredBytes = depth > 1u ? effectiveDepthPitch * static_cast<u64>(depth - 1u) + packedSlicePitch : packedSlicePitch;
+    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(Failure{});
+    return static_cast<usize>(requiredBytes);
 }
 
 

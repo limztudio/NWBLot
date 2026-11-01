@@ -9,11 +9,11 @@
 
 
 #include "cook.h"
-#include "cook_glyph_metadata.h"
 
 #include <impl/assets_font/prepared_source.h>
 #include <impl/assets_font/types.adhd.h>
 
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 
 #include <global/binary_big_endian.h>
@@ -35,26 +35,16 @@ namespace __hidden_font_atlas_cook_metadata{
 
 
 using Core::Metascript::Value;
-static constexpr AStringView s_BakePpemField = "bake_ppem";
-static constexpr AStringView s_SpreadPixelsField = "spread_pixels";
-static constexpr AStringView s_RasterModeField = "raster_mode";
-static constexpr AStringView s_AscenderUnitsField = "ascender_units";
-static constexpr AStringView s_DescenderUnitsField = "descender_units";
-static constexpr AStringView s_LineGapUnitsField = "line_gap_units";
-static constexpr AStringView s_RasterModeBitmap = "bitmap";
-static constexpr AStringView s_RasterModeOutline = "outline";
+
+static Core::Assets::AssetPairedSidecarRuleAutoRegistrar s_FontAtlasPairedSidecarRuleAutoRegistrar({
+    .firstToken = "font_atlas",
+    .sidecarExtension = s_PreparedFontExtension,
+    .bunchScanKeyword = "font_atlas",
+});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<u32> ReadU32(const Path& path, const Value& asset, const AStringView field, const u32 minimum, const u32 maximum){
-    const Value* value = asset.findField(field);
-    if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum)
-        return static_cast<u32>(value->asInteger());
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}"), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
-    return MakeUnexpected(Failure{});
-}
 
 [[nodiscard]] static b8 ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
     const Core::Assets::AssetBytes& bytes = font.fontBytes();
@@ -86,36 +76,30 @@ static constexpr AStringView s_RasterModeOutline = "outline";
 }
 
 [[nodiscard]] static b8 ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
-    auto bakePpemResult = ReadU32(path, asset, s_BakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
+    auto bakePpemResult = ReadFontAtlasMetadataU32(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasBakePpemField, s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
     if(!bakePpemResult)
         return false;
     payload.bakePpem = *bakePpemResult;
-    auto spreadPixelsResult = ReadU32(path, asset, s_SpreadPixelsField, s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
+    auto spreadPixelsResult = ReadFontAtlasMetadataU32(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasSpreadPixelsField, s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
     if(!spreadPixelsResult)
         return false;
     payload.spreadPixels = *spreadPixelsResult;
-    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_AscenderUnitsField, true);
+    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasAscenderUnitsField, true);
     if(!ascenderUnitsResult)
         return false;
     payload.ascenderUnits = *ascenderUnitsResult;
-    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_DescenderUnitsField, true);
+    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasDescenderUnitsField, true);
     if(!descenderUnitsResult)
         return false;
     payload.descenderUnits = *descenderUnitsResult;
-    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_LineGapUnitsField, true);
+    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasLineGapUnitsField, true);
     if(!lineGapUnitsResult)
         return false;
     payload.lineGapUnits = *lineGapUnitsResult;
-    AStringView rasterMode;
-    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_RasterModeField, true);
+    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_FontAtlasMetaDiagnosticPrefix, s_FontAtlasRasterModeField, true);
     if(!rasterModeResult)
         return false;
-    rasterMode = rasterModeResult->text;
-    if(rasterMode == s_RasterModeBitmap)
-        payload.rasterMode = FontAtlasRasterMode::Bitmap;
-    else if(rasterMode == s_RasterModeOutline)
-        payload.rasterMode = FontAtlasRasterMode::Outline;
-    else{
+    if(!TryParseFontAtlasRasterMode(rasterModeResult->text, payload.rasterMode)){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
         return false;
     }
@@ -145,16 +129,16 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<u32> ReadFontAtlasMetadataU32(const Path& path, const Core::Metascript::Value& map, const AStringView diagnosticPrefix, const AStringView field, const u32 minimum, const u32 maximum){
+    const Core::Metascript::Value* value = map.findField(field);
+    if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum)
+        return static_cast<u32>(value->asInteger());
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be an integer in {}..{}"), ConvertString(diagnosticPrefix), PathToString<tchar>(path), ConvertString(field), minimum, maximum);
+    return MakeUnexpected(Failure{});
+}
+
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = s_NameNone;
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    virtualPath = *virtualPathResult;
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, s_FontAtlasMetaDiagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, **asset, arena, scratchArena);
+    return Core::Assets::ParseCookMetadataDocument<FontAtlasCookEntry, &ParseFontAtlasCookMetadataValue>(assetRoot, virtualRoot, nwbFilePath, doc, s_FontAtlasMetaDiagnosticPrefix, arena, scratchArena);
 }
 
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
@@ -165,7 +149,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
             nwbFilePath,
             asset,
             s_FontAtlasMetaDiagnosticPrefix,
-            { s_FontAtlasMetaFontField, s_BakePpemField, s_SpreadPixelsField, s_RasterModeField, s_AscenderUnitsField, s_DescenderUnitsField, s_LineGapUnitsField, s_FontAtlasGlyphsField }
+            { s_FontAtlasMetaFontField, s_FontAtlasBakePpemField, s_FontAtlasSpreadPixelsField, s_FontAtlasRasterModeField, s_FontAtlasAscenderUnitsField, s_FontAtlasDescenderUnitsField, s_FontAtlasLineGapUnitsField, s_FontAtlasGlyphsField }
         )
     )
         return MakeUnexpected(Failure{});
@@ -178,7 +162,7 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(const Name virtualP
         return MakeUnexpected(Failure{});
     Path fontPath = nwbFilePath;
     fontPath.replaceExtension(s_PreparedFontExtension);
-    auto sourceResult = ReadPreparedFontSource(fontPath, arena, true);
+    auto sourceResult = ReadPreparedFontSource(fontPath, true, arena);
     if(!sourceResult)
         return MakeUnexpected(Failure{});
     PreparedFontSource& source = *sourceResult;
@@ -242,6 +226,19 @@ Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::A
         payload.positioningTables.push_back(Move(table));
     }
     candidate.setPayload(Move(payload));
+    if(!candidate.validatePayload(scratchArena))
+        return MakeUnexpected(Failure{});
+    return candidate;
+}
+
+Expected<FontAtlas> BuildFontAtlasAsset(FontAtlasCookEntry&& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
+    if(&entry.payload.glyphs.get_allocator().arena() != &arena){
+        const FontAtlasCookEntry& constEntry = entry;
+        return BuildFontAtlasAsset(constEntry, arena, scratchArena);
+    }
+
+    FontAtlas candidate(arena, entry.virtualPath);
+    candidate.setPayload(Move(entry.payload));
     if(!candidate.validatePayload(scratchArena))
         return MakeUnexpected(Failure{});
     return candidate;

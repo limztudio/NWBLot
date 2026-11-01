@@ -14,9 +14,12 @@ enum<u8> ShadowReceiverResolution{
     Quarter = 4u
 }
 
+const u32 s_SceneShadowSlotCount = 8u;
 const u32 s_ShadowReceiverFactorHalf = cast<u32>(ShadowReceiverResolution::Half);
 const u32 s_ShadowReceiverFactorQuarter = cast<u32>(ShadowReceiverResolution::Quarter);
 const u32 s_SwShadowTransparentSpp = 3u;
+// Crossings, overflow list, and overflow arguments.
+const usize s_HwTransparentScratchBufferCount = 3u;
 
 [reflect]
 class ShadowQualitySettings{
@@ -33,6 +36,38 @@ u32 ResolveTransparentShadowSampleCount(in ShadowQualitySettings settings, in b8
     if(settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable)
         return 1u;
     return s_SwShadowTransparentSpp;
+}
+
+b8 SameShadowQualitySettings(in ShadowQualitySettings first, in ShadowQualitySettings second){
+    return first.transparentSampling == second.transparentSampling && first.receiverResolution == second.receiverResolution;
+}
+
+// Qualifies the accepted RGB history generation independently from opaque-only history advancement.
+class TransparentShadowSamplingHistory{
+    public void reset(){
+        this.m_acceptedSlots = 0u;
+        this.m_pendingSlots = 0u;
+    }
+
+    public void record(in u32 slotMask){
+        this.m_pendingSlots |= slotMask;
+    }
+
+    public void accept(){
+        this.m_acceptedSlots = this.m_pendingSlots;
+        this.m_pendingSlots = 0u;
+    }
+
+    public void discardPending(){
+        this.m_pendingSlots = 0u;
+    }
+
+    public b8 covers(in u32 slotMask)const{
+        return slotMask != 0u && (this.m_acceptedSlots & slotMask) == slotMask;
+    }
+
+    private u32 m_acceptedSlots = 0u;
+    private u32 m_pendingSlots = 0u;
 }
 
 

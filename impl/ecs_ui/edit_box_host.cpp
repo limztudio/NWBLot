@@ -34,7 +34,18 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
     m_events.reserve(Ui::s_InputMaxEvents);
 }
 
-UiEditBoxHost::~UiEditBoxHost()noexcept{ cancelTransfers(); }
+Ui::EditBoxResult UiEditBoxHost::editNavigated(
+    const Ui::WidgetState& widget,
+    const Ui::EditBoxOptions& options,
+    const Ui::PopupToken& popup,
+    Ui::EditModel& model,
+    Ui::EditNavigationState& navigation,
+    Ui::IEditNavigationResolver& resolver,
+    Ui::IEditActionSink& actions
+){
+    NavigationBorrow borrowed{ navigation, resolver };
+    return editBorrowed(widget, options, popup, model, &actions, &borrowed);
+}
 
 b8 UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view, const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
     if(rejectBorrowedMutation())
@@ -104,17 +115,13 @@ void UiEditBoxHost::commitFrame(const u64 generation){
 }
 
 b8 UiEditBoxHost::hasTextFocus()const noexcept{
-    const Entry* entry = find(m_context.input().focus());
-    if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
-        return false;
-    const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
-    return target && target->enabled && target->textEditable && target->popup == entry->popup;
+    return focusedTextEntry() != nullptr;
 }
 
 b8 UiEditBoxHost::wantsTextInput()const noexcept{
-    if(!m_context.input().windowFocused() || !hasTextFocus())
+    if(!m_context.input().windowFocused())
         return false;
-    const Entry* entry = find(m_context.input().focus());
+    const Entry* entry = focusedTextEntry();
     return entry && !entry->displayed.options.readOnly;
 }
 
@@ -129,9 +136,9 @@ b8 UiEditBoxHost::takeClipboardFailure()noexcept{
 void UiEditBoxHost::synchronizeFocus(){
     if(rejectBorrowedMutation())
         return;
-    const Entry* entry = find(m_context.input().focus());
-    const b8 focused = hasTextFocus() && entry;
-    m_clickTracker.retainFocus(focused ? entry->owner : Ui::UiTextEditOwner{});
+    const Entry* entry = focusedTextEntry();
+    const b8 focused = entry != nullptr;
+    m_clickTracker.retainFocus(focused ? entry->owner : UiTextEditOwner{});
     for(auto& candidate : m_entries){
         const b8 active = focused && candidate.owner == entry->owner;
         if(candidate.actionCapable){
@@ -182,11 +189,7 @@ void UiEditBoxHost::reset(){
 }
 
 UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)noexcept{
-    for(auto& entry : m_entries){
-        if(entry.widget.id == widget)
-            return &entry;
-    }
-    return nullptr;
+    return const_cast<Entry*>(static_cast<const UiEditBoxHost&>(*this).find(widget));
 }
 
 const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const noexcept{
@@ -197,7 +200,15 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const 
     return nullptr;
 }
 
-void UiEditBoxHost::discard(const Ui::UiTextEditOwner& owner)noexcept{
+const UiEditBoxHost::Entry* UiEditBoxHost::focusedTextEntry()const noexcept{
+    const Entry* entry = find(m_context.input().focus());
+    if(!entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled || entry->displayed.modelGeneration != entry->owner.modelGeneration || entry->displayed.popup != entry->popup)
+        return nullptr;
+    const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
+    return target && target->enabled && target->textEditable && target->popup == entry->popup ? entry : nullptr;
+}
+
+void UiEditBoxHost::discard(const UiTextEditOwner& owner)noexcept{
     for(usize index = m_events.size(); index > 0u; --index){
         if(m_events[index - 1u].owner == owner){
             m_queuedTextBytes -= m_events[index - 1u].native.text.size();

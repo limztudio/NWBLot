@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -22,7 +22,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
     if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        panelDeclarationBlocked()
         || !anchor || !IsFinite(options.size.x) || !IsFinite(options.size.y) || options.size.x <= 0.0f || options.size.y <= 0.0f
         || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || m_scope->m_contextMenus.size() >= s_InputMaxPopups
@@ -124,10 +124,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return result;
     }
-    const SIMDVectorSingle listPaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVectorSingle listPaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listPaddingMaximum = VectorSelect(listPaddingCandidate, listPaddingCurrent, VectorGreater(listPaddingCurrent, listPaddingCandidate));
-    list.padding = { VectorGetX(listPaddingMaximum), VectorGetY(listPaddingMaximum), VectorGetZ(listPaddingMaximum), VectorGetW(listPaddingMaximum) };
+    list.padding = MaxUiPadding(list.padding, background->padding);
     if(!prepareListMetrics(list) || !contextMenuMatches(frame)){
         m_context.fail();
         return result;
@@ -146,6 +143,23 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     result.closed = previouslyOpen && !state.isOpen();
     m_scope->m_contextMenus.push_back(frame);
     return result;
+}
+
+b8 Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const noexcept{
+    return
+        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
+        && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration
+        && frame.state->m_owner == frame.widget.id && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
+    ;
+}
+
+b8 Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
+    return
+        frame.source && contextMenuStateMatches(frame)
+        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
+        && frame.source->revision() == frame.listToken.contentRevision && contextMenuStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount && contextMenuStateMatches(frame)
+    ;
 }
 
 

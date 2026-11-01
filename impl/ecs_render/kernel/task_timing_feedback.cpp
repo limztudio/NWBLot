@@ -4,7 +4,6 @@
 
 #include "task_timing_feedback.h"
 
-#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/backend_selection.h>
 
@@ -18,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const b8 rendererActive)noexcept{
+RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, const b8 rendererActive, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept{
     RendererTaskTimingFeedbackPolicyTransition transition{ .previousPolicy = currentPolicy, .requestedPolicy = requestedPolicy, };
     if(!rendererActive || currentPolicy.enabled == requestedPolicy.enabled){
         currentPolicy = requestedPolicy;
@@ -31,7 +30,7 @@ RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPoli
     return transition;
 }
 
-void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, const b8 collectionUpdated)noexcept{
+void ResolveRendererTaskTimingFeedbackPolicyTransition(const RendererTaskTimingFeedbackPolicyTransition& transition, const b8 collectionUpdated, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept{
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
         return;
 
@@ -184,20 +183,16 @@ void RendererTaskTimingFeedback::OnGpuTimingSampleCallback(void* const context, 
 }
 
 
-RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const NotNull<const Name*> feedbackCollectionScopes, const usize feedbackCollectionScopeCount)
+RendererTaskTimingFeedback::RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, const Span<const Name> feedbackCollectionScopes)
     : m_graphics(graphics)
     , m_state(arena)
     , m_history(arena)
     , m_snapshot(arena)
     , m_feedbackCollectionScopes(arena)
 {
-    NWB_ASSERT(feedbackCollectionScopeCount != 0u);
-    m_feedbackCollectionScopes.reserve(feedbackCollectionScopeCount);
-    m_feedbackCollectionScopes.assign(feedbackCollectionScopes.get(), feedbackCollectionScopes.get() + feedbackCollectionScopeCount);
-}
-
-RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{
-    deactivate();
+    NWB_ASSERT(!feedbackCollectionScopes.empty());
+    m_feedbackCollectionScopes.reserve(feedbackCollectionScopes.size());
+    m_feedbackCollectionScopes.assign(feedbackCollectionScopes.begin(), feedbackCollectionScopes.end());
 }
 
 
@@ -222,7 +217,7 @@ void RendererTaskTimingFeedback::activate(){
     ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
 
     if(feedbackCollectionEnabled){
-        if(!timing.setFeedbackCollectionScopes(subscription, NotNull<const Name*>(m_feedbackCollectionScopes.data()), m_feedbackCollectionScopes.size())){
+        if(!timing.setFeedbackCollectionScopes(subscription, m_feedbackCollectionScopes)){
             NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
             return;
         }
@@ -354,13 +349,6 @@ namespace ECSRenderDetail{
         context.queue,
         compiledTask.plan->recordsNonCommittingTimingSample
     );
-}
-
-b8 RecordFloatTextureClear(Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const Core::GpuGraphResourceId destination, Core::Texture& nativeDestination, const Core::GpuClearTextureTaskDesc& clearDesc){
-    if(context.commandIrCapture && !context.commandIrCapture->captureClearTexture(context.task, context.packet, context.queue, destination, clearDesc))
-        return false;
-    commandList.clearTextureFloat(nativeDestination, clearDesc.subresources, clearDesc.floatValue);
-    return true;
 }
 
 

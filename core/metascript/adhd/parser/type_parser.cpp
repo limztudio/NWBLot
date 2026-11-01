@@ -43,6 +43,18 @@ namespace __hidden_adhd_type_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+ParamPassingMode::Enum MatchParamPassingMode(ParserCursor& cursor){
+    if(cursor.matchIdentifier("in"))
+        return ParamPassingMode::In;
+    if(cursor.matchIdentifier("mut"))
+        return ParamPassingMode::Mut;
+    return ParamPassingMode::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TypeRef* TypeParser::parseType(const b8 allowRefMode, const b8 allowAuto){
     ParamPassingMode::Enum refMode = ParamPassingMode::None;
     const SourceSpan startSpan{m_cursor.current().line, m_cursor.current().column};

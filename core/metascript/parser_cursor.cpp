@@ -104,7 +104,7 @@ struct TokenDescription{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors)
+ParserCursor::ParserCursor(const MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors)
     : m_lexer(source)
     , m_arena(arena)
     , m_scratchArena(scratchArena)
@@ -113,6 +113,12 @@ ParserCursor::ParserCursor(MStringView source, MetaArena& arena, Alloc::ScratchA
     advance();
 }
 
+void ParserCursor::restore(const Checkpoint& checkpoint)noexcept{
+    m_lexer = checkpoint.lexer;
+    m_current = checkpoint.current;
+    while(m_errors.size() > checkpoint.errorCount)
+        m_errors.pop_back();
+}
 
 b8 ParserCursor::match(const TokenType::Enum type){
     if(m_current.type != type)
@@ -157,7 +163,7 @@ b8 ParserCursor::consumeBalancedBracesRaw(MStringView& outInnerCode){
     return true;
 }
 
-void ParserCursor::error(u32 line, u32 column, MStringView message){
+void ParserCursor::error(const u32 line, const u32 column, const MStringView message){
     m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), m_arena)});
 }
 

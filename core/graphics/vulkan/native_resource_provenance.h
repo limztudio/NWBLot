@@ -30,6 +30,10 @@ struct NativeResourceProvenance{
 };
 
 
+using NativeBufferProvenance = NativeResourceProvenance<VkBufferUsageFlags, VkBufferCreateFlags>;
+using NativeTextureProvenance = NativeResourceProvenance<VkImageUsageFlags, VkImageCreateFlags>;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

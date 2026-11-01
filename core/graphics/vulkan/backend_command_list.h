@@ -13,9 +13,8 @@
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 #include <global/span.h>
@@ -53,7 +52,7 @@ inline constexpr TStringView s_MeshShaderUnavailableReason = NWB_TEXT("mesh shad
 inline constexpr u32 s_GraphicsExtraBufferStateCount = 2u;
 
 
-class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
+class CommandList final : public RefCounter<GraphicsResource>{
     friend class ::NWB::Core::GpuRecordedGraph;
     friend class ::NWB::Core::GpuTimingMeasure;
     friend class ::NWB::Core::GpuTimingSubmissionTicket;
@@ -228,19 +227,33 @@ public:
     void clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
     void clearTextureBoxFloat(Texture& texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor);
     void clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
-    void clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
+    void clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil){
+        clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
+    }
     void clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
-    void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor);
+    void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor){
+        clearTextureUInt(texture, subresources, UIntColor(clearColor));
+    }
     void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor);
-    void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
+    void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor){
+        clearTextureRectUInt(texture, subresources, rect, UIntColor(clearColor));
+    }
     void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor);
-    void clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor);
+    void clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor){
+        clearTextureBoxUInt(texture, subresources, box, UIntColor(clearColor));
+    }
     void clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor);
-    void clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor);
+    void clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor){
+        clearTextureInt(texture, subresources, IntColor(clearColor));
+    }
     void clearTextureInt(Texture& texture, TextureSubresourceSet subresources, const IntColor& clearColor);
-    void clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor);
+    void clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor){
+        clearTextureRectInt(texture, subresources, rect, IntColor(clearColor));
+    }
     void clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor);
-    void clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor);
+    void clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor){
+        clearTextureBoxInt(texture, subresources, box, IntColor(clearColor));
+    }
     void clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor);
 
     void copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
@@ -315,6 +328,7 @@ public:
     const CommandListParameters& getDescription()noexcept{ return m_desc; }
 
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
+
 
 private:
     [[nodiscard]] b8 publicCommandStateAccessible()const noexcept;
@@ -403,8 +417,8 @@ private:
     void discardInvalidCommandBuffer();
     [[nodiscard]] b8 validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, TStringView commandName);
     [[nodiscard]] Expected<NotNull<Buffer*>> prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, TStringView operationLabel, TStringView commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode);
-    void clearColorTexture(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
-    void clearColorTextureBox(Alloc::ScratchArena& scratchArena, Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
+    void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
+    void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue, b8 integerValue, b8 signedIntegerValue);
     b8 clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue);
     b8 clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
     [[nodiscard]] b8 validateTextureTransferResources(Texture& dest, ResourceStates::Mask destState, Texture& src, ResourceStates::Mask srcState, TStringView operationName);
@@ -487,7 +501,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class EventQuery final : public RefCounter<GraphicsResource>, NoCopy{
+class EventQuery final : public RefCounter<GraphicsResource>{
     friend class Device;
 
 
@@ -508,7 +522,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TimerQuery final : public RefCounter<GraphicsResource>, NoCopy{
+class TimerQuery final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
     friend class TrackedCommandBuffer;

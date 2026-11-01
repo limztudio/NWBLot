@@ -10,8 +10,10 @@
 #include <impl/assets/graphics/bvh/scene_refit_constants.h>
 
 #include <core/alloc/global.h>
+#include <core/alloc/scratch.h>
 #include <core/graphics/rhi/command.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/task/gpu/task_graph.h>
 
 #include <global/arena_object.h>
 #include <global/refcount_ptr.h>
@@ -67,14 +69,22 @@ struct SoftwareSceneRefitSnapshot{
 
 
 public:
-    SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
+    SoftwareSceneRefitSnapshot(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphicsIn)noexcept
+        : inputs(arena)
+        , meshNodes(arena)
+        , graphics(graphicsIn)
+    {}
 };
 using SoftwareSceneRefitControl = RefCounter<SoftwareSceneRefitSnapshot>;
 using SoftwareSceneRefitHandle = RefCountPtr<SoftwareSceneRefitControl, ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>>;
 
 class SoftwareSceneRefitResources final : NoCopy{
 public:
-    SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept;
+    SoftwareSceneRefitResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics)noexcept
+        : m_arena(arena)
+        , m_graphics(graphics)
+        , m_snapshots(arena)
+    {}
 
 
 public:
@@ -100,6 +110,18 @@ private:
     Core::ShaderHandle m_shader;
     Core::ComputePipelineHandle m_pipeline;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SoftwareSceneRefitGraphTasks{
+    Core::GpuTaskId inputUpload;
+    Core::GpuTaskId refit;
+};
+
+// Both tasks must share the accepting packet with all mesh builds and the scene upload.
+[[nodiscard]] Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(const SoftwareSceneRefitHandle& snapshot, Core::GpuGraphResourceId sceneNodes, Core::GpuTaskId dependency, Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

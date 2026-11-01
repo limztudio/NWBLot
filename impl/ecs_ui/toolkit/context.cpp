@@ -4,8 +4,6 @@
 
 #include "context.h"
 
-#include <global/hash_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,24 +13,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-usize Context::StateClaimHash::operator()(const StateClaim& claim)const noexcept{
-    usize hash = Hasher<u64>{}(claim.instanceGeneration);
-    HashCombine(hash, static_cast<u8>(claim.kind));
-    return hash;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root)noexcept{
-    for(usize index = 0u; index < count; ++index){
-        if(roots[index] == root)
-            return true;
-    }
-    return false;
-}
 
 Context::Context(Core::Alloc::GlobalArena& arena)
     : m_input(arena)
@@ -73,15 +53,15 @@ b8 Context::beginRoot(const WidgetRoot& root){
         fail();
         return false;
     }
-    const auto rootId = MakeRootId(root);
-    if(!rootId){
+    WidgetId rootId;
+    if(!TryMakeRootId(root, rootId)){
         fail();
         return false;
     }
     m_root = root;
     m_rootActive = true;
     m_scopes.clear();
-    m_scopes.push_back(*rootId);
+    m_scopes.push_back(rootId);
     return true;
 }
 
@@ -99,12 +79,12 @@ b8 Context::pushScope(const AStringView stableKey){
         fail();
         return false;
     }
-    const auto id = MakeWidgetId(m_scopes.back(), stableKey);
-    if(!id){
+    WidgetId id;
+    if(!TryMakeWidgetId(m_scopes.back(), stableKey, id)){
         fail();
         return false;
     }
-    m_scopes.push_back(*id);
+    m_scopes.push_back(id);
     return true;
 }
 
@@ -120,12 +100,12 @@ b8 Context::popScope()noexcept{
 Expected<NotNull<WidgetState*>> Context::declare(const AStringView stableKey, const WidgetKind::Enum kind){
     if(m_failed || !m_rootActive)
         return MakeUnexpected(Failure{});
-    const auto id = MakeWidgetId(m_scopes.back(), stableKey);
-    if(!id){
+    WidgetId id;
+    if(!TryMakeWidgetId(m_scopes.back(), stableKey, id)){
         fail();
-        return MakeUnexpected(id.error());
+        return MakeUnexpected(Failure{});
     }
-    return declareId(*id, kind);
+    return declareId(id, kind);
 }
 
 Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
@@ -133,12 +113,12 @@ Expected<NotNull<WidgetState*>> Context::declarePart(const WidgetState& owner, c
         fail();
         return MakeUnexpected(Failure{});
     }
-    const auto id = MakeWidgetId(owner.id, stableKey);
-    if(!id){
+    WidgetId id;
+    if(!TryMakeWidgetId(owner.id, stableKey, id)){
         fail();
-        return MakeUnexpected(id.error());
+        return MakeUnexpected(Failure{});
     }
-    return declareId(*id, kind);
+    return declareId(id, kind);
 }
 
 b8 Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
@@ -146,7 +126,7 @@ b8 Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
         fail();
         return false;
     }
-    const StateClaim claim{ instanceGeneration, owner.kind };
+    const ContextStateClaim claim{ instanceGeneration, owner.kind };
     if(m_stateClaimCount < s_SmallStateClaims){
         for(usize index = 0u; index < m_stateClaimCount; ++index){
             if(m_smallStateClaims[index] == claim){
@@ -233,7 +213,7 @@ b8 Context::commitFrame(const u64 generation){
     m_commitPopups.clear();
     for(const auto& owned : m_popups)
         m_commitPopups.push_back(owned.scope);
-    if(!m_input.commitTargets(m_commitTargets.data(), m_commitTargets.size(), generation, m_commitPopups.data(), m_commitPopups.size(), m_focusLossGeneration))
+    if(!m_input.commitTargets(m_commitTargets, generation, m_commitPopups, m_focusLossGeneration))
         return false;
     m_targets.clear();
     m_popups.clear();
@@ -261,22 +241,20 @@ void Context::resetInput()noexcept{
     m_readyGeneration = 0u;
 }
 
-void Context::retainRoots(const WidgetRoot* roots, const usize count){
-    if(!roots && count != 0u)
-        return;
+void Context::retainRoots(const Span<const WidgetRoot> roots){
     for(usize index = m_states.entries().size(); index > 0u; --index){
         const auto& state = m_states.entries()[index - 1u];
-        if(!ContainsRoot(roots, count, state.root)){
+        if(!ContainsWidgetRoot(roots, state.root)){
             m_input.invalidateTarget(state.id);
             m_states.erase(index - 1u);
         }
     }
     for(usize index = m_targets.size(); index > 0u; --index){
-        if(!ContainsRoot(roots, count, m_targets[index - 1u].root))
+        if(!ContainsWidgetRoot(roots, m_targets[index - 1u].root))
             m_targets.erase(m_targets.begin() + index - 1u);
     }
     for(usize index = m_popups.size(); index > 0u; --index){
-        if(!ContainsRoot(roots, count, m_popups[index - 1u].root))
+        if(!ContainsWidgetRoot(roots, m_popups[index - 1u].root))
             m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
 }
@@ -303,7 +281,6 @@ b8 Context::currentDeclaration(const WidgetState& state)const noexcept{
     const WidgetState* current = m_states.find(state.id);
     return current && current->root == state.root && current->declarationGeneration == state.declarationGeneration && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind;
 }
-
 
 void Context::retireUnseenStates(){
     if(m_frameGeneration == 0u)

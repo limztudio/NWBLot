@@ -21,7 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceViews(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
     if(!snapshot.ready || !snapshot.viewPipeline || !snapshot.drawArguments || snapshot.plan.viewCount == 0u)
         return false;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.viewPipeline.get()));
@@ -31,7 +31,7 @@ b8 RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap
     return true;
 }
 
-b8 RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceCull(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
     if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || snapshot.casters.empty() || snapshot.plan.viewCount == 0u)
         return false;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.cullPipeline.get()));
@@ -54,7 +54,7 @@ b8 RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap&
     return true;
 }
 
-b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const b8 transparent){
+b8 RecordLightSpaceCapture(const LightSpaceShadowSnapshot& snapshot, const u32 viewIndex, const b8 transparent, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
     static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
     if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount)
         return false;
@@ -63,7 +63,7 @@ b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHe
     if(!framebuffer || !pipeline)
         return false;
     for(const auto& caster : snapshot.casters){
-        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
+        if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
             continue;
         if(!caster.triangleIndexBuffer || !caster.triangleIndexBuffer->getCreationDescription().isIndexBuffer)
             return false;
@@ -90,7 +90,7 @@ b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHe
         }
         const u32 argumentOffset = drawOffset * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
         drawOffset += *drawCount;
-        if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
+        if(!LightSpaceCasterEligibleForCapturePass(caster.transparent, caster.csg, transparent, caster.indexCount, snapshot.push.csgFlags))
             continue;
         graphics.setIndexBuffer(Core::IndexBufferBinding{}.setBuffer(caster.triangleIndexBuffer.get()).setFormat(Core::Format::R32_UINT));
         commandList.setGraphicsState(graphics);
@@ -98,9 +98,8 @@ b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHe
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(&push, sizeof(push));
         const u32 captureCount = (snapshot.plan.views[viewIndex].light[3] & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? *drawCount : 1u;
-        constexpr u32 s_MaxIndirectDraws = 65535u;
         for(u32 firstDraw = 0u; firstDraw < captureCount;){
-            const u32 batchCount = Min(captureCount - firstDraw, s_MaxIndirectDraws);
+            const u32 batchCount = Min(captureCount - firstDraw, s_LightSpaceMaxIndirectDraws);
             commandList.drawIndexedIndirect(argumentOffset + firstDraw * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES, batchCount);
             firstDraw += batchCount;
         }
@@ -109,7 +108,7 @@ b8 RecordLightSpaceCapture(Core::CommandList& commandList, Core::GpuDescriptorHe
     return true;
 }
 
-b8 RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+b8 RecordLightSpaceShade(const LightSpaceShadowSnapshot& snapshot, Core::CommandList& commandList, Core::GpuDescriptorHeap& heap){
     const auto& pipeline = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u ? snapshot.csgShadePipeline : snapshot.shadePipeline;
     if(!snapshot.ready || !pipeline || snapshot.plan.totalPixels == 0u)
         return false;
@@ -126,9 +125,9 @@ b8 RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHeap
 }
 
 b8 RecordLightSpaceResolve(
-    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,
     const LightSpaceShadowSnapshot& snapshot,
-    Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const b8 transparent
+    const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const b8 transparent,
+    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing, Core::Texture& outputTexture
 ){
     const b8 csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
     const b8 hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;

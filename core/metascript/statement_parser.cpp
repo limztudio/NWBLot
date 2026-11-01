@@ -20,7 +20,6 @@ namespace __hidden_metascript_statement_parser{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_InitialReferencePathSegmentCount = 4u;
 constexpr usize s_InitialStructFieldCount = 8u;
 constexpr MStringView s_StructKeyword = LiteralView("struct");
 constexpr MStringView s_NameFieldKey = LiteralView("name");
@@ -52,24 +51,11 @@ constexpr MStringView s_DuplicateVariableDeclarationMessage = "duplicate variabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StatementParser::StatementParser(MStringView source, MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, MStringMap<Value>& variables, Document::DeclarationList& declarations, Document::StructMap& structs)
-    : m_cursor(source, arena, scratchArena, errors)
-    , m_validator(m_cursor)
-    , m_expressions(m_cursor, m_validator, variables)
-    , m_arena(arena)
-    , m_scratchArena(scratchArena)
-    , m_variables(variables)
-    , m_declarations(declarations)
-    , m_structs(structs)
-{}
-
-
 b8 StatementParser::parseInto(){
     while(m_cursor.m_current.type != TokenType::EndOfFile){
         if(!parseStatement())
             return false;
     }
-
     return !m_cursor.failed();
 }
 
@@ -147,7 +133,7 @@ b8 StatementParser::parseStatement(){
 
 b8 StatementParser::parseAssignment(const MStringView firstName, const u32 firstLine, const u32 firstColumn){
     ExpressionParser::ScratchPath path{m_scratchArena};
-    path.reserve(__hidden_metascript_statement_parser::s_InitialReferencePathSegmentCount);
+    path.reserve(ExpressionParser::s_InitialReferencePathSegmentCount);
     path.push_back(firstName);
     if(!m_expressions.parseReferencePath(path))
         return false;

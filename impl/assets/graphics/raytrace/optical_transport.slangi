@@ -288,7 +288,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
         boundaryMedium.priority = optical.priority;
         if(!nwbOpticalSetMediumProperties(hit.surface, boundaryMedium, result))
             return result;
-        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED && boundaryMedium.ior != half(1.0h)){
+        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED && boundaryMedium.ior != 1.0){
             result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
             return result;
         }
@@ -334,7 +334,7 @@ NwbOpticalTraceResult nwbOpticalTrace(const NwbOpticalTraceConfig config, const 
             if(!nwbOpticalApplyBoundary(boundaryMedium, entering, transmittedMedia, result))
                 return result;
             const NwbOpticalMedium transmittedMedium = nwbOpticalDominantMedium(transmittedMedia);
-            const NwbDielectricInterface boundary = nwbDielectricTransmit(direction, entering ? hit.geometricNormal : -hit.geometricNormal, incidentMedium.ior, transmittedMedium.ior);
+            const NwbDielectricInterface boundary = nwbDielectricTransmit(direction, entering ? hit.geometricNormal : -hit.geometricNormal, half(incidentMedium.ior), half(transmittedMedium.ior));
             direction = boundary.direction;
             if(boundary.totalInternalReflection)
                 ++result.tirCount;

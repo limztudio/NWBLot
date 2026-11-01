@@ -25,7 +25,13 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 EligibleGroup(const MaterialPassDrawItemPartitionsView& draws, const Span<const InstanceGpuData> instances, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings, const MaterialPipelinePass::Enum pass, Core::Alloc::ScratchArena& arena){
+[[nodiscard]] b8 EligibleGroup(
+    const MaterialPassDrawItemPartitionsView& draws,
+    const Span<const InstanceGpuData> instances,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const MaterialPipelinePass::Enum pass,
+    Core::Alloc::ScratchArena& arena
+){
     if(
         !MaterialPipelinePassUsesRendererAvboit(pass)
         || draws.regular.computeDrawItems.empty() || !draws.regular.meshDrawItems.empty()
@@ -113,12 +119,6 @@ namespace __hidden_generated_geometry_reuse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGeneratedGeometryReuse::AvboitGeneratedGeometryReuse(Core::Alloc::ScratchArena& arena)noexcept
-    : m_arena(arena)
-    , m_draws(arena)
-    , m_instances(arena)
-{}
-
 void AvboitGeneratedGeometryReuse::reset()noexcept{
     m_draws.clear();
     m_instances.clear();
@@ -131,7 +131,7 @@ b8 AvboitGeneratedGeometryReuse::capture(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::MeshViewGpuData& view,
+    const MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass
 ){
     reset();
@@ -144,7 +144,7 @@ b8 AvboitGeneratedGeometryReuse::capture(
         m_instances.push_back(instances[draw.instanceIndex]);
     m_frameBindings = frameBindings;
     static_assert(sizeof(m_viewBytes) == sizeof(view));
-    NWB_MEMCPY(m_viewBytes, sizeof(m_viewBytes), &view, sizeof(view));
+    NWB_MEMCPY(m_viewBytes.data(), sizeof(m_viewBytes), &view, sizeof(view));
     m_captured = true;
     return true;
 }
@@ -153,7 +153,7 @@ b8 AvboitGeneratedGeometryReuse::matches(
     const MaterialPassDrawItemPartitionsView& draws,
     const Span<const InstanceGpuData> instances,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const ECSRenderDetail::MeshViewGpuData& view,
+    const MeshViewGpuData& view,
     const MaterialPipelinePass::Enum pass
 ){
     if(
@@ -161,7 +161,7 @@ b8 AvboitGeneratedGeometryReuse::matches(
         || !__hidden_generated_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena)
         || m_draws.size() != draws.regular.computeDrawItems.size()
         || !__hidden_generated_geometry_reuse::FrameBindingsMatch(m_frameBindings, frameBindings)
-        || NWB_MEMCMP(m_viewBytes, &view, sizeof(view)) != 0
+        || NWB_MEMCMP(m_viewBytes.data(), &view, sizeof(view)) != 0
     ){
         reset();
         return false;

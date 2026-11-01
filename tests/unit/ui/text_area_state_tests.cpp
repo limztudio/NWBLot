@@ -53,7 +53,7 @@ TEST(UiTextAreaStateTests, InvalidViewportPreservesBothAxesAndBorrowEpoch){
     constexpr u32 s_Float32QuietNaNBits = 0x7fc00000u;
     const f32 infinity = BitCast<f32>(s_Float32PositiveInfinityBits);
     const f32 nan = BitCast<f32>(s_Float32QuietNaNBits);
-    const Point invalid[]{ { -1.0f, 0.0f }, { 0.0f, -1.0f }, { infinity, 0.0f }, { 0.0f, infinity }, { nan, nan } };
+    const Array<Point, 5> invalid{ Point{ -1.0f, 0.0f }, Point{ 0.0f, -1.0f }, Point{ infinity, 0.0f }, Point{ 0.0f, infinity }, Point{ nan, nan } };
     for(const Point point : invalid){
         EXPECT_FALSE(state.scrollTo(point));
         EXPECT_EQ(state.revision(), accepted);

@@ -82,21 +82,21 @@ private:
 
 
 private:
-    ProjectRuntimeContext& m_context;
     SmokeCpuGpuTimingProbe m_cpu;
     PresentationFpsProbe m_presentation{ 30.0 };
+    Array<u64, s_ScopeCount> m_lastPublication{};
+    Array<u32, s_ScopeCount> m_generations{};
+    ::Path<Core::Alloc::GlobalArena> m_startPath;
     Vector<Record, Core::Alloc::GlobalArena> m_records;
     Vector<NativeEndpoint, Core::Alloc::GlobalArena> m_native;
     Vector<Interval, Core::Alloc::GlobalArena> m_intervals;
     SmokeEnvironmentString m_output;
-    ::Path<Core::Alloc::GlobalArena> m_startPath;
-    u64 m_lastPublication[s_ScopeCount] = {};
-    u32 m_generations[s_ScopeCount] = {};
+    PresentationFpsSample m_commonPresentation;
+    ProjectRuntimeContext& m_context;
     Timer m_preparationBegin = {};
     u64 m_firstSource = 0u;
     usize m_commonBegin = Limit<usize>::s_Max;
     usize m_commonEnd = 0u;
-    PresentationFpsSample m_commonPresentation;
     u32 m_positiveIntervals = 0u;
     b8 m_diagnostic = false;
     b8 m_prepared = false;

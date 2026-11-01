@@ -27,10 +27,10 @@ using namespace NWB::Impl::Ui;
 
 
 TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion){
-    const i64 values[]{ 9007199254740993ll, -9007199254740993ll, Limit<i64>::s_Min, Limit<i64>::s_Max };
+    const Array<i64, 4> values{ 9007199254740993ll, -9007199254740993ll, Limit<i64>::s_Min, Limit<i64>::s_Max };
     for(const i64 value : values){
         SCOPED_TRACE(value);
-        char buffer[s_NumericEditMaxBytes];
+        Array<char, s_NumericEditMaxBytes> buffer{};
         const auto formatted = FormatI64(value, buffer);
         ASSERT_TRUE(formatted);
         const AStringView text = *formatted;
@@ -45,10 +45,13 @@ TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingP
 }
 
 TEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtripWithExactBits){
-    const u64 patterns[]{ 0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull, 0x000fffffffffffffull, 0x0010000000000000ull, 0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull, 0x7fefffffffffffffull, 0xffefffffffffffffull };
+    const Array<u64, 10> patterns{
+        0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull, 0x000fffffffffffffull, 0x0010000000000000ull,
+        0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull, 0x7fefffffffffffffull, 0xffefffffffffffffull,
+    };
     for(const u64 bits : patterns){
         SCOPED_TRACE(bits);
-        char buffer[s_NumericEditMaxBytes];
+        Array<char, s_NumericEditMaxBytes> buffer{};
         const auto formatted = FormatF64(BitCast<f64>(bits), buffer);
         ASSERT_TRUE(formatted);
         const AStringView text = *formatted;
@@ -61,7 +64,7 @@ TEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtr
 TEST(UiNumericFormatTests, InsufficientCallerStorageReportsSizeErrorWithoutWritingOutsideTheBuffer){
     struct Storage{
         char first = 'a';
-        char buffer[1u]{ 'x' };
+        Array<char, 1u> buffer{ 'x' };
         char last = 'z';
     };
     Storage integer;
@@ -79,8 +82,8 @@ TEST(UiNumericFormatTests, InsufficientCallerStorageReportsSizeErrorWithoutWriti
 }
 
 TEST(UiNumericFormatTests, NonfiniteFloatFormattingIsRejected){
-    char buffer[s_NumericEditMaxBytes];
-    const f64 values[]{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
+    Array<char, s_NumericEditMaxBytes> buffer{};
+    const Array<f64, 3> values{ Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity, Limit<f64>::s_QuietNaN };
     for(const f64 value : values){
         const auto formatted = FormatF64(value, buffer);
         ASSERT_FALSE(formatted);

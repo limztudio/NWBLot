@@ -25,6 +25,15 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define TESTBED_WINDOW_TITLE "NWB Testbed"
+
+inline constexpr StringView s_WindowTitleText = TESTBED_WINDOW_TITLE;
+inline constexpr TStringView s_WindowTitle = NWB_TEXT(TESTBED_WINDOW_TITLE);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Project final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
     static constexpr usize s_KeyStateCount = static_cast<usize>(NWB::Core::Key::Menu) + 1u;
@@ -32,7 +41,12 @@ private:
 
 
 public:
-    explicit Project(NWB::ProjectRuntimeContext& context);
+    explicit Project(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(CreateInitialWorldOrDie(context))
+        , m_sceneSubsystems(context.objectArena)
+        , m_uiPreview(context.objectArena)
+    {}
     virtual ~Project()noexcept override;
 
 
@@ -40,8 +54,10 @@ public:
     virtual b8 onStartup()override;
     virtual void onShutdown()override;
 
+
 public:
     virtual b8 onUpdate(f32 delta)override;
+
 
 public:
     virtual void windowFocusUpdate(b8 focused)noexcept override;
@@ -52,16 +68,15 @@ public:
 
 
 private:
-    void drawUiControls(NWB::Impl::UiPaintContext& context);
-    void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
     [[nodiscard]] b8 createDefaultScene();
     void registerInputHandler();
-    void unregisterInputHandler();
+    void unregisterInputHandler()noexcept;
     void clearInputState()noexcept;
     void setKeyState(i32 key, b8 pressed)noexcept;
     [[nodiscard]] b8 keyPressed(i32 key)const noexcept;
     void updateMainCamera(f32 delta)noexcept;
-    void destroyWorld();
+    void destroyWorld()noexcept;
+    void drawUiControls(NWB::Impl::UiPaintContext& context);
 
 
 private:
@@ -81,7 +96,7 @@ private:
 };
 
 Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialProjectWorld(NWB::ProjectRuntimeContext& context);
-void DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world);
+void DestroyInitialProjectWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

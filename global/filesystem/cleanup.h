@@ -92,17 +92,17 @@ inline constexpr usize s_ChildNameOverhead = 2u;
     return path.size();
 }
 
-[[nodiscard]] inline Expected<void, ErrorCode> RemoveWindowsTree(wchar (&path)[s_PathCapacity], const usize rootEnd)noexcept{
+[[nodiscard]] inline Expected<void, ErrorCode> RemoveWindowsTree(Array<wchar, s_PathCapacity>& path, const usize rootEnd)noexcept{
     usize end = rootEnd;
     for(;;){
-        const DWORD attributes = GetFileAttributesW(path);
+        const DWORD attributes = GetFileAttributesW(path.data());
         if(attributes == INVALID_FILE_ATTRIBUTES){
             const DWORD error = GetLastError();
             if(!IsMissing(error))
                 return MakeUnexpected(WindowsError(error));
         }
         else if((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u){
-            const BOOL removed = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? RemoveDirectoryW(path) : DeleteFileW(path);
+            const BOOL removed = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? RemoveDirectoryW(path.data()) : DeleteFileW(path.data());
             if(!removed){
                 const DWORD error = GetLastError();
                 if(!IsMissing(error))
@@ -116,7 +116,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
             path[end + 1u] = L'*';
             path[end + 2u] = 0;
             WIN32_FIND_DATAW data = {};
-            const HANDLE findHandle = FindFirstFileW(path, &data);
+            const HANDLE findHandle = FindFirstFileW(path.data(), &data);
             path[end] = 0;
             b8 hasChild = false;
             ErrorCode iterationError;
@@ -155,7 +155,7 @@ inline constexpr usize s_ChildNameOverhead = 2u;
                 return MakeUnexpected(iterationError);
             if(hasChild)
                 continue;
-            if(!RemoveDirectoryW(path)){
+            if(!RemoveDirectoryW(path.data())){
                 const DWORD error = GetLastError();
                 if(!IsMissing(error))
                     return MakeUnexpected(WindowsError(error));
@@ -251,14 +251,14 @@ template<typename ArenaT>
 #if defined(NWB_PLATFORM_WINDOWS)
     if(text.find(L'\0') != decltype(text)::npos || !GlobalFilesystemCleanupDetail::HasNamedLeaf(text, namedEnd) || namedEnd <= GlobalFilesystemCleanupDetail::WindowsRootLength(text))
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_INVALID_NAME));
-    wchar buffer[GlobalFilesystemCleanupDetail::s_PathCapacity];
-    const DWORD absoluteSize = GetFullPathNameW(path.c_str(), static_cast<DWORD>(GlobalFilesystemCleanupDetail::s_PathCapacity), buffer, nullptr);
+    Array<wchar, GlobalFilesystemCleanupDetail::s_PathCapacity> buffer = {};
+    const DWORD absoluteSize = GetFullPathNameW(path.c_str(), static_cast<DWORD>(GlobalFilesystemCleanupDetail::s_PathCapacity), buffer.data(), nullptr);
     if(absoluteSize == 0u)
         return MakeUnexpected(LastSystemError());
     if(absoluteSize >= GlobalFilesystemCleanupDetail::s_PathCapacity)
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_FILENAME_EXCED_RANGE));
-    usize end = GlobalFilesystemCleanupDetail::NamedPathEnd(WStringView(buffer, absoluteSize));
-    if(end <= GlobalFilesystemCleanupDetail::WindowsRootLength(WStringView(buffer, absoluteSize)))
+    usize end = GlobalFilesystemCleanupDetail::NamedPathEnd(WStringView(buffer.data(), absoluteSize));
+    if(end <= GlobalFilesystemCleanupDetail::WindowsRootLength(WStringView(buffer.data(), absoluteSize)))
         return MakeUnexpected(GlobalFilesystemCleanupDetail::WindowsError(ERROR_INVALID_NAME));
     buffer[end] = 0;
     if(end >= GlobalFilesystemCleanupDetail::s_DevicePrefixLength && buffer[0] == L'\\' && buffer[1] == L'\\' && buffer[2] == L'.' && buffer[3] == L'\\')
@@ -295,15 +295,15 @@ template<typename ArenaT>
             error = ErrorCode(ENAMETOOLONG, std::generic_category());
             break;
         }
-        char component[NAME_MAX + 1u];
+        Array<char, NAME_MAX + 1u> component = {};
         for(usize index = begin; index < end; ++index)
             component[index - begin] = text[index];
         component[end - begin] = 0;
         if(end == namedEnd){
-            error = GlobalFilesystemCleanupDetail::RemoveAt(parent, MakeNotNull<const char*>(component));
+            error = GlobalFilesystemCleanupDetail::RemoveAt(parent, MakeNotNull<const char*>(component.data()));
             break;
         }
-        const int next = openat(parent, component, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        const int next = openat(parent, component.data(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
         if(next < 0){
             const int nativeError = errno;
             if(!GlobalFilesystemCleanupDetail::IsMissing(nativeError))

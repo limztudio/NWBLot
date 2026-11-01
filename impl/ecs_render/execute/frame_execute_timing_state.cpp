@@ -49,13 +49,13 @@ FrameExecuteTimingState::FrameExecuteTimingState(Core::GraphicsRuntime& graphics
     , deferredClearTimingState{
         .graphics = &graphics,
         .timing = &deferredClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear)],
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::DeferredClear)],
         .scope = RendererGpuTimingScope::s_DeferredClear,
     }
     , opaqueCsgIntervalClearTimingState{
         .graphics = &graphics,
         .timing = &opaqueCsgIntervalClearTiming,
-        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer)],
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(DeferredGraphicsPrefixTimingSlot::Gbuffer)],
         .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     }
     , shadowVisibilityTimingTicket(graphics.gpuTiming())
@@ -116,22 +116,23 @@ void FrameExecuteTimingState::discardAll(){
 Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
     const RendererFramePipeline& renderer,
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const Core::GpuTaskId (&graphicsPrefixTimingTasks)[s_GraphicsPrefixTimingTicketCount],
+    const Span<const Core::GpuTaskId> graphicsPrefixTimingTasks,
     const usize graphicsPrefixUniquePacketCount,
     const RendererAvboitTaskGraphValidation& avboitValidation,
     const b8 hardwareShadowSupported,
-    const usize ticketCapacity,
-    Core::GpuTaskGraphTaskTimingTicket* const tickets
+    const Span<Core::GpuTaskGraphTaskTimingTicket> tickets
 ){
+    if(graphicsPrefixTimingTasks.size() != s_GraphicsPrefixTimingTaskCount)
+        return MakeUnexpected(Failure{});
     usize ticketCount = 0u;
     const auto appendTicket = [&](const Core::GpuTaskId task, Core::GpuTimingSubmissionTicket& timingTicket)noexcept -> b8 {
-        if(!task.valid() || ticketCount >= ticketCapacity)
+        if(!task.valid() || ticketCount >= tickets.size())
             return false;
         tickets[ticketCount++] = Core::GpuTaskGraphTaskTimingTicket{ .task = task, .timingTicket = &timingTicket, };
         return true;
     };
     b8 ready = appendTicket(renderer.m_deferredShadowPrepareTask, shadowPrepareTimingTicket);
-    for(usize prefixTaskIndex = 0u; ready && prefixTaskIndex < s_GraphicsPrefixTimingTicketCount; ++prefixTaskIndex){
+    for(usize prefixTaskIndex = 0u; ready && prefixTaskIndex < s_GraphicsPrefixTimingTaskCount; ++prefixTaskIndex){
         const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         b8 packetAlreadyTimed = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
@@ -162,7 +163,7 @@ Expected<usize> FrameExecuteTimingState::bindNormalTimingTickets(
         .m_accumulation = avboitAccumulationTimingTicket,
     };
     ready = ready
-        && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, ticketCapacity, avboitTimingTickets, tickets, ticketCount)
+        && renderer.m_avboitSystem.appendTaskGraphTimingTickets(avboitValidation, avboitTimingTickets, tickets, ticketCount)
         && appendTicket(renderer.m_deferredLightingTask, deferredLightingTimingTicket)
         && appendTicket(renderer.m_deferredCompositeTask, deferredCompositeTimingTicket)
         && appendTicket(renderer.m_deferredPresentTask, deferredPresentTimingTicket)

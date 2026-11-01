@@ -106,7 +106,7 @@ TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_EQ(m_state.selectedKey(), 0u);
     EXPECT_EQ(m_state.listState().cursorKey(), 0u);
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
 }
 
 TEST_F(UiComboBuilderTests, OutsideDismissalConsumesTheWholePointerSequence){
@@ -135,7 +135,7 @@ TEST_F(UiComboBuilderTests, HeldOpeningSubmitWaitsForReleaseBeforeTransferringFo
     ASSERT_TRUE(accept(2u));
     EXPECT_FALSE(m_state.isOpen());
     EXPECT_FALSE(m_result.opened);
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
     event.repeat = true;
     EXPECT_TRUE(send(event).commandConsumed);
     ASSERT_TRUE(prepare(3u));
@@ -174,7 +174,7 @@ TEST_F(UiComboBuilderTests, EscapeBeforeReleaseCancelsFieldOpeningAndPopupSubmis
     EXPECT_FALSE(m_result.committed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
     press(Core::Key::Tab);
-    ASSERT_EQ(m_context.input().focus(), host());
+    ASSERT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
     press(Core::Key::Enter);
     ASSERT_TRUE(accept(4u));
     ASSERT_TRUE(m_state.isOpen());
@@ -199,7 +199,7 @@ TEST_F(UiComboBuilderTests, EscapeBeforeReleaseCancelsFieldOpeningAndPopupSubmis
 TEST_F(UiComboBuilderTests, DisabledFieldFencesQueuedOpeningAndHasNoTabStop){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    click(Center(target(host())->rectangle));
+    click(Center(target(id(s_ComboKey, s_ComboPanelKey))->rectangle));
     ComboOptions options = Options();
     options.enabled = false;
     ASSERT_TRUE(accept(2u, options));
@@ -207,9 +207,9 @@ TEST_F(UiComboBuilderTests, DisabledFieldFencesQueuedOpeningAndHasNoTabStop){
     EXPECT_FALSE(m_result.opened);
     EXPECT_FALSE(m_result.committed);
     EXPECT_FALSE(m_result.focused);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_FALSE(target(host())->enabled);
-    EXPECT_FALSE(target(host())->focusable);
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_ComboKey, s_ComboPanelKey))->enabled);
+    EXPECT_FALSE(target(id(s_ComboKey, s_ComboPanelKey))->focusable);
     EXPECT_EQ(target(list()), nullptr);
 }
 
@@ -293,7 +293,7 @@ TEST_F(UiComboBuilderTests, ReplacementSourceCannotBorrowThePreviousSelectionOrP
     EXPECT_TRUE(m_result.selectionChanged);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_EQ(target(host())->control.contentGeneration, replacement.generation);
+    EXPECT_EQ(target(id(s_ComboKey, s_ComboPanelKey))->control.contentGeneration, replacement.generation);
     EXPECT_EQ(target(popup()), nullptr);
 }
 
@@ -301,17 +301,17 @@ TEST_F(UiComboBuilderTests, APreparedMoveKeepsAcceptedFieldAndPopupGeometryUntil
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
-    const Rect acceptedField = target(host())->rectangle;
+    const Rect acceptedField = target(id(s_ComboKey, s_ComboPanelKey))->rectangle;
     const Rect acceptedPopup = target(popup())->rectangle;
     ASSERT_TRUE(prepare(3u, Options(), { 300.0f, 300.0f, 320.0f, 240.0f }));
     EXPECT_EQ(m_context.input().layoutGeneration(), 2u);
-    ExpectRect(target(host())->rectangle, acceptedField);
-    ExpectRect(target(popup())->rectangle, acceptedPopup);
+    UiPaintAssertions::ExpectRect(target(id(s_ComboKey, s_ComboPanelKey))->rectangle, acceptedField);
+    UiPaintAssertions::ExpectRect(target(popup())->rectangle, acceptedPopup);
     EXPECT_NE(m_state.bounds().x, acceptedField.x);
     EXPECT_FALSE(m_context.commitFrame(4u));
     ASSERT_TRUE(m_context.commitFrame(3u));
-    ExpectRect(target(host())->rectangle, m_state.bounds());
-    ExpectRect(target(popup())->rectangle, m_state.placement().bounds);
+    UiPaintAssertions::ExpectRect(target(id(s_ComboKey, s_ComboPanelKey))->rectangle, m_state.bounds());
+    UiPaintAssertions::ExpectRect(target(popup())->rectangle, m_state.placement().bounds);
     EXPECT_EQ(m_context.input().layoutGeneration(), 3u);
 }
 
@@ -325,9 +325,9 @@ TEST_F(UiComboBuilderTests, MultipleFieldsHaveIndependentStableInternalIdsAndSta
     ASSERT_TRUE(m_builder.comboBox(s_SecondComboKey, m_source, other, Options()).valid);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(host()), nullptr);
-    ASSERT_NE(target(host(s_SecondComboKey)), nullptr);
-    click(Center(target(host(s_SecondComboKey))->rectangle));
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    ASSERT_NE(target(id(s_SecondComboKey, s_ComboPanelKey)), nullptr);
+    click(Center(target(id(s_SecondComboKey, s_ComboPanelKey))->rectangle));
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPanel(s_ComboPanelKey, { 10.0f, 10.0f, 320.0f, 240.0f }));
     ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
@@ -372,9 +372,9 @@ TEST_F(UiComboBuilderTests, FullyClippedFieldCannotPublishItsPopupAboveTheParent
     ASSERT_TRUE(m_builder.comboBox(s_ComboKey, m_source, m_state, Options()).valid);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_GE(target(host())->rectangle.y, VectorGetX(VectorAdd(VectorReplicate(target(host())->clip.y), VectorReplicate(target(host())->clip.height))));
-    EXPECT_FLOAT_EQ(target(host())->clip.height, 0.0f);
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_GE(target(id(s_ComboKey, s_ComboPanelKey))->rectangle.y, target(id(s_ComboKey, s_ComboPanelKey))->clip.y + target(id(s_ComboKey, s_ComboPanelKey))->clip.height);
+    EXPECT_FLOAT_EQ(target(id(s_ComboKey, s_ComboPanelKey))->clip.height, 0.0f);
     EXPECT_EQ(target(popup()), nullptr);
     EXPECT_EQ(target(list()), nullptr);
     EXPECT_FALSE(m_context.input().hasPopup());
@@ -421,7 +421,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
-    const u64 oldDeclaration = target(host())->declarationGeneration;
+    const u64 oldDeclaration = target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration;
     InputEvent held;
     held.type = InputEventType::KeyDown;
     held.key = Core::Key::Down;
@@ -432,7 +432,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_FALSE(m_context.input().hasPopup());
-    EXPECT_EQ(target(host()), nullptr);
+    EXPECT_EQ(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
     EXPECT_EQ(target(list()), nullptr);
     EXPECT_TRUE(m_context.input().controlActions().empty());
     ASSERT_TRUE(accept(4u));
@@ -440,10 +440,10 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     EXPECT_TRUE(m_result.closed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_EQ(m_state.listState().cursorKey(), 1u);
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_NE(target(host())->declarationGeneration, oldDeclaration);
+    ASSERT_NE(target(id(s_ComboKey, s_ComboPanelKey)), nullptr);
+    EXPECT_NE(target(id(s_ComboKey, s_ComboPanelKey))->declarationGeneration, oldDeclaration);
     press(Core::Key::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
+    EXPECT_EQ(m_context.input().focus(), id(s_ComboKey, s_ComboPanelKey));
     held.repeat = true;
     EXPECT_TRUE(send(held).commandConsumed);
     ASSERT_TRUE(accept(5u));

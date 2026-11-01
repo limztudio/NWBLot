@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "recorder.h"
+#include "frame_graph_statistics.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +32,7 @@ struct EncodedFrameGraphPayloadHeader{
     u32 physicalQueueRuntimeStatisticsCount = 0u;
     u32 packetSubmissionStatisticsCount = 0u;
     u8 packetSubmissionStatisticsPresent = 0u;
-    u8 reservedTail[3u] = {};
+    Array<u8, 3u> reservedTail = {};
 };
 
 struct EncodedFrameGraphNode{
@@ -73,7 +73,7 @@ struct EncodedFrameGraphQueueAssignment{
     u8 modifiers = FrameGraphQueueAssignmentModifier::None;
     u8 acceptance = FrameGraphQueueAssignmentAcceptance::NotAccepted;
     u8 dedicated = 0u;
-    u8 reserved[3u] = {};
+    Array<u8, 3u> reserved = {};
 };
 
 struct EncodedFrameGraphCompiledTask{
@@ -81,7 +81,7 @@ struct EncodedFrameGraphCompiledTask{
     u32 packetIndex = Limit<u32>::s_Max;
     u64 planGeneration = 0u;
     u8 packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
-    u8 reserved[3u] = {};
+    Array<u8, 3u> reserved = {};
 };
 
 struct EncodedFrameGraphCompileRuntimeStatistics{
@@ -230,7 +230,7 @@ struct EncodedFrameGraphPhysicalQueueRuntimeStatistics{
     u32 ownerNodeIndex = 0u;
     EncodedFrameGraphPhysicalQueueId queue;
     u8 queueClass = FrameGraphQueueClass::Unknown;
-    u8 reserved[7u] = {};
+    Array<u8, 7u> reserved = {};
     EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics compile;
     EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
     EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics submission;

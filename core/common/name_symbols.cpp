@@ -4,11 +4,6 @@
 
 #include "name_symbols.h"
 
-#include "arena_names.h"
-
-#include <core/alloc/general.h>
-#include <core/alloc/scratch.h>
-
 #include <global/algorithm.h>
 #include <global/allocation_size.h>
 #include <global/arena_memory.h>
@@ -55,9 +50,9 @@ inline constexpr AStringView s_NamesymEscapedTab = "\\t";
 
 template<typename ArenaT>
 void AppendDebugHashText(AString<ArenaT>& outText, const NameHash& hash){
-    char hashText[::NameDetail::s_DebugHashTextLength + 1u];
-    NameDetail::HashToDebugString(hashText, sizeof(hashText), hash);
-    outText += AStringView(hashText, ::NameDetail::s_DebugHashTextLength);
+    Array<char, ::NameDetail::s_DebugHashTextLength + 1u> hashText;
+    NameDetail::HashToDebugString(hashText.data(), hashText.size(), hash);
+    outText += AStringView(hashText.data(), ::NameDetail::s_DebugHashTextLength);
 }
 
 template<typename ArenaT>
@@ -83,19 +78,20 @@ void AppendEscapedNamesymText(AString<ArenaT>& outText, const AStringView text){
     }
 }
 
-class SymbolStore final : NoCopy{
+class RuntimeRegistry final : NoCopy{
 public:
-    explicit SymbolStore(SymbolArena& arena)
-        : m_symbols(0u, Hasher<NameHash>(), EqualTo<NameHash>(), arena)
+    RuntimeRegistry()
+        : m_arena(CommonArenaScope::s_NameSymbolsArena)
+        , m_symbols(0u, Hasher<NameHash>(), EqualTo<NameHash>(), m_arena)
     {}
 
 
 public:
-    [[nodiscard]] b8 insert(SymbolArena& arena, const NameHash& hash, const AStringView text){
+    [[nodiscard]] b8 insert(const NameHash& hash, const AStringView text){
         if(NameDetail::IsZeroHash(hash))
             return false;
 
-        SymbolString canonicalText(arena);
+        SymbolString canonicalText(m_arena);
         canonicalText.reserve(text.size());
         for(const char ch : text)
             canonicalText.push_back(Canonicalize(ch));
@@ -132,76 +128,12 @@ public:
         return m_symbols.size();
     }
 
-    template<typename ArenaT>
-    void appendFileText(Alloc::ScratchArena& scratchArena, AString<ArenaT>& outText)const{
-        Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
-        records.reserve(m_symbols.size());
-        for(const auto& symbol : m_symbols)
-            records.push_back(SymbolRecordView{ symbol.first, MakeNotNull(&symbol.second) });
-
-        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
-            return LessNameHash(lhs.hash, rhs.hash);
-        });
-
-        usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
-        requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
-        for(const SymbolRecordView& record : records){
-            requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
-            requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
-            for(const char ch : *record.text){
-                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? s_NamesymEscapedCharBytes : 1u;
-                requiredSize = AddSize(requiredSize, encodedSize);
-            }
-            requiredSize = AddSize(requiredSize, 1u);
-        }
-        outText.reserve(requiredSize);
-
-        outText += NameSymbols::s_FileHeader;
-        outText += s_NamesymProducerSuffix;
-        for(const SymbolRecordView& record : records){
-            AppendDebugHashText(outText, record.hash);
-            outText += s_NamesymRuntimeSource;
-            AppendEscapedNamesymText(outText, AStringView(record.text->data(), record.text->size()));
-            outText += s_NamesymRecordTerminator;
-        }
-    }
-
-
-private:
-    SymbolMap m_symbols;
-};
-
-class RuntimeRegistry final : NoCopy{
-public:
-    RuntimeRegistry()
-        : m_arena(CommonArenaScope::s_NameSymbolsArena)
-        , m_symbols(m_arena)
-    {}
-
-
-public:
-    [[nodiscard]] b8 insert(const NameHash& hash, const AStringView text){
-        return m_symbols.insert(m_arena, hash, text);
-    }
-
-    [[nodiscard]] b8 resolve(char* const outText, const usize outTextSize, const NameHash& hash)const{
-        return m_symbols.resolve(outText, outTextSize, hash);
-    }
-
-    void clear()noexcept{
-        m_symbols.clear();
-    }
-
-    [[nodiscard]] usize size()const noexcept{
-        return m_symbols.size();
-    }
-
     [[nodiscard]] Expected<void> serialize(SymbolString& outText){
         Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
         const auto captured = recordArenaOwnerSymbols();
         if(!captured)
             return MakeUnexpected(captured.error());
-        m_symbols.appendFileText(scratchArena, outText);
+        appendFileText(scratchArena, outText);
         return {};
     }
 
@@ -265,11 +197,45 @@ private:
     [[nodiscard]] Expected<void> recordArenaOwnerSymbols()noexcept{ return {}; }
 #endif
 
+    template<typename ArenaT>
+    void appendFileText(Alloc::ScratchArena& scratchArena, AString<ArenaT>& outText)const{
+        Vector<SymbolRecordView, Alloc::ScratchArena> records(scratchArena);
+        records.reserve(m_symbols.size());
+        for(const auto& symbol : m_symbols)
+            records.push_back(SymbolRecordView{ symbol.first, MakeNotNull(&symbol.second) });
+
+        Sort(records.begin(), records.end(), [](const SymbolRecordView& lhs, const SymbolRecordView& rhs)noexcept{
+            return LessNameHash(lhs.hash, rhs.hash);
+        });
+
+        usize requiredSize = AddSize(outText.size(), NameSymbols::s_FileHeader.size());
+        requiredSize = AddSize(requiredSize, s_NamesymProducerSuffix.size());
+        for(const SymbolRecordView& record : records){
+            requiredSize = AddSize(requiredSize, ::NameDetail::s_DebugHashTextLength);
+            requiredSize = AddSize(requiredSize, s_NamesymRuntimeSource.size());
+            for(const char ch : *record.text){
+                const usize encodedSize = ch == '\\' || ch == '\n' || ch == '\r' || ch == '\t' ? s_NamesymEscapedCharBytes : 1u;
+                requiredSize = AddSize(requiredSize, encodedSize);
+            }
+            requiredSize = AddSize(requiredSize, 1u);
+        }
+        outText.reserve(requiredSize);
+
+        outText += NameSymbols::s_FileHeader;
+        outText += s_NamesymProducerSuffix;
+        for(const SymbolRecordView& record : records){
+            AppendDebugHashText(outText, record.hash);
+            outText += s_NamesymRuntimeSource;
+            AppendEscapedNamesymText(outText, AStringView(record.text->data(), record.text->size()));
+            outText += s_NamesymRecordTerminator;
+        }
+    }
+
     [[nodiscard]] b8 writeFile(const ::Path<Alloc::ScratchArena>& path, Alloc::ScratchArena& scratchArena){
         if(!recordArenaOwnerSymbols())
             return false;
         AString<Alloc::ScratchArena> fileText(scratchArena);
-        m_symbols.appendFileText(scratchArena, fileText);
+        appendFileText(scratchArena, fileText);
         return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));
     }
 
@@ -312,7 +278,7 @@ private:
 
 private:
     SymbolArena m_arena;
-    SymbolStore m_symbols;
+    SymbolMap m_symbols;
 };
 
 
@@ -355,14 +321,6 @@ b8 Resolve(char* const outText, const usize outTextSize, const NameHash& hash){
     return __hidden_common_name_symbols::Registry().resolve(outText, outTextSize, hash);
 }
 
-usize EntryCount(){
-    return __hidden_common_name_symbols::Registry().size();
-}
-
-Expected<void> Serialize(AString<Alloc::GlobalArena>& outText){
-    return __hidden_common_name_symbols::Registry().serialize(outText);
-}
-
 void InstallRuntimeRegistry(){
     __hidden_common_name_symbols::RuntimeRegistry& registry = __hidden_common_name_symbols::Registry();
     SetNameSymbolRecordCallback(&__hidden_common_name_symbols::RecordSymbol, &registry);
@@ -376,6 +334,18 @@ void UninstallRuntimeRegistry()noexcept{
 
 void ClearRuntimeSymbols(){
     __hidden_common_name_symbols::Registry().clear();
+}
+
+b8 WriteDefaultFile(){
+    return __hidden_common_name_symbols::Registry().writeDefaultFile();
+}
+
+usize EntryCount(){
+    return __hidden_common_name_symbols::Registry().size();
+}
+
+Expected<void> Serialize(AString<Alloc::GlobalArena>& outText){
+    return __hidden_common_name_symbols::Registry().serialize(outText);
 }
 
 b8 LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
@@ -400,11 +370,6 @@ b8 LoadFromMemory(const AStringView text, Alloc::ScratchArena& scratchArena){
     }
 
     return true;
-}
-
-b8 LoadFromMemory(const AStringView text){
-    Alloc::ScratchArena scratchArena(CommonArenaScope::s_NameSymbolsScratchArena);
-    return LoadFromMemory(text, scratchArena);
 }
 
 Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
@@ -445,10 +410,6 @@ Expected<b8, DefaultFileLoadFailure> LoadDefaultFile(){
     if(firstError)
         return MakeUnexpected(DefaultFileLoadFailure{ firstError, loadedAny });
     return loadedAny;
-}
-
-b8 WriteDefaultFile(){
-    return __hidden_common_name_symbols::Registry().writeDefaultFile();
 }
 
 

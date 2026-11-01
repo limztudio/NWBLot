@@ -21,20 +21,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgShadowReceiverInput{
-    Core::ECS::EntityID entity;
-    CsgReceiverPass::Enum receiverPass = CsgReceiverPass::Opaque;
-    // Leave false when CPU bounds cannot conservatively contain the current deformed receiver.
-    b8 boundsValid = false;
-    Float3U worldMin = Float3U(0.f, 0.f, 0.f);
-    Float3U worldMax = Float3U(0.f, 0.f, 0.f);
-};
-
 static_assert(sizeof(CsgShadowReceiverRangeGpu) == NWB_CSG_RAY_RANGE_BYTES);
 static_assert(offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset) == sizeof(u32) * 3u);
 static_assert(IsStandardLayout_V<CsgShadowReceiverRangeGpu>);
 static_assert(IsTriviallyCopyable_V<CsgShadowReceiverRangeGpu>);
 static_assert(sizeof(CsgCutterGpuData) == NWB_CSG_RAY_CUTTER_BYTES);
+static_assert(s_CsgRayShapeUnsupported == NWB_CSG_RAY_SHAPE_UNSUPPORTED);
+static_assert(s_CsgRayShapePlane == NWB_CSG_RAY_SHAPE_PLANE);
+static_assert(s_CsgRayShapeBox == NWB_CSG_RAY_SHAPE_BOX);
+static_assert(s_CsgRayShapeSphere == NWB_CSG_RAY_SHAPE_SPHERE);
+static_assert(s_CsgRayShapeCapsule == NWB_CSG_RAY_SHAPE_CAPSULE);
 
 struct CsgShadowSnapshot{
     Vector<CsgShadowReceiverRangeGpu, Core::Alloc::GlobalArena> receiverRanges;

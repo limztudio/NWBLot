@@ -4,6 +4,8 @@
 
 #include "grapheme.h"
 
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
+
 #include <global/unicode/grapheme.h>
 
 
@@ -11,26 +13,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_ui_grapheme{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static b8 IsSingleLineScalar(const u32 scalar)noexcept{
-    return scalar != 0u && scalar != s_UnicodeLineFeed && scalar != s_UnicodeCarriageReturn && scalar != s_UnicodeLineSeparator && scalar != s_UnicodeParagraphSeparator;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +49,7 @@ b8 GraphemeSegmentation::Validate(const AStringView text, const b8 singleLine)no
         const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
         if(!decoded)
             return false;
-        if(singleLine && !__hidden_ui_grapheme::IsSingleLineScalar(decoded->codePoint))
+        if(singleLine && !IsSingleLineScalar(decoded->codePoint))
             return false;
         offset += static_cast<usize>(decoded->byteCount);
     }

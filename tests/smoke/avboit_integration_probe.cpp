@@ -4,7 +4,7 @@
 
 #include "avboit_integration_probe.h"
 
-#include <impl/assets_graphics/transparent/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_shader/loader.h>
 #include <impl/ecs_render/avboit/avboit.h>
 
@@ -119,30 +119,38 @@ public:
             return MakeUnexpected(Failure{});
     }
     payload.stage = NWB_TEXT("volume and staging imports");
-    const auto volume = graph.importTexture(payload.volume, Core::GpuGraphResourceDesc{}.setIdentity(s_ProbeName).setMarkerLabel("Integration probe transmittance volume").setType(Core::GpuGraphResourceType::Texture).setInitialState(payload.volumeInitialState).setExternalFinalState(Core::ResourceStates::CopyDest));
+    const auto volume = graph.importTexture(
+        payload.volume,
+        Core::GpuGraphResourceDesc{}
+            .setIdentity(s_ProbeName)
+            .setMarkerLabel("Integration probe transmittance volume")
+            .setType(Core::GpuGraphResourceType::Texture)
+            .setInitialState(payload.volumeInitialState)
+            .setExternalFinalState(Core::ResourceStates::CopyDest)
+    );
     const auto readback = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(Name("AvboitIntegrationReadback")).setMarkerLabel("Integration probe staging writes").setType(Core::GpuGraphResourceType::HazardDomain));
     if(!volume || !readback)
         return MakeUnexpected(Failure{});
-    const Core::GpuTaskResourceUse uses[]{
+    const Array<Core::GpuTaskResourceUse, 6> uses = {{
         { .resource = *buffers[0], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
         { .resource = *buffers[1], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
         { .resource = *buffers[2], .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::ReadWrite },
         { .resource = *buffers[3], .range = {}, .requiredState = Core::ResourceStates::ConstantBuffer, .access = Core::GpuTaskResourceAccess::Read },
         { .resource = *volume, .range = {}, .requiredState = Core::ResourceStates::CopyDest, .access = Core::GpuTaskResourceAccess::Write },
         { .resource = *readback, .range = {}, .requiredState = Core::ResourceStates::Unknown, .access = Core::GpuTaskResourceAccess::Write },
-    };
+    }};
     payload.stage = NWB_TEXT("task declaration");
-    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses, LengthOf(uses)), ProbeTask::Payload(payload));
+    const auto task = graph.addTask<ProbeTask>(Core::GpuTaskDesc{}.setIdentity(s_ProbeName).setMarkerLabel("AVBOIT sparse integration boundary probe").setResourceUses(uses), ProbeTask::Payload(payload));
     if(task)
         payload.stage = NWB_TEXT("scheduling or initial-state recording admission");
     return task;
 }
 
-static void SetExtinction(ProbeTask::Payload& payload, const u32 pixel, const u32 slice, const u32 value)noexcept{
+static void SetExtinction(const u32 pixel, const u32 slice, const u32 value, ProbeTask::Payload& payload)noexcept{
     payload.words[(slice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * s_PixelCount + pixel] |= value << ((slice % NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD) * NWB_AVBOIT_EXTINCTION_BYTE_BITS);
 }
 
-static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
+static void PreparePhase(const u32 phase, ProbeTask::Payload& payload)noexcept{
     // Completed phases restore CopyDest before reusing the image.
     payload.volumeInitialState = phase == 0u ? Core::ResourceStates::Unknown : Core::ResourceStates::CopyDest;
     payload.words.fill(0u);
@@ -151,25 +159,25 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
     payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES] = active;
     for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
         if(phase == 0u){
-            SetExtinction(payload, pixel, 0u, 255u);
-            SetExtinction(payload, pixel, 1u, 255u);
+            SetExtinction(pixel, 0u, 255u, payload);
+            SetExtinction(pixel, 1u, 255u, payload);
             continue;
         }
         if(phase == 1u)
             continue;
         switch(pixel % 7u){
         case 0u: break;
-        case 1u: SetExtinction(payload, pixel, active > 12u ? 12u : active - 1u, 16u); break;
-        case 2u: SetExtinction(payload, pixel, 0u, 255u); SetExtinction(payload, pixel, 1u, 255u); break;
+        case 1u: SetExtinction(pixel, active > 12u ? 12u : active - 1u, 16u, payload); break;
+        case 2u: SetExtinction(pixel, 0u, 255u, payload); SetExtinction(pixel, 1u, 255u, payload); break;
         case 3u: payload.overflowSlices[pixel] = 0u; break;
         case 4u: payload.overflowSlices[pixel] = active - 1u; break;
-        case 5u: SetExtinction(payload, pixel, Min(DivideUp(active, 4u) * 4u - 1u, s_SliceCount - 1u), 255u); break;
-        case 6u: SetExtinction(payload, pixel, active - 1u, 16u); break;
+        case 5u: SetExtinction(pixel, Min(DivideUp(active, 4u) * 4u - 1u, s_SliceCount - 1u), 255u, payload); break;
+        case 6u: SetExtinction(pixel, active - 1u, 16u, payload); break;
         }
     }
 }
 
-[[nodiscard]] static b8 CompareVolume(Core::Device& device, const ProbeTask::Payload& payload, const u32 phase){
+[[nodiscard]] static b8 CompareVolume(const ProbeTask::Payload& payload, const u32 phase, Core::Device& device){
     Array<u32, s_PixelCount> extinctionFixed{};
     for(u32 slice = 0u; slice < s_SliceCount; ++slice){
         const auto mapping = device.mapStagingTexture(*payload.readback, Core::TextureSlice{}.setOrigin(0u, 0u, slice).setSize(s_Width, s_Height, 1u), Core::CpuAccessMode::Read);
@@ -181,11 +189,11 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
         for(u32 pixel = 0u; pixel < s_PixelCount; ++pixel){
             Half observed;
             NWB_MEMCPY(&observed, sizeof(observed), static_cast<const u8*>(mapping->data) + (pixel / s_Width) * mapping->rowPitch + (pixel % s_Width) * sizeof(Half), sizeof(observed));
-            const f32 exponent = VectorGetX(VectorDivide(VectorNegate(VectorReplicate(static_cast<f32>(extinctionFixed[pixel]))), VectorReplicate(static_cast<f32>(s_FixedScale))));
-            const SIMDVectorSingle expected = VectorReplicate(ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent))));
+            const f32 exponent = -static_cast<f32>(extinctionFixed[pixel]) / static_cast<f32>(s_FixedScale);
+            const f32 expected = ConvertHalfToFloat(ConvertFloatToHalf(Exp(exponent)));
             const f32 actual = ConvertHalfToFloat(observed);
-            if(!IsFinite(actual) || (extinctionFixed[pixel] == 0u ? actual != 1.f : Vector4Greater(VectorAbs(VectorSubtract(VectorReplicate(actual), expected)), VectorMax(VectorReplicate(0.0000002f), VectorScale(expected, 0.002f))))){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"), phase, pixel, slice, VectorGetX(expected), actual);
+            if(!IsFinite(actual) || (extinctionFixed[pixel] == 0u ? actual != 1.f : Abs(actual - expected) > Max(0.0000002f, expected * 0.002f))){
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: mismatch phase {} pixel {} slice {} expected {} observed {}"), phase, pixel, slice, expected, actual);
                 return false;
             }
             if(slice < payload.controlWords[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES]){
@@ -211,7 +219,7 @@ static void PreparePhase(ProbeTask::Payload& payload, const u32 phase)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems){
+b8 RunAvboitIntegrationProbe(const NWB::Impl::ActiveSceneSubsystems& sceneSubsystems, NWB::ProjectRuntimeContext& context){
     using namespace NWB;
     using namespace __hidden_avboit_integration_probe;
     auto& graphics = context.graphics;
@@ -222,7 +230,7 @@ b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Imp
     const auto integrateShaderRef = transparentSubsystem ? transparentSubsystem->avboitIntegrateCs : Core::Assets::AssetRef<Impl::ComputeShader>{};
     if(
         !integrateShaderRef.valid()
-        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(shader, integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, graphics, context.assetManager, context.shaderPathResolver, NWB_TEXT("AvboitIntegrationProbe"))
+        || !Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(integrateShaderRef.name(), Core::ShaderArchive::s_DefaultVariant, s_ProbeName, NWB_TEXT("AvboitIntegrationProbe"), graphics, context.assetManager, context.shaderPathResolver, shader)
     )
         return false;
     Core::BindingLayoutDesc layoutDesc(context.objectArena);
@@ -244,7 +252,16 @@ b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Imp
     const auto overflow = createBuffer(Name("AvboitIntegrationOverflow"), s_PixelCount * sizeof(u32), false);
     const auto control = createBuffer(Name("AvboitIntegrationControl"), NWB_AVBOIT_CONTROL_WORD_COUNT * sizeof(u32), false);
     Core::TextureDesc textureDesc;
-    textureDesc.setWidth(s_Width).setHeight(s_Height).setDepth(s_SliceCount).setDimension(Core::TextureDimension::Texture3D).setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT).setIsUAV(true).setName(s_ProbeName).setInitialState(Core::ResourceStates::CopyDest).setKeepInitialState(true);
+    textureDesc.setWidth(s_Width)
+        .setHeight(s_Height)
+        .setDepth(s_SliceCount)
+        .setDimension(Core::TextureDimension::Texture3D)
+        .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
+        .setIsUAV(true)
+        .setName(s_ProbeName)
+        .setInitialState(Core::ResourceStates::CopyDest)
+        .setKeepInitialState(true)
+    ;
     const auto volume = graphics.createTexture(textureDesc);
     const auto readback = device.createStagingTexture(textureDesc, Core::CpuAccessMode::Read);
     if(!extinction || !overflow || !control || !volume || !readback)
@@ -298,7 +315,7 @@ b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Imp
     payload.push.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = static_cast<f32>(s_FixedScale);
     payload.push.heapSlots[0] = uniform->slot();
     for(u32 phase = 0u; phase < s_PhaseCount; ++phase){
-        PreparePhase(payload, phase);
+        PreparePhase(phase, payload);
         const auto token = graphics.submitStandaloneTaskGraph(&payload, DeclareProbe);
         if(!token){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} standalone graph rejected at {}"), phase, stage);
@@ -308,7 +325,7 @@ b8 RunAvboitIntegrationProbe(NWB::ProjectRuntimeContext& context, const NWB::Imp
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} submission completion wait failed"), phase);
             return false;
         }
-        if(!CompareVolume(device, payload, phase)){
+        if(!CompareVolume(payload, phase, device)){
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitIntegrationProbe: phase {} volume readback comparison failed"), phase);
             return false;
         }

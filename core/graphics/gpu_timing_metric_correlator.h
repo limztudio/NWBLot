@@ -8,6 +8,7 @@
 #include "gpu_timing_metrics.h"
 
 #include <core/perf/timing.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,11 +125,9 @@ public:
     [[nodiscard]] b8 prepareOverlapMetric(const Name& firstScope, const Name& secondScope, const Name& outputScope);
     [[nodiscard]] b8 preparePacketEnvelopeMetrics(
         u64 sourceFrameIndex,
-        NotNull<const GpuPacketEnvelopeMetricScope*> scopeInputs,
-        usize scopeCount,
+        Span<const GpuPacketEnvelopeMetricScope> scopeInputs,
         const Name& queueOverlapScope,
-        NotNull<const GpuPacketEnvelopeMetricQueueOutput*> queueOutputInputs,
-        usize queueOutputCount
+        Span<const GpuPacketEnvelopeMetricQueueOutput> queueOutputInputs
     );
     // Stages completed derived samples without invoking the timing sink. The caller owns the observer-publication boundary.
     void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range, Alloc::ScratchArena& scratchArena, GpuTimingSinkSampleVector& performanceSamples);

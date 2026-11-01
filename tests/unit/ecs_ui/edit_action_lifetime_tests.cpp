@@ -49,7 +49,7 @@ TEST_F(UiEditActionHostTests, OmissionRetiresNativeOwnershipAndRestoresOnlyOnRed
     ASSERT_TRUE(emptyFrame());
     EXPECT_EQ(m_model.text(), "42");
     EXPECT_TRUE(m_actions.records.empty());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(actionFrame());
     EXPECT_NE(m_widget.declarationGeneration, declaration);
     EXPECT_EQ(m_model.text(), "0");
@@ -161,7 +161,7 @@ TEST_F(UiEditActionHostTests, CancelRestorationFencesNativeSessionAndDelayedClip
     EXPECT_EQ(m_model.text(), "0");
     EXPECT_TRUE(m_result.cancelled);
     EXPECT_FALSE(m_clipboard.deliver(request, ClipboardStatus::Success, "late"));
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
 }
 
 

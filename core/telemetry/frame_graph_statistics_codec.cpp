@@ -119,34 +119,14 @@ template<typename OutputT, typename InputT>
 
 template<typename OutputT, typename InputT>
 [[nodiscard]] static OutputT ConvertRecordingRuntimeStatistics(const InputT& statistics)noexcept(
-    noexcept(OutputT{})
+    noexcept(ConvertPhysicalQueueRecordingRuntimeStatistics<OutputT>(DeclVal<const InputT&>()))
     && noexcept(DeclVal<void(*)(OutputT)noexcept>()(DeclVal<OutputT&&>()))
-    && noexcept(DeclVal<OutputT&>().packetCount = DeclVal<const InputT&>().packetCount)
-    && noexcept(DeclVal<OutputT&>().taskCount = DeclVal<const InputT&>().taskCount)
-    && noexcept(DeclVal<OutputT&>().commandListCount = DeclVal<const InputT&>().commandListCount)
-    && noexcept(DeclVal<OutputT&>().barrierCount = DeclVal<const InputT&>().barrierCount)
-    && noexcept(DeclVal<OutputT&>().workerRoutedPacketCount = DeclVal<const InputT&>().workerRoutedPacketCount)
-    && noexcept(DeclVal<OutputT&>().parallelPacketCount = DeclVal<const InputT&>().parallelPacketCount)
-    && noexcept(DeclVal<OutputT&>().commandListAcquisitionSeconds = DeclVal<const InputT&>().commandListAcquisitionSeconds)
-    && noexcept(DeclVal<OutputT&>().graphBarrierRecordingSeconds = DeclVal<const InputT&>().graphBarrierRecordingSeconds)
-    && noexcept(DeclVal<OutputT&>().taskRecordSeconds = DeclVal<const InputT&>().taskRecordSeconds)
-    && noexcept(DeclVal<OutputT&>().recordingSeconds = DeclVal<const InputT&>().recordingSeconds)
     && noexcept(DeclVal<OutputT&>().recordingElapsedSeconds = DeclVal<const InputT&>().recordingElapsedSeconds)
     && noexcept(DeclVal<OutputT&>().readyFrontierElapsedSeconds = DeclVal<const InputT&>().readyFrontierElapsedSeconds)
     && noexcept(DeclVal<OutputT&>().readyFrontierWorkerBusySeconds = DeclVal<const InputT&>().readyFrontierWorkerBusySeconds)
     && noexcept(DeclVal<OutputT&>().readyFrontierWorkerCapacitySeconds = DeclVal<const InputT&>().readyFrontierWorkerCapacitySeconds)
 ){
-    OutputT converted;
-    converted.packetCount = statistics.packetCount;
-    converted.taskCount = statistics.taskCount;
-    converted.commandListCount = statistics.commandListCount;
-    converted.barrierCount = statistics.barrierCount;
-    converted.workerRoutedPacketCount = statistics.workerRoutedPacketCount;
-    converted.parallelPacketCount = statistics.parallelPacketCount;
-    converted.commandListAcquisitionSeconds = statistics.commandListAcquisitionSeconds;
-    converted.graphBarrierRecordingSeconds = statistics.graphBarrierRecordingSeconds;
-    converted.taskRecordSeconds = statistics.taskRecordSeconds;
-    converted.recordingSeconds = statistics.recordingSeconds;
+    OutputT converted = ConvertPhysicalQueueRecordingRuntimeStatistics<OutputT>(statistics);
     converted.recordingElapsedSeconds = statistics.recordingElapsedSeconds;
     converted.readyFrontierElapsedSeconds = statistics.readyFrontierElapsedSeconds;
     converted.readyFrontierWorkerBusySeconds = statistics.readyFrontierWorkerBusySeconds;
@@ -155,6 +135,97 @@ template<typename OutputT, typename InputT>
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EncodedFrameGraphPhysicalQueueRuntimeStatistics EncodePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record)noexcept{
+    const FrameGraphPhysicalQueueRuntimeStatistics& statistics = record.statistics;
+    EncodedFrameGraphPhysicalQueueRuntimeStatistics encoded;
+    encoded.ownerNodeIndex = record.ownerNodeIndex;
+    encoded.queue = EncodeQueue(statistics.queue);
+    encoded.queueClass = statistics.queueClass;
+    encoded.compile = ConvertPhysicalQueueCompileRuntimeStatistics<EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics>(statistics.compile);
+    encoded.recording = ConvertPhysicalQueueRecordingRuntimeStatistics<EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics>(statistics.recording);
+    encoded.submission = ConvertSubmissionRuntimeStatistics<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics>(statistics.submission);
+    return encoded;
+}
+
+Expected<FrameGraphPhysicalQueueRuntimeStatisticsRecord> DecodePhysicalQueueRuntimeStatistics(const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encoded, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord decoded;
+    if(encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u || encoded.reserved[3u] != 0u || encoded.reserved[4u] != 0u || encoded.reserved[5u] != 0u || encoded.reserved[6u] != 0u)
+        return MakeUnexpected(Failure{});
+
+    decoded = {
+        .ownerNodeIndex = encoded.ownerNodeIndex,
+        .statistics = {
+            .graphGeneration = ownerStatistics.graphGeneration,
+            .planGeneration = ownerStatistics.planGeneration,
+            .recordingAttemptGeneration = ownerStatistics.recordingAttemptGeneration,
+            .queue = DecodeQueue(encoded.queue),
+            .deviceGeneration = ownerStatistics.deviceGeneration,
+            .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
+            .compile = ConvertPhysicalQueueCompileRuntimeStatistics<FrameGraphPhysicalQueueCompileRuntimeStatistics>(encoded.compile),
+            .recording = ConvertPhysicalQueueRecordingRuntimeStatistics<FrameGraphPhysicalQueueRecordingRuntimeStatistics>(encoded.recording),
+            .submission = ConvertSubmissionRuntimeStatistics<FrameGraphPhysicalQueueSubmissionRuntimeStatistics>(encoded.submission),
+        },
+    };
+    if(!IsValidFrameGraphPhysicalQueueRuntimeStatistics(decoded.statistics))
+        return MakeUnexpected(Failure{});
+    return decoded;
+}
+
+b8 PacketSubmissionStatisticsRecordLess(const FrameGraphPacketSubmissionStatisticsRecord& lhs, const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept{
+    if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
+        return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
+    return lhs.packetIndex < rhs.packetIndex;
+}
+
+EncodedFrameGraphPacketSubmissionStatistics EncodePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
+    return EncodedFrameGraphPacketSubmissionStatistics{
+        .ownerNodeIndex = statistics.ownerNodeIndex,
+        .packetIndex = statistics.packetIndex,
+        .packetGeneration = statistics.packetGeneration,
+        .queue = EncodeQueue(statistics.queue),
+        .queueClass = statistics.queueClass,
+        .joinsAcceptedQueueFrontier = static_cast<u8>(statistics.joinsAcceptedQueueFrontier ? 1u : 0u),
+        .recoverySubmission = static_cast<u8>(statistics.recoverySubmission ? 1u : 0u),
+        .taskCount = statistics.taskCount,
+        .commandListCount = statistics.commandListCount,
+        .plannedWaitTokenCount = statistics.plannedWaitTokenCount,
+        .sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount,
+        .timelineWaitCount = statistics.timelineWaitCount,
+        .mergedTimelineWaitCount = statistics.mergedTimelineWaitCount,
+        .inheritedTimelineWaitElisionCount = statistics.inheritedTimelineWaitElisionCount,
+        .submissionSeconds = statistics.submissionSeconds,
+    };
+}
+
+Expected<FrameGraphPacketSubmissionStatisticsRecord> DecodePacketSubmissionStatistics(const EncodedFrameGraphPacketSubmissionStatistics& encoded)noexcept{
+    FrameGraphPacketSubmissionStatisticsRecord decoded;
+    if(encoded.joinsAcceptedQueueFrontier > 1u || encoded.recoverySubmission > 1u || encoded.reserved != 0u)
+        return MakeUnexpected(Failure{});
+
+    decoded = {
+        .packetGeneration = encoded.packetGeneration,
+        .taskCount = encoded.taskCount,
+        .commandListCount = encoded.commandListCount,
+        .ownerNodeIndex = encoded.ownerNodeIndex,
+        .packetIndex = encoded.packetIndex,
+        .queue = DecodeQueue(encoded.queue),
+        .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
+        .joinsAcceptedQueueFrontier = encoded.joinsAcceptedQueueFrontier != 0u,
+        .recoverySubmission = encoded.recoverySubmission != 0u,
+        .plannedWaitTokenCount = encoded.plannedWaitTokenCount,
+        .sameQueueWaitElisionCount = encoded.sameQueueWaitElisionCount,
+        .timelineWaitCount = encoded.timelineWaitCount,
+        .mergedTimelineWaitCount = encoded.mergedTimelineWaitCount,
+        .inheritedTimelineWaitElisionCount = encoded.inheritedTimelineWaitElisionCount,
+        .submissionSeconds = encoded.submissionSeconds,
+    };
+    if(!IsValidFrameGraphPacketSubmissionStatistics(decoded))
+        return MakeUnexpected(Failure{});
+    return decoded;
+}
 
 EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(const u32 nodeIndex, const FrameGraphRuntimeStatistics& statistics)noexcept{
     EncodedFrameGraphRuntimeStatistics encoded;
@@ -268,6 +339,39 @@ b8 AccumulatePhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntime
 
 b8 ValidatePhysicalQueueRuntimeStatisticsOwner(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record, const usize nodeCount, const FrameGraphNodeKind::Enum ownerKind, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     return static_cast<usize>(record.ownerNodeIndex) < nodeCount && ownerKind == FrameGraphNodeKind::Pass && IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(record.statistics, ownerStatistics);
+}
+
+b8 AccumulatePacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics, const FrameGraphSubmissionRuntimeStatistics& ownerStatistics, FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept{
+    if(!(
+        AccumulateBoundedCount(1u, ownerStatistics.nativeSubmissionCount, total.nativeSubmissionCount)
+        && AccumulateBoundedCount(statistics.taskCount, ownerStatistics.acceptedTaskCount, total.taskCount)
+        && AccumulateBoundedCount(statistics.commandListCount, ownerStatistics.nativeCommandListCount, total.commandListCount)
+        && AccumulateBoundedCount(statistics.plannedWaitTokenCount, ownerStatistics.plannedWaitTokenCount, total.plannedWaitTokenCount)
+        && AccumulateBoundedCount(statistics.sameQueueWaitElisionCount, ownerStatistics.sameQueueWaitElisionCount, total.sameQueueWaitElisionCount)
+        && AccumulateBoundedCount(statistics.timelineWaitCount, ownerStatistics.timelineWaitCount, total.timelineWaitCount)
+        && AccumulateBoundedCount(statistics.mergedTimelineWaitCount, ownerStatistics.mergedTimelineWaitCount, total.mergedTimelineWaitCount)
+        && AccumulateBoundedCount(statistics.inheritedTimelineWaitElisionCount, ownerStatistics.inheritedTimelineWaitElisionCount, total.inheritedTimelineWaitElisionCount)
+        && AccumulateBoundedCount(statistics.joinsAcceptedQueueFrontier ? 1u : 0u, ownerStatistics.acceptedFrontierSubmissionCount, total.acceptedFrontierSubmissionCount)
+        && AccumulateBoundedCount(statistics.recoverySubmission ? 1u : 0u, ownerStatistics.recoverySubmissionCount, total.recoverySubmissionCount)
+    ))
+        return false;
+
+    total.submissionSeconds += statistics.submissionSeconds;
+    return IsFinite(total.submissionSeconds);
+}
+
+b8 PacketSubmissionDurationSumsMatch(const f64 lhs, const f64 rhs, const u64 submissionCount)noexcept{
+    if(lhs == rhs)
+        return true;
+    if(submissionCount == 0u)
+        return false;
+
+    const f64 roundingFactor = static_cast<f64>(submissionCount) * s_DoublePrecisionEpsilon;
+    if(roundingFactor >= s_SubmissionRoundingLimit)
+        return false;
+    const f64 magnitude = Max(lhs, rhs);
+    const f64 difference = magnitude - Min(rhs, lhs);
+    return (difference / magnitude) <= ((s_SubmissionRoundingScale * roundingFactor) / (1.0 - roundingFactor));
 }
 
 

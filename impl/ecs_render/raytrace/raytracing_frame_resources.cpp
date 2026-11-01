@@ -87,7 +87,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(const RayTr
         if(lights[i].params.w < 0.f)
             continue;
         // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only directional/spot reach here.
-        const b8 directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
+        const b8 directional = lights[i].params.y < s_LightTypeDirectionalMax;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})"), static_cast<u32>(lights[i].params.w), i, directional ? NWB_TEXT("directional") : NWB_TEXT("spot"));
     }
 }
@@ -226,14 +226,6 @@ void RendererRayTracingSystem::logCapabilityOnce(){
         , m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline)
         , m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
-    return m_shadowVisibilityTraceResourcesPreflighted && !m_shadowVisibilityHardwareSupported;
 }
 
 

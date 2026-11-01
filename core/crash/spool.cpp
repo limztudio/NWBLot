@@ -27,17 +27,6 @@ inline constexpr usize s_DumpArenaPayloadSize = 512u * 1024u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Alloc::PersistentArena& DumpArena(){
-    static Alloc::PersistentArena s_Arena(CrashArenaScope::s_DumpArena, Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize));
-    return s_Arena;
-}
-
-void InitializeDumpArena(){
-    const ::ArenaMemoryStats stats = DumpArena().memoryStats();
-    if(stats.reservedBytes != 0u)
-        return;
-}
-
 template<typename ArenaT>
 Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
     const auto pending = EnsureDirectories(PendingDirectory(spoolDirectory));
@@ -56,6 +45,17 @@ Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoo
 }
 
 template Expected<void, ErrorCode> EnsureCrashSpoolDirectories(const ::Path<Alloc::ScratchArena>& spoolDirectory);
+
+Alloc::PersistentArena& DumpArena(){
+    static Alloc::PersistentArena s_Arena(CrashArenaScope::s_DumpArena, Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize));
+    return s_Arena;
+}
+
+void InitializeDumpArena(){
+    const ::ArenaMemoryStats stats = DumpArena().memoryStats();
+    if(stats.reservedBytes != 0u)
+        return;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

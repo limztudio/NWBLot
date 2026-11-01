@@ -107,13 +107,9 @@ public:
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept{
+    [[nodiscard]] b8 hasCompleteSplitMeshPayload()const noexcept{
         return
-            entity.valid()
-            && handle.valid()
-            && sourceName
-            && Core::Mesh::MeshClassUsesSkinning(meshClass)
-            && !restPositions.empty()
+            !restPositions.empty()
             && !restNormals.empty()
             && restTangents.size() == restNormals.size()
             && !uv0.empty()
@@ -125,20 +121,20 @@ public:
             && !meshletAttributeRefDeltas.empty()
             && !meshletLocalVertexRefs.empty()
             && !meshletPrimitiveIndices.empty()
-            && solidTriangleWords.size() == (meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
             && meshletPositionRefCount > 0u
             && meshletAttributeRefCount > 0u
             && attributeSkins.size() == meshletAttributeRefCount
-            && localBounds.valid()
-            && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
-            && restPositionBuffer != nullptr
+        ;
+    }
+
+    [[nodiscard]] b8 hasPersistentComputeBuffers()const noexcept{
+        return
+            restPositionBuffer != nullptr
             && restNormalBuffer != nullptr
             && restTangentBuffer != nullptr
             && skinnedPositionBuffer != nullptr
             && skinnedNormalBuffer != nullptr
             && skinnedTangentBuffer != nullptr
-            && uv0Buffer != nullptr
-            && colorBuffer != nullptr
             && meshletDescBuffer != nullptr
             && meshletBoundsBuffer != nullptr
             && meshletPositionRefDeltaBuffer != nullptr
@@ -148,6 +144,22 @@ public:
             && attributeSkinBuffer != nullptr
             && meshletLocalBoundsBuffer != nullptr
             && localBoundsBuffer != nullptr
+        ;
+    }
+
+    [[nodiscard]] b8 valid()const noexcept{
+        return
+            entity.valid()
+            && handle.valid()
+            && sourceName
+            && Core::Mesh::MeshClassUsesSkinning(meshClass)
+            && hasCompleteSplitMeshPayload()
+            && solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(static_cast<u32>(meshletPrimitiveIndices.size()))
+            && localBounds.valid()
+            && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
+            && hasPersistentComputeBuffers()
+            && uv0Buffer != nullptr
+            && colorBuffer != nullptr
         ;
     }
 };

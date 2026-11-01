@@ -46,18 +46,14 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinnin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningDeformationState::MeshSkinningDeformationState(Core::Alloc::GlobalArena& arena)noexcept
-    : m_acceptedJoints(arena)
-    , m_pendingJoints(arena)
-{}
-
 void MeshSkinningDeformationState::invalidateCurrent()noexcept{
     m_current = false;
     m_pendingCandidate = 0u;
 }
 
-void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount, const b8 inputDirty)noexcept{
+void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints, const b8 inputDirty)noexcept{
     invalidateCurrent();
+    const usize jointCount = joints.size();
     if(
         inputDirty
         || m_acceptedRevision == 0u
@@ -66,22 +62,23 @@ void MeshSkinningDeformationState::refreshCurrent(const MeshSkinningDeformationI
         || inputs.editRevision != m_acceptedInputs.editRevision
         || inputs.skinningMode != m_acceptedInputs.skinningMode
         || jointCount != m_acceptedJoints.size()
-        || (jointCount != 0u && !joints)
+        || (jointCount != 0u && !joints.data())
     )
         return;
-    m_current = jointCount == 0u || NWB_MEMCMP(joints, m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
+    m_current = jointCount == 0u || NWB_MEMCMP(joints.data(), m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
 }
 
-Expected<u64> MeshSkinningDeformationState::stage(const MeshSkinningDeformationInputs& inputs, const SkeletonJointMatrix* const joints, const usize jointCount){
+Expected<u64> MeshSkinningDeformationState::stage(const MeshSkinningDeformationInputs& inputs, const Span<const SkeletonJointMatrix> joints){
     invalidateCurrent();
-    if(!inputs.resourceSlotsBuffer || (jointCount != 0u && !joints) || jointCount > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || m_candidateSerial == Limit<u64>::s_Max || m_acceptedRevision == Limit<u64>::s_Max){
+    const usize jointCount = joints.size();
+    if(!inputs.resourceSlotsBuffer || (jointCount != 0u && !joints.data()) || jointCount > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix) || m_candidateSerial == Limit<u64>::s_Max || m_acceptedRevision == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
         return MakeUnexpected(Failure{});
     }
     if(jointCount == 0u)
         m_pendingJoints.clear();
     else
-        m_pendingJoints.assign(joints, joints + jointCount);
+        m_pendingJoints.assign(joints.begin(), joints.end());
     m_pendingInputs = inputs;
     m_pendingCandidate = ++m_candidateSerial;
     return m_pendingCandidate;

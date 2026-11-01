@@ -7,6 +7,7 @@
 
 #include "compile.h"
 #include "limit.h"
+#include "span.h"
 #include "text_utils.h"
 #include "type.h"
 #include "type_borrow.h"
@@ -36,12 +37,12 @@ inline constexpr usize s_HashCombineRightShift = 2u;
     return hash;
 }
 
-[[nodiscard]] inline u64 UpdateFnv64(u64 hash, const u8* bytes, const usize byteCount)noexcept{
-    if(bytes == nullptr || byteCount == 0)
+[[nodiscard]] inline u64 UpdateFnv64(u64 hash, const Span<const u8> bytes)noexcept{
+    if(bytes.data() == nullptr || bytes.empty())
         return hash;
 
-    for(usize i = 0u; i < byteCount; ++i)
-        hash = UpdateFnv64Byte(hash, bytes[i]);
+    for(const u8 byte : bytes)
+        hash = UpdateFnv64Byte(hash, byte);
 
     return hash;
 }
@@ -49,12 +50,13 @@ inline constexpr usize s_HashCombineRightShift = 2u;
 template<typename T>
 inline void Fnv64AppendValue(u64& inOutHash, const T& value)noexcept(noexcept(&value)){
     static_assert(IsTriviallyCopyable_V<T>, "Fnv64AppendValue requires a trivially copyable value");
-    inOutHash = UpdateFnv64(inOutHash, reinterpret_cast<const u8*>(&value), sizeof(value));
+    inOutHash = UpdateFnv64(inOutHash, Span<const u8>(reinterpret_cast<const u8*>(&value), sizeof(value)));
 }
 
-inline void Fnv64AppendBuffer(u64& inOutHash, const u8* bytes, const usize byteCount)noexcept{
+inline void Fnv64AppendBuffer(u64& inOutHash, const Span<const u8> bytes)noexcept{
+    const usize byteCount = bytes.size();
     Fnv64AppendValue(inOutHash, byteCount);
-    inOutHash = UpdateFnv64(inOutHash, bytes, byteCount);
+    inOutHash = UpdateFnv64(inOutHash, bytes);
 }
 
 inline void Fnv64AppendBool(u64& inOutHash, const b8 value)noexcept{
@@ -74,11 +76,11 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline u64 UpdateFnv64TextExact(u64 hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    return UpdateFnv64(hash, reinterpret_cast<const u8*>(text.data()), text.size() * sizeof(CharT));
+    return UpdateFnv64(hash, Span<const u8>(reinterpret_cast<const u8*>(text.data()), text.size() * sizeof(CharT)));
 }
 
 [[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount)noexcept{
-    return UpdateFnv64(s_Fnv64OffsetBasis, static_cast<const u8*>(data), byteCount);
+    return UpdateFnv64(s_Fnv64OffsetBasis, Span<const u8>(static_cast<const u8*>(data), byteCount));
 }
 
 template<typename T>
@@ -130,20 +132,9 @@ template<typename CharT>
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));
 }
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
-    return ComputeFnv64Text(BasicStringView<CharT>(text));
-}
-
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.data();
-        text.size();
-    }
-[[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
-    using CharT = typename StringT::value_type;
-    return ComputeFnv64Text(BasicStringView<CharT>(text.data(), text.size()));
+template<StringViewConvertible StringT>
+[[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text)noexcept(noexcept(AsBasicStringView(text)) && IsArithmetic_V<typename StringT::value_type>){
+    return ComputeFnv64Text(AsBasicStringView(text));
 }
 
 

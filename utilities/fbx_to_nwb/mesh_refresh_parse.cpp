@@ -4,9 +4,10 @@
 
 #include "mesh_refresh_parse.h"
 
-#include <core/common/log.h>
+#include <impl/assets_mesh/cook_metadata.h>
+#include <impl/assets_mesh/cook_source_streams.h>
 
-#include <global/simd/vector.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,345 +25,76 @@ namespace MeshRefreshParseDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_MeshMetaKind = "Mesh";
-static constexpr AStringView s_PositionsField = "positions";
-static constexpr AStringView s_NormalsField = "normals";
-static constexpr AStringView s_TangentsField = "tangents";
-static constexpr AStringView s_Uv0Field = "uv0";
-static constexpr AStringView s_ColorsField = "colors";
-static constexpr AStringView s_VertexRefsField = "vertex_refs";
-static constexpr AStringView s_IndicesField = "indices";
-static constexpr AStringView s_PositionField = "position";
-static constexpr AStringView s_NormalField = "normal";
-static constexpr AStringView s_TangentField = "tangent";
-static constexpr AStringView s_ColorField = "color";
-static constexpr AStringView s_InfluencesLabelOpen = ".influences[";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<f32> ParseFiniteF32(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return MakeUnexpected(Failure{});
-    }
-
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < static_cast<f64>(s_MinF32) || numericValue > static_cast<f64>(s_MaxF32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-finite or out-of-range f32 value"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return MakeUnexpected(Failure{});
-    }
-
-    return static_cast<f32>(numericValue);
-}
-
-[[nodiscard]] static Expected<u32> ParseU32(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label){
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return MakeUnexpected(Failure{});
-    }
-
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != VectorDoubleGetX(VectorDoubleFloor(VectorDoubleReplicate(numericValue))) || numericValue > static_cast<f64>(s_MaxU32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(label));
-        return MakeUnexpected(Failure{});
-    }
-
-    return static_cast<u32>(numericValue);
-}
-
-[[nodiscard]] static ScratchString MakeIndexedLabel(const AStringView fieldName, const usize index, Core::Alloc::ScratchArena& scratchArena){
-    ScratchStringStream out(s_FileOpenWrite, scratchArena);
-    out << fieldName << "[" << index << "]";
-    return Move(out).str();
-}
-
-[[nodiscard]] static Expected<NotNull<const Core::Metascript::Value*>> FindRequiredListField(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName){
-    const Core::Metascript::Value* field = asset.findField(fieldName);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': missing required '{}' field"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    if(!field->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return MakeNotNull(field);
-}
-
-template<typename ElementT, usize ComponentCount>
-[[nodiscard]] static Expected<UtilityVector<ElementT>> ParseFloatListField(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, const AStringView fieldName, Core::Alloc::ScratchArena& scratchArena){
-    UtilityVector<ElementT> outValues;
-
-    const auto field = FindRequiredListField(nwbFilePath, asset, fieldName);
-    if(!field)
-        return MakeUnexpected(field.error());
-
-    const auto& list = (*field)->asList();
-    outValues.reserve(list.size());
-    for(usize i = 0u; i < list.size(); ++i){
-        const Core::Metascript::Value& value = list[i];
-        if(!value.isList() || value.asList().size() != ComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(MakeIndexedLabel(fieldName, i, scratchArena)), ComponentCount);
-            return MakeUnexpected(Failure{});
-        }
-
-        f32 tuple[ComponentCount] = {};
-        const auto& components = value.asList();
-        for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
-            ScratchStringStream label(s_FileOpenWrite, scratchArena);
-            label << fieldName << "[" << i << "][" << componentIndex << "]";
-            const auto component = ParseFiniteF32(nwbFilePath, components[componentIndex], label.str());
-            if(!component)
-                return MakeUnexpected(Failure{});
-            tuple[componentIndex] = *component;
-        }
-
-        ElementT element;
-        element.x = tuple[0u];
-        element.y = tuple[1u];
-        if constexpr(ComponentCount >= 3u)
-            element.z = tuple[2u];
-        if constexpr(ComponentCount >= 4u)
-            element.w = tuple[3u];
-        outValues.push_back(element);
-    }
-
-    if(outValues.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(fieldName));
-        return MakeUnexpected(Failure{});
-    }
-    return outValues;
-}
-
-[[nodiscard]] static Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
-    UtilityVector<SourceVertexRef> outVertexRefs;
-
-    const auto field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
-    if(!field)
-        return MakeUnexpected(field.error());
-
-    const auto& list = (*field)->asList();
-    outVertexRefs.reserve(list.size());
-    for(usize i = 0u; i < list.size(); ++i){
-        const Core::Metascript::Value& value = list[i];
-        if(!value.isList() || value.asList().size() != s_AuthoredVertexRefComponentCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), i, s_AuthoredVertexRefComponentCount);
-            return MakeUnexpected(Failure{});
-        }
-
-        SourceVertexRef ref;
-        const auto& components = value.asList();
-        const NotNull<u32*> componentValues[] = { MakeNotNull(&ref.position), MakeNotNull(&ref.normal), MakeNotNull(&ref.tangent), MakeNotNull(&ref.uv0), MakeNotNull(&ref.color) };
-        for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
-            ScratchStringStream label(s_FileOpenWrite, scratchArena);
-            label << "vertex_refs[" << i << "][" << componentIndex << "]";
-            const auto component = ParseU32(nwbFilePath, components[componentIndex], label.str());
-            if(!component)
-                return MakeUnexpected(Failure{});
-            *componentValues[componentIndex] = *component;
-        }
-
-        outVertexRefs.push_back(ref);
-    }
-
-    if(outVertexRefs.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-    return outVertexRefs;
-}
-
-[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName, Core::Alloc::ScratchArena& scratchArena){
-    UtilityVector<MeshSkinInfluence> outInfluences;
-
-    const auto field = FindRequiredListField(nwbFilePath, skinAsset, "influences");
-    if(!field)
-        return MakeUnexpected(field.error());
-
-    const auto& list = (*field)->asList();
-    outInfluences.reserve(list.size());
-    for(usize i = 0u; i < list.size(); ++i){
-        const Core::Metascript::Value& influenceValue = list[i];
-        if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}]' must be a map"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(skinVariableName), i);
-            return MakeUnexpected(Failure{});
-        }
-
-        const Core::Metascript::Value* jointsValue = influenceValue.findField("joints");
-        const Core::Metascript::Value* weightsValue = influenceValue.findField("weights");
-        if(!jointsValue || !jointsValue->isList() || jointsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(skinVariableName), i, s_MeshSkinInfluenceCount);
-            return MakeUnexpected(Failure{});
-        }
-        if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(skinVariableName), i, s_MeshSkinInfluenceCount);
-            return MakeUnexpected(Failure{});
-        }
-
-        MeshSkinInfluence influence;
-        for(usize componentIndex = 0u; componentIndex < s_MeshSkinInfluenceCount; ++componentIndex){
-            ScratchStringStream jointLabel(s_FileOpenWrite, scratchArena);
-            jointLabel << skinVariableName << s_InfluencesLabelOpen << i << "].joints[" << componentIndex << "]";
-            const auto jointIndex = ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str());
-            if(!jointIndex)
-                return MakeUnexpected(Failure{});
-            if(*jointIndex > static_cast<u32>(Limit<u16>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(jointLabel.str()));
-                return MakeUnexpected(Failure{});
-            }
-
-            ScratchStringStream weightLabel(s_FileOpenWrite, scratchArena);
-            weightLabel << skinVariableName << s_InfluencesLabelOpen << i << "].weights[" << componentIndex << "]";
-            influence.joint[componentIndex] = static_cast<u16>(*jointIndex);
-            const auto weight = ParseFiniteF32(nwbFilePath, weightsValue->asList()[componentIndex], weightLabel.str());
-            if(!weight)
-                return MakeUnexpected(Failure{});
-            influence.weight.raw[componentIndex] = *weight;
-        }
-
-        outInfluences.push_back(influence);
-    }
-
-    if(outInfluences.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences' must not be empty"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(skinVariableName));
-        return MakeUnexpected(Failure{});
-    }
-    return outInfluences;
-}
-
-[[nodiscard]] static b8 FillIndicesRecursive(const ScratchPath& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, Core::Alloc::ScratchArena& scratchArena, UtilityVector<u32>& outIndices){
-    if(value.isList()){
-        const auto& list = value.asList();
-        for(usize i = 0u; i < list.size(); ++i){
-            ScratchStringStream childLabel(s_FileOpenWrite, scratchArena);
-            childLabel << label << "[" << i << "]";
-            if(!FillIndicesRecursive(nwbFilePath, list[i], childLabel.str(), scratchArena, outIndices))
-                return false;
-        }
-        return true;
-    }
-
-    const auto index = ParseU32(nwbFilePath, value, label);
-    if(!index)
-        return false;
-    outIndices.push_back(*index);
-    return true;
-}
-
-[[nodiscard]] static Expected<UtilityVector<u32>> ParseIndices(const ScratchPath& nwbFilePath, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
-    UtilityVector<u32> outIndices;
-
-    const auto field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
-    if(!field)
-        return MakeUnexpected(field.error());
-    if(!FillIndicesRecursive(nwbFilePath, **field, s_IndicesField, scratchArena, outIndices))
-        return MakeUnexpected(Failure{});
-    if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
-        return MakeUnexpected(Failure{});
-    }
-    return outIndices;
-}
-
-[[nodiscard]] static b8 ValidateStreamIndex(const ScratchPath& nwbFilePath, const AStringView streamName, const u32 index, const usize count){
-    if(index < count)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(streamName));
-    return false;
-}
-
-[[nodiscard]] static b8 ValidateMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(nwbFilePath, s_PositionField, ref.position, mesh.positions.size()))
-            return false;
-        if(!ValidateStreamIndex(nwbFilePath, s_NormalField, ref.normal, mesh.normals.size()))
-            return false;
-        if(!ValidateStreamIndex(nwbFilePath, s_TangentField, ref.tangent, mesh.tangents.size()))
-            return false;
-        if(!ValidateStreamIndex(nwbFilePath, s_Uv0Field, ref.uv0, mesh.uv0.size()))
-            return false;
-        if(!ValidateStreamIndex(nwbFilePath, s_ColorField, ref.color, mesh.colors.size()))
-            return false;
-        if(ref.skin != s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
-            return false;
-        }
-    }
-
-    for(const u32 index : mesh.indices){
-        if(index < mesh.vertexRefs.size())
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    return true;
-}
-
-[[nodiscard]] static b8 IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName)noexcept{
-    return
-        fieldName == s_PositionsField
-        || fieldName == s_NormalsField
-        || fieldName == s_TangentsField
-        || fieldName == s_Uv0Field
-        || fieldName == s_ColorsField
-        || fieldName == s_VertexRefsField
-        || fieldName == s_IndicesField
-    ;
-}
-
 [[nodiscard]] static b8 ValidateMeshAssetFields(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName));
         return false;
     }
 
     for(const auto& field : asset.asMap()){
         const Core::Metascript::MStringView fieldName(field.first);
-        if(IsAllowedMeshAssetField(fieldName))
+        if(Impl::MeshCookMetadata::IsAllowedMeshAssetField(fieldName))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), ConvertString(s_MeshMetaKind), PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath), ConvertString(meshVariableName), ConvertString(fieldName));
         return false;
     }
     return true;
+}
+
+[[nodiscard]] static b8 ValidateMesh(const ScratchPath& nwbFilePath, const SourceMeshStreams& mesh){
+    if(!Impl::MeshCookSourceStreams::ValidateSourceVertexRefStreams(
+        nwbFilePath,
+        Impl::s_MeshMetaKind,
+        Span<const SourceVertexRef>(mesh.vertexRefs.data(), mesh.vertexRefs.size()),
+        mesh.positions.size(),
+        mesh.normals.size(),
+        mesh.tangents.size(),
+        mesh.uv0.size(),
+        mesh.colors.size()
+    ))
+        return false;
+
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        if(ref.skin != Impl::s_MeshMissingStreamIndex){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index"), Impl::s_MeshMetaKind, PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+    }
+
+    return Impl::MeshCookSourceStreams::ValidateSourceIndexStream(
+        nwbFilePath,
+        Impl::s_MeshMetaKind,
+        Span<const u32>(mesh.indices.data(), mesh.indices.size()),
+        mesh.vertexRefs.size()
+    );
+}
+
+[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(const ScratchPath& nwbFilePath, const Core::Metascript::Value& skinAsset, const AStringView skinVariableName){
+    UtilityVector<MeshSkinInfluence> outInfluences;
+    if(!Impl::MeshCookSourceStreams::ParseSourceSkinInfluencesInto(nwbFilePath, skinAsset, Impl::s_MeshMetaKind, skinVariableName, false, outInfluences))
+        return MakeUnexpected(Failure{});
+    return outInfluences;
 }
 
 [[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const ScratchPath& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset, Core::Alloc::ScratchArena& scratchArena){
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
         return MakeUnexpected(Failure{});
     SourceMeshStreams mesh;
-    auto positions = ParseFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, s_PositionsField, scratchArena);
-    if(!positions)
-        return MakeUnexpected(positions.error());
-    mesh.positions = Move(*positions);
-    auto normals = ParseFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, s_NormalsField, scratchArena);
-    if(!normals)
-        return MakeUnexpected(normals.error());
-    mesh.normals = Move(*normals);
-    auto tangents = ParseFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, s_TangentsField, scratchArena);
-    if(!tangents)
-        return MakeUnexpected(tangents.error());
-    mesh.tangents = Move(*tangents);
-    auto uv0 = ParseFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, s_Uv0Field, scratchArena);
-    if(!uv0)
-        return MakeUnexpected(uv0.error());
-    mesh.uv0 = Move(*uv0);
-    auto colors = ParseFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, s_ColorsField, scratchArena);
-    if(!colors)
-        return MakeUnexpected(colors.error());
-    mesh.colors = Move(*colors);
-    auto vertexRefs = ParseVertexRefs(nwbFilePath, asset, scratchArena);
-    if(!vertexRefs)
-        return MakeUnexpected(vertexRefs.error());
-    mesh.vertexRefs = Move(*vertexRefs);
-    auto indices = ParseIndices(nwbFilePath, asset, scratchArena);
-    if(!indices)
-        return MakeUnexpected(indices.error());
-    mesh.indices = Move(*indices);
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshPositionsFieldNameView, scratchArena, mesh.positions))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec3, s_Vector3ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshNormalsFieldNameView, scratchArena, mesh.normals))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshTangentsFieldNameView, scratchArena, mesh.tangents))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec2, s_Vector2ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshUv0FieldNameView, scratchArena, mesh.uv0))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::FillMetadataFloatListField<Vec4, s_Vector4ComponentCount>(nwbFilePath, asset, Impl::s_MeshMetaKind, Impl::s_MeshColorsFieldNameView, scratchArena, mesh.colors))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookSourceStreams::ParseSourceVertexRefsInto(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.vertexRefs))
+        return MakeUnexpected(Failure{});
+    if(!Impl::MeshCookMetadata::ParseMetadataIndexFieldInto(nwbFilePath, asset, Impl::s_MeshMetaKind, scratchArena, mesh.indices))
+        return MakeUnexpected(Failure{});
     if(!ValidateMesh(nwbFilePath, mesh))
         return MakeUnexpected(Failure{});
     return mesh;

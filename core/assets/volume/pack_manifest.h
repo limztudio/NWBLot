@@ -66,12 +66,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, u64 plannedFileCount);
-[[nodiscard]] b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const void* payloadBytes, usize payloadByteCount, u64 cookKeyHash = 0u);
-
-[[nodiscard]] inline b8 AppendPayloadBytesToManifest(AssetVolumePackManifest& manifest, const Name& virtualPath, const Span<const u8> payloadBytes, const u64 cookKeyHash = 0u){
-    return AppendPayloadBytesToManifest(manifest, virtualPath, payloadBytes.empty() ? nullptr : payloadBytes.data(), payloadBytes.size(), cookKeyHash);
-}
+[[nodiscard]] b8 ReserveAssetVolumePackManifest(u64 plannedFileCount, AssetVolumePackManifest& manifest);
+[[nodiscard]] b8 AppendPayloadBytesToManifest(const Name& virtualPath, Span<const u8> payloadBytes, AssetVolumePackManifest& manifest, u64 cookKeyHash = 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -6,9 +6,9 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/reflection/composite_inputs.adhd.h>
+#include <impl/ecs_render/reflection/settings.adhd.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/rhi/framebuffer.h>
@@ -77,7 +77,13 @@ public:
         Core::GraphicsRuntime& graphics,
         Core::IGpuTaskGraphPresentationContributor* presentationContributor,
         Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
-    )noexcept;
+    )noexcept
+        : m_graph(graph)
+        , m_deferredSystem(deferredSystem)
+        , m_graphics(graphics)
+        , m_presentationContributor(presentationContributor)
+        , m_outputLayerContributor(outputLayerContributor)
+    {}
 
 
 public:

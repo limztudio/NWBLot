@@ -25,17 +25,6 @@ using namespace NWB::UiRadioGroupTests;
 class UiRadioGroupBuilderTests : public RadioGroupFixture{};
 
 
-static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core::Alloc::ScratchArena>& vertices){
-    vertices.reserve(snapshot.indices().size());
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Glyph)
-            continue;
-        for(u32 index = command.firstIndex; index < command.firstIndex + command.indexCount; ++index)
-            vertices.push_back(snapshot.vertices()[snapshot.indices()[index]]);
-    }
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,10 +44,10 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
         const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
         const auto measured = m_text.measure(layout, reference.displayMetrics());
         ASSERT_TRUE(measured);
-        const SIMDVectorSingle centering = VectorMax(VectorZero(), VectorMultiply(VectorSubtract(VectorReplicate(row.rectangle.height), VectorReplicate(measured->height)), VectorReplicate(0.5f)));
-        const SIMDVectorSingle textStart = VectorAdd(VectorAdd(VectorReplicate(row.indicator.x), VectorReplicate(row.indicator.width)), VectorReplicate(m_builder.radioGroupStyle().gap));
-        const SIMDVectorSingle textTop = VectorAdd(VectorReplicate(row.rectangle.y), centering);
-        const SIMDVectorSingle originValue = VectorSubtract(VectorMergeXY(textStart, textTop), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
+        const f32 centering = Max(0.0f, (row.rectangle.height - measured->height) * 0.5f);
+        const f32 textStart = row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap;
+        const f32 textTop = row.rectangle.y + centering;
+        const SIMDVectorSingle originValue = VectorSubtract(VectorSet(textStart, textTop, 0.0f, 0.0f), VectorSet(measured->x, measured->y, 0.0f, 0.0f));
         const Point origin{ VectorGetX(originValue), VectorGetY(originValue) };
         reference.pushClip(row.clip);
         reference.pushClip(row.textClip);
@@ -197,7 +186,7 @@ TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMa
     ASSERT_TRUE(accept(1u));
     EXPECT_EQ(m_state.selectedKey(), 30u);
     EXPECT_EQ(m_state.cursorKey(), 40u);
-    const WidgetId part = UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 30u));
+    const WidgetId part = UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(host(), "choices"), 30u);
     ASSERT_NE(target(part), nullptr);
     EXPECT_FALSE(target(part)->enabled);
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -217,9 +206,9 @@ TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetire
     ASSERT_NE(target(host()), nullptr);
     EXPECT_FALSE(target(host())->enabled);
     EXPECT_FALSE(target(host())->focusable);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetPartId(UiTestSupport::RequireWidgetId(MakeWidgetId(host(), "choices")), 10u))), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetPartId(UiTestSupport::RequireWidgetId(host(), "choices"), 10u)), nullptr);
     const Point point = choicePoint(10u);
-    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_RadioPanelKey)));
+    EXPECT_EQ(m_context.input().hitTest(point), UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_RadioPanelKey));
     EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
     EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
     ASSERT_TRUE(accept(3u, options));
@@ -313,10 +302,10 @@ TEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTar
     ASSERT_TRUE(accept(1u));
     const Rect oldBounds = target(host())->rectangle;
     ASSERT_TRUE(prepare(2u, {}, { 80.0f, 40.0f, 420.0f, 360.0f }));
-    ExpectRect(target(host())->rectangle, oldBounds);
+    UiPaintAssertions::ExpectRect(target(host())->rectangle, oldBounds);
     EXPECT_NE(m_state.placement().bounds.x, oldBounds.x);
     ASSERT_TRUE(m_context.commitFrame(2u));
-    ExpectRect(target(host())->rectangle, m_state.placement().bounds);
+    UiPaintAssertions::ExpectRect(target(host())->rectangle, m_state.placement().bounds);
 }
 
 TEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds){

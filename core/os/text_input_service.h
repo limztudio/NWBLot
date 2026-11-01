@@ -39,9 +39,9 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken token, const TextInputSessionDesc& desc);
+    [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(TextInputSessionToken, const TextInputSessionDesc&){ return TextInputAdmission::Accepted; }
     virtual void endNativeSession(TextInputSessionToken token);
-    [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect caret);
+    [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(TextInputRect){ return TextInputAdmission::Accepted; }
     virtual void updateNativeSurrounding(AStringView text, usize anchorByte, usize caretByte, u64 revision, TextInputChangeCause::Enum cause);
 
 

@@ -3,7 +3,6 @@
 
 
 #include "module.h"
-#include "arena_names.h"
 
 #include <global/simd/vector.h>
 
@@ -17,29 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputDispatcher::InputDispatcher()
-    : m_arena(InputArenaScope::s_DispatcherArena)
-    , m_handlers(m_arena)
-    , m_pendingHandlerMutations(m_arena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void InputDispatcher::addHandlerToFront(IInputEventHandler& handler){
-    queueOrApplyHandlerMutation(HandlerMutationType::AddFront, handler);
-}
-
-void InputDispatcher::addHandlerToBack(IInputEventHandler& handler){
-    queueOrApplyHandlerMutation(HandlerMutationType::AddBack, handler);
-}
-
-void InputDispatcher::removeHandler(IInputEventHandler& handler){
-    queueOrApplyHandlerMutation(HandlerMutationType::Remove, handler);
-}
-
-void InputDispatcher::setMousePositionScale(f32 x, f32 y)noexcept{
+void InputDispatcher::setMousePositionScale(const f32 x, const f32 y)noexcept{
     m_mousePositionScaleX = x != 0.f ? x : 1.f;
     m_mousePositionScaleY = y != 0.f ? y : 1.f;
 }
@@ -107,7 +84,7 @@ b8 InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
     return m_keyboardTextBlocked;
 }
 
-void InputDispatcher::keyboardCharInput(u32 unicode, i32 mods){
+void InputDispatcher::keyboardCharInput(const u32 unicode, const i32 mods){
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.keyboardCharInput(unicode, mods);
     });
@@ -133,7 +110,7 @@ void InputDispatcher::mouseButtonUpdate(i32 button, i32 action, i32 mods){
     });
 }
 
-void InputDispatcher::mouseScrollUpdate(f64 xoffset, f64 yoffset){
+void InputDispatcher::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.mouseScrollUpdate(xoffset, yoffset);
     });

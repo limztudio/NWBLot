@@ -16,10 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ReflectionHistoryState::ReflectionHistoryState(const u16 deviceGeneration)noexcept
-    : m_deviceGeneration(deviceGeneration)
-{}
-
 void ReflectionHistoryState::reset(const u16 deviceGeneration)noexcept{
     NothrowScopedLock lock(m_mutex);
 
@@ -38,37 +34,25 @@ void ReflectionHistoryState::reset(const u16 deviceGeneration)noexcept{
 ReflectionHistoryPlan ReflectionHistoryState::plan(const ReflectionSceneContentStamp& stamp, const ReflectionSettings& settings, const u64 graphicsFrameIndex)noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    ReflectionHistoryPlan result;
-    result.stamp = stamp;
-    result.graphicsFrameIndex = graphicsFrameIndex;
-    result.historyStartGraphicsFrame = m_historyStartGraphicsFrame;
-    result.settings = settings;
-    result.generation = m_generation;
-    result.sequence = m_nextSequence++;
-    result.acceptedSequence = m_acceptedSequence;
-    result.previousHardwareReady = m_hardwareReady;
-    if(m_acceptedSequence == 0u)
-        result.resetReason = m_resourcesChanged ? ReflectionHistoryResetReason::ResourcesChanged : ReflectionHistoryResetReason::FirstSample;
-    else if(!SameReflectionEstimatorSettings(settings, m_settings))
-        result.resetReason = ReflectionHistoryResetReason::SettingsChanged;
-    else if(!stamp.matchesScene(m_stamp))
-        result.resetReason = ReflectionHistoryResetReason::SceneChanged;
-    else if(stamp.view != m_stamp.view)
-        result.resetReason = ReflectionHistoryResetReason::ViewChanged;
-    result.reset = result.resetReason != ReflectionHistoryResetReason::None;
-    result.epoch = m_epoch + (result.reset ? 1u : 0u);
-    result.sampleIndex = result.reset ? 0u : m_nextSampleIndex;
-    result.eligible = settings.temporalEnabled && stamp.trusted && settings.traceMode != ReflectionTraceMode::Disabled;
-    result.reused = result.eligible && m_eligible && !result.reset && m_sampleCount > 0u;
-    result.previousSampleCount = result.reused ? m_sampleCount : 0u;
-    result.previousBank = m_acceptedBank;
-    // Rejected transitions keep last accepted history.
-    result.currentBank = (result.eligible || m_eligible) && m_acceptedSequence != 0u ? 1u - m_acceptedBank : 0u;
-    if(result.reset && (!settings.temporalEnabled || settings.traceMode == ReflectionTraceMode::Disabled))
-        result.resetReason = ReflectionHistoryResetReason::Disabled;
-    else if(result.reset && !stamp.trusted)
-        result.resetReason = ReflectionHistoryResetReason::UntrustedScene;
-    return result;
+    const u64 sequence = m_nextSequence++;
+    return ResolveReflectionHistoryPlan(
+        stamp,
+        settings,
+        graphicsFrameIndex,
+        m_stamp,
+        m_settings,
+        m_generation,
+        sequence,
+        m_acceptedSequence,
+        m_epoch,
+        m_historyStartGraphicsFrame,
+        m_nextSampleIndex,
+        m_sampleCount,
+        m_acceptedBank,
+        m_eligible,
+        m_hardwareReady,
+        m_resourcesChanged
+    );
 }
 
 b8 ReflectionHistoryState::reserve(const ReflectionHistoryPlan& plan)noexcept{
@@ -113,57 +97,9 @@ void ReflectionHistoryState::accept(const ReflectionHistoryPlan& plan, const Cor
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ReflectionHistoryControlHandle> CreateReflectionHistoryControl(Core::Alloc::GlobalArena& arena, const u16 deviceGeneration)noexcept{
-    auto control = ReflectionHistoryControlHandle(NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration), ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
-    if(!control)
-        return MakeUnexpected(Failure{});
-    return control;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ReflectionHistoryReservation::ReflectionHistoryReservation(ReflectionHistoryControlHandle control, const ReflectionHistoryPlan& plan)noexcept
-    : m_control(Move(control))
-    , m_plan(plan)
-{
-    m_reserved = m_control && m_control->reserve(m_plan);
-}
-
-ReflectionHistoryReservation::ReflectionHistoryReservation(ReflectionHistoryReservation&& other)noexcept
-    : m_control(Move(other.m_control))
-    , m_plan(other.m_plan)
-    , m_reserved(other.m_reserved)
-{
-    other.m_reserved = false;
-}
-
-ReflectionHistoryReservation::~ReflectionHistoryReservation()noexcept{
-    discard();
-}
-
-ReflectionHistoryReservation& ReflectionHistoryReservation::operator=(ReflectionHistoryReservation&& other)noexcept{
-    if(this != &other){
-        discard();
-        m_control = Move(other.m_control);
-        m_plan = other.m_plan;
-        m_reserved = other.m_reserved;
-        other.m_reserved = false;
-    }
-    return *this;
-}
-
 void ReflectionHistoryReservation::accept(const Core::QueueSubmissionToken& token, const b8 hardwareReady)noexcept{
     if(m_reserved)
         m_control->accept(m_plan, token, hardwareReady);
-    m_reserved = false;
-    m_control = nullptr;
-}
-
-void ReflectionHistoryReservation::discard()noexcept{
-    if(m_reserved)
-        m_control->discard(m_plan);
     m_reserved = false;
     m_control = nullptr;
 }

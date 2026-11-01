@@ -17,7 +17,13 @@
 NWB_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct PassiveSmokeColumns{
@@ -26,28 +32,31 @@ struct PassiveSmokeColumns{
     f32 rightWidth = 0.0f;
 };
 
-[[nodiscard]] inline PassiveSmokeColumns ResolvePassiveSmokeColumns(const Impl::Ui::DisplayMetrics& display)noexcept{
-    const SIMDVectorSingle logicalWidth = VectorReplicate(display.logicalWidth);
-    const SIMDVectorSingle mainWidth = VectorMax(VectorReplicate(300.0f), VectorMultiplyAddExpression(logicalWidth, VectorReplicate(0.5f), VectorNegate(VectorReplicate(40.0f))));
-    const SIMDVectorSingle rightColumn = VectorAdd(VectorAdd(VectorReplicate(24.0f), mainWidth), VectorReplicate(32.0f));
-    const SIMDVectorSingle rightWidth = VectorMax(VectorReplicate(220.0f), VectorSubtract(VectorSubtract(logicalWidth, rightColumn), VectorReplicate(24.0f)));
-    return { VectorGetX(mainWidth), VectorGetX(rightColumn), VectorGetX(rightWidth) };
-}
-
 struct PassiveSmokeTargetObservation{
     u32 focusCode = 0u;
     u32 passiveTargets = 0u;
 };
 
+struct PassiveSmokeSnapshotUpdate{
+    b8 published = false;
+    b8 displayChanged = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] PassiveSmokeColumns ResolvePassiveSmokeColumns(const Impl::Ui::DisplayMetrics& display)noexcept;
+
 template<typename RectanglesT, typename IncludeIndexT>
 [[nodiscard]] inline PassiveSmokeTargetObservation ObservePassiveSmokeTargets(
-    RectanglesT& rectangles,
     const Impl::Ui::InputRouter& input,
     const u64 parentGeneration,
     const u64 childGeneration,
     const usize beginIndex,
     const usize endIndex,
-    const IncludeIndexT& includeIndex
+    const IncludeIndexT& includeIndex,
+    RectanglesT& rectangles
 )noexcept(
     noexcept(rectangles[DeclVal<u32&>()] = DeclVal<const Impl::Ui::Rect&>())
     && noexcept(static_cast<b8>(!includeIndex(DeclVal<usize&>()) || rectangles[DeclVal<usize&>()].width == 0.0f))
@@ -78,13 +87,8 @@ template<typename RectanglesT, typename IncludeIndexT>
     return observation;
 }
 
-struct PassiveSmokeSnapshotUpdate{
-    b8 published = false;
-    b8 displayChanged = false;
-};
-
 template<typename SnapshotT, typename StateChangedT>
-[[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(SnapshotT& current, SnapshotT& snapshot, const StateChangedT& stateChanged)noexcept(
+[[nodiscard]] inline PassiveSmokeSnapshotUpdate PublishPassiveSmokeSnapshot(const StateChangedT& stateChanged, SnapshotT& current, SnapshotT& snapshot)noexcept(
     noexcept(DeclVal<void(*)(const Impl::Ui::DisplayMetrics&)noexcept>()(snapshot.display))
     && noexcept(DeclVal<void(*)(b8)noexcept>()(
         current.display.logicalWidth != DeclVal<const Impl::Ui::DisplayMetrics&>().logicalWidth
@@ -111,31 +115,21 @@ template<typename SnapshotT, typename StateChangedT>
     return { true, displayChanged };
 }
 
-[[nodiscard]] inline b8 HandlePassiveSmokeKeyboard(const i32 key, const i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept{
-    if(key != Core::Key::F4 && key != Core::Key::F5)
-        return false;
-    if(action != Core::InputAction::Press)
-        return true;
-    if(key == Core::Key::F4)
-        phase = !phase;
-    else if(parent.isOpen()){
-        child.close();
-        parent.close();
-    }
-    else{
-        parent.open();
-        child.open();
-    }
-    return true;
-}
+[[nodiscard]] b8 HandlePassiveSmokeKeyboard(i32 key, i32 action, b8& phase, Impl::Ui::PopupState& parent, Impl::Ui::PopupState& child)noexcept;
 
 template<typename ValuesT>
-inline void PaintPassiveSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
-    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(context, values, sequence);
+inline void PaintPassiveSmokeValueMarkers(const ValuesT& values, const u64 sequence, Impl::UiPaintContext& context){
+    PaintKeyedSmokeValueMarkers<12u, 8u, 8u, 18u>(values, sequence, context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_END

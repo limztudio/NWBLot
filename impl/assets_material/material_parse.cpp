@@ -26,13 +26,7 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntry*>, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena){
+Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(const Span<const MaterialBindEntry> materialBindEntries, ScratchArena& scratchArena){
     MaterialBindInterfaceLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
     lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){

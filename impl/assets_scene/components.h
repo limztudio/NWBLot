@@ -7,8 +7,6 @@
 
 #include "../global.h"
 
-#include <impl/ecs_scene/components.adhd.h>
-
 #include <core/assets/auto_registration.h>
 #include <core/assets/module.h>
 #include <core/common/log.h>
@@ -26,6 +24,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr TStringView s_ComponentAssetKindLabel = NWB_TEXT("component");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 interface IComponent : Core::Assets::IAsset{
 public:
     NWB_DEFINE_ASSET_TYPE("component")
@@ -33,12 +37,15 @@ public:
 
 public:
     virtual ~IComponent()noexcept override = 0;
+
+
 protected:
     explicit IComponent(const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
     {}
     IComponent(const IComponent&) = default;
     IComponent(IComponent&&)noexcept = default;
+
 
 protected:
     IComponent& operator=(const IComponent&) = default;
@@ -65,7 +72,7 @@ namespace ComponentAssetRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 LoadBinary(IComponent& component, Span<const u8> binary);
+[[nodiscard]] b8 LoadBinary(Span<const u8> binary, IComponent& outComponent);
 
 template<typename TPod>
 [[nodiscard]] Expected<TPod> ReadSinglePodPayload(const Span<const u8> payload, const TStringView contextLabel){
@@ -89,7 +96,14 @@ template<typename TPod>
 
 
 template<typename ComponentT>
+class TypedComponentAssetCodec;
+
+template<typename ComponentT>
 class TypedComponent : public IComponent{
+public:
+    using AssetCodecType = TypedComponentAssetCodec<ComponentT>;
+
+
 public:
     explicit TypedComponent(Core::Assets::AssetArena&)noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ComponentT::AssetTypeName())))
         : IComponent(ComponentT::AssetTypeName())
@@ -109,7 +123,7 @@ public:
 
 public:
     [[nodiscard]] virtual b8 loadBinary(const Span<const u8> binary)override{
-        return ComponentAssetRuntime::LoadBinary(*this, binary);
+        return ComponentAssetRuntime::LoadBinary(binary, *this);
     }
 };
 
@@ -120,24 +134,8 @@ TypedComponent<ComponentT>::~TypedComponent()noexcept = default;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ComponentInstanceFactory = UniquePtr<IComponent>(*)(Core::Assets::AssetArena& arena, const Name& virtualPath);
-
-class ComponentTypeAutoRegistrar final : NoCopy{
-public:
-    ComponentTypeAutoRegistrar(const Name& assetType, ComponentInstanceFactory create)noexcept;
-
-
-public:
-    [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
-    [[nodiscard]] ComponentInstanceFactory create()const noexcept{ return m_create; }
-    [[nodiscard]] const ComponentTypeAutoRegistrar* next()const noexcept{ return m_next; }
-
-
-private:
-    Name m_assetType = s_NameNone;
-    ComponentInstanceFactory m_create = nullptr;
-    const ComponentTypeAutoRegistrar* m_next = nullptr;
-};
+using ComponentInstanceFactory = Core::Assets::PolymorphicAssetInstanceFactory<IComponent>;
+using ComponentTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<IComponent>;
 
 [[nodiscard]] const IComponent* CastComponent(const Core::Assets::IAsset* asset)noexcept;
 
@@ -153,7 +151,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const override;
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(const Name& virtualPath, Span<const u8> binary, Core::Assets::AssetArena& arena)const override;
 #if defined(NWB_COOK)
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
@@ -178,6 +176,7 @@ class TypedComponentAssetCodec final : public Core::Assets::AssetCodec<Component
 public:
     TypedComponentAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(ComponentT::AssetTypeName()))) = default;
 
+
 #if defined(NWB_COOK)
 public:
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
@@ -190,35 +189,10 @@ public:
 };
 
 template<typename ComponentT>
-class TypedComponentAutoRegistrar final : NoCopy{
-private:
-    [[nodiscard]] static UniquePtr<IComponent> CreateInstance(Core::Assets::AssetArena& arena, const Name& virtualPath){
-        return MakeUnique<ComponentT>(arena, virtualPath);
-    }
-
-
-public:
-    TypedComponentAutoRegistrar()noexcept
-        : m_typeRegistrar(ComponentT::AssetTypeName(), &CreateInstance)
-        , m_codecRegistrar(&Core::Assets::CreateAssetCodec<TypedComponentAssetCodec<ComponentT>>)
-    {}
-
-
-private:
-    ComponentTypeAutoRegistrar m_typeRegistrar;
-    Core::Assets::AssetCodecAutoRegistrar m_codecRegistrar;
-};
+using TypedComponentAutoRegistrar = Core::Assets::TypedPolymorphicAssetAutoRegistrar<IComponent, ComponentT, TypedComponentAssetCodec<ComponentT>>;
 
 #define NWB_DEFINE_COMPONENT_ASSET_REGISTRAR(registrarVariable, componentType) \
     TypedComponentAutoRegistrar<componentType> registrarVariable
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using Scene::TransformComponent;
-using Scene::CameraComponent;
-using Scene::LightComponent;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

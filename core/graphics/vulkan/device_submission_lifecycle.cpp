@@ -19,6 +19,27 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const Device::SubmissionOperationLease*& Device::SubmissionOperationLease::ActiveLease()noexcept{
+    static thread_local const SubmissionOperationLease* s_ActiveLease = nullptr;
+    return s_ActiveLease;
+}
+
+b8 Device::SubmissionOperationLease::ActiveFor(const Device& device)noexcept{
+    for(const SubmissionOperationLease* lease = ActiveLease(); lease; lease = lease->m_previousActiveLease){
+        if(lease->m_device == &device)
+            return true;
+    }
+    return false;
+}
+
+Device::SubmissionOperationLease::SubmissionOperationLease(Device& device)noexcept{
+    if(!device.beginSubmissionOperation())
+        return;
+    m_device = &device;
+    m_previousActiveLease = ActiveLease();
+    ActiveLease() = this;
+}
+
 Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
     if(!m_device)
         return;

@@ -142,6 +142,9 @@ public:
     mutable u64 revisionValue = 1u;
     mutable u64 count = 10u;
     u64 disabledKey = 0u;
+    b8 reversed = false;
+    b8 badLookup = false;
+    b8 wrongLookup = false;
 
 
 private:
@@ -149,19 +152,13 @@ private:
     u64 m_selected = 8u;
     mutable CallbackStage::Enum m_stage = CallbackStage::None;
     CallbackMutation::Enum m_mutation = CallbackMutation::Select;
-
-
-public:
-    b8 reversed = false;
-    b8 badLookup = false;
-    b8 wrongLookup = false;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind)noexcept{
+[[nodiscard]] static b8 Navigate(const ComboSource& source, const ControlActionKind::Enum kind, ComboState& state)noexcept{
     ListState& preview = ComboBehavior::Preview(state);
     if(!ListBehavior::Reconcile(preview, source))
         return false;
@@ -201,7 +198,7 @@ TEST(UiComboBehaviorTests, ARecreatedDeclarationCancelsPreviewAndPreservesTheCom
     ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
     ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 18u));
@@ -263,7 +260,7 @@ TEST(UiComboBehaviorTests, ReorderPreservesCommittedSelectionAndOpenPreviewCurso
     state.select(4u);
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     ASSERT_EQ(state.listState().cursorKey(), 5u);
     source.reversed = true;
     ++source.revisionValue;
@@ -319,7 +316,7 @@ TEST(UiComboBehaviorTests, ExplicitSelectRenewsInputEvenWhenUnchangedAndCancelsP
     state.select(4u);
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     state.select(4u);
     EXPECT_NE(state.inputGeneration(), inputGeneration);
@@ -357,7 +354,7 @@ TEST(UiComboBehaviorTests, ReopenRestoresCommittedCursorAndRetiresPreviousPrevie
     state.select(4u);
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
     ComboBehavior::Open(state);
@@ -373,7 +370,7 @@ TEST(UiComboBehaviorTests, RemovedOrDisabledCommittedKeyClearsOnRevisionWithoutC
     state.select(4u);
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
     ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     source.disabledKey = 4u;
     ++source.revisionValue;
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
@@ -419,7 +416,7 @@ TEST(UiComboBehaviorTests, EmptyDatasetClearsSelectionAndDoesNotInventACommit){
     source.count = 0u;
     ++source.revisionValue;
     ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
+    ASSERT_TRUE(Navigate(source, ControlActionKind::Down, state));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
     EXPECT_FALSE(ComboBehavior::Commit(state, source, 0u));

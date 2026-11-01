@@ -4,7 +4,6 @@
 
 #include "tooltip.h"
 
-#include <global/simd/vector.h>
 #include <global/simplemath.h>
 #include <global/atomic_identity.h>
 
@@ -25,18 +24,6 @@ namespace __hidden_ui_tooltip{
 
 
 static Atomic<u64> s_NextIdentity{ 1u };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static b8 ValidOptions(const TooltipOptions& options)noexcept{
-    return IsFinite(options.delaySeconds) && options.delaySeconds >= 0.0f && IsFinite(options.maximumWidth) && options.maximumWidth > 0.0f && IsFinite(options.gap) && options.gap >= 0.0f && options.side <= PopupPlacementSide::Center;
-}
-
-[[nodiscard]] static b8 SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs)noexcept{
-    return lhs.enabled == rhs.enabled && lhs.delaySeconds == rhs.delaySeconds && lhs.maximumWidth == rhs.maximumWidth && lhs.gap == rhs.gap && lhs.side == rhs.side;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,15 +70,14 @@ b8 TooltipBehavior::Update(
     const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
     const b8 hovered, const f32 deltaSeconds, const TooltipOptions& options
 )noexcept{
-    using namespace __hidden_ui_tooltip;
-    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{})) || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !ValidOptions(options))
+    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{})) || !IsFinite(deltaSeconds) || deltaSeconds < 0.0f || !IsValidTooltipOptions(options))
         return false;
     const b8 sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration && state.m_hoverActivityGeneration == hoverActivityGeneration;
-    const b8 sameOptions = SameOptions(state.m_options, options);
+    const b8 sameOptions = state.m_options == options;
     const b8 activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
     if(activeHover && state.m_hovered && sameBinding && sameOptions)
-        elapsed = VectorDoubleGetX(VectorDoubleMin(VectorDoubleAdd(VectorDoubleReplicate(state.m_elapsed), VectorDoubleReplicate(static_cast<f64>(deltaSeconds))), VectorDoubleReplicate(static_cast<f64>(options.delaySeconds))));
+        elapsed = Min(state.m_elapsed + static_cast<f64>(deltaSeconds), static_cast<f64>(options.delaySeconds));
     const b8 visible = activeHover && elapsed >= static_cast<f64>(options.delaySeconds);
     if(!sameBinding || !sameOptions || state.m_hovered != activeHover || state.m_elapsed != elapsed || state.m_visible != visible){
         state.advanceRevision();

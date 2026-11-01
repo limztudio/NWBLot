@@ -139,15 +139,15 @@ public:
     [[nodiscard]] virtual const IListDataSource& filtered()const noexcept override{ ++filteredCalls; return view; }
 
 
-private:
-    AString<Core::Alloc::GlobalArena> m_query;
-
-
 public:
     NestedMutationSource full{ 2201u };
     NestedMutationSource view{ 2202u };
     u64 filterCalls = 0u;
     mutable u64 filteredCalls = 0u;
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_query;
 };
 
 
@@ -236,7 +236,14 @@ protected:
     }
 
     void expectNoChildCallbacks()const{
-        for(const auto source : { MakeNotNull<const NestedMutationSource*>(&m_childSource), MakeNotNull<const NestedMutationSource*>(&m_comboSource), MakeNotNull<const NestedMutationSource*>(&m_menuSource), MakeNotNull<const NestedMutationSource*>(&m_searchSource.full), MakeNotNull<const NestedMutationSource*>(&m_searchSource.view) }){
+        const NotNull<const NestedMutationSource*> sources[]{
+            MakeNotNull<const NestedMutationSource*>(&m_childSource),
+            MakeNotNull<const NestedMutationSource*>(&m_comboSource),
+            MakeNotNull<const NestedMutationSource*>(&m_menuSource),
+            MakeNotNull<const NestedMutationSource*>(&m_searchSource.full),
+            MakeNotNull<const NestedMutationSource*>(&m_searchSource.view)
+        };
+        for(const auto source : sources){
             EXPECT_EQ(source->metadataCalls, 0u);
             EXPECT_EQ(source->keyCalls, 0u);
             EXPECT_EQ(source->lookupCalls, 0u);
@@ -438,10 +445,10 @@ TEST_F(UiNestedPopupLoanTests, ClosingTheEndedChildSkipsItsCallbacksAndKeepsPare
     EXPECT_EQ(m_childSource.textCalls, 0u);
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey));
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "before"))), nullptr);
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "after"))), nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, s_ChildPopupKey))), nullptr);
+    const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "before")), nullptr);
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "after")), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey)), nullptr);
 }
 
 TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSourceCallbacks){
@@ -461,9 +468,9 @@ TEST_F(UiNestedPopupLoanTests, ReopeningTheEndedChildRetiresItsOldBodyBeforeSour
     EXPECT_TRUE(m_child.isOpen());
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId parent = UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey));
-    EXPECT_NE(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, "after"))), nullptr);
-    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(MakeWidgetId(parent, s_ChildPopupKey))), nullptr);
+    const WidgetId parent = UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey);
+    EXPECT_NE(target(UiTestSupport::RequireWidgetId(parent, "after")), nullptr);
+    EXPECT_EQ(target(UiTestSupport::RequireWidgetId(parent, s_ChildPopupKey)), nullptr);
 }
 
 TEST_F(UiNestedPopupLoanTests, ParentFirstRowClosingItsPopupRejectsBeforeAnyDescendantTextCallback){

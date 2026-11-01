@@ -8,7 +8,6 @@
 #include <tests/common/test_context.h>
 
 #include <logger/common.h>
-#include <logger/server/crash_ingest.h>
 
 #include <gtest/gtest.h>
 
@@ -22,8 +21,9 @@ namespace __hidden_logger_producer_contract_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace NWB::Tests::CrashTestPaths;
 using namespace NWB::Tests::LoggerServerCrash;
-using TestArena = NWB::Tests::TestArena<struct LoggerProducerContractsTag>;
+using TestArena = NWB::Tests::TestArena<>;
 
 class LoggerProducerContracts : public testing::Test{
 public:

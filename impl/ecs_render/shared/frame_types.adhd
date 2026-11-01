@@ -2,6 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/avboit/types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_RtInvalidSlot = 0xffffffffu;
+const u32 s_RtMaxI32AsU32 = 2147483647u;
+
+const usize s_SmallInlineIndexCapacity = 32u;
+const usize s_PromotedInlineIndexCapacity = s_SmallInlineIndexCapacity * 4u;
+
 // Ray tracing gathers emission targets before Deferred ranks lights. The root module brokers this contract between them.
 class RayTracingLightingClassificationInput{
     public u32 refractiveInstanceCount = 0u;
@@ -10,20 +22,6 @@ class RayTracingLightingClassificationInput{
 class RayTracingLightingClassification{
     public u32 causticLightCount = 0u;
     public u32 softShadowSlotMask = 0u;
-}
-
-// Heap-slot indirection for the ray-tracing material context.
-[serialize]
-class RayTraceMaterialContextSlots{
-    public u32 sceneBvhNodes = 0u;
-    public u32 sceneInstances = 0u;
-    public u32 instanceMaterial = 0u;
-    public u32 materialTyped = 0u;
-
-    public u32 meshInstances = 0u;
-    public u32 opticalScene = 0u;
-    public u32 opticalInstanceCount = 0u;
-    public u32 csgContext = 4294967295u;
 }
 
 // Eleven std140 uint4 lanes of ordinary-pass heap slots.
@@ -112,34 +110,10 @@ class StatisticsReservationKey{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[serialize]
-class RendererAvboitPushConstants{
-    public Array<u32, 4u> frame;
-    public Array<u32, 4u> volume;
-    public f32x4 params(0.0f, 0.0f, 0.0f, 0.0f);
-    public Array<u32, 4u> heapSlots;
-}
-
-class AvboitPassUploadResult{
-    public b8 hasDrawItems = false;
-    public b8 hasCsgDrawItems = false;
-}
-
-enum<u8> AvboitSharedComputeEmulationPhase{
+[reflect]
+enum<u8> SharedComputeEmulationPhase{
     Generate = 0u,
     Raster = 1u
-}
-
-enum<u8> AvboitGeometryPhase{
-    Occupancy = 0u,
-    Extinction = 1u,
-    Accumulation = 2u
-}
-
-enum<u8> AvboitMaterialUploadPhase{
-    Occupancy = 0u,
-    Extinction = 1u,
-    Accumulation = 2u
 }
 
 
@@ -205,7 +179,7 @@ class SceneLightGpuData{
     public f32x4 params2(s_SceneDefaultDirectionalAngularRadius, s_SceneDefaultPunctualSourceRadius, 0.0f, 0.0f);
 }
 
-void HashCombineF32x4(mut usize seed, in f32x4 value){
+void HashCombineF32x4(in f32x4 value, mut usize seed){
     seed = hashCombineValue(seed, bit_cast<u32>(value.x));
     seed = hashCombineValue(seed, bit_cast<u32>(value.y));
     seed = hashCombineValue(seed, bit_cast<u32>(value.z));
@@ -216,13 +190,13 @@ void HashCombineF32x4(mut usize seed, in f32x4 value){
 u64 ComputeSceneLightingContentHash(in SceneShadingGpuData shading, in Span<SceneLightGpuData> lights){
     const u32 lightCount = cast<u32>(lights.size());
     usize seed = hashValue(lightCount);
-    HashCombineF32x4(seed, shading.cameraPositionLightCount);
+    HashCombineF32x4(shading.cameraPositionLightCount, seed);
     for(usize i = 0u; i < lights.size(); ++i){
-        HashCombineF32x4(seed, lights[i].position);
-        HashCombineF32x4(seed, lights[i].direction);
-        HashCombineF32x4(seed, lights[i].colorIntensity);
-        HashCombineF32x4(seed, lights[i].params);
-        HashCombineF32x4(seed, lights[i].params2);
+        HashCombineF32x4(lights[i].position, seed);
+        HashCombineF32x4(lights[i].direction, seed);
+        HashCombineF32x4(lights[i].colorIntensity, seed);
+        HashCombineF32x4(lights[i].params, seed);
+        HashCombineF32x4(lights[i].params2, seed);
     }
     return cast<u64>(seed);
 }
@@ -289,6 +263,129 @@ enum<u8> RendererTaskTimingFeedbackCollectionAction{
     Disable = 2u,
     kCount = 3u
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const Name s_PrepareArena = "impl/ecs_render/prepare";
+const Name s_RenderArena = "impl/ecs_render/render";
+const Name s_TaskGraphArena = "impl/ecs_render/task_graph";
+
+const u32 s_FullscreenTriangleVertexCount = 3u;
+const u32 s_EmulatedVertexStride = 64u;
+
+const Name s_InstanceBufferName = "ecs_render/instance_data";
+const Name s_MaterialTypedBufferName = "ecs_render/material_typed_data";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 FrameSetupReady(in b8 meshViewSetupReady, in b8 sceneShadingSetupReady){
+    return meshViewSetupReady && sceneShadingSetupReady;
+}
+
+ShaderDrivenPushConstants ResolveShaderDrivenPushConstants(
+    in u32 meshletCount,
+    in u32 instanceIndex,
+    in u32 materialConstantByteOffset,
+    in b8 hasViewport,
+    in f32x4 viewportRect,
+    in f32x4 scissorRect,
+    in MeshFrameHeapSlots frameHeapSlots,
+    in u32 dispatchFlags
+){
+    ShaderDrivenPushConstants pushConstants;
+    pushConstants.meshletCount = meshletCount;
+    pushConstants.instanceIndex = instanceIndex;
+    pushConstants.materialConstantByteOffset = materialConstantByteOffset;
+    pushConstants.dispatchFlags = dispatchFlags;
+    pushConstants.frameHeapSlots = frameHeapSlots;
+    if(!hasViewport)
+        return pushConstants;
+
+    pushConstants.dispatchFlags |= (1u << 0u);
+    pushConstants.viewportRect = viewportRect;
+    pushConstants.scissorRect = scissorRect;
+    return pushConstants;
+}
+
+TransparentDrawPushConstants ResolveTransparentDrawPushConstants(
+    in ShaderDrivenPushConstants meshPushConstants,
+    in RendererAvboitPushConstants avboitPushConstants,
+    in u32 csgContextHeapSlot,
+    in b8 refractionCapture
+){
+    TransparentDrawPushConstants pushConstants;
+    pushConstants.mesh = meshPushConstants;
+    pushConstants.avboit = avboitPushConstants;
+    pushConstants.avboit.heapSlots[1u] = csgContextHeapSlot;
+    if(refractionCapture){
+        pushConstants.avboit.params = f32x4(
+            pushConstants.avboit.params.x,
+            pushConstants.avboit.params.y,
+            pushConstants.avboit.params.z,
+            s_AvboitRefractionCapture
+        );
+    }
+    return pushConstants;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SceneMaxLights = 64u;
+
+const f32 s_Rec709LuminanceRed = 0.2126f;
+const f32 s_Rec709LuminanceGreen = 0.7152f;
+const f32 s_Rec709LuminanceBlue = 0.0722f;
+const f32 s_LightTypeDirectionalMax = 0.5f;
+const f32 s_LightTypePointMax = 1.5f;
+
+class SceneShadingBufferUploads{
+    public Array<SceneLightGpuData, 64u> lightData;
+    public SceneShadingGpuData sceneShadingState;
+    public RayTracingLightingClassification lightingClassification;
+    public u32 lightCount = 0u;
+    public b8 lightUploadRequired = false;
+    public b8 sceneShadingUploadRequired = false;
+}
+
+f32 CausticSlotImportanceData(in f32x4 colorIntensity){
+    const f32 luminance = dot(colorIntensity, f32x4(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f));
+    const f32 intensity = max(colorIntensity.w, 0.0f);
+    return luminance * intensity;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_StatisticsReadbackSlotCount = 3u;
+
+const u32 s_GpuTimingQueriesPerRange = 2u;
+const u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
+const u32 s_GpuTimingRefractionTileScopeQueryBudget = 32u;
+const u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
+
+const StringView s_UnknownStageLabel = "Unknown";
+const StringView s_GraphicsQueueLabel = "Graphics";
+const StringView s_ComputeQueueLabel = "Compute";
+const StringView s_TransferQueueLabel = "Transfer";
+const StringView s_InternalRouteLabel = "Internal";
+const StringView s_ExternalImportRouteLabel = "ExternalImport";
+const StringView s_ExternalExportRouteLabel = "ExternalExport";
+const StringView s_ExclusiveSharingLabel = "Exclusive";
+const StringView s_AsyncComputeSharingLabel = "AsyncCompute";
+const StringView s_GraphicsAndAsyncComputeSharingLabel = "GraphicsAndAsyncCompute";
+const StringView s_GraphicsAndTransferSharingLabel = "GraphicsAndTransfer";
+const StringView s_AsyncComputeAndTransferSharingLabel = "AsyncComputeAndTransfer";
+const StringView s_GraphicsAsyncComputeAndTransferSharingLabel = "GraphicsAsyncComputeAndTransfer";
+const StringView s_RendererFrameTitle = "Renderer Frame";
+const f64 s_MillisecondsPerSecondTelemetry = 1000.0;
+const f64 s_PercentScaleTelemetry = 100.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

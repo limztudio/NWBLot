@@ -24,7 +24,6 @@ public:
     [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values)noexcept(noexcept(static_cast<usize>(values.size() * sizeof(typename VectorT::value_type))));
     [[nodiscard]] static usize EstimateMeshletSourceBytes(Span<const u32> indices, const MeshCookEntry& entry)noexcept;
     [[nodiscard]] static usize EstimateMeshletRuntimeBytes(const MeshCookEntry& entry)noexcept;
-    [[nodiscard]] static MeshletCookMetrics BuildMeshletCookMetrics(const MeshCookEntry& entry)noexcept;
     static void LogMeshletCookMetrics(const Path& nwbFilePath, const TStringView metaKind, Span<const u32> indices, const MeshCookEntry& entry);
 
 

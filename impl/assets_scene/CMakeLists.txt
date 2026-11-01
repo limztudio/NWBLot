@@ -44,3 +44,4 @@ if(NWB_BUILD_PIPELINE)
     )
     target_compile_definitions(nwb_assets_scene_volume_entry PRIVATE NWB_COOK=1)
 endif()
+

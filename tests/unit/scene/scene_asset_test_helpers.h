@@ -40,52 +40,12 @@ inline constexpr Name s_UiSubsystemPath("engine/subsystems/ui");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline AssetBytes MakeProjectBinary(AssetArena& arena, const Name& startScene){
-    ProjectHeaderBinary header;
-    header.startSceneHash = startScene.hash();
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header));
-    AppendPOD(binary, header);
-    return binary;
-}
-
-[[nodiscard]] inline AssetBytes MakeSceneBinary(AssetArena& arena, const Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, const Span<const SceneAsset::EntityRef> entities = {}){
-    SceneHeaderBinary header;
-    header.subsystemCount = static_cast<u64>(subsystems.size());
-    header.entityCount = static_cast<u64>(entities.size());
-    header.assetCount = static_cast<u64>(assets.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + subsystems.size() * sizeof(NameHash) + entities.size() * sizeof(NameHash) + assets.size() * sizeof(SceneAssetEntryBinary));
-    AppendPOD(binary, header);
-    for(const SceneAsset::SubsystemRef& ref : subsystems)
-        AppendPOD(binary, ref.name().hash());
-    for(const SceneAsset::EntityRef& ref : entities)
-        AppendPOD(binary, ref.name().hash());
-    for(const auto& [nickname, ref] : assets){
-        SceneAssetEntryBinary entry;
-        entry.nicknameHash = nickname.hash();
-        entry.assetHash = ref.name().hash();
-        AppendPOD(binary, entry);
-    }
-    return binary;
-}
-
-[[nodiscard]] inline AssetBytes MakeEntityBinary(AssetArena& arena, const Span<const EntityAsset::ComponentRef> components){
-    EntityHeaderBinary header;
-    header.componentCount = static_cast<u64>(components.size());
-
-    AssetBytes binary(arena);
-    binary.reserve(sizeof(header) + components.size() * sizeof(NameHash));
-    AppendPOD(binary, header);
-    for(const EntityAsset::ComponentRef& ref : components)
-        AppendPOD(binary, ref.name().hash());
-    return binary;
-}
+[[nodiscard]] AssetBytes MakeProjectBinary(const Name& startScene, AssetArena& arena);
+[[nodiscard]] AssetBytes MakeSceneBinary(Span<const SceneAsset::SubsystemRef> subsystems, const SceneAsset::AssetMap& assets, Span<const SceneAsset::EntityRef> entities, AssetArena& arena);
+[[nodiscard]] AssetBytes MakeEntityBinary(Span<const EntityAsset::ComponentRef> components, AssetArena& arena);
 
 template<typename ComponentT, typename PayloadT>
-[[nodiscard]] inline AssetBytes MakeComponentBinary(AssetArena& arena, const PayloadT& payload){
+[[nodiscard]] inline AssetBytes MakeComponentBinary(const PayloadT& payload, AssetArena& arena){
     ComponentHeaderBinary header;
     header.componentTypeHash = ComponentT::AssetTypeName().hash();
     header.payloadByteCount = sizeof(PayloadT);
@@ -112,7 +72,7 @@ inline void PopulateRequiredSubsystemFields(SubsystemT& subsystem){
 }
 
 template<typename SubsystemT>
-[[nodiscard]] inline AssetBytes MakeSubsystemBinary(AssetArena& arena, const SubsystemT& subsystem){
+[[nodiscard]] inline AssetBytes MakeSubsystemBinary(const SubsystemT& subsystem, AssetArena& arena){
     const usize subsystemCount = subsystem.subsystems.size();
     const usize fieldCount = subsystem.fieldCount();
     u64 totalAssetCount = 0u;
@@ -149,14 +109,14 @@ template<typename SubsystemT>
 class MapAssetBinarySource final : public IAssetBinarySource{
 public:
     struct Entry{
-        Name path = s_NameNone;
         AssetBytes binary;
+        Name path = s_NameNone;
 
 
     public:
         Entry(const Name& inPath, AssetBytes&& inBinary)noexcept
-            : path(inPath)
-            , binary(Move(inBinary))
+            : binary(Move(inBinary))
+            , path(inPath)
         {}
     };
 
@@ -169,28 +129,8 @@ public:
 
 
 public:
-    void setBinary(const Name& virtualPath, const Span<const u8> binary){
-        AssetBytes copy(m_arena);
-        copy.assign(binary.begin(), binary.end());
-        for(Entry& entry : m_entries){
-            if(entry.path == virtualPath){
-                entry.binary = Move(copy);
-                return;
-            }
-        }
-        m_entries.emplace_back(virtualPath, Move(copy));
-    }
-
-    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override{
-        outBinary.clear();
-        for(const Entry& entry : m_entries){
-            if(entry.path == virtualPath){
-                outBinary.assign(entry.binary.begin(), entry.binary.end());
-                return true;
-            }
-        }
-        return false;
-    }
+    void setBinary(const Name& virtualPath, Span<const u8> binary);
+    virtual b8 readAssetBinary(const Name& virtualPath, AssetBytes& outBinary)const override;
 
 
 private:

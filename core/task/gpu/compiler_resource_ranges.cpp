@@ -76,6 +76,35 @@ namespace GpuTaskGraphCompilerDetail{
     return true;
 }
 
+[[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    const GpuPhysicalQueueId& destinationQueue,
+    const GpuPhysicalQueueId* const requiredSourceQueue,
+    const GpuTaskGraph::DeclarationReadView* const planningGraph
+)noexcept{
+    if(resource.initialOwnerHandoffSourceCount == 0u || !resource.initialOwnerHandoffSources || (resource.type != GpuGraphResourceType::Texture && resource.type != GpuGraphResourceType::Buffer && resource.type != GpuGraphResourceType::AccelStruct))
+        return nullptr;
+
+    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
+    for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
+        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
+        Expected<GpuTaskResourceRange> plannedSourceRange = source.range;
+        if(
+            (requiredSourceQueue && source.sourceQueue != *requiredSourceQueue)
+            || source.destinationQueue != destinationQueue
+            || (planningGraph && !(plannedSourceRange = ResolveResourceRangeForPlanning(*planningGraph, resource, source.range)))
+            || !RangeContains(resource, (*plannedSourceRange), range)
+        )
+            continue;
+        // One first-use fragment must have one exact external owner and one matching completion token.
+        if(result)
+            return nullptr;
+        result = &source;
+    }
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -263,7 +292,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
 // Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges.
 // A selected state owns exactly the terminal cells it produced; remaining cells keep their declared graph initial state.
 [[nodiscard]] b8 CollectLatestResourceStateFragments(
-    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     const Span<const GpuTaskResourceRange> requestedRanges,
@@ -339,7 +368,7 @@ static void AppendResourceStateFragmentsInStateOrder(const Span<const TrackedRes
 // Terminal exports have no single requested range. Subtract later declared states from each earlier range, keeping only its surviving portions.
 // This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
 [[nodiscard]] b8 CollectTerminalResourceStateFragments(
-    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const Span<const TrackedCompiledResourceState> trackedStates,
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,

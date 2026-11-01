@@ -47,6 +47,8 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0
 
 b8 ContainsText(const AStringView text, const AStringView needle)noexcept;
 
+Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(const Telemetry::FrameGraphRuntimeStatistics& statistics, const u32 nodeIndex, const u16 reserved)noexcept;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

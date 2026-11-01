@@ -3,19 +3,14 @@
 
 
 #include "system.h"
-
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include "frame_graph_tasks.h"
 #include "frame_plan_builder.h"
 #include "graph_resource_uses.h"
-#include "local_bounds.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
 
 
@@ -23,6 +18,68 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::GpuTaskSchedulingHint MeshSkinningGraphDetail::MakeSerialMergeScheduling(const Core::GpuTaskCostHint::Enum cost)noexcept{
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = cost;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    // The external renderer consumes one accepted skinning state on this serial timeline.
+    scheduling.mergeWithPrevious = true;
+    scheduling.frontierScoredMergeDomain = s_SerialMergeDomain;
+    return scheduling;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 MeshSkinningSystem::TaskGraphSkinningFinalizerTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
+    if(payload.plans.empty())
+        return false;
+
+    for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
+        if(plan.hasActiveSkin || plan.copiedRestStreams){
+            Core::Buffer* const skinnedPosition = context.declarations.bufferForResource(plan.skinnedPositionResource);
+            Core::Buffer* const skinnedNormal = context.declarations.bufferForResource(plan.skinnedNormalResource);
+            Core::Buffer* const skinnedTangent = context.declarations.bufferForResource(plan.skinnedTangentResource);
+            if(
+                !skinnedPosition
+                || !skinnedNormal
+                || !skinnedTangent
+                || commandList.getBufferState(skinnedPosition) != Core::ResourceStates::ShaderResource
+                || commandList.getBufferState(skinnedNormal) != Core::ResourceStates::ShaderResource
+                || commandList.getBufferState(skinnedTangent) != Core::ResourceStates::ShaderResource
+            )
+                return false;
+        }
+        if(plan.updatesMeshletBounds){
+            Core::Buffer* const meshletBounds = context.declarations.bufferForResource(plan.meshletBoundsResource);
+            Core::Buffer* const localBounds = context.declarations.bufferForResource(plan.localBoundsResource);
+            if(!meshletBounds || !localBounds || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource || commandList.getBufferState(localBounds) != Core::ResourceStates::ShaderResource)
+                return false;
+        }
+        if(plan.repacksNormals){
+            Core::Buffer* const attributes = context.declarations.bufferForResource(plan.attributeResource);
+            if(!attributes || commandList.getBufferState(attributes) != Core::ResourceStates::ShaderResource)
+                return false;
+        }
+    }
+    return true;
+}
+
+void MeshSkinningSystem::TaskGraphSkinningFinalizerTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+    if(!token.valid())
+        return;
+    for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
+        payload.system.confirmGraphOwnedSkinningDispatch(plan);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,13 +116,13 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     if(dispatchPlans.empty())
         return true;
 
-    const auto resourceUses = BuildMeshSkinningGraphResourceUses(dispatchPlans.data(), dispatchPlans.size(), scratchArena);
+    const auto resourceUses = BuildMeshSkinningGraphResourceUses(dispatchPlans, scratchArena);
     if(!resourceUses)
         return false;
 
     // Retain prior-frame state with its consuming task; source stays serial by contract.
-    const Core::GpuTaskExternalStateSource previousFrameStateSources[] = { Core::GpuTaskExternalStateSource{ .states = m_acceptedSkinningState.source(), }, };
-    const usize previousFrameStateSourceCount = m_acceptedSkinningState.valid() ? LengthOf(previousFrameStateSources) : 0u;
+    const Array<Core::GpuTaskExternalStateSource, 1> previousFrameStateSources = { Core::GpuTaskExternalStateSource{ .states = m_acceptedSkinningState.source(), }, };
+    const usize previousFrameStateSourceCount = m_acceptedSkinningState.valid() ? previousFrameStateSources.size() : 0u;
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     // Dispatch payload slices reference reused member storage that outlives m_frameTaskGraph.
@@ -103,12 +160,12 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
             .setIdentity(Name("mesh_skinning.frame_deformation"))
             .setMarkerLabel("Runtime Skinning Deformation")
             .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
-            .setResourceUses(resourceUses->deformation.data(), resourceUses->deformation.size())
+            .setResourceUses(resourceUses->deformation)
         ;
         if(previousFrameStateSourceCount != 0u)
-            deformationDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
+            deformationDesc.setExternalStateSources({ previousFrameStateSources.data(), previousFrameStateSourceCount });
         if(terminalTask.valid())
-            deformationDesc.setDependencies(&terminalTask, 1u);
+            deformationDesc.setDependencies({ &terminalTask, 1u });
         const auto deformationTaskResult = graph.addTask<TaskGraphSkinningDeformationTask>(deformationDesc, Move(deformationPayload));
         if(!deformationTaskResult){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning deformation"));
@@ -124,12 +181,12 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
         .setMarkerLabel("Runtime Skinning Bounds and Repack")
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
-        .setResourceUses(resourceUses->postDispatch.data(), resourceUses->postDispatch.size())
+        .setResourceUses(resourceUses->postDispatch)
     ;
     if(previousFrameStateSourceCount != 0u)
-        postDispatchDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
+        postDispatchDesc.setExternalStateSources({ previousFrameStateSources.data(), previousFrameStateSourceCount });
     if(postDispatchDependency.valid())
-        postDispatchDesc.setDependencies(&postDispatchDependency, 1u);
+        postDispatchDesc.setDependencies({ &postDispatchDependency, 1u });
     const auto postDispatchTaskResult = graph.addTask<TaskGraphSkinningPostDispatchTask>(postDispatchDesc, Move(postDispatchPayload));
     if(!postDispatchTaskResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack"));
@@ -142,11 +199,11 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setIdentity(Name("mesh_skinning.frame_local_bounds"))
         .setMarkerLabel("Runtime Skinning Local Bounds")
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
-        .setDependencies(&postDispatchTask, 1u)
-        .setResourceUses(resourceUses->localBounds.data(), resourceUses->localBounds.size())
+        .setDependencies({ &postDispatchTask, 1u })
+        .setResourceUses(resourceUses->localBounds)
     ;
     if(previousFrameStateSourceCount != 0u)
-        localBoundsDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
+        localBoundsDesc.setExternalStateSources({ previousFrameStateSources.data(), previousFrameStateSourceCount });
     const auto localBoundsTaskResult = graph.addTask<MeshSkinningLocalBoundsTask>(localBoundsDesc, Move(localBoundsPayload));
     if(!localBoundsTaskResult){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
@@ -158,8 +215,8 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
         .setIdentity(Name("mesh_skinning.frame_finalize_states"))
         .setMarkerLabel("Runtime Skinning Finalize States")
         .setScheduling(MeshSkinningGraphDetail::SkinningDispatchScheduling())
-        .setDependencies(&localBoundsTask, 1u)
-        .setResourceUses(resourceUses->finalizer.data(), resourceUses->finalizer.size())
+        .setDependencies({ &localBoundsTask, 1u })
+        .setResourceUses(resourceUses->finalizer)
     ;
     const auto finalizerTaskResult = graph.addTask<TaskGraphSkinningFinalizerTask>(finalizerDesc, Move(finalizerPayload));
     if(!finalizerTaskResult){
@@ -204,31 +261,29 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     // Live-buffer list is reused member storage; only capacity growth may allocate, never per-frame creation.
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     liveBuffers.clear();
-    collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
+    collectLiveSkinningStateBuffers(scratchArena, liveBuffers);
     Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{
         Core::GpuPersistentResourceStateCache& cache;
         Core::Alloc::ScratchArena& scratchArena;
         Core::GpuPersistentResourceStateCache::Candidate& candidate;
-        const Core::BufferHandle* buffers = nullptr;
-        usize bufferCount = 0u;
+        Span<const Core::BufferHandle> buffers;
         b8 preparationInvoked = false;
         b8 statePrepared = false;
         b8 stateAccepted = false;
-    } skinningState{ .cache = m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = acceptedStateCandidate, .buffers = liveBuffers.data(), .bufferCount = liveBuffers.size(), };
+    } skinningState{ .cache = m_acceptedSkinningState, .scratchArena = scratchArena, .candidate = acceptedStateCandidate, .buffers = liveBuffers, };
     const auto prepareSkinningState = [](void* const rawContext, const Core::CommandListResourceStateHandoff* const finalState) -> b8 {
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context)
             return false;
         context->preparationInvoked = true;
-        if(!finalState || (context->bufferCount != 0u && !context->buffers))
+        if(!finalState || (!context->buffers.empty() && !context->buffers.data()))
             return false;
-        context->statePrepared = context->cache.buildMergedBufferSubset(context->candidate, *finalState, context->buffers, context->bufferCount, context->scratchArena);
+        context->statePrepared = context->cache.buildMergedBufferSubset(*finalState, Span<const Core::BufferHandle>(context->buffers), context->scratchArena, context->candidate);
         return context->statePrepared;
     };
     const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{ .task = terminalTask, .context = &skinningState, .invoke = prepareSkinningState, };
-    const auto acceptSkinningTask = [](void* const rawContext, const Core::QueueSubmissionToken& token)noexcept -> b8 {
-        static_cast<void>(token);
+    const auto acceptSkinningTask = [](void* const rawContext, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept -> b8 {
         SkinningStateContext* const context = static_cast<SkinningStateContext*>(rawContext);
         if(!context || !context->statePrepared)
             return false;
@@ -237,12 +292,12 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     };
     const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{ .task = terminalTask, .context = &skinningState, .invoke = acceptSkinningTask, };
 
-    const Core::GpuTaskGraphTaskTimingTicket timingTickets[] = { Core::GpuTaskGraphTaskTimingTicket{ .task = terminalTask, .timingTicket = &timingTicket, }, };
+    const Array<Core::GpuTaskGraphTaskTimingTicket, 1> timingTickets = { Core::GpuTaskGraphTaskTimingTicket{ .task = terminalTask, .timingTicket = &timingTicket, }, };
     Core::GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.taskRecordedCallbacks = &recordedCallback;
     normalExecution.taskRecordedCallbackCount = 1u;
-    normalExecution.taskTimingTickets = timingTickets;
-    normalExecution.taskTimingTicketCount = LengthOf(timingTickets);
+    normalExecution.taskTimingTickets = timingTickets.data();
+    normalExecution.taskTimingTicketCount = timingTickets.size();
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
     const b8 skinningGraphAccepted = scheduler.executeGraph(normalExecution, scratchArena, graph, compiledGraph, recordedGraph, transaction, nullptr);

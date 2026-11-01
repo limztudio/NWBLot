@@ -45,7 +45,7 @@ struct CountField{
     usize Core::GpuTaskGraphCompileStatistics::*member;
 };
 
-static constexpr DurationField s_Durations[] = {
+static constexpr Array<DurationField, 12> s_Durations = {{
     { "declaration", &Core::GpuTaskGraphCompileStatistics::declarationSeconds },
     { "analysis", &Core::GpuTaskGraphCompileStatistics::analysisSeconds },
     { "validation", &Core::GpuTaskGraphCompileStatistics::validationSeconds },
@@ -58,9 +58,9 @@ static constexpr DurationField s_Durations[] = {
     { "packetization", &Core::GpuTaskGraphCompileStatistics::packetizationSeconds },
     { "resource_state_planning", &Core::GpuTaskGraphCompileStatistics::resourceStatePlanningSeconds },
     { "packet_dependency_planning", &Core::GpuTaskGraphCompileStatistics::packetDependencyPlanningSeconds },
-};
+}};
 
-static constexpr CountField s_Counts[] = {
+static constexpr Array<CountField, 19> s_Counts = {{
     { "task", &Core::GpuTaskGraphCompileStatistics::taskCount },
     { "resource", &Core::GpuTaskGraphCompileStatistics::resourceCount },
     { "resource_use", &Core::GpuTaskGraphCompileStatistics::resourceUseCount },
@@ -80,7 +80,7 @@ static constexpr CountField s_Counts[] = {
     { "resource_set", &Core::GpuTaskGraphCompileStatistics::resourceSetCount },
     { "direct_resource_use", &Core::GpuTaskGraphCompileStatistics::directResourceUseCount },
     { "expanded_resource_set_member_use", &Core::GpuTaskGraphCompileStatistics::expandedResourceSetMemberUseCount },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsR
 
 RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe()noexcept{ stop(); }
 
-b8 RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const AStringView path){
+b8 RendererCompilerStatisticsProbe::start(const AStringView path, Impl::RendererSystem& renderer){
     if(m_enabled || path.empty())
         return false;
     m_output.assign(path);

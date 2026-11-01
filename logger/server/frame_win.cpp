@@ -67,7 +67,6 @@ inline constexpr LogRowColors s_FatalOddLogRowColors{ RGB(255, 255, 0), RGB(250,
 
 
 inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
-inline constexpr AStringView s_WarningEventName = "warning";
 inline constexpr AStringView s_LifecycleDiagnosticCategory = "logger_window_lifecycle";
 inline constexpr AStringView s_MessagesDiagnosticCategory = "logger_window_messages";
 inline constexpr AStringView s_LayoutDiagnosticCategory = "logger_window_layout";
@@ -238,7 +237,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopedLock lock(s_ListMutex);
                 s_ListHwnd = nullptr;
             }
-            frame->data<WinFrame>().setHwnd(nullptr);
+            frame->data<Core::Common::WinFrame>().setHwnd(nullptr);
             PostQuitMessage(0);
         }
         return 0;
@@ -254,7 +253,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             if(!s_Font)
                 CaptureDiagnosticEvent(s_LifecycleDiagnosticCategory, "Log server: failed to create its font; using the system font", __FILE__, __LINE__);
 
-            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<WinFrame>().instance(), nullptr);
+            const HWND listHwnd = CreateWindowEx(0, NWB_TEXT("LISTBOX"), nullptr, WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), frame->data<Core::Common::WinFrame>().instance(), nullptr);
             if(!listHwnd){
                 CaptureDiagnosticEvent(s_LifecycleDiagnosticCategory, "Log server: failed to create its message list", __FILE__, __LINE__);
                 return -1;
@@ -464,13 +463,20 @@ Frame::Frame(void* inst){
     }
     FrameDetail::s_Frame = this;
 
-    data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
+    data<Core::Common::WinFrame>().setInstance(static_cast<HINSTANCE>(inst));
 }
 
 Frame::~Frame()noexcept{
-    const HWND hwnd = data<FrameDetail::WinFrame>().hwnd();
-    if(hwnd && !DestroyWindow(hwnd))
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = FrameDetail::s_WarningEventName, .category = FrameDetail::s_LifecycleDiagnosticCategory, .message = "Log server: failed to destroy its window during shutdown", .file = __FILE__, .line = __LINE__, });
+    const HWND hwnd = data<Core::Common::WinFrame>().hwnd();
+    if(hwnd && !DestroyWindow(hwnd)){
+        CaptureDiagnosticEvent(DiagnosticEventRecord{
+            .event = DiagnosticEventName::s_Warning,
+            .category = FrameDetail::s_LifecycleDiagnosticCategory,
+            .message = "Log server: failed to destroy its window during shutdown",
+            .file = __FILE__,
+            .line = __LINE__,
+        });
+    }
 
     FrameDetail::ReleaseLogFont();
 
@@ -491,7 +497,7 @@ b8 Frame::init(){
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = FrameDetail::WinProc;
-        wc.hInstance = data<FrameDetail::WinFrame>().instance();
+        wc.hInstance = data<Core::Common::WinFrame>().instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
@@ -501,15 +507,15 @@ b8 Frame::init(){
         return false;
 
     HWND hwnd = CreateWindowEx(s_WindowExtendedStyle, wc.lpszClassName, s_WindowTitle.data(), s_WindowStyle, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, wc.hInstance, nullptr);
-    data<FrameDetail::WinFrame>().setHwnd(hwnd);
-    if(!data<FrameDetail::WinFrame>().hwnd())
+    data<Core::Common::WinFrame>().setHwnd(hwnd);
+    if(!data<Core::Common::WinFrame>().hwnd())
         return false;
 
     return true;
 }
 
 void Frame::showFrame(){
-    ShowWindow(data<FrameDetail::WinFrame>().hwnd(), SW_SHOW);
+    ShowWindow(data<Core::Common::WinFrame>().hwnd(), SW_SHOW);
 }
 
 b8 Frame::mainLoop(){

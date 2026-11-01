@@ -35,36 +35,36 @@ using TaskGraphTestUtils::TestArena;
 
 TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddHazardDomain(graph, Name("tests/task_graph/resource"), "Resource");
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
+    const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
 
-    const auto predecessorResult = AddTask(graph, Name("tests/task_graph/predecessor"), "Predecessor");
+    const auto predecessorResult = AddTask(Name("tests/task_graph/predecessor"), "Predecessor", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(predecessorResult);
-    const Graphics::GpuTaskId predecessor = *predecessorResult;
+    const Core::GpuTaskId predecessor = *predecessorResult;
     ASSERT_TRUE(predecessor.valid());
 
-    Graphics::GpuTaskId dependencies[] = { predecessor };
-    Graphics::GpuTaskResourceUse uses[] = { Graphics::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, }, };
-    char markerLabel[] = "Stack Marker";
-    Graphics::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/payload")).setMarkerLabel(AStringView(markerLabel)).setDependencies(dependencies, LengthOf(dependencies)).setResourceUses(uses, LengthOf(uses));
+    Array<Core::GpuTaskId, 1> dependencies = { predecessor };
+    Array<Core::GpuTaskResourceUse, 1> uses = { Core::GpuTaskResourceUse{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, }, };
+    Array<char, 13u> markerLabel = { 'S', 't', 'a', 'c', 'k', ' ', 'M', 'a', 'r', 'k', 'e', 'r', '\0' };
+    Core::GpuTaskDesc desc;
+    desc.setIdentity(Name("tests/task_graph/payload")).setMarkerLabel(AStringView(markerLabel.data())).setDependencies(dependencies).setResourceUses(uses);
 
     u32 destructionCount = 0u;
     PayloadDestroyTask::Payload payload(&destructionCount);
     const auto taskResult = graph.addTask<PayloadDestroyTask>(desc, Move(payload));
     ASSERT_TRUE(taskResult);
-    const Graphics::GpuTaskId task = *taskResult;
+    const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
 
     dependencies[0] = {};
     uses[0].resource = {};
     markerLabel[0] = 'X';
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        const Graphics::GpuTaskGraphTaskView stored = declarations.taskAt(task.index);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraphTaskView stored = declarations.taskAt(task.index);
         ASSERT_EQ(stored.dependencyCount, 1u);
         ASSERT_EQ(stored.resourceUseCount, 1u);
         EXPECT_EQ(stored.dependencies[0], predecessor);
@@ -75,7 +75,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     graph.reset();
     EXPECT_EQ(destructionCount, 1u);
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_FALSE(declarations.validTask(task));
         EXPECT_FALSE(declarations.validResource(resource));
     }
@@ -83,22 +83,22 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
 
 TEST(GpuTaskGraph, RejectsInvalidExternalStateSourceWithoutDeclarationMutation){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::CommandListResourceStateHandoff externalStateSource(testArena.arena);
     ASSERT_FALSE(externalStateSource.valid());
-    const Graphics::GpuTaskExternalStateSource externalStateSources[] = { Graphics::GpuTaskExternalStateSource{ .states = &externalStateSource, .applicableConsumerQueueClass = Graphics::CommandQueue::Compute, }, };
-    Graphics::GpuTaskDesc desc;
-    desc.setIdentity(Name("tests/task_graph/invalid_external_state_source")).setMarkerLabel("Invalid External State Source").setExternalStateSources(externalStateSources, LengthOf(externalStateSources));
+    const Array<Core::GpuTaskExternalStateSource, 1> externalStateSources = { Core::GpuTaskExternalStateSource{ .states = &externalStateSource, .applicableConsumerQueueClass = Core::CommandQueue::Compute, }, };
+    Core::GpuTaskDesc desc;
+    desc.setIdentity(Name("tests/task_graph/invalid_external_state_source")).setMarkerLabel("Invalid External State Source").setExternalStateSources(externalStateSources);
 
     EXPECT_FALSE(graph.addTask(desc).has_value());
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     EXPECT_EQ(declarations.taskCount(), 0u);
 }
 
 TEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     b8 compileAttempted = false;
     b8 compileSucceeded = true;
@@ -110,22 +110,22 @@ TEST(GpuTaskGraph, RejectsReentrantCompilerReadDuringDeclarationMutation){
     payload.compileAttempted = &compileAttempted;
     payload.compileSucceeded = &compileSucceeded;
 
-    Graphics::GpuTaskDesc desc;
+    Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests/task_graph/reentrant_compile_during_declaration")).setMarkerLabel("Reentrant Compile During Declaration");
     const auto taskResult = graph.addTask<ReentrantCompileDuringDeclarationTask>(desc, Move(payload));
     ASSERT_TRUE(taskResult);
-    const Graphics::GpuTaskId task = *taskResult;
+    const Core::GpuTaskId task = *taskResult;
 
     ASSERT_TRUE(task.valid());
     EXPECT_TRUE(compileAttempted);
     EXPECT_FALSE(compileSucceeded);
     EXPECT_FALSE(analysis.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_EQ(declarations.taskCount(), 1u);
     }
-    EXPECT_TRUE(Analyze(scratchArena, graph, analysis));
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    EXPECT_TRUE(Analyze(graph, scratchArena, analysis));
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     EXPECT_TRUE(analysis.validFor(declarations));
 }
 
@@ -133,23 +133,23 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto existingTaskResult = AddTask(graph, Name("tests/task_graph/reentrant_telemetry_existing"), "Reentrant Telemetry Existing");
+    Core::GpuTaskGraph graph(testArena.arena);
+    const auto existingTaskResult = AddTask(Name("tests/task_graph/reentrant_telemetry_existing"), "Reentrant Telemetry Existing", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(existingTaskResult);
-    const Graphics::GpuTaskId existingTask = *existingTaskResult;
+    const Core::GpuTaskId existingTask = *existingTaskResult;
     ASSERT_TRUE(existingTask.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    const Core::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Core::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, scratchArena, graph, topology));
-    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    Core::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
 
-    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker tracker(testArena.arena);
-    Graphics::GpuTaskQueueAssignmentTelemetry savedTelemetry;
+    Core::GpuTaskGraphQueueAssignmentTelemetryTracker tracker(testArena.arena);
+    Core::GpuTaskQueueAssignmentTelemetry savedTelemetry;
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -160,11 +160,11 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
         ASSERT_TRUE(reads.valid());
         ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratchArena));
         ASSERT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
-        const Graphics::GpuTaskQueueAssignmentTelemetry* const initialTelemetry = tracker.find(existingTask);
+        const Core::GpuTaskQueueAssignmentTelemetry* const initialTelemetry = tracker.find(existingTask);
         ASSERT_NE(initialTelemetry, nullptr);
         savedTelemetry = *initialTelemetry;
-        const Graphics::GpuTaskGraphTelemetryOptions options{ .queueAssignments = &assignments, .compiledPlan = &reads.compiled, .queueAssignmentTelemetry = &tracker, };
-        ASSERT_TRUE(reads.declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, options));
+        const Core::GpuTaskGraphTelemetryOptions options{ .queueAssignments = &assignments, .compiledPlan = &reads.compiled, .queueAssignmentTelemetry = &tracker, };
+        ASSERT_TRUE(reads.declarations.appendFrameGraphTelemetry(analysis, scratchArena, builder, options));
     }
     const usize nodeCount = nodes.size();
     const usize edgeCount = edges.size();
@@ -172,13 +172,13 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
 
     ReentrantTelemetryDuringDeclarationState state{ .graph = &graph, .analysis = &analysis, .assignments = &assignments, .compiledGraph = &compiledGraph, .transaction = &transaction, .tracker = &tracker, .builder = &builder, .scratchArena = &scratchArena, };
     const auto probeTaskResult = graph.addTask<ReentrantTelemetryDuringDeclarationTask>(
-        Graphics::GpuTaskDesc{}
+        Core::GpuTaskDesc{}
             .setIdentity(Name("tests/task_graph/reentrant_telemetry_during_declaration"))
             .setMarkerLabel("Reentrant Telemetry During Declaration"),
         ReentrantTelemetryDuringDeclarationTask::Payload(state)
     );
     ASSERT_TRUE(probeTaskResult);
-    const Graphics::GpuTaskId probeTask = *probeTaskResult;
+    const Core::GpuTaskId probeTask = *probeTaskResult;
 
     ASSERT_TRUE(probeTask.valid());
     EXPECT_TRUE(state.trackerValidationAttempted);
@@ -190,7 +190,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     EXPECT_EQ(nodes.size(), nodeCount);
     EXPECT_EQ(edges.size(), edgeCount);
     EXPECT_EQ(pendingEdges.size(), pendingEdgeCount);
-    const Graphics::GpuTaskQueueAssignmentTelemetry* const retainedTelemetry = tracker.find(existingTask);
+    const Core::GpuTaskQueueAssignmentTelemetry* const retainedTelemetry = tracker.find(existingTask);
     ASSERT_NE(retainedTelemetry, nullptr);
     EXPECT_EQ(retainedTelemetry->assignment.task, savedTelemetry.assignment.task);
     EXPECT_EQ(retainedTelemetry->assignment.queue, savedTelemetry.assignment.queue);
@@ -210,25 +210,25 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     ASSERT_TRUE(reads.valid());
     ASSERT_TRUE(tracker.update(reads.declarations, assignments, reads.compiled, transaction, scratchArena));
     EXPECT_TRUE(tracker.validFor(reads.declarations, assignments, reads.compiled));
-    const Graphics::GpuTaskGraphTelemetryOptions options{ .queueAssignments = &assignments, .compiledPlan = &reads.compiled, .queueAssignmentTelemetry = &tracker, };
-    EXPECT_TRUE(reads.declarations.appendFrameGraphTelemetry(recoveredBuilder, analysis, scratchArena, options));
+    const Core::GpuTaskGraphTelemetryOptions options{ .queueAssignments = &assignments, .compiledPlan = &reads.compiled, .queueAssignmentTelemetry = &tracker, };
+    EXPECT_TRUE(reads.declarations.appendFrameGraphTelemetry(analysis, scratchArena, recoveredBuilder, options));
 }
 
 TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    u8 sourceBytes[] = { 0x17u, 0x3au, 0x5cu, 0x8eu };
+    Core::GpuTaskGraph graph(testArena.arena);
+    Array<u8, 4> sourceBytes = { 0x17u, 0x3au, 0x5cu, 0x8eu };
 
     EXPECT_FALSE(graph.copyUploadData(nullptr, sizeof(sourceBytes), alignof(u8)).has_value());
-    EXPECT_FALSE(graph.copyUploadData(sourceBytes, 0u, alignof(u8)).has_value());
-    EXPECT_FALSE(graph.copyUploadData(sourceBytes, sizeof(sourceBytes), 3u).has_value());
+    EXPECT_FALSE(graph.copyUploadData(sourceBytes.data(), 0u, alignof(u8)).has_value());
+    EXPECT_FALSE(graph.copyUploadData(sourceBytes.data(), sizeof(sourceBytes), 3u).has_value());
 
-    const auto blobResult = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
+    const auto blobResult = graph.copyUploadData(sourceBytes.data(), sizeof(sourceBytes), alignof(u32));
     ASSERT_TRUE(blobResult);
-    const Graphics::GpuUploadBlobId blob = *blobResult;
+    const Core::GpuUploadBlobId blob = *blobResult;
     ASSERT_TRUE(blob.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.validUploadBlob(blob));
         EXPECT_EQ(declarations.uploadBlobCount(), 1u);
 
@@ -241,15 +241,15 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
 
     graph.reset();
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_FALSE(declarations.validUploadBlob(blob));
         EXPECT_EQ(declarations.uploadBlobCount(), 0u);
         EXPECT_FALSE(declarations.uploadBlobData(blob));
     }
 
-    const auto replacementResult = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
+    const auto replacementResult = graph.copyUploadData(sourceBytes.data(), sizeof(sourceBytes), alignof(u32));
     ASSERT_TRUE(replacementResult);
-    const Graphics::GpuUploadBlobId replacement = *replacementResult;
+    const Core::GpuUploadBlobId replacement = *replacementResult;
     ASSERT_TRUE(replacement.valid());
     EXPECT_EQ(replacement.index, 0u);
     EXPECT_NE(replacement.generation, blob.generation);
@@ -257,29 +257,31 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
 
 TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuGraphPipelineDesc invalidDesc;
+    Core::GpuGraphPipelineDesc invalidDesc;
     invalidDesc.setIdentity(Name("tests/task_graph/invalid_pipeline")).setMarkerLabel("Invalid Pipeline");
     EXPECT_FALSE(graph.importPipeline(invalidDesc).has_value());
     EXPECT_FALSE(graph.importComputePipeline(
-        Graphics::ComputePipelineHandle{},
-        Graphics::GpuGraphPipelineDesc{}
+        Core::ComputePipelineHandle{},
+        Core::GpuGraphPipelineDesc{}
             .setIdentity(Name("tests/task_graph/null_compute_pipeline"))
             .setMarkerLabel("Null Compute Pipeline")
-            .setType(Graphics::GpuGraphPipelineType::Compute)
+            .setType(Core::GpuGraphPipelineType::Compute)
     ).has_value()
     );
 
-    char markerLabel[] = "Deferred Lighting Pipeline";
-    Graphics::GpuGraphPipelineDesc desc;
-    desc.setIdentity(Name(s_DeferredLightingPipelinePath)).setMarkerLabel(AStringView(markerLabel)).setType(Graphics::GpuGraphPipelineType::Compute);
+    Array<char, 27u> markerLabel = {
+        'D', 'e', 'f', 'e', 'r', 'r', 'e', 'd', ' ', 'L', 'i', 'g', 'h', 't', 'i', 'n', 'g', ' ', 'P', 'i', 'p', 'e', 'l', 'i', 'n', 'e', '\0'
+    };
+    Core::GpuGraphPipelineDesc desc;
+    desc.setIdentity(Name(s_DeferredLightingPipelinePath)).setMarkerLabel(AStringView(markerLabel.data())).setType(Core::GpuGraphPipelineType::Compute);
     const auto pipelineResult = graph.importPipeline(desc);
     ASSERT_TRUE(pipelineResult);
-    const Graphics::GpuGraphPipelineId pipeline = *pipelineResult;
+    const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(pipeline.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.validPipeline(pipeline));
         EXPECT_EQ(declarations.pipelineCount(), 1u);
     }
@@ -292,26 +294,26 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
 
     markerLabel[0] = 'X';
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        const Graphics::GpuTaskGraphPipelineView stored = declarations.pipelineAt(pipeline.index);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraphPipelineView stored = declarations.pipelineAt(pipeline.index);
         EXPECT_EQ(stored.markerLabel, AStringView("Deferred Lighting Pipeline"));
     }
 
-    Graphics::GpuGraphPipelineDesc mismatchedType = desc;
-    mismatchedType.setType(Graphics::GpuGraphPipelineType::Graphics);
+    Core::GpuGraphPipelineDesc mismatchedType = desc;
+    mismatchedType.setType(Core::GpuGraphPipelineType::Graphics);
     EXPECT_FALSE(graph.importPipeline(mismatchedType).has_value());
 
     graph.reset();
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_EQ(declarations.pipelineCount(), 0u);
         EXPECT_FALSE(declarations.validPipeline(pipeline));
         EXPECT_EQ(declarations.computePipelineFor(pipeline), nullptr);
     }
 
-    const auto replacementResult = AddPipelineMetadata(graph, Name(s_DeferredLightingPipelinePath), "Replacement Pipeline", Graphics::GpuGraphPipelineType::Compute);
+    const auto replacementResult = AddPipelineMetadata(graph, Name(s_DeferredLightingPipelinePath), "Replacement Pipeline", Core::GpuGraphPipelineType::Compute);
     ASSERT_TRUE(replacementResult);
-    const Graphics::GpuGraphPipelineId replacement = *replacementResult;
+    const Core::GpuGraphPipelineId replacement = *replacementResult;
     ASSERT_TRUE(replacement.valid());
     EXPECT_EQ(replacement.index, 0u);
     EXPECT_NE(replacement.generation, pipeline.generation);
@@ -322,18 +324,18 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/declaration_revision_base"), "Declaration Revision Base");
+        const auto gpuTaskAdmission = AddTask(Name("tests/task_graph/declaration_revision_base"), "Declaration Revision Base", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    const Core::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Core::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
@@ -358,93 +360,93 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
 
     u64 previousRevision = 0u;
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
     {
-        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/declaration_revision_task"), "Declaration Revision Task");
+        const auto secondGpuTaskAdmission = AddTask(Name("tests/task_graph/declaration_revision_task"), "Declaration Revision Task", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(secondGpuTaskAdmission);
         ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
 
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
     const auto resourceResult = AddBufferMetadata(graph, Name("tests/task_graph/declaration_revision_resource"), "Declaration Revision Resource");
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
+    const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
 
-    const Graphics::GpuGraphResourceId resourceSetMembers[] = { resource };
+    const Array<Core::GpuGraphResourceId, 1> resourceSetMembers = { resource };
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
     const auto resourceSetResult = graph.importResourceSet(
-        Graphics::GpuGraphResourceSetDesc{}
+        Core::GpuGraphResourceSetDesc{}
             .setIdentity(Name("tests/task_graph/declaration_revision_resource_set"))
             .setMarkerLabel("Declaration Revision Resource Set")
-        .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+        .setMembers(resourceSetMembers)
     );
     ASSERT_TRUE(resourceSetResult);
-    const Graphics::GpuGraphResourceSetId resourceSet = *resourceSetResult;
+    const Core::GpuGraphResourceSetId resourceSet = *resourceSetResult;
     ASSERT_TRUE(resourceSet.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
 
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto pipelineResult = AddPipelineMetadata(graph, Name("tests/task_graph/declaration_revision_pipeline"), "Declaration Revision Pipeline", Graphics::GpuGraphPipelineType::Compute);
+    const auto pipelineResult = AddPipelineMetadata(graph, Name("tests/task_graph/declaration_revision_pipeline"), "Declaration Revision Pipeline", Core::GpuGraphPipelineType::Compute);
     ASSERT_TRUE(pipelineResult);
-    const Graphics::GpuGraphPipelineId pipeline = *pipelineResult;
+    const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(pipeline.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
 
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/declaration_revision_completion")).setMarkerLabel("Declaration Revision Completion"));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/declaration_revision_completion")).setMarkerLabel("Declaration Revision Completion"));
     ASSERT_TRUE(completionResult);
-    const Graphics::GpuExternalCompletionId completion = *completionResult;
+    const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
 
-    const u8 uploadBytes[] = { 0x17u, 0x3au, 0x5cu, 0x8eu };
+    const Array<u8, 4> uploadBytes = { 0x17u, 0x3au, 0x5cu, 0x8eu };
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         previousRevision = declarations.declarationRevision();
     }
-    const auto uploadResult = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
+    const auto uploadResult = graph.copyUploadData(uploadBytes.data(), sizeof(uploadBytes), alignof(u32));
     ASSERT_TRUE(uploadResult);
-    const Graphics::GpuUploadBlobId upload = *uploadResult;
+    const Core::GpuUploadBlobId upload = *uploadResult;
     ASSERT_TRUE(upload.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_NE(declarations.declarationRevision(), previousRevision);
     }
     recompileAfterMutation();
@@ -454,59 +456,59 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
 
-    const Graphics::GpuGraphResourceDesc resourceDesc = Graphics::GpuGraphResourceDesc{}
+    const Core::GpuGraphResourceDesc resourceDesc = Core::GpuGraphResourceDesc{}
         .setIdentity(Name("tests/task_graph/stable_declaration_resource"))
         .setMarkerLabel("Stable Declaration Resource")
-        .setType(Graphics::GpuGraphResourceType::Buffer)
-        .setInitialState(Graphics::ResourceStates::Common)
+        .setType(Core::GpuGraphResourceType::Buffer)
+        .setInitialState(Core::ResourceStates::Common)
     ;
     const auto resourceResult = graph.importResource(resourceDesc);
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
+    const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
-    const Graphics::GpuGraphResourceId resourceSetMembers[] = { resource };
-    const Graphics::GpuGraphResourceSetDesc resourceSetDesc = Graphics::GpuGraphResourceSetDesc{}
+    const Array<Core::GpuGraphResourceId, 1> resourceSetMembers = { resource };
+    const Core::GpuGraphResourceSetDesc resourceSetDesc = Core::GpuGraphResourceSetDesc{}
         .setIdentity(Name("tests/task_graph/stable_declaration_resource_set"))
         .setMarkerLabel("Stable Declaration Resource Set")
-        .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+        .setMembers(resourceSetMembers)
     ;
     const auto resourceSetResult = graph.importResourceSet(resourceSetDesc);
     ASSERT_TRUE(resourceSetResult);
-    const Graphics::GpuGraphResourceSetId resourceSet = *resourceSetResult;
+    const Core::GpuGraphResourceSetId resourceSet = *resourceSetResult;
     ASSERT_TRUE(resourceSet.valid());
-    const Graphics::GpuGraphPipelineDesc pipelineDesc = Graphics::GpuGraphPipelineDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_pipeline")).setMarkerLabel("Stable Declaration Pipeline").setType(Graphics::GpuGraphPipelineType::Compute);
+    const Core::GpuGraphPipelineDesc pipelineDesc = Core::GpuGraphPipelineDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_pipeline")).setMarkerLabel("Stable Declaration Pipeline").setType(Core::GpuGraphPipelineType::Compute);
     const auto pipelineResult = graph.importPipeline(pipelineDesc);
     ASSERT_TRUE(pipelineResult);
-    const Graphics::GpuGraphPipelineId pipeline = *pipelineResult;
+    const Core::GpuGraphPipelineId pipeline = *pipelineResult;
     ASSERT_TRUE(pipeline.valid());
-    const Graphics::GpuExternalCompletionDesc completionDesc = Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_completion")).setMarkerLabel("Stable Declaration Completion");
+    const Core::GpuExternalCompletionDesc completionDesc = Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stable_declaration_completion")).setMarkerLabel("Stable Declaration Completion");
     const auto completionResult = graph.importExternalCompletion(completionDesc);
     ASSERT_TRUE(completionResult);
-    const Graphics::GpuExternalCompletionId completion = *completionResult;
+    const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
-    const u8 uploadBytes[] = { 0x17u };
+    const Array<u8, 1> uploadBytes = { 0x17u };
     {
-        const auto gpuTaskAdmission = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u8));
+        const auto gpuTaskAdmission = graph.copyUploadData(uploadBytes.data(), sizeof(uploadBytes), alignof(u8));
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
     {
-        const auto secondGpuTaskAdmission = AddTask(graph, Name("tests/task_graph/stable_declaration_task"), "Stable Declaration Task");
+        const auto secondGpuTaskAdmission = AddTask(Name("tests/task_graph/stable_declaration_task"), "Stable Declaration Task", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(secondGpuTaskAdmission);
         ASSERT_TRUE(secondGpuTaskAdmission->valid());
     }
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    const Core::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Core::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph, topology));
     u64 compiledRevision = 0u;
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         compiledRevision = declarations.declarationRevision();
     }
 
@@ -542,11 +544,11 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
         EXPECT_TRUE(reads.compiled.validFor(reads.declarations));
     }
 
-    EXPECT_FALSE(graph.addTask(Graphics::GpuTaskDesc{}).has_value());
-    EXPECT_FALSE(graph.importResource(Graphics::GpuGraphResourceDesc{}).has_value());
-    EXPECT_FALSE(graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}).has_value());
-    EXPECT_FALSE(graph.importPipeline(Graphics::GpuGraphPipelineDesc{}).has_value());
-    EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}).has_value());
+    EXPECT_FALSE(graph.addTask(Core::GpuTaskDesc{}).has_value());
+    EXPECT_FALSE(graph.importResource(Core::GpuGraphResourceDesc{}).has_value());
+    EXPECT_FALSE(graph.importResourceSet(Core::GpuGraphResourceSetDesc{}).has_value());
+    EXPECT_FALSE(graph.importPipeline(Core::GpuGraphPipelineDesc{}).has_value());
+    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}).has_value());
     EXPECT_FALSE(graph.copyUploadData(nullptr, sizeof(uploadBytes), alignof(u8)).has_value());
     const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
     EXPECT_EQ(reads.declarations.declarationRevision(), compiledRevision);
@@ -559,18 +561,18 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     {
-        const auto gpuTaskAdmission = AddTask(graph, Name("tests/task_graph/external_final_revision_base"), "External Final Revision Base");
+        const auto gpuTaskAdmission = AddTask(Name("tests/task_graph/external_final_revision_base"), "External Final Revision Base", {}, {}, {}, {}, {}, graph);
         ASSERT_TRUE(gpuTaskAdmission);
         ASSERT_TRUE(gpuTaskAdmission->valid());
     }
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
-    Graphics::GpuTaskGraphAnalysis priorAnalysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments priorAssignments(testArena.arena);
-    Graphics::GpuCompiledGraph priorCompiledGraph(testArena.arena);
+    const Core::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u, };
+    Core::GpuTaskGraphAnalysis priorAnalysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments priorAssignments(testArena.arena);
+    Core::GpuCompiledGraph priorCompiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(priorAnalysis, priorAssignments, priorCompiledGraph, operationScratchArena, graph, topology));
     u64 compiledRevision = 0u;
     {
@@ -579,15 +581,15 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
         compiledRevision = reads.declarations.declarationRevision();
     }
     const auto externalFinalResourceResult = graph.importResource(
-        Graphics::GpuGraphResourceDesc{}
+        Core::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/task_graph/external_final_revision_resource"))
             .setMarkerLabel("External Final Revision Resource")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+            .setType(Core::GpuGraphResourceType::Buffer)
+            .setInitialState(Core::ResourceStates::Common)
+            .setExternalFinalState(Core::ResourceStates::ShaderResource)
     );
     ASSERT_TRUE(externalFinalResourceResult);
-    const Graphics::GpuGraphResourceId externalFinalResource = *externalFinalResourceResult;
+    const Core::GpuGraphResourceId externalFinalResource = *externalFinalResourceResult;
     ASSERT_TRUE(externalFinalResource.valid());
     {
         const Tests::GpuTaskGraphReadViews reads(graph, priorCompiledGraph);
@@ -597,11 +599,11 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
         EXPECT_FALSE(reads.compiled.validFor(reads.declarations));
     }
 
-    Graphics::GpuTaskGraphAnalysis freshAnalysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments freshAssignments(testArena.arena);
-    Graphics::GpuCompiledGraph freshCompiledGraph(testArena.arena);
+    Core::GpuTaskGraphAnalysis freshAnalysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments freshAssignments(testArena.arena);
+    Core::GpuCompiledGraph freshCompiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(freshAnalysis, freshAssignments, freshCompiledGraph, operationScratchArena, graph, topology));
-    const Graphics::GpuCompiledGraph::ReadView freshCompiledPlan(freshCompiledGraph);
+    const Core::GpuCompiledGraph::ReadView freshCompiledPlan(freshCompiledGraph);
     EXPECT_FALSE(freshCompiledPlan.valid());
 }
 
@@ -609,21 +611,21 @@ TEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const auto staleTaskResult = AddTask(graph, Name("tests/task_graph/old"), "Old");
+    Core::GpuTaskGraph graph(testArena.arena);
+    const auto staleTaskResult = AddTask(Name("tests/task_graph/old"), "Old", {}, {}, {}, {}, {}, graph);
     ASSERT_TRUE(staleTaskResult);
-    const Graphics::GpuTaskId staleTask = *staleTaskResult;
+    const Core::GpuTaskId staleTask = *staleTaskResult;
     ASSERT_TRUE(staleTask.valid());
 
     graph.reset();
-    const auto taskResult = AddTask(graph, Name("tests/task_graph/new"), "New", &staleTask, 1u);
+    const auto taskResult = AddTask(Name("tests/task_graph/new"), "New", Span(&staleTask, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(taskResult);
-    const Graphics::GpuTaskId task = *taskResult;
+    const Core::GpuTaskId task = *taskResult;
     ASSERT_TRUE(task.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, analysis));
-    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, operationScratchArena, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::InvalidTaskDependency);
     EXPECT_EQ(analysis.diagnostic().task, task);
     EXPECT_EQ(analysis.diagnostic().relatedTask, staleTask);
 }
@@ -632,45 +634,45 @@ TEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphTestUtils::s_TaskGraphScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuGraphResourceDesc unlabeledResource;
-    unlabeledResource.setIdentity(Name("tests/task_graph/unlabeled_resource")).setType(Graphics::GpuGraphResourceType::HazardDomain);
+    Core::GpuGraphResourceDesc unlabeledResource;
+    unlabeledResource.setIdentity(Name("tests/task_graph/unlabeled_resource")).setType(Core::GpuGraphResourceType::HazardDomain);
     EXPECT_FALSE(graph.importHazardDomain(unlabeledResource).has_value());
-    EXPECT_FALSE(AddTask(graph, Name("tests/task_graph/unlabeled_task"), "").has_value());
-    EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/unlabeled_external"))).has_value());
+    EXPECT_FALSE(AddTask(Name("tests/task_graph/unlabeled_task"), "", {}, {}, {}, {}, {}, graph).has_value());
+    EXPECT_FALSE(graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/unlabeled_external"))).has_value());
 
     const auto staleResourceResult = AddHazardDomain(graph, Name("tests/task_graph/stale_resource"), "Stale Resource");
     ASSERT_TRUE(staleResourceResult);
-    const Graphics::GpuGraphResourceId staleResource = *staleResourceResult;
-    const auto staleExternalResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stale_external")).setMarkerLabel("Stale External"));
+    const Core::GpuGraphResourceId staleResource = *staleResourceResult;
+    const auto staleExternalResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph/stale_external")).setMarkerLabel("Stale External"));
     ASSERT_TRUE(staleExternalResult);
-    const Graphics::GpuExternalCompletionId staleExternal = *staleExternalResult;
+    const Core::GpuExternalCompletionId staleExternal = *staleExternalResult;
     ASSERT_TRUE(staleResource.valid());
     ASSERT_TRUE(staleExternal.valid());
 
     graph.reset();
-    const Graphics::GpuTaskResourceUse staleResourceUse{ .resource = staleResource, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read, };
-    const auto resourceTaskResult = AddTask(graph, Name("tests/task_graph/stale_resource_consumer"), "Stale Resource Consumer", nullptr, 0u, &staleResourceUse, 1u);
+    const Core::GpuTaskResourceUse staleResourceUse{ .resource = staleResource, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read, };
+    const auto resourceTaskResult = AddTask(Name("tests/task_graph/stale_resource_consumer"), "Stale Resource Consumer", {}, Span(&staleResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(resourceTaskResult);
-    const Graphics::GpuTaskId resourceTask = *resourceTaskResult;
+    const Core::GpuTaskId resourceTask = *resourceTaskResult;
     ASSERT_TRUE(resourceTask.valid());
-    Graphics::GpuTaskGraphAnalysis resourceAnalysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, resourceAnalysis));
-    EXPECT_EQ(resourceAnalysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
+    Core::GpuTaskGraphAnalysis resourceAnalysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, operationScratchArena, resourceAnalysis));
+    EXPECT_EQ(resourceAnalysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
     EXPECT_EQ(resourceAnalysis.diagnostic().task, resourceTask);
     EXPECT_EQ(resourceAnalysis.diagnostic().resource, staleResource);
 
     graph.reset();
-    Graphics::GpuTaskDesc externalDesc;
-    externalDesc.setIdentity(Name("tests/task_graph/stale_external_consumer")).setMarkerLabel("Stale External Consumer").setExternalDependencies(&staleExternal, 1u);
+    Core::GpuTaskDesc externalDesc;
+    externalDesc.setIdentity(Name("tests/task_graph/stale_external_consumer")).setMarkerLabel("Stale External Consumer").setExternalDependencies(Span(&staleExternal, 1u));
     const auto externalTaskResult = graph.addTask(externalDesc);
     ASSERT_TRUE(externalTaskResult);
-    const Graphics::GpuTaskId externalTask = *externalTaskResult;
+    const Core::GpuTaskId externalTask = *externalTaskResult;
     ASSERT_TRUE(externalTask.valid());
-    Graphics::GpuTaskGraphAnalysis externalAnalysis(testArena.arena);
-    EXPECT_FALSE(Analyze(operationScratchArena, graph, externalAnalysis));
-    EXPECT_EQ(externalAnalysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency);
+    Core::GpuTaskGraphAnalysis externalAnalysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, operationScratchArena, externalAnalysis));
+    EXPECT_EQ(externalAnalysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency);
     EXPECT_EQ(externalAnalysis.diagnostic().task, externalTask);
 }
 

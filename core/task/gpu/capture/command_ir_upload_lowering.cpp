@@ -26,7 +26,7 @@ namespace GpuCommandIrDetail{
 
 
 // Semantic preflight admitted the destination, and the graph stays caller-stable.
-GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, CommandList& commandList, const GpuPhysicalQueueInfo& queue)noexcept{
+GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& queue, CommandList& commandList)noexcept{
     if(record.opcode == GpuCommandIrOpcode::UploadBuffer){
         auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
         if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &destination, ResourceStates::CopyDest) || !ResourceQueueAdmissionAdmitsQueue(destination.getQueueAdmissionSnapshot(), queue))

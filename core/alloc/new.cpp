@@ -4,8 +4,6 @@
 
 #include "core.h"
 
-#include <new>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,9 +33,9 @@ template<typename AllocateFunc>
 [[nodiscard]] NotNull<void*> RetryOperatorNew(AllocateFunc allocate){
     void* result = allocate();
     while(!result){
-        const std::new_handler handler = std::get_new_handler();
+        const NewHandler handler = GetNewHandler();
         if(!handler)
-            throw std::bad_alloc();
+            throw AllocationException();
 
         (*handler)();
         result = allocate();
@@ -45,15 +43,15 @@ template<typename AllocateFunc>
     return MakeNotNull(result);
 }
 
-[[nodiscard]] NotNull<void*> InternalOperatorNew(const std::size_t size){
+[[nodiscard]] NotNull<void*> InternalOperatorNew(const usize size){
     return RetryOperatorNew([size]()noexcept{
-        return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size));
+        return NWB::Core::Alloc::CoreAlloc(size);
     });
 }
 
-[[nodiscard]] NotNull<void*> InternalOperatorNew(const std::size_t size, const std::size_t alignment){
+[[nodiscard]] NotNull<void*> InternalOperatorNew(const usize size, const usize alignment){
     return RetryOperatorNew([size, alignment]()noexcept{
-        return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(size), static_cast<usize>(alignment));
+        return NWB::Core::Alloc::CoreAllocAligned(size, alignment);
     });
 }
 
@@ -71,23 +69,23 @@ void operator delete(void* p)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete(void* p, const std::nothrow_t&)noexcept{
+void operator delete(void* p, const NoThrowT&)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete(void* p, std::size_t n)noexcept{
-    NWB::Core::Alloc::CoreFreeSize(p, static_cast<usize>(n));
+void operator delete(void* p, usize n)noexcept{
+    NWB::Core::Alloc::CoreFreeSize(p, n);
 }
 
-void operator delete(void* p, std::align_val_t)noexcept{
+void operator delete(void* p, AlignValT)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
-void operator delete(void* p, std::size_t n, std::align_val_t)noexcept{
-    NWB::Core::Alloc::CoreFreeSizeAligned(p, static_cast<usize>(n));
+void operator delete(void* p, usize n, AlignValT)noexcept{
+    NWB::Core::Alloc::CoreFreeSizeAligned(p, n);
 }
 
-void operator delete(void* p, std::align_val_t, const std::nothrow_t&)noexcept{
+void operator delete(void* p, AlignValT, const NoThrowT&)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
@@ -95,56 +93,56 @@ void operator delete[](void* p)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete[](void* p, const std::nothrow_t&)noexcept{
+void operator delete[](void* p, const NoThrowT&)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-void operator delete[](void* p, std::size_t n)noexcept{
-    NWB::Core::Alloc::CoreFreeSize(p, static_cast<usize>(n));
+void operator delete[](void* p, usize n)noexcept{
+    NWB::Core::Alloc::CoreFreeSize(p, n);
 }
 
-void operator delete[](void* p, std::align_val_t)noexcept{
+void operator delete[](void* p, AlignValT)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
-void operator delete[](void* p, std::size_t n, std::align_val_t)noexcept{
-    NWB::Core::Alloc::CoreFreeSizeAligned(p, static_cast<usize>(n));
+void operator delete[](void* p, usize n, AlignValT)noexcept{
+    NWB::Core::Alloc::CoreFreeSizeAligned(p, n);
 }
 
-void operator delete[](void* p, std::align_val_t, const std::nothrow_t&)noexcept{
+void operator delete[](void* p, AlignValT, const NoThrowT&)noexcept{
     NWB::Core::Alloc::CoreFreeAligned(p);
 }
 
-NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new(std::size_t n)noexcept(false){
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new(usize n)noexcept(false){
     return __hidden_new::InternalOperatorNew(n).get();
 }
 
-NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new(std::size_t n, const std::nothrow_t&)noexcept{
-    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new(usize n, const NoThrowT&)noexcept{
+    return NWB::Core::Alloc::CoreAlloc(n);
 }
 
-void* operator new(std::size_t n, std::align_val_t alignment)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment)).get();
+void* operator new(usize n, AlignValT alignment)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n, static_cast<usize>(alignment)).get();
 }
 
-void* operator new(std::size_t n, std::align_val_t alignment, std::nothrow_t const&)noexcept{
-    return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(alignment));
+void* operator new(usize n, AlignValT alignment, const NoThrowT&)noexcept{
+    return NWB::Core::Alloc::CoreAllocAligned(n, static_cast<usize>(alignment));
 }
 
-NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new[](std::size_t n)noexcept(false){
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new[](usize n)noexcept(false){
     return __hidden_new::InternalOperatorNew(n).get();
 }
 
-NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new[](std::size_t n, const std::nothrow_t&)noexcept{
-    return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new[](usize n, const NoThrowT&)noexcept{
+    return NWB::Core::Alloc::CoreAlloc(n);
 }
 
-void* operator new[](std::size_t n, std::align_val_t alignment)noexcept(false){
-    return __hidden_new::InternalOperatorNew(n, static_cast<std::size_t>(alignment)).get();
+void* operator new[](usize n, AlignValT alignment)noexcept(false){
+    return __hidden_new::InternalOperatorNew(n, static_cast<usize>(alignment)).get();
 }
 
-void* operator new[](std::size_t n, std::align_val_t alignment, std::nothrow_t const&)noexcept{
-    return NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(n), static_cast<usize>(alignment));
+void* operator new[](usize n, AlignValT alignment, const NoThrowT&)noexcept{
+    return NWB::Core::Alloc::CoreAllocAligned(n, static_cast<usize>(alignment));
 }
 
 

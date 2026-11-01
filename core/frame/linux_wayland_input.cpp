@@ -32,7 +32,6 @@
 #undef interface
 #include <xkbcommon/xkbcommon-keysyms.h>
 #pragma pop_macro("interface")
-#include <cerrno>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,22 +50,16 @@ namespace __hidden_frame_linux_wayland_input{
 
 
 static constexpr f64 s_WaylandScrollAxisUnit = 120.0;
-static constexpr i32 s_MillisecondsPerSecond = 1000;
 static constexpr u32 s_EvdevToXkbKeycodeOffset = 8u;
 static constexpr i32 s_MinKeyRepeatStepMs = 1;
 static constexpr u32 s_WaylandSeatBindVersion = 5u;
 static constexpr u32 s_WaylandPointerFrameSeatVersion = 5u;
 static constexpr u32 s_WaylandSeatReleaseVersion = 5u;
-static constexpr StringView s_WarningEventName = "warning";
 static constexpr StringView s_KeymapLifecycleCategory = "frame_keymap_lifecycle";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static SIMDVectorDouble SurfaceCoordinatesToPixels(const SIMDVectorDouble surfaceCoordinates, const SIMDVectorDouble bufferScale)noexcept{
-    return VectorDoubleMultiply(surfaceCoordinates, bufferScale);
-}
 
 static i32 TranslatePointerButton(u32 button)noexcept{
     switch(button){
@@ -85,10 +78,6 @@ static i32 TranslatePointerButton(u32 button)noexcept{
 
 NWB_DECLARE_LINUX_KEY_SYMBOLS(WaylandKeySymbols, xkb_keysym_t, XKB_KEY);
 
-static i32 TranslateKey(xkb_keysym_t keySym)noexcept{
-    return FrameDetail::TranslateLinuxKeySymbol<WaylandKeySymbols>(keySym);
-}
-
 static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size)noexcept{
     const b8 unmapFailed = map && munmap(map, size) != 0;
     const i32 unmapError = unmapFailed ? errno : 0;
@@ -97,11 +86,11 @@ static void ReleaseKeymapResources(const i32 fd, void* const map, const u32 size
     const i32 closeError = closeFailed ? errno : 0;
     if(unmapFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap unmap failed; native_domain=POSIX native_code={}", unmapError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
     if(closeFailed){
         const DiagnosticEventText message = MakeDiagnosticEventText("Frame Wayland keymap descriptor release failed; native_domain=POSIX native_code={}", closeError);
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = s_KeymapLifecycleCategory, .message = message.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -184,51 +173,33 @@ void WaylandFrameInput::OnSeatCapabilities(void* data, wl_seat* seat, u32 capabi
     }
 }
 
-void WaylandFrameInput::OnSeatName(void* data, wl_seat* seat, const char* name)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(seat);
-    static_cast<void>(name);
-}
+void WaylandFrameInput::OnSeatName([[maybe_unused]] void* data, [[maybe_unused]] wl_seat* seat, [[maybe_unused]] const char* name)noexcept{}
 
-void WaylandFrameInput::OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy){
+void WaylandFrameInput::OnPointerEnter(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 serial, [[maybe_unused]] wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy){
     using namespace __hidden_frame_linux_wayland_input;
 
-    static_cast<void>(pointer);
-    static_cast<void>(serial);
-    static_cast<void>(surface);
-
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
-    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
+    const SIMDVectorDouble pixelCoordinates = VectorDoubleMultiply(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(Max(frameInput.m_bufferScale, 1))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
-void WaylandFrameInput::OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
-    static_cast<void>(pointer);
-    static_cast<void>(serial);
-    static_cast<void>(surface);
-
+void WaylandFrameInput::OnPointerLeave(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 serial, [[maybe_unused]] wl_surface* surface){
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_frame.input().pointerLeave();
     // The compositor retains pointer focus during the implicit grab; leave terminates any remaining grab.
     frameInput.m_frame.input().pointerCaptureLost();
 }
 
-void WaylandFrameInput::OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_t sx, wl_fixed_t sy){
+void WaylandFrameInput::OnPointerMotion(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 time, wl_fixed_t sx, wl_fixed_t sy){
     using namespace __hidden_frame_linux_wayland_input;
 
-    static_cast<void>(pointer);
-    static_cast<void>(time);
-
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
-    const SIMDVectorDouble pixelCoordinates = SurfaceCoordinatesToPixels(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(FrameDetail::ClampBufferScale(frameInput.m_bufferScale))));
+    const SIMDVectorDouble pixelCoordinates = VectorDoubleMultiply(VectorDoubleSet(wl_fixed_to_double(sx), wl_fixed_to_double(sy), 0.0, 0.0), VectorDoubleReplicate(static_cast<f64>(Max(frameInput.m_bufferScale, 1))));
     frameInput.m_frame.input().mousePosUpdate(VectorDoubleGetX(pixelCoordinates), VectorDoubleGetY(pixelCoordinates));
 }
 
-void WaylandFrameInput::OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
+void WaylandFrameInput::OnPointerButton(void* data, [[maybe_unused]] wl_pointer* pointer, u32 serial, [[maybe_unused]] u32 time, u32 button, u32 state){
     using namespace __hidden_frame_linux_wayland_input;
-
-    static_cast<void>(pointer);
-    static_cast<void>(time);
 
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_inputSerial = serial;
@@ -240,46 +211,31 @@ void WaylandFrameInput::OnPointerButton(void* data, wl_pointer* pointer, u32 ser
     }
 }
 
-void WaylandFrameInput::OnPointerAxis(void* data, wl_pointer* pointer, u32 time, u32 axis, wl_fixed_t value){
+void WaylandFrameInput::OnPointerAxis(void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 time, u32 axis, wl_fixed_t value){
     using namespace __hidden_frame_linux_wayland_input;
-
-    static_cast<void>(pointer);
-    static_cast<void>(time);
 
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_scrollPending = true;
 
-    const SIMDVectorDouble delta = VectorDoubleReplicate(wl_fixed_to_double(value));
+    const f64 delta = wl_fixed_to_double(value);
     if(axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL)
-        frameInput.m_scrollX = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(frameInput.m_scrollX), delta));
+        frameInput.m_scrollX += delta;
     else if(axis == WL_POINTER_AXIS_VERTICAL_SCROLL)
-        frameInput.m_scrollY = VectorDoubleGetX(VectorDoubleAdd(VectorDoubleReplicate(frameInput.m_scrollY), delta));
+        frameInput.m_scrollY += delta;
 
     if(frameInput.m_seatVersion < s_WaylandPointerFrameSeatVersion)
         frameInput.dispatchScroll();
 }
 
-void WaylandFrameInput::OnPointerFrame(void* data, wl_pointer* pointer){
-    static_cast<void>(pointer);
+void WaylandFrameInput::OnPointerFrame(void* data, [[maybe_unused]] wl_pointer* pointer){
     MakeNotNull(static_cast<WaylandFrameInput*>(data))->dispatchScroll();
 }
 
-void WaylandFrameInput::OnPointerAxisSource(void* data, wl_pointer* pointer, u32 axisSource)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(pointer);
-    static_cast<void>(axisSource);
-}
+void WaylandFrameInput::OnPointerAxisSource([[maybe_unused]] void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 axisSource)noexcept{}
 
-void WaylandFrameInput::OnPointerAxisStop(void* data, wl_pointer* pointer, u32 time, u32 axis)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(pointer);
-    static_cast<void>(time);
-    static_cast<void>(axis);
-}
+void WaylandFrameInput::OnPointerAxisStop([[maybe_unused]] void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 time, [[maybe_unused]] u32 axis)noexcept{}
 
-void WaylandFrameInput::OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32 discrete)noexcept{
-    static_cast<void>(pointer);
-
+void WaylandFrameInput::OnPointerAxisDiscrete(void* data, [[maybe_unused]] wl_pointer* pointer, u32 axis, i32 discrete)noexcept{
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_scrollPending = true;
 
@@ -290,27 +246,15 @@ void WaylandFrameInput::OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u
 }
 
 #if defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
-void WaylandFrameInput::OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32 value120)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(pointer);
-    static_cast<void>(axis);
-    static_cast<void>(value120);
-}
+void WaylandFrameInput::OnPointerAxisValue120([[maybe_unused]] void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 axis, [[maybe_unused]] i32 value120)noexcept{}
 #endif
 
 #if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
-void WaylandFrameInput::OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 axis, u32 direction)noexcept{
-    static_cast<void>(data);
-    static_cast<void>(pointer);
-    static_cast<void>(axis);
-    static_cast<void>(direction);
-}
+void WaylandFrameInput::OnPointerAxisRelativeDirection([[maybe_unused]] void* data, [[maybe_unused]] wl_pointer* pointer, [[maybe_unused]] u32 axis, [[maybe_unused]] u32 direction)noexcept{}
 #endif
 
-void WaylandFrameInput::OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 fd, u32 size){
+void WaylandFrameInput::OnKeyboardKeymap(void* data, [[maybe_unused]] wl_keyboard* keyboard, u32 format, i32 fd, u32 size){
     using namespace __hidden_frame_linux_wayland_input;
-
-    static_cast<void>(keyboard);
 
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
 
@@ -351,11 +295,7 @@ void WaylandFrameInput::OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 
     frameInput.m_xkbState = state;
 }
 
-void WaylandFrameInput::OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface, wl_array* keys){
-    static_cast<void>(keyboard);
-    static_cast<void>(serial);
-    static_cast<void>(keys);
-
+void WaylandFrameInput::OnKeyboardEnter(void* data, [[maybe_unused]] wl_keyboard* keyboard, [[maybe_unused]] u32 serial, wl_surface* surface, [[maybe_unused]] wl_array* keys){
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(surface != frameInput.m_surface)
         return;
@@ -370,10 +310,7 @@ void WaylandFrameInput::OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 s
     frameInput.m_frame.input().windowFocusUpdate(true);
 }
 
-void WaylandFrameInput::OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
-    static_cast<void>(keyboard);
-    static_cast<void>(serial);
-
+void WaylandFrameInput::OnKeyboardLeave(void* data, [[maybe_unused]] wl_keyboard* keyboard, [[maybe_unused]] u32 serial, wl_surface* surface){
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(surface != frameInput.m_surface)
         return;
@@ -390,11 +327,8 @@ void WaylandFrameInput::OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 s
     frameInput.m_frame.input().windowFocusUpdate(false);
 }
 
-void WaylandFrameInput::OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 time, u32 key, u32 state){
+void WaylandFrameInput::OnKeyboardKey(void* data, [[maybe_unused]] wl_keyboard* keyboard, u32 serial, [[maybe_unused]] u32 time, u32 key, u32 state){
     using namespace __hidden_frame_linux_wayland_input;
-
-    static_cast<void>(keyboard);
-    static_cast<void>(time);
 
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_inputSerial = serial;
@@ -405,7 +339,7 @@ void WaylandFrameInput::OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 ser
 
     const u32 keycode = key + s_EvdevToXkbKeycodeOffset;
     const xkb_keysym_t keySym = xkb_state_key_get_one_sym(frameInput.m_xkbState, keycode);
-    const i32 translatedKey = TranslateKey(keySym);
+    const i32 translatedKey = FrameDetail::TranslateLinuxKeySymbol<WaylandKeySymbols>(keySym);
 
     if(state == WL_KEYBOARD_KEY_STATE_PRESSED){
         xkb_state_update_key(frameInput.m_xkbState, keycode, XKB_KEY_DOWN);
@@ -433,18 +367,13 @@ void WaylandFrameInput::OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 ser
     }
 }
 
-void WaylandFrameInput::OnKeyboardModifiers(void* data, wl_keyboard* keyboard, u32 serial, u32 depressed, u32 latched, u32 locked, u32 group)noexcept{
-    static_cast<void>(keyboard);
-    static_cast<void>(serial);
-
+void WaylandFrameInput::OnKeyboardModifiers(void* data, [[maybe_unused]] wl_keyboard* keyboard, [[maybe_unused]] u32 serial, u32 depressed, u32 latched, u32 locked, u32 group)noexcept{
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     if(frameInput.m_xkbState)
         xkb_state_update_mask(frameInput.m_xkbState, depressed, latched, locked, 0, 0, group);
 }
 
-void WaylandFrameInput::OnKeyboardRepeatInfo(void* data, wl_keyboard* keyboard, i32 rate, i32 delay)noexcept{
-    static_cast<void>(keyboard);
-
+void WaylandFrameInput::OnKeyboardRepeatInfo(void* data, [[maybe_unused]] wl_keyboard* keyboard, i32 rate, i32 delay)noexcept{
     auto& frameInput = *MakeNotNull(static_cast<WaylandFrameInput*>(data));
     frameInput.m_repeatRate = rate;
     frameInput.m_repeatDelayMs = delay;
@@ -562,7 +491,7 @@ i32 WaylandFrameInput::pollTimeoutForKeyRepeat(const i32 timeoutMs)const noexcep
         return timeoutMs;
 
     const f64 secondsUntilRepeat = DurationInSeconds<f64>(m_nextRepeatTime, TimerNow());
-    const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(VectorDoubleGetX(VectorDoubleCeiling(VectorDoubleScale(VectorDoubleReplicate(secondsUntilRepeat), static_cast<f64>(s_MillisecondsPerSecond)))));
+    const i32 repeatTimeoutMs = secondsUntilRepeat <= 0.0 ? 0 : static_cast<i32>(Ceil(secondsUntilRepeat * static_cast<f64>(s_MillisecondsInSecond)));
     return timeoutMs < repeatTimeoutMs ? timeoutMs : repeatTimeoutMs;
 }
 
@@ -576,7 +505,7 @@ void WaylandFrameInput::processKeyRepeat(){
     if(now < m_nextRepeatTime)
         return;
 
-    const i32 candidateStepMs = m_repeatRate > 0 ? (s_MillisecondsPerSecond / m_repeatRate) : 0;
+    const i32 candidateStepMs = m_repeatRate > 0 ? (static_cast<i32>(s_MillisecondsInSecond) / m_repeatRate) : 0;
     const i32 stepMs = m_repeatRate > 0 ? (candidateStepMs > 0 ? candidateStepMs : s_MinKeyRepeatStepMs) : 0;
     do{
         const i32 mods = translateModifiers();
@@ -652,7 +581,10 @@ void WaylandFrameInput::dispatchScroll(){
     if(!m_scrollPending)
         return;
 
-    const SIMDVectorDouble scroll = VectorDoubleXorInt(VectorDoubleSet(m_scrollDiscreteX != 0 ? static_cast<f64>(m_scrollDiscreteX) : m_scrollX, m_scrollDiscreteY != 0 ? static_cast<f64>(m_scrollDiscreteY) : m_scrollY, 0.0, 0.0), VectorDoubleSetInt(0u, s_F64SignBitMask, 0u, 0u));
+    const SIMDVectorDouble scroll = VectorDoubleXorInt(
+        VectorDoubleSet(m_scrollDiscreteX != 0 ? static_cast<f64>(m_scrollDiscreteX) : m_scrollX, m_scrollDiscreteY != 0 ? static_cast<f64>(m_scrollDiscreteY) : m_scrollY, 0.0, 0.0),
+        VectorDoubleSetInt(0u, s_F64SignBitMask, 0u, 0u)
+    );
     const SIMDVectorDouble units = VectorDoubleSet(m_scrollDiscreteX != 0 ? 1.0 : s_WaylandScrollAxisUnit, m_scrollDiscreteY != 0 ? 1.0 : s_WaylandScrollAxisUnit, 1.0, 1.0);
     const SIMDVectorDouble offsets = VectorDoubleDivide(scroll, units);
     const f64 xoffset = VectorDoubleGetX(offsets);

@@ -11,6 +11,9 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/module.h>
+#include <core/common/log.h>
+
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,6 +29,8 @@ static_assert(IsStandardLayout_V<SkeletonJointMatrix>, "SkeletonJointMatrix must
 static_assert(IsTriviallyCopyable_V<SkeletonJointMatrix>, "SkeletonJointMatrix must stay GPU-uploadable");
 static_assert(sizeof(SkeletonJointMatrix) == sizeof(f32) * s_SkeletonJointMatrixFloatCount, "SkeletonJointMatrix GPU layout drifted");
 static_assert(alignof(SkeletonJointMatrix) >= alignof(Float4), "SkeletonJointMatrix must stay SIMD-aligned");
+
+inline constexpr TStringView s_SkeletonAssetKindLabel = NWB_TEXT("skeleton");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,9 +64,7 @@ public:
 
 public:
     [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
-
     [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
-
     [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
     [[nodiscard]] u32 findJointIndex(Name jointName)const noexcept;
 

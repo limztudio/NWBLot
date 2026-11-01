@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 b8 LayoutTree::measure()noexcept{
     for(usize reverse = m_nodes.size(); reverse > 0u; --reverse){
         const u32 index = static_cast<u32>(reverse - 1u);
-        const Node& node = m_nodes[index];
+        const LayoutTreeNode& node = m_nodes[index];
         const LayoutNodeDesc& description = node.description;
         SIMDVectorDouble extent = VectorDoubleZero();
         u32 childCount = 0u;

@@ -3,7 +3,8 @@
 
 
 #include <impl/ecs_render/csg/csg_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -26,44 +27,6 @@ namespace CsgIntervalDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::Rect ResolveCsgFrameWorkRect(const DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData)noexcept{
-    return csgFrameData.workRegion.resolveRect(targets.width, targets.height);
-}
-
-
-[[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(const DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const u32 meshViewHeapSlot)noexcept{
-    const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
-
-    const SIMDVectorSingle workRectLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.maxX), static_cast<f32>(workRect.maxY)), VectorZero());
-    CsgIntervalSampleStateGpuData state;
-    state.workMinX = static_cast<u32>(VectorGetX(workRectLanes));
-    state.workMinY = static_cast<u32>(VectorGetY(workRectLanes));
-    state.workMaxX = static_cast<u32>(VectorGetZ(workRectLanes));
-    state.workMaxY = static_cast<u32>(VectorGetW(workRectLanes));
-    state.meshViewHeapSlot = meshViewHeapSlot;
-    return state;
-}
-
-
-[[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(const DeferredFrameTargets& targets, const CsgFrameGpuDataView& csgFrameData, const u32 meshViewHeapSlot, const u32 csgContextHeapSlot)noexcept{
-    const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
-
-    CsgIntervalDispatchPushConstants pushConstants;
-    pushConstants.frameWidth = targets.width;
-    pushConstants.frameHeight = targets.height;
-    pushConstants.receiverCount = static_cast<u32>(csgFrameData.receiverRanges.size());
-    const SIMDVectorSingle workOffsetExtentLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.width()), static_cast<f32>(workRect.height())), VectorZero());
-    pushConstants.layerCount = static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(static_cast<f32>(targets.csgPeelLayerCount)), VectorReplicate(static_cast<f32>(NWB_CSG_PEEL_LAYER_COUNT)))));
-    pushConstants.workOffsetX = static_cast<u32>(VectorGetX(workOffsetExtentLanes));
-    pushConstants.workOffsetY = static_cast<u32>(VectorGetY(workOffsetExtentLanes));
-    pushConstants.workExtentX = static_cast<u32>(VectorGetZ(workOffsetExtentLanes));
-    pushConstants.workExtentY = static_cast<u32>(VectorGetW(workOffsetExtentLanes));
-    pushConstants.meshViewHeapSlot = meshViewHeapSlot;
-    pushConstants.csgContextHeapSlot = csgContextHeapSlot;
-    return pushConstants;
-}
-
-
 static void DispatchCsgIntervalCompute(
     Core::CommandList& commandList,
     Core::GpuDescriptorHeap& heap,
@@ -80,7 +43,15 @@ static void DispatchCsgIntervalCompute(
     // Bind after setComputeState so the StorageImage table resolves.
     heap.bindCompute(commandList, pipeline);
 
-    const CsgIntervalDispatchPushConstants pushConstants = BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot, csgContextHeapSlot);
+    const CsgIntervalDispatchPushConstants pushConstants = ResolveCsgIntervalDispatchPushConstants(
+        csgFrameData.workRegion,
+        targets.width,
+        targets.height,
+        targets.csgPeelLayerCount,
+        static_cast<u32>(csgFrameData.receiverRanges.size()),
+        meshViewHeapSlot,
+        csgContextHeapSlot
+    );
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
         return;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -147,7 +118,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
 
     Core::ViewportState viewportState;
-    viewportState.addViewport(targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(CsgIntervalDetail::ResolveCsgFrameWorkRect(targets, csgFrameData));
+    viewportState.addViewport(targets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height)));
 
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(m_csgState.m_intervalCapFillPipeline.get());
@@ -161,7 +132,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, 0u, 0u, viewportState, frameHeapSlots, 0u);
 
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
+    drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
     commandList.draw(drawArgs);
 }
 
@@ -185,7 +156,7 @@ void RendererCsgSystem::renderRefractionIntervalCaps(Core::CommandList& commandL
     frameHeapSlots.view = targets.bindless.slotsBufferDescriptor.slot();
     frameHeapSlots.generatedVertex = csgResources.clipContextSlotsHeapHandle.slot();
     Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
+    drawArgs.setVertexCount(s_FullscreenTriangleVertexCount);
     for(const u32 receiverIndex : receiverIndices){
         ECSRenderDetail::SetShaderDrivenPushConstants(commandList, 0u, receiverIndex, 0u, viewportState, frameHeapSlots, 0u);
         commandList.draw(drawArgs);
@@ -205,7 +176,7 @@ Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSam
         return MakeUnexpected(Failure{});
 
     // Freeze rect and slot before recording; later state must not leak in.
-    state = CsgIntervalDetail::BuildCsgIntervalSampleState(targets, csgFrameData, frameBindings.meshView.heapHandle.slot());
+    state = ResolveCsgIntervalSampleState(csgFrameData.workRegion, targets.width, targets.height, frameBindings.meshView.heapHandle.slot());
     return state;
 }
 

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "array.h"
 #include "atomic.h"
 
 #include <charconv>
@@ -61,6 +62,7 @@ namespace DiagnosticEventName{
 
 
 inline constexpr StringView s_Assert = "assert";
+inline constexpr StringView s_Warning = "warning";
 inline constexpr StringView s_Error = "error";
 inline constexpr StringView s_Fatal = "fatal";
 inline constexpr StringView s_ManualDump = "manual_dump";
@@ -112,7 +114,7 @@ template<typename CharT>
         return ch >= 0 && ch <= s_AsciiCharacterMax ? static_cast<char>(ch) : '?';
 }
 
-inline void AppendEventChar(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const char ch)noexcept{
+inline void AppendEventChar(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const char ch)noexcept{
     if(outCursor + 1u >= s_MaxEventTextBytes)
         return;
 
@@ -121,13 +123,13 @@ inline void AppendEventChar(char (&outText)[s_MaxEventTextBytes], usize& outCurs
 }
 
 template<typename CharT>
-inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text)noexcept{
+inline void AppendEventText(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const BasicStringView<CharT> text)noexcept{
     for(const CharT ch : text)
         AppendEventChar(outText, outCursor, ToEventAsciiChar(ch));
 }
 
 template<typename CharT>
-[[nodiscard]] inline b8 TryAppendEscapedBrace(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text, usize& inoutIndex)noexcept(std::is_arithmetic_v<CharT>){
+[[nodiscard]] inline b8 TryAppendEscapedBrace(const BasicStringView<CharT> text, usize& inoutIndex, Array<char, s_MaxEventTextBytes>& outText, usize& outCursor)noexcept(IsArithmetic_V<CharT>){
     const CharT ch = text[inoutIndex];
     if(ch == static_cast<CharT>('{') && inoutIndex + 1u < text.size() && text[inoutIndex + 1u] == static_cast<CharT>('{')){
         AppendEventChar(outText, outCursor, '{');
@@ -143,40 +145,40 @@ template<typename CharT>
 }
 
 template<typename CharT>
-inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text)noexcept(std::is_arithmetic_v<CharT>){
+inline void AppendFormatLiteral(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(usize i = 0u; i < text.size(); ++i){
-        if(TryAppendEscapedBrace(outText, outCursor, text, i))
+        if(TryAppendEscapedBrace(text, i, outText, outCursor))
             continue;
         AppendEventChar(outText, outCursor, ToEventAsciiChar(text[i]));
     }
 }
 
 template<typename T>
-inline void AppendEventNumber(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T value)noexcept(std::is_arithmetic_v<T>){
-    char buffer[s_NumberTextBufferBytes];
-    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+inline void AppendEventNumber(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const T value)noexcept(IsArithmetic_V<T>){
+    Array<char, s_NumberTextBufferBytes> buffer = {};
+    const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
     if(result.ec == std::errc{})
-        AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
+        AppendEventText(outText, outCursor, AStringView(buffer.data(), static_cast<usize>(result.ptr - buffer.data())));
 }
 
-inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const void* const value)noexcept{
+inline void AppendEventPointer(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const void* const value)noexcept{
     if(!value){
         AppendEventText(outText, outCursor, AStringView(s_NullText));
         return;
     }
 
-    char buffer[s_NumberTextBufferBytes];
+    Array<char, s_NumberTextBufferBytes> buffer = {};
     const usize address = reinterpret_cast<usize>(value);
-    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), address, s_PointerTextRadix);
+    const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), address, s_PointerTextRadix);
     if(result.ec != std::errc{})
         return;
 
     AppendEventText(outText, outCursor, AStringView(s_PointerHexPrefix));
-    AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
+    AppendEventText(outText, outCursor, AStringView(buffer.data(), static_cast<usize>(result.ptr - buffer.data())));
 }
 
 template<typename T>
-inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T& value)noexcept{
+inline void AppendEventArgument(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const T& value)noexcept{
     using RawT = std::remove_cvref_t<T>;
     if constexpr(std::is_same_v<RawT, b8>){
         AppendEventText(outText, outCursor, value ? AStringView(s_TrueText) : AStringView(s_FalseText));
@@ -187,7 +189,7 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
     else if constexpr(std::is_same_v<RawT, wchar_t>){
         AppendEventChar(outText, outCursor, ToEventAsciiChar(value));
     }
-    else if constexpr(std::is_same_v<RawT, std::nullptr_t>){
+    else if constexpr(std::is_same_v<RawT, Nullptr>){
         AppendEventText(outText, outCursor, AStringView(s_NullText));
     }
     else if constexpr(std::is_pointer_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<RawT>>, char>){
@@ -238,7 +240,7 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
 }
 
 template<typename CharT>
-[[nodiscard]] inline usize FindReplacementEnd(const BasicStringView<CharT> text, const usize begin)noexcept(std::is_arithmetic_v<CharT>){
+[[nodiscard]] inline usize FindReplacementEnd(const BasicStringView<CharT> text, const usize begin)noexcept(IsArithmetic_V<CharT>){
     for(usize i = begin; i < text.size(); ++i){
         if(text[i] == static_cast<CharT>('}'))
             return i;
@@ -248,14 +250,14 @@ template<typename CharT>
 }
 
 template<typename CharT>
-inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> fmt)noexcept(std::is_arithmetic_v<CharT>){
+inline void FormatEventTextArgs(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const BasicStringView<CharT> fmt)noexcept(IsArithmetic_V<CharT>){
     AppendFormatLiteral(outText, outCursor, fmt);
 }
 
 template<typename CharT, typename Arg, typename... Args>
-inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> fmt, Arg&& arg, Args&&... args)noexcept(std::is_arithmetic_v<CharT>){
+inline void FormatEventTextArgs(Array<char, s_MaxEventTextBytes>& outText, usize& outCursor, const BasicStringView<CharT> fmt, Arg&& arg, Args&&... args)noexcept(IsArithmetic_V<CharT>){
     for(usize i = 0u; i < fmt.size(); ++i){
-        if(TryAppendEscapedBrace(outText, outCursor, fmt, i))
+        if(TryAppendEscapedBrace(fmt, i, outText, outCursor))
             continue;
         const CharT ch = fmt[i];
         if(ch == static_cast<CharT>('{')){
@@ -273,7 +275,7 @@ inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& out
 }
 
 template<typename CharT, typename... Args>
-inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStringView<CharT> fmt, Args&&... args)noexcept(std::is_arithmetic_v<CharT>){
+inline void FormatEventText(Array<char, s_MaxEventTextBytes>& outText, const BasicStringView<CharT> fmt, Args&&... args)noexcept(IsArithmetic_V<CharT>){
     usize outCursor = 0u;
     outText[0] = 0;
     FormatEventTextArgs(outText, outCursor, fmt, Forward<Args>(args)...);
@@ -290,7 +292,7 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStr
 
 
 template<typename CharT>
-inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const BasicStringView<CharT> text)noexcept{
+inline void CopyEventText(Array<char, s_MaxEventTextBytes>& outText, const BasicStringView<CharT> text)noexcept{
     usize outCursor = 0u;
     outText[0] = 0;
     DiagnosticDetail::AppendEventText(outText, outCursor, text);
@@ -311,16 +313,16 @@ inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const BasicStrin
 }
 
 struct DiagnosticEventText{
-    char value[s_MaxEventTextBytes] = {};
+    Array<char, s_MaxEventTextBytes> value = {};
 
 
 public:
     [[nodiscard]] AStringView view()const noexcept{
-        const AStringView text(value, sizeof(value));
+        const AStringView text(value.data(), value.size());
         return text.substr(0u, text.find('\0'));
     }
 
-    [[nodiscard]] const char* c_str()const noexcept{ return value; }
+    [[nodiscard]] const char* c_str()const noexcept{ return value.data(); }
 };
 
 

@@ -35,7 +35,7 @@ inline constexpr Core::Assets::AssetRef<UiSkin> s_DefaultUiSkinRef{ s_DefaultSki
 
 TEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefault){
     const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_MissingSkinPath };
-    UiSkinSelection selection(custom);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(custom);
     u32 customCalls = 0u;
     u32 defaultCalls = 0u;
     const auto bind = [&](const Core::Assets::AssetRef<UiSkin>& ref){
@@ -47,34 +47,34 @@ TEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefau
         ++defaultCalls;
         return true;
     };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, bind), UiSkinSelectionResult::DefaultFallback);
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, bind), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, bind), UiSkinSelectionResult::DefaultFallback);
+    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, bind), UiSkinSelectionResult::Selected);
     EXPECT_EQ(customCalls, 1u);
     EXPECT_EQ(defaultCalls, 2u);
 }
 
 TEST(UiSkinSelectionTests, FailedDefaultLeavesSelectionUncommittedForRetry){
     const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_MissingSkinPath };
-    UiSkinSelection selection(custom);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(custom);
     u32 calls = 0u;
     const auto reject = [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ ++calls; return false; };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, reject), UiSkinSelectionResult::Failed);
-    EXPECT_FALSE(selection.selected().valid());
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, reject), UiSkinSelectionResult::Failed);
+    EXPECT_FALSE(selection.selected.valid());
     EXPECT_EQ(calls, 2u);
     const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref)noexcept{ return ref == custom; };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
-    EXPECT_EQ(selection.selected(), custom);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(selection.selected, custom);
 }
 
 TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
     const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_CustomSkinPath };
-    UiSkinSelection selection(custom);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(custom);
     const auto acceptCustom = [&](const Core::Assets::AssetRef<UiSkin>& ref)noexcept{ return ref == custom; };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, acceptCustom), UiSkinSelectionResult::Selected);
     u32 calls = 0u;
     EXPECT_EQ(
-        selection.ensure(s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref){
+        EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref){
             ++calls;
             EXPECT_EQ(ref, custom);
             return false;
@@ -82,60 +82,60 @@ TEST(UiSkinSelectionTests, FailedRevalidationPreservesPreviouslySelectedCustom){
         UiSkinSelectionResult::Failed
     );
     EXPECT_EQ(calls, 1u);
-    EXPECT_EQ(selection.selected(), custom);
+    EXPECT_EQ(selection.selected, custom);
 }
 
 TEST(UiSkinSelectionTests, ChangeWaitsForResourcesGpuFrameAndAcceptedLayout){
-    UiSkinSelection selection(s_DefaultUiSkinRef);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
     const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
     selection.requestChange(alternate);
     u32 binds = 0u;
     const auto bind = [&](const Core::Assets::AssetRef<UiSkin>&, const u64)noexcept{ ++binds; return true; };
-    EXPECT_EQ(selection.applyChangeIfReady(false, false, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
-    EXPECT_TRUE(selection.changePending());
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
-    EXPECT_EQ(selection.applyChangeIfReady(true, true, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
-    EXPECT_EQ(selection.applyChangeIfReady(true, false, true, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, false, false, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
+    EXPECT_TRUE(selection.changePending);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, true, false, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, true, s_DefaultUiSkinRef, bind), UiSkinChangeResult::Deferred);
     EXPECT_EQ(binds, 0u);
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation(), 1u);
+    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
+    EXPECT_EQ(selection.generation, 1u);
     const auto bindAlternate = [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
         ++binds;
         EXPECT_EQ(ref, alternate);
         EXPECT_EQ(generation, 2u);
-        EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-        EXPECT_EQ(selection.generation(), 1u);
+        EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
+        EXPECT_EQ(selection.generation, 1u);
         return true;
     };
-    EXPECT_EQ(selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, bindAlternate), UiSkinChangeResult::Applied);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, bindAlternate), UiSkinChangeResult::Applied);
     EXPECT_EQ(binds, 1u);
-    EXPECT_EQ(selection.selected(), alternate);
-    EXPECT_EQ(selection.generation(), 2u);
+    EXPECT_EQ(selection.selected, alternate);
+    EXPECT_EQ(selection.generation, 2u);
 }
 
 TEST(UiSkinSelectionTests, SameReferenceReloadAdvancesGenerationAndLatestRequestWins){
-    UiSkinSelection selection(s_DefaultUiSkinRef);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
     const Core::Assets::AssetRef<UiSkin> obsolete{ "project/ui/skins/obsolete/atlas" };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange(obsolete);
     selection.requestChange(s_DefaultUiSkinRef);
     EXPECT_EQ(
-        selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
             EXPECT_EQ(ref, s_DefaultUiSkinRef);
             EXPECT_EQ(generation, 2u);
             return true;
         }),
         UiSkinChangeResult::Applied
     );
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation(), 2u);
-    EXPECT_FALSE(selection.changePending());
+    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
+    EXPECT_EQ(selection.generation, 2u);
+    EXPECT_FALSE(selection.changePending);
 }
 
 TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetry){
-    UiSkinSelection selection(s_DefaultUiSkinRef);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
     const Core::Assets::AssetRef<UiSkin> alternate{ __hidden_ui_skin_selection_tests::s_AlternateSkinPath };
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange(alternate);
     u32 binds = 0u;
     const auto reject = [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
@@ -144,43 +144,43 @@ TEST(UiSkinSelectionTests, FailedCandidateRetainsSkinUntilExplicitOrResourceRetr
         EXPECT_EQ(generation, 2u);
         return false;
     };
-    EXPECT_EQ(selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Failed);
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-    EXPECT_EQ(selection.generation(), 1u);
-    EXPECT_TRUE(selection.changeFailed());
-    EXPECT_FALSE(selection.changePending());
-    EXPECT_EQ(selection.requestedChange(), alternate);
-    EXPECT_EQ(selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Deferred);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Failed);
+    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
+    EXPECT_EQ(selection.generation, 1u);
+    EXPECT_TRUE(selection.changeFailed);
+    EXPECT_FALSE(selection.changePending);
+    EXPECT_EQ(selection.requestedChange, alternate);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, reject), UiSkinChangeResult::Deferred);
     EXPECT_EQ(binds, 1u);
     selection.resourcesValidated();
-    EXPECT_TRUE(selection.changePending());
+    EXPECT_TRUE(selection.changePending);
     EXPECT_EQ(
-        selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
             EXPECT_EQ(ref, alternate);
             EXPECT_EQ(generation, 2u);
             return true;
         }),
         UiSkinChangeResult::Applied
     );
-    EXPECT_EQ(selection.selected(), alternate);
-    EXPECT_EQ(selection.generation(), 2u);
-    EXPECT_FALSE(selection.changeFailed());
+    EXPECT_EQ(selection.selected, alternate);
+    EXPECT_EQ(selection.generation, 2u);
+    EXPECT_FALSE(selection.changeFailed);
 }
 
 TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
     const Core::Assets::AssetRef<UiSkin> custom{ __hidden_ui_skin_selection_tests::s_CustomSkinPath };
-    UiSkinSelection selection(custom);
-    EXPECT_EQ(selection.ensure(s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
+    UiSkinSelectionState selection = MakeUiSkinSelectionState(custom);
+    EXPECT_EQ(EnsureUiSkinSelection(selection, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>&)noexcept{ return true; }), UiSkinSelectionResult::Selected);
     selection.requestChange({});
     EXPECT_EQ(
-        selection.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+        ApplyUiSkinSelectionChangeIfReady(selection, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
             EXPECT_EQ(ref, s_DefaultUiSkinRef);
             EXPECT_EQ(generation, 2u);
             return true;
         }),
         UiSkinChangeResult::Applied
     );
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
+    EXPECT_EQ(selection.selected, s_DefaultUiSkinRef);
 }
 
 TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceSelection){
@@ -209,19 +209,19 @@ TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceS
         EXPECT_EQ(ref, s_DefaultUiSkinRef);
         return true;
     };
-    UiSkinSelection startup(custom);
-    EXPECT_EQ(startup.ensure(s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::DefaultFallback);
-    EXPECT_EQ(startup.selected(), s_DefaultUiSkinRef);
+    UiSkinSelectionState startup = MakeUiSkinSelectionState(custom);
+    EXPECT_EQ(EnsureUiSkinSelection(startup, s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::DefaultFallback);
+    EXPECT_EQ(startup.selected, s_DefaultUiSkinRef);
     EXPECT_EQ(gpuBinds, 0u);
 
-    UiSkinSelection live(s_DefaultUiSkinRef);
-    ASSERT_EQ(live.ensure(s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::Selected);
+    UiSkinSelectionState live = MakeUiSkinSelectionState(s_DefaultUiSkinRef);
+    ASSERT_EQ(EnsureUiSkinSelection(live, s_DefaultUiSkinRef, tryBind), UiSkinSelectionResult::Selected);
     live.requestChange(custom);
-    EXPECT_EQ(live.applyChangeIfReady(true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64){ return tryBind(ref); }), UiSkinChangeResult::Failed);
-    EXPECT_EQ(live.selected(), s_DefaultUiSkinRef);
-    EXPECT_EQ(live.generation(), 1u);
+    EXPECT_EQ(ApplyUiSkinSelectionChangeIfReady(live, true, false, false, s_DefaultUiSkinRef, [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64){ return tryBind(ref); }), UiSkinChangeResult::Failed);
+    EXPECT_EQ(live.selected, s_DefaultUiSkinRef);
+    EXPECT_EQ(live.generation, 1u);
     EXPECT_EQ(gpuBinds, 0u);
-    EXPECT_TRUE(live.changeFailed());
+    EXPECT_TRUE(live.changeFailed);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
 }
 

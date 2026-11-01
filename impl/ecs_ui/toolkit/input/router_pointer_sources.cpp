@@ -20,30 +20,11 @@ b8 InputRouter::acceptsPointerSource(const InputSource& source)const noexcept{
     return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source](const PointerSource& held)noexcept{ return held.source == source && held.inert; }) == m_pointerSources.end();
 }
 
-b8 InputRouter::ownsPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
-    const PointerSource* held = findPointerSource(source, intent);
-    return held != nullptr && held->consumed;
-}
-
 b8 InputRouter::wantsPointer()const noexcept{
     if(!m_pointerSources.empty()){
         return FindIf(m_pointerSources.begin(), m_pointerSources.end(), [](const PointerSource& held)noexcept{ return held.consumed; }) != m_pointerSources.end();
     }
     return hasPopup() || m_hover.valid();
-}
-
-InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)noexcept{
-    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
-        return current.source == source && current.intent == intent;
-    });
-    return found == m_pointerSources.end() ? nullptr : &*found;
-}
-
-const InputRouter::PointerSource* InputRouter::findPointerSource(const InputSource& source, const PointerIntent::Enum intent)const noexcept{
-    const auto found = FindIf(m_pointerSources.begin(), m_pointerSources.end(), [&source, intent](const PointerSource& current)noexcept{
-        return current.source == source && current.intent == intent;
-    });
-    return found == m_pointerSources.end() ? nullptr : &*found;
 }
 
 void InputRouter::routePointerSource(const InputEvent& event, InputRoutingResult& result){

@@ -30,29 +30,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ observeCallback(); return generation; }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{ observeCallback(); return contentRevision; }
-
-    [[nodiscard]] virtual u64 rowCount()const noexcept override{ observeCallback(); return count; }
-
-    [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
-        observeCallback();
-        return ComboSource::key(index);
-    }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        observeCallback();
-        return ComboSource::indexOf(value);
-    }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverseSearch)const noexcept override{
-        observeCallback();
-        return ComboSource::findEnabled(start, reverseSearch);
-    }
-
     [[nodiscard]] virtual StringView text(const u64 index)const override{
-        observeCallback();
         const StringView value = ComboSource::text(index);
         if(rowHook){
             Function<void()> hook = Move(rowHook);
@@ -63,14 +41,9 @@ public:
         return value;
     }
 
-    [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{
-        observeCallback();
-        return ComboSource::enabled(index);
-    }
-
 
 private:
-    void observeCallback()const noexcept{
+    virtual void observeCallback()const noexcept override{
         if(attempts != 0u)
             ++callbacksAfterAttempt;
     }

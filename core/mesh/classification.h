@@ -38,10 +38,10 @@ struct MeshClassInfo{
     b8 usesSkinning = false;
 };
 
-inline constexpr MeshClassInfo s_MeshClassInfos[] = {
+inline constexpr Array<MeshClassInfo, 2> s_MeshClassInfos = {{
     { "static", MeshClass::Static, false },
     { "skinned", MeshClass::Skinned, true },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

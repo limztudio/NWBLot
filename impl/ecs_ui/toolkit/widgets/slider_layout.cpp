@@ -40,7 +40,7 @@ namespace __hidden_ui_slider_layout{
         || !IsFinite(metrics.contentSize.x)
         || !IsFinite(metrics.contentSize.y)
     )
-        return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
+        return MakeInvalidUiMatrixDouble();
     return SIMDMatrixDouble{ .v = {
         VectorDoubleSet(metrics.padding.left, metrics.padding.top, metrics.padding.right, metrics.padding.bottom),
         VectorDoubleSet(metrics.thumbExtent.x, metrics.thumbExtent.y, metrics.trackHeight, 0.0),
@@ -51,9 +51,7 @@ namespace __hidden_ui_slider_layout{
 
 [[nodiscard]] static b8 ValidMetrics(const SIMDMatrixDouble& values)noexcept{
     if(
-        VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[0]), VectorDoubleIsInfinite(values.v[0]))) != 0u
-        || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[1]), VectorDoubleIsInfinite(values.v[1]))) != 0u
-        || VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[2]), VectorDoubleIsInfinite(values.v[2]))) != 0u
+        !AreUiMatrixRowsFinite(values, 3u)
         || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[0], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
         || (VectorDoubleMoveMask(VectorDoubleGreater(values.v[1], VectorDoubleZero())) & VectorDoubleComponentMask::s_DoubleXYZ) != VectorDoubleComponentMask::s_DoubleXYZ
     )
@@ -78,7 +76,7 @@ namespace __hidden_ui_slider_layout{
 Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style)noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
-        !SliderBehavior::Validate(options) || !IsValidUiPadding(style.padding)
+        !IsValidSliderOptions(options) || !IsValidUiPadding(style.padding)
         || !IsFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
         || !IsFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
         || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
@@ -113,16 +111,11 @@ Expected<SliderPlacement> SliderLayout::Place(const Rect& bounds, const Rect& cl
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const SIMDVectorDouble boundsSize = VectorDoubleSet(bounds.width, bounds.height, 0.0, 0.0);
-    const SIMDVectorDouble paddingStart = VectorDoubleSet(metrics.padding.left, metrics.padding.top, 0.0, 0.0);
-    const SIMDVectorDouble firstInset = VectorDoubleSelect(boundsSize, paddingStart, VectorDoubleLess(paddingStart, boundsSize));
-    const SIMDVectorDouble remaining = VectorDoubleSubtract(boundsSize, firstInset);
-    const SIMDVectorDouble paddingEnd = VectorDoubleSet(metrics.padding.right, metrics.padding.bottom, 0.0, 0.0);
-    const SIMDVectorDouble lastInset = VectorDoubleSelect(remaining, paddingEnd, VectorDoubleLess(paddingEnd, remaining));
-    const SIMDVectorDouble xYValue = VectorDoubleAdd(VectorDoubleSet(bounds.x, bounds.y, 0.0, 0.0), firstInset);
+    const SIMDVectorDouble insetRect = InsetUiRectValue(bounds, metrics.padding);
+    const SIMDVectorDouble xYValue = VectorDoubleSwizzle<0, 1, 0, 1>(insetRect);
     const SIMDVectorDouble xVector = VectorDoubleSplatX(xYValue);
     const SIMDVectorDouble yVector = VectorDoubleSplatY(xYValue);
-    const SIMDVectorDouble widthHeightValue = VectorDoubleSubtract(remaining, lastInset);
+    const SIMDVectorDouble widthHeightValue = VectorDoubleSwizzle<2, 3, 2, 3>(insetRect);
     const SIMDVectorDouble heightVector = VectorDoubleSplatY(widthHeightValue);
     const SIMDVectorDouble geometryPair4Operand0 = VectorDoubleSet(static_cast<f64>(metrics.thumbExtent.x), static_cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
     const SIMDVectorDouble geometryPair4Operand1 = VectorDoubleSelect(VectorDoubleZero(), widthHeightValue, s_DoubleSIMDMaskXY);

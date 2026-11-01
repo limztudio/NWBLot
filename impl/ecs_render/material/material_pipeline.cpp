@@ -8,8 +8,7 @@
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/assets_graphics/csg/subsystem.adhd.h>
-#include <impl/assets_graphics/mesh/subsystem.adhd.h>
+#include <impl/assets_graphics/components.adhd.h>
 #include <impl/assets_material/types.adhd.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -34,12 +33,6 @@ namespace __hidden_material_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<Core::GraphicsString> ResolveCsgProjectEvaluatorModuleInclude(Core::GraphicsArena& arena, const CsgShapeRegistry& shapeRegistry, const Name& evaluatorVariant){
     if(!evaluatorVariant)
         return Core::GraphicsString(arena);
@@ -54,8 +47,8 @@ inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
     if(moduleInclude.empty())
         return assignment;
 
-    assignment.reserve(ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + s_ModuleAssignmentPunctuationSize);
-    assignment += ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName;
+    assignment.reserve(s_CsgProjectEvaluatorModuleDefineName.size() + moduleInclude.size() + s_ModuleAssignmentPunctuationSize);
+    assignment += s_CsgProjectEvaluatorModuleDefineName;
     assignment += "=\"";
     assignment += moduleInclude;
     assignment += '"';
@@ -63,21 +56,21 @@ inline constexpr usize s_ModuleAssignmentPunctuationSize = 3u;
 }
 
 [[nodiscard]] Expected<Core::GraphicsString> BuildCsgShaderVariantName(Core::GraphicsArena& arena, const AStringView baseVariant, const AStringView projectEvaluatorModuleAssignment){
-    ECSRenderMaterialShaderVariants::ShaderVariantDefineAssignment defineAssignments[ECSRenderMaterialShaderVariants::s_MaxCsgClipShaderVariantDefineAssignments];
+    Array<ShaderVariantDefineAssignment, s_MaxCsgClipShaderVariantDefineAssignments> defineAssignments;
     usize defineAssignmentCount = 0u;
 
-    defineAssignments[defineAssignmentCount++] = { ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName, ECSRenderMaterialShaderVariants::s_CsgEnabledDefineAssignment };
-    defineAssignments[defineAssignmentCount++] = { ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineName, ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineAssignment };
+    defineAssignments[defineAssignmentCount++] = { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment };
+    defineAssignments[defineAssignmentCount++] = { s_CsgIntervalSampleEnabledDefineName, s_CsgIntervalSampleEnabledDefineAssignment };
     if(!projectEvaluatorModuleAssignment.empty()){
-        defineAssignments[defineAssignmentCount++] = { ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName, projectEvaluatorModuleAssignment };
+        defineAssignments[defineAssignmentCount++] = { s_CsgProjectEvaluatorModuleDefineName, projectEvaluatorModuleAssignment };
     }
 
-    return ECSRenderMaterialShaderVariants::BuildCsgClipShaderVariantName(arena, baseVariant, defineAssignments, defineAssignmentCount);
+    return ECSRenderMaterialShaderVariants::BuildCsgClipShaderVariantName(arena, baseVariant, Span<const ShaderVariantDefineAssignment>(defineAssignments.data(), defineAssignmentCount));
 }
 
 struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<PixelShader>* materialShader = nullptr;
-    NameText<char> debugName = "ECSRender_InvalidAvboitPixelShader";
+    Name debugName = s_InvalidAvboitPixelShaderDebugName;
 
 
 public:
@@ -88,23 +81,18 @@ public:
 
 [[nodiscard]] MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(const MaterialPipelinePass::Enum pass, const MaterialSurfaceInfo& materialInfo)noexcept{
     MaterialPipelineAvboitPixelShaderSelection selection;
+    selection.debugName = ResolveAvboitPixelShaderDebugName(pass);
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
         selection.materialShader = &materialInfo.avboitOccupancyPixelShader;
-        selection.debugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         selection.materialShader = &materialInfo.avboitExtinctionPixelShader;
-        selection.debugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
-        selection.debugName = "ECSRender_AvboitAccumulatePS";
-        break;
     case MaterialPipelinePass::AvboitRefractionCapture:
         // The draw mode selects optical capture in the existing material-authored accumulation shader.
         selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
-        selection.debugName = "ECSRender_AvboitRefractionCapturePS";
         break;
     default:
         break;
@@ -159,7 +147,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(m_arena);
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
-    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
+    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey.csgMode, pass);
     const b8 csgClipPipeline = csgBindingUse.clip;
     const b8 avboitCsgClipPipeline = csgBindingUse.avboitClip;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(m_arena);
@@ -173,7 +161,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         }
         csgProjectEvaluatorModuleAssignment = __hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(m_arena, AStringView(*csgProjectEvaluatorModuleInclude));
         if(!csgProjectEvaluatorModuleAssignment.empty()){
-            const auto existingEvaluatorModuleAssignment = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(shaderVariant, ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName);
+            const auto existingEvaluatorModuleAssignment = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(shaderVariant, s_CsgProjectEvaluatorModuleDefineName);
             if(existingEvaluatorModuleAssignment && *existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters"), ConvertString(materialKey.resolvedText()));
                 return failMaterialPipeline();
@@ -217,7 +205,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
     const b8 sharedObjectGeometry = sharedMeshShaderAssetName && materialInfo.meshShader.name() == sharedMeshShaderAssetName && shaderVariant == Core::ShaderArchive::s_DefaultVariant;
 
     Name passPixelShaderName = s_NameNone;
-    NameText<char> passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
+    Name passPixelShaderDebugName = s_InvalidPassPixelShaderDebugName;
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(pass, materialInfo);
@@ -251,17 +239,17 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
 
     auto loadPassPixelShader = [&]() -> b8{
         if(pass == MaterialPipelinePass::Opaque)
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, "ECSRender_RendererPS");
+            return m_shaderSystem.loadShader<PixelShader>(materialInfo.pixelShader.name(), pixelShaderVariant, s_RendererPsDebugName, resources.pixelShader);
         if(pass == MaterialPipelinePass::CsgReceiverSurface)
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, &CsgSubsystem::receiverSurfacePs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSurfacePS");
+            return m_shaderSystem.loadShader<PixelShader>(&CsgSubsystem::receiverSurfacePs, Core::ShaderArchive::s_DefaultVariant, s_CsgReceiverSurfacePsDebugName, resources.pixelShader);
         if(avboitCsgClipPipeline)
-            return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Name(passPixelShaderDebugName));
+            return m_shaderSystem.loadShader<PixelShader>(passPixelShaderName, AStringView(avboitCsgShaderVariant), passPixelShaderDebugName, resources.pixelShader);
         // AVBOIT pixel shaders are generated per material with its binding/surface contract; load the resolved pass shader at its default variant.
-        return m_shaderSystem.loadShader<PixelShader>(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Name(passPixelShaderDebugName));
+        return m_shaderSystem.loadShader<PixelShader>(passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, passPixelShaderDebugName, resources.pixelShader);
     };
 
     auto tryBuildMeshPipeline = [&]() -> b8{
-        if(!m_shaderSystem.loadShader<MeshShader>(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererMesh"))
+        if(!m_shaderSystem.loadShader<MeshShader>(materialInfo.meshShader.name(), meshShaderVariant, s_RendererMeshDebugName, resources.meshShader))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -324,7 +312,7 @@ Expected<NotNull<MaterialPipelineResources*>> RendererMaterialSystem::createRend
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
         const Name& meshComputeArchiveStageName = s_MeshComputeArchiveStageName;
-        if(!m_shaderSystem.loadShader<ComputeShader>(resources.computeShader, materialInfo.meshShader.name(), meshShaderVariant, "ECSRender_RendererCS", &meshComputeArchiveStageName))
+        if(!m_shaderSystem.loadShader<ComputeShader>(materialInfo.meshShader.name(), meshShaderVariant, s_RendererCsDebugName, &meshComputeArchiveStageName, resources.computeShader))
             return false;
         if(!loadPassPixelShader())
             return false;

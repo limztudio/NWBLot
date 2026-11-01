@@ -213,7 +213,7 @@ public:
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const & noexcept;
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const && = delete;
 
-    [[nodiscard]] b8 appendFrameGraphTelemetry(Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, const GpuTaskGraphTelemetryOptions& options = {})const;
+    [[nodiscard]] b8 appendFrameGraphTelemetry(const GpuTaskGraphAnalysis& analysis, Alloc::ScratchArena& scratchArena, Telemetry::FrameGraphBuilder& builder, const GpuTaskGraphTelemetryOptions& options = {})const;
 
 
 private:

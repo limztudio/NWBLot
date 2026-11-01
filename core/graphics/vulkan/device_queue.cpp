@@ -109,6 +109,31 @@ Expected<QueueSubmissionReceipt> Device::executeCommandLists(CommandList* const*
     return executeCommandListsInternal(commandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
+b8 Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
+    if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
+        return false;
+
+    NWB_ASSERT(token.physicalQueueIndex < m_physicalQueues.size());
+    const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
+    NWB_ASSERT(producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
+
+    NothrowScopedLock producerLock(producerQueue->m_mutex);
+    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
+}
+
+b8 Device::waitForSubmissionToken(const QueueSubmissionToken& token){
+    return waitForSubmissionTokenInternal(token, DeviceLossDiagnosticPolicy::Capture);
+}
+
+u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const noexcept{
+    return getQueueFamilyIndex(getPrimaryPhysicalQueue(queueType));
+}
+
+u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
+    const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(queue);
+    return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
+}
+
 void Device::prepareSubmissionCommandListWorkspaceLocked(Queue& queue, CommandList* const* commandLists, const usize numCommandLists, const b8 graphSubmissionAuthorized){
     auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     auto& submittedOwners = queue.m_executeSubmittedOwners;
@@ -147,9 +172,9 @@ void Device::finalizeSubmissionCommandListResourcesLocked(Queue& queue, CommandL
         return;
 
     if(submissionAccepted){
-        m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
-        m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
-        m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists.data(), expectedCommandLists.size(), queue.m_executeSubmittedOwners);
+        m_uploadManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
+        m_scratchManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
+        m_accelStructInputManager.submitChunks(executionQueue, submittedID, expectedCommandLists, queue.m_executeSubmittedOwners);
         return;
     }
 
@@ -343,31 +368,6 @@ Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
         return MakeUnexpected(Failure{});
 
     return QueueSubmissionReceipt{ submissionToken, submission->timelineWaitCount };
-}
-
-b8 Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
-    if(!token.valid() || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration))
-        return false;
-
-    NWB_ASSERT(token.physicalQueueIndex < m_physicalQueues.size());
-    const auto producerQueue = m_physicalQueues[token.physicalQueueIndex];
-    NWB_ASSERT(producerQueue->m_queueID == token.queue && token.matchesPhysicalQueue(producerQueue->m_physicalQueue.index, producerQueue->m_physicalQueue.deviceGeneration));
-
-    NothrowScopedLock producerLock(producerQueue->m_mutex);
-    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE && token.value <= producerQueue->m_lastSubmittedID;
-}
-
-b8 Device::waitForSubmissionToken(const QueueSubmissionToken& token){
-    return waitForSubmissionTokenInternal(token, DeviceLossDiagnosticPolicy::Capture);
-}
-
-u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const noexcept{
-    return getQueueFamilyIndex(getPrimaryPhysicalQueue(queueType));
-}
-
-u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
-    const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(queue);
-    return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
 }
 
 b8 Device::waitForSubmissionTokenInternal(const QueueSubmissionToken& token, const DeviceLossDiagnosticPolicy::Enum deviceLossDiagnosticPolicy){

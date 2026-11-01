@@ -30,16 +30,6 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookArena = Core::Alloc::GlobalArena;
-using CookString = AString<CookArena>;
-template<typename T>
-using CookVector = Vector<T, CookArena>;
-template<typename T, typename V>
-using CookMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
-template<typename T>
-using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
-using ScratchArena = Core::Alloc::ScratchArena;
-using ScratchString = AString<ScratchArena>;
 using CookEntryPathHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
@@ -137,7 +127,7 @@ namespace CookEntryRegistryDetail{
 
 
 // Resolves a cook entry's virtualPath to a Name; strings hash on demand.
-[[nodiscard]] inline Expected<Optional<Name>, NameTextError::Enum> ToCookEntryName(const Name& virtualPath)noexcept{
+[[nodiscard]] constexpr Expected<Optional<Name>, NameTextError::Enum> ToCookEntryName(const Name& virtualPath)noexcept{
     if(!virtualPath)
         return Optional<Name>{};
     return Optional<Name>{ virtualPath };
@@ -163,31 +153,8 @@ template<typename StringT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline b8 RegisterParsedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
-    if(!virtualPath)
-        return true;
-
-    const NameHash pathHash = virtualPath.hash();
-    if(inOutSeenVirtualPathHashes.insert(pathHash).second)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}"), ConvertString(virtualPath.resolvedText()), assetKind);
-    return false;
-}
-
-[[nodiscard]] inline b8 RegisterCookedVirtualPath(const TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes){
-    if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
-        return false;
-    }
-
-    const NameHash virtualPathHash = virtualPath.hash();
-    if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'"), assetKind, ConvertString(virtualPath.resolvedText()));
-    return false;
-}
+[[nodiscard]] b8 RegisterParsedVirtualPath(TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
+[[nodiscard]] b8 RegisterCookedVirtualPath(TStringView assetKind, const Name& virtualPath, CookEntryPathHashSet& inOutSeenVirtualPathHashes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -412,14 +379,8 @@ public:
         return registerBucket(assetType, Move(bucket));
     }
 
-    [[nodiscard]] ICookEntryBucket* find(const Name& assetType)const noexcept{
-        const auto found = m_lookup.find(assetType);
-        return found == m_lookup.end() ? nullptr : found.value().get();
-    }
-
-    [[nodiscard]] b8 has(const Name& assetType)const noexcept{
-        return find(assetType) != nullptr;
-    }
+    [[nodiscard]] ICookEntryBucket* find(const Name& assetType)const noexcept;
+    [[nodiscard]] b8 has(const Name& assetType)const noexcept;
 
     template<typename EntryT>
     [[nodiscard]] CookVector<EntryT>& entries(const Name& assetType)const noexcept{
@@ -427,55 +388,12 @@ public:
         return checked_cast<CookEntryBucketTyped<EntryT>*>(bucket.get())->entries();
     }
 
-    [[nodiscard]] b8 parseDocument(const Name& assetType, const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context){
-        ICookEntryBucket* bucket = find(assetType);
-        if(bucket)
-            return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
-
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    [[nodiscard]] b8 parseValue(const Name& assetType, const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context){
-        ICookEntryBucket* bucket = find(assetType);
-        if(bucket)
-            return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
-
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'"), ConvertString(assetType.resolvedText()), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    [[nodiscard]] b8 appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, const Span<const u8> payloadBytes, CookEntryParseContext& context){
-        ICookEntryBucket* bucket = find(assetType);
-        if(bucket)
-            return bucket->appendCachedEntry(location, virtualPath, payloadBytes, context);
-
-        return false;
-    }
-
-    [[nodiscard]] usize bucketCount()const noexcept{
-        return m_buckets.size();
-    }
-
-    [[nodiscard]] b8 writeBucket(const usize bucketIndex, CookEntryWriteContext& context){
-        if(bucketIndex >= m_buckets.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
-            return false;
-        }
-
-        return m_buckets[bucketIndex]->writeCookedAssets(context);
-    }
-
-    [[nodiscard]] u64 entryCount()const noexcept{
-        u64 count = 0;
-        for(const BucketPtr& bucket : m_buckets){
-            const u64 bucketSize = static_cast<u64>(bucket->size());
-            if(count > Limit<u64>::s_Max - bucketSize)
-                return Limit<u64>::s_Max;
-            count += bucketSize;
-        }
-        return count;
-    }
+    [[nodiscard]] b8 parseDocument(const Name& assetType, const Path& assetRoot, AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, CookEntryParseContext& context);
+    [[nodiscard]] b8 parseValue(const Name& assetType, Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, CookEntryParseContext& context);
+    [[nodiscard]] b8 appendCachedEntry(const Name& assetType, const CookEntrySourceLocation& location, const Name& virtualPath, Span<const u8> payloadBytes, CookEntryParseContext& context);
+    [[nodiscard]] usize bucketCount()const noexcept;
+    [[nodiscard]] b8 writeBucket(usize bucketIndex, CookEntryWriteContext& context);
+    [[nodiscard]] u64 entryCount()const noexcept;
 
 
 private:
@@ -503,26 +421,15 @@ public:
     Core::Assets::CookEntryAutoRegistrar registrarVariable(&registerFunction)
 
 template<typename EntryT, typename AssetT, typename CodecT>
-[[nodiscard]] inline b8 RegisterSingleDocumentCookEntry(
-    CookEntryRegistry& registry,
-    const TStringView assetKindText,
-    typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
-    typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
-    const b8 logBuildFailure = true
-){
-    return RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(registry, assetKindText, parseDocument, nullptr, buildAsset, logBuildFailure);
-}
-
-template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline b8 RegisterDocumentValueCookEntry(
-    CookEntryRegistry& registry,
     const TStringView assetKindText,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
+    CookEntryRegistry& outRegistry,
     const b8 logBuildFailure = true
 ){
-    return registry.registerType<EntryT, AssetT, CodecT>(AssetT::AssetTypeName(), assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
+    return outRegistry.registerType<EntryT, AssetT, CodecT>(AssetT::AssetTypeName(), assetKindText, parseDocument, parseValue, buildAsset, logBuildFailure);
 }
 
 [[nodiscard]] b8 RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry, ScratchArena& scratchArena);

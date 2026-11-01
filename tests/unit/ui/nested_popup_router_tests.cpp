@@ -60,9 +60,9 @@ HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, cons
     HitTarget target;
     target.id = { scope.token.widget.value + offset };
     target.declarationGeneration = 10u;
-    const SIMDVectorSingle inset = VectorAdd(VectorSet(scope.bounds.x, scope.bounds.y, 0.0f, 0.0f), VectorReplicate(4.0f));
-    const SIMDVectorSingle shifted = VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(offset - 1u)), VectorReplicate(35.0f), inset);
-    target.rectangle = { VectorGetX(shifted), VectorGetY(inset), 24.0f, 18.0f };
+    const f32 insetX = scope.bounds.x + 4.0f;
+    const f32 insetY = scope.bounds.y + 4.0f;
+    target.rectangle = { static_cast<f32>(offset - 1u) * 35.0f + insetX, insetY, 24.0f, 18.0f };
     target.clip = scope.bounds;
     target.paintOrder = order;
     target.popup = scope.token;
@@ -81,52 +81,31 @@ HitTarget Child(const PopupScope& scope, const u64 offset, const u32 order, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiNestedPopupRouterTests : public testing::Test{
+class UiNestedPopupRouterTests : public UiTestSupport::RouterTestFixture{
 public:
     UiNestedPopupRouterTests()
-        : m_arena(Name("tests/ui/nested_popup_router"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/nested_popup_router"))
     {}
 
 
 protected:
-    [[nodiscard]] b8 install(const PopupScope* scopes, const usize count, const u64 generation, const b8 navigation = false){
+    [[nodiscard]] b8 install(const Span<const PopupScope> scopes, const u64 generation, const b8 navigation = false){
         Array<HitTarget, 1u + 3u * s_InputMaxPopups> targets{};
         targets[0u] = BaseHitTarget();
-        for(usize index = 0u; index < count; ++index){
+        for(usize index = 0u; index < scopes.size(); ++index){
             const u32 order = static_cast<u32>(1u + index * 3u);
             targets[order] = Barrier(scopes[index], order);
             targets[order + 1u] = Child(scopes[index], 1u, order + 1u, navigation);
             targets[order + 2u] = Child(scopes[index], 2u, order + 2u, navigation);
         }
-        return m_router.commitTargets(targets.data(), 1u + count * 3u, generation, scopes, count);
-    }
-
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-        return m_router.process();
-    }
-
-    void key(const Core::Key::Enum key, const b8 shift = false){
-        EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyDown, .shift = shift }).commandConsumed);
-        EXPECT_TRUE(send({ .position = {}, .key = key, .type = InputEventType::KeyUp, .shift = shift }).commandConsumed);
-    }
-
-    void click(const Point& point){
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
+        return m_router.commitTargets(Span(targets.data(), 1u + scopes.size() * 3u), generation, scopes);
     }
 
     void focusBase(){
-        ASSERT_TRUE(install(nullptr, 0u, 1u));
+        ASSERT_TRUE(install({}, 1u));
         key(Core::Key::Tab);
         ASSERT_EQ(m_router.focus().value, 1u);
     }
-
-
-protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
 };
 
 
@@ -136,8 +115,8 @@ protected:
 TEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointerStayInAcceptedTopScope){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 1u));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 1u));
     ASSERT_EQ(m_router.popupCount(), 2u);
     ASSERT_NE(m_router.popupScope(child.token), nullptr);
     EXPECT_EQ(m_router.popupScope(child.token)->parent, parent.token);
@@ -159,12 +138,12 @@ TEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointer
 TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParentFocusAfterAcceptance){
     focusBase();
     const PopupScope parent = Scope(100u, 1u);
-    ASSERT_TRUE(install(&parent, 1u, 2u));
+    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
     key(Core::Key::Tab);
     ASSERT_EQ(m_router.focus().value, 102u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 3u));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 3u));
     ASSERT_EQ(m_router.focus().value, 201u);
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape , .type = InputEventType::KeyDown}).commandConsumed);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
@@ -174,7 +153,7 @@ TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParen
     EXPECT_EQ(reason, PopupDismissReason::Cancel);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
     EXPECT_FALSE(m_router.focus().valid());
-    ASSERT_TRUE(install(&parent, 1u, 4u));
+    ASSERT_TRUE(install(Span(&parent, 1u), 4u));
     EXPECT_EQ(m_router.focus().value, 102u);
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Escape, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
@@ -190,15 +169,15 @@ TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParen
 TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus){
     focusBase();
     const PopupScope parent = Scope(100u, 1u);
-    ASSERT_TRUE(install(&parent, 1u, 2u));
+    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
     key(Core::Key::Tab);
     ASSERT_EQ(m_router.focus().value, 102u);
     PopupScope child = Scope(200u, 2u, parent.token);
     child.dismissFocusTraversal = true;
     child.focusAnchor = { 102u };
     child.focusAnchorDeclarationGeneration = 10u;
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 3u));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 3u));
     ASSERT_EQ(m_router.focus().value, 201u);
     key(Core::Key::Tab);
     EXPECT_EQ(m_router.focus().value, 202u);
@@ -209,7 +188,7 @@ TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesPa
     reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    ASSERT_TRUE(install(&parent, 1u, 4u));
+    ASSERT_TRUE(install(Span(&parent, 1u), 4u));
     EXPECT_EQ(m_router.popupCount(), 1u);
     EXPECT_EQ(m_router.topPopupToken(), parent.token);
     EXPECT_EQ(m_router.focus().value, 101u);
@@ -218,8 +197,8 @@ TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesPa
 TEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWithoutParentActivation){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 1u));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 1u));
     EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
@@ -228,7 +207,7 @@ TEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWitho
     reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token));
-    ASSERT_TRUE(install(&parent, 1u, 2u));
+    ASSERT_TRUE(install(Span(&parent, 1u), 2u));
     EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_FALSE(m_router.consumeActivation({ 101u }));
     click({ 35.0f, 35.0f });
@@ -238,12 +217,12 @@ TEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWitho
 TEST_F(UiNestedPopupRouterTests, OutsideSecondarySequenceCannotOpenTheNewlyExposedParentMenu){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 1u, true));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 1u, true));
     EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryDown}).pointerConsumed);
     const auto reasonResult = m_router.consumePopupDismissal(child.token);
     ASSERT_TRUE(reasonResult);
-    ASSERT_TRUE(install(&parent, 1u, 2u, true));
+    ASSERT_TRUE(install(Span(&parent, 1u), 2u, true));
     EXPECT_TRUE(send({ .position = { 35.0f, 35.0f } , .type = InputEventType::SecondaryUp}).pointerConsumed);
     ContextMenuAction action;
     EXPECT_FALSE(m_router.consumeContextMenu({ 101u }, 10u));
@@ -263,21 +242,21 @@ TEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndIts
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope grandchild = Scope(300u, 3u, child.token);
     const PopupScope unrelated = Scope(400u, 4u);
-    const PopupScope scopes[]{ parent, child, grandchild, unrelated };
-    ASSERT_TRUE(install(scopes, 4u, 2u));
+    const Array<PopupScope, 4> scopes = { parent, child, grandchild, unrelated };
+    ASSERT_TRUE(install(scopes, 2u));
     key(Core::Key::Enter);
     ASSERT_EQ(m_router.actions().size(), 1u);
     m_router.closePopup(parent.token);
     EXPECT_EQ(m_router.focus().value, 401u);
     EXPECT_EQ(m_router.hitTest({ 255.0f, 35.0f }).value, 401u);
     EXPECT_TRUE(m_router.consumeActivation({ 401u }));
-    ASSERT_TRUE(install(&unrelated, 1u, 3u));
+    ASSERT_TRUE(install(Span(&unrelated, 1u), 3u));
     EXPECT_EQ(m_router.popupCount(), 1u);
     EXPECT_EQ(m_router.focus().value, 401u);
     EXPECT_EQ(m_router.popupScope(parent.token), nullptr);
     EXPECT_EQ(m_router.popupScope(child.token), nullptr);
     EXPECT_EQ(m_router.popupScope(grandchild.token), nullptr);
-    ASSERT_TRUE(install(nullptr, 0u, 4u));
+    ASSERT_TRUE(install({}, 4u));
     EXPECT_EQ(m_router.focus().value, 1u);
 }
 
@@ -285,8 +264,8 @@ TEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcro
     focusBase();
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 2u, true));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 2u, true));
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Down , .type = InputEventType::KeyDown}).commandConsumed);
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Menu , .type = InputEventType::KeyDown}).commandConsumed);
     EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
@@ -302,7 +281,7 @@ TEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcro
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_FALSE(m_router.consumeContextMenu({ 201u }, 10u));
-    ASSERT_TRUE(install(scopes, 2u, 3u, true));
+    ASSERT_TRUE(install(scopes, 3u, true));
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Down, .type = InputEventType::KeyDown, .repeat = true }).commandConsumed);
     EXPECT_TRUE(send({ .position = {}, .key = Core::Key::Menu , .type = InputEventType::KeyDown}).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -325,8 +304,8 @@ TEST_F(UiNestedPopupRouterTests, RetiringLowerFamilyPreservesUnrelatedTopCapture
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope unrelated = Scope(400u, 3u);
-    const PopupScope scopes[]{ parent, child, unrelated };
-    ASSERT_TRUE(install(scopes, 3u, 1u));
+    const Array<PopupScope, 3> scopes = { parent, child, unrelated };
+    ASSERT_TRUE(install(scopes, 1u));
     EXPECT_TRUE(send({ .position = { 255.0f, 35.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     ASSERT_EQ(m_router.capture().value, 401u);
     m_router.invalidateTarget(parent.token.widget);
@@ -342,26 +321,26 @@ TEST_F(UiNestedPopupRouterTests, RetiringLowerFamilyPreservesUnrelatedTopCapture
 TEST_F(UiNestedPopupRouterTests, ChangingAncestorRequiresRenewedChildTokenAndFencesOldCapture){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope original[]{ parent, child };
-    ASSERT_TRUE(install(original, 2u, 1u));
+    const Array<PopupScope, 2> original = { parent, child };
+    ASSERT_TRUE(install(original, 1u));
     click({ 175.0f, 125.0f });
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     PopupScope nextParent = parent;
     ++nextParent.token.openGeneration;
     PopupScope nextChild = child;
-    const PopupScope staleParent[]{ nextParent, nextChild };
-    EXPECT_FALSE(install(staleParent, 2u, 2u));
+    const Array<PopupScope, 2> staleParent = { nextParent, nextChild };
+    EXPECT_FALSE(install(staleParent, 2u));
     nextChild.parent = nextParent.token;
-    const PopupScope staleChild[]{ nextParent, nextChild };
-    EXPECT_FALSE(install(staleChild, 2u, 2u));
+    const Array<PopupScope, 2> staleChild = { nextParent, nextChild };
+    EXPECT_FALSE(install(staleChild, 2u));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus().value, 201u);
     EXPECT_EQ(m_router.capture().value, 201u);
     ASSERT_EQ(m_router.actions().size(), 1u);
     ++nextChild.token.openGeneration;
-    const PopupScope renewed[]{ nextParent, nextChild };
-    ASSERT_TRUE(install(renewed, 2u, 2u));
+    const Array<PopupScope, 2> renewed = { nextParent, nextChild };
+    ASSERT_TRUE(install(renewed, 2u));
     EXPECT_EQ(m_router.focus().value, 201u);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_TRUE(m_router.actions().empty());
@@ -374,8 +353,8 @@ TEST_F(UiNestedPopupRouterTests, ChangingAncestorRequiresRenewedChildTokenAndFen
 TEST_F(UiNestedPopupRouterTests, InvalidOrMissingAncestryRejectsAtomicallyAgainstAcceptedNestedGeometry){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
-    const PopupScope scopes[]{ parent, child };
-    ASSERT_TRUE(install(scopes, 2u, 1u));
+    const Array<PopupScope, 2> scopes = { parent, child };
+    ASSERT_TRUE(install(scopes, 1u));
     click({ 175.0f, 125.0f });
     EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
     Array<PopupScope, 5u> invalid{};
@@ -386,19 +365,19 @@ TEST_F(UiNestedPopupRouterTests, InvalidOrMissingAncestryRejectsAtomicallyAgains
     invalid[3u].parent = child.token;
     invalid[4u].parent = {};
     for(const auto& candidate : invalid){
-        const PopupScope rejected[]{ parent, candidate };
-        EXPECT_FALSE(install(rejected, 2u, 2u));
+        const Array<PopupScope, 2> rejected = { parent, candidate };
+        EXPECT_FALSE(install(rejected, 2u));
         EXPECT_EQ(m_router.layoutGeneration(), 1u);
         EXPECT_EQ(m_router.focus().value, 201u);
         EXPECT_EQ(m_router.capture().value, 201u);
         EXPECT_EQ(m_router.hitTest({ 175.0f, 125.0f }).value, 201u);
         EXPECT_EQ(m_router.actions().size(), 1u);
     }
-    EXPECT_FALSE(install(&child, 1u, 2u));
+    EXPECT_FALSE(install(Span(&child, 1u), 2u));
     PopupScope forwardParent = parent;
     forwardParent.parent = child.token;
-    const PopupScope cyclic[]{ forwardParent, child };
-    EXPECT_FALSE(install(cyclic, 2u, 2u));
+    const Array<PopupScope, 2> cyclic = { forwardParent, child };
+    EXPECT_FALSE(install(cyclic, 2u));
     EXPECT_EQ(m_router.popupCount(), 2u);
     EXPECT_TRUE(send({ .position = { 175.0f, 125.0f } , .type = InputEventType::PrimaryUp}).pointerConsumed);
     EXPECT_TRUE(m_router.consumeActivation({ 201u }));
@@ -408,14 +387,14 @@ TEST_F(UiNestedPopupRouterTests, NewDescendantsCannotRestoreInputBeneathAClosing
     PopupScope parent = Scope(100u, 1u);
     PopupScope child = Scope(200u, 2u, parent.token);
     PopupScope grandchild = Scope(300u, 3u, child.token);
-    const PopupScope original[]{ parent, child, grandchild };
-    ASSERT_TRUE(install(original, 3u, 1u));
+    const Array<PopupScope, 3> original = { parent, child, grandchild };
+    ASSERT_TRUE(install(original, 1u));
     m_router.closePopup(parent.token);
     ++child.token.openGeneration;
     ++grandchild.token.openGeneration;
     grandchild.parent = child.token;
-    const PopupScope underClosingParent[]{ parent, child, grandchild };
-    ASSERT_TRUE(install(underClosingParent, 3u, 2u));
+    const Array<PopupScope, 3> underClosingParent = { parent, child, grandchild };
+    ASSERT_TRUE(install(underClosingParent, 2u));
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_FALSE(m_router.hitTest({ 285.0f, 205.0f }).valid());
     EXPECT_TRUE(m_router.actions().empty());
@@ -425,8 +404,8 @@ TEST_F(UiNestedPopupRouterTests, NewDescendantsCannotRestoreInputBeneathAClosing
     child.parent = parent.token;
     ++grandchild.token.openGeneration;
     grandchild.parent = child.token;
-    const PopupScope renewed[]{ parent, child, grandchild };
-    ASSERT_TRUE(install(renewed, 3u, 3u));
+    const Array<PopupScope, 3> renewed = { parent, child, grandchild };
+    ASSERT_TRUE(install(renewed, 3u));
     EXPECT_EQ(m_router.focus().value, 301u);
     EXPECT_EQ(m_router.hitTest({ 285.0f, 205.0f }).value, 301u);
 }
@@ -435,8 +414,8 @@ TEST_F(UiNestedPopupRouterTests, FencingAncestorImmediatelySuppressesAllDescenda
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope grandchild = Scope(300u, 3u, child.token);
-    const PopupScope scopes[]{ parent, child, grandchild };
-    ASSERT_TRUE(install(scopes, 3u, 1u));
+    const Array<PopupScope, 3> scopes = { parent, child, grandchild };
+    ASSERT_TRUE(install(scopes, 1u));
     click({ 285.0f, 205.0f });
     ASSERT_EQ(m_router.actions().size(), 1u);
     EXPECT_TRUE(send({ .position = { 285.0f, 205.0f } , .type = InputEventType::PrimaryDown}).pointerConsumed);
@@ -459,8 +438,8 @@ TEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRest
     owner.owner = host.id;
     owner.ownerDeclarationGeneration = host.declarationGeneration;
     owner.control = host.control;
-    const HitTarget targets[]{ BaseHitTarget(), host, owner };
-    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 2u, &scope, 1u));
+    const Array<HitTarget, 3> targets = { BaseHitTarget(), host, owner };
+    ASSERT_TRUE(m_router.commitTargets(targets, 2u, Span(&scope, 1u)));
     m_router.invalidateTarget(host.id);
     EXPECT_EQ(m_router.targets().size(), 1u);
     EXPECT_EQ(m_router.findTarget(owner.id), nullptr);
@@ -477,8 +456,8 @@ TEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutResto
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope grandchild = Scope(300u, 3u, child.token);
-    const PopupScope scopes[]{ parent, child, grandchild };
-    ASSERT_TRUE(install(scopes, 3u, 2u));
+    const Array<PopupScope, 3> scopes = { parent, child, grandchild };
+    ASSERT_TRUE(install(scopes, 2u));
     EXPECT_TRUE(send({ .position = {} , .type = InputEventType::FocusLost}).commandConsumed);
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_FALSE(m_router.hitTest({ 285.0f, 205.0f }).valid());
@@ -491,7 +470,7 @@ TEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutResto
         EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     }
     EXPECT_FALSE(send({ .position = {} , .type = InputEventType::FocusGained}).focus.valid());
-    ASSERT_TRUE(install(nullptr, 0u, 3u));
+    ASSERT_TRUE(install({}, 3u));
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_FALSE(m_router.hasPopup());
 }

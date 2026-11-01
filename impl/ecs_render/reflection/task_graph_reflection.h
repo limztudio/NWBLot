@@ -31,8 +31,6 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_ReflectionCsgHardwareSliceFamily("render.reflection.hardware.csg_slice");
-
 [[nodiscard]] Expected<Name, ErrorCode> ReflectionCsgHardwareSliceIdentity(u32 slice);
 
 struct ReflectionGraphInputs{

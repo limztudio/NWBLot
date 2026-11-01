@@ -22,12 +22,6 @@ namespace __hidden_model_runtime_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::ModelTests;
@@ -154,12 +148,12 @@ TEST(ModelRuntime, FailedReplacementLoadClearsOnlyThatOwnersObjectsAndCanRetry){
     EXPECT_EQ(context.source.readCount, 1u);
 
     context.system.syncModelRuntimes();
-    EXPECT_EQ(context.source.readCount, s_ExpectedDualCount);
+    EXPECT_EQ(context.source.readCount, 2u);
     EXPECT_TRUE(world.entity(retainedObject).alive());
     world.entity(changedOwner).removeComponent<ModelComponent>();
     context.system.syncModelRuntimes();
     EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner), nullptr);
-    EXPECT_EQ(context.source.readCount, s_ExpectedDualCount);
+    EXPECT_EQ(context.source.readCount, 2u);
 }
 
 

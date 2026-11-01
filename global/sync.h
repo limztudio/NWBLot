@@ -40,7 +40,7 @@ inline void YieldThread()noexcept{ std::this_thread::yield(); }
 #endif
 
 
-inline void MachinePause(i32 delay)noexcept{
+inline void MachinePause([[maybe_unused]] i32 delay)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64)
     while(delay > 0){
         __yield();
@@ -57,7 +57,6 @@ inline void MachinePause(i32 delay)noexcept{
         --delay;
     }
 #else /* Generic */
-    static_cast<void>(delay);
     YieldThread();
 #endif
 }
@@ -147,7 +146,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AtomicBackOff{
+class AtomicBackOff : NoCopy{
 private:
     // Power-of-two pause threshold approximating a context switch.
     static constexpr i32 s_LoopsBeforeYield = 16;
@@ -162,11 +161,6 @@ public:
     AtomicBackOff(b8)noexcept
         : m_count(1)
         { pause(); }
-    AtomicBackOff(const AtomicBackOff&) = delete;
-
-
-public:
-    AtomicBackOff& operator=(const AtomicBackOff&) = delete;
 
 
 public:
@@ -238,17 +232,12 @@ ScopedLock(Mutexes&...) -> ScopedLock<Mutexes...>;
 template<isize LeastMaxValue>
 class ScopedLock<Semaphore<LeastMaxValue>> : NoCopy{
 public:
-    ScopedLock(const ScopedLock&) = delete;
     ScopedLock(Semaphore<LeastMaxValue>& obj)noexcept(noexcept(obj.acquire()))
         : m_obj(obj)
     {
         m_obj.acquire();
     }
     ~ScopedLock()noexcept{ m_obj.release(); }
-
-
-public:
-    ScopedLock& operator=(const ScopedLock&) = delete;
 
 
 private:

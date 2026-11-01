@@ -14,3 +14,4 @@ target_sources(nwb_logclient PRIVATE
 )
 target_link_libraries(nwb_logclient PUBLIC nwb_common)
 target_link_libraries(nwb_logclient PRIVATE nwb::curl)
+

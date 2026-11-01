@@ -67,6 +67,8 @@ protected:
         : m_assetType(assetType)
         , m_virtualPath(virtualPath)
     {}
+
+
 public:
     virtual ~IAsset()noexcept = default;
 
@@ -78,13 +80,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 checkVirtualPath(const TStringView failureContext)const{
-        if(virtualPath())
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: virtual path is empty"), failureContext);
-        return false;
-    }
+    [[nodiscard]] b8 checkVirtualPath(TStringView failureContext)const;
 
 
 private:
@@ -93,7 +89,7 @@ private:
 };
 
 template<typename ArenaT>
-[[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
+[[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(const IAsset& asset, ArenaT& arena){
     return asset.virtualPath() ? ConvertString(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
 }
 
@@ -122,6 +118,8 @@ protected:
     explicit IAssetCodec(const Name& assetType)noexcept
         : m_assetType(assetType)
     {}
+
+
 public:
     virtual ~IAssetCodec()noexcept = default;
 
@@ -131,7 +129,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const = 0;
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(const Name& virtualPath, Span<const u8> binary, AssetArena& arena)const = 0;
 
 #if defined(NWB_COOK)
 
@@ -141,13 +139,7 @@ public:
 
 
 public:
-    [[nodiscard]] b8 checkSerializeAssetType(const IAsset& asset, const TStringView failureContext)const{
-        if(asset.assetType() == assetType())
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'"), failureContext, ConvertString(asset.assetType().resolvedText()), ConvertString(assetType().resolvedText()));
-        return false;
-    }
+    [[nodiscard]] b8 checkSerializeAssetType(const IAsset& asset, TStringView failureContext)const;
 #endif
 
 
@@ -164,7 +156,7 @@ protected:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const final override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, AssetArena& arena)const final override{
         auto asset = MakeUnique<AssetT>(arena, virtualPath);
         if(!asset || !asset->loadBinary(binary))
             return MakeUnexpected(Failure{});

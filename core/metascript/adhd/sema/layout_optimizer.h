@@ -23,8 +23,15 @@ NWB_ADHD_BEGIN
 void SortTypeAliasesTopologically(Span<const TypeAliasDecl* const> aliases, MetaArena& arena, MVector<const TypeAliasDecl*>& outSorted);
 void SortInterfacesTopologically(Span<const InterfaceDecl* const> interfaces, const SymbolTable& symbols, MetaArena& arena, MVector<const InterfaceDecl*>& outSorted);
 void SortClassesTopologically(Span<const ClassDecl* const> classes, const SymbolTable& symbols, MetaArena& arena, MVector<const ClassDecl*>& outSorted);
-void CollectExternalForwardDeclClasses(const TypeRef& type, const SymbolTable& symbols, Span<const TemplateParamDecl> outerTemplateParams, Span<const TemplateParamDecl> innerTemplateParams, b8 inRefOrAssetContext, u32 depth, MVector<MStringView>& outNames);
-inline void CollectExternalForwardDeclClasses(const TypeRef& type, const SymbolTable& symbols, const Span<const TemplateParamDecl> outerTemplateParams, const Span<const TemplateParamDecl> innerTemplateParams, MVector<MStringView>& outNames){ CollectExternalForwardDeclClasses(type, symbols, outerTemplateParams, innerTemplateParams, false, 0u, outNames); }
+void CollectExternalForwardDeclClasses(
+    const TypeRef& type,
+    const SymbolTable& symbols,
+    Span<const TemplateParamDecl> outerTemplateParams,
+    Span<const TemplateParamDecl> innerTemplateParams,
+    MVector<MStringView>& outNames,
+    b8 inRefOrAssetContext = false,
+    u32 depth = 0u
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

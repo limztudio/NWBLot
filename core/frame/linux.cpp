@@ -59,7 +59,7 @@ static StringView BackendName(Common::LinuxFrameBackend::Enum backend)noexcept{
 inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
 struct LinuxBackendOrder final{
-    Common::LinuxFrameBackend::Enum backends[s_LinuxBackendOrderCapacity] = {};
+    Array<Common::LinuxFrameBackend::Enum, s_LinuxBackendOrderCapacity> backends = {};
     usize count = 0u;
 };
 
@@ -131,67 +131,6 @@ static Expected<LinuxBackendOrder> BuildBackendOrder(Alloc::ScratchArena& scratc
     return order;
 }
 
-static b8 TryInitBackend(Frame& frame, Common::LinuxFrameBackend::Enum backend){
-    switch(backend){
-    case Common::LinuxFrameBackend::X11:
-        return InitX11Frame(frame);
-#if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Wayland:
-        return InitWaylandFrame(frame);
-#endif
-    case Common::LinuxFrameBackend::None:
-    default:
-        return false;
-    }
-}
-
-static b8 ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
-    switch(backend){
-    case Common::LinuxFrameBackend::X11:
-        ShowX11Frame(frame);
-        return true;
-#if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Wayland:
-        return ShowWaylandFrame(frame);
-#endif
-    case Common::LinuxFrameBackend::None:
-    default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend has been initialized."));
-        return false;
-    }
-}
-
-static b8 RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend){
-    switch(backend){
-    case Common::LinuxFrameBackend::X11:
-        return RunX11Frame(frame);
-#if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Wayland:
-        return RunWaylandFrame(frame);
-#endif
-    case Common::LinuxFrameBackend::None:
-    default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend is available for the main loop."));
-        return false;
-    }
-}
-
-static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backend)noexcept{
-    switch(backend){
-    case Common::LinuxFrameBackend::X11:
-        CleanupX11Frame(frame);
-        break;
-#if defined(NWB_WITH_WAYLAND)
-    case Common::LinuxFrameBackend::Wayland:
-        CleanupWaylandFrame(frame);
-        break;
-#endif
-    case Common::LinuxFrameBackend::None:
-    default:
-        break;
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -212,7 +151,21 @@ b8 Frame::init(){
 
     for(usize i = 0u; i < backendOrder->count; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder->backends[i];
-        if(FrameDetail::TryInitBackend(*this, backend)){
+        b8 initialized = false;
+        switch(backend){
+        case Common::LinuxFrameBackend::X11:
+            initialized = FrameDetail::InitX11Frame(*this);
+            break;
+#if defined(NWB_WITH_WAYLAND)
+        case Common::LinuxFrameBackend::Wayland:
+            initialized = FrameDetail::InitWaylandFrame(*this);
+            break;
+#endif
+        case Common::LinuxFrameBackend::None:
+        default:
+            break;
+        }
+        if(initialized){
             frameData.setBackend(backend);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Linux {} backend."), ConvertString(FrameDetail::BackendName(backend)));
 
@@ -230,11 +183,34 @@ b8 Frame::init(){
 }
 
 b8 Frame::showFrame(){
-    return FrameDetail::ShowBackendFrame(*this, data<Common::LinuxFrame>().backend());
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        FrameDetail::ShowX11Frame(*this);
+        return true;
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::ShowWaylandFrame(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend has been initialized."));
+        return false;
+    }
 }
 
 b8 Frame::mainLoop(){
-    return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        return FrameDetail::RunX11Frame(*this);
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::RunWaylandFrame(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: No Linux window backend is available for the main loop."));
+        return false;
+    }
 }
 
 Expected<GlobalUniquePtr<IClipboardService>> Frame::createPlatformClipboardService(){
@@ -265,9 +241,7 @@ Expected<GlobalUniquePtr<ITextInputService>> Frame::createPlatformTextInputServi
     }
 }
 
-void Frame::setupPlatform(void* inst)noexcept{
-    static_cast<void>(inst);
-
+void Frame::setupPlatform([[maybe_unused]] void* inst)noexcept{
     auto& frameData = data<Common::LinuxFrame>();
     frameData.setActive(false);
     frameData.setBackend(Common::LinuxFrameBackend::None);
@@ -279,7 +253,19 @@ void Frame::setupPlatform(void* inst)noexcept{
 
 void Frame::cleanupPlatform()noexcept{
     auto& frameData = data<Common::LinuxFrame>();
-    FrameDetail::CleanupBackendFrame(*this, frameData.backend());
+    switch(frameData.backend()){
+    case Common::LinuxFrameBackend::X11:
+        FrameDetail::CleanupX11Frame(*this);
+        break;
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        FrameDetail::CleanupWaylandFrame(*this);
+        break;
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        break;
+    }
 
     frameData.setActive(false);
     frameData.setBackend(Common::LinuxFrameBackend::None);

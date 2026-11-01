@@ -22,6 +22,8 @@ class ExpressionParser final{
 public:
     using ScratchPath = Vector<MStringView, Alloc::ScratchArena>;
 
+    static constexpr usize s_InitialReferencePathSegmentCount = 4u;
+
 
 private:
     using ScratchString = BasicString<MChar, Alloc::ScratchArena>;

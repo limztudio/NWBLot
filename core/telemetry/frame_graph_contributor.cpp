@@ -45,16 +45,6 @@ inline constexpr u64 s_QueueIndexShift = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-FrameGraphBuilder::FrameGraphBuilder(Alloc::ScratchArena& scratchArena, FrameGraphNodeDescs& nodes, FrameGraphEdgeDescs& edges, FrameGraphPendingNameEdges& pendingNameEdges, const u64 frameIndex)
-    : m_scratchArena(scratchArena)
-    , m_nodes(nodes)
-    , m_edges(edges)
-    , m_pendingNameEdges(pendingNameEdges)
-    , m_physicalQueueIdentities(scratchArena)
-    , m_packetIdentities(scratchArena)
-    , m_frameIndex(frameIndex)
-{}
-
 FrameGraphBuilder::FrameGraphBuilder(
     Alloc::ScratchArena& scratchArena,
     FrameGraphNodeDescs& nodes,

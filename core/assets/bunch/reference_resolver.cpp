@@ -29,6 +29,7 @@ namespace AssetsBunchCook{
 
 
 namespace Metascript = Core::Metascript;
+using Alloc::ScratchArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,6 +119,55 @@ ReferenceResolutionContext::ReferenceResolutionContext(
     , m_scratchArena(inScratchArena)
     , m_resolvingVariableHashes(AddSize(inDoc.declarations().size(), inDoc.declarations().size()), Hasher<NameHash>(), EqualTo<NameHash>(), inScratchArena)
 {}
+
+Expected<Metascript::Value> ReferenceResolutionContext::resolveValue(
+    const Metascript::Value& source,
+    Metascript::MetaArena& valueArena,
+    ScratchNameHashSet* const referencedAssetVariableHashes
+){
+    if(source.isReference())
+        return resolveReference(source, valueArena, referencedAssetVariableHashes);
+    if(source.isList())
+        return resolveList(source, valueArena, referencedAssetVariableHashes);
+    if(source.isMap())
+        return resolveMap(source, valueArena, referencedAssetVariableHashes);
+
+    Metascript::Value result(valueArena);
+    result = source;
+    return result;
+}
+
+Expected<ExpandedAssetMetadata> ReferenceResolutionContext::expandItemDeclaration(
+    const Metascript::Document::Declaration& itemDeclaration,
+    const TStringView diagnosticPrefix,
+    const NameHash* const activeItemHash
+){
+    const AStringView variableName = itemDeclaration.variable;
+    const Metascript::Value* const itemValue = m_doc.findVariable(variableName);
+    if(!itemValue){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': references missing variable '{}'"), diagnosticPrefix, PathToString<tchar>(m_nwbFilePath), ConvertString(variableName));
+        return MakeUnexpected(Failure{});
+    }
+
+    if(activeItemHash)
+        m_resolvingVariableHashes.insert(*activeItemHash);
+    auto resolvedItemValue = resolveValue(*itemValue, itemValue->arena());
+    if(activeItemHash)
+        m_resolvingVariableHashes.erase(*activeItemHash);
+    if(!resolvedItemValue)
+        return MakeUnexpected(Failure{});
+
+    const auto virtualPath = BuildItemVirtualPath(m_baseVirtualPath, variableName, m_scratchArena);
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to build virtual path for variable '{}'"), diagnosticPrefix, PathToString<tchar>(m_nwbFilePath), ConvertString(variableName));
+        return MakeUnexpected(Failure{});
+    }
+
+    const auto assetType = ToName(itemDeclaration.type);
+    if(!assetType)
+        return MakeUnexpected(Failure{});
+    return ExpandedAssetMetadata{ *assetType ? **assetType : s_NameNone, virtualPath->identity, Move(*resolvedItemValue) };
+}
 
 Expected<Metascript::Value> ReferenceResolutionContext::resolveList(
     const Metascript::Value& source,
@@ -209,10 +259,6 @@ Expected<Metascript::Value> ReferenceResolutionContext::resolveReference(
     }
 
     if(referencedAssetVariableHashes){
-        if(m_resolvingVariableHashes.find(variableHash) != m_resolvingVariableHashes.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': cyclic asset reference '{}'"), PathToString<tchar>(m_nwbFilePath), ConvertString(reference));
-            return MakeUnexpected(Failure{});
-        }
         if(referencedAssetVariableHashes->insert(variableHash).second){
             const auto nestedResolved = resolveDeclaredVariableValue(
                 *declaration,
@@ -226,6 +272,10 @@ Expected<Metascript::Value> ReferenceResolutionContext::resolveReference(
             if(!nestedResolved)
                 return MakeUnexpected(Failure{});
         }
+        else if(m_resolvingVariableHashes.find(variableHash) != m_resolvingVariableHashes.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Composite asset '{}': cyclic asset reference '{}'"), PathToString<tchar>(m_nwbFilePath), ConvertString(reference));
+            return MakeUnexpected(Failure{});
+        }
     }
 
     const auto virtualPath = BuildItemVirtualPath(m_baseVirtualPath, declaration->variable, m_scratchArena);
@@ -237,55 +287,6 @@ Expected<Metascript::Value> ReferenceResolutionContext::resolveReference(
     Metascript::Value result(valueArena);
     result.setString(virtualPath->text);
     return result;
-}
-
-Expected<Metascript::Value> ReferenceResolutionContext::resolveValue(
-    const Metascript::Value& source,
-    Metascript::MetaArena& valueArena,
-    ScratchNameHashSet* const referencedAssetVariableHashes
-){
-    if(source.isReference())
-        return resolveReference(source, valueArena, referencedAssetVariableHashes);
-    if(source.isList())
-        return resolveList(source, valueArena, referencedAssetVariableHashes);
-    if(source.isMap())
-        return resolveMap(source, valueArena, referencedAssetVariableHashes);
-
-    Metascript::Value result(valueArena);
-    result = source;
-    return result;
-}
-
-Expected<ExpandedAssetMetadata> ReferenceResolutionContext::expandItemDeclaration(
-    const Metascript::Document::Declaration& itemDeclaration,
-    const TStringView diagnosticPrefix,
-    const NameHash* const activeItemHash
-){
-    const AStringView variableName = itemDeclaration.variable;
-    const Metascript::Value* const itemValue = m_doc.findVariable(variableName);
-    if(!itemValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': references missing variable '{}'"), diagnosticPrefix, PathToString<tchar>(m_nwbFilePath), ConvertString(variableName));
-        return MakeUnexpected(Failure{});
-    }
-
-    if(activeItemHash)
-        m_resolvingVariableHashes.insert(*activeItemHash);
-    auto resolvedItemValue = resolveValue(*itemValue, itemValue->arena());
-    if(activeItemHash)
-        m_resolvingVariableHashes.erase(*activeItemHash);
-    if(!resolvedItemValue)
-        return MakeUnexpected(Failure{});
-
-    const auto virtualPath = BuildItemVirtualPath(m_baseVirtualPath, variableName, m_scratchArena);
-    if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to build virtual path for variable '{}'"), diagnosticPrefix, PathToString<tchar>(m_nwbFilePath), ConvertString(variableName));
-        return MakeUnexpected(Failure{});
-    }
-
-    const auto assetType = ToName(itemDeclaration.type);
-    if(!assetType)
-        return MakeUnexpected(Failure{});
-    return ExpandedAssetMetadata{ *assetType ? **assetType : s_NameNone, virtualPath->identity, Move(*resolvedItemValue) };
 }
 
 

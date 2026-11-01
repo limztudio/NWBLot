@@ -46,7 +46,7 @@ b8 ValidateOptions(const BakeOptions& options){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
         return false;
     }
-    constexpr AStringView s_SourceExtensions[] = { s_TrueTypeExtension, s_OpenTypeExtension, s_PreparedFontExtension };
+    static constexpr Array<AStringView, 3u> s_SourceExtensions = { s_TrueTypeExtension, s_OpenTypeExtension, Impl::s_PreparedFontExtension };
     if(!PathHasListedExtension(options.source, s_SourceExtensions)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
@@ -54,17 +54,23 @@ b8 ValidateOptions(const BakeOptions& options){
     return true;
 }
 
-Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
+Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch, Core::Assets::AssetBytes& outSourceFontBytes){
     Impl::FontAtlasPayload candidate(arena);
     FontSource source(candidate.glyphs.get_allocator().arena());
-    if(!source.open(options, candidate, scratch))
+    if(!source.open(options, scratch, candidate))
         return MakeUnexpected(Failure{});
-    auto glyphs = Rasterize(source, options);
+    auto glyphs = Rasterize(options, source);
     if(!glyphs || !PackGlyphs(options, *glyphs, scratch, candidate) || !ExportPositioning(source, candidate))
         return MakeUnexpected(Failure{});
     if(!Impl::ValidateFontAtlasPayload(candidate, scratch))
         return MakeUnexpected(Failure{});
+    outSourceFontBytes = source.takeBytes();
     return candidate;
+}
+
+Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
+    Core::Assets::AssetBytes sourceFontBytes(arena);
+    return Bake(options, arena, scratch, sourceFontBytes);
 }
 
 

@@ -33,30 +33,30 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] Core::GpuTaskDesc ReflectionTaskDesc(Name identity, AStringView label, const Core::GpuTaskId& dependency)noexcept;
 
 [[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
     const ReflectionDepthPyramidSnapshot& pyramid,
     Core::GpuGraphResourceId opaqueDepth,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
+    Core::GraphicsRuntime& graphics,
     Core::GpuGraphResourceId& outDepthPyramid
 );
 
 [[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
-    Core::GpuTaskGraph& graph,
-    Core::GraphicsRuntime& graphics,
-    Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
+    Core::GraphicsRuntime& graphics,
+    Core::Alloc::ScratchArena& scratchArena,
     ReflectionGraphResult& result
 );
 
 [[nodiscard]] Expected<Core::GpuTaskId> DeclareReflectionStatisticsAndFinalizeTasks(
-    Core::GpuTaskGraph& graph,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
     b8 feedbackReserved,
     Core::GpuTaskId dependency,
+    Core::GpuTaskGraph& graph,
     ReflectionGraphResult& result
 );
 

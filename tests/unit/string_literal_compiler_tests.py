@@ -264,7 +264,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--source-dir", required=True, type=Path)
     parser.add_argument("--target", default="")
     options = parser.parse_args(argv)
-    for field in ("compiler", "c_compiler", "runtime_object", "llvm_library", "source_dir"):
+    for field in ("compiler", "c_compiler"):
+        candidate = Path(os.path.abspath(getattr(options, field)))
+        if not candidate.is_file():
+            raise FileNotFoundError(candidate)
+        setattr(options, field, candidate)
+    for field in ("runtime_object", "llvm_library", "source_dir"):
         setattr(options, field, getattr(options, field).resolve(strict=True))
     with tempfile.TemporaryDirectory(prefix="nwb-literal-edge-") as temporary:
         qualification = LiteralQualification(options, Path(temporary))
@@ -276,3 +281,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

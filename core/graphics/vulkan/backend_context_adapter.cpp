@@ -205,10 +205,10 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
         if(deviceIsGood){
             const VulkanDetail::PhysicalDeviceFeatureQueryOptions featureQueryOptions{
                 .apiSupportsVulkan13 = prop.apiVersion >= VK_API_VERSION_1_3,
-                .descriptorBufferExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions.data(), static_cast<u32>(deviceExtensions.size()), VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME),
-                .dynamicRenderingExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions.data(), static_cast<u32>(deviceExtensions.size()), VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME),
-                .synchronization2ExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions.data(), static_cast<u32>(deviceExtensions.size()), VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME),
-                .maintenance4ExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions.data(), static_cast<u32>(deviceExtensions.size()), VK_KHR_MAINTENANCE_4_EXTENSION_NAME),
+                .descriptorBufferExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME),
+                .dynamicRenderingExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME),
+                .synchronization2ExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME),
+                .maintenance4ExtensionAvailable = VulkanDetail::HasDeviceExtension(deviceExtensions, VK_KHR_MAINTENANCE_4_EXTENSION_NAME),
             };
             VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
             VulkanDetail::QueryPhysicalDeviceFeatureSupport(m_instanceDispatch, dev, featureQueryOptions, featureSupport);
@@ -269,7 +269,7 @@ b8 BackendContext::pickPhysicalDevice(Alloc::ScratchArena& scratchArena){
                     deviceIsGood = false;
                 }
 
-                if(!VulkanDetail::SelectSurfaceFormat(surfaceFmts.data(), static_cast<u32>(surfaceFmts.size()), requestedSdrFormat, hdr10Allowed)){
+                if(!VulkanDetail::SelectSurfaceFormat(surfaceFmts, requestedSdrFormat, hdr10Allowed)){
                     errorStream << "\n  - does not support HDR10 or the requested SDR swap chain format";
                     deviceIsGood = false;
                 }
@@ -326,7 +326,7 @@ b8 BackendContext::findQueueFamilies(Alloc::ScratchArena& scratchArena, VkPhysic
     m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
-    const VulkanDetail::RequiredQueueFamilySelection selection = VulkanDetail::SelectRequiredQueueFamilies(props.data(), static_cast<u32>(props.size()), m_deviceParams.enableAsyncComputeLane, m_deviceParams.enableTransferQueue);
+    const VulkanDetail::RequiredQueueFamilySelection selection = VulkanDetail::SelectRequiredQueueFamilies(props, m_deviceParams.enableAsyncComputeLane, m_deviceParams.enableTransferQueue);
     m_graphicsQueueFamily = selection.graphicsFamily;
     m_computeQueueFamily = selection.computeFamily;
     m_asyncComputeQueueFamily = selection.asyncComputeFamily;

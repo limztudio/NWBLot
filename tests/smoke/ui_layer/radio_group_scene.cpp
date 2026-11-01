@@ -66,9 +66,7 @@ b8 UiRadioGroupSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiRadioGroupSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     if(key < Core::Key::F4 || key > Core::Key::F9)
         return false;
     if(action != Core::InputAction::Press)

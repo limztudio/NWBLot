@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/builder.h>
+#include "selectable_paint.h"
 
 #include <global/simplemath.h>
 
@@ -17,36 +17,16 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_controls_paint{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr f32 s_CheckmarkInsetFraction = 0.2f;
-// The mark loses its inset on both opposite sides.
-inline constexpr f32 s_CheckmarkInsetSides = 2.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 Builder::paintPanel(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)
         return false;
-    m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip))));
+    m_paint.pushClip(visibleClip(panel->clip));
     const b8 painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
     const b8 popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
-    barrier.clip = StoreRectangle(loadVisibleClip(LoadRectangle(panel->clip)));
+    barrier.clip = visibleClip(panel->clip);
     if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();
@@ -85,7 +65,7 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     const b8 pressed = input.pressed(item.state.id);
     const b8 focused = input.focus() == item.state.id;
     const b8 interactive = item.state.kind == WidgetKind::Button || item.state.kind == WidgetKind::Checkbox;
-    m_paint.pushClip(StoreRectangle(loadVisibleClip(LoadRectangle(box.clip))));
+    m_paint.pushClip(visibleClip(box.clip));
     b8 painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
     Rect textClip = box.rectangle;
@@ -99,8 +79,8 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         const Name& preferred = !item.enabled ? item.style.buttonDisabled : pressed ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
-        const SIMDVectorSingle content = InsetRectValue(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
-        textClip = { VectorGetX(content), VectorGetY(content), VectorGetZ(content), VectorGetW(content) };
+        const SIMDVectorSingle content = InsetRectValue(LoadRect(box.rectangle), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
+        textClip = StoreRect(content);
         const SIMDVectorSingle remaining = VectorScale(VectorSubtract(VectorSwizzle<2, 3, 2, 3>(content), VectorSet(measured.x, measured.y, 0.0f, 0.0f)), 0.5f);
         const SIMDVectorSingle centered = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
         const SIMDVectorSingle textOrigin = VectorAdd(content, centered);
@@ -114,18 +94,18 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         const Rect square{ VectorGetX(squareOrigin), VectorGetY(squareOrigin), item.checkboxExtent, item.checkboxExtent };
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, square);
         if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
-            const SIMDVectorSingle inset = VectorScale(VectorReplicate(item.checkboxExtent), __hidden_ui_controls_paint::s_CheckmarkInsetFraction);
+            const SIMDVectorSingle inset = VectorScale(VectorReplicate(item.checkboxExtent), s_CheckmarkInsetFraction);
             const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha };
             const SIMDVectorSingle markOrigin = VectorAdd(VectorSet(square.x, square.y, 0.0f, 0.0f), inset);
-            const SIMDVectorSingle markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(__hidden_ui_controls_paint::s_CheckmarkInsetSides), inset, VectorSet(square.width, square.height, square.width, square.height));
+            const SIMDVectorSingle markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(s_CheckmarkInsetSides), inset, VectorSet(square.width, square.height, square.width, square.height));
             const SIMDVectorSingle mark = VectorPermute<0, 1, 4, 5>(markOrigin, markSize);
-            painted = m_paint.drawRegion(item.style.checkboxMark, { VectorGetX(mark), VectorGetY(mark), VectorGetZ(mark), VectorGetW(mark) }, tint);
+            painted = m_paint.drawRegion(item.style.checkboxMark, StoreRect(mark), tint);
         }
         const SIMDVectorSingle textOffset = VectorAdd(VectorSelect(centered, VectorReplicate(item.checkboxExtent), s_SIMDMaskX), VectorSet(item.style.gap, 0.0f, 0.0f, 0.0f));
         const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), textOffset);
         origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
-        const SIMDVectorSingle clipSize = VectorMax(VectorZero(), VectorSubtract(VectorSet(box.rectangle.width, box.rectangle.height, 0.0f, 0.0f), VectorAndInt(textOffset, s_SIMDMaskX)));
-        textClip = { origin.x, box.rectangle.y, VectorGetX(clipSize), box.rectangle.height };
+        const f32 clipWidth = Max(0.0f, box.rectangle.width - VectorGetX(textOffset));
+        textClip = { origin.x, box.rectangle.y, clipWidth, box.rectangle.height };
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
@@ -141,7 +121,7 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
     if(interactive || item.annotated){
         HitTarget target;
         target.rectangle = box.rectangle;
-        target.clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
+        target.clip = visibleClip(box.clip);
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
         target.enabled = item.enabled;
         target.focusable = item.enabled && interactive;
@@ -150,6 +130,22 @@ b8 Builder::paintItem(const Item& item, const LayoutBox& box){
         return m_context.addTarget(item.state, target);
     }
     return true;
+}
+
+b8 Builder::paintSelectable(const Item& item, const LayoutBox& box){
+    const InputRouter& input = m_context.input();
+    const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
+    const Rect clip = visibleClip(box.clip);
+    if(!SelectablePainter::Paint(m_paint, m_text, *m_skin, item.text, item.textBounds, item.padding, box.rectangle, clip, item.selectableStyle, flags, item.style.text, item.style.disabledText))
+        return false;
+    HitTarget target;
+    target.rectangle = box.rectangle;
+    target.clip = clip;
+    target.enabled = item.enabled;
+    target.focusable = item.enabled;
+    target.activatable = item.enabled;
+    target.contextMenu = item.contextMenu;
+    return m_context.addTarget(item.state, target);
 }
 
 b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted){
@@ -165,11 +161,6 @@ b8 Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& cl
     target.activatable = false;
     target.contextMenu = item.contextMenu;
     return m_context.addTarget(item.state, target);
-}
-
-SIMDVectorSingle Builder::loadVisibleClip(const SIMDVectorSingle clip)const noexcept{
-    const DisplayMetrics& display = m_paint.displayMetrics();
-    return IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
 }
 
 

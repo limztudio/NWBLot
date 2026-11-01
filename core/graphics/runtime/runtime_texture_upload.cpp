@@ -38,52 +38,6 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
     return formatInfo.hasDepth || formatInfo.hasStencil;
 }
 
-[[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const TextureDesc& textureDesc, const GraphicsRuntime::TextureUploadRegion& region)noexcept{
-    if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
-        return MakeUnexpected(Failure{});
-    if(textureDesc.sampleCount != 1)
-        return MakeUnexpected(Failure{});
-    if(region.mipLevel >= textureDesc.mipLevels || region.mipLevel >= sizeof(u32) * s_BitsPerByte || region.arraySlice >= textureDesc.arraySize)
-        return MakeUnexpected(Failure{});
-    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::Count))
-        return MakeUnexpected(Failure{});
-
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    const auto aspectLayout = GetTextureUploadAspectLayout(formatInfo, region.aspect);
-    if(!aspectLayout)
-        return MakeUnexpected(Failure{});
-
-    const u32 width = Max<u32>(1u, textureDesc.width >> region.mipLevel);
-    const u32 height = Max<u32>(1u, textureDesc.height >> region.mipLevel);
-    const u32 depth = Max<u32>(1u, textureDesc.depth >> region.mipLevel);
-
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout->blockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout->blockHeight));
-    if(blockCountX > Limit<u64>::s_Max / aspectLayout->bytesPerBlock)
-        return MakeUnexpected(Failure{});
-
-    const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
-    const u64 effectiveRowPitch = region.rowPitch != 0 ? static_cast<u64>(region.rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0)
-        return MakeUnexpected(Failure{});
-    if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
-        return MakeUnexpected(Failure{});
-
-    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
-    const u64 effectiveDepthPitch = region.depthPitch != 0 ? static_cast<u64>(region.depthPitch) : packedSlicePitch;
-    if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
-        return MakeUnexpected(Failure{});
-
-    if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
-        return MakeUnexpected(Failure{});
-
-    const u64 requiredBytes = depth > 1 ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch : packedSlicePitch;
-    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return MakeUnexpected(Failure{});
-
-    return static_cast<usize>(requiredBytes);
-}
-
 [[nodiscard]] static b8 ValidateTextureUploadRegion(const TextureDesc& textureDesc, const GraphicsRuntime::TextureUploadRegion& region){
     if(!region.data && region.dataSize == 0)
         return true;
@@ -97,7 +51,7 @@ inline constexpr AStringView s_UploadTextureBatchMarkerLabel = "Texture Upload B
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil"), ConvertString(textureDesc.name.resolvedText()));
         return false;
     }
-    const auto requiredBytes = ComputeTextureUploadByteSize(textureDesc, region);
+    const auto requiredBytes = ComputeTextureUploadByteSize(textureDesc, region.arraySlice, region.mipLevel, region.rowPitch, region.depthPitch, region.aspect);
     if(!requiredBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), ConvertString(textureDesc.name.resolvedText()));
         return false;
@@ -235,7 +189,7 @@ struct TextureUploadBatchSubmissionData{
         GpuTaskDesc uploadTaskDesc;
         uploadTaskDesc.setIdentity(s_UploadTextureBatchUploadIdentity).setMarkerLabel(s_UploadTextureBatchMarkerLabel).setScheduling(scheduling);
         if(previousTask.valid())
-            uploadTaskDesc.setDependencies(&previousTask, 1u);
+            uploadTaskDesc.setDependencies(Span<const GpuTaskId>(&previousTask, 1u));
 
         const auto uploadTaskResult = graph.addUploadTextureTask(
             uploadTaskDesc,
@@ -297,14 +251,14 @@ b8 GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        uploadToken,
-        *m_standaloneGraphWorkspaces,
         *this,
         textureDesc.queueSharing,
         consumerQueue,
-        &submissionData,
         MakeNotNull(&__hidden_graphics_texture_upload::DeclareTextureUploadBatch),
-        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
+        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{},
+        &submissionData,
+        *m_standaloneGraphWorkspaces,
+        uploadToken
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned texture upload batch '{}'"), ConvertString(textureDesc.name.resolvedText()));

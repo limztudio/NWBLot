@@ -109,8 +109,17 @@ NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD("union",     true)
 NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD("type",      true)
 NWB_ADHD_EXPORT_NESTED_TYPE_KEYWORD("namespace", false)
 
-NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("const", "C++-style 'const' type qualifier is prohibited in adhd; use 'in' for read-only parameters")
-NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("bool",  "'bool' is prohibited in adhd; use 'b8'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("const",    "C++-style 'const' type qualifier is prohibited in adhd; use 'in' for read-only parameters")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("bool",     "'bool' is prohibited in adhd; use 'b8'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("int",      "'int' is prohibited in adhd; use 'i32'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("float",    "'float' is prohibited in adhd; use 'f32'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("double",   "'double' is prohibited in adhd; use 'f64'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("char",     "'char' is prohibited in adhd; use 'u8' or 'i8'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("short",    "'short' is prohibited in adhd; use 'i16'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("long",     "'long' is prohibited in adhd; use 'i64'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("unsigned", "'unsigned' is prohibited in adhd; use 'u32' or 'u64'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("signed",   "'signed' is prohibited in adhd; use 'i32' or 'i64'")
+NWB_ADHD_EXPORT_PROHIBITED_TYPE_KEYWORD("NotNull",  "'NotNull' is prohibited in adhd; use 'in T' or 'mut T'")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,11 +5,11 @@
 #pragma once
 
 
-#include <tests/common/capturing_logger.h>
-#include <tests/common/gpu_task_graph_read_views.h>
-#include <tests/common/test_context.h>
+#include "gpu_task_graph_read_views.h"
 
-#include <cstddef>
+#include <tests/common/arena_owner_fixture.h>
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -48,9 +48,9 @@ namespace TaskGraphTestUtils{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTestsTag>;
-namespace Graphics = Core;
 namespace Telemetry = Core::Telemetry;
-using TestPath = ::Path<Graphics::Alloc::GlobalArena>;
+using TestPath = ::Path<Core::Alloc::GlobalArena>;
+using ArenaOwnerTestSupport::ExpectMemoryStatsEqual;
 
 inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 
@@ -58,100 +58,96 @@ inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual);
+[[nodiscard]] Expected<Name> IndexedName(const Name& prefix, const usize index);
 
+[[nodiscard]] Expected<Core::GpuGraphResourceId> AddHazardDomain(Core::GpuTaskGraph& graph, const Name& identity, const AStringView label);
 
-[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddHazardDomain(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label);
-
-[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddTextureMetadata(
-    Graphics::GpuTaskGraph& graph,
+[[nodiscard]] Expected<Core::GpuGraphResourceId> AddTextureMetadata(
+    Core::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
-    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+    const Core::ResourceStates::Mask initialState = Core::ResourceStates::Common,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
 );
 
-
-[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddBufferMetadata(
-    Graphics::GpuTaskGraph& graph,
+[[nodiscard]] Expected<Core::GpuGraphResourceId> AddBufferMetadata(
+    Core::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
-    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+    const Core::ResourceStates::Mask initialState = Core::ResourceStates::Common,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Expected<Graphics::GpuGraphResourceId> AddAccelStructMetadata(
-    Graphics::GpuTaskGraph& graph,
+[[nodiscard]] Expected<Core::GpuGraphResourceId> AddAccelStructMetadata(
+    Core::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
-    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+    const Core::ResourceStates::Mask initialState = Core::ResourceStates::Common,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Expected<Graphics::GpuGraphPipelineId> AddPipelineMetadata(Graphics::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Graphics::GpuGraphPipelineType::Enum type);
+[[nodiscard]] Expected<Core::GpuGraphPipelineId> AddPipelineMetadata(Core::GpuTaskGraph& graph, const Name& identity, const AStringView label, const Core::GpuGraphPipelineType::Enum type);
 
-[[nodiscard]] Expected<Graphics::GpuTaskId> AddTask(
-    Graphics::GpuTaskGraph& graph,
+[[nodiscard]] Expected<Core::GpuTaskId> AddTask(
     const Name& identity,
     const AStringView label,
-    const Graphics::GpuTaskId* const dependencies = nullptr,
-    const usize dependencyCount = 0u,
-    const Graphics::GpuTaskResourceUse* const resourceUses = nullptr,
-    const usize resourceUseCount = 0u,
-    const Graphics::GpuTaskResourceSetUse* const resourceSetUses = nullptr,
-    const usize resourceSetUseCount = 0u
+    const Span<const Core::GpuTaskId> dependencies,
+    const Span<const Core::GpuTaskResourceUse> resourceUses,
+    const Span<const Core::GpuTaskResourceSetUse> resourceSetUses,
+    const Span<const Core::GpuTaskResourceVersionUse> resourceVersionUses,
+    const Span<const Core::GpuExternalCompletionId> externalDependencies,
+    Core::GpuTaskGraph& graph
 );
 
-[[nodiscard]] Expected<Graphics::GpuTaskId> AddTaskWithCommands(
-    Graphics::GpuTaskGraph& graph,
+[[nodiscard]] Expected<Core::GpuTaskId> AddTaskWithCommands(
     const Name& identity,
     const AStringView label,
-    const Graphics::GpuTaskCommandRequirements& commands,
-    const Graphics::GpuTaskSchedulingHint& scheduling = {},
-    const Graphics::GpuTaskTimingMetadata& timing = {},
-    const Graphics::GpuTaskId* const dependencies = nullptr,
-    const usize dependencyCount = 0u
+    const Core::GpuTaskCommandRequirements& commands,
+    const Core::GpuTaskSchedulingHint& scheduling,
+    const Core::GpuTaskTimingMetadata& timing,
+    const Span<const Core::GpuTaskId> dependencies,
+    Core::GpuTaskGraph& graph
 );
 
-[[nodiscard]] b8 Analyze(Core::Alloc::ScratchArena& scratchArena, const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis);
+[[nodiscard]] b8 Analyze(const Core::GpuTaskGraph& graph, Core::Alloc::ScratchArena& scratchArena, Core::GpuTaskGraphAnalysis& analysis);
 
 [[nodiscard]] b8 Assign(
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    Core::GpuTaskGraphQueueAssignments& assignments,
     Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
-    const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuPhysicalQueueTopology& topology,
-    const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
+    const Core::GpuTaskGraph& graph,
+    const Core::GpuTaskGraphAnalysis& analysis,
+    const Core::GpuPhysicalQueueTopology& topology,
+    const Core::GpuTaskGraphQueueAssignmentOptions& options = {}
 );
 
 [[nodiscard]] b8 Compile(
-    Graphics::GpuTaskGraphAnalysis& analysis,
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
-    Graphics::GpuCompiledGraph& compiledGraph,
+    Core::GpuTaskGraphAnalysis& analysis,
+    Core::GpuTaskGraphQueueAssignments& assignments,
+    Core::GpuCompiledGraph& compiledGraph,
     Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
-    const Graphics::GpuPhysicalQueueTopology& topology,
-    const Graphics::GpuTaskGraphCompileOptions& options = {}
+    const Core::GpuTaskGraph& graph,
+    const Core::GpuPhysicalQueueTopology& topology,
+    const Core::GpuTaskGraphCompileOptions& options = {}
 );
 
 // Compile on a topology where Compute and Transfer capabilities stay on their dedicated queue classes.
 [[nodiscard]] b8 CompileWithSeparatedCommandQueues(
-    Graphics::GpuTaskGraphAnalysis& analysis,
-    Graphics::GpuTaskGraphQueueAssignments& assignments,
-    Graphics::GpuCompiledGraph& compiledGraph,
+    Core::GpuTaskGraphAnalysis& analysis,
+    Core::GpuTaskGraphQueueAssignments& assignments,
+    Core::GpuCompiledGraph& compiledGraph,
     Core::Alloc::ScratchArena& scratchArena,
-    const Graphics::GpuTaskGraph& graph,
-    const Graphics::GpuPhysicalQueueTopology& topology,
-    const Graphics::GpuTaskGraphCompileOptions& options = {}
+    const Core::GpuTaskGraph& graph,
+    const Core::GpuPhysicalQueueTopology& topology,
+    const Core::GpuTaskGraphCompileOptions& options = {}
 );
 
 struct SingleQueueCompile{
     Core::Alloc::ScratchArena scratchArena;
-    Graphics::GpuPhysicalQueueInfo singleQueue;
-    Graphics::GpuPhysicalQueueTopology topology;
-    Graphics::GpuTaskGraphAnalysis analysis;
-    Graphics::GpuTaskGraphQueueAssignments assignments;
-    Graphics::GpuCompiledGraph compiledGraph;
+    Core::GpuPhysicalQueueInfo singleQueue;
+    Core::GpuPhysicalQueueTopology topology;
+    Core::GpuTaskGraphAnalysis analysis;
+    Core::GpuTaskGraphQueueAssignments assignments;
+    Core::GpuCompiledGraph compiledGraph;
 
 
 public:
@@ -159,18 +155,18 @@ public:
 
 
 public:
-    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct TwoQueueCompile{
     Core::Alloc::ScratchArena scratchArena;
-    Graphics::GpuPhysicalQueueInfo graphicsQueue;
-    Graphics::GpuPhysicalQueueInfo computeQueue;
-    Graphics::GpuPhysicalQueueInfo queueStorage[2u];
-    Graphics::GpuPhysicalQueueTopology topology;
-    Graphics::GpuTaskGraphAnalysis analysis;
-    Graphics::GpuTaskGraphQueueAssignments assignments;
-    Graphics::GpuCompiledGraph compiledGraph;
+    Core::GpuPhysicalQueueInfo graphicsQueue;
+    Core::GpuPhysicalQueueInfo computeQueue;
+    Array<Core::GpuPhysicalQueueInfo, 2> queueStorage{};
+    Core::GpuPhysicalQueueTopology topology;
+    Core::GpuTaskGraphAnalysis analysis;
+    Core::GpuTaskGraphQueueAssignments assignments;
+    Core::GpuCompiledGraph compiledGraph;
 
 
 public:
@@ -178,19 +174,19 @@ public:
 
 
 public:
-    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {});
 };
 
 struct ThreeQueueCompile{
     Core::Alloc::ScratchArena scratchArena;
-    Graphics::GpuPhysicalQueueInfo graphicsQueue;
-    Graphics::GpuPhysicalQueueInfo computeQueue;
-    Graphics::GpuPhysicalQueueInfo transferQueue;
-    Graphics::GpuPhysicalQueueInfo queueStorage[3u];
-    Graphics::GpuPhysicalQueueTopology topology;
-    Graphics::GpuTaskGraphAnalysis analysis;
-    Graphics::GpuTaskGraphQueueAssignments assignments;
-    Graphics::GpuCompiledGraph compiledGraph;
+    Core::GpuPhysicalQueueInfo graphicsQueue;
+    Core::GpuPhysicalQueueInfo computeQueue;
+    Core::GpuPhysicalQueueInfo transferQueue;
+    Array<Core::GpuPhysicalQueueInfo, 3> queueStorage{};
+    Core::GpuPhysicalQueueTopology topology;
+    Core::GpuTaskGraphAnalysis analysis;
+    Core::GpuTaskGraphQueueAssignments assignments;
+    Core::GpuCompiledGraph compiledGraph;
 
 
 public:
@@ -198,66 +194,64 @@ public:
 
 
 public:
-    [[nodiscard]] b8 compile(const Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskGraphCompileOptions& options = {});
+    [[nodiscard]] b8 compile(const Core::GpuTaskGraph& graph, const Core::GpuTaskGraphCompileOptions& options = {});
 };
 
-[[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
-    const Graphics::GpuQueueCapability::Mask first,
-    const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,
-    const Graphics::GpuQueueCapability::Mask third = Graphics::GpuQueueCapability::None
+[[nodiscard]] constexpr Core::GpuQueueCapability::Mask QueueCapabilities(
+    const Core::GpuQueueCapability::Mask first,
+    const Core::GpuQueueCapability::Mask second = Core::GpuQueueCapability::None,
+    const Core::GpuQueueCapability::Mask third = Core::GpuQueueCapability::None
 )noexcept{
-    return static_cast<Graphics::GpuQueueCapability::Mask>(static_cast<u8>(first) | static_cast<u8>(second) | static_cast<u8>(third));
+    return static_cast<Core::GpuQueueCapability::Mask>(static_cast<u8>(first) | static_cast<u8>(second) | static_cast<u8>(third));
 }
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
+[[nodiscard]] Core::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index = 0u,
-    const Graphics::GpuQueueCapability::Mask capabilities = QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer)
+    const Core::GpuQueueCapability::Mask capabilities = QueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Compute, Core::GpuQueueCapability::Transfer)
 )noexcept;
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u)noexcept;
+[[nodiscard]] Core::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index = 1u)noexcept;
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u)noexcept;
+[[nodiscard]] Core::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u)noexcept;
 
-[[nodiscard]] inline Graphics::GpuTaskCommandRequirements GraphicsCommands()noexcept{
-    return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics };
+[[nodiscard]] inline Core::GpuTaskCommandRequirements GraphicsCommands()noexcept{
+    return Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics };
 }
 
-[[nodiscard]] inline Graphics::GpuTaskCommandRequirements ComputeCommands()noexcept{
-    return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute };
+[[nodiscard]] inline Core::GpuTaskCommandRequirements ComputeCommands()noexcept{
+    return Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Compute };
 }
 
 struct TransferOwnershipPair{
-    Graphics::GpuGraphResourceId texture;
-    Graphics::GpuTaskId producer;
-    Graphics::GpuTaskId consumer;
+    Core::GpuGraphResourceId texture;
+    Core::GpuTaskId producer;
+    Core::GpuTaskId consumer;
 };
 
-[[nodiscard]] Expected<TransferOwnershipPair> AddTransferOwnershipPair(Graphics::GpuTaskGraph& graph, const Graphics::ResourceQueueSharing::Mask queueSharing);
+[[nodiscard]] Expected<TransferOwnershipPair> AddTransferOwnershipPair(Core::GpuTaskGraph& graph, const Core::ResourceQueueSharing::Mask queueSharing);
 
-[[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer)noexcept;
+[[nodiscard]] const Core::GpuTaskDependencyEdge* FindEdge(const Core::GpuTaskGraphAnalysis& analysis, const Core::GpuTaskId producer, const Core::GpuTaskId consumer)noexcept;
 
 struct ExternalFinalReadPair{
-    Graphics::GpuGraphResourceId resource;
-    Graphics::GpuTaskId earlierReader;
-    Graphics::GpuTaskId finalizingReader;
+    Core::GpuGraphResourceId resource;
+    Core::GpuTaskId earlierReader;
+    Core::GpuTaskId finalizingReader;
 };
 
-
 [[nodiscard]] Expected<ExternalFinalReadPair> AddExternalFinalReadPair(
-    Graphics::GpuTaskGraph& graph,
-    const Graphics::GpuGraphResourceType::Enum resourceType,
-    const Graphics::GpuTaskResourceRange& earlierRange,
-    const Graphics::GpuTaskResourceRange& finalizingRange,
-    const Graphics::ResourceStates::Mask readState,
-    const Graphics::ResourceStates::Mask externalFinalState,
-    const Graphics::ResourceQueueSharing::Mask queueSharing,
+    Core::GpuTaskGraph& graph,
+    const Core::GpuGraphResourceType::Enum resourceType,
+    const Core::GpuTaskResourceRange& earlierRange,
+    const Core::GpuTaskResourceRange& finalizingRange,
+    const Core::ResourceStates::Mask readState,
+    const Core::ResourceStates::Mask externalFinalState,
+    const Core::ResourceQueueSharing::Mask queueSharing,
     const b8 samePacket,
     const b8 finalizerDependsOnEarlier,
-    const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue
+    const Core::GpuPhysicalQueueId externalFinalReleaseDestinationQueue
 );
 
-
-[[nodiscard]] b8 HasInferredHazard(const Graphics::GpuTaskGraphAnalysis& analysis, const Graphics::GpuTaskId producer, const Graphics::GpuTaskId consumer, const Graphics::GpuGraphResourceId resource, const Graphics::GpuTaskHazardType::Enum hazard)noexcept;
+[[nodiscard]] b8 HasInferredHazard(const Core::GpuTaskGraphAnalysis& analysis, const Core::GpuTaskId producer, const Core::GpuTaskId consumer, const Core::GpuGraphResourceId resource, const Core::GpuTaskHazardType::Enum hazard)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

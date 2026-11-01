@@ -90,12 +90,12 @@ void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const 
     else if(typeName == "Name"){
         out.append("::Name(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString().data())");
+        out.append(".asString())");
     }
     else{
         out.append("{::Name(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString().data())}");
+        out.append(".asString())}");
     }
 }
 
@@ -111,6 +111,14 @@ void EmitNwbSimdVectorCtorExpr(MString& out, const MStringView vecTypeName, cons
     for(u32 lane = 0u; lane < simdLanes; ++lane){
         if(lane > 0u)
             out.append(", ");
+        if(vecTypeName == "f16x2u" || vecTypeName == "f16x4u"){
+            out.append("::ConvertFloatToHalf(static_cast<f32>(");
+            out.append(listAccessor.data(), listAccessor.size());
+            out.push_back('[');
+            AppendAdhdUnsigned(out, lane);
+            out.append("].toDouble()))");
+            continue;
+        }
         const MStringView curScalar = (isMixedVec && lane == 3u) ? wLaneScalar : laneScalar;
         const b8 laneIsInt = IsIntegerScalarType(curScalar);
         out.append("static_cast<");
@@ -132,18 +140,36 @@ void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumK
     else if(keyName == "CompactString")
         out.append("ACompactString(__k)");
     else if(keyName == "Name")
-        out.append("::Name(__k.data())");
+        out.append("::Name(__k)");
     else
         out.append("Path(::ConvertString(__k))");
 }
 
-void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName){
-    EmitNwbFieldFindPrefix(out, fieldName);
-    out.append("__f->isString()){ if(const auto __e = ");
+void EmitNwbEnumFieldDeserialize(MString& out, const MStringView fieldName, const MStringView enumName, const b8 isFlag){
+    if(!isFlag){
+        EmitNwbFieldFindPrefix(out, fieldName);
+        out.append("__f->isString()){ if(const auto __e = ");
+        out.append(enumName.data(), enumName.size());
+        out.append("::parseNamedEnum(__f->asString())) this->");
+        out.append(fieldName.data(), fieldName.size());
+        out.append(" = *__e; }\r\n");
+        return;
+    }
+    out.append("        if(const auto* __f = inMap.findField(\"");
+    out.append(fieldName.data(), fieldName.size());
+    out.append("\"); __f){ if(__f->isString()){ if(const auto __e = ");
     out.append(enumName.data(), enumName.size());
     out.append("::parseNamedEnum(__f->asString())) this->");
     out.append(fieldName.data(), fieldName.size());
-    out.append(" = *__e; }\r\n");
+    out.append(" = *__e; } else if(__f->isList()){ ");
+    out.append(enumName.data(), enumName.size());
+    out.append("::Enum __flags = static_cast<");
+    out.append(enumName.data(), enumName.size());
+    out.append("::Enum>(0); for(const auto& __item : __f->asList()){ if(__item.isString()){ if(const auto __e = ");
+    out.append(enumName.data(), enumName.size());
+    out.append("::parseNamedEnum(__item.asString())) __flags |= *__e; } } this->");
+    out.append(fieldName.data(), fieldName.size());
+    out.append(" = __flags; } }\r\n");
 }
 
 void EmitNwbSimdMatrixElementLoop(MString& out, const MStringView targetPrefix, const MStringView targetName, const MStringView matTypeName, const MStringView listAccessor, const MStringView loopVar, const u32 elemCount){
@@ -183,14 +209,14 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
 [[nodiscard]] b8 TryEmitNwbSharedScalarOrVectorFieldDeserialize(MString& out, const MStringView fieldName, const MStringView typeName, const SymbolTable& symbols){
     if(typeName == "b8"){
         EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isNumeric()) this->");
+        out.append("__f->isInteger()) this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(" = (__f->asInteger() != 0);\r\n");
         return true;
     }
     if(IsIntegerScalarType(typeName)){
         EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isNumeric()) this->");
+        out.append("__f->isInteger()) this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(" = static_cast<");
         out.append(typeName.data(), typeName.size());
@@ -206,13 +232,13 @@ void EmitNwbSimdMatrixLocalInit(MString& out, const MStringView matTypeName, con
         out.append(">(__f->toDouble());\r\n");
         return true;
     }
-    if(symbols.findEnum(typeName)){
-        EmitNwbEnumFieldDeserialize(out, fieldName, typeName);
+    if(const EnumDecl* ed = symbols.findEnum(typeName)){
+        EmitNwbEnumFieldDeserialize(out, fieldName, typeName, ed->isFlag);
         return true;
     }
     if(typeName == "EntityID"){
         EmitNwbFieldFindPrefix(out, fieldName);
-        out.append("__f->isNumeric()) this->");
+        out.append("__f->isInteger()) this->");
         out.append(fieldName.data(), fieldName.size());
         out.append(" = ::NWB::Core::ECS::EntityID(static_cast<u32>(__f->asInteger()));\r\n");
         return true;
@@ -637,7 +663,7 @@ void ReflectionEmitter::emitExtractNwbAssetDependenciesMethod(MString& out, cons
             const MStringView valName = m_symbols.resolveBaseTypeName(effectiveTypeRef->templateArgs[1].type->name);
             if(valName == "AssetRef" || m_symbols.findClass(valName)){
                 EmitNwbFieldFindPrefix(out, field->name);
-                out.append("__f->isMap()){ for(const auto& [__k, __v] : __f->asMap()){ (void)__k; ");
+                out.append("__f->isMap()){ for([[maybe_unused]] const auto& [__k, __v] : __f->asMap()){ ");
                 EmitNwbContainerElementDependencyExtract(out, valTypeRef, valName, "__v", m_symbols);
                 out.append(" } }\r\n");
             }

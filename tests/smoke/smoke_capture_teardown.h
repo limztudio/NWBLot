@@ -24,13 +24,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void DestroyCapturedSmokeRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world, UniquePtr<FramebufferCapture>& capture){
-    DestroySmokeRenderWorld(context, world);
-    if(capture){
-        capture->stop();
-        capture.reset();
-    }
-}
+void DestroyCapturedSmokeRenderWorld(ProjectRuntimeContext& context, NotNullUniquePtr<Core::ECS::World>& world, UniquePtr<FramebufferCapture>& capture);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -108,8 +108,7 @@ Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& quer
     const b8 recordsInlineReset = canResetTimerQueryHereUnchecked();
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u32 s_CompleteTimestampValidBits = 64u;
-    if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > s_CompleteTimestampValidBits){
+    if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > Device::s_CompleteTimestampValidBits){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
         invalidateCommandRecording();
         return MakeUnexpected(Failure{});
@@ -312,7 +311,6 @@ b8 CommandList::endTimerQueryFromExistingClaim(TimerQuery& query, const TimerQue
 
 b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
-    constexpr u32 s_CompleteTimestampValidBits = 64u;
     constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute) | static_cast<u8>(GpuQueueCapability::Transfer);
     return
         !m_commandRecordingFailed
@@ -323,7 +321,7 @@ b8 CommandList::canRecordTimerQueryHereUnchecked()const noexcept{
         && queueInfo->queueClass == m_creationDesc.queueType
         && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
         && queueInfo->timestampValidBits > 0u
-        && queueInfo->timestampValidBits <= s_CompleteTimestampValidBits
+        && queueInfo->timestampValidBits <= Device::s_CompleteTimestampValidBits
     ;
 }
 

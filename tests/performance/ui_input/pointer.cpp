@@ -22,7 +22,7 @@ namespace WorkloadKind{
     enum Enum : u8{ CursorHover, TouchGesture, CursorGesture, PressedSweep, CompetingContacts, CommitTargets };
 };
 
-static constexpr AStringView s_Names[]{ "cursor_hover", "touch_gesture", "cursor_gesture", "pressed_sweep", "competing_contacts", "commit_targets" };
+static constexpr Array<AStringView, 6> s_Names{ "cursor_hover", "touch_gesture", "cursor_gesture", "pressed_sweep", "competing_contacts", "commit_targets" };
 static constexpr Point s_FirstPosition{ 8.0f, 8.0f };
 static constexpr Point s_LastPosition{ 9.0f, 8.0f };
 static constexpr InputSource s_FirstSource{ 97u, 1u };
@@ -66,7 +66,7 @@ public:
 
 public:
     [[nodiscard]] b8 initialize(){
-        if(!m_router.commitTargets(m_targets.data(), m_targets.size(), ++m_generation))
+        if(!m_router.commitTargets(m_targets, ++m_generation))
             return false;
         if(m_kind == WorkloadKind::CursorHover || m_kind == WorkloadKind::CommitTargets)
             return true;
@@ -88,7 +88,7 @@ public:
 
     [[nodiscard]] b8 operation(){
         if(m_kind == WorkloadKind::CommitTargets)
-            return m_router.commitTargets(m_targets.data(), m_targets.size(), ++m_generation);
+            return m_router.commitTargets(m_targets, ++m_generation);
         if(m_kind == WorkloadKind::PressedSweep){
             usize pressed = 0u;
             for(const HitTarget& target : m_targets)
@@ -132,6 +132,7 @@ public:
         const auto name = StringFormat(m_arena, "{}_targets_{}_sources_{}", s_Names[m_kind], m_targets.size(), m_contactCount);
         return Measure(name, m_setupChecksum, [&](){ return operation(); }, [&]()noexcept{ return checksum(); });
     }
+
 
 private:
     [[nodiscard]] b8 move(const Point& position){
@@ -178,7 +179,8 @@ private:
 
 b8 RunPointerBenchmarks(){
     using namespace __hidden_ui_pointer_benchmark;
-    constexpr usize s_Counts[]{ 128u, 1024u, 4096u };
+    constexpr Array<usize, 3> s_Counts{ 128u, 1024u, 4096u };
+    constexpr Array<usize, 2> s_ContactCounts{ 16u, 256u };
     for(const usize count : s_Counts){
         for(u8 kind = WorkloadKind::CursorHover; kind <= WorkloadKind::PressedSweep; ++kind){
             Workload workload(count, static_cast<WorkloadKind::Enum>(kind));
@@ -186,7 +188,7 @@ b8 RunPointerBenchmarks(){
                 return false;
         }
     }
-    for(const usize contacts : { 16u, 256u }){
+    for(const usize contacts : s_ContactCounts){
         Workload workload(1024u, WorkloadKind::CompetingContacts, contacts);
         if(!workload.measure())
             return false;

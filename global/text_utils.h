@@ -226,15 +226,9 @@ template<typename CharT>
     return false;
 }
 
-template<typename StringT>
-    requires requires(const StringT& text){
-        typename StringT::value_type;
-        text.data();
-        text.size();
-    }
-[[nodiscard]] inline b8 HasEmbeddedNull(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
-    using CharT = typename StringT::value_type;
-    return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
+template<StringViewConvertible StringT>
+[[nodiscard]] inline b8 HasEmbeddedNull(const StringT& text)noexcept(noexcept(AsBasicStringView(text)) && IsArithmetic_V<typename StringT::value_type>){
+    return HasEmbeddedNull(AsBasicStringView(text));
 }
 
 template<typename CharT>

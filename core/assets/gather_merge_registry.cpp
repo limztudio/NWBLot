@@ -6,9 +6,6 @@
 
 #include "arena_names.h"
 
-#include <core/common/log.h>
-
-#include <global/assert.h>
 #include <global/auto_registration.h>
 
 
@@ -21,29 +18,8 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gather_merge_registry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-::AutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetArena>& QueryAutoMergeQueue(){
-    static ::AutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetArena> s_Queue(AssetsArenaScope::s_GatherMergeQueueArena);
-    return s_Queue;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 AssetGatherMergeAutoRegistrar::AssetGatherMergeAutoRegistrar(const AssetGatherMergeFunction function){
-    ::RegisterAutoFactory(__hidden_gather_merge_registry::QueryAutoMergeQueue(), function);
+    ::RegisterAutoFactory(QueryAssetAutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetsArenaScope::s_GatherMergeQueueArena>(), function);
 }
 
 
@@ -52,7 +28,7 @@ AssetGatherMergeAutoRegistrar::AssetGatherMergeAutoRegistrar(const AssetGatherMe
 
 AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(Alloc::ScratchArena& scratchArena){
     Vector<NotNull<AssetGatherMergeFunction>, Core::Alloc::ScratchArena> functions{scratchArena};
-    __hidden_gather_merge_registry::QueryAutoMergeQueue().copyTo(functions);
+    QueryAssetAutoRegistrationQueue<NotNull<AssetGatherMergeFunction>, AssetsArenaScope::s_GatherMergeQueueArena>().copyTo(functions);
 
     if(functions.empty())
         return nullptr;

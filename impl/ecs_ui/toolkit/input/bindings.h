@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include <impl/ecs_ui/toolkit/global.h>
 
 #include <impl/ecs_ui/toolkit/input/commands.adhd.h>
 
@@ -38,7 +38,7 @@ public:
 
 public:
     // Replacement is atomic, accepts an empty profile, and rejects overlapping chords for the same physical key.
-    [[nodiscard]] b8 set(const InputKeyBinding* bindings, usize count);
+    [[nodiscard]] b8 set(Span<const InputKeyBinding> bindings);
     void restoreDefaults();
     [[nodiscard]] InputCommandIntent resolve(i32 key, i32 modifiers)const noexcept;
     // Borrowed observations remain valid until a successful profile replacement or default restoration.

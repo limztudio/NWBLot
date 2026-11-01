@@ -49,7 +49,7 @@ struct DeviceExtensionEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr DeviceExtensionEntry s_RayTracingDeviceExtensions[] = {
+inline constexpr Array<DeviceExtensionEntry, 10> s_RayTracingDeviceExtensions = {{
     { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::AccelerationStructure },
     { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, DeviceExtensionFeature::None },
     { VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -60,7 +60,7 @@ inline constexpr DeviceExtensionEntry s_RayTracingDeviceExtensions[] = {
     { VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::ClusterAccelerationStructure },
     { VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME, DeviceExtensionFeature::RayTracingInvocationReorder },
     { VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME, DeviceExtensionFeature::RayTracingLinearSweptSpheres },
-};
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +76,19 @@ namespace DeviceExtensionRequestAction{
 };
 
 // A disabled RT policy rejects required RT extensions instead of silently weakening either request.
-[[nodiscard]] DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(HardwareRayTracingPolicy::Enum policy, AStringView extensionName, b8 required)noexcept;
+[[nodiscard]] constexpr DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(const HardwareRayTracingPolicy::Enum policy, const AStringView extensionName, const b8 required)noexcept{
+    if(!IsValidHardwareRayTracingPolicy(policy))
+        return DeviceExtensionRequestAction::Reject;
+    if(policy == HardwareRayTracingPolicy::Automatic)
+        return DeviceExtensionRequestAction::Enable;
+
+    // Generic dependency extensions remain available to non-RT callers that request them explicitly.
+    for(const DeviceExtensionEntry& entry : s_RayTracingDeviceExtensions){
+        if(entry.feature != DeviceExtensionFeature::None && extensionName == entry.name)
+            return required ? DeviceExtensionRequestAction::Reject : DeviceExtensionRequestAction::Omit;
+    }
+    return DeviceExtensionRequestAction::Enable;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -20,14 +20,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Telemetry = Core::Telemetry;
-using TelemetryArena = Telemetry::TelemetryArena;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Telemetry::EventKind::MemoryFrame) + 1u;
+inline constexpr usize s_TelemetryReportEventKindCount = static_cast<usize>(Core::Telemetry::EventKind::MemoryFrame) + 1u;
 inline constexpr usize s_TelemetryMemorySourceCount = static_cast<usize>(Core::Perf::MemorySource::HeapBacking) + 1u;
 
 struct TelemetryMemorySummary{
@@ -41,7 +34,7 @@ struct TelemetryMemorySummary{
 
 struct TelemetryReportSummary{
     u64 eventCount = 0u;
-    u64 eventKindCounts[s_TelemetryReportEventKindCount] = {};
+    Array<u64, s_TelemetryReportEventKindCount> eventKindCounts{};
     u64 parseFailureCount = 0u;
 
     u64 minFrameIndex = 0u;
@@ -58,7 +51,7 @@ struct TelemetryReportSummary{
     f64 maxGpuTimingSeconds = 0.0;
 
     u64 memoryEventCount = 0u;
-    TelemetryMemorySummary memorySources[s_TelemetryMemorySourceCount];
+    Array<TelemetryMemorySummary, s_TelemetryMemorySourceCount> memorySources;
 
     u64 frameGraphFrameCount = 0u;
     u64 frameGraphNodeCount = 0u;
@@ -72,13 +65,13 @@ struct TelemetryReportSummary{
 
 struct TelemetryReport{
     TelemetryReportSummary summary;
-    AString<TelemetryArena> json;
-    AString<TelemetryArena> perfCsv;
-    AString<TelemetryArena> graph;
+    AString<Core::Telemetry::TelemetryArena> json;
+    AString<Core::Telemetry::TelemetryArena> perfCsv;
+    AString<Core::Telemetry::TelemetryArena> graph;
 
 
 public:
-    explicit TelemetryReport(TelemetryArena& arena)noexcept
+    explicit TelemetryReport(Core::Telemetry::TelemetryArena& arena)noexcept
         : json(arena)
         , perfCsv(arena)
         , graph(arena)
@@ -89,9 +82,25 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView EventKindText(Telemetry::EventKind::Enum kind)noexcept;
-[[nodiscard]] AStringView PerfTimingSourceText(Telemetry::PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, Core::Alloc::ScratchArena& scratchArena);
+namespace TelemetryReportDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] AStringView FormatNameIdentityText(const Name& name, Array<char, NameDetail::s_DebugHashTextLength + 1u>& outIdentityText);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(const Core::Telemetry::EventView& events, Core::Telemetry::TelemetryArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

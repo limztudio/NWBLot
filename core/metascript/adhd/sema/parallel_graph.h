@@ -25,7 +25,9 @@ public:
 
 
 public:
-    [[nodiscard]] b8 validateMethod(const MethodDecl& method, MVector<ParseError>& errors);
+    [[nodiscard]] b8 validateMethod(const MethodDecl& method, MVector<ParseError>& errors){
+        return !method.hasBody || validateBlock(method.body, errors);
+    }
 
 
 private:

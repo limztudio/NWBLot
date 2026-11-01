@@ -5,6 +5,7 @@
 #include "text_input_service.h"
 #include "text_input_text.h"
 
+#include <global/atomic_identity.h>
 #include <global/scope_exit.h>
 #include <global/simplemath.h>
 #include <global/termination.h>
@@ -54,10 +55,8 @@ b8 QueuedTextInputService::cancelSession(const TextInputSessionToken token, cons
     m_cancelledToken = token;
     TextInputEvent& event = m_events.emplace_back(m_arena);
     event.token = token;
-    if(m_nextSequence == Limit<u64>::s_Max)
-        TerminateInvariant();
     event.sequence = m_nextSequence;
-    ++m_nextSequence;
+    AdvanceNonWrappingRevision(m_nextSequence);
     event.surroundingRevision = revision;
     event.kind = TextInputEventKind::Cancelled;
     event.cancelReason = reason;
@@ -108,10 +107,8 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     TextInputEvent& event = replace ? m_events.back() : m_events.emplace_back(m_arena);
     event.text.assign(text.data(), text.size());
     event.token = token;
-    if(m_nextSequence == Limit<u64>::s_Max)
-        TerminateInvariant();
     event.sequence = m_nextSequence;
-    ++m_nextSequence;
+    AdvanceNonWrappingRevision(m_nextSequence);
     event.surroundingRevision = m_surroundingRevision;
     event.kind = kind;
     event.anchorByte = anchorByte;

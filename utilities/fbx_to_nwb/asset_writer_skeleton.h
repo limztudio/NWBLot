@@ -40,11 +40,10 @@ struct PositionAlignedSkinnedMesh{
 
 
 [[nodiscard]] b8 ValidateSplitSkinSource(const SourceMeshStreams& mesh, Span<ufbx_node* const> skeletonJoints, Span<const JointMatrix> skeletonBindPoseMatrices, Span<const JointMatrix> inverseBindMatrices);
+[[nodiscard]] ScratchString NodeName(const ufbx_node* node, usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] Expected<SkeletonOutputData> BuildSkeletonOutputData(Span<ufbx_node* const> joints, Span<const JointMatrix> bindPoseMatrices, Span<const JointMatrix> inverseBindMatrices, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 RemapSkinInfluences(Span<MeshSkinInfluence> inOutInfluences, Span<const u16> oldToNewJointIndices);
+[[nodiscard]] b8 RemapSkinInfluences(Span<const u16> oldToNewJointIndices, Span<MeshSkinInfluence> inOutInfluences);
 [[nodiscard]] Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] b8 ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context);
-[[nodiscard]] ScratchString NodeName(const ufbx_node* node, const usize fallbackIndex, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

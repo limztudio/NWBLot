@@ -4,7 +4,6 @@
 
 #include "coincident_volumes.h"
 
-#include <impl/ecs_render/components.adhd.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_csg/components.adhd.h>
 #include <impl/ecs_mesh/system.h>
@@ -31,29 +30,22 @@ namespace __hidden_coincident_volumes{
 using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
-inline constexpr usize s_MinCoincidentCandidateCount = 2u;
-
-[[nodiscard]] b8 ValidCandidateLanes(SIMDVectorSingle positionVec, SIMDVectorSingle rotationVec, SIMDVectorSingle scaleVec)noexcept{
-    if(!VectorIsFinite(positionVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW) || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ))
-        return false;
-    const b8 scaleNonzero = (VectorMoveMask(VectorEqual(scaleVec, VectorZero())) & VectorComponentMask::s_XYZ) == 0u;
-    const b8 rotationNonzero = (VectorMoveMask(VectorNotEqual(rotationVec, VectorZero())) & VectorComponentMask::s_XYZW) != 0u;
-    return scaleNonzero && rotationNonzero;
-}
-
-[[nodiscard]] b8 ValidCandidate(const Candidate& candidate, const SIMDVectorSingle position, const SIMDVectorSingle rotation, const SIMDVectorSingle scale)noexcept{
-    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
-        return false;
-    return ValidCandidateLanes(position, rotation, scale);
-}
-
 struct CandidateHasher{
 public:
     usize operator()(const CandidatePointer candidate)const noexcept{
         usize hash = Hasher<Name>{}(candidate->mesh.name());
         HashCombine(hash, candidate->material.name());
         HashCombine(hash, candidate->group);
-        hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
+        HashCombineFloating(hash, candidate->position.x);
+        HashCombineFloating(hash, candidate->position.y);
+        HashCombineFloating(hash, candidate->position.z);
+        HashCombineFloating(hash, candidate->rotation.x);
+        HashCombineFloating(hash, candidate->rotation.y);
+        HashCombineFloating(hash, candidate->rotation.z);
+        HashCombineFloating(hash, candidate->rotation.w);
+        HashCombineFloating(hash, candidate->scale.x);
+        HashCombineFloating(hash, candidate->scale.y);
+        HashCombineFloating(hash, candidate->scale.z);
         if(candidate->group == s_NameNone){
             HashCombine(hash, candidate->boundaryMode);
             HashCombine(hash, candidate->mediumPriority);
@@ -62,24 +54,6 @@ public:
         }
         return hash;
     }
-
-
-public:
-    usize hashTransformLanes(SIMDVectorSingle positionLanes, SIMDVectorSingle rotationLanes, SIMDVectorSingle scaleLanes, usize hash)const noexcept{
-        HashCombineFloating(hash, VectorGetX(positionLanes));
-        HashCombineFloating(hash, VectorGetY(positionLanes));
-        HashCombineFloating(hash, VectorGetZ(positionLanes));
-        HashCombineFloating(hash, VectorGetX(rotationLanes));
-        HashCombineFloating(hash, VectorGetY(rotationLanes));
-        HashCombineFloating(hash, VectorGetZ(rotationLanes));
-        HashCombineFloating(hash, VectorGetW(rotationLanes));
-        HashCombineFloating(hash, VectorGetX(scaleLanes));
-        HashCombineFloating(hash, VectorGetY(scaleLanes));
-        HashCombineFloating(hash, VectorGetZ(scaleLanes));
-        return hash;
-    }
-
-
 };
 
 struct CandidateEqual{
@@ -103,12 +77,10 @@ public:
     }
 
 
-public:
+private:
     b8 equalTransformLanes(SIMDVectorSingle lhsPosition, SIMDVectorSingle lhsRotation, SIMDVectorSingle lhsScale, SIMDVectorSingle rhsPosition, SIMDVectorSingle rhsRotation, SIMDVectorSingle rhsScale)const noexcept{
         return Vector3Equal(lhsPosition, rhsPosition) && Vector4Equal(lhsRotation, rhsRotation) && Vector3Equal(lhsScale, rhsScale);
     }
-
-
 };
 
 
@@ -120,39 +92,32 @@ public:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-RendererOpticalVolumeSelection::RendererOpticalVolumeSelection(Core::Alloc::GlobalArena& arena)
-    : m_suppressed(0u, Hasher<Core::ECS::EntityID>{}, EqualTo<Core::ECS::EntityID>{}, arena)
-{}
 
 void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMaterialSystem& materials, Core::Alloc::ScratchArena& scratchArena){
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
-    if(!meshSystemPtr || rendererView.candidateCount() < __hidden_coincident_volumes::s_MinCoincidentCandidateCount){
+    if(!meshSystemPtr || rendererView.candidateCount() < s_MinCoincidentCandidateCount){
         reset();
         return;
     }
 
-    const auto mergingEnabled = [](const RendererComponent& renderer)noexcept{
-        return renderer.visible && (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone));
-    };
     // Count opt-ins first; opaque-heavy worlds need no candidate allocation.
     usize candidateCapacity = 0u;
     for(auto&& [entity, renderer] : rendererView){
-        if(mergingEnabled(renderer))
+        if(RendererComponentOpticalVolumeMergingEnabled(renderer))
             ++candidateCapacity;
     }
-    if(candidateCapacity < __hidden_coincident_volumes::s_MinCoincidentCandidateCount){
+    if(candidateCapacity < s_MinCoincidentCandidateCount){
         reset();
         return;
     }
     Vector<CoincidentOpticalVolumeCandidate, Core::Alloc::ScratchArena> candidates(scratchArena);
     candidates.reserve(candidateCapacity);
     for(auto&& [entity, renderer] : rendererView){
-        if(!mergingEnabled(renderer))
+        if(!RendererComponentOpticalVolumeMergingEnabled(renderer))
             continue;
         const auto materialResult = materials.findMaterialSurfaceInfo(renderer.material);
-        const b8 closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
+        const b8 closed = OpticalBoundaryModeIsClosed(renderer.opticalBoundaryMode);
         if(!materialResult)
             continue;
         const NotNull<MaterialSurfaceInfo*> material = *materialResult;
@@ -194,7 +159,7 @@ void RendererOpticalVolumeSelection::prepare(Core::ECS::World& world, RendererMa
 void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVolumeCandidate> candidates, Core::Alloc::ScratchArena& scratchArena){
     reset();
     const usize candidateCount = candidates.size();
-    if(candidateCount < __hidden_coincident_volumes::s_MinCoincidentCandidateCount)
+    if(candidateCount < s_MinCoincidentCandidateCount)
         return;
 
     using namespace __hidden_coincident_volumes;
@@ -204,7 +169,7 @@ void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVo
     // Inspect membership each frame; components may change without structural mutation.
     for(usize index = 0u; index < candidateCount; ++index){
         const Candidate& candidate = candidates[index];
-        if(!ValidCandidate(candidate, LoadFloat(candidate.position), LoadFloat(candidate.rotation), LoadFloat(candidate.scale)))
+        if(!ValidCoincidentOpticalVolumeCandidate(candidate))
             continue;
         const CandidatePointer current(&candidate);
         auto [entry, inserted] = representatives.emplace(current, current);
@@ -212,7 +177,7 @@ void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVo
             continue;
 
         const Candidate& previous = *entry.value();
-        const b8 replace = candidate.priority > previous.priority || (candidate.priority == previous.priority && candidate.entity < previous.entity);
+        const b8 replace = CoincidentOpticalVolumeCandidateOutranks(candidate, previous);
         const Core::ECS::EntityID suppressed = replace ? previous.entity : candidate.entity;
         if(replace)
             entry.value() = current;
@@ -221,14 +186,6 @@ void RendererOpticalVolumeSelection::select(const Span<const CoincidentOpticalVo
             continue;
         }
     }
-}
-
-void RendererOpticalVolumeSelection::reset()noexcept{
-    m_suppressed.clear();
-}
-
-b8 RendererOpticalVolumeSelection::isSuppressed(const Core::ECS::EntityID entity)const noexcept{
-    return !m_suppressed.empty() && m_suppressed.contains(entity);
 }
 
 

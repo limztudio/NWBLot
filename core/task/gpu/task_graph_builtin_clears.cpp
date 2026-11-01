@@ -213,7 +213,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, co
 
     const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
     GpuTaskDesc resolvedDesc = desc;
-    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
     return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation);
 }
 
@@ -263,7 +263,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(clearContract->queueRequirement);
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return MakeUnexpected(Failure{});
-    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
     return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
 }
 
@@ -310,7 +310,7 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc&
     GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(queueRequirement);
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
         return MakeUnexpected(Failure{});
-    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
     return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
 }
 

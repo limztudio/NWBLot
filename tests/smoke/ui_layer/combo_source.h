@@ -34,11 +34,7 @@ public:
 
     virtual u64 key(u64 index)const noexcept override{ return m_empty ? 0u : m_rows.key(index); }
 
-    virtual Expected<u64> indexOf(u64 key)const noexcept override{
-        if(m_empty)
-            return MakeUnexpected(Failure{});
-        return m_rows.indexOf(key);
-    }
+    virtual Expected<u64> indexOf(u64 key)const noexcept override{ return m_empty ? MakeUnexpected(Failure{}) : m_rows.indexOf(key); }
     virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override{ return m_empty ? StringView{} : m_rows.text(index); }
 
@@ -52,7 +48,7 @@ public:
 
     void beginFrame()noexcept{ m_rows.beginFrame(); }
 
-    void toggleEmpty()noexcept{ m_empty = !m_empty; ++m_revision; }
+    void toggleEmpty()noexcept;
 
     void replace()noexcept{ ++m_generation; }
 

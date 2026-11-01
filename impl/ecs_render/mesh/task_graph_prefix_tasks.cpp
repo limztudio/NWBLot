@@ -51,27 +51,14 @@ b8 MeshViewSetupGraphTask::Record(const Payload& payload, Core::CommandList& com
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 MeshViewUploadCommitGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept{
-    static_cast<void>(commandList);
-    static_cast<void>(context);
+b8 MeshViewUploadCommitGraphTask::Record(const Payload& payload, [[maybe_unused]] Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context)noexcept{
     payload.ready = true;
     return true;
 }
 
-
-void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    static_cast<void>(token);
+void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, [[maybe_unused]] const Core::QueueSubmissionToken& token)noexcept{
     if(payload.uploadRequired)
         payload.meshSystem.confirmMeshViewBufferUpload(payload.viewState);
-}
-
-
-void MeshViewUploadCommitGraphTask::Discarded(Payload& payload)noexcept{
-    payload.ready = false;
 }
 
 

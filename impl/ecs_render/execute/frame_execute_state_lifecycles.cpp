@@ -5,7 +5,7 @@
 #include "frame_execute_state_lifecycles.h"
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,11 +26,11 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
     const b8 hardwareShadowSupported,
     const b8 usesLaggedHistory
 )
-    : shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena)
+    : shadowPrepareStateScratchArena(s_TaskGraphArena)
     , meshAccelerationStateBuffers(shadowPrepareStateScratchArena)
     , shadowPrepareLiveStateBuffers(shadowPrepareStateScratchArena)
     , shadowPrepareAcceptedStateCandidate(renderer.m_shadowPreparePersistentState)
-    , normalExecutionScratchArena(RendererArenaScope::s_TaskGraphArena)
+    , normalExecutionScratchArena(s_TaskGraphArena)
     , shadowVisibilityReturnTextures{ targets.shadowVisibility, }
     , lightSpaceShadowResources(renderer.m_raytracingSystem.lightSpaceShadowSnapshot())
     , shadowComputeScratchTextures{
@@ -105,9 +105,6 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
         .scratchBuffers = shadowComputeScratchBuffers,
         .lightSpacePrepared = &renderer.m_shadowPreparationOutcome.ready,
         .lightSpaceCaptureTicket = lightSpaceShadowResources.captureTicket,
-        .returnTextureCount = LengthOf(shadowVisibilityReturnTextures),
-        .scratchTextureCount = LengthOf(shadowComputeScratchTextures),
-        .scratchBufferCount = LengthOf(shadowComputeScratchBuffers),
     }
     , softwareCausticsStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
@@ -116,8 +113,6 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
         .scratchStateCandidate = MakeNotNull(&causticsScratchStateCandidate),
         .irradianceTextures = causticIrradianceTextures,
         .scratchTextures = causticsComputeScratchTextures,
-        .irradianceTextureCount = LengthOf(causticIrradianceTextures),
-        .scratchTextureCount = LengthOf(causticsComputeScratchTextures),
     }
     , surfelGiStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
@@ -129,17 +124,12 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
         .counterBuffers = surfelGiCounterBuffers,
         .computeTextures = surfelGiComputeScratchTextures,
         .computeBuffers = surfelGiComputeScratchBuffers,
-        .returnTextureCount = LengthOf(surfelIrradianceReturnTextures),
-        .counterBufferCount = LengthOf(surfelGiCounterBuffers),
-        .computeTextureCount = LengthOf(surfelGiComputeScratchTextures),
-        .computeBufferCount = LengthOf(surfelGiComputeScratchBuffers),
     }
     , hardwareCausticsStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = MakeNotNull(&renderer),
         .accumulatorStateCandidate = MakeNotNull(&hardwareCausticAccumulatorStateCandidate),
         .accumulatorTextures = hardwareCausticAccumulatorTextures,
-        .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
     }
     , deferredLightingStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
@@ -151,9 +141,6 @@ FrameExecuteStateLifecycleSet::FrameExecuteStateLifecycleSet(
         .shadowReturnTextures = shadowVisibilityReturnTextures,
         .causticReturnTextures = causticIrradianceTextures,
         .surfelReturnTextures = surfelIrradianceReturnTextures,
-        .shadowReturnTextureCount = LengthOf(shadowVisibilityReturnTextures),
-        .causticReturnTextureCount = LengthOf(causticIrradianceTextures),
-        .surfelReturnTextureCount = LengthOf(surfelIrradianceReturnTextures),
         .usesLaggedHistory = usesLaggedHistory,
     }
 {
@@ -166,7 +153,8 @@ void FrameExecuteStateLifecycleSet::collectShadowPrepareStateBuffers(RendererFra
     renderer.m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
     const auto& acceptedTraceGeometry = renderer.m_raytracingSystem.acceptedShadowTraceGeometryBuffers();
     const auto& preparedTraceGeometry = renderer.m_raytracingSystem.preparedShadowTraceGeometryBuffers();
-    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? s_ShadowPrepareCsgStateBufferCapacity : s_ShadowPrepareFixedStateBufferCapacity)));
+    const usize shadowPrepareFixedCapacity = rayTracingGraphResources.csgTraceContextBuffer ? s_ShadowPrepareCsgStateBufferCapacity : s_ShadowPrepareFixedStateBufferCapacity;
+    shadowPrepareLiveStateBuffers.reserve(AddSize(AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()), AddSize(meshAccelerationStateBuffers.size(), shadowPrepareFixedCapacity)));
     const auto appendStateBuffer = [this](const Core::BufferHandle& buffer)noexcept{
         if(buffer)
             shadowPrepareLiveStateBuffers.push_back(buffer);
@@ -196,8 +184,7 @@ void FrameExecuteStateLifecycleSet::collectShadowPrepareStateBuffers(RendererFra
         stateCandidateRequired = true;
     }
 
-    shadowPrepareStateLifecycle.buffers = shadowPrepareLiveStateBuffers.data();
-    shadowPrepareStateLifecycle.bufferCount = shadowPrepareLiveStateBuffers.size();
+    shadowPrepareStateLifecycle.buffers = shadowPrepareLiveStateBuffers;
     shadowPrepareStateLifecycle.stateCandidateRequired = stateCandidateRequired;
 }
 
@@ -212,7 +199,7 @@ void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& r
         recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask, };
     }
     recordedCallbacks[recordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask, };
-    NWB_ASSERT(recordedCallbackCount <= LengthOf(recordedCallbacks));
+    NWB_ASSERT(recordedCallbackCount <= recordedCallbacks.size());
 
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredShadowPrepareTask, .context = &shadowPrepareStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask, };
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredShadowVisibilityTask, .context = &shadowVisibilityStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask, };
@@ -224,7 +211,7 @@ void FrameExecuteStateLifecycleSet::bindCallbacks(const RendererFramePipeline& r
         acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredHardwareCausticsTask, .context = &hardwareCausticsStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask, };
     }
     acceptedCallbacks[acceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{ .task = renderer.m_deferredLightingTask, .context = &deferredLightingStateLifecycle, .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask, };
-    NWB_ASSERT(acceptedCallbackCount <= LengthOf(acceptedCallbacks));
+    NWB_ASSERT(acceptedCallbackCount <= acceptedCallbacks.size());
 }
 
 

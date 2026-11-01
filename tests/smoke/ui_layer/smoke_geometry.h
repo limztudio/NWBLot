@@ -27,6 +27,10 @@ NWB_BEGIN
 
 namespace Tests::Smoke{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Source>
 [[nodiscard]] Expected<u64> FindAdjacentEnabledRow(const Source& source, const u64 start, const b8 reverse)noexcept(
     noexcept(static_cast<b8>(start >= source.rowCount()))
@@ -58,68 +62,32 @@ template<typename Source>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value)noexcept{
-    const SIMDVectorSingle channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u), static_cast<f32>((value >> 8u) & 15u), 15.0f);
-    const SIMDVectorSingle color = VectorDivide(channels, VectorReplicate(15.0f));
-    return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
-}
+[[nodiscard]] Impl::Ui::Color EncodeSmokeColor(u64 value)noexcept;
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
-    return EncodeSmokeColor(static_cast<u64>(value));
-}
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{ return EncodeSmokeColor(static_cast<u64>(value)); }
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{
-    return EncodeSmokeColor(static_cast<u64>(VectorGetX(VectorAdd(VectorMax(VectorZero(), VectorReplicate(value)), VectorReplicate(0.5f)))));
-}
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{ return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f)); }
 
 // Lanes are x, y, width and height.
-[[nodiscard]] inline Impl::Ui::Rect StoreSmokeRect(const SIMDVectorSingle rectangle)noexcept{
-    return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) };
-}
+[[nodiscard]] inline Impl::Ui::Rect StoreSmokeRect(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
 
-[[nodiscard]] inline b8 SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
+[[nodiscard]] inline b8 SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{ return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height; }
 
 // Compute expected row height from the accepted content extent.
-[[nodiscard]] inline Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
-    if(placement.rowCount == 0u)
-        return MakeUnexpected(Failure{});
-    const f32 height = static_cast<f32>(VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(placement.contentHeight), VectorDoubleReplicate(static_cast<f64>(placement.rowCount)))));
-    return Impl::Ui::ScrollLayout::RowBounds(index, placement, height);
-}
+[[nodiscard]] Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& placement, u64 index)noexcept;
 
-[[nodiscard]] inline Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{
-    const auto rectangle = SmokeListRowBounds(placement, index);
-    if(!rectangle)
-        return {};
-    const auto visible = Impl::Ui::IntersectUiRects<Impl::Ui::UiRectPrecision::PreciseExtents>(*rectangle, placement.contentClip);
-    return visible ? *visible : Impl::Ui::Rect{};
-}
+[[nodiscard]] Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, u64 index)noexcept;
 
-inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-}
+void LogSmokeRect(TStringView tag, u32 sequence, TStringView name, const Impl::Ui::Rect& rectangle);
 
-[[nodiscard]] inline u64 HashSmokeText(const AStringView text)noexcept{
-    u32 hash = 2166136261u;
-    for(const char value : text)
-        hash = (hash ^ static_cast<u8>(value)) * 16777619u;
-    return hash;
-}
+[[nodiscard]] u64 HashSmokeText(AStringView text)noexcept;
 
-inline void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){
-    if(inOutLastDisplay.logicalWidth == display.logicalWidth && inOutLastDisplay.logicalHeight == display.logicalHeight && inOutLastDisplay.pixelScaleX == display.pixelScaleX && inOutLastDisplay.pixelScaleY == display.pixelScaleY)
-        return;
-    inOutLastDisplay = display;
-    inOutDisplayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: display logical={}x{} scale={}x{}"), tag, display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY);
-}
+void ObserveSmokeDisplay(TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged);
 
 template<typename ValuesT>
-inline void PaintSingleSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u32 sequence){
+inline void PaintSingleSmokeValueMarkers(const ValuesT& values, const u32 sequence, Impl::UiPaintContext& context){
     const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> + 1u, 12u, 20u>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(20.0f)));
+    const f32 y = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index <= values.size(); ++index){
         const u32 value = index == values.size() ? sequence : values[index];
         context.paint.fillRect({ positions[index], y, 14.0f, 12.0f }, EncodeSmokeColor(value));
@@ -127,9 +95,9 @@ inline void PaintSingleSmokeValueMarkers(Impl::UiPaintContext& context, const Va
 }
 
 template<u32 Step, u32 Width, u32 Height = 12u, u32 BottomOffset = 20u, typename ValuesT>
-inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const u64 sequence){
+inline void PaintKeyedSmokeValueMarkers(const ValuesT& values, const u64 sequence, Impl::UiPaintContext& context){
     const auto positions = BuildSmokeMarkerPositions<(TupleSize_V<ValuesT> + 1u) * 2u, 12u, Step>();
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(static_cast<f32>(BottomOffset))));
+    const f32 y = context.display.logicalHeight - static_cast<f32>(BottomOffset);
     for(usize index = 0u; index <= values.size(); ++index){
         const u64 value = index == values.size() ? sequence : values[index];
         for(u32 part = 0u; part < 2u; ++part){
@@ -141,8 +109,8 @@ inline void PaintKeyedSmokeValueMarkers(Impl::UiPaintContext& context, const Val
 
 // Progress, slider, and image snapshots paint one 12-bit marker swatch per value part plus sequence swatches along the bottom edge.
 template<typename ValuesT, typename BitsT>
-inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const BitsT& bits, const u64 sequence){
-    const f32 y = VectorGetX(VectorSubtract(VectorReplicate(context.display.logicalHeight), VectorReplicate(18.0f)));
+inline void PaintSmokeValueMarkers(const ValuesT& values, const BitsT& bits, const u64 sequence, Impl::UiPaintContext& context){
+    const f32 y = context.display.logicalHeight - 18.0f;
     const auto positions = BuildSmokeMarkerPositions<TupleSize_V<ValuesT> * 2u + TupleSize_V<BitsT> * 6u + 2u, 12u, 12u>();
     usize marker = 0u;
     for(const u64 value : values){
@@ -160,24 +128,13 @@ inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT&
     }
 }
 
-[[nodiscard]] inline u32 HashSmokeText32(const AStringView text)noexcept{
-    return static_cast<u32>(HashSmokeText(text));
-}
+[[nodiscard]] inline u32 HashSmokeText32(const AStringView text)noexcept{ return static_cast<u32>(HashSmokeText(text)); }
 
 [[nodiscard]] inline b8 SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
     return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;
 }
 
-inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection){
-    const auto& bounds = placement.bounds;
-    const auto& content = placement.content;
-    const auto& caret = placement.caret;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}"), tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height, content.x, content.y, content.width, content.height);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
-        , tag, sequence, field, caret.x, caret.y, caret.width, caret.height
-        , selection.x, selection.y, selection.width, selection.height, placement.scroll
-    );
-}
+void LogSmokeEditGeometry(TStringView tag, u32 sequence, TStringView field, const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

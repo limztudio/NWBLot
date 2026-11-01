@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
-#include <global/simd/vector_arithmetic.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,12 +25,11 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         const ScrollbarPlacement& bar = horizontal ? placement.horizontal : placement.vertical;
         if(!bar.visible)
             continue;
-        const auto thumbIdResult = MakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
-        if(!thumbIdResult){
+        WidgetId thumbId;
+        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb, thumbId)){
             painted = false;
             break;
         }
-        const WidgetId thumbId = *thumbIdResult;
         const b8 hovered = m_context.input().hover() == thumbId;
         const b8 pressed = m_context.input().capture() == thumbId;
         const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
@@ -65,11 +64,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         const f32 thumbStart = horizontal ? bar.thumb.x : bar.thumb.y;
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
-        const SIMDVectorSingle afterStart = VectorSubtract(VectorAdd(VectorReplicate(start), VectorReplicate(trackExtent)), VectorReplicate(thumbStart));
-        const SIMDVectorSingle extent = VectorSubtract(VectorSelect(afterStart, VectorReplicate(thumbStart), s_SIMDMaskX), VectorSet(start, thumbExtent, start, thumbExtent));
-        const SIMDVectorSingle visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
-        const f32 before = VectorGetX(visible);
-        const f32 after = VectorGetY(visible);
+        const f32 before = Max(0.0f, thumbStart - start);
+        const f32 after = Max(0.0f, ((start + trackExtent) - thumbStart) - thumbExtent);
         HitTarget target;
         target.clip = clip;
         target.control = token;
@@ -80,21 +76,21 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
             target.rectangle.width = before;
         else
             target.rectangle.height = before;
-        const auto beforeId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.before" : "scroll.y.before");
-        if(!beforeId || !m_context.addPartTarget(item.state, *beforeId, target))
+        WidgetId beforeId;
+        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalBefore : s_WidgetPartScrollVerticalBefore, beforeId) || !m_context.addPartTarget(item.state, beforeId, target))
             return false;
         target.value = horizontal ? s_TextAreaScrollHorizontalAfter : s_TextAreaScrollVerticalAfter;
         target.rectangle = bar.track;
         if(horizontal){
-            target.rectangle.x = VectorGetX(VectorAdd(VectorReplicate(thumbStart), VectorReplicate(thumbExtent)));
+            target.rectangle.x = thumbStart + thumbExtent;
             target.rectangle.width = after;
         }
         else{
-            target.rectangle.y = VectorGetY(VectorAdd(VectorReplicate(thumbStart), VectorReplicate(thumbExtent)));
+            target.rectangle.y = thumbStart + thumbExtent;
             target.rectangle.height = after;
         }
-        const auto afterId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.after" : "scroll.y.after");
-        if(!afterId || !m_context.addPartTarget(item.state, *afterId, target))
+        WidgetId afterId;
+        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalAfter : s_WidgetPartScrollVerticalAfter, afterId) || !m_context.addPartTarget(item.state, afterId, target))
             return false;
         target.rectangle = bar.thumb;
         target.activatable = false;
@@ -102,8 +98,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         target.pointerGesture = trackExtent > thumbExtent;
         target.gestureReference = bar.track;
         target.gestureMaximum = bar.maximum;
-        const auto thumbId = MakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb);
-        if(!thumbId || !m_context.addPartTarget(item.state, *thumbId, target))
+        WidgetId thumbId;
+        if(!TryMakeWidgetId(item.state.id, horizontal ? s_WidgetPartScrollHorizontalThumb : s_WidgetPartScrollVerticalThumb, thumbId) || !m_context.addPartTarget(item.state, thumbId, target))
             return false;
     }
     if(placement.corner.width > 0.0f && placement.corner.height > 0.0f){
@@ -111,8 +107,8 @@ b8 Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacem
         target.rectangle = placement.corner;
         target.clip = clip;
         target.control = token;
-        const auto cornerId = MakeWidgetId(item.state.id, "scroll.corner");
-        if(!cornerId || !m_context.addPartTarget(item.state, *cornerId, target))
+        WidgetId cornerId;
+        if(!TryMakeWidgetId(item.state.id, s_WidgetPartScrollCorner, cornerId) || !m_context.addPartTarget(item.state, cornerId, target))
             return false;
     }
     return true;

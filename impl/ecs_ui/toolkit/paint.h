@@ -13,6 +13,8 @@
 #include <impl/assets_ui_skin/asset.h>
 #include <impl/ecs_ui/toolkit/paint_types.adhd.h>
 
+#include <global/simplemath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,16 +24,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
-struct SkinBinding{
-    Core::Assets::AssetRef<UiSkin> skin;
-    Core::Assets::AssetRef<Texture> texture;
-    u64 generation = 0u;
-    u32 atlasWidth = 0u;
-    u32 atlasHeight = 0u;
-    f32 referenceDensity = 1.0f;
-};
 
 template<typename T>
 using PaintVector = Vector<T, Core::Alloc::GlobalArena>;
@@ -46,7 +38,14 @@ class DrawSnapshot final{
 
 
 public:
-    explicit DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept
+        : m_vertices(arena)
+        , m_indices(arena)
+        , m_commands(arena)
+        , m_glyphPages(arena)
+        , m_sdfPages(arena)
+        , m_textureImages(arena)
+    {}
     DrawSnapshot(DrawSnapshot&&)noexcept = default;
     DrawSnapshot(const DrawSnapshot&) = delete;
 
@@ -95,14 +94,21 @@ private:
 
 class PaintBuilder final : NoCopy{
 private:
-    struct OverlayFrame{
-        usize clipDepth = 0u;
-        u32 layer = 0u;
-    };
+    [[nodiscard]] static constexpr b8 IsValidUvRect(const Rect& uv)noexcept{
+        return
+            IsFinite(uv.x) && IsFinite(uv.y) && IsFinite(uv.width) && IsFinite(uv.height)
+            && uv.x >= 0.0f && uv.y >= 0.0f && uv.width > 0.0f && uv.height > 0.0f
+            && uv.x + uv.width <= 1.0f && uv.y + uv.height <= 1.0f
+        ;
+    }
 
 
 public:
-    explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept;
+    explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
+        : m_snapshot(arena)
+        , m_regions(arena)
+        , m_clips(arena)
+    {}
 
 
 public:
@@ -114,15 +120,15 @@ public:
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
     [[nodiscard]] b8 beginOverlay(u32 layer);
     [[nodiscard]] b8 endOverlay()noexcept;
-    void fillRect(const Rect& rectangle, const Color& color = {});
+    void fillRect(const Rect& rectangle, const Color& color = {}){ emitQuad(rectangle, {}, color, PaintMaterial::Solid); }
     [[nodiscard]] b8 drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
-    [[nodiscard]] b8 prepareGlyphPages(const SharedGlyphPage* pages, usize count);
+    [[nodiscard]] b8 prepareGlyphPages(const Span<const SharedGlyphPage> pages){ return prepareImages(pages, {}); }
     [[nodiscard]] b8 drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
-    [[nodiscard]] b8 prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
-    [[nodiscard]] b8 prepareImages(const SharedGlyphPage* glyphPages, usize glyphCount, const SharedSdfAtlasPage* sdfPages, usize sdfCount, const SharedImageSource* textureImages = nullptr, usize textureCount = 0u);
+    [[nodiscard]] b8 prepareSdfPages(const Span<const SharedSdfAtlasPage> pages){ return prepareImages({}, pages); }
+    [[nodiscard]] b8 prepareImages(Span<const SharedGlyphPage> glyphPages, Span<const SharedSdfAtlasPage> sdfPages, Span<const SharedImageSource> textureImages = {});
     [[nodiscard]] b8 drawSdfGlyph(const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {});
-    [[nodiscard]] b8 prepareTextureImages(const SharedImageSource* images, usize count);
+    [[nodiscard]] b8 prepareTextureImages(const Span<const SharedImageSource> images){ return prepareImages({}, {}, images); }
     // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
     [[nodiscard]] b8 drawImage(const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f }, const Color& tint = {});
     [[nodiscard]] DrawSnapshot freeze();
@@ -139,7 +145,7 @@ private:
     DrawSnapshot m_snapshot;
     PaintVector<UiSkinRegion> m_regions;
     PaintVector<Rect> m_clips;
-    OverlayFrame m_overlays[s_PaintMaxOverlayDepth];
+    Array<PaintOverlayFrame, s_PaintMaxOverlayDepth> m_overlays{};
     usize m_overlayDepth = 0u;
     u32 m_layer = 0u;
     b8 m_commandsOrdered = true;

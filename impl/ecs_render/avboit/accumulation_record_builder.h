@@ -6,13 +6,13 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/record_inputs_base.h>
 #include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
+#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
+#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
@@ -47,7 +47,6 @@ struct AvboitAccumulationRecordInputs : public AvboitRecordInputsBase{
     Core::GpuGraphResourceId avboitAccumColor;
     Core::GpuGraphResourceId avboitAccumExtinction;
     Core::GpuTaskId integrationTask;
-    b8 streamsUploaded = false;
     Core::GpuTimingSubmissionTicket& accumulationTimingTicket;
     Optional<Core::GpuTimingMeasure>& accumulationComputeEmulationTiming;
 
@@ -66,7 +65,12 @@ public:
 
 class AvboitAccumulationRecordBuilder final : NoCopy{
 public:
-    AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept;
+    AvboitAccumulationRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
+        : m_graph(graph)
+        , m_graphics(graphics)
+        , m_materialSystem(materialSystem)
+        , m_avboitSystem(avboitSystem)
+    {}
 
 
 public:

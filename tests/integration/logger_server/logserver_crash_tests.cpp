@@ -23,13 +23,9 @@
 
 #include <logger/common.h>
 #include <logger/server/crash_auth.h>
-#include <logger/server/crash_ingest.h>
-#include <logger/server/crash_paths.h>
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-#include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -66,11 +62,12 @@ static constexpr AStringView s_Windows = "windows";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
+using TestArena = NWB::Tests::TestArena<>;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::WaitForDirectory;
+using namespace NWB::Tests::CrashTestPaths;
 using namespace NWB::Tests::LoggerServerCrash;
-namespace CrashNames = NWB::Core::Crash::PackageNames;
+using namespace NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");
 inline constexpr Name s_ArchiveScratch("tests/integration/logger_server/archive_scratch");
 inline constexpr Name s_AssertChildInstallArena("tests/integration/logger_server/assert_child_install");
@@ -96,8 +93,8 @@ private:
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 
 
-static void AppendDecimalText(CrashTestText& outText, const u64 value){
-    char buffer[32] = {};
+static void AppendDecimalText(const u64 value, CrashTestText& outText){
+    Array<char, 32u> buffer = {};
     outText += FormatDecimal(static_cast<usize>(value), buffer);
 }
 
@@ -146,7 +143,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
             continue;
 
         CrashTestText manifest(arena);
-        if(!ReadTextFile(entry.path() / CrashNames::s_ManifestFileName, manifest))
+        if(!ReadTextFile(entry.path() / s_ManifestFileName, manifest))
             continue;
         if(Contains(manifest, firstNeedle) && Contains(manifest, secondNeedle))
             return true;
@@ -210,12 +207,6 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(NWB::Core::Alloc::Gl
     return ProcessCrashArchiveBytes(arena, testGroup, stem, archive, config);
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-[[nodiscard]] static usize FindText(const AStringView text, const AStringView needle)noexcept{
-    return text.find(needle);
-}
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -258,7 +249,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(WIFSIGNALED(status));
     EXPECT_EQ(WTERMSIG(status), SIGABRT);
 
-    const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
+    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingDirectoryName;
     {
         constexpr u32 s_PendingDirectoryReadyTimeoutMS = 3000u;
         const auto directoryReady = WaitForDirectory(pendingDirectory, s_PendingDirectoryReadyTimeoutMS);
@@ -268,7 +259,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 
     CrashTestText expectedAbortCode(arena);
     expectedAbortCode += "\"reason_code\": ";
-    AppendDecimalText(expectedAbortCode, static_cast<u64>(SIGABRT));
+    AppendDecimalText(static_cast<u64>(SIGABRT), expectedAbortCode);
     EXPECT_FALSE(PendingDirectoryContainsManifestTexts(arena, pendingDirectory, AStringView("\"reason_kind\": \"signal\""), AStringView(expectedAbortCode.data(), expectedAbortCode.size())));
 
     const auto assertPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, expectedAssertCategory, "false", AStringView(), s_TestSourceFilename);
@@ -291,7 +282,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(Contains(report, "event=assert"));
     EXPECT_TRUE(Contains(report, s_StatusCallstackCaptured));
     EXPECT_TRUE(Contains(report, s_Callstack));
-    EXPECT_EQ(FindText(report, "false\nat "), 0u);
+    EXPECT_EQ(report.find("false\nat "), 0u);
     EXPECT_TRUE(Contains(report, s_TestSourceFilename));
     const auto externalSymbolizer = LinuxExternalSymbolizerAvailable(arena);
     ASSERT_TRUE(externalSymbolizer);
@@ -331,7 +322,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
         continuedAfterError = true;
     }
 
-    const CrashTestPath pendingDirectory = spoolDirectory / CrashNames::s_PendingDirectoryName;
+    const CrashTestPath pendingDirectory = spoolDirectory / s_PendingDirectoryName;
     const auto errorPackageDirectory = WaitForTriggerPackage(arena, pendingDirectory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError, AStringView(), s_ErrorMessage, s_TestSourceFilename);
     EXPECT_TRUE(errorPackageDirectory);
     EXPECT_TRUE(continuedAfterError);
@@ -380,8 +371,8 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u);
-    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=4198964\n");
+    BeginArchiveWithManifest("linux-missing-maps-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
+    AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=4198964\n", archive);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -405,9 +396,9 @@ TEST_F(LoggerServerCrash, LinuxCrashPackageReportsUnmappedInstructionPointer){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u);
-    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, "instruction_pointer=7340032\n");
-    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
+    BeginArchiveWithManifest("linux-unmapped-ip-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
+    AppendArchiveFile(s_CpuContextFileName, "instruction_pointer=7340032\n", archive);
+    AppendArchiveFile(s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n", archive);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -431,8 +422,8 @@ TEST_F(LoggerServerCrash, AndroidCrashPackageReportsTombstoneWithoutFrames){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "android-no-frames-test", "android", s_Crash, s_ManualDump, 0u);
-    AppendArchiveFile(archive, CrashNames::s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n");
+    BeginArchiveWithManifest("android-no-frames-test", "android", s_Crash, s_ManualDump, 0u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
+    AppendArchiveFile(s_AndroidTombstoneFileName, "pid: 7, tid: 7, name: nwb\nbacktrace:\n", archive);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -457,7 +448,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest("windows-missing-dump-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
@@ -473,7 +464,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageReportsMissingMinidump){
     EXPECT_TRUE(Contains(report, "resolver=windows_pdb_minidump"));
 #if defined(NWB_PLATFORM_WINDOWS)
     CrashTestText missingDumpMessage(arena);
-    missingDumpMessage += CrashNames::s_ProcessDumpFileName;
+    missingDumpMessage += s_ProcessDumpFileName;
     missingDumpMessage += " is missing or unreadable";
     EXPECT_TRUE(Contains(report, AStringView(missingDumpMessage.data(), missingDumpMessage.size())));
 #else
@@ -491,9 +482,9 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u);
+    BeginArchiveWithManifest("gpu-detective-test", s_Windows, s_Crash, s_WindowsExceptionCategory, 0xC0000005u, ManifestEventField::Include, ManifestTriggerFields{}, arena, archive);
     // Malformed RGD input must report decode failure without aborting crash ingest.
-    AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
+    AppendArchiveFile(s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n", archive);
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
     EXPECT_TRUE(result.accepted);
@@ -542,7 +533,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BeginArchiveWithManifest(archive, arena, "missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit);
+    BeginArchiveWithManifest("missing-event-manifest-test", s_Linux, s_Crash, s_Signal, 11u, ManifestEventField::Omit, ManifestTriggerFields{}, arena, archive);
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);
@@ -566,19 +557,19 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText validArchive(arena);
-    BeginArchiveWithManifest(validArchive, arena, s_ValidStem, s_Linux, s_Crash, s_Signal, 0u);
+    BeginArchiveWithManifest(s_ValidStem, s_Linux, s_Crash, s_Signal, 0u, ManifestEventField::Include, ManifestTriggerFields{}, arena, validArchive);
     const auto validResult = ProcessCrashArchive(arena, s_Group, s_ValidStem, validArchive);
     ASSERT_TRUE(validResult.accepted);
 
-    CrashTestText manifest = BuildManifest(arena, s_InvalidStem, s_Linux, s_Crash, s_Signal, 0u);
+    CrashTestText manifest = BuildManifest(s_InvalidStem, s_Linux, s_Crash, s_Signal, 0u, ManifestEventField::Include, ManifestTriggerFields{}, arena);
     constexpr AStringView s_BooleanPrefix("\"has_exception_context\": ");
     const usize fieldOffset = AStringView(manifest.data(), manifest.size()).find(s_BooleanPrefix);
     ASSERT_NE(fieldOffset, AStringView::npos);
     manifest.replace(fieldOffset + s_BooleanPrefix.size(), 5u, "null");
 
     CrashTestText invalidArchive(arena);
-    invalidArchive += CrashNames::s_ArchiveHeaderText;
-    AppendArchiveFile(invalidArchive, CrashNames::s_ManifestFileName, AStringView(manifest.data(), manifest.size()));
+    invalidArchive += s_ArchiveHeaderText;
+    AppendArchiveFile(s_ManifestFileName, AStringView(manifest.data(), manifest.size()), invalidArchive);
     const auto invalidResult = ProcessCrashArchive(arena, s_Group, s_InvalidStem, invalidArchive);
     EXPECT_FALSE(invalidResult.accepted);
     EXPECT_TRUE(ContainsMessage(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
@@ -612,19 +603,19 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestAcceptedUploads){
 
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(archive, arena, s_Stem0);
+        BuildLinuxCrashArchive(s_Stem0, arena, archive);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem0, archive, config);
         EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(archive, arena, s_Stem1);
+        BuildLinuxCrashArchive(s_Stem1, arena, archive);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem1, archive, config);
         EXPECT_TRUE(result.accepted);
     }
     {
         CrashTestText archive(arena);
-        BuildLinuxCrashArchive(archive, arena, s_Stem2);
+        BuildLinuxCrashArchive(s_Stem2, arena, archive);
         const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem2, archive, config);
         EXPECT_TRUE(result.accepted);
     }
@@ -671,7 +662,7 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     RemoveTestArtifacts(arena, s_Group);
 
     CrashTestText archive(arena);
-    BuildLinuxCrashArchive(archive, arena, s_Stem);
+    BuildLinuxCrashArchive(s_Stem, arena, archive);
 
     EXPECT_TRUE(EnsureDirectories(StorageDirectory(arena, s_Group)));
     EXPECT_TRUE(WriteTextFile(StorageDirectory(arena, s_Group) / NWB::Log::s_CrashRawDirectoryName, AStringView("blocked")));
@@ -738,8 +729,8 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
 
 TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls){
     TestArena testArena;
-    constexpr tchar s_Message[] = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
-    const TStringView message(s_Message, LengthOf(s_Message));
+    constexpr Array<tchar, 3u> s_Message = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
+    const TStringView message(s_Message.data(), s_Message.size());
     const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Core::Common::LogType::Warning, NWB::Log::LogString(message, testArena.arena));
     NWB::Log::LogBytes payload(testArena.arena);
     ASSERT_TRUE(NWB::Log::BuildMessagePayload(source, payload));
@@ -767,8 +758,8 @@ TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer wrong"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, "Bearer secret-token "));
 
-    const char headerBytes[] = "Bearer secret-token trailing";
-    const AStringView header(headerBytes, LengthOf("Bearer secret-token") - 1u);
+    constexpr AStringView s_HeaderBytes = "Bearer secret-token trailing";
+    const AStringView header(s_HeaderBytes.data(), LengthOf("Bearer secret-token") - 1u);
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SecretToken, header.substr(0u, header.size() - 1u)));
 }

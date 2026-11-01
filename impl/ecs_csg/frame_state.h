@@ -43,6 +43,8 @@ static_assert(IsStandardLayout_V<CsgFrameState>, "CsgFrameState must stay layout
 static_assert(IsTriviallyCopyable_V<CsgFrameState>, "CsgFrameState must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameCutterRange>, "CsgFrameCutterRange must stay layout-stable for frame handoff");
 static_assert(IsTriviallyCopyable_V<CsgFrameCutterRange>, "CsgFrameCutterRange must stay cheap to pass by value");
+static_assert(IsStandardLayout_V<CsgFrameCutterRangeEntry>, "CsgFrameCutterRangeEntry must stay layout-stable for frame handoff");
+static_assert(IsTriviallyCopyable_V<CsgFrameCutterRangeEntry>, "CsgFrameCutterRangeEntry must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay cheap to pass by value");
 
@@ -57,14 +59,9 @@ private:
         const CsgCutterComponent* cutter = nullptr;
     };
 
-    struct CutterRangeEntry{
-        CsgFrameCutterRange range;
-        u32 writtenCount = 0u;
-    };
-
 
 private:
-    using CutterRangeMap = HashMap<Name, CutterRangeEntry, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
+    using CutterRangeMap = HashMap<Name, CsgFrameCutterRangeEntry, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
     using CutterRefVector = Vector<CsgFrameCutterRef, Core::Alloc::ScratchArena>;
 
 
@@ -107,16 +104,13 @@ public:
         if(!range)
             return;
 
-        CsgReceiverDrawState drawState;
-        drawState.active = true;
-        drawState.firstCutter = range->firstCutter;
-        drawState.cutterCount = range->cutterCount;
-        forEachReceiverCutter(drawState, handler);
+        forEachReceiverCutter(MakeCsgReceiverDrawState(CsgReceiverKind::Static, *range), handler);
     }
 
 
 private:
     [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(Core::ECS::EntityID entity)const noexcept;
+    [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(const CsgReceiverComponent& receiver)const noexcept;
 
 
 private:

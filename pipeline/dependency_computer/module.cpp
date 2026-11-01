@@ -2,10 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../command_line.h"
-#include "dependencies.h"
+#include "provider_catalog.h"
+
+#include <pipeline/command_line.h>
 
 #include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,12 +33,16 @@ inline constexpr usize s_LineFeedReserveBytes = 1u;
 
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(__hidden_dependency_computer::s_DependencyComputerArena);
+    Core::Assets::AssetArena arena(__hidden_dependency_computer::s_DependencyComputerArena);
+    Core::Alloc::ScratchArena scratchArena(__hidden_dependency_computer::s_DependencyComputerArena);
     PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
-    return commandLine.run(argc, argv, arena, [&](PipelineOptions& parsed){
-        NWB::Core::Alloc::ScratchArena scratchArena(__hidden_dependency_computer::s_DependencyComputerArena);
-        const auto resolvedInputs = ComputeAssetDependencies(parsed, arena, scratchArena);
+    return commandLine.run(argc, argv, [&](PipelineOptions& parsed){
+        const auto resolvedInputs = DependencyComputer::ComputeAssetDependencies(parsed, arena, scratchArena);
         if(!resolvedInputs)
             return s_PipelineExitFailure;
         const auto& inputs = *resolvedInputs;
@@ -39,7 +50,7 @@ int RunPipelineTool(const int argc, char** argv){
         usize outputReserveBytes = 0u;
         for(const auto& input : inputs)
             outputReserveBytes += input.size() + __hidden_dependency_computer::s_LineFeedReserveBytes;
-        AString<NWB::Core::Alloc::ScratchArena> text(scratchArena);
+        AString<Core::Alloc::ScratchArena> text(scratchArena);
         text.reserve(outputReserveBytes);
         for(const auto& input : inputs){
             text += input;
@@ -52,8 +63,14 @@ int RunPipelineTool(const int argc, char** argv){
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs"), inputs.size());
         return s_PipelineExitSuccess;
-    });
+    }, arena, scratchArena);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

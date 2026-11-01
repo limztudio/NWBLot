@@ -14,37 +14,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_combo_behavior{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<b8> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
-    if(key == 0u || count == 0u)
-        return false;
-    const auto index = source.indexOf(key);
-    if(!index)
-        return false;
-    if(*index >= count || source.key(*index) != key)
-        return MakeUnexpected(Failure{});
-    return source.enabled(*index);
-}
-
-[[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision, const u64 count){
-    return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision && source.rowCount() == count;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration)noexcept{
     if(!owner.valid() || declarationGeneration == 0u)
         return false;
@@ -56,7 +25,6 @@ b8 ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declar
 }
 
 b8 ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
-    using namespace __hidden_ui_combo_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
     const u64 revision = source.revision();
@@ -65,14 +33,14 @@ b8 ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
         return false;
     const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     const u64 selected = replacement ? 0u : state.m_selectedKey;
-    const auto present = ResolveKey(source, count, selected);
+    const auto present = ListBehavior::ResolveKey(source, count, selected);
     if(!present)
         return false;
-    if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
+    if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
         return false;
     if(replacement && !state.m_list.scrollTo(0.0))
         return false;
-    state.m_selectedKey = *present ? selected : 0u;
+    state.m_selectedKey = present->present ? selected : 0u;
     state.m_sourceGeneration = generation;
     state.m_sourceRevision = revision;
     if(replacement)
@@ -92,19 +60,18 @@ void ComboBehavior::Close(ComboState& state)noexcept{
 }
 
 b8 ComboBehavior::Commit(ComboState& state, const IListDataSource& source, const u64 key){
-    using namespace __hidden_ui_combo_behavior;
     if(!state.m_popup.isOpen() || key == 0u)
         return false;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = state.m_sourceGeneration;
     const u64 revision = state.m_sourceRevision;
     const u64 count = source.rowCount();
-    if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
+    if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
         return false;
-    const auto present = ResolveKey(source, count, key);
-    if(!present || !*present)
+    const auto present = ListBehavior::ResolveKey(source, count, key);
+    if(!present || !present->present)
         return false;
-    if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration || !state.m_popup.isOpen())
+    if(!ListBehavior::SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration || !state.m_popup.isOpen())
         return false;
     state.m_selectedKey = key;
     Close(state);

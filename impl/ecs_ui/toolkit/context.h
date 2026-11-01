@@ -18,44 +18,16 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builder containers and context scopes nest together, so one depth limit bounds both.
-inline constexpr usize s_ContextMaxScopeDepth = 64u;
-
 // One CPU owner coordinates declarations, input and the exact matching frozen frame's layout publication.
 class Context final : NoCopy{
 private:
-    struct OwnedTarget{
-        HitTarget target;
-        WidgetRoot root;
-    };
-
-    struct OwnedPopup{
-        PopupScope scope;
-        WidgetRoot root;
-    };
-
-    struct StateClaim{
-        u64 instanceGeneration = 0u;
-        WidgetKind::Enum kind = WidgetKind::Panel;
-
-
-    public:
-        [[nodiscard]] b8 operator==(const StateClaim&)const noexcept = default;
-    };
-
     struct StateClaimHash{
-        [[nodiscard]] usize operator()(const StateClaim& claim)const noexcept;
+        [[nodiscard]] usize operator()(const ContextStateClaim& claim)const noexcept{ return ContextStateClaimHash(claim); }
     };
 
 
 private:
-    using StateClaims = HashSet<StateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<StateClaim>>;
-
-
-private:
-    static constexpr usize s_SmallStateClaims = 32u;
-
-    [[nodiscard]] static b8 ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root)noexcept;
+    using StateClaims = HashSet<ContextStateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<ContextStateClaim>>;
 
 
 public:
@@ -83,11 +55,11 @@ public:
     [[nodiscard]] b8 registerPopupScope(const WidgetState& state, PopupScope scope);
     [[nodiscard]] b8 activatePopupScope(const PopupToken& token)noexcept;
     [[nodiscard]] b8 updatePopupScope(const PopupToken& token, PopupScope scope)noexcept;
-    [[nodiscard]] b8 beginPopupScope(const WidgetState& state, PopupScope scope);
+    [[nodiscard]] b8 beginPopupScope(const WidgetState& state, const PopupScope scope){ return registerPopupScope(state, scope) && activatePopupScope(scope.token); }
     [[nodiscard]] b8 endPopupScope(b8 visible)noexcept;
     // Discard an inactive scope and its descendants without disturbing the current parent activation.
     void discardPopupScope(const PopupToken& token)noexcept;
-    [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept;
+    [[nodiscard]] b8 hasPopupScope(const PopupToken& token)const noexcept{ return popupLayer(token) != 0u; }
     [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
 
     [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
@@ -101,7 +73,7 @@ public:
     void abandonFrame();
     void resetInput()noexcept;
     // Retire removed/hidden host roots even while a GPU frame is pending.
-    void retainRoots(const WidgetRoot* roots, usize count);
+    void retainRoots(Span<const WidgetRoot> roots);
     void fail()noexcept{ m_failed = true; }
 
     [[nodiscard]] b8 failed()const noexcept{ return m_failed; }
@@ -127,9 +99,9 @@ private:
     InputRouter m_input;
     WidgetStateStore m_states;
     PaintVector<WidgetId> m_scopes;
-    PaintVector<OwnedTarget> m_targets;
-    PaintVector<OwnedPopup> m_popups;
-    Array<StateClaim, s_SmallStateClaims> m_smallStateClaims{};
+    PaintVector<ContextOwnedTarget> m_targets;
+    PaintVector<ContextOwnedPopup> m_popups;
+    Array<ContextStateClaim, s_SmallStateClaims> m_smallStateClaims{};
     StateClaims m_stateClaims;
     InputVector<HitTarget> m_commitTargets;
     InputVector<PopupScope> m_commitPopups;

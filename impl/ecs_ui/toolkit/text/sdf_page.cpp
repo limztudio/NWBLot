@@ -14,45 +14,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)noexcept{
-    return
-        lhs.font == rhs.font && lhs.fontSha256 == rhs.fontSha256 && lhs.pixelsSha256 == rhs.pixelsSha256
-        && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity && lhs.generation == rhs.generation
-        && lhs.index == rhs.index && lhs.width == rhs.width && lhs.height == rhs.height
-        && lhs.channelCount == rhs.channelCount
-        && lhs.spreadPixels == rhs.spreadPixels && lhs.distanceEncoding == rhs.distanceEncoding
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels)noexcept
-    : m_binding(binding)
-    , m_pixels(arena)
-{
-    m_pixels = Move(pixels);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Expected<SharedSdfAtlasPage> CreateSdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, SdfAtlasPage::Pixels&& pixels)noexcept{
-    if(
-        !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
-        || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
-        || binding.width > s_FontAtlasMaxExtent || binding.height > s_FontAtlasMaxExtent
-        || binding.channelCount == 0u || binding.channelCount > s_SdfMaxChannelCount
-        || binding.spreadPixels < s_FontAtlasMinSpreadPixels || binding.spreadPixels > s_FontAtlasMaxSpreadPixels
-        || binding.distanceEncoding != s_FontAtlasDistanceEncoding
-        || pixels.size() != static_cast<usize>(binding.width) * binding.height * binding.channelCount
-    )
+    if(!ValidSdfAtlasPageBinding(binding, pixels.size()))
         return MakeUnexpected(Failure{});
     SdfAtlasPageBinding immutable = binding;
     immutable.pixelsSha256 = ComputeSha256(BinaryByteView(pixels.data(), pixels.size()));
-    auto* const page = NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels));
+    auto* const page = NewArenaObject<RefCounter<SdfAtlasPage>>(arena, immutable, Move(pixels));
     if(!page)
         return MakeUnexpected(Failure{});
     return SharedSdfAtlasPage(page, ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);

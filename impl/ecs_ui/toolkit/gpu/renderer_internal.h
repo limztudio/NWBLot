@@ -6,13 +6,13 @@
 
 
 #include "renderer.h"
-#include "renderer_sdf_resources.h"
-#include "renderer_texture_resources.h"
 
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
 #include <impl/assets_texture/loader.h>
+#include <impl/ecs_ui/toolkit/images/image_source.h>
 #include <impl/ecs_ui/toolkit/text/glyph_page.h>
+#include <impl/ecs_ui/toolkit/text/sdf_page.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/backend_selection.h>
@@ -59,15 +59,35 @@ static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
 static_assert(s_FontAtlasDistanceEncoding == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
 inline constexpr TStringView s_GpuRendererContext = NWB_TEXT("GpuRenderer");
+inline constexpr Core::FormatSupport::Mask s_RequiredSampledTextureSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + s_GpuRasterFixedResourceUses>;
-using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
-using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
-using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxTextureImages>;
+using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_PaintMaxImages + s_GpuRasterFixedResourceUses>;
+using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_PaintMaxImages>;
+
+namespace GpuSampledTextureImportError{
+    enum Enum : u8{
+        Identity,
+        Completion,
+        Texture,
+    };
+};
+
+struct GpuSampledTextureImportDesc{
+    usize index = 0u;
+    Name readyPrefix;
+    AStringView readyMarkerLabel;
+    TStringView completionLabel;
+    Core::QueueSubmissionToken readinessToken;
+    Name texturePrefix;
+    AStringView textureMarkerLabel;
+    Core::TextureHandle texture;
+};
 
 template<typename T>
 using GpuVersion = RefCountPtr<RefCounter<T>, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>>;
@@ -80,69 +100,115 @@ template<typename T, typename... Args>
     return GpuVersion<T>(value, ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena), s_AdoptRef);
 }
 
-inline void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept{
-    if(descriptor.valid())
-        graphics.getDevice().getDescriptorHeap().free(descriptor);
-}
-
-[[nodiscard]] inline b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, const Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor){
-    if(inOutDescriptor.valid())
-        return true;
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    const Expected<Core::GpuDescriptorHandle> descriptorResult = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(!descriptorResult)
-        return false;
-    const Core::GpuDescriptorHandle descriptor = *descriptorResult;
-    Core::GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(0u, texture.get(), format, Core::s_AllSubresources, Core::TextureDimension::Texture2D)))
-        return false;
-    inOutDescriptor = descriptor;
-    descriptorGuard.release();
-    return true;
-}
+void FreeGpuDescriptor(Core::GraphicsRuntime& graphics, const Core::GpuDescriptorHandle& descriptor)noexcept;
+[[nodiscard]] b8 PrepareGpuSampledImageDescriptor(Core::GraphicsRuntime& graphics, const Core::TextureHandle& texture, Core::Format::Enum format, Core::GpuDescriptorHandle& inOutDescriptor);
+[[nodiscard]] b8 GpuTokenComplete(Core::Device& device, const Core::QueueSubmissionToken& token);
+[[nodiscard]] Expected<Core::GpuGraphResourceId, GpuSampledTextureImportError::Enum> ImportGpuSampledTexture(const GpuSampledTextureImportDesc& desc, Core::GpuTaskGraph& graph, GpuRasterResourceUses& uses);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GpuSkinVersion : NoCopy{
-    Core::GraphicsRuntime& m_graphics;
-    SkinBinding m_binding;
-    TextureGpuResource m_texture;
+class GpuSkinVersion : NoCopy{
+public:
+    explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuSkinVersion()noexcept{
+        TextureAssetLoader::Release(m_texture, m_graphics);
+    }
 
 
 public:
-    explicit GpuSkinVersion(Core::GraphicsRuntime& graphics)noexcept;
-    ~GpuSkinVersion()noexcept;
+    Core::GraphicsRuntime& m_graphics;
+    SkinBinding m_binding;
+    TextureGpuResource m_texture;
 };
 
-struct GpuGlyphVersion : NoCopy{
+class GpuGlyphVersion : NoCopy{
+public:
+    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page)noexcept
+        : m_graphics(graphics)
+        , m_page(Move(page))
+    {}
+    ~GpuGlyphVersion()noexcept{
+        FreeGpuDescriptor(m_graphics, m_sampledImage);
+    }
+
+
+public:
     Core::GraphicsRuntime& m_graphics;
     SharedGlyphPage m_page;
     Core::TextureHandle m_texture;
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
+};
+
+class GpuSdfAtlasVersion : NoCopy{
+public:
+    GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page)noexcept
+        : m_graphics(graphics)
+        , m_page(Move(page))
+    {}
+    ~GpuSdfAtlasVersion()noexcept{
+        FreeGpuDescriptor(m_graphics, m_sampledImage);
+    }
 
 
 public:
-    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page)noexcept;
-    ~GpuGlyphVersion()noexcept;
+    Core::GraphicsRuntime& m_graphics;
+    SharedSdfAtlasPage m_page;
+    Core::TextureHandle m_texture;
+    Core::GpuDescriptorHandle m_sampledImage;
+    Core::QueueSubmissionToken m_readinessToken;
 };
 
-struct GpuTargetVersion : NoCopy{
+class GpuTextureImageVersion : NoCopy{
+public:
+    GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source)noexcept
+        : m_graphics(graphics)
+        , m_source(Move(source))
+    {}
+    ~GpuTextureImageVersion()noexcept{
+        TextureAssetLoader::Release(m_texture, m_graphics);
+    }
+
+
+public:
+    Core::GraphicsRuntime& m_graphics;
+    SharedImageSource m_source;
+    TextureGpuResource m_texture;
+};
+
+class GpuTargetVersion : NoCopy{
+public:
+    explicit GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuTargetVersion()noexcept{
+        FreeGpuDescriptor(m_graphics, m_sampledImage);
+    }
+
+
+public:
     Core::GraphicsRuntime& m_graphics;
     Core::TextureHandle m_color;
     Core::FramebufferHandle m_framebuffer;
     Core::GpuDescriptorHandle m_sampledImage;
     Core::QueueSubmissionToken m_readinessToken;
+};
+
+class GpuSharedResources : NoCopy{
+public:
+    explicit GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept
+        : m_graphics(graphics)
+    {}
+    ~GpuSharedResources()noexcept{
+        FreeGpuDescriptor(m_graphics, m_samplerDescriptor);
+    }
 
 
 public:
-    explicit GpuTargetVersion(Core::GraphicsRuntime& graphics)noexcept;
-    ~GpuTargetVersion()noexcept;
-};
-
-struct GpuSharedResources : NoCopy{
     Core::GraphicsRuntime& m_graphics;
     Core::ShaderHandle m_vertexShader;
     Core::ShaderHandle m_pixelShader;
@@ -155,14 +221,30 @@ struct GpuSharedResources : NoCopy{
     Core::GraphicsPipelineHandle m_outputPipeline;
     Core::SamplerHandle m_sampler;
     Core::GpuDescriptorHandle m_samplerDescriptor;
+};
+
+class GpuFrameData : NoCopy{
+public:
+    explicit GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept
+        : m_arena(arena)
+        , m_snapshot(arena)
+        , m_glyphPages(arena)
+        , m_sdfPages(arena)
+        , m_textureImages(arena)
+    {}
 
 
 public:
-    explicit GpuSharedResources(Core::GraphicsRuntime& graphics)noexcept;
-    ~GpuSharedResources()noexcept;
-};
+    void reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
 
-struct GpuFrameData : NoCopy{
+
+public:
+    [[nodiscard]] b8 prefixComplete(Core::Device& device)const;
+    [[nodiscard]] b8 recyclable(Core::Device& device)const;
+    [[nodiscard]] b8 complete(Core::Device& device)const;
+
+
+public:
     // Strong version owners keep descriptors allocated through pending recording and final GPU completion.
     Core::Alloc::GlobalArena& m_arena;
     DrawSnapshot m_snapshot;
@@ -184,20 +266,6 @@ struct GpuFrameData : NoCopy{
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     b8 m_prepared = false;
     u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
-
-
-public:
-    explicit GpuFrameData(Core::Alloc::GlobalArena& arena)noexcept;
-
-
-public:
-    void reset(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)noexcept;
-
-
-public:
-    [[nodiscard]] b8 prefixComplete(Core::Device& device)const;
-    [[nodiscard]] b8 recyclable(Core::Device& device)const;
-    [[nodiscard]] b8 complete(Core::Device& device)const;
 };
 
 using GpuFrame = GpuVersion<GpuFrameData>;
@@ -229,73 +297,18 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<GpuPaintPushConstants> initializePushConstants(const u32 samplerSlot)const noexcept{
-        constexpr f32 s_ClipSpaceExtent = 2.0f;
-        const SIMDVectorSingle projection = VectorMultiply(VectorSet(s_ClipSpaceExtent, -s_ClipSpaceExtent, s_ClipSpaceExtent, -s_ClipSpaceExtent), pixelScale);
-        const SIMDVectorSingle projectionScale = VectorDivide(projection, targetSize);
-        GpuPaintPushConstants push;
-        push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
-        push.translate = { -1.0f, 1.0f };
-        push.samplerSlot = samplerSlot;
-        if(!IsFinite(push.scale.x) || !IsFinite(push.scale.y))
-            return MakeUnexpected(Failure{});
-        return push;
-    }
-
-    [[nodiscard]] Optional<Core::Rect> scissor(const DrawCommand& draw)const noexcept{
-        const SIMDVectorSingle clip = VectorSet(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y);
-        const SIMDVectorSingle extent = VectorSet(0.0f, 0.0f, draw.clip.width, draw.clip.height);
-        const SIMDVectorSingle ends = VectorAdd(clip, extent);
-        const SIMDVectorSingle coordinates = VectorPermute<0, 1, 6, 7>(clip, ends);
-        const SIMDVectorSingle physicalClip = VectorMultiply(coordinates, pixelScale);
-        const SIMDVectorSingle first = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physicalClip));
-        const SIMDVectorSingle last = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physicalClip));
-        const SIMDVectorSingle minimum = VectorSelect(first, VectorZero(), VectorGreater(VectorZero(), first));
-        const SIMDVectorSingle maximum = VectorSelect(last, targetSize, VectorLess(targetSize, last));
-        const f32 minX = VectorGetX(minimum);
-        const f32 minY = VectorGetY(minimum);
-        const f32 maxX = VectorGetX(maximum);
-        const f32 maxY = VectorGetY(maximum);
-        if(maxX <= minX || maxY <= minY)
-            return {};
-        return Core::Rect(static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY));
-    }
+    [[nodiscard]] Expected<GpuPaintPushConstants> initializePushConstants(u32 samplerSlot)const noexcept;
+    [[nodiscard]] Optional<Core::Rect> scissor(const DrawCommand& draw)const noexcept;
 };
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
-[[nodiscard]] NWB_INLINE b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept{
-    push.material = static_cast<u32>(draw.material);
-    push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
-    if(draw.material == PaintMaterial::Skin)
-        push.textureSlot = frame.m_skin->m_texture.sampledImageHeapHandle.slot();
-    else if(draw.material == PaintMaterial::Glyph){
-        if(draw.glyphPageIndex >= frame.m_glyphPages.size())
-            return false;
-        push.textureSlot = frame.m_glyphPages[draw.glyphPageIndex]->m_sampledImage.slot();
-    }
-    else if(draw.material == PaintMaterial::SdfGlyph){
-        if(draw.sdfPageIndex >= frame.m_sdfPages.size())
-            return false;
-        const auto& page = frame.m_sdfPages[draw.sdfPageIndex];
-        push.textureSlot = page->m_sampledImage.slot();
-        push.sdfChannel = draw.sdfChannel;
-        push.sdfSpreadPixels = page->m_page->binding().spreadPixels;
-        push.sdfDistanceEncoding = page->m_page->binding().distanceEncoding;
-    }
-    else if(draw.material == PaintMaterial::Image){
-        if(draw.textureImageIndex >= frame.m_textureImages.size())
-            return false;
-        push.textureSlot = frame.m_textureImages[draw.textureImageIndex]->m_texture.sampledImageHeapHandle.slot();
-    }
-    return true;
-}
+[[nodiscard]] b8 ResolvePaintPushConstants(const GpuFrameData& frame, const DrawCommand& draw, GpuPaintPushConstants& push)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct GpuRasterTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, false };
     struct Payload{
         GpuFrame frame;
         Core::GpuGraphResourceId color;
@@ -310,12 +323,17 @@ struct GpuRasterTask{
 
 
 public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, false };
+
+
+public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        payload.frame->m_raster = token;
+    }
 };
 
 struct GpuOutputTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
     struct Payload{
         GpuFrame frame;
         Core::GpuGraphResourceId backBuffer;
@@ -328,44 +346,24 @@ struct GpuOutputTask{
 
 
 public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
+
+
+public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        payload.frame->m_finalConsumer = token;
+    }
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GpuRendererState final : NoCopy{
-    Core::Alloc::GlobalArena& m_arena;
-    Core::GraphicsRuntime& m_graphics;
-    Core::Assets::AssetManager& m_assets;
-    GpuRenderer::ShaderPathResolveCallback m_resolver;
-    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    GpuVersion<GpuSharedResources> m_resources;
-    GpuVersion<GpuSkinVersion> m_skin;
-    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
-    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
-    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
-    Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
-    Array<GpuFrame, s_GpuFrameCount> m_frames;
-    GpuFrame m_pending;
-    Core::AcquiredPresentationFrame m_lastAcceptedAcquired;
-    Core::IGpuTaskGraphPresentationContributor* m_presentationContributor = nullptr;
-    const Core::GpuTaskGraph* m_declaredGraph = nullptr;
-    Core::GpuTaskGraphOutputLayer m_declaredLayer;
-    u64 m_graphGeneration = 0u;
-    u64 m_lastAcceptedGeneration = 0u;
-    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
-    u32 m_width = 0u;
-    u32 m_height = 0u;
-    b8 m_frameTimingScopePrepared = false;
-    b8 m_claimed = false;
-    b8 m_readyToDeclare = false;
-
-
+class GpuRendererState final : NoCopy{
 public:
     [[nodiscard]] static b8 MatchesAcquired(const Core::AcquiredPresentationFrame& first, const Core::AcquiredPresentationFrame& second)noexcept;
+    [[nodiscard]] static b8 ValidSnapshotImageCount(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateGlyphPages(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateSdfPages(const DrawSnapshot& snapshot)noexcept;
     [[nodiscard]] static b8 ValidateTextureImages(const DrawSnapshot& snapshot)noexcept;
@@ -394,6 +392,34 @@ public:
     [[nodiscard]] b8 prepare(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, b8 allowEmptySceneLayer);
     [[nodiscard]] Expected<Core::GpuTaskId> declareStandalone(Core::GpuTaskGraph& graph, Core::GpuTimingFrameTransaction& frameTimingTransaction);
+
+
+public:
+    Core::Alloc::GlobalArena& m_arena;
+    Core::GraphicsRuntime& m_graphics;
+    Core::Assets::AssetManager& m_assets;
+    GpuRenderer::ShaderPathResolveCallback m_resolver;
+    const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
+    GpuVersion<GpuSharedResources> m_resources;
+    GpuVersion<GpuSkinVersion> m_skin;
+    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
+    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
+    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
+    Array<GpuFrameSlot, s_GpuTargetSlotCount> m_slots;
+    Array<GpuFrame, s_GpuFrameCount> m_frames;
+    GpuFrame m_pending;
+    Core::AcquiredPresentationFrame m_lastAcceptedAcquired;
+    Core::IGpuTaskGraphPresentationContributor* m_presentationContributor = nullptr;
+    const Core::GpuTaskGraph* m_declaredGraph = nullptr;
+    Core::GpuTaskGraphOutputLayer m_declaredLayer;
+    u64 m_graphGeneration = 0u;
+    u64 m_lastAcceptedGeneration = 0u;
+    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
+    u32 m_width = 0u;
+    u32 m_height = 0u;
+    b8 m_frameTimingScopePrepared = false;
+    b8 m_claimed = false;
+    b8 m_readyToDeclare = false;
 };
 
 

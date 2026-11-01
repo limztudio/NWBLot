@@ -92,6 +92,12 @@ struct QueueSubmissionDesc{
 
 
 public:
+    constexpr QueueSubmissionDesc& setWaitTokens(const Span<const QueueSubmissionToken> value)noexcept{
+        waitTokens = value.data();
+        waitTokenCount = value.size();
+        return *this;
+    }
+
     constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count)noexcept{
         waitTokens = value;
         waitTokenCount = count;

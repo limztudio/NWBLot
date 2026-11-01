@@ -16,6 +16,7 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/cook_dependency_registry.h>
 #include <core/assets/cook_entry_registry.h>
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 
@@ -88,52 +89,15 @@ namespace SceneAssetCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename EntryT>
-using ParseMetadataValueFn = Expected<EntryT>(*)(Name, const Path&, const Core::Metascript::Value&, Core::Assets::AssetArena&, Core::Alloc::ScratchArena&);
-
-[[nodiscard]] Expected<b8> ParseMetadataBoolField(const Path& nwbFilePath, AStringView diagnosticPrefix, const Core::Metascript::Value& value, AStringView fieldLabel);
-[[nodiscard]] b8 ReadOptionalFiniteF32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, AStringView diagnosticPrefix, AStringView fieldLabel, f32& outValue);
-[[nodiscard]] b8 ReadOptionalI32Field(const Path& nwbFilePath, const Core::Metascript::Value& asset, AStringView diagnosticPrefix, AStringView fieldLabel, i32& outValue);
-
-template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
-[[nodiscard]] Expected<EntryT> ParseCookMetadataDocument(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    const AStringView diagnosticPrefix,
-    Core::Assets::AssetArena& arena,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    auto virtualPathResult = Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
-    if(!virtualPathResult)
-        return MakeUnexpected(Failure{});
-    const auto asset = Core::Assets::FindMetadataAssetValue<Core::Metascript::Document, Core::Metascript::Value>(nwbFilePath, doc, diagnosticPrefix);
-    if(!asset)
-        return MakeUnexpected(asset.error());
-    return ParseValFn(*virtualPathResult, nwbFilePath, **asset, arena, scratchArena);
-}
-
-template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] Expected<EntryT> ParseCookEntryDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseCookMetadataDocument<EntryT, ParseValFn>(assetRoot, virtualRoot, nwbFilePath, doc, DiagnosticPrefix, context.cookArena, context.scratchArena);
-}
-
-template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
-[[nodiscard]] Expected<EntryT> ParseCookEntryValue(const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
-    return ParseValFn(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
-}
-
-template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn>
-[[nodiscard]] Expected<EntryT> ParseCookDependencyEntry(const Core::Assets::CookDependencyItemContext& context, const AStringView diagnosticPrefix){
-    return context.document
-        ? ParseCookMetadataDocument<EntryT, ParseValFn>(context.assetRoot, context.virtualRoot, context.nwbFilePath, *context.document, diagnosticPrefix, context.arena, context.scratchArena)
-        : ParseValFn(context.virtualPath, context.nwbFilePath, context.asset, context.arena, context.scratchArena)
-    ;
-}
+using Core::Assets::ParseMetadataValueFn;
+using Core::Assets::ParseMetadataBoolField;
+using Core::Assets::ReadOptionalFiniteF32Field;
+using Core::Assets::ReadOptionalI32Field;
+using Core::Assets::ParseCookMetadataDocument;
+using Core::Assets::ParseCookDependencyEntry;
 
 template<typename AssetT, typename EntryT>
-[[nodiscard]] Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
+[[nodiscard]] inline Expected<AssetT> BuildComponentAssetFromEntry(const EntryT& entry, Core::Assets::AssetArena& arena){
     AssetT asset(arena, entry.virtualPath);
     asset.component = entry.component;
     if(!asset.validatePayload())
@@ -141,24 +105,31 @@ template<typename AssetT, typename EntryT>
     return asset;
 }
 
-template<typename AssetT, typename EntryT>
-[[nodiscard]] Expected<AssetT> BuildComponentCookAsset(EntryT& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
-    return BuildComponentAssetFromEntry<AssetT>(entry, arena);
-}
-
-template<typename EntryT, typename AssetT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, TypedComponentAssetCodec<AssetT>>(
-        registry,
-        s_ComponentAssetKindLabel,
-        &ParseCookEntryDocument<EntryT, ParseValFn, DiagnosticPrefix>,
-        &ParseCookEntryValue<EntryT, ParseValFn>,
-        &BuildComponentCookAsset<AssetT, EntryT>
+template<
+    typename EntryT,
+    typename AssetT,
+    ParseMetadataValueFn<EntryT> ParseValFn,
+    const AStringView& DiagnosticPrefix,
+    typename CodecT = typename AssetT::AssetCodecType
+>
+[[nodiscard]] inline b8 RegisterComponentCookEntry(Core::Assets::CookEntryRegistry& registry, const TStringView kindLabel = s_ComponentAssetKindLabel){
+    return Core::Assets::RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
+        kindLabel,
+        [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+            return ParseCookMetadataDocument<EntryT, ParseValFn>(assetRoot, virtualRoot, nwbFilePath, doc, DiagnosticPrefix, context.cookArena, context.scratchArena);
+        },
+        [](const Name virtualPath, const Path& nwbFilePath, const Core::Metascript::Value& asset, Core::Assets::CookEntryParseContext& context){
+            return ParseValFn(virtualPath, nwbFilePath, asset, context.cookArena, context.scratchArena);
+        },
+        [](EntryT& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){
+            return BuildComponentAssetFromEntry<AssetT>(entry, arena);
+        },
+        registry
     );
 }
 
 template<typename EntryT, ParseMetadataValueFn<EntryT> ParseValFn, const AStringView& DiagnosticPrefix>
-[[nodiscard]] b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
+[[nodiscard]] inline b8 ExtractLeafComponentDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector&){
     return ParseCookDependencyEntry<EntryT, ParseValFn>(context, DiagnosticPrefix).has_value();
 }
 

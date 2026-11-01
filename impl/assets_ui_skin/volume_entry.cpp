@@ -10,8 +10,6 @@
 
 #include "cook.h"
 
-#include <impl/assets_ui_skin/subsystem.adhd.h>
-
 #include <impl/assets_subsystem/cook.h>
 #include <impl/assets_texture/asset.h>
 
@@ -34,10 +32,6 @@ namespace __hidden_ui_skin_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Expected<UiSkinCookEntry> ParseUiSkinDocument(const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
-    return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
-}
-
 static b8 ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContext& context, Core::Assets::ICookDependencyCollector& collector){
     if(!context.document)
         return false;
@@ -49,11 +43,14 @@ static b8 ExtractUiSkinDependencies(const Core::Assets::CookDependencyItemContex
 
 static b8 RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return
-        Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
-            registry,
+        Core::Assets::RegisterDocumentValueCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
             s_UiSkinAssetKindLabel,
-            &ParseUiSkinDocument,
+            [](const Path& assetRoot, const AStringView virtualRoot, const Path& nwbFilePath, const Core::Metascript::Document& doc, Core::Assets::CookEntryParseContext& context){
+                return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
+            },
+            nullptr,
             [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena&){ return BuildUiSkinAsset(entry, arena); },
+            registry,
             false
         )
         && AssetsSubsystemCook::RegisterSubsystemCookEntry<UiSubsystem>(registry)

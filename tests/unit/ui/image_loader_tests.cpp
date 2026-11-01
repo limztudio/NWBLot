@@ -32,7 +32,7 @@ constexpr AStringView s_TexturePath = "tests/ui/image_loader/texture";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static AssetBytes MakeTextureBinary(AssetArena& arena, const u8 initialValue){
+[[nodiscard]] static AssetBytes MakeTextureBinary(const u8 initialValue, AssetArena& arena){
     TextureBinaryPayload::HeaderBinary header;
     header.dimension = static_cast<u32>(TextureDimension::Texture2D);
     header.width = 2u;
@@ -108,12 +108,12 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const Span<const u8> binary)const override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(const Name& virtualPath, const Span<const u8> binary, AssetArena& arena)const override{
         if(m_wrongType){
             return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
         }
         TextureAssetCodec codec;
-        return codec.deserialize(arena, Name("tests/ui/image_loader/other_texture"), binary);
+        return codec.deserialize(Name("tests/ui/image_loader/other_texture"), binary, arena);
     }
 
 
@@ -139,7 +139,7 @@ public:
 protected:
     virtual void SetUp()override{
         ASSERT_TRUE(m_registry.registerCodec(MakeUnique<TextureAssetCodec>()));
-        m_source.m_binary = MakeTextureBinary(m_arena, 3u);
+        m_source.m_binary = MakeTextureBinary(3u, m_arena);
     }
 
 
@@ -197,10 +197,10 @@ TEST_F(ImageLoaderTests, MissingTextureCodecFailsAfterReadingAValidBinary){
 TEST_F(ImageLoaderTests, RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes){
     m_source.m_binary[0u] ^= 0xFFu;
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
-    m_source.m_binary = MakeTextureBinary(m_arena, 3u);
+    m_source.m_binary = MakeTextureBinary(3u, m_arena);
     m_source.m_binary.pop_back();
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
-    m_source.m_binary = MakeTextureBinary(m_arena, 3u);
+    m_source.m_binary = MakeTextureBinary(3u, m_arena);
     m_source.m_binary.push_back(0u);
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 3u);
@@ -259,7 +259,7 @@ TEST_F(ImageLoaderTests, FailedReplacementPreservesRetainedSourceAndLaterSuccess
     EXPECT_EQ(current->generation(), oldGeneration);
     ExpectPayload(current->texture(), 3u);
 
-    m_source.m_binary = MakeTextureBinary(m_arena, 67u);
+    m_source.m_binary = MakeTextureBinary(67u, m_arena);
     replacement = LoadImageSource(m_arena, m_assets, m_identity);
     ASSERT_TRUE(replacement);
     current = Move(*replacement);

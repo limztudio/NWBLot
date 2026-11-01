@@ -71,9 +71,7 @@ b8 UiImageSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiImageSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiImageSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 
@@ -177,7 +175,7 @@ b8 UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.image("parent_value", Name(__hidden_ui_image_smoke::s_ProgressRegion), options))
         return false;
     PopupOptions child;
-    child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 370.0f, 8.0f, 16.0f };
+    child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 128.0f };
     if(ui.beginPopup("image_child", m_child, child)){
         options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };

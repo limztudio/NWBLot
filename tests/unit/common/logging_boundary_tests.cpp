@@ -23,7 +23,6 @@ namespace __hidden_logging_boundary_tests{
 
 using CapturingLogger = NWB::Tests::CapturingLogger;
 
-inline constexpr u32 s_ExpectedDualCount = 2u;
 inline constexpr TStringView s_ParallelLoggerMessage = NWB_TEXT("parallel logger message");
 
 
@@ -48,9 +47,9 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
     constexpr u32 s_ThreadCount = 4u;
     constexpr u32 s_MessagesPerThread = 512u;
     constexpr u32 s_ExpectedMessageCount = s_ThreadCount * s_MessagesPerThread;
-    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / s_ExpectedDualCount;
+    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / 2u;
     CapturingLogger logger;
-    Latch startGate(s_ThreadCount + s_ExpectedDualCount);
+    Latch startGate(s_ThreadCount + 2u);
     Atomic<u32> activeWriters{ s_ThreadCount };
     Atomic<u32> observedMessages{ 0u };
     Atomic<u32> observedErrors{ 0u };
@@ -88,7 +87,7 @@ TEST(CommonLoggingBoundaries, CapturingLoggerSerializesConcurrentWritersAndReade
             observedErrors.fetch_add(errorCount - lastErrorCount, MemoryOrder::relaxed);
         // Partial reads already proved reader and writer overlap.
     });
-    Thread writers[s_ThreadCount];
+    Array<Thread, s_ThreadCount> writers;
     for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         writers[threadIndex] = Thread([&logger, &startGate, &activeWriters](){
             startGate.arrive_and_wait();

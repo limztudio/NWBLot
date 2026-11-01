@@ -2,6 +2,7 @@ nwb_declare_static_library(nwb_ui)
 target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/context*.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/rect_math.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text/*_page.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text/*_page.h"
     "${CMAKE_CURRENT_LIST_DIR}/*.h"
@@ -50,6 +51,7 @@ nwb_target_adhd_sources(nwb_ui
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/layout/*.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/input/*.adhd"
+        "${CMAKE_CURRENT_LIST_DIR}/text/*.adhd"
 )
 target_link_libraries(nwb_ui PUBLIC nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
 
@@ -59,3 +61,4 @@ add_subdirectory(images)
 target_link_libraries(nwb_ui PUBLIC nwb_ui_images)
 add_subdirectory(widgets)
 add_subdirectory(gpu)
+

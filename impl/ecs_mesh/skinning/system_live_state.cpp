@@ -5,7 +5,6 @@
 #include "system.h"
 #include "live_state_buffers.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
@@ -21,27 +20,15 @@ NWB_IMPL_BEGIN
 
 
 Expected<MeshSkinningRestToSkinnedCopyByteCounts> MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance){
-    const auto resolvePayloadBytes = [](const usize count, const usize stride, const TStringView label)->Expected<usize>{
-        const auto bytes = TryMultiply<usize>(count, stride);
-        if(stride != 0u && bytes)
-            return *bytes;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+    MeshSkinningRestToSkinnedCopyByteCounts counts;
+    if(!TryResolveMeshSkinningRestToSkinnedCopyByteCounts(instance.restPositions.size(), instance.restNormals.size(), instance.restTangents.size(), counts)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: rest stream payload byte size is empty or overflows"));
         return MakeUnexpected(Failure{});
-    };
-    const auto positionBytes = resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), NWB_TEXT("rest position"));
-    if(!positionBytes)
-        return MakeUnexpected(Failure{});
-    const auto normalBytes = resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), NWB_TEXT("rest normal"));
-    if(!normalBytes)
-        return MakeUnexpected(Failure{});
-    const auto tangentBytes = resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), NWB_TEXT("rest tangent"));
-    if(!tangentBytes)
-        return MakeUnexpected(Failure{});
-    return MeshSkinningRestToSkinnedCopyByteCounts{ *positionBytes, *normalBytes, *tangentBytes };
+    }
+    return counts;
 }
 
-void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const{
+void MeshSkinningSystem::collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const{
     MeshSkinningStateBufferCollector collector(scratchArena, outBuffers);
     m_world.view<SkinnedMeshBindingComponent>().each([&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
         if(!binding.runtimeMesh.valid())
@@ -61,7 +48,7 @@ void MeshSkinningSystem::collectLiveSkinningStateBuffers(Vector<Core::BufferHand
                 .bindlessResourceSlotsBuffer = &foundResources.value().bindlessResourceSlotsBuffer,
             };
         }
-        collector.collect(instance, resources);
+        collector.collect(*instance, resources);
     });
 }
 
@@ -69,8 +56,8 @@ b8 MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResou
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     ScopeExit releaseLiveBuffers([&]()noexcept{ liveBuffers.clear(); });
 
-    collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
-    return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size(), scratchArena);
+    collectLiveSkinningStateBuffers(scratchArena, liveBuffers);
+    return m_acceptedSkinningState.replaceBufferSubset(state, Span<const Core::BufferHandle>(liveBuffers), scratchArena);
 }
 
 

@@ -3,11 +3,12 @@
 
 
 #include "reflection_system.h"
-#include "timing_names.h"
+#include <impl/ecs_render/kernel/timing_names.h>
 
 #include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
@@ -31,21 +32,7 @@ namespace __hidden_reflection_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_RayQueueBufferName("engine/reflection/ray_queue");
-inline constexpr Name s_IndirectArgsBufferName("engine/reflection/indirect_args");
-
-namespace DescriptorIndex{
-    enum Enum : u32{
-        OpaqueSampled,
-        OpaqueStorage,
-        GlassSampled,
-        GlassStorage,
-        Queue,
-        Counters,
-        Args,
-        Parameters,
-    };
-};
+namespace DescriptorIndex = ReflectionDescriptorIndex;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,21 +43,11 @@ namespace DescriptorIndex{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-RendererReflectionSystem::RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders)noexcept
-    : m_arena(arena)
-    , m_graphics(graphics)
-    , m_shaders(shaders)
-    , m_statistics(arena, graphics)
-    , m_postprocess(arena, graphics, shaders)
-    , m_feedback(arena, graphics)
-    , m_csgDispatchStates(arena)
-{}
 
 void RendererReflectionSystem::invalidateResources(){
     m_preparedCsgDispatch = nullptr;
     m_csgDispatchStates.clear();
-    m_statistics.invalidateResources();
+    m_statistics.resetReadbackBuffers();
     releaseTargets();
     m_resources.classifyPipeline = nullptr;
     m_resources.buildArgsPipeline = nullptr;
@@ -99,14 +76,9 @@ void RendererReflectionSystem::invalidateResources(){
 
 b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height, const b8 prepareHardware, const b8 prepareCsgHardware, const ReflectionSettings& settings){
     using namespace __hidden_reflection_system;
-    const u64 pixelCount = static_cast<u64>(width) * height;
-    // Packed pixels cover both families; queue addresses need byte offsets.
-    if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / 2u)
+    u32 capacity = 0u;
+    if(!TryResolveReflectionQueueCapacity(width, height, settings.maxHardwareRaysPerFrame, capacity))
         return false;
-    const u64 boundedCapacity = Max(static_cast<u64>(1u), Min(pixelCount * 2u, static_cast<u64>(settings.maxHardwareRaysPerFrame)));
-    if(boundedCapacity > static_cast<u64>(s_MaxU32) / sizeof(u32))
-        return false;
-    const u32 capacity = static_cast<u32>(boundedCapacity);
     const b8 csgHardwareWork = prepareCsgHardware && settings.maxHardwareRaysPerFrame > 0u && (settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid);
     if(csgHardwareWork && !prepareCsgDispatchResources())
         return false;
@@ -125,12 +97,12 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !preparePipelines(prepareHardware, csgHardwareWork))
         return false;
-    const NotNull<const Core::GpuTimingScopeDefinition*> scopes[] = { MakeNotNull(&ReflectionGpuTimingScope::s_Classify), MakeNotNull(&ReflectionGpuTimingScope::s_BuildArgs), MakeNotNull(&ReflectionGpuTimingScope::s_Hardware), };
+    const Array<NotNull<const Core::GpuTimingScopeDefinition*>, 3> scopes = { MakeNotNull(&ReflectionGpuTimingScope::s_Classify), MakeNotNull(&ReflectionGpuTimingScope::s_BuildArgs), MakeNotNull(&ReflectionGpuTimingScope::s_Hardware), };
     for(const NotNull<const Core::GpuTimingScopeDefinition*> scope : scopes){
         if(!m_graphics.gpuTiming().prepareScopeQueries(scope->identity, device, s_ReflectionGpuTimingQueriesPerRange))
             return false;
     }
-    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_ReflectionGpuTimingQueriesPerRange * ReflectionDepthPyramidSnapshot::s_MaxMipCount))
+    if(!m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_DepthPyramid.identity, device, s_ReflectionGpuTimingQueriesPerRange * s_ReflectionMaxDepthMips))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
         return
@@ -160,33 +132,33 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         ;
         return m_graphics.createBuffer(desc);
     };
-    auto opaqueRadianceResult = createOutput(Name("engine/reflection/opaque_radiance"));
+    auto opaqueRadianceResult = createOutput(s_ReflectionOpaqueRadianceName);
     if(opaqueRadianceResult)
         m_resources.opaqueRadiance = Move(*opaqueRadianceResult);
     else
         m_resources.opaqueRadiance.reset();
-    auto glassRadianceResult = createOutput(Name("engine/reflection/glass_radiance"));
+    auto glassRadianceResult = createOutput(s_ReflectionGlassRadianceName);
     if(glassRadianceResult)
         m_resources.glassRadiance = Move(*glassRadianceResult);
     else
         m_resources.glassRadiance.reset();
-    auto queueResult = createBuffer(s_RayQueueBufferName, static_cast<u64>(capacity) * sizeof(u32), false, false);
+    auto queueResult = createBuffer(s_ReflectionRayQueueBufferName, static_cast<u64>(capacity) * sizeof(u32), false, false);
     if(queueResult)
         m_resources.queue = Move(*queueResult);
     else
         m_resources.queue.reset();
-    auto countersResult = createBuffer(Name("engine/reflection/counters"), NWB_REFLECTION_COUNTER_SIZE, false, false);
+    auto countersResult = createBuffer(s_ReflectionCountersBufferName, NWB_REFLECTION_COUNTER_SIZE, false, false);
     if(countersResult)
         m_resources.counters = Move(*countersResult);
     else
         m_resources.counters.reset();
-    const u32 argumentCount = csgHardwareWork && m_csgBuildArgsPipeline ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    auto indirectArgsResult = createBuffer(s_IndirectArgsBufferName, static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES, false, true);
+    const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, csgHardwareWork && m_csgBuildArgsPipeline);
+    auto indirectArgsResult = createBuffer(s_ReflectionIndirectArgsBufferName, static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes, false, true);
     if(indirectArgsResult)
         m_resources.indirectArgs = Move(*indirectArgsResult);
     else
         m_resources.indirectArgs.reset();
-    auto frameParametersResult = createBuffer(Name("engine/reflection/frame_parameters"), sizeof(ReflectionFrameParameters), true, false);
+    auto frameParametersResult = createBuffer(s_ReflectionFrameParametersBufferName, sizeof(ReflectionFrameParameters), true, false);
     if(frameParametersResult)
         m_resources.frameParameters = Move(*frameParametersResult);
     else
@@ -209,7 +181,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
             break;
         mipWidth = Max(mipWidth / 2u, 1u);
         mipHeight = Max(mipHeight / 2u, 1u);
-    }while(depthPyramid.mipCount < ReflectionDepthPyramidSnapshot::s_MaxMipCount);
+    }while(depthPyramid.mipCount < s_ReflectionMaxDepthMips);
     constexpr Core::FormatSupport::Mask s_DepthSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderUavStore;
     Core::Format::Enum depthFormat = Core::Format::RG32_FLOAT;
     if((device.queryFormatSupport(depthFormat) & s_DepthSupport) != s_DepthSupport)
@@ -225,7 +197,7 @@ b8 RendererReflectionSystem::prepareResources(const u32 width, const u32 height,
         .setMipLevels(depthPyramid.mipCount)
         .setFormat(depthFormat)
         .setIsUAV(true)
-        .setName(Name("engine/reflection/depth_pyramid"))
+        .setName(s_ReflectionDepthPyramidName)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
@@ -302,14 +274,6 @@ Expected<ReflectionCsgDispatchHandle> RendererReflectionSystem::acquireCsgDispat
     return ReflectionCsgDispatchHandle(control, ArenaRefDeleter<ReflectionCsgDispatchControl, Core::Alloc::GlobalArena>(&m_arena));
 }
 
-void RendererReflectionSystem::pollStatistics(){
-    m_statistics.pollCompleted();
-}
-
-Expected<ReflectionStatistics> RendererReflectionSystem::tryGetLatestStatistics()const noexcept{
-    return m_statistics.tryGetLatestStatistics();
-}
-
 ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     const DeferredFrameTargets& targets,
     const ECSRenderDetail::MeshViewBufferSnapshot& view,
@@ -346,41 +310,24 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         return {};
     snapshot.opaqueRadiance = snapshot.postprocess.current.texture;
     ReflectionFrameParameters& parameters = snapshot.parameters;
-    parameters.traceMode = static_cast<u32>(settings.traceMode);
+    PopulateReflectionFrameSettingsParameters(settings, parameters);
     const b8 hardwareRequested = settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid;
     parameters.hardwareEnabled = scene.valid() && snapshot.hardwarePipeline && hardwareRequested ? 1u : 0u;
     parameters.opaqueSpecularSlot = targets.bindless.gbufferSpecularRoughness.slot();
     parameters.glassSpecularSlot = targets.bindless.refractionSpecularRoughness.slot();
     parameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, parameters.queueCapacity);
     if(parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u && scene.csgTraceContextBuffer){
-        const u32 argumentCount = (parameters.maxHardwareRays + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS;
-        if(!m_csgBuildArgsPipeline || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES)
+        const u32 argumentCount = ResolveReflectionIndirectArgumentCount(parameters.maxHardwareRays, true);
+        if(!m_csgBuildArgsPipeline || snapshot.indirectArgs->getCreationDescription().byteSize < static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes)
             return {};
         snapshot.buildArgsPipeline = m_csgBuildArgsPipeline;
     }
     parameters.sampleIndex = snapshot.postprocess.history.sampleIndex;
-    parameters.samplingSeed = settings.samplingSeed;
-    parameters.maxOpticalQueries = settings.maxOpticalQueries;
     parameters.opaqueOutputSlot = snapshot.postprocess.current.storageSlot;
     parameters.opaqueRadianceSlot = snapshot.postprocess.spatialEnabled ? snapshot.postprocess.spatial.sampledSlot : snapshot.postprocess.current.sampledSlot;
     parameters.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
     parameters.viewSlot = view.heapHandle.slot();
     parameters.materialContextSlot = parameters.hardwareEnabled != 0u ? scene.materialContextSlotsHeapSlot : 0u;
-    parameters.debugView = static_cast<u32>(settings.debugView);
-    parameters.maxRayDistance = settings.maxRayDistance;
-    parameters.distanceFadeStart = settings.distanceFadeStart;
-    parameters.roughnessCutoff = settings.roughnessCutoff;
-    parameters.environmentTopR = settings.environmentTop.x;
-    parameters.environmentTopG = settings.environmentTop.y;
-    parameters.environmentTopB = settings.environmentTop.z;
-    parameters.environmentBottomR = settings.environmentBottom.x;
-    parameters.environmentBottomG = settings.environmentBottom.y;
-    parameters.environmentBottomB = settings.environmentBottom.z;
-    parameters.screenMaxSteps = settings.screenMaxSteps;
-    parameters.screenThickness = settings.screenThickness;
-    parameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
-    parameters.screenEdgeFade = settings.screenEdgeFade;
-    parameters.diagnosticsEnabled = settings.diagnosticsEnabled ? 1u : 0u;
     // Bank access needs a resolved outcome plus a reservation.
     parameters.feedbackFlags = 0u;
     parameters.feedbackProbeIndex = snapshot.feedback.plan.probeIndex;
@@ -484,7 +431,7 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
         .setByteSize(static_cast<u64>(capacity) * sizeof(u32))
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
-        .setDebugName(s_RayQueueBufferName)
+        .setDebugName(s_ReflectionRayQueueBufferName)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -513,8 +460,8 @@ b8 RendererReflectionSystem::prepareQueue(const u32 capacity){
 
 b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 sliced){
     using namespace __hidden_reflection_system;
-    const u32 argumentCount = sliced ? (capacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u) / NWB_REFLECTION_TRACE_SLICE_RAYS : 1u;
-    const u64 byteSize = static_cast<u64>(argumentCount) * NWB_REFLECTION_INDIRECT_ARGUMENT_BYTES;
+    const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, sliced);
+    const u64 byteSize = static_cast<u64>(argumentCount) * s_ReflectionIndirectArgumentBytes;
     if(m_resources.indirectArgs && m_resources.indirectArgs->getCreationDescription().byteSize >= byteSize)
         return true;
     Core::BufferDesc desc;
@@ -523,7 +470,7 @@ b8 RendererReflectionSystem::prepareArguments(const u32 capacity, const b8 slice
         .setCanHaveUAVs(true)
         .setCanHaveRawViews(true)
         .setIsDrawIndirectArgs(true)
-        .setDebugName(s_IndirectArgsBufferName)
+        .setDebugName(s_ReflectionIndirectArgsBufferName)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -586,7 +533,7 @@ b8 RendererReflectionSystem::preparePipelines(const b8 prepareHardware, const b8
     ){
         if(pipeline)
             return true;
-        if(!m_shaders.loadShader<ComputeShader>(shader, member, variant, debugName))
+        if(!m_shaders.loadShader<ComputeShader>(member, variant, debugName, shader))
             return false;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());

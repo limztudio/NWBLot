@@ -31,7 +31,15 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
         out.append(entry.name.data(), entry.name.size());
         if(entry.valueExpr){
             out.append(" = ");
+            const b8 wrapSizeCast = entry.valueExpr->kind != ExprKind::IntegerLiteral;
+            if(wrapSizeCast){
+                out.append("static_cast<::");
+                out.append(decl.sizeTypeName.data(), decl.sizeTypeName.size());
+                out.append(">(");
+            }
             m_sourceEmitter.emitExpr(out, *entry.valueExpr);
+            if(wrapSizeCast)
+                out.push_back(')');
         }
         else if(decl.isFlag){
             out.append(" = (static_cast<::");
@@ -88,7 +96,9 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     }
     out.append("        return {};\r\n    }\r\n");
     if(reflectedEntryCount > 0u){
-        out.append("    inline constexpr ::NamedEnumCase<Enum> s_NamedEnumCases[] = {\r\n");
+        out.append("    inline constexpr Array<::NamedEnumCase<Enum>, ");
+        AppendAdhdUnsigned(out, reflectedEntryCount);
+        out.append("u> s_NamedEnumCases = {{\r\n");
         for(const EnumEntry& entry : decl.entries){
             if(entry.name == "kCount")
                 continue;
@@ -98,7 +108,7 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
             out.append(entry.name.data(), entry.name.size());
             out.append(" },\r\n");
         }
-        out.append("    };\r\n");
+        out.append("    }};\r\n");
         out.append("    [[nodiscard]] constexpr Span<const ::NamedEnumCase<Enum>> namedEnumCases()noexcept{ return s_NamedEnumCases; }\r\n");
     }
     else{
@@ -152,7 +162,7 @@ void HeaderEmitter::emitInterfaceDecl(MString& out, const InterfaceDecl& decl)co
     }
 
     const ReflectionEmitter reflectionEmitter(m_symbols);
-    reflectionEmitter.emitInterfaceReflectionDeclarations(out, decl, m_arena);
+    reflectionEmitter.emitInterfaceReflectionDeclarations(decl, m_arena, out);
 
     out.append("};\r\n\r\n");
 }
@@ -174,7 +184,6 @@ void HeaderEmitter::emitGlobalConstDecl(MString& out, const Stmt& c)const{
         out.append(";\r\n");
     }
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

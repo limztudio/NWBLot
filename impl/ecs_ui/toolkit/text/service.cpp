@@ -45,23 +45,19 @@ TextService::TextService(Core::Alloc::GlobalArena& arena)
     , m_identity(NextNonWrappingIdentity(__hidden_ui_text_service::s_NextServiceIdentity))
 {
     m_pages.reserve(s_GlyphAtlasMaxPages);
-    m_sdfPages.reserve(s_PaintMaxGlyphPages);
+    m_sdfPages.reserve(s_PaintMaxImages);
 }
 
 TextService::~TextService()noexcept = default;
 
-b8 TextService::setFonts(Core::Alloc::ScratchArena& scratchArena, const FontSource* sources, usize count){
-    if(m_generation == Limit<u64>::s_Max || !m_shaper.setFonts(scratchArena, sources, count))
+b8 TextService::setFonts(Core::Alloc::ScratchArena& scratchArena, const Span<const FontSource> sources){
+    if(m_generation == Limit<u64>::s_Max || !m_shaper.setFonts(scratchArena, sources))
         return false;
     m_pages.clear();
     m_sdfPages.clear();
     m_atlas->reset();
     ++m_generation;
     return true;
-}
-
-Expected<TextLayout, TextLayoutStatus::Enum> TextService::layout(const ShapeRequest& request){
-    return m_layoutBuilder.layout(request);
 }
 
 

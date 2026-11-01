@@ -6,8 +6,6 @@
 
 #include <global/hash_utils.h>
 
-#include <new>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,7 +62,7 @@ b8 CommandListResourceSelection::addResource(void* const resource, const usize i
         m_valid = false;
         return false;
     }
-    Entry* const entries = m_storage ? static_cast<Entry*>(m_storage) : m_inlineEntries;
+    Entry* const entries = m_storage ? static_cast<Entry*>(m_storage) : m_inlineEntries.data();
     new(entries + m_size) Entry{ resource, inputIndex, texture };
     if(m_storage)
         InsertIndex(m_storage, m_capacity, m_size);
@@ -80,6 +78,18 @@ b8 CommandListResourceSelection::addResource(void* const resource, const usize i
     if(texture)
         ++m_textureCount;
     return true;
+}
+
+b8 CommandListResourceSelection::containsResource(void* const resource, const b8 texture)const noexcept{
+    if(m_storage)
+        return containsIndexedResource(resource, texture);
+    const usize begin = texture ? 0u : m_textureCount;
+    const usize end = texture ? m_textureCount : m_size;
+    for(usize index = begin; index < end; ++index){
+        if(m_inlineIdentities[index] == resource)
+            return true;
+    }
+    return false;
 }
 
 b8 CommandListResourceSelection::containsIndexedResource(void* const resource, const b8 texture)const noexcept{

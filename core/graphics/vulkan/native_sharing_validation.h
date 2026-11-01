@@ -87,7 +87,7 @@ template<typename UsageFlags, typename CreateFlags>
         if(!ResourceQueueSharing::IncludesQueueClass(queueSharing, queue.queueClass))
             continue;
         hasLogicalQueue = true;
-        if(!ResourceQueueSharing::QueueFamilyIndexListContains(provenance.queueFamilyIndices, provenance.queueFamilyIndexCount, queue.familyIndex)){
+        if(!ResourceQueueSharing::QueueFamilyIndexListContains(Span<const u32>(provenance.queueFamilyIndices, provenance.queueFamilyIndexCount), queue.familyIndex)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: native sharing omits a logically admitted queue family"), ConvertString(logPrefix));
             return false;
         }

@@ -29,12 +29,6 @@ namespace __hidden_cpu_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_BitsPerByte = 8u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void ClassifyPlacements(const Span<CpuWorkerPlacement> placements)noexcept{
     u32 minimumClass = Limit<u32>::s_Max;
     u32 maximumClass = 0u;
@@ -197,11 +191,11 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 
 [[nodiscard]] u32 QueryLinuxCapacity(u32 processorIndex){
-    char path[s_SysfsCapacityPathCapacity];
-    const int pathLength = NWB_SPRINTF(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
-    if(pathLength <= 0 || static_cast<usize>(pathLength) >= sizeof(path))
+    Array<char, s_SysfsCapacityPathCapacity> path = {};
+    const int pathLength = NWB_SPRINTF(path.data(), path.size(), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
+    if(pathLength <= 0 || static_cast<usize>(pathLength) >= path.size())
         return 0u;
-    InputFileStream stream(path);
+    InputFileStream stream(path.data());
     u32 capacity = 0u;
     if(!(stream >> capacity))
         return 0u;
@@ -221,7 +215,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
         return MakeUnexpected(Failure{});
     placements.reserve(static_cast<usize>(processorCount));
     b8 allCapacitiesKnown = true;
-    for(usize processorIndex = 0u; processorIndex < byteCount * __hidden_cpu_topology::s_BitsPerByte; ++processorIndex){
+    for(usize processorIndex = 0u; processorIndex < byteCount * s_BitsPerByte; ++processorIndex){
         if(!CPU_ISSET_S(processorIndex, byteCount, affinity.get()))
             continue;
         const u32 capacity = QueryLinuxCapacity(static_cast<u32>(processorIndex));
@@ -275,7 +269,7 @@ b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     if(!placement.valid())
         return false;
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(placement.processorGroup >= GetActiveProcessorGroupCount() || placement.logicalProcessorIndex >= sizeof(KAFFINITY) * __hidden_cpu_topology::s_BitsPerByte)
+    if(placement.processorGroup >= GetActiveProcessorGroupCount() || placement.logicalProcessorIndex >= sizeof(KAFFINITY) * s_BitsPerByte)
         return false;
     GROUP_AFFINITY affinity{};
     affinity.Group = static_cast<WORD>(placement.processorGroup);
@@ -289,7 +283,7 @@ b8 SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
         return false;
     const usize byteCount = affinityWords->size() * sizeof(usize);
     const auto affinity = MakeNotNull(reinterpret_cast<cpu_set_t*>(affinityWords->data()));
-    if(placement.logicalProcessorIndex >= byteCount * __hidden_cpu_topology::s_BitsPerByte || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity.get()))
+    if(placement.logicalProcessorIndex >= byteCount * s_BitsPerByte || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity.get()))
         return false;
     CPU_ZERO_S(byteCount, affinity.get());
     CPU_SET_S(placement.logicalProcessorIndex, byteCount, affinity.get());

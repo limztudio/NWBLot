@@ -72,13 +72,6 @@ namespace Tests{
 ];
 
 )"
-#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 0, 0, 0, 0],
-    [1, 1, 1, 1, 0],
-    [2, 2, 2, 2, 0],
-];
-
-)"
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS R"(asset.vertex_refs = [
     [0, 0, 4294967295, 0, 0],
     [1, 1, 4294967295, 1, 1],
@@ -106,19 +99,6 @@ struct AssetsGraphicsMeshSources{
     ];
 
     )" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-    static constexpr AStringView s_DefaultColorMeshMeta =
-    "mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    R"(asset.colors = [
-    [1.0, 1.0, 1.0, 1.0],
-    ];
-
-    )"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
     #if defined(NWB_FINAL)
     static constexpr AStringView s_TriangleNormalField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS;

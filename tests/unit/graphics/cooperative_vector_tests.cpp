@@ -22,12 +22,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_cooperative_vector_tests{
 
 
@@ -41,16 +35,16 @@ using namespace Core;
 
 
 TEST(CooperativeVectorMatrixStride, FailsClosedForInvalidOrDriverOptimalInputs){
-    const auto inferencingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::InferencingOptimal, s_ExpectedDualCount, s_ExpectedDualCount);
+    const auto inferencingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::InferencingOptimal, 2u, 2u);
     ASSERT_TRUE(inferencingStride);
     EXPECT_EQ(*inferencingStride, 0u);
-    const auto trainingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::TrainingOptimal, s_ExpectedDualCount, s_ExpectedDualCount);
+    const auto trainingStride = GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::TrainingOptimal, 2u, 2u);
     ASSERT_TRUE(trainingStride);
     EXPECT_EQ(*trainingStride, 0u);
-    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::RowMajor, 0u, s_ExpectedDualCount));
-    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::ColumnMajor, s_ExpectedDualCount, 0u));
-    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(static_cast<CooperativeVectorDataType::Enum>(Limit<u8>::s_Max), CooperativeVectorMatrixLayout::RowMajor, s_ExpectedDualCount, s_ExpectedDualCount));
-    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, static_cast<CooperativeVectorMatrixLayout::Enum>(Limit<u8>::s_Max), s_ExpectedDualCount, s_ExpectedDualCount));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::RowMajor, 0u, 2u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, CooperativeVectorMatrixLayout::ColumnMajor, 2u, 0u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(static_cast<CooperativeVectorDataType::Enum>(Limit<u8>::s_Max), CooperativeVectorMatrixLayout::RowMajor, 2u, 2u));
+    EXPECT_FALSE(GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Float32, static_cast<CooperativeVectorMatrixLayout::Enum>(Limit<u8>::s_Max), 2u, 2u));
 }
 
 TEST(CooperativeVectorMatrixStride, DoesNotWrapLargestPublicDimension){

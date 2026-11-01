@@ -6,13 +6,12 @@
 
 
 #include <impl/ecs_ui/components.adhd.h>
-#include "paint_context.h"
-#include "edit_box_host.h"
-#include <impl/ecs_ui/frame_delta.adhd.h>
-#include "skin_selection.h"
+#include <impl/ecs_ui/paint_context.h>
+#include <impl/ecs_ui/edit_box_host.h>
+#include <impl/ecs_ui/skin_selection.h>
 
 #include <impl/assets_scene/asset.h>
-#include <impl/assets_ui_skin/subsystem.adhd.h>
+#include <impl/assets_ui_skin/types.adhd.h>
 #include <impl/ecs_ui/toolkit/input/pointer.adhd.h>
 #include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
@@ -38,13 +37,6 @@ class UiLayerSystem final
     , public Core::IRenderPass
     , public Core::IInputEventHandler
 {
-private:
-    struct LiveRoot{
-        Core::ECS::EntityID entity;
-        i32 order = 0;
-    };
-
-
 public:
     using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
 
@@ -66,13 +58,15 @@ public:
 
 
 public:
-    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; m_renderer.setActiveSceneSubsystems(subsystems); }
-    void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode)noexcept;
+    void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept;
+    void setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode)noexcept{ m_renderer.setCommandRecordingMode(mode); }
 
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
-    virtual void prepare(Core::ECS::World& world)override;
+    virtual void prepare([[maybe_unused]] Core::ECS::World& world)override{
+        synchronizeInput();
+    }
     [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)override;
     virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
@@ -83,7 +77,7 @@ public:
 
 public:
     // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
-    [[nodiscard]] b8 setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
+    [[nodiscard]] b8 setInputBindings(Span<const Ui::InputKeyBinding> bindings);
     virtual b8 keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     [[nodiscard]] virtual b8 blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
     virtual b8 keyboardCharInput(u32 unicode, i32 mods)override;
@@ -93,7 +87,7 @@ public:
     virtual void windowFocusUpdate(b8 focused)override;
     virtual void pointerLeave()override;
     virtual void pointerCaptureLost()override;
-    [[nodiscard]] b8 wantsKeyboard()const noexcept;
+    [[nodiscard]] b8 wantsKeyboard()const noexcept{ return m_resourcesReady && m_context.input().wantsCommands(); }
     [[nodiscard]] b8 wantsPointer()const noexcept;
 
 
@@ -103,21 +97,13 @@ private:
     void routeInput(const Ui::InputEvent& event, b8* blockText = nullptr);
     void routePointerInput(const Ui::PointerInput& input, b8* consumed = nullptr);
     void synchronizeNativeInput();
+    void abandonPendingFrame(b8 resetUi = false)noexcept;
+    void resetNormalizedInput();
+    void resetNativeInputState()noexcept;
+    void logInputRoutingOverflows(const Ui::InputRoutingResult& result)const;
     [[nodiscard]] b8 loadFonts(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept{
-        if(!m_activeSceneSubsystems)
-            return {};
-        const UiSubsystem* const uiSubsystem = m_activeSceneSubsystems->findSubsystem<UiSubsystem>();
-        return uiSubsystem ? uiSubsystem->basicSkin : Core::Assets::AssetRef<UiSkin>{};
-    }
-    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept{
-        const Core::Assets::AssetRef<UiSkin> fallbackSkin = basicSkin();
-        if(!fallbackSkin.valid())
-            return {};
-        if(!ref.valid() || ref == fallbackSkin)
-            return fallbackSkin;
-        return m_activeSceneSubsystems->findSceneAsset<UiSkin>(ref.name());
-    }
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> basicSkin()const noexcept;
+    [[nodiscard]] Core::Assets::AssetRef<UiSkin> resolveSkin(const Core::Assets::AssetRef<UiSkin>& ref)const noexcept;
 
 
 private:
@@ -129,14 +115,14 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ActiveSceneSubsystems m_defaultSceneSubsystems;
     const ActiveSceneSubsystems* m_activeSceneSubsystems = nullptr;
-    UiSkinSelection m_skinSelection;
+    UiSkinSelectionState m_skinSelection;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
     Ui::PaintBuilder m_paint;
     Ui::TextService m_text;
     Ui::Context m_context;
     UiEditBoxHost m_editHost;
     Ui::Builder m_ui;
-    Ui::PaintVector<LiveRoot> m_liveRoots;
+    Ui::PaintVector<UiLiveRoot> m_liveRoots;
     Ui::PaintVector<Ui::WidgetRoot> m_rootIdentities;
     Ui::GpuRenderer m_renderer;
     UiFrameDelta m_frameDelta;

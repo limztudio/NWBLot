@@ -172,14 +172,14 @@ Expected<BufferHandle> GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)
         .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const b8 submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
-        uploadToken,
-        *m_standaloneGraphWorkspaces,
         *this,
         uploadDesc.queueSharing,
         consumerQueue,
-        &submissionData,
         MakeNotNull(&__hidden_graphics_setup::DeclareBufferSetupUpload),
-        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
+        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{},
+        &submissionData,
+        *m_standaloneGraphWorkspaces,
+        uploadToken
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), ConvertString(desc.bufferDesc.debugName.resolvedText()));

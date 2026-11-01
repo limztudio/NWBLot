@@ -31,7 +31,6 @@ namespace __hidden_volume_staging{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr StringView s_WarningEventName = "warning";
 inline constexpr StringView s_CleanupCategory = "filesystem_volume_cleanup";
 
 
@@ -55,7 +54,7 @@ b8 RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView o
     return true;
 }
 
-void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringView operationName, const AStringView label){
+static void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringView operationName, const AStringView label){
 
     if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
         const ErrorCode errorCode = operation.error();
@@ -78,18 +77,12 @@ b8 EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView opera
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StagedDirectoryCleanupGuard::StagedDirectoryCleanupGuard(const Path& directoryPath, const AStringView operationName, const AStringView label)
-    : m_directoryPath(directoryPath)
-    , m_operationName(operationName)
-    , m_label(label)
-{}
-
 StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard()noexcept{
     if(!m_active)
         return;
     if(const auto removed = RemoveAllForCleanup(m_directoryPath); !removed){
         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("{}: failed to remove {} '{}', error {}", m_operationName, m_label, m_directoryPath.c_str(), removed.error().value());
-        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
     }
 }
 
@@ -111,7 +104,6 @@ constexpr usize s_StagedVolumeHashDigits = sizeof(u64) * 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using StagedVolumePaths = StagedDirectoryPaths;
 using ScratchPath = ::Path<Alloc::ScratchArena>;
 
 struct VolumeSegmentMove{
@@ -147,7 +139,7 @@ static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode
     return detail;
 }
 
-StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+StagedDirectoryPaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
     AString<Core::Alloc::ScratchArena> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += s_StagedVolumeKeySeparator;
     stageKey += volumeName;
@@ -199,7 +191,7 @@ static Expected<usize> CountExistingVolumeSegments(const Path& fromDirectory, co
     }
 }
 
-b8 PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
+b8 PromoteStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena, const VolumePublicationObserver observer){
     if(segmentCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), ConvertString(volumeName));
         return false;
@@ -244,7 +236,7 @@ b8 PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputD
                     if(const auto restored = RenamePath(move.destinationPath, move.sourcePath); !restored){
                         rollbackComplete = false;
                         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to restore volume segment '{}', error {}", move.sourcePath.c_str(), restored.error().value());
-                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
                     }
                 }
                 else{
@@ -252,7 +244,7 @@ b8 PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputD
                         rollbackComplete = false;
                         const i32 errorValue = removed ? 0 : removed.error().value();
                         const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Failed to remove promoted volume segment '{}', error {}", move.destinationPath.c_str(), errorValue);
-                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = __hidden_volume_staging::s_WarningEventName, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+                        CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = __hidden_volume_staging::s_CleanupCategory, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
                     }
                 }
             }
@@ -280,7 +272,21 @@ b8 PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputD
     return promoted;
 }
 
-b8 RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
+    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount, scratchArena);
+}
+
+b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
+    if(!ValidVolumeName(volumeName)){
+        FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, FilesystemVolumeDetail::s_VolumeDetailInvalidVolumeName);
+        return false;
+    }
 
     const auto outputExists = FileExists(outputDirectory);
     if(!outputExists){
@@ -303,7 +309,7 @@ b8 RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView v
         return false;
     }
 
-    ScratchPath hashedPath(scratchArena);
+    FilesystemVolumeStagingDetail::ScratchPath hashedPath(scratchArena);
     for(usize segmentIndex = 0u;; ++segmentIndex){
         hashedPath = outputDirectory;
         hashedPath /= MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
@@ -319,7 +325,7 @@ b8 RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView v
 
         if(const auto operation = RemoveFile(hashedPath); !operation || !*operation){
             const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(FilesystemMutationFailureDetail(errorCode, "segment was not present")));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old hashed segment '{}' : {}"), PathToString<tchar>(hashedPath), ConvertString(FilesystemVolumeStagingDetail::FilesystemMutationFailureDetail(errorCode, "segment was not present")));
             return false;
         }
 
@@ -330,29 +336,6 @@ b8 RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView v
     }
 
     return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-b8 PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount, Alloc::ScratchArena& scratchArena){
-    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount, scratchArena);
-}
-
-b8 RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName, Alloc::ScratchArena& scratchArena){
-    if(!ValidVolumeName(volumeName)){
-        FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, FilesystemVolumeDetail::s_VolumeDetailInvalidVolumeName);
-        return false;
-    }
-
-    return FilesystemVolumeStagingDetail::RemoveExistingVolumeSegments(outputDirectory, volumeName, scratchArena);
 }
 
 

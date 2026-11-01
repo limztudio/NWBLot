@@ -5,10 +5,8 @@
 #include "runtime_validation.h"
 
 #include "binary_payload_io.h"
-#include "meshlet_payload_packing.h"
-#include "meshlet_ref_decode.h"
-#include "meshlet_ref_validation.h"
-#include "runtime_validation_diagnostics.h"
+
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,13 +24,31 @@ namespace __hidden_mesh_runtime_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_DirectionLengthTolerance = 0.01f;
-inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 inline constexpr TStringView s_StreamCountLimitReason = NWB_TEXT("exceeds u32 stream count limits");
 inline constexpr TStringView s_NonFiniteDataReason = NWB_TEXT("contains non-finite data");
 inline constexpr TStringView s_InvalidStreamReason = NWB_TEXT("is invalid");
 inline constexpr TStringView s_InvalidEncodedPositionRefReason = NWB_TEXT("has invalid encoded position ref");
 inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has invalid encoded attribute ref");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void LogMeshPayloadValidation(const TStringView contextText, const TStringView meshPathText, const TStringView detailText){
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {}"), contextText, meshPathText, detailText);
+}
+
+void LogMeshPayloadIndexedValidation(const TStringView contextText, const TStringView meshPathText, const TStringView itemText, const usize itemIndex, const TStringView detailText){
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {} {} {}"), contextText, meshPathText, itemText, itemIndex, detailText);
+}
+
+void LogMeshletPayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const TStringView detailText){
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} {}"), contextText, meshPathText, meshletIndex, detailText);
+}
+
+void LogMeshletPrimitivePayloadValidation(const TStringView contextText, const TStringView meshPathText, const usize meshletIndex, const usize primitiveIndex, const TStringView detailText){
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} {}"), contextText, meshPathText, meshletIndex, primitiveIndex, detailText);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,28 +60,16 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshPositionVector(const SIMDVectorSingle position)noexcept{
-    return VectorSetW(position, 0.0f);
-}
-
-[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVectorSingle normal)noexcept{
-    return VectorSetW(normal, 0.0f);
-}
-
-[[nodiscard]] SIMDVectorSingle MeshRuntimeValidation::MakeMeshUvVector(const SIMDVectorSingle uv)noexcept{
-    return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
-}
-
 [[nodiscard]] b8 MeshRuntimeValidation::ValidDirectionVector(const SIMDVectorSingle direction)noexcept{
-    return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance));
+    return VectorIsFinite(direction, VectorComponentMask::s_XYZ) && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(s_DirectionLengthTolerance));
 }
 
 [[nodiscard]] b8 MeshRuntimeValidation::ValidTangentVector(const SIMDVectorSingle tangent)noexcept{
     const SIMDVectorSingle direction = VectorSetW(tangent, 0.0f);
     return
         VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
-        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_DirectionLengthTolerance))
-        && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(__hidden_mesh_runtime_validation::s_TangentHandednessTolerance))
+        && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(s_DirectionLengthTolerance))
+        && Vector4NearEqual(VectorAbs(VectorSplatW(tangent)), s_SIMDOne, VectorReplicate(s_TangentHandednessTolerance))
     ;
 }
 
@@ -79,43 +83,43 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const TStringView meshPathText
 ){
     if(!FitsU32(positions.size()) || !FitsU32(normals.size()) || !FitsU32(tangents.size()) || !FitsU32(uv0.size()) || !FitsU32(colors.size())){
-        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, __hidden_mesh_runtime_validation::s_StreamCountLimitReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadValidation(contextText, meshPathText, __hidden_mesh_runtime_validation::s_StreamCountLimitReason);
         return false;
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
-        if(VectorIsFinite(MakeMeshPositionVector(LoadFloat(positions[i])), VectorComponentMask::s_XYZ))
+        if(VectorIsFinite(VectorSetW(LoadFloat(positions[i]), 0.0f), VectorComponentMask::s_XYZ))
             continue;
 
-        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_PositionsStreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_PositionsStreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
         return false;
     }
     for(usize i = 0u; i < normals.size(); ++i){
-        if(ValidDirectionVector(MakeMeshNormalVector(LoadHalf(normals[i]))))
+        if(ValidDirectionVector(VectorSetW(LoadHalf(normals[i]), 0.0f)))
             continue;
 
-        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_NormalsStreamLabel, i, __hidden_mesh_runtime_validation::s_InvalidStreamReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_NormalsStreamLabel, i, __hidden_mesh_runtime_validation::s_InvalidStreamReason);
         return false;
     }
     for(usize i = 0u; i < tangents.size(); ++i){
         if(ValidTangentVector(LoadHalf(tangents[i])))
             continue;
 
-        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_TangentsStreamLabel, i, __hidden_mesh_runtime_validation::s_InvalidStreamReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_TangentsStreamLabel, i, __hidden_mesh_runtime_validation::s_InvalidStreamReason);
         return false;
     }
     for(usize i = 0u; i < uv0.size(); ++i){
-        if(VectorIsFinite(MakeMeshUvVector(LoadFloat(uv0[i])), VectorComponentMask::s_XY))
+        if(VectorIsFinite(VectorSetW(VectorSetZ(LoadFloat(uv0[i]), 0.0f), 0.0f), VectorComponentMask::s_XY))
             continue;
 
-        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_Uv0StreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_Uv0StreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
         return false;
     }
     for(usize i = 0u; i < colors.size(); ++i){
         if(VectorIsFinite(LoadHalf(colors[i]), VectorComponentMask::s_XYZW))
             continue;
 
-        MeshPayloadValidationDiagnostics::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_ColorsStreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadIndexedValidation(contextText, meshPathText, MeshAssetBinaryPayload::s_ColorsStreamLabel, i, __hidden_mesh_runtime_validation::s_NonFiniteDataReason);
         return false;
     }
 
@@ -138,15 +142,15 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
     const TStringView meshPathText
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
-        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
+        __hidden_mesh_runtime_validation::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("has incomplete meshlet payload"));
         return false;
     }
     if(meshlets.size() > Limit<u32>::s_Max / s_MeshletBoundsStride){
-        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet bounds exceed u32 byte-address limits"));
+        __hidden_mesh_runtime_validation::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet bounds exceed u32 byte-address limits"));
         return false;
     }
     if(!FitsU32(positionRefDeltas.size()) || !FitsU32(attributeRefDeltas.size())){
-        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, __hidden_mesh_runtime_validation::s_StreamCountLimitReason);
+        __hidden_mesh_runtime_validation::LogMeshPayloadValidation(contextText, meshPathText, __hidden_mesh_runtime_validation::s_StreamCountLimitReason);
         return false;
     }
 
@@ -161,76 +165,76 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         const u32 encodedPositionCount = MeshletPositionCount(meshlet);
         const u32 attributeCount = MeshletAttributeCount(meshlet);
         if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid vertex count"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid vertex count"));
             return false;
         }
         if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid primitive count"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid primitive count"));
             return false;
         }
         if(encodedPositionCount == 0u || encodedPositionCount > s_MeshMaxMeshletVertices){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid deformed position count"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid deformed position count"));
             return false;
         }
         if(attributeCount == 0u || attributeCount > s_MeshMaxMeshletVertices){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid attribute count"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid attribute count"));
             return false;
         }
         if(meshlet.localVertexOffset != expectedLocalVertexRefCount || meshlet.primitiveOffset != expectedPrimitiveIndexCount || meshlet.positionRefOffset != expectedPositionRefByteCount || meshlet.attributeRefOffset != expectedAttributeRefByteCount){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has non-contiguous offsets"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has non-contiguous offsets"));
             return false;
         }
 
-        const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, false);
-        const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
-        if(!encodedPositionBytes || !encodedAttributeBytes){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
+        usize encodedPositionBytes = 0u;
+        usize encodedAttributeBytes = 0u;
+        if(!TryComputeMeshletEncodedPositionRefByteCount(meshlet, false, encodedPositionBytes) || !TryComputeMeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)){
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid ref encoding width"));
             return false;
         }
-        if(*encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount || *encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("encoded ref byte counts overflow"));
+        if(encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount || encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount){
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("encoded ref byte counts overflow"));
             return false;
         }
 
         expectedLocalVertexRefCount += vertexCount;
-        expectedPositionRefByteCount += *encodedPositionBytes;
-        expectedAttributeRefByteCount += *encodedAttributeBytes;
+        expectedPositionRefByteCount += encodedPositionBytes;
+        expectedAttributeRefByteCount += encodedAttributeBytes;
         expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * s_MeshletTriangleIndexCount;
         if(expectedLocalVertexRefCount > localVertexRefs.size() || expectedPositionRefByteCount > positionRefDeltas.size() || expectedAttributeRefByteCount > attributeRefDeltas.size() || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("exceeds meshlet stream bounds"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("exceeds meshlet stream bounds"));
             return false;
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
         const SIMDVectorSingle sphere = LoadFloat(bounds.sphere);
         if(!VectorIsFinite(sphere, VectorComponentMask::s_XYZW) || VectorGetW(sphere) < 0.0f){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid bounds"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid bounds"));
             return false;
         }
         if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone flags"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone flags"));
             return false;
         }
         if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone cutoff"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("has invalid cone cutoff"));
             return false;
         }
 
         for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-            const auto ref = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, false);
-            if(ref && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, positionCount, 0u, false))
+            MeshletPositionStreamRef ref;
+            if(TryDecodeMeshletPositionRef(positionRefDeltas, meshlet, localPositionIndex, false, ref) && MeshletPositionRefInRange(ref, positionCount, 0u, false))
                 continue;
 
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedPositionRefReason);
             return false;
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-            const auto ref = DecodeMeshletAttributeRef(attributeRefDeltas.data(), attributeRefDeltas.size(), meshlet, localAttributeIndex);
-            if(ref && MeshMeshletRefValidation::MeshletAttributeRefInRange(*ref, normalCount, tangentCount, uv0Count, colorCount))
+            MeshletAttributeStreamRef ref;
+            if(TryDecodeMeshletAttributeRef(attributeRefDeltas, meshlet, localAttributeIndex, ref) && MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount))
                 continue;
 
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedAttributeRefReason);
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, __hidden_mesh_runtime_validation::s_InvalidEncodedAttributeRefReason);
             return false;
         }
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
@@ -238,7 +242,7 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
             if(ref.localDeformedPosition < encodedPositionCount && ref.localAttribute < attributeCount)
                 continue;
 
-            MeshPayloadValidationDiagnostics::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("local vertex ref is out of range"));
+            __hidden_mesh_runtime_validation::LogMeshletPayloadValidation(contextText, meshPathText, meshletIndex, NWB_TEXT("local vertex ref is out of range"));
             return false;
         }
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
@@ -247,14 +251,14 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
                 if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
                     continue;
 
-                MeshPayloadValidationDiagnostics::LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, primitiveIndex, NWB_TEXT("has an out-of-range local vertex"));
+                __hidden_mesh_runtime_validation::LogMeshletPrimitivePayloadValidation(contextText, meshPathText, meshletIndex, primitiveIndex, NWB_TEXT("has an out-of-range local vertex"));
                 return false;
             }
         }
     }
 
     if(expectedLocalVertexRefCount != localVertexRefs.size() || expectedPositionRefByteCount != positionRefDeltas.size() || expectedAttributeRefByteCount != attributeRefDeltas.size() || expectedPrimitiveIndexCount != meshletPrimitiveIndices.size()){
-        MeshPayloadValidationDiagnostics::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet streams contain trailing data"));
+        __hidden_mesh_runtime_validation::LogMeshPayloadValidation(contextText, meshPathText, NWB_TEXT("meshlet streams contain trailing data"));
         return false;
     }
 
@@ -280,24 +284,6 @@ inline constexpr TStringView s_InvalidEncodedAttributeRefReason = NWB_TEXT("has 
         return false;
 
     return ValidateMeshletPayload(positionRefDeltas, attributeRefDeltas, localVertexRefs, meshlets, meshletBounds, meshletPrimitiveIndices, positions.size(), normals.size(), tangents.size(), uv0.size(), colors.size(), contextText, meshPathText);
-}
-
-[[nodiscard]] b8 MeshRuntimeValidation::ValidateSharedMeshPayload(const Mesh& payload, const TStringView contextText, const TStringView meshPathText){
-    return ValidateSharedMeshPayload(
-        payload.positionStream(),
-        payload.normalStream(),
-        payload.tangentStream(),
-        payload.uv0Stream(),
-        payload.colorStream(),
-        payload.meshletPositionRefDeltas(),
-        payload.meshletAttributeRefDeltas(),
-        payload.meshletLocalVertexRefs(),
-        payload.meshlets(),
-        payload.meshletBounds(),
-        payload.meshletPrimitiveIndices(),
-        contextText,
-        meshPathText
-    );
 }
 
 

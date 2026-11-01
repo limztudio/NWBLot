@@ -5,9 +5,6 @@
 #pragma once
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/prepared_source.h>
 
@@ -29,21 +26,8 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena){
-    auto source = Impl::ReadPreparedFontSource(fontPath, arena, false);
-    if(!source)
-        return MakeUnexpected(source.error());
-    return Move(source->fontBytes);
-}
-
-[[nodiscard]] inline b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, const StringView directory, const StringView filename){
-    const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, directory) / filename;
-    auto bytes = ReadBundledFontBytes(path, arena);
-    if(!bytes)
-        return false;
-    font.setFontBytes(Move(*bytes));
-    return font.validatePayload();
-}
+[[nodiscard]] Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena);
+[[nodiscard]] b8 LoadBundledFont(Impl::Font& font, Core::Alloc::GlobalArena& arena, StringView directory, StringView filename);
 
 #if defined(NWB_REPO_ROOT)
 template<typename TestArenaT>
@@ -52,10 +36,7 @@ template<typename TestArenaT>
 }
 #endif
 
-inline void WriteLittleU32(const Span<u8> bytes, const usize offset, const u32 value)noexcept{
-    for(u32 index = 0u; index < 4u; ++index)
-        bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
-}
+void WriteLittleU32(usize offset, u32 value, Span<u8> bytes)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

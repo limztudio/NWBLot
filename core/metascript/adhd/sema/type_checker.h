@@ -57,13 +57,13 @@ public:
 
 private:
     [[nodiscard]] b8 linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>& errors);
-    void buildCallArgHints(ClassDecl* ownerClass, const MethodDecl* method, Span<const Expr* const> args, Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const;
+    void buildCallArgHints(const ClassDecl* ownerClass, const MethodDecl* method, Span<const Expr* const> args, Span<const ScopedVarInfo> scope, MVector<MStringView>& outArgTypes, MVector<u8>& outArgIsMut)const;
     [[nodiscard]] MStringView resolveScopedVarBaseType(const ScopedVarInfo& var)const noexcept;
     [[nodiscard]] b8 isThisConstInScope(const MethodDecl& method, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] b8 validateThisAccess(const ClassDecl* ownerClass, SourceSpan span, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors)const;
     [[nodiscard]] b8 isConstructibleTypeName(MStringView calleeName, MStringView baseCallee)const noexcept;
     [[nodiscard]] const MethodDecl* resolveCustomOperator(
-        ClassDecl* ownerClass,
+        const ClassDecl* ownerClass,
         const MethodDecl* method,
         const TypeRef* lhsTypeRef,
         MStringView lhsBaseType,
@@ -73,7 +73,7 @@ private:
         const ClassDecl** outDeclaringClass = nullptr
     )const noexcept;
     [[nodiscard]] MStringView resolveScopeAccessEnumTypeName(
-        ClassDecl* ownerClass,
+        const ClassDecl* ownerClass,
         const MethodDecl* method,
         const Expr& expr,
         Span<const ScopedVarInfo> scope,
@@ -90,9 +90,9 @@ private:
     [[nodiscard]] b8 checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, b8 allowVoid, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, MVector<ParseError>& errors){ return checkTypeRef(typeRef, enclosingClass, enclosingMethod, false, errors); }
     [[nodiscard]] b8 checkReturnTypeRef(const TypeRef& returnType, const ClassDecl* enclosingClass, const MethodDecl* enclosingMethod, SourceSpan errorSpan, MVector<ParseError>& errors);
-    void markStringToPathAdaptation(ClassDecl* ownerClass, const MethodDecl* method, Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    void markStringToPathAdaptation(const ClassDecl* ownerClass, const MethodDecl* method, Span<const ScopedVarInfo> scope, Expr& expr)const noexcept;
     [[nodiscard]] b8 verifyConcreteClassImplementsInterface(
-        ClassDecl* ownerClass,
+        const ClassDecl* ownerClass,
         const MethodDecl& method,
         const Expr& rhsExpr,
         const TypeRef* expectedInterfaceType,
@@ -110,30 +110,28 @@ private:
 
     [[nodiscard]] b8 checkMethodBody(ClassDecl* ownerClass, MethodDecl& method, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkStatementList(ClassDecl* ownerClass, MethodDecl& method, MVector<Stmt*>& statements, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkConstructorInitArguments(ClassDecl* ownerClass, MethodDecl& method, const TypeRef* targetType, MVector<Expr*>& arguments, Span<const ScopedVarInfo> scope, SourceSpan errorSpan, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkConstructorInitArguments(ClassDecl* ownerClass, const TypeRef* targetType, Span<const ScopedVarInfo> scope, SourceSpan errorSpan, MethodDecl& method, MVector<Expr*>& arguments, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkReturnStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkReturnStatement(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Stmt& stmt, MVector<ParseError>& errors);
     [[nodiscard]] b8 checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& stmt, MVector<ScopedVarInfo>& scope, MVector<ParseError>& errors);
 
-    [[nodiscard]] b8 checkExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
     [[nodiscard]] b8 applyInterfaceRefRebind(
-        ClassDecl* ownerClass,
-        MethodDecl& method,
-        Expr& assignExpr,
+        const ClassDecl* ownerClass,
+        const MethodDecl& method,
         const TypeRef* targetType,
         ParamPassingMode::Enum targetRefMode,
         Span<const ScopedVarInfo> scope,
         MStringView errorMessage,
-        b8& outRhsNeedsMut,
-        MVector<ParseError>& errors
+        Expr& assignExpr,
+        MVector<ParseError>& errors,
+        b8& inOutRhsNeedsMut
     );
-    [[nodiscard]] b8 checkBinaryExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors);
-    [[nodiscard]] b8 isReceiverConst(ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] b8 checkBinaryExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
+    [[nodiscard]] b8 isReceiverConst(const ClassDecl* ownerClass, const MethodDecl& method, const Expr& recv, Span<const ScopedVarInfo> scope)const noexcept;
 
     [[nodiscard]] b8 checkCallableArguments(
         ClassDecl* ownerClass,
-        MethodDecl& method,
-        MVector<Expr*>& arguments,
         Span<const ScopedVarInfo> scope,
         const MethodDecl* targetCallable,
         const ClassDecl* targetOwnerCls,
@@ -142,14 +140,16 @@ private:
         const TypeRef* invokedFuncType,
         const ScopedVarInfo* localCallable,
         MStringView calledMemberName,
+        MethodDecl& method,
+        MVector<Expr*>& arguments,
         MVector<ParseError>& errors
     );
-    [[nodiscard]] b8 checkCallExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MVector<ParseError>& errors);
-    [[nodiscard]] b8 checkLambdaExpr(ClassDecl* ownerClass, MethodDecl& method, Expr& expr, Span<const ScopedVarInfo> scope, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkCallExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, b8 isMutationTarget, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
+    [[nodiscard]] b8 checkLambdaExpr(ClassDecl* ownerClass, Span<const ScopedVarInfo> scope, MethodDecl& method, Expr& expr, MVector<ParseError>& errors);
 
-    [[nodiscard]] MStringView inferExprTypeName(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
-    [[nodiscard]] const TypeRef* inferExprTypeRef(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
-    [[nodiscard]] MStringView inferExprBaseType(ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
+    [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
+    [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
     void analyzeBlockMoveAtLastUse(Span<Stmt* const> statements, Span<const ScopedVarInfo> scope, usize savedScopeSize)const noexcept;
 
 
@@ -163,6 +163,7 @@ private:
     u32 m_loopDepth = 0u;
     u32 m_switchDepth = 0u;
     b8 m_inLambda = false;
+    b8 m_activeLambdaMutatesContainer = false;
     b8 m_inClassArenaContext = false;
     b8 m_activeParallelBlockUsesScratch = false;
 };

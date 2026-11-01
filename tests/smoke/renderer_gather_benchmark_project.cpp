@@ -4,6 +4,7 @@
 
 #include "renderer_gather_benchmark_probe.h"
 #include "renderer_compiler_statistics_probe.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
@@ -86,7 +87,7 @@ class RendererGatherBenchmarkProject final : public IProjectEntryCallbacks{
 public:
     explicit RendererGatherBenchmarkProject(ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("RendererGatherBenchmark")))
+        , m_world(CreateSmokeWorldOrDie(NWB_TEXT("RendererGatherBenchmark"), context))
         , m_timingPass(context.graphics)
         , m_probe(context.objectArena)
         , m_compilerProbe(context.graphics, context.objectArena)
@@ -138,7 +139,7 @@ public:
             return false;
         renderer.setRefractionEnabled(true);
         renderer.setRefractionHardwareTracingEnabled(true);
-        const auto cameraEntity = CreateSmokeCamera(*m_world, 2.6f, 9.0f, 0.0f);
+        const auto cameraEntity = CreateSmokeCamera(2.6f, 9.0f, 0.0f, *m_world);
         if(!cameraEntity.valid())
             return false;
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.0f, Float4(1.0f, 0.96f, 0.88f), 2.0f);
@@ -184,8 +185,7 @@ public:
             ++m_renderers;
             if(workload == s_OverridesWorkload){
                 entity.addComponent<NWB::Impl::MaterialInstanceComponent>(Name(s_Interface));
-                Float4 tint;
-                StoreFloat(VectorAdd(VectorSet(0.55f, 0.85f, 1.0f, 1.0f), VectorDivide(VectorSet(static_cast<f32>(index), 0.0f, 0.0f, 0.0f), VectorReplicate(256.0f))), tint);
+                const Float4 tint(0.55f + static_cast<f32>(index) / 256.0f, 0.85f, 1.0f, 1.0f);
                 if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint", tint))
                     return false;
             }
@@ -198,7 +198,7 @@ public:
         m_timingRegistered = true;
         const auto compilerOutput = ReadSmokeEnvironmentText(scratchArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
         if(compilerOutput){
-            if(!m_compilerProbe.start(renderer, AStringView(*compilerOutput)))
+            if(!m_compilerProbe.start(AStringView(*compilerOutput), renderer))
                 return false;
         }
         NWB::Core::Perf::CaptureOptions capture;
@@ -238,39 +238,34 @@ public:
                 return false;
             m_actualCountsRead = true;
         }
-        const auto updated = m_world->tick(s_FixedDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
-            return false;
-        }
-        return true;
+        return TickSmokeWorld(s_FixedDelta, *m_world);
     }
 
 
 private:
     [[nodiscard]] b8 createBackdrop(){
-        const auto backdrop = CreateTintedStaticMeshEntity(*m_world, s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f));
+        const auto backdrop = CreateTintedStaticMeshEntity(s_Plane, s_Opaque, s_Interface, Float4(0.1f, 0.1f, 0.1f, 1.0f), Float4(0.0f, 2.6f, 2.0f, 0.0f), Float4(5.0f, 1.0f, 3.5f, 0.0f), *m_world);
         if(!backdrop.valid())
             return false;
         auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
         const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.0f);
         const Half roughness = ConvertFloatToHalf(0.0f);
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::f16x3, NWB::Impl::PackMaterialInstanceBytes(Span<const Half>(f0.raw, 3u))))
             return false;
-        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::f16, NWB::Impl::PackMaterialInstanceValue(roughness)))
             return false;
         ++m_renderers;
         return true;
     }
 
     [[nodiscard]] b8 createRuntime(const u32 index, const Float4& position){
-        const auto modelResult = CreateTintedModelEntity(*m_world, s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f));
+        const auto modelResult = CreateTintedModelEntity(s_Model, s_Opaque, s_Interface, Float4(0.9f, 0.45f, 0.2f, 1.0f), position, Float4(0.22f, 0.22f, 0.22f, 0.0f), *m_world);
         const auto owner = modelResult.entity;
         if(!owner.valid() || !modelResult.tintApplied)
             return false;
         SyncSmokeModelRuntimes(*m_world);
-        const auto skeleton = FindSpawnedModelObject(*m_world, owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton);
+        const auto skeleton = FindSpawnedModelObject(owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton, *m_world);
         if(!skeleton.valid())
             return false;
         auto& pose = m_world->entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();

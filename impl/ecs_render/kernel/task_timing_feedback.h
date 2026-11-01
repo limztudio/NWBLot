@@ -28,8 +28,8 @@ struct RendererTaskTimingFeedbackPolicyTransition{
     RendererTaskTimingFeedbackCollectionAction::Enum action = RendererTaskTimingFeedbackCollectionAction::None;
 };
 
-[[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, b8 rendererActive)noexcept;
-void ResolveRendererTaskTimingFeedbackPolicyTransition(Core::GpuTaskTimingFeedbackPolicy& currentPolicy, const RendererTaskTimingFeedbackPolicyTransition& transition, b8 collectionUpdated)noexcept;
+[[nodiscard]] RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(const Core::GpuTaskTimingFeedbackPolicy& requestedPolicy, b8 rendererActive, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept;
+void ResolveRendererTaskTimingFeedbackPolicyTransition(const RendererTaskTimingFeedbackPolicyTransition& transition, b8 collectionUpdated, Core::GpuTaskTimingFeedbackPolicy& currentPolicy)noexcept;
 
 // Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
 class RendererTaskTimingFeedbackState final : NoCopy{
@@ -81,8 +81,10 @@ private:
 
 
 public:
-    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, NotNull<const Name*> feedbackCollectionScopes, usize feedbackCollectionScopeCount);
-    ~RendererTaskTimingFeedback()noexcept;
+    RendererTaskTimingFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Span<const Name> feedbackCollectionScopes);
+    ~RendererTaskTimingFeedback()noexcept{
+        deactivate();
+    }
 
 
 public:

@@ -1,0 +1,128 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/ecs_render/raytrace/graph_snapshots.h>
+
+#include <core/task/gpu/task_graph.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class RendererMeshSystem;
+class RendererRayTracingSystem;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Software-BVH build-state import owns the mesh software-BVH parent plus raytracing BVH sort-buffer graph imports.
+struct FrameGraphSoftwareBvhBuildStateInputs{
+    const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources;
+    b8 softwareTraceResourcesPrepared = false;
+};
+
+struct FrameGraphSoftwareBvhBuildStateResult{
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> buildStateResources;
+
+
+public:
+    explicit FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena)noexcept
+        : buildStateResources(scratchArena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FrameGraphSoftwareBvhBuildStateImporter final : NoCopy{
+public:
+    FrameGraphSoftwareBvhBuildStateImporter(Core::GpuTaskGraph& graph, RendererMeshSystem& meshSystem)noexcept
+        : m_graph(graph)
+        , m_meshSystem(meshSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<FrameGraphSoftwareBvhBuildStateResult> declare(const FrameGraphSoftwareBvhBuildStateInputs& inputs, Core::Alloc::ScratchArena& scratchArena);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererMeshSystem& m_meshSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Graph imports for the preflighted trace geometry buffers, trace material textures, their resource sets, and software BVH build state.
+struct FrameGraphTraceGeometryResult{
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometry;
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometry;
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometry;
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildState;
+    Core::GpuGraphResourceSetId shadowTraceGeometrySet;
+    Core::GpuGraphResourceSetId softwareTraceGeometrySet;
+    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
+    b8 softwareTraceResourcesPrepared = false;
+
+
+public:
+    explicit FrameGraphTraceGeometryResult(Core::Alloc::ScratchArena& scratchArena)noexcept
+        : traceGeometry(scratchArena)
+        , hardwareTraceGeometry(scratchArena)
+        , softwareTraceGeometry(scratchArena)
+        , softwareBvhBuildState(scratchArena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FrameGraphTraceGeometryImporter final : NoCopy{
+public:
+    FrameGraphTraceGeometryImporter(Core::GpuTaskGraph& graph, RendererRayTracingSystem& raytracingSystem, RendererMeshSystem& meshSystem)noexcept
+        : m_graph(graph)
+        , m_raytracingSystem(raytracingSystem)
+        , m_meshSystem(meshSystem)
+    {}
+
+
+public:
+    [[nodiscard]] Expected<FrameGraphTraceGeometryResult> declare(Core::Alloc::ScratchArena& scratchArena, const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources);
+
+
+private:
+    [[nodiscard]] Core::GpuGraphResourceSetId importSet(Span<const Core::GpuGraphResourceId> members, const Name& identity, AStringView markerLabel);
+
+
+private:
+    Core::GpuTaskGraph& m_graph;
+    RendererRayTracingSystem& m_raytracingSystem;
+    RendererMeshSystem& m_meshSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

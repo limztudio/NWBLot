@@ -56,6 +56,8 @@ namespace ECSRenderDetail{
 struct OpaqueCsgReceiverComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     // All bindings required: the receiver emulation always generates against this frame's bindings.
     struct Payload{
         RendererMaterialSystem& materialSystem;
@@ -75,7 +77,21 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
 
 
     public:
-        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, DeferredFrameTargets& targetsIn, Core::GpuTimingSubmissionTicket*& timingTicketIn, const b8& meshViewSetupReadyIn, const b8& sceneShadingSetupReadyIn)noexcept;
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererMaterialSystem& materialSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket*& timingTicketIn,
+            const b8& meshViewSetupReadyIn,
+            const b8& sceneShadingSetupReadyIn
+        )noexcept
+            : materialSystem(materialSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , meshViewSetupReady(meshViewSetupReadyIn)
+            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+            , plan(arena)
+        {}
     };
 
 
@@ -88,6 +104,8 @@ public:
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     // All bindings required: emulation always brackets its dispatch with the frame timing.
     struct Payload{
         Core::GraphicsRuntime& graphics;
@@ -118,14 +136,23 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
             const b8& meshViewSetupReadyIn,
             const b8& sceneShadingSetupReadyIn,
             Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
-        )noexcept;
+        )noexcept
+            : graphics(graphicsIn)
+            , materialSystem(materialSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , meshViewSetupReady(meshViewSetupReadyIn)
+            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+            , opaqueCsgTiming(opaqueCsgTimingIn)
+            , plan(arena)
+        {}
     };
 
 
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         Core::DiscardGpuTimingMeasure(&payload.opaqueCsgTiming);
     }
 };

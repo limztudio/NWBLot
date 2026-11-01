@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -53,14 +54,15 @@ namespace ECSRenderDetail{
 struct MeshViewSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+
+public:
     // All bindings required: mesh-view setup always records the prefix timing for this frame.
-    // Only the shadow-visibility task stays optional: the queue lookup may be absent when no visibility pass runs.
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming;
         Core::GpuTimingSubmissionTicket*& timingTicket;
         const b8& asyncPrefixTimingSpansOnePacket;
-        const Core::GpuTaskId* shadowVisibilityTask = nullptr;
+        const Core::GpuTaskId& shadowVisibilityTask;
     };
 
 
@@ -73,10 +75,12 @@ public:
 struct MeshViewUploadCommitGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+
+public:
     // The mesh system and the ready flag are required: the commit always publishes mesh-view readiness for this frame.
     struct Payload{
         RendererMeshSystem& meshSystem;
-        ECSRenderDetail::MeshViewGpuData viewState;
+        MeshViewGpuData viewState;
         b8 uploadRequired = false;
         b8& ready;
     };
@@ -85,7 +89,7 @@ struct MeshViewUploadCommitGraphTask{
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context)noexcept;
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
-    static void Discarded(Payload& payload)noexcept;
+    static void Discarded(Payload& payload)noexcept{ payload.ready = false; }
 };
 
 

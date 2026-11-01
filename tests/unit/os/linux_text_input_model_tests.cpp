@@ -251,7 +251,7 @@ TEST(X11PreeditBuffer, MalformedReplacementPreservesPublishedTextAndCaret){
     NWB::Tests::TestArena arena;
     X11PreeditBuffer preedit(arena.arena);
     ASSERT_TRUE(preedit.replace(0u, 0u, "valid", 3u));
-    const AStringView invalid[]{ "\x80", "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
+    const Array<AStringView, 4u> invalid = { "\x80", "\xC0\xAF", "\xED\xA0\x80", AStringView("a\0b", 3u) };
     for(const AStringView text : invalid){
         EXPECT_FALSE(preedit.replace(1u, 2u, text, 1u));
         EXPECT_EQ(preedit.text(), "valid");

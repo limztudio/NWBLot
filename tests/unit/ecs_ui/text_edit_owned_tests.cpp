@@ -41,7 +41,7 @@ public:
     }
 };
 
-inline constexpr Ui::UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
+inline constexpr UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
 inline constexpr TextInputRect s_Caret{ 10, 20, 1, 18 };
 
 
@@ -56,7 +56,7 @@ TEST(UiTextEditOwned, PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativ
     TextInputEvent event(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
     const auto oldToken = session.token();
     AString<Alloc::GlobalArena> source(" copied", arena.arena);
     ASSERT_EQ(service.commit(source), TextInputAdmission::Accepted);
@@ -81,7 +81,7 @@ TEST(UiTextEditOwned, TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChang
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
     const u64 oldSurrounding = session.surroundingRevision();
     ASSERT_TRUE(model.replaceSelection(" local"));
     EXPECT_FALSE(session.matchesPublished(s_Owner, model));
@@ -101,7 +101,7 @@ TEST(UiTextEditOwned, CancelWithoutModelLeavesTransientCompositionForTheNextSync
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
     ASSERT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
     ASSERT_TRUE(session.cancel());
@@ -109,7 +109,7 @@ TEST(UiTextEditOwned, CancelWithoutModelLeavesTransientCompositionForTheNextSync
     EXPECT_EQ(model.text(), "base");
     EXPECT_EQ(session.adoptLocal(s_Owner, model, s_Caret), TextInputAdmission::InvalidSession);
     model.cancelComposition();
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
 }
 
 TEST(UiTextEditOwned, CopiedSurroundingDeletionRequiresPublishedRevisionAndGraphemeAlignedRange){
@@ -164,7 +164,7 @@ TEST(UiTextEditOwned, IdenticalExternalResetFencesOldEventsAndPublishedDeletionC
     UiTextEditSession session(arena.arena, service);
     ASSERT_TRUE(service.setFocused(true));
     ASSERT_TRUE(model.setText("base"));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("old"), TextInputAdmission::Accepted);
     const u64 revision = model.revision();
     ASSERT_TRUE(model.setText("base"));
@@ -182,7 +182,7 @@ TEST(UiTextEditOwned, OwnedCollectionAdoptionAndCancellationRejectAnotherThread)
     UiTextEditSession session(arena.arena, service);
     TextInputEvent event(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.begin(s_Owner, s_Caret, model), TextInputAdmission::Accepted);
     TextInputPollResult::Enum poll = TextInputPollResult::Pending;
     TextInputAdmission::Enum adopt = TextInputAdmission::Accepted;
     b8 cancelled = true;

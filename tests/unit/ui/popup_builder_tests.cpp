@@ -51,7 +51,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel& model, const EditBoxOptions&)override{
+    [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, const EditBoxOptions&, EditModel& model)override{
         ++loans;
         EditBoxResult result;
         result.valid = model.setText("borrowed");
@@ -59,11 +59,11 @@ public:
         return result;
     }
 
-    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model, const EditBoxOptions& options, const PopupToken&)override{ return edit(widget, model, options); }
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, const EditBoxOptions& options, const PopupToken&, EditModel& model)override{ return edit(widget, options, model); }
 
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, IEditActionSink&)noexcept override{ return {}; }
 
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&, const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, const EditBoxOptions&, const PopupToken&, EditModel&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)noexcept override{ return {}; }
 
     [[nodiscard]] virtual b8 publish(const WidgetState&, const EditBoxView&, const EditBoxPlacement&, const EditBoxOptions&)noexcept override{
         ++publications;
@@ -91,7 +91,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId ownerId(const AStringView key = s_PopupKey)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), key));
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), key);
     }
 };
 
@@ -135,7 +135,7 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     EXPECT_EQ(backdrop.firstIndex, 0u);
     EXPECT_EQ(backdrop.indexCount, 6u);
     EXPECT_GT(snapshot.commands()[0u].firstIndex, backdrop.firstIndex);
-    ExpectRect(backdrop.clip, { 0.0f, 0.0f, 800.0f, 600.0f });
+    UiPaintAssertions::ExpectRect(backdrop.clip, { 0.0f, 0.0f, 800.0f, 600.0f });
     const Vertex& first = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex]];
     const Vertex& opposite = snapshot.vertices()[snapshot.indices()[backdrop.firstIndex + 2u]];
     EXPECT_FLOAT_EQ(first.position.x, 0.0f);
@@ -440,7 +440,7 @@ TEST_F(UiPopupBuilderTests, MissingPopupAndPanelSkinRejectsAdmissionWithoutChang
     EXPECT_FALSE(m_builder.beginPopup(s_PopupKey, state, moved));
     EXPECT_TRUE(m_context.failed());
     EXPECT_TRUE(m_builder.balanced());
-    ExpectRect(state.placement().bounds, previous);
+    UiPaintAssertions::ExpectRect(state.placement().bounds, previous);
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);

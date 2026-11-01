@@ -207,6 +207,9 @@ inline constexpr u32 s_UnicodeLowSurrogateMax = 0xDFFFu;
 inline constexpr u32 s_Utf16SurrogatePayloadBits = 10u;
 inline constexpr u32 s_Utf16SurrogatePayloadMask = 0x3FFu;
 inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
+inline constexpr i32 s_Utf8TwoByteLength = 2;
+inline constexpr i32 s_Utf8ThreeByteLength = 3;
+inline constexpr i32 s_Utf8FourByteLength = 4;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,6 +220,10 @@ inline constexpr u32 s_InvalidCodePointReplacement = static_cast<u32>('?');
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+[[nodiscard]] inline constexpr b8 IsUtf8Continuation(const u8 value)noexcept{
+    return (value & BasicStringDetail::s_Utf8ContinuationMask) == BasicStringDetail::s_Utf8ContinuationMarker;
+}
 
 [[nodiscard]] inline constexpr b8 IsUtf16HighSurrogate(const u32 codeUnit)noexcept{
     return codeUnit >= BasicStringDetail::s_UnicodeHighSurrogateMin && codeUnit <= BasicStringDetail::s_UnicodeHighSurrogateMax;
@@ -325,49 +332,93 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept
     }
 }
 
+[[nodiscard]] inline constexpr b8 TryDecodeUtf8CodePoint(u32& outCodePoint, i32& outByteCount, const AStringView bytes, const b8 rejectOverlong = true)noexcept{
+    if(bytes.empty())
+        return false;
+
+    const u8 c0 = static_cast<u8>(bytes[0u]);
+    if(c0 < s_Utf8OneByteMaxExclusive){
+        outCodePoint = c0;
+        outByteCount = 1;
+        return true;
+    }
+
+    if((c0 & s_Utf8TwoByteMask) == s_Utf8TwoByteMarker){
+        if(bytes.size() < static_cast<usize>(s_Utf8TwoByteLength))
+            return false;
+
+        const u8 c1 = static_cast<u8>(bytes[1u]);
+        if(!IsUtf8Continuation(c1))
+            return false;
+
+        const u32 unicode = (static_cast<u32>(c0 & s_Utf8TwoBytePayloadMask) << s_Utf8ContinuationPayloadBits) | static_cast<u32>(c1 & s_Utf8ContinuationPayloadMask);
+        if(rejectOverlong && unicode < s_Utf8TwoByteMinCodePoint)
+            return false;
+
+        outCodePoint = unicode;
+        outByteCount = s_Utf8TwoByteLength;
+        return true;
+    }
+
+    if((c0 & s_Utf8ThreeByteMask) == s_Utf8ThreeByteMarker){
+        if(bytes.size() < static_cast<usize>(s_Utf8ThreeByteLength))
+            return false;
+
+        const u8 c1 = static_cast<u8>(bytes[1u]);
+        const u8 c2 = static_cast<u8>(bytes[2u]);
+        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
+            return false;
+
+        const u32 unicode =
+            (static_cast<u32>(c0 & s_Utf8ThreeBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
+            | (static_cast<u32>(c1 & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
+            | static_cast<u32>(c2 & s_Utf8ContinuationPayloadMask)
+        ;
+        if(rejectOverlong && unicode < s_Utf8ThreeByteMinCodePoint)
+            return false;
+
+        outCodePoint = unicode;
+        outByteCount = s_Utf8ThreeByteLength;
+        return true;
+    }
+
+    if((c0 & s_Utf8FourByteMask) == s_Utf8FourByteMarker){
+        if(bytes.size() < static_cast<usize>(s_Utf8FourByteLength))
+            return false;
+
+        const u8 c1 = static_cast<u8>(bytes[1u]);
+        const u8 c2 = static_cast<u8>(bytes[2u]);
+        const u8 c3 = static_cast<u8>(bytes[3u]);
+        if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2) || !IsUtf8Continuation(c3))
+            return false;
+
+        const u32 unicode =
+            (static_cast<u32>(c0 & s_Utf8FourBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 3u))
+            | (static_cast<u32>(c1 & s_Utf8ContinuationPayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
+            | (static_cast<u32>(c2 & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
+            | static_cast<u32>(c3 & s_Utf8ContinuationPayloadMask)
+        ;
+        if(rejectOverlong && (unicode < s_Utf8FourByteMinCodePoint || unicode > s_UnicodeMaxCodePoint))
+            return false;
+
+        outCodePoint = unicode;
+        outByteCount = s_Utf8FourByteLength;
+        return true;
+    }
+
+    return false;
+}
+
 template<typename Out>
 inline void WriteUtf8AsWString(Out& out, const AStringView src)noexcept(noexcept(WriteWideCodePoint(out, u32{}))){
     usize i = 0u;
     while(i < src.size()){
-        const u8 first = static_cast<u8>(src[i++]);
         u32 codePoint = s_InvalidCodePointReplacement;
-
-        if(first < s_Utf8OneByteMaxExclusive){
-            codePoint = first;
-        }
-        else if((first & s_Utf8TwoByteMask) == s_Utf8TwoByteMarker && i < src.size()){
-            const u8 second = static_cast<u8>(src[i]);
-            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
-                ++i;
-                codePoint = (static_cast<u32>(first & s_Utf8TwoBytePayloadMask) << s_Utf8ContinuationPayloadBits) | static_cast<u32>(second & s_Utf8ContinuationPayloadMask);
-            }
-        }
-        else if((first & s_Utf8ThreeByteMask) == s_Utf8ThreeByteMarker && (i + 1u) < src.size()){
-            const u8 second = static_cast<u8>(src[i]);
-            const u8 third = static_cast<u8>(src[i + 1u]);
-            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
-                i += 2u;
-                codePoint =
-                    (static_cast<u32>(first & s_Utf8ThreeBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
-                    | (static_cast<u32>(second & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
-                    | static_cast<u32>(third & s_Utf8ContinuationPayloadMask)
-                ;
-            }
-        }
-        else if((first & s_Utf8FourByteMask) == s_Utf8FourByteMarker && (i + 2u) < src.size()){
-            const u8 second = static_cast<u8>(src[i]);
-            const u8 third = static_cast<u8>(src[i + 1u]);
-            const u8 fourth = static_cast<u8>(src[i + 2u]);
-            if((second & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (third & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker && (fourth & s_Utf8ContinuationMask) == s_Utf8ContinuationMarker){
-                i += 3u;
-                codePoint =
-                    (static_cast<u32>(first & s_Utf8FourBytePayloadMask) << (s_Utf8ContinuationPayloadBits * 3u))
-                    | (static_cast<u32>(second & s_Utf8ContinuationPayloadMask) << (s_Utf8ContinuationPayloadBits * 2u))
-                    | (static_cast<u32>(third & s_Utf8ContinuationPayloadMask) << s_Utf8ContinuationPayloadBits)
-                    | static_cast<u32>(fourth & s_Utf8ContinuationPayloadMask)
-                ;
-            }
-        }
+        i32 byteCount = 1;
+        if(TryDecodeUtf8CodePoint(codePoint, byteCount, src.substr(i), false))
+            i += static_cast<usize>(byteCount);
+        else
+            ++i;
 
         WriteWideCodePoint(out, codePoint);
     }

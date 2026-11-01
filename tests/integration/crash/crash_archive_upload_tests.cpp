@@ -35,8 +35,8 @@ inline constexpr Name s_FixtureArena("tests/integration/crash/archive_upload");
 inline constexpr Name s_OperationScratch("tests/integration/crash/archive_upload_scratch");
 
 static u32 s_UploadDiagnostics = 0u;
-static char s_LastUploadOperation[64u] = {};
-static char s_LastUploadDiagnostic[192u] = {};
+static Array<char, 64u> s_LastUploadOperation = {};
+static Array<char, 192u> s_LastUploadDiagnostic = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,8 +131,8 @@ TEST_F(CrashArchiveUpload, UnsupportedProtocolPreservesFailureAndPendingRetry){
     s_UploadDiagnostics = 0u;
     EXPECT_FALSE(NWB::Core::Crash::CrashDetail::FlushPendingCrashReportsImpl(m_arena, snapshot));
     EXPECT_EQ(s_UploadDiagnostics, 1u);
-    EXPECT_EQ(AStringView(s_LastUploadOperation), AStringView("perform_upload"));
-    EXPECT_NE(AStringView(s_LastUploadDiagnostic).find("curl code="), AStringView::npos);
+    EXPECT_EQ(FixedBufferView(s_LastUploadOperation), AStringView("perform_upload"));
+    EXPECT_NE(FixedBufferView(s_LastUploadDiagnostic).find("curl code="), AStringView::npos);
     const auto retained = IsDirectory(pending);
     ASSERT_TRUE(retained);
     EXPECT_TRUE(*retained);

@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <impl/ecs_mesh/runtime/handle.adhd.h>
 #include <impl/ecs_mesh/runtime/types.adhd.h>
 
 #include <impl/assets_mesh/payload_types.adhd.h>
@@ -99,14 +98,13 @@ public:
             && buffersValid()
             && meshletCount > 0u
             && meshletPrimitiveIndexCount > 0u
-            && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / s_MeshletTriangleIndexCount + s_MeshletSolidTriangleWordRoundUp) / s_MeshletSolidTriangleWordBits
+            && solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(meshletPrimitiveIndexCount)
             && localBounds.valid()
         ;
     }
 };
 
-class IRuntimeMeshProvider{
-public:
+interface IRuntimeMeshProvider{
     virtual ~IRuntimeMeshProvider()noexcept = default;
 
 
@@ -133,8 +131,7 @@ public:
     }
 };
 
-class IRuntimeMeshRegistry{
-public:
+interface IRuntimeMeshRegistry{
     virtual ~IRuntimeMeshRegistry()noexcept = default;
 
 

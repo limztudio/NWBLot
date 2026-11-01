@@ -8,6 +8,8 @@
 #include "slider_layout.h"
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -47,9 +49,14 @@ public:
     [[nodiscard]] SliderResult result()const noexcept{ return m_result; }
 
     [[nodiscard]] const SliderPlacement& placement()const noexcept{ return m_placement; }
-    [[nodiscard]] ControlToken controlToken()const noexcept;
-    [[nodiscard]] SliderSnapshot snapshot()const noexcept;
-    [[nodiscard]] b8 matches(const SliderSnapshot& value)const noexcept;
+
+    [[nodiscard]] ControlToken controlToken()const noexcept{ return { m_inputGeneration, m_admissionGeneration, m_instanceGeneration }; }
+
+    [[nodiscard]] SliderSnapshot snapshot()const noexcept{
+        return { .press = m_press, .instanceGeneration = m_instanceGeneration, .inputGeneration = m_inputGeneration, .revision = m_revision, .admissionGeneration = m_admissionGeneration, .valueBits = BitCast<u64>(m_value), .pressMoved = m_pressMoved };
+    }
+
+    [[nodiscard]] b8 matches(const SliderSnapshot& value)const noexcept{ return snapshot() == value; }
     [[nodiscard]] b8 setValue(f64 value)noexcept;
     void reset()noexcept;
 
@@ -79,7 +86,6 @@ private:
 
 class SliderBehavior final{
 public:
-    [[nodiscard]] static b8 Validate(const SliderOptions& options)noexcept;
     [[nodiscard]] static Expected<f64> Normalize(f64 minimum, f64 maximum, f64 value)noexcept;
     [[nodiscard]] static Expected<f64> Interpolate(f64 minimum, f64 maximum, f64 normalized)noexcept;
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.

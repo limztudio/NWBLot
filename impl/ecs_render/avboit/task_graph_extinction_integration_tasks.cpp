@@ -4,15 +4,8 @@
 
 #include "task_graph_extinction_integration_tasks.h"
 
-#include <impl/ecs_render/avboit/compute_emulation_record.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-#include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-#include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-
-#include <core/graphics/backend_selection.h>
-#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +26,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitExtinctionComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
 
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, trait, payload.extinctionTiming);
+    return RecordAvboitComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -43,7 +36,7 @@ namespace RendererTaskGraphDetail{
 [[nodiscard]] b8 AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
     const AvboitComputeEmulationRecordTrait trait{ RendererGpuTimingScope::s_AvboitExtinction, MaterialPipelinePass::AvboitExtinction, &AvboitFrameTargets::lowFramebuffer, };
 
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, trait, payload.extinctionTiming);
+    return RecordAvboitSharedComputeEmulation(payload, commandList, trait);
 }
 
 
@@ -54,10 +47,6 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitRasterPassFromPayload(
         payload,
         commandList,
-        &Payload::extinctionPhasePrepared,
-        &Payload::extinctionSnapshot,
-        &Payload::extinctionComputeEmulationOutputStatesGraphOwned,
-        &Payload::extinctionCsgComputeEmulationOutputStatesGraphOwned,
         [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
             payload.avboitSystem.renderAvboitExtinctionPass(
                 dispatchCommandList,
@@ -68,15 +57,14 @@ namespace RendererTaskGraphDetail{
                 payload.frameBindings,
                 dispatchInstanceCount,
                 dispatchMaterialTypedByteCount,
-                payload.extinctionMaterialFrameStatesGraphOwned,
-                payload.extinctionMaterialGeometryStatesGraphOwned,
-                payload.extinctionComputeEmulationOutputStatesGraphOwned,
-                payload.extinctionCsgComputeEmulationOutputStatesGraphOwned,
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned,
+                payload.computeEmulationOutputStatesGraphOwned,
+                payload.csgComputeEmulationOutputStatesGraphOwned,
                 payload.generatedGeometryReused,
-                payload.extinctionComputeEmulationTiming
+                payload.computeEmulationTiming
             );
-        },
-        payload.extinctionComputeEmulationTiming
+        }
     );
 }
 
@@ -93,14 +81,6 @@ namespace RendererTaskGraphDetail{
             payload.avboitSystem.dispatchAvboitIntegration(dispatchCommandList, targets, attribution, timingRecorded);
         }
     );
-}
-
-void AvboitIntegrationGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-    AcceptAvboitComputeEffect(payload, token);
-}
-
-void AvboitIntegrationGraphTask::Discarded(Payload& payload)noexcept{
-    DiscardAvboitComputeEffect(payload);
 }
 
 

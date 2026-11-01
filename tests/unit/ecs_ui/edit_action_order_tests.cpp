@@ -59,7 +59,7 @@ TEST_F(UiEditActionHostTests, CanonicalizingSubmitPreservesLaterCopiedCommitWhil
     EXPECT_EQ(m_actions.records[0u].text, "42");
     ASSERT_TRUE(m_textInput.activeSession().valid());
     EXPECT_NE(m_textInput.activeSession(), oldSession);
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(m_model.undo());
     EXPECT_EQ(m_model.text(), "42");
     EXPECT_FALSE(m_model.canUndo());
@@ -97,7 +97,7 @@ TEST_F(UiEditActionHostTests, CancelRestoresLastSubmittedDraftAndFencesRemaining
     ASSERT_EQ(m_actions.records.size(), 2u);
     EXPECT_EQ(m_actions.records[1u].action, Ui::EditAction::Cancel);
     EXPECT_EQ(m_actions.records[1u].text, "427");
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
 }
 
 TEST_F(UiEditActionHostTests, TextBeforeTabIsLentBeforeItsOrderedBlurBoundary){
@@ -107,7 +107,7 @@ TEST_F(UiEditActionHostTests, TextBeforeTabIsLentBeforeItsOrderedBlurBoundary){
     ASSERT_TRUE(focusOther());
     EXPECT_EQ(m_model.text(), "0");
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_result.blurred);
     EXPECT_FALSE(m_result.focused);
@@ -145,7 +145,7 @@ TEST_F(UiEditActionHostTests, BlurThenRefocusSameWidgetRetainsNewEpochCharacterA
     ASSERT_TRUE(focusEditor());
     EXPECT_FALSE(m_textInput.activeSession().valid());
     ASSERT_TRUE(m_host.character('7'));
-    EXPECT_EQ(m_textInput.commitFor(oldSession, "old"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "old"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_result.blurred);
     EXPECT_TRUE(m_result.focused);

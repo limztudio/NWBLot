@@ -4,9 +4,6 @@
 
 #include "module.h"
 
-#include <global/allocation_size.h>
-#include <global/command_line.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,37 +20,37 @@ namespace __hidden_common{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin };
-static constexpr NormalMode::Enum s_NormalModeValues[] = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate };
-static constexpr AStringView s_OptionSeparatorText = ", ";
-static constexpr AStringView s_OptionLastSeparatorText = ", or ";
+inline constexpr Array<OutputAssetType::Enum, 5u> s_OutputAssetTypeValues = { OutputAssetType::Bunch, OutputAssetType::Mesh, OutputAssetType::Model, OutputAssetType::Skeleton, OutputAssetType::Skin };
+inline constexpr Array<NormalMode::Enum, 3u> s_NormalModeValues = { NormalMode::Imported, NormalMode::Smooth, NormalMode::Regenerate };
+inline constexpr AStringView s_OptionSeparatorText = ", ";
+inline constexpr AStringView s_OptionLastSeparatorText = ", or ";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename EnumT, usize Count, typename TextFunction>
-static ScratchString BuildOptionTexts(Core::Alloc::ScratchArena& scratchArena, const EnumT (&values)[Count], TextFunction textFunction){
+template<typename EnumT, typename TextFunction>
+[[nodiscard]] ScratchString BuildOptionTexts(const Span<const EnumT> values, TextFunction textFunction, Core::Alloc::ScratchArena& scratchArena){
     usize capacity = 0u;
-    for(usize i = 0u; i < Count; ++i){
+    for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
-            capacity = AddSize(capacity, i + 1u == Count ? s_OptionLastSeparatorText.size() : s_OptionSeparatorText.size());
+            capacity = AddSize(capacity, i + 1u == values.size() ? s_OptionLastSeparatorText.size() : s_OptionSeparatorText.size());
         capacity = AddSize(capacity, textFunction(values[i]).size());
     }
     ScratchString text(scratchArena);
     text.reserve(capacity);
-    for(usize i = 0u; i < Count; ++i){
+    for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u)
-            text += i + 1u == Count ? s_OptionLastSeparatorText : s_OptionSeparatorText;
+            text += i + 1u == values.size() ? s_OptionLastSeparatorText : s_OptionSeparatorText;
         text += textFunction(values[i]);
     }
     return text;
 }
 
-template<typename EnumT, usize Count, typename TextFunction>
-static Expected<EnumT> ParseOptionText(const AStringView value, const EnumT (&values)[Count], TextFunction textFunction)noexcept{
+template<typename EnumT, typename TextFunction>
+[[nodiscard]] Expected<EnumT> ParseOptionText(const AStringView value, const Span<const EnumT> values, TextFunction textFunction)noexcept{
     const AStringView trimmed = TrimView(value);
-    for(usize i = 0u; i < Count; ++i){
+    for(usize i = 0u; i < values.size(); ++i){
         if(EqualsAsciiIgnoreCase(trimmed, textFunction(values[i])))
             return values[i];
     }
@@ -61,7 +58,7 @@ static Expected<EnumT> ParseOptionText(const AStringView value, const EnumT (&va
 }
 
 template<typename TextFunction, typename ParseFunction>
-static b8 ValidateOptionText(AString& inOutValue, TextFunction textFunction, ParseFunction parseValue){
+b8 ValidateOptionText(TextFunction textFunction, ParseFunction parseValue, AString& inOutValue){
     const auto parsed = parseValue(AStringView(inOutValue));
     if(parsed){
         inOutValue.assign(textFunction(*parsed));
@@ -72,7 +69,7 @@ static b8 ValidateOptionText(AString& inOutValue, TextFunction textFunction, Par
     return false;
 }
 
-static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType)noexcept{
+[[nodiscard]] constexpr AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType)noexcept{
     switch(assetType){
     case OutputAssetType::Bunch:
         return s_DefaultOutputAssetTypeText;
@@ -89,7 +86,7 @@ static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType)noe
     }
 }
 
-static AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
+[[nodiscard]] constexpr AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
     switch(normalMode){
     case NormalMode::Imported:
         return s_DefaultNormalModeText;
@@ -113,7 +110,7 @@ static AStringView NormalModeText(const NormalMode::Enum normalMode)noexcept{
 
 
 ScratchString OutputAssetTypeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(scratchArena, __hidden_common::s_OutputAssetTypeValues, __hidden_common::OutputAssetTypeText);
+    return __hidden_common::BuildOptionTexts(Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), __hidden_common::OutputAssetTypeText, scratchArena);
 }
 
 ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
@@ -125,15 +122,15 @@ ScratchString OutputAssetTypeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, __hidden_common::s_OutputAssetTypeValues, __hidden_common::OutputAssetTypeText);
+    return __hidden_common::ParseOptionText(value, Span<const OutputAssetType::Enum>(__hidden_common::s_OutputAssetTypeValues), __hidden_common::OutputAssetTypeText);
 }
 
 b8 ValidateAssetTypeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::OutputAssetTypeText, ParseAssetTypeText);
+    return __hidden_common::ValidateOptionText(__hidden_common::OutputAssetTypeText, ParseAssetTypeText, inOutValue);
 }
 
 ScratchString NormalModeOptionsText(Core::Alloc::ScratchArena& scratchArena){
-    return __hidden_common::BuildOptionTexts(scratchArena, __hidden_common::s_NormalModeValues, __hidden_common::NormalModeText);
+    return __hidden_common::BuildOptionTexts(Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), __hidden_common::NormalModeText, scratchArena);
 }
 
 ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
@@ -145,11 +142,11 @@ ScratchString NormalModeErrorText(Core::Alloc::ScratchArena& scratchArena){
 }
 
 Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value)noexcept{
-    return __hidden_common::ParseOptionText(value, __hidden_common::s_NormalModeValues, __hidden_common::NormalModeText);
+    return __hidden_common::ParseOptionText(value, Span<const NormalMode::Enum>(__hidden_common::s_NormalModeValues), __hidden_common::NormalModeText);
 }
 
 b8 ValidateNormalModeText(AString& inOutValue){
-    return __hidden_common::ValidateOptionText(inOutValue, __hidden_common::NormalModeText, ParseNormalModeText);
+    return __hidden_common::ValidateOptionText(__hidden_common::NormalModeText, ParseNormalModeText, inOutValue);
 }
 
 AStringView SourceTangentModeText(const SourceTangentMode::Enum mode)noexcept{
@@ -192,7 +189,7 @@ Expected<Vec4> ParseColorText(const AStringView text, Core::Alloc::ScratchArena&
 
 ScratchPath DefaultOutputPath(const AStringView inputPath, Core::Alloc::ScratchArena& scratchArena){
     ScratchPath outputPath(scratchArena, inputPath);
-    outputPath.replaceExtension(s_NwbOutputExtension);
+    outputPath.replaceExtension(Core::Assets::s_NwbExtension);
     return outputPath;
 }
 

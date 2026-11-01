@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/scope_exit.h>
 
@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 
 
 b8 Builder::image(const AStringView stableKey, const SharedImageSource& source, const ImageOptions& options){
-    if(declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed() || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_items.size() >= s_LayoutMaxNodes){
+    if(itemDeclarationBlocked() || !m_skin){
         m_context.fail();
         return false;
     }

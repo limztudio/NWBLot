@@ -333,7 +333,15 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4TransformTransposed(SIMDV
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDoubleTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrixDouble& matrix, TransformT transform)noexcept(
+NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorDoubleTransformStreamImpl(
+    NotNull<OutputT*> outputStream,
+    usize outputStride,
+    NotNull<const InputT*> inputStream,
+    usize inputStride,
+    usize vectorCount,
+    const SIMDMatrixDouble& matrix,
+    TransformT transform
+)noexcept(
     IsNothrowDestructible_V<TransformT>
     && noexcept(MatrixDoubleTransposeForTransform(matrix))
     && noexcept(DeclVal<void(*)(SIMDVectorDouble)noexcept>()(LoadDouble(*VectorScalarDetail::StridePointer(inputStream, inputStride, 0u))))

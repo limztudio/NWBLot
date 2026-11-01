@@ -8,7 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -116,7 +116,9 @@ struct DeferredGraphResourceImportResult{
 
 class DeferredGraphResourceImportBuilder final : NoCopy{
 public:
-    explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept;
+    explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph)noexcept
+        : m_graph(graph)
+    {}
 
 
 public:

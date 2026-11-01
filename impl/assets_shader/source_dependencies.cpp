@@ -10,8 +10,6 @@
 
 #include "source_dependencies.h"
 
-#include <core/common/log.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,70 +95,19 @@ void ShaderSourceDependencies::MaskSourceComments(AString<Alloc::ScratchArena>& 
     }
 }
 
-Expected<ShaderSourceDependencies::IncludeDirective> ShaderSourceDependencies::ExtractIncludeDirective(const AStringView line)noexcept{
-    IncludeDirective include;
-
-    usize cursor = 0u;
-    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
-        ++cursor;
-    if(cursor >= line.size() || line[cursor] != '#')
-        return MakeUnexpected(Failure{});
-    ++cursor;
-    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
-        ++cursor;
-    const usize directiveBegin = cursor;
-    while(cursor < line.size() && IsAsciiIdentifierChar(line[cursor]))
-        ++cursor;
-    const AStringView directive = line.substr(directiveBegin, cursor - directiveBegin);
-    if(directive == "include_next" || directive == "import"){
-        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        include.name = TrimView(line.substr(cursor));
-        return include;
-    }
-    if(directive != AStringView("include"))
-        return MakeUnexpected(Failure{});
-    while(cursor < line.size() && IsAsciiSpace(line[cursor]))
-        ++cursor;
-    if(cursor >= line.size()){
-        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        return include;
-    }
-
-    char closingDelimiter = '"';
-    if(line[cursor] == '"')
-        include.kind = ShaderSourceDependencies::IncludeKind::Relative;
-    else if(line[cursor] == '<'){
-        include.kind = ShaderSourceDependencies::IncludeKind::Standard;
-        closingDelimiter = '>';
-    }
-    else{
-        include.kind = ShaderSourceDependencies::IncludeKind::Macro;
-        include.name = TrimView(line.substr(cursor));
-        return include;
-    }
-    ++cursor;
-    const usize closingDelimiterPos = line.find(closingDelimiter, cursor);
-    if(closingDelimiterPos == AStringView::npos || closingDelimiterPos <= cursor){
-        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        return include;
-    }
-    include.name = line.substr(cursor, closingDelimiterPos - cursor);
-    return include;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Expected<::Path<Core::Alloc::ScratchArena>> ShaderSourceDependencies::ResolveIncludeFile(
     const AStringView includeName,
-    const ShaderSourceDependencies::IncludeKind::Enum kind,
+    const ShaderBinaryPayload::IncludeKind::Enum kind,
     const TStringView sourceDirectory,
     const Span<const Path> includeDirectories,
     Core::Alloc::ScratchArena& scratchArena
 ){
 
-    if(kind == ShaderSourceDependencies::IncludeKind::Relative){
+    if(kind == ShaderBinaryPayload::IncludeKind::Relative){
         ::Path<Alloc::ScratchArena> localCandidate = (::Path<Alloc::ScratchArena>(scratchArena, sourceDirectory) / includeName).lexicallyNormal();
         const auto localCandidateQueryResult = IsRegularFile(localCandidate);
         if(localCandidateQueryResult && *localCandidateQueryResult){

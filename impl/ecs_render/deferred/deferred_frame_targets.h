@@ -1,0 +1,253 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/avboit/avboit_frame_targets.h>
+#include <impl/ecs_render/shared/frame_types.adhd.h>
+
+#include <core/graphics/api.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Deferred owns these buffers, while the root module freezes their generation for graph imports and ray-tracing payloads.
+struct DeferredLightingGraphResources{
+    Core::BufferHandle sceneShadingBuffer;
+    Core::BufferHandle lightBuffer;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept{ return sceneShadingBuffer && lightBuffer; }
+};
+
+// Deferred target generation owns these heap registrations and retires them before target release.
+struct DeferredBindlessFrameResources{
+    Core::BufferHandle slotsBuffer;
+    DeferredBindlessResourceSlots slots;
+    // Shared global-heap UniformBuffer slot payload.
+    Core::GpuDescriptorHandle slotsBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle gbufferBaseColor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle gbufferNormal = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle gbufferWorldPosition = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle gbufferSpecularRoughness = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle gbufferDepth = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowVisibility = Core::GpuDescriptorHandle::Invalid();
+    // Writable view of the sampled shadow visibility array.
+    Core::GpuDescriptorHandle shadowVisibilityStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticIrradiance = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticIrradianceStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle surfelIrradiance = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle surfelIrradianceStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle surfelIrradianceHalf = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle surfelIrradianceHalfStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle opaqueColorStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle compositeColor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle compositeColorStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionDepth = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionNormalIor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionTintCoverage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionInstance = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionSpecularRoughness = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionResolve = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle refractionResolveStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitForegroundColor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitForegroundExtinction = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle sceneShading = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle lightList = Core::GpuDescriptorHandle::Invalid();
+    // Typed uint accumulator plus floating-point caustic resolve views.
+    Core::GpuDescriptorHandle causticAccumulator = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticAccumulatorStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticHistory = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticHistoryStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticResolveHalf = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticResolveHalfStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticResolveGeometry = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticResolveGeometryStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowCoarseTransmittanceStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometry = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryPrev = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryPrevStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfA = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfAStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfB = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfBStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowHistA = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowHistAStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowHistB = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowHistBStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowMomentsA = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowMomentsAStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowMomentsB = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowMomentsBStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentSoftHalf = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentSoftHalfStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentHistA = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentHistAStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentHistB = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentHistBStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentMomentsA = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentMomentsAStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentMomentsB = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle transparentMomentsBStorage = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgCapBackNormal = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgIntervalDepth = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgIntervalId = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgReceiverEventData = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgReceiverEventCount = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgReceiverSpanData = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgReceiverSpanCount = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalDepth = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalCapNormal = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalData = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle csgRemovedIntervalCount = Core::GpuDescriptorHandle::Invalid();
+    b8 slotsUploaded = false;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept;
+};
+
+// Optional immutable one-frame-lagged lighting history.
+struct DeferredLaggedLightingHistoryResources{
+    Core::TextureHandle shadowVisibility;
+    Core::TextureHandle causticIrradiance;
+    Core::TextureHandle surfelIrradiance;
+    Core::BufferHandle slotsBuffer;
+    DeferredBindlessResourceSlots slots;
+    Core::GpuDescriptorHandle slotsBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle shadowVisibilityDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle causticIrradianceDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle surfelIrradianceDescriptor = Core::GpuDescriptorHandle::Invalid();
+    // Prevents accepting history from a recycled target generation.
+    u64 generation = 0u;
+    b8 slotsUploaded = false;
+
+
+public:
+    [[nodiscard]] b8 valid()const noexcept;
+};
+
+struct DeferredFrameTargets{
+    u32 width = 0;
+    u32 height = 0;
+    u32 surfelResolveFactor = 0u;
+    u32 shadowReceiverFactor = 0u;
+    Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum specularRoughnessFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum compositeColorFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowVisibilityFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticIrradianceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum surfelIrradianceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticAccumulatorFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum causticHistoryFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverEventCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgReceiverSpanCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalCapNormalFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalDataFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgRemovedIntervalCountFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowCoarseTransmittanceFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowSoftFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum shadowSoftGeometryFormat = Core::Format::UNKNOWN;
+    u32 csgPeelLayerCount = 0u;
+    u32 csgReceiverEventLayerCount = 0u;
+    u32 csgReceiverSpanLayerCount = 0u;
+    u32 csgRemovedIntervalLayerCount = 0u;
+    Core::TextureHandle albedo;
+    Core::TextureHandle normal;
+    Core::TextureHandle worldPosition;
+    Core::TextureHandle specularRoughness;
+    Core::TextureHandle csgCapBackNormal;
+    Core::TextureHandle csgIntervalDepth;
+    Core::TextureHandle csgIntervalId;
+    Core::TextureHandle csgReceiverEventData;
+    Core::TextureHandle csgReceiverEventCount;
+    Core::TextureHandle csgReceiverSpanData;
+    Core::TextureHandle csgReceiverSpanCount;
+    Core::TextureHandle csgRemovedIntervalDepth;
+    Core::TextureHandle csgRemovedIntervalCapNormal;
+    Core::TextureHandle csgRemovedIntervalData;
+    Core::TextureHandle csgRemovedIntervalCount;
+    Core::TextureHandle opaqueColor;
+    // Compute output presented by a Graphics blit.
+    Core::TextureHandle compositeColor;
+    Core::TextureHandle depth;
+    // Full-resolution per-light visibility; HW opaque and SW transparent paths combine here.
+    Core::TextureHandle shadowVisibility;
+    // Half-resolution adaptive transparent-shadow scratch; null when disabled.
+    Core::TextureHandle shadowCoarseTransmittance;
+    // Half-resolution opaque soft-shadow ping-pong and geometry cache.
+    Core::TextureHandle shadowSoftHalfA;
+    Core::TextureHandle shadowSoftHalfB;
+    Core::TextureHandle shadowSoftGeometry;
+    // Reprojected opaque soft-shadow history and moments; reset with the visibility target.
+    Core::TextureHandle shadowHistA;
+    Core::TextureHandle shadowHistB;
+    Core::TextureHandle shadowMomentsA;
+    Core::TextureHandle shadowMomentsB;
+    Core::TextureHandle shadowSoftGeometryPrev;
+    // Separate transparent history is denoised before multiplying onto opaque visibility.
+    Core::TextureHandle transparentSoftHalf;
+    Core::TextureHandle transparentHistA;
+    Core::TextureHandle transparentHistB;
+    Core::TextureHandle transparentMomentsA;
+    Core::TextureHandle transparentMomentsB;
+    // Additive caustic targets; black is the no-producer identity.
+    Core::TextureHandle causticIrradiance;
+    // Screen-space surfel GI avoids sharing the writable pool with deferred lighting.
+    Core::TextureHandle surfelIrradiance;
+    // Reduced-resolution surfel GI gather output; surfelResolveFactor belongs to this target generation.
+    Core::TextureHandle surfelIrradianceHalf;
+    Core::TextureHandle causticAccumulator;
+    // Half-resolution caustic a-trous ping-pong.
+    Core::TextureHandle causticHistory;
+    Core::TextureHandle causticResolveHalf;
+    // Half-resolution caustic geometry cache.
+    Core::TextureHandle causticResolveGeometry;
+    Core::FramebufferHandle framebuffer;
+    DeferredBindlessFrameResources bindless;
+    DeferredLaggedLightingHistoryResources laggedLightingHistory;
+    AvboitFrameTargets avboit;
+
+
+public:
+    [[nodiscard]] b8 csgIntervalTargetsValid()const noexcept;
+    [[nodiscard]] b8 valid()const noexcept;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

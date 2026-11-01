@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
+#include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
@@ -21,13 +22,34 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct AvboitFrameTargets;
+
 namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
+};
 
 
-// Generated geometry stores compact vertices and indices in one allocation; non-indexed draws use only its vertex region.
-inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = s_ObjectGeometryRasterState;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct MaterialPassDrawContext{
+    Core::CommandList& commandList;
+    Core::Framebuffer* framebuffer = nullptr;
+    const AvboitFrameTargets* avboitTargets = nullptr;
+    const Core::ViewportState& viewportState;
+    // Prepared CSG draws consume the root tuple; regular paths leave it null.
+    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
+    // Every material path consumes one immutable Mesh-published binding generation.
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
+    // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
+    b8 materialFrameStatesGraphOwned = false;
+    // Graph may retain source buffers; emulation vertices stay local by default.
+    b8 materialGeometryStatesGraphOwned = false;
+    // Split pairs receive generated-output entry states; shared-output draws interleave generation and rasterization.
+    b8 emulationOutputEntryStateGraphOwned = false;
+    // Shared generated output must retain triangles needed by every consuming viewport.
+    b8 conservativeGeometryScissor = false;
 };
 
 
@@ -36,7 +58,7 @@ inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState = s_O
 
 struct MaterialPassMeshResourceSnapshot{
     RuntimeMeshBuffers sourceBuffers;
-    Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    Array<Core::GpuDescriptorHandle, NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT> geometryHeapHandles{};
     // Retains the same unified generated buffer for both vertex and index consumption.
     Core::BufferHandle emulationVertexBuffer;
     ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCache;
@@ -50,27 +72,7 @@ struct MaterialPassMeshResourceSnapshot{
 
 
 public:
-    [[nodiscard]] b8 geometryHeapHandlesReady()const noexcept{
-        constexpr u32 s_SourceBindingSlots[] = {
-            NWB_MESH_BINDING_POSITION,
-            NWB_MESH_BINDING_NORMAL,
-            NWB_MESH_BINDING_TANGENT,
-            NWB_MESH_BINDING_UV0,
-            NWB_MESH_BINDING_COLOR,
-            NWB_MESH_BINDING_MESHLET_DESC,
-            NWB_MESH_BINDING_MESHLET_BOUNDS,
-            NWB_MESH_BINDING_MESHLET_POSITION_REFS,
-            NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS,
-            NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS,
-            NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES,
-        };
-        for(const u32 bindingSlot : s_SourceBindingSlots){
-            const Core::GpuDescriptorHandle handle = geometryHeapHandles[bindingSlot];
-            if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-                return false;
-        }
-        return true;
-    }
+    [[nodiscard]] b8 geometryHeapHandlesReady()const noexcept;
 
     [[nodiscard]] b8 valid()const noexcept{
         return sourceBuffers.buffersValid() && geometryHeapHandlesReady() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
@@ -158,11 +160,7 @@ public:
 public:
     [[nodiscard]] b8 empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
 
-    void reserve(const usize capacity){
-        meshDrawItems.reserve(capacity);
-        indexedDrawItems.reserve(capacity);
-        computeDrawItems.reserve(capacity);
-    }
+    void reserve(usize capacity);
 };
 
 struct MaterialPassDrawItemsView{
@@ -206,11 +204,7 @@ public:
 public:
     [[nodiscard]] b8 empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
 
-    void reserve(const usize capacity){
-        regular.reserve(capacity);
-        csg.reserve(capacity);
-        csgReceiverSurface.reserve(capacity);
-    }
+    void reserve(usize capacity);
 };
 
 struct MaterialPassDrawItemPartitionsView{

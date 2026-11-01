@@ -9,7 +9,7 @@
 #include <impl/ecs_render/material/sampled_texture_collection.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
-#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
+#include <impl/ecs_render/shadow/prepared_shadow_material_context.h>
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 
@@ -35,150 +35,43 @@ namespace RayTracingSoftwareBvhDetail{
 using MeshBufferSlotLookup = HashMap<NotNull<Core::Buffer*>, u32, Core::Alloc::ScratchArena, Hasher<NotNull<Core::Buffer*>>, EqualTo<NotNull<Core::Buffer*>>>;
 
 
-// Hash semantic scene inputs, not padded object representations.
-inline constexpr u32 s_SceneStaticCacheHashVersion = 2u;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept{
-    Fnv64AppendValue(inOutHash, instance.transform);
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceContributionToHitGroupIndex));
-    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.flags));
-    const usize bottomLevelAsIdentity = reinterpret_cast<usize>(instance.bottomLevelAS);
-    Fnv64AppendValue(inOutHash, bottomLevelAsIdentity);
-}
-
-[[nodiscard]] inline u64 ComputeTlasStaticSceneHash(const Span<const Core::RayTracingInstanceDesc> instances)noexcept{
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    Fnv64AppendValue(hash, instances.size());
-    for(const Core::RayTracingInstanceDesc& instance : instances)
-        AppendTlasInstanceStaticCacheInput(instance, hash);
-    return hash;
-}
-
-[[nodiscard]] inline u64 ComputeSceneSwBvhStaticSceneHash(const Span<const SceneSwBvhInstanceGpu> instances, const Span<const SceneBvhPrimitiveCalculation> primitives)noexcept{
-    NWB_ASSERT(instances.size() == primitives.size());
-
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    Fnv64AppendValue(hash, instances.size());
-    for(usize index = 0u; index < instances.size(); ++index){
-        const SceneSwBvhInstanceGpu& instance = instances[index];
-
-        Fnv64AppendValue(hash, instance.worldToObject);
-        Fnv64AppendValue(hash, instance.primitiveCount);
-        Fnv64AppendValue(hash, primitives[index].aabbMin.x);
-        Fnv64AppendValue(hash, primitives[index].aabbMin.y);
-        Fnv64AppendValue(hash, primitives[index].aabbMin.z);
-        Fnv64AppendValue(hash, 0.0f);
-        Fnv64AppendValue(hash, primitives[index].aabbMax.x);
-        Fnv64AppendValue(hash, primitives[index].aabbMax.y);
-        Fnv64AppendValue(hash, primitives[index].aabbMax.z);
-        Fnv64AppendValue(hash, 0.0f);
-        Fnv64AppendValue(hash, primitives[index].transparentOccluder);
-    }
-    return hash;
-}
-
-[[nodiscard]] inline u64 ComputeShadowMaterialContextHash(const Span<const NwbRtInstanceMaterialGpu> instanceMaterials, const Span<const InstanceGpuData> instanceData, const Span<const u8> materialTypedBytes)noexcept{
-    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
-
-    u64 hash = s_Fnv64OffsetBasis;
-    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
-    Fnv64AppendBuffer(hash, reinterpret_cast<const u8*>(instanceMaterials.data()), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-    Fnv64AppendBuffer(hash, reinterpret_cast<const u8*>(instanceData.data()), instanceData.size() * sizeof(InstanceGpuData));
-    Fnv64AppendBuffer(hash, materialTypedBytes.data(), materialTypedBytes.size());
-    return hash;
-}
-
+void AppendTlasInstanceStaticCacheInput(const Core::RayTracingInstanceDesc& instance, u64& inOutHash)noexcept;
+[[nodiscard]] u64 ComputeTlasStaticSceneHash(Span<const Core::RayTracingInstanceDesc> instances)noexcept;
+[[nodiscard]] u64 ComputeSceneSwBvhStaticSceneHash(Span<const SceneSwBvhInstanceGpu> instances, Span<const SceneBvhPrimitiveCalculation> primitives)noexcept;
 
 // Cross-frame cache pins raw keys; failed registrations retry next gather.
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache, const Core::BufferHandle& bufferHandle){
-    if(!bufferHandle)
-        return MakeUnexpected(Failure{});
-
-    Core::Buffer& buffer = *bufferHandle;
-    const NotNull<const Core::Buffer*> bufferKey(&buffer);
-    auto found = cache.find(bufferKey);
-    if(found != cache.end()){
-        NWB_ASSERT(found.value().handle.valid());
-        found.value().seenThisFrame = true;
-        return found.value().handle;
-    }
-
-    const auto handle = RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
-    if(!handle)
-        return MakeUnexpected(Failure{});
-
-    Core::GpuDescriptorRetirementGuard descriptorRetirement(heap, *handle);
-    RtMeshHeapHandleCacheEntry entry;
-    entry.keepAlive = bufferHandle;
-    entry.handle = *handle;
-    entry.seenThisFrame = true;
-    if(!cache.insert({bufferKey, Move(entry)}).second){
-        NWB_ASSERT(false);
-        return MakeUnexpected(Failure{});
-    }
-    descriptorRetirement.release();
-    return *handle;
-}
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(const Core::BufferHandle& bufferHandle, Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache);
 
 // Evict unseen cache entries; heap quarantine protects in-flight work.
-inline void SweepUnseenMeshHeapHandles(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache){
-    for(auto it = cache.begin(); it != cache.end(); ){
-        if(it.value().seenThisFrame){
-            it.value().seenThisFrame = false;
-            ++it;
-        }
-        else{
-            heap.free(it.value().handle);
-            it = cache.erase(it);
-        }
-    }
-}
-
-inline void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept{
-    for(auto it = cache.begin(); it != cache.end(); ++it)
-        it.value().seenThisFrame = false;
-}
-
-[[nodiscard]] inline b8 IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
-    return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
-}
-
-// Recording is not allowed to register a new descriptor after the shared graph has frozen resource identities.
-[[nodiscard]] inline b8 IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle)noexcept{
-    return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
-}
+void SweepUnseenMeshHeapHandles(Core::GpuDescriptorHeap& heap, RtMeshHeapHandleCache& cache);
+void BeginMeshHeapHandleGather(RtMeshHeapHandleCache& cache)noexcept;
 
 template<typename RayTracingState>
 [[nodiscard]] inline b8 HasPreparedShadowMaterialContextBuffers(const RayTracingState& state, const usize materialCount, const usize instanceCount, const usize materialTypedUploadBytes)noexcept(noexcept(DeclVal<void(*)(b8)noexcept>()(
     state.m_shadowInstanceMaterialBuffer
         && state.m_shadowInstanceMaterialCapacity >= materialCount
-        && IsStorageBufferHeapHandle(state.m_shadowInstanceMaterialHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && state.m_shadowInstanceBuffer
         && state.m_shadowInstanceCapacity >= instanceCount
-        && IsStorageBufferHeapHandle(state.m_shadowInstanceHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && state.m_shadowMaterialTypedBuffer
         && state.m_shadowMaterialTypedCapacity >= DeclVal<const usize&>()
-        && IsStorageBufferHeapHandle(state.m_shadowMaterialTypedHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
 ))){
     const usize requiredMaterialTypedBytes = AlignUp(Max<usize>(materialTypedUploadBytes, sizeof(u32)), sizeof(u32));
     return
         state.m_shadowInstanceMaterialBuffer
         && state.m_shadowInstanceMaterialCapacity >= materialCount
-        && IsStorageBufferHeapHandle(state.m_shadowInstanceMaterialHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && state.m_shadowInstanceBuffer
         && state.m_shadowInstanceCapacity >= instanceCount
-        && IsStorageBufferHeapHandle(state.m_shadowInstanceHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         && state.m_shadowMaterialTypedBuffer
         && state.m_shadowMaterialTypedCapacity >= requiredMaterialTypedBytes
-        && IsStorageBufferHeapHandle(state.m_shadowMaterialTypedHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 
@@ -188,8 +81,8 @@ template<typename RayTracingState>
         && state.m_sceneInstanceBuffer
         && state.m_sceneBvhNodeCapacity >= DeclVal<const usize&>()
         && state.m_sceneInstanceCapacity >= instanceCount
-        && IsStorageBufferHeapHandle(state.m_sceneBvhNodeHeapHandle)
-        && IsStorageBufferHeapHandle(state.m_sceneInstanceHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_sceneBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
 ))){
     NWB_ASSERT(instanceCount > 0u);
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
@@ -198,113 +91,14 @@ template<typename RayTracingState>
         && state.m_sceneInstanceBuffer
         && state.m_sceneBvhNodeCapacity >= requiredNodeCount
         && state.m_sceneInstanceCapacity >= instanceCount
-        && IsStorageBufferHeapHandle(state.m_sceneBvhNodeHeapHandle)
-        && IsStorageBufferHeapHandle(state.m_sceneInstanceHeapHandle)
+        && RayTracingDetail::IsHeapHandle(state.m_sceneBvhNodeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(state.m_sceneInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 
-// Register writable scratch with its explicit owner.
-[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterWritableBvhBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
-    return RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, true);
-}
-
-[[nodiscard]] inline Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept{
-    PreparedMeshBlasBuild build;
-    if(!meshResources.meshName || !meshResources.positionBuffer || !meshResources.triangleIndexBuffer || !meshResources.blas || !meshResources.blas->getBackingBufferHandle())
-        return MakeUnexpected(Failure{});
-
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
-    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
-        return MakeUnexpected(Failure{});
-
-    const b8 firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
-    const b8 performRefit = meshResources.runtimeMesh && !firstBuild && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount);
-    build.meshName = meshResources.meshName;
-    build.positionBuffer = meshResources.positionBuffer;
-    build.triangleIndexBuffer = meshResources.triangleIndexBuffer;
-    build.blas = meshResources.blas;
-    build.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
-    build.runtimeMeshVersion = meshResources.runtimeMeshVersion;
-    build.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
-    build.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
-    build.positionByteSize = positionDesc.byteSize;
-    build.vertexStride = static_cast<u32>(positionDesc.structStride);
-    build.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
-    build.indexCount = meshResources.meshletPrimitiveIndexCount;
-    build.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
-    build.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
-    build.runtimeMesh = meshResources.runtimeMesh;
-    build.buildPending = meshResources.blasBuildPending;
-    build.firstBuild = firstBuild;
-    build.backingFresh = meshResources.blasBackingFresh;
-    build.performRefit = performRefit;
-    return build;
-}
-
-[[nodiscard]] inline b8 MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept{
-    if(
-        meshResources.meshName != build.meshName
-        || meshResources.runtimeMesh != build.runtimeMesh
-        || meshResources.runtimeMeshVersion != build.runtimeMeshVersion
-        || meshResources.runtimeGeometryContentRevision != build.geometryContentRevision
-        || meshResources.blasGeometryContentRevision != build.acceptedGeometryContentRevision
-        || meshResources.positionBuffer.get() != build.positionBuffer.get()
-        || meshResources.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
-        || meshResources.blas.get() != build.blas.get()
-        || !meshResources.blas
-        || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
-        || meshResources.meshletPrimitiveIndexCount != build.indexCount
-        || meshResources.blasBuildPending != build.buildPending
-        || (meshResources.blasBuildPending || !meshResources.blasBuildAccepted) != build.firstBuild
-        || meshResources.blasBackingFresh != build.backingFresh
-        || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
-    )
-        return false;
-
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
-    return positionDesc.structStride == build.vertexStride && positionDesc.byteSize == build.positionByteSize && build.vertexStride != 0u && build.vertexCount == positionDesc.byteSize / build.vertexStride;
-}
-
-[[nodiscard]] inline b8 RecordPreparedMeshBlasBuild(Core::CommandList& commandList, const PreparedMeshBlasBuild& build, const b8 meshBlasGeometryBuildInputStatesGraphOwned){
-    if(
-        !build.positionBuffer
-        || !build.triangleIndexBuffer
-        || !build.blas
-        || !build.blasBackingBuffer
-        || build.vertexStride == 0u
-        || build.vertexCount == 0u
-        || build.indexCount == 0u
-        || build.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
-    )
-        return false;
-
-    Core::RayTracingGeometryTriangles triangles;
-    triangles
-        .setVertexBuffer(build.positionBuffer.get())
-        .setVertexFormat(Core::Format::RGB32_FLOAT)
-        .setVertexStride(build.vertexStride)
-        .setVertexCount(build.vertexCount)
-        .setIndexBuffer(build.triangleIndexBuffer.get())
-        .setIndexFormat(Core::Format::R32_UINT)
-        .setIndexCount(build.indexCount)
-    ;
-    Core::RayTracingGeometryDesc geometry;
-    geometry.setTriangles(triangles).setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation);
-    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
-    if(build.runtimeMesh)
-        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
-    if(build.performRefit)
-        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
-
-    // Mixed geometry input ownership establishes these states locally; fully declared inputs use the packet prologue.
-    if(!meshBlasGeometryBuildInputStatesGraphOwned){
-        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
-        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
-    }
-    commandList.commitBarriers();
-    commandList.buildBottomLevelAccelStruct(build.blas.get(), &geometry, 1u, buildFlags);
-    return true;
-}
+[[nodiscard]] Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources)noexcept;
+[[nodiscard]] b8 MatchesPreparedMeshBlasBuild(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources, const PreparedMeshBlasBuild& build)noexcept;
+[[nodiscard]] b8 RecordPreparedMeshBlasBuild(const PreparedMeshBlasBuild& build, b8 meshBlasGeometryBuildInputStatesGraphOwned, Core::CommandList& commandList);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

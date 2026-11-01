@@ -8,6 +8,7 @@
 #include "types.h"
 
 #include <core/graphics/rhi/device.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,9 +184,9 @@ public:
 
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value)noexcept{ initialOwnerQueue = value; return *this; }
 
-    constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(const GpuGraphInitialOwnerHandoffSourceDesc* const values, const usize count)noexcept{
-        initialOwnerHandoffSources = values;
-        initialOwnerHandoffSourceCount = count;
+    constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(const Span<const GpuGraphInitialOwnerHandoffSourceDesc> values)noexcept{
+        initialOwnerHandoffSources = values.data();
+        initialOwnerHandoffSourceCount = values.size();
         return *this;
     }
 
@@ -226,9 +227,9 @@ public:
 
     constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
 
-    constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count)noexcept{
-        members = values;
-        memberCount = count;
+    constexpr GpuGraphResourceSetDesc& setMembers(const Span<const GpuGraphResourceId> values)noexcept{
+        members = values.data();
+        memberCount = values.size();
         return *this;
     }
 };
@@ -291,37 +292,41 @@ public:
 
     constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value)noexcept{ scheduling = value; return *this; }
 
-    constexpr GpuTaskDesc& setDependencies(const GpuTaskId* values, const usize count)noexcept{ dependencies = values; dependencyCount = count; return *this; }
-
-    constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count)noexcept{
-        externalDependencies = values;
-        externalDependencyCount = count;
+    constexpr GpuTaskDesc& setDependencies(const Span<const GpuTaskId> values)noexcept{
+        dependencies = values.data();
+        dependencyCount = values.size();
         return *this;
     }
 
-    constexpr GpuTaskDesc& setExternalStateSources(const GpuTaskExternalStateSource* values, const usize count)noexcept{
-        externalStateSources = values;
-        externalStateSourceCount = count;
+    constexpr GpuTaskDesc& setExternalDependencies(const Span<const GpuExternalCompletionId> values)noexcept{
+        externalDependencies = values.data();
+        externalDependencyCount = values.size();
         return *this;
     }
 
-    constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count)noexcept{
-        resourceUses = values;
-        resourceUseCount = count;
+    constexpr GpuTaskDesc& setExternalStateSources(const Span<const GpuTaskExternalStateSource> values)noexcept{
+        externalStateSources = values.data();
+        externalStateSourceCount = values.size();
         return *this;
     }
 
-    constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count)noexcept{
-        resourceSetUses = values;
-        resourceSetUseCount = count;
+    constexpr GpuTaskDesc& setResourceUses(const Span<const GpuTaskResourceUse> values)noexcept{
+        resourceUses = values.data();
+        resourceUseCount = values.size();
+        return *this;
+    }
+
+    constexpr GpuTaskDesc& setResourceSetUses(const Span<const GpuTaskResourceSetUse> values)noexcept{
+        resourceSetUses = values.data();
+        resourceSetUseCount = values.size();
         return *this;
     }
 
     constexpr GpuTaskDesc& setTiming(const GpuTaskTimingMetadata& value)noexcept{ timing = value; return *this; }
 
-    constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count)noexcept{
-        resourceVersionUses = values;
-        resourceVersionUseCount = count;
+    constexpr GpuTaskDesc& setResourceVersionUses(const Span<const GpuTaskResourceVersionUse> values)noexcept{
+        resourceVersionUses = values.data();
+        resourceVersionUseCount = values.size();
         return *this;
     }
 };

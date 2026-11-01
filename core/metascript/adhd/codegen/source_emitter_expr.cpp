@@ -76,9 +76,8 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
             out.push_back(')');
         }
         else{
-            const MStringView globalConstCpp = FindBuiltinGlobalConstantCppName(expr.text);
-            if(!globalConstCpp.empty())
-                out.append(globalConstCpp.data(), globalConstCpp.size());
+            if(const BuiltinGlobalConstantInfo* globalConst = FindBuiltinGlobalConstant(expr.text))
+                out.append(globalConst->cppExportName.data(), globalConst->cppExportName.size());
             else
                 out.append(expr.text.data(), expr.text.size());
         }
@@ -110,6 +109,15 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         break;
     }
     case ExprKind::MemberAccess:{
+        if(expr.lhs && expr.lhs->kind == ExprKind::Identifier && expr.lhs->callTemplateArgs.empty() && !expr.derefNotNull && !expr.isPointerMemberAccess && !m_symbols.findGlobalConstant(expr.lhs->text)){
+            const MStringView resolvedBaseType = m_symbols.resolveBaseTypeName(expr.lhs->text);
+            if(IsNumericScalarType(resolvedBaseType) && (expr.text == "min" || expr.text == "max")){
+                out.append("::Limit<::");
+                out.append(resolvedBaseType.data(), resolvedBaseType.size());
+                out.append((expr.text == "min") ? ">::s_Min" : ">::s_Max");
+                break;
+            }
+        }
         u32 lane = 0u;
         if(!expr.isMutArg && expr.lhs && IsRegisterPromotableSimdType(expr.lhs->resolvedSimdType) && IsSingleSwizzleLane(expr.text, lane)){
             if(findSimdBindingForExpr(expr.lhs) || ExprContainsSimdMath(expr.lhs, m_symbols)){
@@ -208,22 +216,7 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
 
         if(expr.derefNotNull)
             out.append("(*");
-        if(expr.lhs){
-            if(expr.lhs->kind == ExprKind::Identifier){
-                const MStringView mappedMath = MapBuiltinMathFunction(expr.lhs->text);
-                if(!mappedMath.empty()){
-                    out.append(mappedMath.data(), mappedMath.size());
-                }
-                else{
-                    TypeRef maybeType(m_arena);
-                    maybeType.name = expr.lhs->text;
-                    m_typeEmitter.emitTypeCpp(out, maybeType);
-                }
-            }
-            else{
-                emitExpr(out, *expr.lhs);
-            }
-        }
+        emitCallTargetExpr(out, expr.lhs);
         if(!expr.callTemplateArgs.empty())
             m_typeEmitter.emitTypeArgListCpp(out, expr.callTemplateArgs);
         const MStringView baseCallee = (expr.lhs && expr.lhs->kind == ExprKind::Identifier)
@@ -341,6 +334,25 @@ void SourceEmitter::emitExpr(MString& out, const Expr& expr, const b8 omitOuterB
         out.append("    }");
         break;
     }
+    }
+}
+
+void SourceEmitter::emitCallTargetExpr(MString& out, const Expr* lhs)const{
+    if(!lhs)
+        return;
+    if(lhs->kind == ExprKind::Identifier){
+        const MStringView mappedMath = MapBuiltinMathFunction(lhs->text);
+        if(!mappedMath.empty()){
+            out.append(mappedMath.data(), mappedMath.size());
+        }
+        else{
+            TypeRef maybeType(m_arena);
+            maybeType.name = lhs->text;
+            m_typeEmitter.emitTypeCpp(out, maybeType);
+        }
+    }
+    else{
+        emitExpr(out, *lhs);
     }
 }
 

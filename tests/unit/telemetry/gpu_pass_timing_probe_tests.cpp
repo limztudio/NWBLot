@@ -36,7 +36,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
     constexpr u32 s_ScopeCount = 96u;
     Name lastScope;
     for(u32 index = 0u; index < s_ScopeCount; ++index){
-        char scopeText[32u] = {};
+        Array<char, 32u> scopeText = {};
         const auto scopeName = Name::FromText(FormatDecimal(index, scopeText));
         ASSERT_TRUE(scopeName);
         lastScope = *scopeName;
@@ -80,7 +80,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     constexpr u32 s_AddedScopes = 96u;
     Core::Perf::TimingScopeId lastScope;
     for(u32 index = 0u; index < s_AddedScopes; ++index){
-        char scopeText[32u] = {};
+        Array<char, 32u> scopeText = {};
         const auto scopeName = Name::FromText(FormatDecimal(index, scopeText));
         ASSERT_TRUE(scopeName);
         const auto scopeResult = recorder.registerScope(*scopeName);

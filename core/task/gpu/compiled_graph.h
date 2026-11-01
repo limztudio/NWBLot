@@ -207,51 +207,13 @@ struct GpuCompiledOwnershipTransfer{
 
 
 public:
-    [[nodiscard]] b8 valid()const noexcept{
-        if(
-            !resource.valid()
-            || resourceIdentity == s_NameNone
-            || resourceType >= GpuGraphResourceType::HazardDomain
-            || route >= GpuOwnershipTransferRoute::Count
-            || !sourceQueue.valid()
-            || !destinationQueue.valid()
-            || sourceQueue == destinationQueue
-            || sourceQueue.deviceGeneration != destinationQueue.deviceGeneration
-            || sourceQueueFamilyIndex == Limit<u32>::s_Max
-            || destinationQueueFamilyIndex == Limit<u32>::s_Max
-            || sourceQueueFamilyIndex == destinationQueueFamilyIndex
-            || !ResourceQueueSharing::IsValid(declaredQueueSharing)
-        )
-            return false;
-
-        switch(route){
-        case GpuOwnershipTransferRoute::Internal:
-            return
-                sourceTask.valid()
-                && destinationTask.valid()
-                && sourceTask != destinationTask
-                && sourceTask.generation == resource.generation
-                && destinationTask.generation == resource.generation
-                && sourcePacket.valid()
-                && destinationPacket.valid()
-                && sourcePacket != destinationPacket
-                && sourcePacket.generation == destinationPacket.generation
-            ;
-        case GpuOwnershipTransferRoute::ExternalImport:
-            return !sourceTask.valid() && destinationTask.valid() && destinationTask.generation == resource.generation && !sourcePacket.valid() && destinationPacket.valid();
-        case GpuOwnershipTransferRoute::ExternalExport:
-            return sourceTask.valid() && sourceTask.generation == resource.generation && !destinationTask.valid() && sourcePacket.valid() && !destinationPacket.valid();
-        default:
-            return false;
-        }
-    }
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
 
 // Immutable accepted-plan telemetry for one concrete task-graph plan.
 // Core counters and the caller-provided declaration duration publish only after success; failed or superseded plans keep an empty snapshot.
 struct GpuTaskGraphCompileStatistics{
-    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::Count);
     static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::Count);
 
@@ -295,12 +257,12 @@ struct GpuTaskGraphCompileStatistics{
     usize repeatedOwnershipTransferSignatureCount = 0u;
     usize concurrentSharingCouldAvoidTransferCount = 0u;
     usize concurrentSharingAdviceResourceCount = 0u;
-    usize logicalOwnershipTransferCountByRoute[s_OwnershipTransferRouteCount] = {};
+    Array<usize, s_OwnershipTransferRouteCount> logicalOwnershipTransferCountByRoute{};
     // Recording-frontier depth: max packet recordingFrontier plus one, rather than the number of packets.
     usize recordingFrontierCount = 0u;
-    usize taskCountByQueueClass[s_QueueClassCount] = {};
-    usize packetCountByQueueClass[s_QueueClassCount] = {};
-    usize packetizationDecisionCounts[s_PacketizationDecisionCount] = {};
+    Array<usize, s_QueueClassCount> taskCountByQueueClass{};
+    Array<usize, s_QueueClassCount> packetCountByQueueClass{};
+    Array<usize, s_PacketizationDecisionCount> packetizationDecisionCounts{};
     // Sanitized caller-measured graph declaration/build wall time. totalSeconds covers the core compiler only.
     f64 declarationSeconds = 0.0;
     // Total analysis wall time includes the named passes below plus scaffolding and timing overhead.
@@ -377,38 +339,6 @@ class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskScheduler;
 
 
-private:
-    static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;
-    static constexpr u32 s_PlanAccessReaderMask = s_PlanAccessWriterBit - 1u;
-
-
-private:
-    struct AttemptBindingState{
-        enum Enum : u8{
-            None,
-            Recording,
-            Submitting,
-            Resolved,
-        };
-    };
-
-    class CompilationScope final : NoCopy{
-    public:
-        explicit CompilationScope(GpuCompiledGraph& graph)noexcept;
-        ~CompilationScope()noexcept;
-
-
-    public:
-        [[nodiscard]] b8 valid()const noexcept{ return m_graph != nullptr; }
-        void publish()noexcept;
-
-
-    private:
-        GpuCompiledGraph* m_graph = nullptr;
-        b8 m_published = false;
-    };
-
-
 public:
     // Entry points take a short nonblocking read claim while deriving packet/plan storage before an exact attempt grants the lease.
     // The view is deliberately nonmovable because its address participates in the thread-local lexical proof chain.
@@ -422,7 +352,6 @@ public:
 
     public:
         explicit ReadView(const GpuCompiledGraph& graph)noexcept;
-        ReadView(ReadView&&) = delete;
         ~ReadView()noexcept;
 
 
@@ -453,7 +382,7 @@ public:
         [[nodiscard]] b8 tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
         [[nodiscard]] b8 taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
         [[nodiscard]] b8 taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-        [[nodiscard]] b8 tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
+        [[nodiscard]] b8 tasksFormContiguousPacketSequence(Span<const GpuTaskId> tasks)const noexcept;
         [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
         [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const & noexcept;
         const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
@@ -490,9 +419,35 @@ public:
 
 
 private:
-    void clearAttemptBindingWithinLock()noexcept;
-    void resetPlanStorageWithinPlanWriteScope()noexcept;
-    void buildPlanStatistics(const GpuTaskGraphDeclarationReadView& graph, Alloc::ScratchArena& scratchArena);
+    struct AttemptBindingState{
+        enum Enum : u8{
+            None,
+            Recording,
+            Submitting,
+            Resolved,
+        };
+    };
+
+    class CompilationScope final : NoCopy{
+    public:
+        explicit CompilationScope(GpuCompiledGraph& graph)noexcept;
+        ~CompilationScope()noexcept;
+
+
+    public:
+        [[nodiscard]] b8 valid()const noexcept{ return m_graph != nullptr; }
+        void publish()noexcept;
+
+
+    private:
+        GpuCompiledGraph* m_graph = nullptr;
+        b8 m_published = false;
+    };
+
+
+private:
+    static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;
+    static constexpr u32 s_PlanAccessReaderMask = s_PlanAccessWriterBit - 1u;
 
 
 public:
@@ -508,6 +463,10 @@ public:
 
 
 private:
+    void clearAttemptBindingWithinLock()noexcept;
+    void resetPlanStorageWithinPlanWriteScope()noexcept;
+    void buildPlanStatistics(const GpuTaskGraphDeclarationReadView& graph, Alloc::ScratchArena& scratchArena);
+
     // Compilation writes these helpers while holding CompilationScope; ReadView is the only read-side API surface.
     [[nodiscard]] b8 valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
 
@@ -535,7 +494,7 @@ private:
     [[nodiscard]] b8 tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
     [[nodiscard]] b8 taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
     [[nodiscard]] b8 taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
-    [[nodiscard]] b8 tasksFormContiguousPacketSequence(const GpuTaskId* tasks, usize taskCount)const noexcept;
+    [[nodiscard]] b8 tasksFormContiguousPacketSequence(Span<const GpuTaskId> tasks)const noexcept;
     [[nodiscard]] b8 taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;

@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "arena_names.h"
+
 #include <core/global.h>
 #include <core/alloc/module.h>
 
@@ -262,13 +264,17 @@ private:
 
 
 public:
-    InputDispatcher();
+    InputDispatcher()
+        : m_arena(InputArenaScope::s_DispatcherArena)
+        , m_handlers(m_arena)
+        , m_pendingHandlerMutations(m_arena)
+    {}
 
 
 public:
-    void addHandlerToFront(IInputEventHandler& handler);
-    void addHandlerToBack(IInputEventHandler& handler);
-    void removeHandler(IInputEventHandler& handler);
+    void addHandlerToFront(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddFront, handler); }
+    void addHandlerToBack(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::AddBack, handler); }
+    void removeHandler(IInputEventHandler& handler){ queueOrApplyHandlerMutation(HandlerMutationType::Remove, handler); }
 
     void setMousePositionScale(f32 x, f32 y)noexcept;
 

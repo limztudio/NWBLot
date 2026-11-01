@@ -5,7 +5,8 @@
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
-#include "shadow_timing_render_pass.h"
+#include "avboit_timing_render_pass.h"
+#include "smoke_capture_teardown.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -45,11 +46,12 @@ using NWB::Tests::Smoke::CreateSmokeSkinnedRenderWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
-using NWB::Tests::Smoke::CalculateSmokeYawDisplay;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
-using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
+using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
+using NWB::Tests::Smoke::s_SmokeTwoPi;
+using NWB::Tests::Smoke::TickSmokeWorld;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 using SoftShadowModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
@@ -94,7 +96,6 @@ static constexpr f32 s_SpotOuterConeCos = 0.55f;
 
 static constexpr f32 s_SpinSpeed = 0.5f;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
-static constexpr f32 s_TwoPi = 6.2831853f;
 static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
@@ -109,8 +110,7 @@ private:
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
             if(!parsed)
                 return s_DefaultAngularRadius;
-            const SIMDVectorSingle angle = VectorReplicate(*parsed);
-            return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorReplicate(0.2f), angle), VectorGreater(angle, VectorZero())));
+            return *parsed > 0.0f ? Min(0.2f, *parsed) : 0.0f;
         }();
         return s_Angle;
     }
@@ -121,23 +121,21 @@ private:
             const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
             if(!parsed)
                 return s_DefaultSourceRadius;
-            const SIMDVectorSingle radius = VectorReplicate(*parsed);
-            return VectorGetX(VectorSelect(VectorZero(), VectorMin(VectorSplatOne(), radius), VectorGreater(radius, VectorZero())));
+            return *parsed > 0.0f ? Min(1.0f, *parsed) : 0.0f;
         }();
         return s_Radius;
     }
 
     // Pin yaw for captures that isolate shimmer from motion.
     static f32 FrozenYaw(){
-        static const f32 s_Yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
-        return s_Yaw;
+        return ReadSmokeFrozenYawCached("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
     }
 
 
 public:
     explicit SoftShadowTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeSkinnedRenderWorldOrDie(context, s_ProjectName))
+        , m_world(CreateSmokeSkinnedRenderWorldOrDie(s_ProjectName, {}, context))
     {}
     virtual ~SoftShadowTestSmokeProject()noexcept override{
         m_timingRenderPass.stop();
@@ -157,7 +155,7 @@ public:
         // Register arrow yaw scrubbing at the front of the input chain.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(s_CameraHeight, s_CameraDistance, s_CameraPitch, *m_world);
 
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, s_DirectionalLightPitch, s_DirectionalLightYaw, 0.0f, Float4(1.00f, 0.96f, 0.88f), s_DirectionalLightIntensity);
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
@@ -191,22 +189,22 @@ public:
         // Timing materials omit stochastic surfel GI while keeping direct shadows.
         const auto& opaqueMaterial = m_timingEnabled ? s_TimingOpaqueMaterial : s_OpaqueMaterial;
         const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
-        m_groundEntity = CreateTintedStaticMeshEntity(*m_world, s_GroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f));
+        m_groundEntity = CreateTintedStaticMeshEntity(s_GroundMesh, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.82f, 0.82f, 0.85f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f), *m_world);
 
         // The opaque caster provides the contact-hardening reference.
-        const auto characterModel = CreateTintedModelEntity(*m_world, s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f));
+        const auto characterModel = CreateTintedModelEntity(s_Model, opaqueMaterial, s_SmokeSurfaceMaterialInterface, Float4(0.86f, 0.80f, 0.74f, 1.0f), Float4(0.7f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f), *m_world);
         m_characterOwner = characterModel.entity;
         if(!characterModel.tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
         // The glass caster must preserve tint while its penumbra widens with receiver distance.
         const auto glassModel = CreateTintedModelEntity(
-            *m_world,
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Glass caster tint and density for Beer-Lambert shadow absorption.
-            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f)
+            Float4(0.20f, 0.55f, 0.12f, 0.6f), Float4(-0.6f, 0.0f, -1.1f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            *m_world
         );
         m_glassOwner = glassModel.entity;
         if(!glassModel.tintApplied)
@@ -217,7 +215,7 @@ public:
         NWB_FATAL_ASSERT_MSG(activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(), NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities"));
 
         if(m_timingEnabled){
-            const NWB::Core::ECS::EntityID lights[] = { directionalLight, pointLight, spotLight };
+            const Array<NWB::Core::ECS::EntityID, 3> lights = { directionalLight, pointLight, spotLight };
             for(const auto lightEntity : lights){
                 const auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity);
                 if(!light || light->enableCaustics){
@@ -256,7 +254,7 @@ public:
         }
 
         const f32 fixedDelta = RendererBaselineFixedDelta();
-        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? VectorGetX(VectorMax(VectorReplicate(delta), VectorZero())) : 0.0f);
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         if(m_timingEnabled)
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -265,11 +263,8 @@ public:
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCasters();
         updateWindowTitle();
-        const auto updated = m_world->tick(safeDelta);
-        if(!updated){
-            NWB_LOGGER_ERROR(NWB_TEXT("Project: world update rejected CPU work: {}"), static_cast<u32>(updated.error()));
+        if(!TickSmokeWorld(safeDelta, *m_world))
             return false;
-        }
         ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
@@ -289,32 +284,35 @@ private:
     }
 
     void updateWindowTitle(){
-        const SIMDVectorSingle yawDisplay = CalculateSmokeYawDisplay(VectorReplicate(m_yaw.yaw()), VectorReplicate(s_TwoPi));
-        const f32 angleDegrees = VectorGetX(VectorScale(VectorReplicate(ConfiguredAngularRadius()), 360.0f / s_TwoPi));
+        f32 wrappedYaw = FMod(m_yaw.yaw(), s_SmokeTwoPi);
+        if(wrappedYaw < 0.0f)
+            wrappedYaw += s_SmokeTwoPi;
+        const f32 yawDegrees = wrappedYaw * (360.0f / s_SmokeTwoPi);
+        const f32 angleDegrees = ConfiguredAngularRadius() * 360.0f / s_SmokeTwoPi;
 
         static constexpr usize s_TitleCapacity = 256u;
-        tchar title[s_TitleCapacity];
+        Array<tchar, s_TitleCapacity> title{};
         NWB_TSPRINTF(
-            title, s_TitleCapacity,
+            title.data(), title.size(),
             NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), VectorGetY(yawDisplay), angleDegrees, ConfiguredSourceRadius(),
+            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDegrees, angleDegrees, ConfiguredSourceRadius(),
             m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
-        m_context.graphics.setWindowTitle(TStringView(title));
+        m_context.graphics.setWindowTitle(TStringView(title.data()));
     }
 
 
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::ShadowTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ s_ProjectName };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ s_ProjectName };
-    NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
+    NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Tests::Smoke::YawSpinController m_yaw;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     b8 m_timingEnabled = false;
     b8 m_rendererBaselineCapturePaused = false;

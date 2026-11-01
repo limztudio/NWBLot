@@ -35,6 +35,7 @@ if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED AND NOT N
     message(FATAL_ERROR "NWB_BUILD_TESTBED requires NWB_BUILD_LOADER because Testbed uses the loader project-entry API.")
 endif()
 add_subdirectory(3rd_parties)
+set(CMAKE_UNITY_BUILD ON)
 nwb_configure_external_dependencies()
 nwb_configure_internal_headers()
 nwb_configure_name_symbols()

@@ -85,30 +85,15 @@ public:
 protected:
     b8 internalInit(AStringView url);
     b8 internalUpdate();
-    [[nodiscard]] inline b8 workerCanExit()const noexcept{
+    [[nodiscard]] b8 workerCanExit()const noexcept{
         return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
     }
 
 
 protected:
-    inline void enqueue(MessageType&& data){
-        this->m_messageQueue.emplace(Move(data));
-        m_messageCount.fetch_add(1, MemoryOrder::relaxed);
-        this->m_semaphore.release();
-    }
-
-    inline void enqueue(const MessageType& data){
-        this->m_messageQueue.emplace(data);
-        m_messageCount.fetch_add(1, MemoryOrder::relaxed);
-        this->m_semaphore.release();
-    }
-
-    inline b8 tryDequeueMessage(MessageType& msg){
-        auto dequeued = this->tryDequeue(msg);
-        if(dequeued)
-            m_messageCount.fetch_sub(1, MemoryOrder::relaxed);
-        return dequeued;
-    }
+    void enqueue(MessageType&& data);
+    void enqueue(const MessageType& data);
+    b8 tryDequeueMessage(MessageType& msg);
 
 
 private:

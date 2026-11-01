@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
 #include "selectable_paint.h"
+
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -21,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 
 ListResult Builder::virtualList(const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
-    if(declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f){
+    if(itemDeclarationBlocked() || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f){
         m_context.fail();
         return result;
     }
@@ -48,13 +49,12 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
     result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
-    const auto thumbResult = MakeWidgetId((*widget)->id, s_WidgetPartScrollbar);
-    if(!thumbResult){
+    WidgetId thumb;
+    if(!TryMakeWidgetId((*widget)->id, s_WidgetPartScrollbar, thumb)){
         m_context.fail();
         result.valid = false;
         return result;
     }
-    const WidgetId thumb = *thumbResult;
     auto gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
     b8 haveGesture = gesture && gesture->control == token;
     auto action = m_context.takeControlAction(**widget, options.enabled, token);
@@ -95,10 +95,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
         result.valid = false;
         return result;
     }
-    const SIMDVectorSingle framePaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
-    const SIMDVectorSingle framePaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle framePaddingMaximum = VectorSelect(framePaddingCandidate, framePaddingCurrent, VectorGreater(framePaddingCurrent, framePaddingCandidate));
-    frame.padding = { VectorGetX(framePaddingMaximum), VectorGetY(framePaddingMaximum), VectorGetZ(framePaddingMaximum), VectorGetW(framePaddingMaximum) };
+    frame.padding = MaxUiPadding(frame.padding, background->padding);
     if(!prepareListMetrics(frame)){
         m_context.fail();
         result.valid = false;
@@ -109,8 +106,9 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     if(options.height.policy == LayoutSizePolicy::Content && frame.rowCount != 0u){
         for(;;){
             LayoutBox provisional;
-            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(s_ListMinimumWidth, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
-            const SIMDVectorSingle probeWidth = VectorAdd(VectorAdd(VectorAdd(VectorSet(frame.padding.left, frame.rowHeight, 0.0f, 0.0f), VectorSet(frame.padding.right, frame.padding.top, 0.0f, 0.0f)), VectorSet(frame.style.scrollbarWidth, frame.padding.bottom, 0.0f, 0.0f)), VectorSet(frame.rowHeight, 0.0f, 0.0f, 0.0f));
+            const SIMDVectorSingle probeMinimum = VectorMax(VectorSet(s_StyleMinimumFieldWidth, background->minimumHeight, 0.0f, 0.0f), VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f));
+            const SIMDVectorSingle probePadding = VectorAdd(VectorSet(frame.padding.left, frame.rowHeight, 0.0f, 0.0f), VectorSet(frame.padding.right, frame.padding.top, 0.0f, 0.0f));
+            const SIMDVectorSingle probeWidth = VectorAdd(VectorAdd(probePadding, VectorSet(frame.style.scrollbarWidth, frame.padding.bottom, 0.0f, 0.0f)), VectorSet(frame.rowHeight, 0.0f, 0.0f, 0.0f));
             const SIMDVectorSingle probeSize = VectorMax(probeMinimum, probeWidth);
             provisional.rectangle = { 0.0f, 0.0f, VectorGetX(probeSize), VectorGetY(probeSize) };
             provisional.clip = provisional.rectangle;
@@ -120,8 +118,7 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
                 result.valid = false;
                 return result;
             }
-            const SIMDVectorSingle measuredSize = VectorAdd(VectorAdd(VectorSet(0.0f, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
-            const f32 height = VectorGetY(VectorMax(VectorSet(0.0f, background->minimumHeight, 0.0f, 0.0f), measuredSize));
+            const f32 height = Max(background->minimumHeight, frame.rowHeight + frame.padding.top + frame.padding.bottom);
             if(height == placement->bounds.height)
                 break;
         }
@@ -133,17 +130,14 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(s_ListMinimumWidth, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
+    const SIMDVectorSingle preferredSize = VectorAdd(VectorAdd(VectorSet(s_StyleMinimumFieldWidth, frame.rowHeight, 0.0f, 0.0f), VectorSet(0.0f, frame.padding.top, 0.0f, 0.0f)), VectorSet(0.0f, frame.padding.bottom, 0.0f, 0.0f));
     const SIMDVectorSingle minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
     const SIMDVectorSingle intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
     description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    if(!addItemNode(description, item)){
         result.valid = false;
         return result;
     }
-    item.node = *admittedNode;
     m_scope->m_lists.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return result;
@@ -156,7 +150,7 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
     if(!metrics)
         return false;
     frame.style.row.padding = metrics->padding;
-    ListState::MeasureKey key;
+    ListMeasureKey key;
     key.sourceGeneration = frame.token.contentGeneration;
     key.sourceRevision = frame.token.contentRevision;
     key.rowCount = frame.rowCount;
@@ -180,8 +174,7 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
         const auto bounds = m_text.measure(*empty, m_paint.displayMetrics());
         if(!bounds)
             return false;
-        const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(VectorSet(bounds->width, bounds->height, 0.0f, 0.0f), VectorSet(metrics->padding.left, metrics->padding.top, 0.0f, 0.0f)), VectorSet(metrics->padding.right, metrics->padding.bottom, 0.0f, 0.0f));
-        const f32 height = VectorGetY(VectorMax(VectorSet(metrics->minimum.x, metrics->minimum.y, 0.0f, 0.0f), paddedSize));
+        const f32 height = Max(metrics->minimum.y, bounds->height + metrics->padding.top + metrics->padding.bottom);
         if(!IsFinite(height) || height <= 0.0f || !listMatches(frame))
             return false;
         state.m_measureKey = key;
@@ -189,10 +182,10 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
     }
     // The last painted offset may belong to a different styled declaration than the measurement cache.
     if(state.m_scrollRowHeight > 0.0f && state.m_scrollSourceGeneration == key.sourceGeneration && state.m_scrollRowHeight != state.m_rowHeight){
-        const SIMDVectorDouble clippedTop = VectorDoubleSubtract(VectorDoubleReplicate(state.m_placement.contentClip.y), VectorDoubleReplicate(state.m_placement.viewport.y));
-        const SIMDVectorDouble anchor = VectorDoubleDivide(VectorDoubleMax(VectorDoubleZero(), VectorDoubleAdd(VectorDoubleReplicate(state.scrollOffset()), clippedTop)), VectorDoubleReplicate(state.m_scrollRowHeight));
-        const SIMDVectorDouble offset = VectorDoubleMax(VectorDoubleZero(), VectorDoubleSubtract(VectorDoubleMultiply(anchor, VectorDoubleReplicate(state.m_rowHeight)), clippedTop));
-        if(!state.m_scroll.setOffset(VectorDoubleGetX(offset)))
+        const f64 clippedTop = static_cast<f64>(state.m_placement.contentClip.y) - static_cast<f64>(state.m_placement.viewport.y);
+        const f64 anchor = Max(0.0, state.scrollOffset() + clippedTop) / static_cast<f64>(state.m_scrollRowHeight);
+        const f64 offset = Max(0.0, anchor * static_cast<f64>(state.m_rowHeight) - clippedTop);
+        if(!state.m_scroll.setOffset(offset))
             return false;
     }
     state.m_scrollRowHeight = state.m_rowHeight;
@@ -205,18 +198,27 @@ b8 Builder::prepareListMetrics(ListFrame& frame){
 }
 
 b8 Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
-    const SIMDVectorDouble travelValue = VectorDoubleSubtract(VectorDoubleReplicate(static_cast<f64>(gesture.referenceRectangle.height)), VectorDoubleReplicate(static_cast<f64>(gesture.targetRectangle.height)));
-    const f64 travel = VectorDoubleGetX(travelValue);
+    const f64 travel = static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height);
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;
     const SIMDVectorDouble startDeltaValue = VectorDoubleSubtract(
         VectorDoubleSet(static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y), 0.0, 0.0),
         VectorDoubleSet(static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y), 0.0, 0.0)
     );
-    const SIMDVectorDouble fractionValue = VectorDoubleDivide(VectorDoubleAdd(VectorDoubleSplatX(startDeltaValue), VectorDoubleSplatY(startDeltaValue)), travelValue);
-    const SIMDVectorDouble fraction = VectorDoubleSelect(VectorDoubleZero(), VectorDoubleMin(VectorDoubleSplatOne(), fractionValue), VectorDoubleGreater(fractionValue, VectorDoubleZero()));
+    const f64 fractionValue = (VectorDoubleGetX(startDeltaValue) + VectorDoubleGetY(startDeltaValue)) / travel;
+    const f64 fraction = fractionValue > 0.0 ? Min(1.0, fractionValue) : 0.0;
     state.m_ensureCursor = false;
-    return state.m_scroll.setOffset(VectorDoubleGetX(VectorDoubleMultiply(fraction, VectorDoubleReplicate(gesture.maximum))));
+    return state.m_scroll.setOffset(fraction * gesture.maximum);
+}
+
+b8 Builder::listMatches(const ListFrame& frame)const{
+    return
+        frame.source && listStateMatches(frame)
+        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
+        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount
+        && listStateMatches(frame)
+    ;
 }
 
 

@@ -46,7 +46,7 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
     Atomic<b8> releaseFirstAllocations{ false };
     Atomic<usize> completed{ 0u };
     Latch firstAllocationsReady(s_ThreadCount);
-    Thread workers[s_ThreadCount];
+    Array<Thread, s_ThreadCount> workers;
 
     for(Thread& worker : workers){
         worker = Thread([&failed, &releaseFirstAllocations, &completed, &firstAllocationsReady, poolBytes](){

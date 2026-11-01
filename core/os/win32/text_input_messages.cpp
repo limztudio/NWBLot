@@ -80,18 +80,18 @@ TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputS
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
     if(codePoint < s_UnicodeSpace || codePoint == s_UnicodeDelete)
         return TextInputAdmission::Accepted;
-    char bytes[s_Utf8MaxSequenceBytes];
+    Array<char, s_Utf8MaxSequenceBytes> bytes;
     const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
     if(!encoded)
         return encoded.error();
     const usize length = *encoded;
     if(repeatCount == 1u)
-        return emitCommit(token, AStringView(bytes, length));
+        return emitCommit(token, AStringView(bytes.data(), length));
     const usize batchCount = Min<usize>(repeatCount, s_TextInputMaxEventTextBytes / length);
     m_utf8Text.clear();
     m_utf8Text.reserve(batchCount * length);
     for(usize index = 0u; index < batchCount; ++index)
-        m_utf8Text.append(bytes, length);
+        m_utf8Text.append(bytes.data(), length);
     usize remaining = repeatCount;
     while(remaining != 0u){
         const usize count = Min(remaining, batchCount);

@@ -7,15 +7,15 @@
 
 #include "module.h"
 #include "backend_forward.h"
+#include "backend_core_context.h"
 
 #include <core/task/cpu/scheduler.h>
 
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
-#include "native_buffer_provenance.h"
+#include "native_resource_provenance.h"
 #include "native_queue_state.h"
-#include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
 
@@ -102,7 +102,7 @@ struct QueueSubmissionWait{
     u64 value = 0u;
 };
 
-class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
+class TrackedCommandBuffer final : public RefCounter<GraphicsResource>{
     friend class CommandList;
     friend class DescriptorBufferManager;
     friend class Queue;
@@ -136,38 +136,51 @@ private:
 
 
 public:
-    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, b8 ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept;
+    TrackedCommandBuffer(Queue& queue, const VulkanContext& context, VkCommandPool commandPool, b8 ownsCommandPool, Futex* sharedCommandPoolMutex)noexcept
+        : RefCounter<GraphicsResource>(context.cpuScheduler)
+        , m_cmdPool(commandPool)
+        , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
+        , m_resourceReferences(context.objectArena)
+        , m_referencedStagingBuffers(context.objectArena)
+        , m_referencedDescriptorHeaps(context.objectArena)
+        , m_retainedTextureStateCommits(context.objectArena)
+        , m_pendingAccelStructBuildCommits(context.objectArena)
+        , m_referencedTopLevelAccelStructs(context.objectArena)
+        , m_referencedBottomLevelReferenceSets(context.objectArena)
+        , m_pendingOpacityMicromapBuildCommits(context.objectArena)
+        , m_timerQueryRecordingClaims(context.objectArena)
+        , m_ownsCmdPool(ownsCommandPool)
+        , m_context(context)
+        , m_queue(queue)
+    {}
     ~TrackedCommandBuffer()noexcept;
 
 
 private:
-
-
     [[nodiscard]] Expected<void, VkResult> initialize(u32 queueFamilyIndex);
     [[nodiscard]] TimerQueryRecordingClaim& findOrAppendTimerQueryRecordingClaim(TimerQuery& query);
     [[nodiscard]] TimerQueryRecordingClaim* findTimerQueryRecordingClaim(TimerQuery& query, u64 generation)noexcept;
     [[nodiscard]] b8 recordsTimerQueryBegin(const TimerQuery& query, u64 generation)const noexcept;
     [[nodiscard]] TimerQueryClaimOwnerMatches resolveTimerQueryClaimOwnerMatches(const TimerQuery& query, const TimerQueryRecordingClaim& claim)const noexcept;
-    [[nodiscard]] b8 validateTimerQueryRecordingClaims(const Queue& submissionQueue, const QueueSubmissionWait* localWaits, usize localWaitCount, const NotNull<TrackedCommandBuffer*>* precedingCommandBuffers, usize precedingCommandBufferCount)const noexcept;
+    [[nodiscard]] b8 validateTimerQueryRecordingClaims(const Queue& submissionQueue, Span<const QueueSubmissionWait> localWaits, Span<const NotNull<TrackedCommandBuffer*>> precedingCommandBuffers)const noexcept;
     void commitTimerQueryRecordingClaims(const QueueSubmissionToken& submissionToken)noexcept;
     void discardTimerQueryRecordingClaims()noexcept;
     void commitRetainedBufferStateCommits()noexcept;
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits()noexcept;
-    void discardRetainedTextureStateCommits()noexcept;
+    void discardRetainedTextureStateCommits()noexcept{
+        m_retainedTextureStateCommits.clear();
+    }
     [[nodiscard]] b8 appendPendingAccelStructBuildCommit(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
-        const AccelStructGeometryBuildSignature* geometrySignatures,
-        usize geometrySignatureCount,
-        const RayTracingInstanceDesc* instances = nullptr,
-        usize instanceCount = 0u
+        Span<const AccelStructGeometryBuildSignature> geometrySignatures,
+        Span<const RayTracingInstanceDesc> instances = {}
     );
     [[nodiscard]] Expected<NotNull<const AccelStructBuildSignatureRole*>> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
     [[nodiscard]] b8 validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
-    void releasePendingAccelStructBuildCommits()noexcept;
     void retainTopLevelAccelStruct(AccelStruct& accelStruct);
     void retainBottomLevelReferenceSet(const AccelStructBottomLevelReferenceHandle& references);
     void retainAcceptedTopLevelAccelStructReferences();
@@ -176,7 +189,10 @@ private:
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
     [[nodiscard]] b8 hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
     void commitPendingOpacityMicromapBuildCommits()noexcept;
-    void discardPendingOpacityMicromapBuildCommits()noexcept;
+    void discardPendingOpacityMicromapBuildCommits()noexcept{
+        m_pendingOpacityMicromapBuildCommits.clear();
+    }
+    void discardPendingRecordingCommits()noexcept;
     void clearTrackedReferences()noexcept;
 
 

@@ -20,56 +20,56 @@ namespace __hidden_adhd_type_utils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr BuiltinObjectTypeInfo s_BuiltinObjectTypes[] = {
+inline constexpr Array s_BuiltinObjectTypes = {
 #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey) \
     BuiltinObjectTypeInfo{ adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
 
-inline constexpr BuiltinGenericTypeInfo s_BuiltinGenericTypes[] = {
+inline constexpr Array s_BuiltinGenericTypes = {
 #define NWB_ADHD_EXPORT_GENERIC_TYPE(adhdName, cppExportName, paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap) \
     BuiltinGenericTypeInfo{ adhdName, cppExportName, GenericParamKind::paramKind, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isNonThreadSafeContainer, isNonRandomAccessContainer, isIndexableSequence, isReflectedLinear, isReflectedMap },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_GENERIC_TYPE
 };
 
-inline constexpr BuiltinUnalignedVectorInfo s_BuiltinUnalignedVectorTypes[] = {
+inline constexpr Array s_BuiltinUnalignedVectorTypes = {
 #define NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, laneScalarType) \
     BuiltinUnalignedVectorInfo{ adhdName, cppExportName, laneScalarType, lanes, byteSize, byteAlign },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_UNALIGNED_VECTOR_TYPE
 };
 
-inline constexpr BuiltinSimdVectorInfo s_BuiltinSimdVectorTypes[] = {
+inline constexpr Array s_BuiltinSimdVectorTypes = {
 #define NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE(adhdName, cppExportName, lanes, byteSize, byteAlign, xyzScalarType, wScalarType, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed, regCppType, loadCppFunc, storeCppFunc) \
     BuiltinSimdVectorInfo{ adhdName, cppExportName, xyzScalarType, wScalarType, regCppType, loadCppFunc, storeCppFunc, lanes, byteSize, byteAlign, isFloatReg, isDoubleReg, isIntReg, isSignedInt, isMixed },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_VECTOR_TYPE
 };
 
-inline constexpr BuiltinSimdMatrixInfo s_BuiltinSimdMatrixTypes[] = {
+inline constexpr Array s_BuiltinSimdMatrixTypes = {
 #define NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE(adhdName, cppExportName, elemCount, byteSize, byteAlign, elemScalarType, isDoubleReg, regCppType, loadCppFunc, storeCppFunc) \
     BuiltinSimdMatrixInfo{ adhdName, cppExportName, elemScalarType, regCppType, loadCppFunc, storeCppFunc, elemCount, byteSize, byteAlign, isDoubleReg },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_SIMD_MATRIX_TYPE
 };
 
-inline constexpr BuiltinMemberMethodInfo s_BuiltinMemberMethods[] = {
+inline constexpr Array s_BuiltinMemberMethods = {
 #define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, adaptsFirstArgToElement, returnRule) \
     BuiltinMemberMethodInfo{ methodName, BuiltinMemberReturnRule::returnRule, isMutating, adaptsFirstArgToElement },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_MEMBER_METHOD
 };
 
-inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
+inline constexpr Array s_BuiltinFunctions = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule) \
     BuiltinFunctionInfo{ adhdName, cppExportName, arity, BuiltinFunctionReturnRule::returnRule },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION
 };
 
-inline constexpr BuiltinGlobalConstantInfo s_BuiltinGlobalConstants[] = {
+inline constexpr Array s_BuiltinGlobalConstants = {
 #define NWB_ADHD_EXPORT_GLOBAL_CONSTANT(adhdName, cppExportName, adhdTypeName) \
     BuiltinGlobalConstantInfo{ adhdName, cppExportName, adhdTypeName },
 #include "../export_functions.h"
@@ -124,6 +124,24 @@ const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(const MStringView name)no
             return &info;
     }
     return nullptr;
+}
+
+b8 IsValidBuiltinVectorOrMatrixCtorArity(const MStringView baseTypeName, const usize argCount)noexcept{
+    if(const BuiltinSimdVectorInfo* vecInfo = FindBuiltinSimdVectorType(baseTypeName)){
+        return argCount == 0u
+            || argCount == 1u
+            || argCount == vecInfo->lanes
+            || ((baseTypeName == "f32x4" || baseTypeName == "f64x4") && argCount == 3u);
+    }
+    if(const BuiltinUnalignedVectorInfo* unalignedInfo = FindBuiltinUnalignedVectorType(baseTypeName)){
+        return argCount == 0u
+            || argCount == 1u
+            || argCount == unalignedInfo->lanes
+            || (baseTypeName == "f16x4u" && argCount == 2u);
+    }
+    if(const BuiltinSimdMatrixInfo* matInfo = FindBuiltinSimdMatrixType(baseTypeName))
+        return argCount == 0u || argCount == 1u || argCount == matInfo->elemCount;
+    return true;
 }
 
 b8 FindBuiltinFixedLayout(const MStringView name, usize& outSize, usize& outAlign)noexcept{
@@ -181,18 +199,6 @@ const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(const MStringView nam
             return &info;
     }
     return nullptr;
-}
-
-MStringView FindBuiltinGlobalConstantType(const MStringView name)noexcept{
-    if(const BuiltinGlobalConstantInfo* info = FindBuiltinGlobalConstant(name))
-        return info->adhdTypeName;
-    return {};
-}
-
-MStringView FindBuiltinGlobalConstantCppName(const MStringView name)noexcept{
-    if(const BuiltinGlobalConstantInfo* info = FindBuiltinGlobalConstant(name))
-        return info->cppExportName;
-    return {};
 }
 
 b8 IsNwbMapKeyType(const MStringView name)noexcept{
@@ -266,10 +272,6 @@ b8 IsVoidTypeRef(const TypeRef* ref)noexcept{
     if(!ref)
         return true;
     return ref->name == "void" && ref->refMode == ParamPassingMode::None && !ref->isAuto && !ref->isFuncType && ref->templateArgs.empty();
-}
-
-b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
-    return AreTypeRefsEquivalentWithSubst(a, b, {}, {}, symbols);
 }
 
 b8 AreTypeRefsEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, const Span<const TemplateParamDecl> ifaceParams, const Span<const TypeArg> ifaceArgs, const SymbolTable& symbols)noexcept{
@@ -369,8 +371,8 @@ b8 IsKnownConcreteTypeName(const MStringView name, const SymbolTable& symbols)no
         return true;
     if(FindBuiltinObjectType(name) != nullptr)
         return true;
-    if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(name))
-        return genericInfo->paramKind != GenericParamKind::NotNullType;
+    if(FindBuiltinGenericType(name) != nullptr)
+        return true;
     return false;
 }
 

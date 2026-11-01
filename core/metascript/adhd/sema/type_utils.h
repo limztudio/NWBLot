@@ -22,7 +22,6 @@ namespace GenericParamKind{
         SingleType,
         TwoType,
         TypeAndCount,
-        NotNullType,
     };
 };
 
@@ -160,12 +159,11 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] const BuiltinUnalignedVectorInfo* FindBuiltinUnalignedVectorType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinSimdVectorInfo* FindBuiltinSimdVectorType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinSimdMatrixInfo* FindBuiltinSimdMatrixType(MStringView name)noexcept;
+[[nodiscard]] b8 IsValidBuiltinVectorOrMatrixCtorArity(MStringView baseTypeName, usize argCount)noexcept;
 [[nodiscard]] b8 FindBuiltinFixedLayout(MStringView name, usize& outSize, usize& outAlign)noexcept;
 [[nodiscard]] const BuiltinMemberMethodInfo* FindBuiltinMemberMethod(MStringView name)noexcept;
 [[nodiscard]] const BuiltinFunctionInfo* FindBuiltinFunction(MStringView name)noexcept;
 [[nodiscard]] const BuiltinGlobalConstantInfo* FindBuiltinGlobalConstant(MStringView name)noexcept;
-[[nodiscard]] MStringView FindBuiltinGlobalConstantType(MStringView name)noexcept;
-[[nodiscard]] MStringView FindBuiltinGlobalConstantCppName(MStringView name)noexcept;
 [[nodiscard]] b8 IsNwbMapKeyType(MStringView name)noexcept;
 
 [[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
@@ -175,8 +173,10 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 CheckSwizzlePattern(MStringView text, u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept;
 
 [[nodiscard]] b8 IsVoidTypeRef(const TypeRef* ref)noexcept;
-[[nodiscard]] b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 AreTypeRefsEquivalentWithSubst(const TypeRef* actual, const TypeRef* pattern, Span<const TemplateParamDecl> ifaceParams, Span<const TypeArg> ifaceArgs, const SymbolTable& symbols)noexcept;
+[[nodiscard]] inline b8 AreTypeRefsEquivalent(const TypeRef* a, const TypeRef* b, const SymbolTable& symbols)noexcept{
+    return AreTypeRefsEquivalentWithSubst(a, b, {}, {}, symbols);
+}
 [[nodiscard]] b8 AreTemplateArgListsEqual(Span<const TypeArg> a, Span<const TypeArg> b, const SymbolTable& symbols)noexcept;
 [[nodiscard]] b8 DoParamListsMatch(Span<const ParamDecl> a, Span<const ParamDecl> b, const SymbolTable& symbols)noexcept;
 

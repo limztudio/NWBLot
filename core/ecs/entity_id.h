@@ -84,7 +84,12 @@ class EntityManager{
 
 
 public:
-    explicit EntityManager(Alloc::GlobalArena& arena)noexcept;
+    explicit EntityManager(Alloc::GlobalArena& arena)noexcept
+        : m_generations(arena)
+        , m_freeIndices(arena)
+        , m_nextEntityIndex(0u)
+        , m_aliveCount(0)
+    {}
 
 
 public:

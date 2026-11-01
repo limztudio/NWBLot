@@ -60,7 +60,7 @@ TEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTarge
         EXPECT_EQ(accepted.layer, 0u);
     }
     press(Core::Key::Tab);
-    EXPECT_EQ(m_context.input().focus(), anchor());
+    EXPECT_EQ(m_context.input().focus(), id(s_AnchorKey, s_PopupToolsPanelKey));
 }
 
 TEST_F(UiPopupToolsBuilderTests, VisibleTooltipPaintsItsDeclarationStyleAfterALaterStyleChange){
@@ -89,7 +89,7 @@ TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequire
     ASSERT_TRUE(acceptTools(2u, true, false));
     ASSERT_TRUE(acceptTools(3u, true, false));
     ASSERT_TRUE(m_tooltip.visible());
-    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, anchor());
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
     ASSERT_TRUE(acceptTools(4u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
     ASSERT_TRUE(moveToAnchor());
@@ -108,7 +108,7 @@ TEST_F(UiPopupToolsBuilderTests, LeaveAndReturnBetweenDeclarationsRestartsTheToo
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
     const u64 activity = m_context.input().hoverActivityGeneration();
-    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, anchor());
+    EXPECT_NE(send({ .position = { 790.0f, 590.0f } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
     ASSERT_TRUE(moveToAnchor());
     EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(4u, true, false));
@@ -127,7 +127,7 @@ TEST_F(UiPopupToolsBuilderTests, SameAnchorPointerMotionKeepsTheTooltipDelay){
     ASSERT_TRUE(acceptTools(2u, true, false));
     const u64 activity = m_context.input().hoverActivityGeneration();
     const Point pointer = m_context.input().pointerPosition();
-    EXPECT_EQ(send({ .position = { VectorGetX(VectorAdd(VectorReplicate(pointer.x), VectorReplicate(5.0f))), pointer.y } , .type = InputEventType::PointerMove}).hover, anchor());
+    EXPECT_EQ(send({ .position = { pointer.x + 5.0f, pointer.y } , .type = InputEventType::PointerMove}).hover, id(s_AnchorKey, s_PopupToolsPanelKey));
     EXPECT_EQ(m_context.input().hoverActivityGeneration(), activity);
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
@@ -212,10 +212,10 @@ TEST_F(UiPopupToolsBuilderTests, OmittedTooltipAttachmentCannotReuseDelayWhileTh
     ASSERT_TRUE(acceptTools(2u, true, false));
     ASSERT_TRUE(acceptTools(3u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
-    const u64 anchorDeclaration = target(anchor())->declarationGeneration;
+    const u64 anchorDeclaration = target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration;
     ASSERT_TRUE(acceptTools(4u, false, false));
-    ASSERT_NE(target(anchor()), nullptr);
-    EXPECT_EQ(target(anchor())->declarationGeneration, anchorDeclaration);
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration, anchorDeclaration);
     ASSERT_TRUE(acceptTools(5u, true, false));
     EXPECT_FALSE(m_tooltip.visible());
     ASSERT_TRUE(acceptTools(6u, true, false));
@@ -247,10 +247,10 @@ TEST_F(UiPopupToolsBuilderTests, TooltipInsideAPlainPopupPaintsAfterItsOverlayWi
     EXPECT_TRUE(m_context.input().hasPopup());
     EXPECT_EQ(m_context.input().targets().size(), targetCount);
     EXPECT_EQ(target(id("tip", "plain")), nullptr);
-    EXPECT_EQ(m_context.input().focus(), anchor("plain"));
+    EXPECT_EQ(m_context.input().focus(), id(s_AnchorKey, "plain"));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_FALSE(snapshot.commands().empty());
-    EXPECT_GT(snapshot.commands().back().layer, target(anchor("plain"))->layer);
+    EXPECT_GT(snapshot.commands().back().layer, target(id(s_AnchorKey, "plain"))->layer);
 }
 
 TEST_F(UiPopupToolsBuilderTests, TooltipRequiresAPrecedingAnchorInTheSameContainer){
@@ -419,8 +419,8 @@ TEST_F(UiPopupToolsBuilderTests, EmptyMenuRemainsOpenAndCannotProduceACommand){
 TEST_F(UiPopupToolsBuilderTests, DisabledAttachmentDoesNotPublishAContextMenuTrigger){
     m_menuOptions.enabled = false;
     ASSERT_TRUE(acceptTools(1u, false));
-    ASSERT_NE(target(anchor()), nullptr);
-    EXPECT_FALSE(target(anchor())->contextMenu);
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_AnchorKey, s_PopupToolsPanelKey))->contextMenu);
     ASSERT_TRUE(moveToAnchor());
     secondaryClick(m_context.input().pointerPosition());
     ASSERT_TRUE(acceptTools(2u, false));
@@ -437,8 +437,8 @@ TEST_F(UiPopupToolsBuilderTests, DisablingTheAnchorClosesItsOpenMenuAndRemovesTh
     EXPECT_FALSE(m_menuResult.activated);
     EXPECT_FALSE(m_menu.isOpen());
     EXPECT_FALSE(m_context.input().hasPopup());
-    ASSERT_NE(target(anchor()), nullptr);
-    EXPECT_FALSE(target(anchor())->contextMenu);
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_FALSE(target(id(s_AnchorKey, s_PopupToolsPanelKey))->contextMenu);
 }
 
 TEST_F(UiPopupToolsBuilderTests, FullyClippedAnchorCancelsItsOpenContextMenuDuringScopeEnd){
@@ -453,10 +453,10 @@ TEST_F(UiPopupToolsBuilderTests, FullyClippedAnchorCancelsItsOpenContextMenuDuri
 TEST_F(UiPopupToolsBuilderTests, RecreatedMenuAttachmentClosesOldPopupWhileItsAnchorSurvives){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(openBySecondary(2u));
-    const u64 anchorDeclaration = target(anchor())->declarationGeneration;
+    const u64 anchorDeclaration = target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration;
     ASSERT_TRUE(acceptTools(3u, false, false));
-    ASSERT_NE(target(anchor()), nullptr);
-    EXPECT_EQ(target(anchor())->declarationGeneration, anchorDeclaration);
+    ASSERT_NE(target(id(s_AnchorKey, s_PopupToolsPanelKey)), nullptr);
+    EXPECT_EQ(target(id(s_AnchorKey, s_PopupToolsPanelKey))->declarationGeneration, anchorDeclaration);
     EXPECT_FALSE(m_context.input().hasPopup());
     ASSERT_TRUE(acceptTools(4u, false));
     EXPECT_FALSE(m_menu.isOpen());

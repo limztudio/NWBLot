@@ -3,7 +3,6 @@
 
 
 #include "integer_model.h"
-#include "numeric_model_operations.h"
 
 #include <global/numeric_text.h>
 #include <global/termination.h>
@@ -13,32 +12,6 @@
 
 
 NWB_IMPL_UI_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const b8 canonical){
-    if(!ValidateIntegerBounds(bounds))
-        return {};
-    NumericEditResult result = NumericEditDetail::CommitDraft(
-        m_value, m_acceptedDraft, ParseIntegerDraft(m_draft.text()), bounds, canonical, m_draft.text(),
-        [this](const i64 candidate){ return canonicalize(candidate); },
-        [](const i64 candidate, const i64 value)noexcept{ return candidate != value; }
-    );
-    if(result.valid)
-        advanceRevision();
-    return result;
-}
-
-Expected<b8, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
-    char buffer[s_NumericEditMaxBytes];
-    return NumericEditDetail::CanonicalizeDraft(FormatI64(value, buffer), m_draft, m_acceptedDraft);
-}
-
-void IntegerEditModel::advanceRevision()noexcept{
-    NumericEditDetail::AdvanceRevision(m_revision);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,32 +32,30 @@ NumericParseStatus::Enum IntegerEditModel::status(const IntegerBounds& bounds)co
     return NumericEditDetail::DraftStatus(ParseIntegerDraft(m_draft.text()), bounds);
 }
 
-b8 IntegerEditModel::dirty()const noexcept{
-    return NumericEditDetail::DraftDirty(m_draft, m_acceptedDraft);
-}
-
 b8 IntegerEditModel::setValue(const i64 value){
     if(!canonicalize(value))
         return false;
     m_value = value;
-    advanceRevision();
+    NumericEditDetail::AdvanceRevision(m_revision);
     return true;
 }
 
-b8 IntegerEditModel::setDraft(const AStringView text){
-    return NumericEditDetail::SetDraftText(text, m_draft, m_revision);
+NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const b8 canonical){
+    if(!ValidateIntegerBounds(bounds))
+        return {};
+    NumericEditResult result = NumericEditDetail::CommitDraft(
+        ParseIntegerDraft(m_draft.text()), bounds, canonical, m_draft.text(),
+        [this](const i64 candidate){ return canonicalize(candidate); },
+        [](const i64 candidate, const i64 value)noexcept{ return candidate != value; },
+        m_acceptedDraft, m_value
+    );
+    if(result.valid)
+        NumericEditDetail::AdvanceRevision(m_revision);
+    return result;
 }
 
-NumericEditResult IntegerEditModel::submit(const IntegerBounds& bounds){ return commit(bounds, false); }
-
-NumericEditResult IntegerEditModel::blur(const IntegerBounds& bounds){ return commit(bounds, true); }
-
-NumericEditResult IntegerEditModel::cancel(){
-    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, true, m_revision);
-}
-
-NumericEditResult IntegerEditModel::abandon(){
-    return NumericEditDetail::RestoreModelDraft([this](){ return canonicalize(m_value); }, false, m_revision);
+Expected<b8, ErrorCode> IntegerEditModel::canonicalize(const i64 value){
+    return NumericEditDetail::FormatCanonicalDraft(value, [](const i64 candidate, const Span<char> buffer)noexcept{ return FormatI64(candidate, buffer); }, m_draft, m_acceptedDraft);
 }
 
 

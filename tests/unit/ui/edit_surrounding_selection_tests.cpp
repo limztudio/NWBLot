@@ -26,7 +26,7 @@ constexpr AStringView s_SelectionSampleText = "abcDEFghi";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 SeedHistoryAndPreedit(EditModel& model, const AStringView text, const usize anchor, const usize caret){
+[[nodiscard]] static b8 SeedHistoryAndPreedit(const AStringView text, const usize anchor, const usize caret, EditModel& model){
     if(text.empty())
         return false;
     return
@@ -38,7 +38,7 @@ constexpr AStringView s_SelectionSampleText = "abcDEFghi";
     ;
 }
 
-static void ExpectRetainedHistory(EditModel& model, const AStringView text){
+static void ExpectRetainedHistory(const AStringView text, EditModel& model){
     EXPECT_TRUE(model.canUndo());
     EXPECT_TRUE(model.canRedo());
     model.cancelComposition();
@@ -175,15 +175,15 @@ TEST_F(UiEditSurroundingSelectionTests, AcceptedDeletionCancelsPreeditWithoutAdd
 }
 
 TEST_F(UiEditSurroundingSelectionTests, ZeroCountsPreserveSelectionPreeditHistoryAndAllEpochs){
-    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_SelectionSampleText, 6u, 3u));
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_SelectionSampleText, 6u, 3u, m_model));
     const MultilineSnapshot before(m_arena, m_model);
     ASSERT_TRUE(m_model.eraseAroundSelection(0u, 0u));
     before.expectUnchanged(m_model);
-    ExpectRetainedHistory(m_model, s_SelectionSampleText);
+    ExpectRetainedHistory(s_SelectionSampleText, m_model);
 }
 
 TEST_F(UiEditSurroundingSelectionTests, OutOfRangeCountsPreserveTheCompleteDraftAndRedoBranch){
-    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_SelectionSampleText, 3u, 6u));
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_SelectionSampleText, 3u, 6u, m_model));
     const MultilineSnapshot before(m_arena, m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(4u, 0u));
     before.expectUnchanged(m_model);
@@ -193,12 +193,12 @@ TEST_F(UiEditSurroundingSelectionTests, OutOfRangeCountsPreserveTheCompleteDraft
     before.expectUnchanged(m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(0u, Limit<usize>::s_Max));
     before.expectUnchanged(m_model);
-    ExpectRetainedHistory(m_model, s_SelectionSampleText);
+    ExpectRetainedHistory(s_SelectionSampleText, m_model);
 }
 
 TEST_F(UiEditSurroundingSelectionTests, OriginalCutsRejectBothUtf8SplitsAndScalarValidGraphemeSplits){
     constexpr AStringView s_Text = "ae\xCC\x81" "DEF\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x92\xBB" "z";
-    ASSERT_TRUE(SeedHistoryAndPreedit(m_model, s_Text, 4u, 7u));
+    ASSERT_TRUE(SeedHistoryAndPreedit(s_Text, 4u, 7u, m_model));
     const MultilineSnapshot before(m_arena, m_model);
     EXPECT_FALSE(IsUtf8ScalarBoundary(s_Text, 3u));
     EXPECT_TRUE(IsUtf8ScalarBoundary(s_Text, 2u));
@@ -212,7 +212,7 @@ TEST_F(UiEditSurroundingSelectionTests, OriginalCutsRejectBothUtf8SplitsAndScala
     before.expectUnchanged(m_model);
     EXPECT_FALSE(m_model.eraseAroundSelection(0u, 4u));
     before.expectUnchanged(m_model);
-    ExpectRetainedHistory(m_model, s_Text);
+    ExpectRetainedHistory(s_Text, m_model);
 }
 
 TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointWithoutSnappingOrCancelling){
@@ -225,13 +225,13 @@ TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointW
         AStringView merged;
         usize lostBoundary;
     };
-    constexpr Case s_Cases[] = {
+    constexpr Array<Case, 2> s_Cases = {{
         { "\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7z", 5u, 9u, 1u, 0u, "\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7z", 4u },
         { "z\xF0\x9F\x87\xA6" "x\xF0\x9F\x87\xA7q", 1u, 5u, 0u, 1u, "z\xF0\x9F\x87\xA6\xF0\x9F\x87\xA7q", 5u },
-    };
+    }};
     for(const Case& value : s_Cases){
         EditModel model(m_arena);
-        ASSERT_TRUE(SeedHistoryAndPreedit(model, value.text, value.anchor, value.caret));
+        ASSERT_TRUE(SeedHistoryAndPreedit(value.text, value.anchor, value.caret, model));
         const MultilineSnapshot before(m_arena, model);
         EditModel merged(m_arena);
         ASSERT_TRUE(merged.setText(value.merged));
@@ -239,7 +239,7 @@ TEST_F(UiEditSurroundingSelectionTests, CandidateSeamMergesRejectEitherEndpointW
         EXPECT_FALSE(merged.setSelection(value.lostBoundary, value.lostBoundary));
         EXPECT_FALSE(model.eraseAroundSelection(value.before, value.after));
         before.expectUnchanged(model);
-        ExpectRetainedHistory(model, value.text);
+        ExpectRetainedHistory(value.text, model);
     }
 }
 

@@ -5,16 +5,9 @@
 #pragma once
 
 
-#include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/assets/graphics/scene/binding_slots.h>
+#include <impl/global.h>
 
 #include <core/graphics/api.h>
-#include <core/graphics/runtime/runtime.h>
-#include <core/task/gpu/capture/command_ir.h>
-#include <core/task/gpu/compiled_graph.h>
-#include <core/task/gpu/task_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,38 +26,7 @@ namespace ECSRenderDetail{
 
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-// G-buffer sentinels; keep creation and clears in lockstep.
-inline constexpr Core::Color s_GBufferNormalClearColor = Core::Color(0.5f, 0.5f, 1.f, 1.f);
-inline constexpr Core::Color s_GBufferWorldPositionClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
-inline constexpr Core::Color s_GBufferSpecularRoughnessClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
-inline constexpr Core::Color s_SurfelIrradianceClearColor = Core::Color(0.f, 0.f, 0.f, 0.f);
-// Full-screen triangle vertex count; VS reconstructs position from SV_VertexID.
-inline constexpr u32 s_FullscreenTriangleVertexCount = 3u;
-inline constexpr u32 s_EmulatedVertexStride = NWB_MESH_EMULATION_VERTEX_BYTE_SIZE;
-inline constexpr u32 s_CsgPeelLayerCount = NWB_CSG_PEEL_LAYER_COUNT;
-inline constexpr u32 s_CsgReceiverEventLayerCount = NWB_CSG_RECEIVER_EVENT_LAYER_COUNT;
-inline constexpr u32 s_CsgReceiverSpanLayerCount = NWB_CSG_RECEIVER_SPAN_LAYER_COUNT;
-inline constexpr u32 s_CsgRemovedIntervalLayerCount = NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT;
-inline constexpr u32 s_MeshDispatchFlagScissorCull = NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL;
-inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL;
-inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;
-inline constexpr u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
-inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
-inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.f, 1.f, 1.f, 1.f);
-
-// Capture the clear before native recording; callers own destination lookup and render-pass gating.
-[[nodiscard]] b8 RecordFloatTextureClear(Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const Core::GpuGraphResourceId destination, Core::Texture& nativeDestination, const Core::GpuClearTextureTaskDesc& clearDesc);
-// Caustic splats are fixed-point R32_UINT (no float atomics), one RGB layer each; resolve converts to RGBA16F.
-inline constexpr u32 s_CausticAccumulatorChannelCount = NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT;
-inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, s_CausticAccumulatorChannelCount);
-
-inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
-inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
-inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");
-inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
-inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
-inline constexpr Name s_SceneLightBufferName("ecs_render/scene_light_data");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

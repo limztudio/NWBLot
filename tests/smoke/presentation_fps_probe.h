@@ -44,7 +44,7 @@ struct PresentationFpsSample{
 public:
     [[nodiscard]] u64 presentations()const noexcept{ return lastPresentationCount - firstPresentationCount; }
 
-    [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? VectorDoubleGetX(VectorDoubleDivide(VectorDoubleReplicate(static_cast<f64>(presentations())), VectorDoubleReplicate(wallSeconds))) : 0.0; }
+    [[nodiscard]] f64 averageFps()const noexcept{ return wallSeconds > 0.0 ? static_cast<f64>(presentations()) / wallSeconds : 0.0; }
 };
 
 // Measure FPS from accepted presentation counts and steady-clock wall time.
@@ -63,6 +63,8 @@ public:
 
 
 private:
+    PresentationFpsSample m_interval;
+    PresentationFpsSample m_total;
     f64 m_warmupSeconds = 0.25;
     f64 m_measurementSeconds = 0.0;
     Timer m_warmupBegin = {};
@@ -71,8 +73,6 @@ private:
     Timer m_previousObservation = {};
     u64 m_previousPresentationCount = 0u;
     u64 m_intervalPresentationCount = 0u;
-    PresentationFpsSample m_interval;
-    PresentationFpsSample m_total;
     b8 m_started = false;
     b8 m_measuring = false;
     b8 m_complete = false;

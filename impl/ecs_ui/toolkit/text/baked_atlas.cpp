@@ -53,7 +53,7 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_ready = true;
 }
 
-const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const noexcept{
+const SharedSdfAtlasPage& BakedFontAtlas::page(const u32 group)const noexcept{
     NWB_FATAL_ASSERT(group < m_pages.size());
     return m_pages[group];
 }

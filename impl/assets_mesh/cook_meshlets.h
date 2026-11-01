@@ -25,9 +25,16 @@ NWB_IMPL_BEGIN
 class MeshCookMeshlets final : NoCopy{
 public:
     static void ClearMeshletFrontier(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
-    static void RemoveMeshletFrontierCandidate(Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags, const usize frontierOffset)noexcept;
+    static void RemoveMeshletFrontierCandidate(usize frontierOffset, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags)noexcept;
     static void AddMeshletTriangleNeighborsToFrontier(const MeshletTrianglePrecompute& trianglePrecompute, const u32 triangleIndex, Vector<u32, Core::Alloc::ScratchArena>& frontier, Span<u8> frontierFlags);
-    [[nodiscard]] static b8 AddMeshletTriangleToBuilder(const Path& nwbFilePath, const TStringView metaKind, const MeshletTriangleData& triangle, Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs, MeshletDesc& meshlet, Core::Assets::AssetVector<u8>& primitiveIndices);
+    [[nodiscard]] static b8 AddMeshletTriangleToBuilder(
+        const Path& nwbFilePath,
+        const TStringView metaKind,
+        const MeshletTriangleData& triangle,
+        Vector<u32, Core::Alloc::ScratchArena>& localSourceVertexRefs,
+        MeshletDesc& meshlet,
+        Core::Assets::AssetVector<u8>& primitiveIndices
+    );
     [[nodiscard]] static b8 AddVisitedMeshletTriangle(
         const Path& nwbFilePath,
         const TStringView metaKind,

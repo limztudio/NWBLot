@@ -17,27 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options){
-    return editBorrowed(widget, options, m_context.popupToken(), model, nullptr);
-}
-
-Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup){
-    return editBorrowed(widget, options, popup, model, nullptr);
-}
-
-Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions){
-    return editBorrowed(widget, options, popup, model, &actions);
-}
-
-Ui::EditBoxResult UiEditBoxHost::editNavigated(
-    const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
-    Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
-){
-    NavigationBorrow borrowed{ navigation, resolver };
-    return editBorrowed(widget, options, popup, model, &actions, &borrowed);
-}
-
 Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditModel& model, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     if(rejectBorrowedMutation())
         return {};
@@ -52,7 +31,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     Ui::EditBoxResult result;
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget.id;
-    const Ui::UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
+    const UiTextEditOwner owner{ widget.id, widget.declarationGeneration, model.instanceGeneration() };
     Entry* entry = find(widget.id);
     b8 abandon = false;
     if(!entry){
@@ -174,13 +153,13 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, con
     result.selectionChanged |= beforeAnchor != model.anchor() || beforeCaret != model.caret();
     result.focused = options.enabled && m_context.input().focus() == widget.id;
     result.preeditCaretVisible = entry->preeditCaretVisible;
-    synchronizeSession(*entry, model, options, inputMethod);
+    synchronizeSession(options, inputMethod, *entry, model);
     result.valid = !m_borrowRejected;
     entry->expected.capture(model);
     return result;
 }
 
-void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, const b8 inputMethod){
+void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const b8 inputMethod, Entry& entry, Ui::EditModel& model){
     if(!options.enabled || options.readOnly || m_context.input().focus() != entry.widget.id){
         if(m_session.owner() == entry.owner && !m_session.cancel())
             TerminateInvariant();
@@ -193,7 +172,7 @@ void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const
         TerminateInvariant();
     if(!m_session.token().valid()){
         model.cancelComposition();
-        const auto admission = m_session.begin(entry.owner, model, nativeCaret(entry.displayed));
+        const auto admission = m_session.begin(entry.owner, nativeCaret(entry.displayed), model);
         if(admission != Core::TextInputAdmission::Accepted)
             return;
         m_lastNativeSequence = 0u;

@@ -78,7 +78,7 @@ TEST(PresentationReceipt, EqualTimelineValuesOnDifferentQueuesDevicesOrImagesDoN
     const AcquiredBackBuffer acquired = Acquisition();
     PresentationReceipt receipt;
     receipt.record(acquired, true);
-    AcquiredBackBuffer variants[5u];
+    Array<AcquiredBackBuffer, 5u> variants;
     for(auto& variant : variants)
         variant = acquired;
     ++variants[0u].availabilityCompletion.physicalQueueIndex;
@@ -93,7 +93,7 @@ TEST(PresentationReceipt, EqualTimelineValuesOnDifferentQueuesDevicesOrImagesDoN
 
 TEST(PresentationReceipt, InvalidTokensAndImageStatesNeverPublishEvidence){
     const AcquiredBackBuffer acquired = Acquisition();
-    AcquiredBackBuffer variants[7u];
+    Array<AcquiredBackBuffer, 7u> variants;
     for(auto& variant : variants)
         variant = acquired;
     variants[0u].availabilityCompletion.value = 0u;

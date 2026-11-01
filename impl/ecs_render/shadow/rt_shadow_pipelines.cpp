@@ -1,0 +1,345 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+
+#include <global/algorithm.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 RendererRayTracingSystem::ensureShadowPipeline(){
+    if(m_rayTracingState.m_shadowPipeline)
+        return true;
+    if(m_rayTracingState.m_shadowPipelineFailed)
+        return false;
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_rayTracingState.m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        m_rayTracingState.m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_shadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        appendShadowTraceBindingLayout(layoutDesc);
+
+        auto shadowBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(shadowBindingLayoutResult)
+            m_rayTracingState.m_shadowBindingLayout = Move(*shadowBindingLayoutResult);
+        else
+            m_rayTracingState.m_shadowBindingLayout.reset();
+        if(!shadowBindingLayoutResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
+            m_rayTracingState.m_shadowPipelineFailed = true;
+            return false;
+        }
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayqueryCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuery", m_rayTracingState.m_shadowShader)){
+        m_rayTracingState.m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
+    auto shadowPipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowPipelineResult)
+        m_rayTracingState.m_shadowPipeline = Move(*shadowPipelineResult);
+    else
+        m_rayTracingState.m_shadowPipeline.reset();
+    if(!shadowPipelineResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
+        m_rayTracingState.m_shadowPipelineFailed = true;
+        return false;
+    }
+
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureShadowSoftPipeline(){
+    if(m_rayTracingState.m_shadowSoftPipeline)
+        return true;
+    if(m_rayTracingState.m_shadowSoftPipelineFailed)
+        return false;
+    if(!m_graphics.queryFeatureSupport(Core::Feature::RayQuery) || !m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+
+    // Soft and hard traces share their push-only layout.
+    if(!m_rayTracingState.m_shadowBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(&ShadowSubsystem::shadowRayquerySoftCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_ShadowRayQuerySoft", m_rayTracingState.m_shadowSoftShader)){
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(m_rayTracingState.m_shadowSoftShader).addBindingLayout(m_rayTracingState.m_shadowBindingLayout);
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout()).addBindingLayout(heap.getAccelStructLayout());
+    auto shadowSoftPipelineResult = device.createComputePipeline(pipelineDesc);
+    if(shadowSoftPipelineResult)
+        m_rayTracingState.m_shadowSoftPipeline = Move(*shadowSoftPipelineResult);
+    else
+        m_rayTracingState.m_shadowSoftPipeline.reset();
+    if(!shadowSoftPipelineResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
+        m_rayTracingState.m_shadowSoftPipelineFailed = true;
+        return false;
+    }
+
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureSwShadowPipeline(){
+    if(m_rayTracingState.m_swShadowPipelineFailed)
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
+        m_rayTracingState.m_swShadowPipelineFailed = true;
+        return false;
+    }
+
+    if(!m_rayTracingState.m_swShadowBindingLayout){
+        Core::BindingLayoutDesc layoutDesc(m_arena);
+        layoutDesc.setVisibility(Core::ShaderType::Compute);
+        // All pass resources are selected through the fixed push ABI.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
+
+        auto swShadowBindingLayoutResult = device.createBindingLayout(layoutDesc);
+        if(swShadowBindingLayoutResult)
+            m_rayTracingState.m_swShadowBindingLayout = Move(*swShadowBindingLayoutResult);
+        else
+            m_rayTracingState.m_swShadowBindingLayout.reset();
+        if(!swShadowBindingLayoutResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
+            m_rayTracingState.m_swShadowPipelineFailed = true;
+            return false;
+        }
+
+
+        // Compaction uses a persistent counter and UAV-writable indirect-args buffer.
+        Core::BufferDesc edgeCounterDesc;
+        edgeCounterDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_COUNTER_SIZE))
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(Name("sw_shadow_edge_counter"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        auto swShadowEdgeCounterBufferResult = m_graphics.createBuffer(edgeCounterDesc);
+        if(swShadowEdgeCounterBufferResult)
+            m_rayTracingState.m_swShadowEdgeCounterBuffer = Move(*swShadowEdgeCounterBufferResult);
+        else
+            m_rayTracingState.m_swShadowEdgeCounterBuffer.reset();
+        if(!swShadowEdgeCounterBufferResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
+            m_rayTracingState.m_swShadowPipelineFailed = true;
+            return false;
+        }
+
+        Core::BufferDesc indirectArgsDesc;
+        indirectArgsDesc
+            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT))
+            .setStructStride(sizeof(u32))
+            .setCanHaveUAVs(true)
+            .setIsDrawIndirectArgs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setDebugName(Name("sw_shadow_indirect_args"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        auto swShadowIndirectArgsBufferResult = m_graphics.createBuffer(indirectArgsDesc);
+        if(swShadowIndirectArgsBufferResult)
+            m_rayTracingState.m_swShadowIndirectArgsBuffer = Move(*swShadowIndirectArgsBufferResult);
+        else
+            m_rayTracingState.m_swShadowIndirectArgsBuffer.reset();
+        if(!swShadowIndirectArgsBufferResult){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
+            m_rayTracingState.m_swShadowPipelineFailed = true;
+            return false;
+        }
+    }
+
+    const b8 heapResourcesReady =
+        RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), m_rayTracingState.m_swShadowEdgeCounterHeapHandle)
+        && RayTracingDetail::EnsureHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, true, heap, *m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), m_rayTracingState.m_swShadowIndirectArgsHeapHandle)
+    ;
+    if(!heapResourcesReady){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
+        m_rayTracingState.m_swShadowPipelineFailed = true;
+        return false;
+    }
+
+    const b8 passesReady =
+        ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowOpaquePrepassShader, m_rayTracingState.m_swShadowOpaquePrepassPipeline, &ShadowSubsystem::swShadowOpaquePrepassCs, "ECSRender_SwShadowOpaquePrepass")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowSoftOpaqueShader, m_rayTracingState.m_swShadowSoftOpaquePipeline, &ShadowSubsystem::swShadowSoftOpaqueCs, "ECSRender_SwShadowSoftOpaque")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentCoarseShader, m_rayTracingState.m_swShadowTransparentCoarsePipeline, &ShadowSubsystem::swShadowTransparentCoarseCs, "ECSRender_SwShadowTransparentCoarse")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentResolveShader, m_rayTracingState.m_swShadowTransparentResolvePipeline, &ShadowSubsystem::swShadowTransparentResolveCs, "ECSRender_SwShadowTransparentResolve")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, &ShadowSubsystem::swShadowTransparentClassifyCs, "ECSRender_SwShadowTransparentClassify")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, &ShadowSubsystem::swShadowTransparentBuildargsCs, "ECSRender_SwShadowTransparentBuildArgs")
+        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, &ShadowSubsystem::swShadowTransparentIndirectCs, "ECSRender_SwShadowTransparentIndirect")
+        && ensureSoftwareTransparentSamplingPipeline()
+    ;
+    if(!passesReady){
+        m_rayTracingState.m_swShadowPipelineFailed = true;
+        return false;
+    }
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::* shaderMember, const NameText<char> debugLabel){
+    if(pipeline)
+        return true;
+
+    if(!m_shaderSystem.loadShader<ComputeShader>(shaderMember, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel), shader))
+        return false;
+
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(shader).addBindingLayout(m_rayTracingState.m_swShadowBindingLayout);
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+    pipelineDesc.addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    auto pipelineResult = m_graphics.getDevice().createComputePipeline(pipelineDesc);
+    if(pipelineResult)
+        pipeline = Move(*pipelineResult);
+    else
+        pipeline.reset();
+    if(!pipelineResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
+        return false;
+    }
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
+    // CPU-uploaded material context is shared by the exclusive HW/SW backends.
+    if(m_rayTracingState.m_shadowInstanceMaterialBuffer && m_rayTracingState.m_shadowInstanceMaterialCapacity >= instanceCount)
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
+
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowInstanceMaterialCapacity, instanceCount, s_ShadowInstanceMaterialInitialCapacity);
+
+    Core::BufferDesc materialBufferDesc;
+    materialBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(NwbRtInstanceMaterialGpu) * capacity))
+        .setStructStride(sizeof(NwbRtInstanceMaterialGpu))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name("shadow_instance_material"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto materialBufferResult = m_graphics.createBuffer(materialBufferDesc);
+    if(!materialBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance material buffer"));
+        return false;
+    }
+    Core::BufferHandle materialBuffer = Move(*materialBufferResult);
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle))
+        return false;
+    m_rayTracingState.m_shadowInstanceMaterialBuffer = Move(materialBuffer);
+    m_rayTracingState.m_shadowInstanceMaterialCapacity = capacity;
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
+    // Shadow tracing needs an instance record for every gathered occluder.
+    if(instanceCount == 0u)
+        return !m_rayTracingState.m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
+    if(m_rayTracingState.m_shadowInstanceBuffer && m_rayTracingState.m_shadowInstanceCapacity >= instanceCount)
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
+
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowInstanceCapacity, instanceCount);
+    Core::BufferDesc instanceBufferDesc;
+    instanceBufferDesc
+        .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
+        .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name("shadow_instance_context"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto instanceBufferResult = m_graphics.createBuffer(instanceBufferDesc);
+    if(!instanceBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
+        return false;
+    }
+    Core::BufferHandle instanceBuffer = Move(*instanceBufferResult);
+    if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle))
+        return false;
+    m_rayTracingState.m_shadowInstanceBuffer = Move(instanceBuffer);
+    m_rayTracingState.m_shadowInstanceCapacity = capacity;
+    return true;
+}
+
+b8 RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
+    // Keep one word so the heap binding remains valid with no transparent occluders.
+    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
+    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
+    if(m_rayTracingState.m_shadowMaterialTypedBuffer && m_rayTracingState.m_shadowMaterialTypedCapacity >= requiredByteCount)
+        return ensureRayTraceMaterialContextHeapHandle(*m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
+
+    const usize capacity = ::NextGrowingCapacity(m_rayTracingState.m_shadowMaterialTypedCapacity, requiredByteCount);
+    Core::BufferDesc materialTypedBufferDesc;
+    materialTypedBufferDesc
+        .setByteSize(static_cast<u64>(capacity))
+        .setStructStride(sizeof(u32))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(Name("shadow_material_typed"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    auto materialTypedBufferResult = m_graphics.createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBufferResult){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
+        return false;
+    }
+    Core::BufferHandle materialTypedBuffer = Move(*materialTypedBufferResult);
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle))
+        return false;
+    m_rayTracingState.m_shadowMaterialTypedBuffer = Move(materialTypedBuffer);
+    m_rayTracingState.m_shadowMaterialTypedCapacity = capacity;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

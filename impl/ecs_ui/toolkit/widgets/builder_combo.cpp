@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
+#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/images/skin_region_geometry.h>
 
 #include <global/simd/vector_arithmetic.h>
 #include <global/simplemath.h>
@@ -18,15 +19,10 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ComboResult Builder::comboBox(const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options){
-    return declareCombo(stableKey, source, options, nullptr, state);
-}
-
 ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource){
     ComboResult result;
     if(
-        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
-        || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
+        itemDeclarationBlocked() || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
         || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || !IsFinite(m_comboStyle.arrowExtent) || m_comboStyle.arrowExtent <= 0.0f
         || !IsFinite(m_comboStyle.arrowGap) || m_comboStyle.arrowGap < 0.0f
@@ -141,8 +137,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     item.enabled = options.enabled;
     item.combo = static_cast<u32>(m_scope->m_combos.size());
     SIMDVectorSingle minimumSize = VectorZero();
-    SIMDVectorSingle itemPadding = VectorSet(frame.style.padding.left, frame.style.padding.top, frame.style.padding.right, frame.style.padding.bottom);
-    const Name names[]{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
+    const Array<Name, 5> names{ frame.style.normal, frame.style.hover, frame.style.open, frame.style.focused, frame.style.disabled };
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
         if(!skinRegion){
@@ -151,17 +146,15 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         }
         const SIMDVectorSingle minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight, 0.0f, 0.0f);
         minimumSize = VectorSelect(minimumCandidate, minimumSize, VectorGreater(minimumSize, minimumCandidate));
-        const SIMDVectorSingle paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
-        itemPadding = VectorSelect(paddingCandidate, itemPadding, VectorGreater(itemPadding, paddingCandidate));
     }
-    item.padding = { VectorGetX(itemPadding), VectorGetY(itemPadding), VectorGetZ(itemPadding), VectorGetW(itemPadding) };
+    item.padding = resolveRegionsPadding(frame.style.padding, names, frame.style.fallback);
+    const SIMDVectorSingle itemPadding = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!arrow){
         m_context.fail();
         return {};
     }
-    const SIMDVectorSingle arrowMinimum = VectorSet(arrow->minimumWidth, arrow->minimumHeight, 0.0f, 0.0f);
-    frame.arrowExtent = VectorGetX(VectorMax(VectorReplicate(frame.style.arrowExtent), VectorMax(arrowMinimum, VectorSplatY(arrowMinimum))));
+    frame.arrowExtent = ResolveUiSkinSquareExtent(frame.style.arrowExtent, *arrow);
     const b8 selected = state.selectedKey() != 0u;
     const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
     if(selected && (!index || *index >= frame.rowCount || source.key(*index) != state.selectedKey() || !source.enabled(*index))){
@@ -200,10 +193,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    const SIMDVectorSingle listPaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
-    const SIMDVectorSingle listPaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle listPaddingMaximum = VectorSelect(listPaddingCandidate, listPaddingCurrent, VectorGreater(listPaddingCurrent, listPaddingCandidate));
-    list.padding = { VectorGetX(listPaddingMaximum), VectorGetY(listPaddingMaximum), VectorGetZ(listPaddingMaximum), VectorGetW(listPaddingMaximum) };
+    list.padding = MaxUiPadding(list.padding, background->padding);
     if(!prepareListMetrics(list) || !comboMatches(frame)){
         m_context.fail();
         return {};
@@ -223,12 +213,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const SIMDVectorSingle paddedSize = VectorAdd(VectorAdd(contentSize, VectorSelect(VectorZero(), itemPadding, s_SIMDMaskXY)), VectorSwizzle<2, 3, 2, 3>(itemPadding));
     const SIMDVectorSingle intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
     description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
-    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
-    if(!admittedNode){
-        m_context.fail();
+    if(!addItemNode(description, item))
         return {};
-    }
-    item.node = *admittedNode;
     frame.list = static_cast<u32>(m_scope->m_lists.size());
     if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){
         m_context.fail();
@@ -243,6 +229,28 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     result.closed = previouslyOpen && !state.isOpen();
     result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_scope->m_comboEditors[frame.editor].state.id));
     return result;
+}
+
+b8 Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
+    return
+        popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open
+        && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken
+        && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration && frame.search->query().revision() == frame.queryRevision && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
+        && frame.search->query().selectionGeneration() == frame.querySelectionGeneration && frame.search->query().externalRevision() == frame.queryExternalRevision && frame.search->query().anchor() == frame.queryAnchor
+        && frame.search->query().caret() == frame.queryCaret))
+    ;
+}
+
+b8 Builder::comboMatches(const ComboFrame& frame)const{
+    return
+        frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results) && comboStateMatches(frame)
+        && frame.source->instanceGeneration() == frame.token.contentGeneration && comboStateMatches(frame)
+        && frame.source->revision() == frame.token.contentRevision && comboStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount && comboStateMatches(frame)
+        && frame.results && frame.results->instanceGeneration() == frame.listToken.contentGeneration && comboStateMatches(frame)
+        && frame.results->revision() == frame.listToken.contentRevision && comboStateMatches(frame)
+        && frame.results->rowCount() == frame.resultCount && comboStateMatches(frame)
+    ;
 }
 
 

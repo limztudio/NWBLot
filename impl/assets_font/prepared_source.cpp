@@ -3,7 +3,6 @@
 
 
 #include "prepared_source.h"
-#include "asset.h"
 
 #include <global/binary_little_endian.h>
 
@@ -23,36 +22,6 @@ namespace __hidden_prepared_source{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_Magic = 0x324e4f46u; // FON2 in little-endian wire order.
-static constexpr u32 s_Version = 1u;
-static constexpr usize s_HeaderBytes = 56u;
-static constexpr usize s_GroupHeaderBytes = 48u;
-static constexpr u32 s_MaxGroupCount = 8u;
-static constexpr u32 s_MaxSide = 2048u;
-static constexpr u32 s_MaxChannelCount = 4u;
-static constexpr usize s_HeaderVersionOffset = 4u;
-static constexpr usize s_HeaderFaceIndexOffset = 8u;
-static constexpr usize s_HeaderFontByteCountOffset = 12u;
-static constexpr usize s_HeaderGroupCountOffset = 16u;
-static constexpr usize s_HeaderFlagsOffset = 20u;
-static constexpr usize s_HeaderFontSha256Offset = 24u;
-static constexpr usize s_GroupHeightOffset = 4u;
-static constexpr usize s_GroupChannelCountOffset = 8u;
-static constexpr usize s_GroupByteCountOffset = 12u;
-static constexpr usize s_GroupSha256Offset = 16u;
-static constexpr u64 s_MaxPixelBytes = 128u * 1024u * 1024u;
-static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupHeaderBytes + s_FontMaxSourceBytes + s_MaxPixelBytes;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Expected<u32> ImageByteCount(const u32 width, const u32 height, const u32 channels)noexcept{
-    if(width == 0u || width > s_MaxSide || height == 0u || height > s_MaxSide || channels == 0u || channels > s_MaxChannelCount)
-        return MakeUnexpected(Failure{});
-    return width * height * channels;
-}
-
 [[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
     NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), ConvertString(reason));
     return MakeUnexpected(reason);
@@ -69,28 +38,27 @@ static constexpr u64 s_MaxFileBytes = s_HeaderBytes + s_MaxGroupCount * s_GroupH
 
 
 Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(const BinaryByteView sfnt, const u32 faceIndex, const Span<const PreparedFontImageView> groups, Core::Assets::AssetArena& arena){
-    using namespace __hidden_prepared_source;
-    if(!sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u || groups.empty() || groups.size() > s_MaxGroupCount){
+    if(!sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u || groups.empty() || groups.size() > s_PreparedFontMaxGroupCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
-        return MakeUnexpected(AStringView("invalid font bytes, face index, or image group count"));
+        return MakeUnexpected(s_PreparedFontInvalidSerializeInputReason);
     }
 
     u64 pixelByteCount = 0u;
     for(usize index = 0u; index < groups.size(); ++index){
         const PreparedFontImageView& group = groups[index];
-        const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
-        if(!expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount){
+        u32 expectedBytes = 0u;
+        if(!TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount, expectedBytes) || !group.pixels.data() || group.pixels.size() != expectedBytes || expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
-            return MakeUnexpected(AStringView("image dimensions, channels, or pixel bytes are invalid"));
+            return MakeUnexpected(s_PreparedFontInvalidSerializeGroupReason);
         }
-        pixelByteCount += *expectedBytes;
+        pixelByteCount += expectedBytes;
     }
 
-    const usize byteCount = s_HeaderBytes + groups.size() * s_GroupHeaderBytes + sfnt.size() + static_cast<usize>(pixelByteCount);
+    const usize byteCount = s_PreparedFontHeaderBytes + groups.size() * s_PreparedFontGroupHeaderBytes + sfnt.size() + static_cast<usize>(pixelByteCount);
     Core::Assets::AssetBytes binary(arena);
     binary.reserve(byteCount);
-    AppendU32LittleEndian(binary, s_Magic);
-    AppendU32LittleEndian(binary, s_Version);
+    AppendU32LittleEndian(binary, s_PreparedFontMagic);
+    AppendU32LittleEndian(binary, s_PreparedFontVersion);
     AppendU32LittleEndian(binary, faceIndex);
     AppendU32LittleEndian(binary, static_cast<u32>(sfnt.size()));
     AppendU32LittleEndian(binary, static_cast<u32>(groups.size()));
@@ -114,83 +82,87 @@ Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(cons
     return binary;
 }
 
-Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, Core::Assets::AssetArena& arena, const b8 includePixels){
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, const b8 includePixels, Core::Assets::AssetArena& arena){
     using namespace __hidden_prepared_source;
     InputFileStream stream(path, InputFileStream::binary);
     if(!stream.is_open())
-        return ReadFailure(path, "could not open paired .font source");
+        return ReadFailure(path, s_PreparedFontOpenFailedReason);
     stream.seekg(0, InputFileStream::end);
     const StreamOffset fileEnd = stream.tellg();
-    if(!stream || fileEnd < static_cast<StreamOffset>(s_HeaderBytes) || static_cast<u64>(fileEnd) > s_MaxFileBytes)
-        return ReadFailure(path, "file length is outside prepared-source limits");
+    if(!stream || fileEnd < static_cast<StreamOffset>(s_PreparedFontHeaderBytes) || static_cast<u64>(fileEnd) > s_PreparedFontMaxFileBytes)
+        return ReadFailure(path, s_PreparedFontLengthOutOfBoundsReason);
     stream.seekg(0, InputFileStream::beg);
     if(!stream)
-        return ReadFailure(path, "could not seek prepared-source header");
+        return ReadFailure(path, s_PreparedFontSeekFailedReason);
 
-    u8 header[s_HeaderBytes];
-    if(!ReadStreamExact(stream, NotNull<void*>(header), sizeof(header)))
-        return ReadFailure(path, "prepared-source header is truncated");
-    const u32 fontByteCount = ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderFontByteCountOffset));
-    const u32 groupCount = ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderGroupCountOffset));
+    Array<u8, s_PreparedFontHeaderBytes> header{};
+    if(!ReadStreamExact(stream, NotNull<void*>(header.data()), sizeof(header)))
+        return ReadFailure(path, s_PreparedFontHeaderTruncatedReason);
+    const u32 fontByteCount = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFontByteCountOffset));
+    const u32 groupCount = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderGroupCountOffset));
     if(
-        ReadU32LittleEndian(NotNull<const u8*>(header)) != s_Magic
-        || ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderVersionOffset)) != s_Version
-        || ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderFaceIndexOffset)) != 0u
-        || ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderFlagsOffset)) != 0u
+        ReadU32LittleEndian(NotNull<const u8*>(header.data())) != s_PreparedFontMagic
+        || ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderVersionOffset)) != s_PreparedFontVersion
+        || ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFaceIndexOffset)) != 0u
+        || ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFlagsOffset)) != 0u
     )
-        return ReadFailure(path, "unsupported prepared-source magic, version, face index, or flags; rebuild required");
-    if(fontByteCount == 0u || fontByteCount > s_FontMaxSourceBytes || groupCount == 0u || groupCount > s_MaxGroupCount)
-        return ReadFailure(path, "font size or image group count is outside prepared-source limits");
+        return ReadFailure(path, s_PreparedFontUnsupportedHeaderReason);
+    if(fontByteCount == 0u || fontByteCount > s_FontMaxSourceBytes || groupCount == 0u || groupCount > s_PreparedFontMaxGroupCount)
+        return ReadFailure(path, s_PreparedFontCountsOutOfBoundsReason);
 
     PreparedFontSource candidate(arena);
-    candidate.faceIndex = ReadU32LittleEndian(NotNull<const u8*>(header + s_HeaderFaceIndexOffset));
-    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + s_HeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
+    candidate.faceIndex = ReadU32LittleEndian(NotNull<const u8*>(header.data() + s_PreparedFontHeaderFaceIndexOffset));
+    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header.data() + s_PreparedFontHeaderFontSha256Offset, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
-    u32 groupByteCounts[s_MaxGroupCount];
+    Array<u32, s_PreparedFontMaxGroupCount> groupByteCounts{};
     u64 pixelByteCount = 0u;
     for(u32 index = 0u; index < groupCount; ++index){
-        u8 groupHeader[s_GroupHeaderBytes];
-        if(!ReadStreamExact(stream, NotNull<void*>(groupHeader), sizeof(groupHeader)))
-            return ReadFailure(path, "image directory is truncated");
+        Array<u8, s_PreparedFontGroupHeaderBytes> groupHeader{};
+        if(!ReadStreamExact(stream, NotNull<void*>(groupHeader.data()), sizeof(groupHeader)))
+            return ReadFailure(path, s_PreparedFontImageDirectoryTruncatedReason);
         PreparedFontImageGroup group(candidate.fontBytes.get_allocator().arena());
-        group.width = ReadU32LittleEndian(NotNull<const u8*>(groupHeader));
-        group.height = ReadU32LittleEndian(NotNull<const u8*>(groupHeader + s_GroupHeightOffset));
-        group.channelCount = ReadU32LittleEndian(NotNull<const u8*>(groupHeader + s_GroupChannelCountOffset));
-        const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
-        if(!expectedBytes || ReadU32LittleEndian(NotNull<const u8*>(groupHeader + s_GroupByteCountOffset)) != *expectedBytes || *expectedBytes > s_MaxPixelBytes - pixelByteCount)
-            return ReadFailure(path, "image dimensions, channels, or byte count are invalid");
-        pixelByteCount += *expectedBytes;
-        groupByteCounts[index] = *expectedBytes;
-        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + s_GroupSha256Offset, sizeof(group.sha256.bytes));
+        group.width = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data()));
+        group.height = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupHeightOffset));
+        group.channelCount = ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupChannelCountOffset));
+        u32 expectedBytes = 0u;
+        if(
+            !TryComputePreparedFontImageByteCount(group.width, group.height, group.channelCount, expectedBytes)
+            || ReadU32LittleEndian(NotNull<const u8*>(groupHeader.data() + s_PreparedFontGroupByteCountOffset)) != expectedBytes
+            || expectedBytes > s_PreparedFontMaxPixelBytes - pixelByteCount
+        )
+            return ReadFailure(path, s_PreparedFontInvalidImageGroupReason);
+        pixelByteCount += expectedBytes;
+        groupByteCounts[index] = expectedBytes;
+        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader.data() + s_PreparedFontGroupSha256Offset, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 
-    const u64 expectedFileBytes = s_HeaderBytes + static_cast<u64>(groupCount) * s_GroupHeaderBytes + fontByteCount + pixelByteCount;
+    const u64 expectedFileBytes = s_PreparedFontHeaderBytes + static_cast<u64>(groupCount) * s_PreparedFontGroupHeaderBytes + fontByteCount + pixelByteCount;
     if(expectedFileBytes != static_cast<u64>(fileEnd))
-        return ReadFailure(path, "prepared-source layout is truncated or has trailing bytes");
+        return ReadFailure(path, s_PreparedFontLayoutMismatchReason);
     candidate.fontBytes.resize(fontByteCount);
     if(!ReadStreamExact(stream, NotNull<void*>(candidate.fontBytes.data()), candidate.fontBytes.size()))
-        return ReadFailure(path, "prepared SFNT bytes are truncated");
+        return ReadFailure(path, s_PreparedFontSfntBytesTruncatedReason);
     if(ComputeSha256({ candidate.fontBytes.data(), candidate.fontBytes.size() }) != candidate.fontSha256)
-        return ReadFailure(path, "prepared SFNT content hash differs from its directory");
+        return ReadFailure(path, s_PreparedFontSfntHashMismatchReason);
 
     if(includePixels){
         for(u32 index = 0u; index < groupCount; ++index){
             PreparedFontImageGroup& group = candidate.groups[index];
             group.pixels.resize(groupByteCounts[index]);
             if(!ReadStreamExact(stream, NotNull<void*>(group.pixels.data()), group.pixels.size()))
-                return ReadFailure(path, "prepared image bytes are truncated");
+                return ReadFailure(path, s_PreparedFontImageBytesTruncatedReason);
             if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256)
-                return ReadFailure(path, "prepared image content hash differs from its directory");
+                return ReadFailure(path, s_PreparedFontImageHashMismatchReason);
         }
     }
 
     // Recheck the opened stream length even when its image payloads were skipped.
     stream.seekg(0, InputFileStream::end);
     if(!stream || stream.tellg() != fileEnd)
-        return ReadFailure(path, "prepared source changed length during read");
+        return ReadFailure(path, s_PreparedFontLengthChangedReason);
     if(!VerifyStreamAtEnd(stream))
-        return ReadFailure(path, "prepared source changed during read");
+        return ReadFailure(path, s_PreparedFontChangedDuringReadReason);
     return candidate;
 }
 

@@ -51,8 +51,24 @@ public:
     [[nodiscard]] MethodDecl* findFreeFunction(MStringView name, const usize* preferredArgCount = nullptr, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
     [[nodiscard]] Stmt* findGlobalConstant(MStringView name)const noexcept;
 
-    [[nodiscard]] const MethodDecl* findClassMethod(const ClassDecl& classDecl, MStringView name, const usize* preferredArgCount = nullptr, b8 preferConst = false, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
-    [[nodiscard]] const MethodDecl* findClassOperator(const ClassDecl& classDecl, MStringView opName, const usize* preferredArgCount = nullptr, b8 preferConst = false, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
+    [[nodiscard]] const MethodDecl* findClassMethod(
+        const ClassDecl& classDecl,
+        MStringView name,
+        const usize* preferredArgCount = nullptr,
+        b8 preferConst = false,
+        b8 requirePublic = false,
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
+    )const noexcept;
+    [[nodiscard]] const MethodDecl* findClassOperator(
+        const ClassDecl& classDecl,
+        MStringView opName,
+        const usize* preferredArgCount = nullptr,
+        b8 preferConst = false,
+        b8 requirePublic = false,
+        Span<const MStringView> argTypeNames = {},
+        Span<const u8> argIsMut = {}
+    )const noexcept;
     [[nodiscard]] const MethodDecl* findClassConstructor(const ClassDecl& classDecl, usize argCount, b8 requirePublic = false, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
     [[nodiscard]] MethodDecl* findInterfaceMethod(const TypeRef& ifaceType, MStringView methodName, const usize* preferredArgCount = nullptr, u32 depth = 0u, Span<const MStringView> argTypeNames = {}, Span<const u8> argIsMut = {})const noexcept;
     void collectAllInterfaceMethods(const TypeRef& ifaceType, u32 depth, MVector<MethodDecl*>& outMethods)const;

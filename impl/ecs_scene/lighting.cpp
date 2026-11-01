@@ -26,17 +26,59 @@ static SIMDVectorSingle BuildDirectionalLightDirectionVector(const SIMDVectorSin
     return Vector3NormalizeOr(VectorNegate(forward), VectorSet(0.0f, 0.0f, -1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
 }
 
-static SIMDVectorSingle BuildLightEmissionVector(const SIMDVectorSingle forward)noexcept{
-    return Vector3NormalizeOr(forward, VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon);
-}
-
 static b8 IsValidLightRotation(const SIMDVectorSingle rotation)noexcept{
     const SIMDVectorSingle rotationLengthSquared = QuaternionLengthSq(rotation);
     return !QuaternionIsNaN(rotation) && !QuaternionIsInfinite(rotation) && VectorIsFinite(rotationLengthSquared, VectorComponentMask::s_XYZW) && Vector4Greater(rotationLengthSquared, VectorReplicate(s_NormalizeLengthSquaredEpsilon));
 }
 
-static b8 IsValidLightColorIntensity(const SIMDVectorSingle colorIntensity)noexcept{
-    return VectorIsFinite(colorIntensity, VectorComponentMask::s_XYZW) && Vector4Greater(VectorSplatW(colorIntensity), VectorZero());
+[[nodiscard]] Expected<SIMDMatrix> TryBuildSceneLightVectors(
+    const SIMDVectorSingle position,
+    const SIMDVectorSingle rotation,
+    const SIMDVectorSingle colorIntensity,
+    const f32 range,
+    const f32 innerConeCos,
+    const f32 outerConeCos,
+    const LightType::Enum type
+)noexcept{
+    SIMDMatrix light{ .v = { VectorSet(0.0f, 0.0f, 0.0f, 1.0f), VectorSet(0.0f, 0.0f, -1.0f, 1.0f), colorIntensity, VectorZero() } };
+    if(!VectorIsFinite(colorIntensity, VectorComponentMask::s_XYZW) || !Vector4Greater(VectorSplatW(colorIntensity), VectorZero()))
+        return MakeUnexpected(Failure{});
+
+    switch(type){
+    case LightType::Directional:{
+        if(!IsValidLightRotation(rotation))
+            return MakeUnexpected(Failure{});
+
+        light.v[1] = BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation));
+        return light;
+    }
+    case LightType::Point:{
+        if(Vector3IsNaN(position) || Vector3IsInfinite(position))
+            return MakeUnexpected(Failure{});
+        if(!IsFinite(range) || range <= 0.0f)
+            return MakeUnexpected(Failure{});
+
+        light.v[0] = VectorSetW(position, 1.0f);
+        return light;
+    }
+    case LightType::Spot:{
+        if(!IsValidLightRotation(rotation))
+            return MakeUnexpected(Failure{});
+
+        if(Vector3IsNaN(position) || Vector3IsInfinite(position))
+            return MakeUnexpected(Failure{});
+        if(!IsFinite(range) || range <= 0.0f)
+            return MakeUnexpected(Failure{});
+        if(!IsValidLightCone(innerConeCos, outerConeCos))
+            return MakeUnexpected(Failure{});
+
+        light.v[0] = VectorSetW(position, innerConeCos);
+        light.v[1] = VectorSetW(Vector3NormalizeOr(Vector3Rotate(s_SIMDIdentityR2, rotation), VectorSet(0.0f, 0.0f, 1.0f, 0.0f), s_NormalizeLengthSquaredEpsilon), outerConeCos);
+        return light;
+    }
+    default:
+        return MakeUnexpected(Failure{});
+    }
 }
 
 
@@ -101,63 +143,8 @@ Core::ECS::EntityID CreateSpotLightEntity(
     return lightEntity.id();
 }
 
-namespace __hidden_lighting{
-
-
-[[nodiscard]] Expected<SIMDMatrix> TryBuildSceneLightVectors(
-    const SIMDVectorSingle position,
-    const SIMDVectorSingle rotation,
-    const SIMDVectorSingle colorIntensity,
-    const f32 range,
-    const f32 innerConeCos,
-    const f32 outerConeCos,
-    const LightType::Enum type
-)noexcept{
-    SIMDMatrix light{ .v = { VectorSet(0.0f, 0.0f, 0.0f, 1.0f), VectorSet(0.0f, 0.0f, -1.0f, 1.0f), colorIntensity, VectorZero() } };
-    if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
-        return MakeUnexpected(Failure{});
-
-    switch(type){
-    case LightType::Directional:{
-        if(!__hidden_lighting::IsValidLightRotation(rotation))
-            return MakeUnexpected(Failure{});
-
-        light.v[1] = __hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation));
-        return light;
-    }
-    case LightType::Point:{
-        if(Vector3IsNaN(position) || Vector3IsInfinite(position))
-            return MakeUnexpected(Failure{});
-        if(!IsFinite(range) || range <= 0.0f)
-            return MakeUnexpected(Failure{});
-
-        light.v[0] = VectorSetW(position, 1.0f);
-        return light;
-    }
-    case LightType::Spot:{
-        if(!__hidden_lighting::IsValidLightRotation(rotation))
-            return MakeUnexpected(Failure{});
-
-        if(Vector3IsNaN(position) || Vector3IsInfinite(position))
-            return MakeUnexpected(Failure{});
-        if(!IsFinite(range) || range <= 0.0f)
-            return MakeUnexpected(Failure{});
-        if(!IsValidLightCone(innerConeCos, outerConeCos))
-            return MakeUnexpected(Failure{});
-
-        light.v[0] = VectorSetW(position, innerConeCos);
-        light.v[1] = VectorSetW(__hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)), outerConeCos);
-        return light;
-    }
-    default:
-        return MakeUnexpected(Failure{});
-    }
-}
-
-
-};
-
-usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const usize maxLights, SceneLight* outLights)noexcept{
+usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultForward, const Span<SceneLight> outLights)noexcept{
+    const usize maxLights = outLights.size();
     if(maxLights == 0u)
         return 0u;
 
@@ -167,8 +154,7 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVectorSingle defaultF
         if(count >= maxLights)
             break;
 
-        auto&& [entity, transform, light] = *it;
-        static_cast<void>(entity);
+        [[maybe_unused]] auto&& [entity, transform, light] = *it;
 
         const SIMDVectorSingle colorIntensity = LoadFloat(light.colorIntensity);
         Expected<SIMDMatrix> resolvedLight = MakeUnexpected(Failure{});

@@ -33,14 +33,6 @@ static_assert(s_FreeEntityFlag > ECSDetail::s_EntityGenerationMask);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EntityManager::EntityManager(Alloc::GlobalArena& arena)noexcept
-    : m_generations(arena)
-    , m_freeIndices(arena)
-    , m_nextEntityIndex(0u)
-    , m_aliveCount(0)
-{}
-
-
 EntityID EntityManager::create(){
     u32 index;
 

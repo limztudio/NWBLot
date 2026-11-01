@@ -1,10 +1,8 @@
 nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/crash_auth.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_android.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_ingest.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_linux.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/crash_paths.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_rgd.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_aftermath.cpp"
@@ -20,6 +18,7 @@ target_sources(nwb_logserver PRIVATE
 nwb_target_sources_standalone_runtime(nwb_logserver)
 if(WIN32)
     target_sources(nwb_logserver PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/clipboard_text.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_win32.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
     )
@@ -36,3 +35,4 @@ nwb_copy_aftermath_runtime(nwb_logserver)
 # Radeon GPU Detective in-process .rgd decoder.
 # The logger-owned adapter consumes the vendored amdrdf/system_info/isa_decoder/comgr_utils/pix stack.
 target_link_libraries(nwb_logserver PRIVATE nwb_logrgd)
+

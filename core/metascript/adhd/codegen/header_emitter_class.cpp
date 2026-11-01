@@ -169,7 +169,12 @@ void HeaderEmitter::emitClassDecl(MString& out, const ClassDecl& decl)const{
         out.append("        entity.addComponent<");
         if(!decl.fields.empty() && decl.fields[0] && decl.fields[0]->type)
             m_typeEmitter.emitTypeCpp(out, *decl.fields[0]->type);
-        out.append(">() = component;\r\n");
+        out.append(">() = ");
+        if(!decl.fields.empty() && decl.fields[0] && !decl.fields[0]->name.empty())
+            out.append(decl.fields[0]->name.data(), decl.fields[0]->name.size());
+        else
+            out.append("component");
+        out.append(";\r\n");
         out.append("    }\r\n");
         out.append("#if defined(NWB_COOK)\r\n");
         out.append("    [[nodiscard]] virtual b8 serializeComponentPayload(::NWB::Core::Assets::AssetBytes& outPayload)const override;\r\n");
@@ -295,8 +300,10 @@ void HeaderEmitter::emitClassTemplateSpecialization(MString& out, const ClassTem
 
     emitClassFieldsCpp(out, inst.orderedFields);
 
-    out.append("\r\n");
-    reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
+    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
+        out.append("\r\n");
+        reflectionEmitter.emitInlineClassReflection(out, decl, inst.orderedFields);
+    }
 
     out.append("};\r\n");
     if(packClass)
@@ -324,7 +331,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
         const b8 emitInlineBody = forceInlineBody || method->isInline || !method->templateParams.empty();
         if(emitInlineBody && method->hasBody){
             if(method->isForceInline)
-                out.append("NWB_FORCE_INLINE ");
+                out.append("NWB_INLINE ");
             else if(method->isNoInline)
                 out.append("NWB_NOINLINE ");
         }

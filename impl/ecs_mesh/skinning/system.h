@@ -11,11 +11,12 @@
 
 #include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
-#include <impl/assets_mesh/subsystem.adhd.h>
+#include <impl/assets_mesh/skin_types.adhd.h>
 #include <impl/assets_scene/asset.h>
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
+#include <core/ecs/world.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/task/gpu/compiler.h>
@@ -45,31 +46,11 @@ NWB_CORE_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class AssetManager;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct MeshSkinningRuntimeInstance;
 
 static_assert(SkeletonSkinningMode::LinearBlend == NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND && SkeletonSkinningMode::DualQuaternion == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION, "Skeleton skinning mode values must match the shader ABI");
 
@@ -82,6 +63,10 @@ class MeshSkinningSystem final
     , public Core::IRenderPass
     , public IRuntimeMeshProvider
 {
+public:
+    using ShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
+
+
 private:
     static_assert(sizeof(MeshSkinningPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning push constants layout must match the shader ABI");
     static_assert(offsetof(MeshSkinningPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "MeshSkinning meshlet-count push offset drifted");
@@ -98,6 +83,8 @@ private:
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
     static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
 
+
+private:
     struct RuntimeBindlessHeapHandles{
         Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::Invalid();
         Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::Invalid();
@@ -138,44 +125,13 @@ private:
 
 
     public:
-        [[nodiscard]] b8 hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
-            const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
-                return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-            };
-            const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
-                return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
-            };
-            const b8 common =
-                bindlessResourceSlotsBuffer != nullptr
-                && uniformHandle(bindlessHeapHandles.resourceSlots)
-                && storageHandle(bindlessHeapHandles.restPosition)
-                && storageHandle(bindlessHeapHandles.skinnedPosition)
-                && storageHandle(bindlessHeapHandles.restNormal)
-                && storageHandle(bindlessHeapHandles.skinnedNormal)
-                && storageHandle(bindlessHeapHandles.restTangent)
-                && storageHandle(bindlessHeapHandles.skinnedTangent)
-                && storageHandle(bindlessHeapHandles.meshletDesc)
-                && storageHandle(bindlessHeapHandles.positionRefDeltas)
-                && storageHandle(bindlessHeapHandles.attributeRefDeltas)
-                && storageHandle(bindlessHeapHandles.attributeSkins)
-                && storageHandle(bindlessHeapHandles.localVertexRefs)
-                && storageHandle(bindlessHeapHandles.primitiveIndices)
-                && storageHandle(bindlessHeapHandles.meshletBounds)
-                && storageHandle(bindlessHeapHandles.meshletLocalBounds)
-                && storageHandle(bindlessHeapHandles.localBounds)
-            ;
-            return common && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette))) && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer));
-        }
+        [[nodiscard]] b8 hasPersistentHeapDescriptors(b8 hasActiveSkin, b8 hasAttributeBuffer)const noexcept;
     };
 
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
     class FramePlanBuilder;
-
-
-public:
-    using ShaderPathResolveCallback = Function< Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName) >;
 
 
 private:
@@ -189,14 +145,16 @@ public:
 
 public:
     virtual void prepare(Core::ECS::World& world)override;
-    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update(Core::ECS::World& world, f32 delta)noexcept override;
+    [[nodiscard]] virtual Expected<void, Core::CpuTaskAdmissionError::Enum> update([[maybe_unused]] Core::ECS::World& world, [[maybe_unused]] f32 delta)noexcept override{ return {}; }
     virtual b8 validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual b8 prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
     virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity)override;
-    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override;
+    [[nodiscard]] virtual b8 hasRuntimeMeshBinding(Core::ECS::EntityID entity)const noexcept override{
+        return m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
+    }
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
     void setActiveSceneSubsystems(const ActiveSceneSubsystems* subsystems)noexcept{ m_activeSceneSubsystems = subsystems; }
@@ -206,21 +164,22 @@ public:
 
 
 private:
+    [[nodiscard]] b8 ensureActiveSceneSubsystems();
     [[nodiscard]] b8 ensureSkinningPipeline();
     [[nodiscard]] b8 ensureBoundsPipeline();
     [[nodiscard]] b8 ensureLocalBoundsPipeline();
     [[nodiscard]] b8 ensureRepackPipeline();
     // Consume-only pipeline checks for the per-frame prepare path; creation belongs to validateResources via the ensure* setup above.
-    [[nodiscard]] b8 skinningPipelineReady()const noexcept;
-    [[nodiscard]] b8 boundsPipelinesReady()const noexcept;
-    [[nodiscard]] b8 repackPipelineReady()const noexcept;
+    [[nodiscard]] b8 skinningPipelineReady()const noexcept{ return m_skinningBindingLayout && m_skinningComputePipeline; }
+    [[nodiscard]] b8 boundsPipelinesReady()const noexcept{ return m_boundsBindingLayout && m_boundsComputePipeline && m_localBoundsComputePipeline; }
+    [[nodiscard]] b8 repackPipelineReady()const noexcept{ return m_repackBindingLayout && m_repackComputePipeline; }
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] b8 submitFrameSkinningGraph();
     [[nodiscard]] b8 prepareRuntimeMeshResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] b8 recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-    [[nodiscard]] b8 recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
+    [[nodiscard]] b8 recordGraphOwnedSkinningDeformation(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList);
+    [[nodiscard]] b8 recordGraphOwnedSkinningPostDispatch(const MeshSkinningGraphDispatchPlan& plan, const Core::GpuTaskRecordContext& context, Core::CommandList& commandList);
     void confirmGraphOwnedSkinningDispatch(const MeshSkinningGraphDispatchPlan& plan)noexcept;
-    void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers, Core::Alloc::ScratchArena& scratchArena)const;
+    void collectLiveSkinningStateBuffers(Core::Alloc::ScratchArena& scratchArena, Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const;
     [[nodiscard]] b8 replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] Expected<b8> ensureRuntimeResources(MeshSkinningRuntimeInstance& instance, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] b8 createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);

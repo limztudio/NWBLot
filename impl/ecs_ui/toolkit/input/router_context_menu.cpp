@@ -4,8 +4,6 @@
 
 #include "router.h"
 
-#include <global/simd/vector.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,11 +27,6 @@ Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, c
         return action;
     }
     return MakeUnexpected(Failure{});
-}
-
-b8 InputRouter::currentContextMenuOwner(const TargetOwner& owner)const noexcept{
-    const HitTarget* target = findTarget(owner.target, owner.declarationGeneration);
-    return m_windowFocused && owner.declarationGeneration != 0u && target != nullptr && target->contextMenu && isInteractive(*target) && target->popup == owner.popup && target->control == owner.control;
 }
 
 void InputRouter::reconcileContextMenus()noexcept{
@@ -74,7 +67,7 @@ b8 InputRouter::routeContextMenuCommand(const InputEvent& event, const HitTarget
         return false;
     if(!alreadyPressed && !event.repeat){
         source.contextArmed = true;
-        source.contextPosition = { focused->rectangle.x, VectorGetX(VectorAdd(VectorReplicate(focused->rectangle.y), VectorReplicate(focused->rectangle.height))) };
+        source.contextPosition = { focused->rectangle.x, focused->rectangle.y + focused->rectangle.height };
     }
     return true;
 }

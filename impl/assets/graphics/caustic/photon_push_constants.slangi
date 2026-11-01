@@ -9,7 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "photon_push_constants.h"
+// Shared CPU/GPU photon-producer ABI.
+#define NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT 1u
+#define NWB_CAUSTIC_TEMPORAL_PHASE_COUNT 2u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,9 +19,21 @@
 
 // Mirrors the C++ field list as u32. Slang needs the same 15 words; defaults stay CPU-side.
 struct NwbCausticPhotonPushConstants{
-#define NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD(name, defaultValue) uint name;
-    NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD)
-#undef NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint photonCount;
+    uint emissionTargetCount;
+    uint gridSide;
+    uint frameIndex;
+    uint depthSlot;
+    uint worldPositionSlot;
+    uint emissionTargetSlot;
+    uint viewSlot;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint accumulatorStorageSlot;
+    uint temporalPhaseCount;
 };
 
 

@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
@@ -28,23 +29,11 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque compute-emulation merge validation owns packet-merge checks for prefix tasks.
-struct OpaqueEmulationMergeValidationResult{
-    b8 packetsAreGraphics = false;
-    b8 opaqueComputeEmulationMerged = false;
-    b8 opaqueSharedComputeEmulationMerged = false;
-    b8 opaqueCsgReceiverComputeEmulationMerged = false;
-    b8 opaqueCsgIntervalSampleComputeEmulationMerged = false;
-    b8 csgIntervalClearBundleMerged = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class OpaqueEmulationMergeValidator final : NoCopy{
 public:
-    explicit OpaqueEmulationMergeValidator(NotNull<RendererFramePipeline*> pipeline)noexcept;
+    explicit OpaqueEmulationMergeValidator(const RendererFramePipeline& pipeline)noexcept
+        : m_pipeline(pipeline)
+    {}
 
 
 public:
@@ -52,7 +41,7 @@ public:
 
 
 private:
-    NotNull<RendererFramePipeline*> m_pipeline;
+    const RendererFramePipeline& m_pipeline;
 };
 
 

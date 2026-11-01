@@ -71,7 +71,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(payload.data(), payload.size())));
 
     const Telemetry::TelemetryBytes current = payload;
-    const u16 unsupportedVersions[] = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max };
+    const Array<u16, 3> unsupportedVersions = { 0u, static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u), Limit<u16>::s_Max };
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         usize cursor = 0u;
@@ -105,8 +105,13 @@ TEST(Telemetry, PerfTimingRejectsNonfiniteDurationsAtBuildAndWireAdmission){
     using TimingField = f64 TimingStats::*;
     using WireField = f64 Telemetry::EncodedPerfTimingPayloadHeader::*;
     constexpr Array<TimingField, 4u> s_Fields = { &TimingStats::seconds, &TimingStats::minSeconds, &TimingStats::maxSeconds, &TimingStats::lastSeconds };
-    constexpr WireField s_WireFields[] = { &Telemetry::EncodedPerfTimingPayloadHeader::seconds, &Telemetry::EncodedPerfTimingPayloadHeader::minSeconds, &Telemetry::EncodedPerfTimingPayloadHeader::maxSeconds, &Telemetry::EncodedPerfTimingPayloadHeader::lastSeconds };
-    constexpr u64 s_NonfiniteBits[] = { 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8000000000001ull };
+    constexpr Array<WireField, 4> s_WireFields = {
+        &Telemetry::EncodedPerfTimingPayloadHeader::seconds,
+        &Telemetry::EncodedPerfTimingPayloadHeader::minSeconds,
+        &Telemetry::EncodedPerfTimingPayloadHeader::maxSeconds,
+        &Telemetry::EncodedPerfTimingPayloadHeader::lastSeconds,
+    };
+    constexpr Array<u64, 3> s_NonfiniteBits = { 0x7FF0000000000000ull, 0xFFF0000000000000ull, 0x7FF8000000000001ull };
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
     Telemetry::TelemetryBytes current(testArena.arena);
@@ -163,7 +168,7 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
         u64 previous;
         i64 expected;
     };
-    constexpr CounterCase s_Cases[] = {
+    constexpr Array<CounterCase, 10> s_Cases = {{
         { 0u, 0u, 0 },
         { s_MaxSigned, 0u, Limit<i64>::s_Max },
         { 0u, s_MaxSigned, -Limit<i64>::s_Max },
@@ -174,7 +179,7 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
         { Limit<u64>::s_Max, Limit<u64>::s_Max - 17u, 17 },
         { Limit<u64>::s_Max - 17u, Limit<u64>::s_Max, -17 },
         { 0u, 128u, -128 },
-    };
+    }};
     const Name scopeName(s_MemoryProjectArena);
     const auto makeSnapshot = [scopeName](const u64 counter, const u64 frame)noexcept{
         MemorySnapshot snapshot;
@@ -207,18 +212,18 @@ TEST(Telemetry, MemoryDifferencePreservesSignedLimitsAndLargeUnsignedCounters){
 TEST(Telemetry, MemoryDifferenceOmitsUnrepresentableCountersFromTelemetry){
     using MemorySnapshot = NWB::Core::Perf::MemorySnapshot;
     using CounterField = u64 MemorySnapshot::*;
-    constexpr CounterField s_Fields[] = { &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes, &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount };
+    constexpr Array<CounterField, 6> s_Fields = { &MemorySnapshot::reservedBytes, &MemorySnapshot::usedBytes, &MemorySnapshot::peakUsedBytes, &MemorySnapshot::allocationCount, &MemorySnapshot::reallocationCount, &MemorySnapshot::deallocationCount };
     struct CounterCase{
         u64 current;
         u64 previous;
     };
     constexpr u64 s_MinMagnitude = static_cast<u64>(Limit<i64>::s_Max) + 1u;
-    constexpr CounterCase s_Cases[] = {
+    constexpr Array<CounterCase, 4> s_Cases = {{
         { s_MinMagnitude, 0u },
         { 0u, s_MinMagnitude + 1u },
         { Limit<u64>::s_Max, 0u },
         { 0u, Limit<u64>::s_Max },
-    };
+    }};
     TestArena testArena;
     const Name scopeName(s_MemoryProjectArena);
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -253,14 +258,14 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         i64 expected;
         b8 valid;
     };
-    constexpr DeltaCase s_Cases[] = {
+    constexpr Array<DeltaCase, 6> s_Cases = {{
         { Limit<i64>::s_Max, 1, 0, false },
         { Limit<i64>::s_Min, -1, 0, false },
         { Limit<i64>::s_Max - 1, 1, Limit<i64>::s_Max, true },
         { Limit<i64>::s_Min + 1, -1, Limit<i64>::s_Min, true },
         { Limit<i64>::s_Max, -Limit<i64>::s_Max, 0, true },
         { Limit<i64>::s_Min, Limit<i64>::s_Max, -1, true },
-    };
+    }};
     TestArena testArena;
     const Name scopeName(s_MemoryProjectArena);
     for(const DeltaCase& test : s_Cases){
@@ -277,7 +282,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         ++delta.currentFrameIndex;
         delta.usedBytes = test.second;
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
-        const auto report = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
+        const auto report = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
         ASSERT_TRUE(report);
         EXPECT_EQ(report->summary.parseFailureCount, 0u);
         EXPECT_EQ(report->summary.memoryEventCount, 2u);
@@ -299,12 +304,12 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
             ++delta.currentFrameIndex;
             delta.usedBytes = -test.second;
             ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
-            const auto continued = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
+            const auto continued = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
             ASSERT_TRUE(continued);
             EXPECT_FALSE(continued->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);
             EXPECT_EQ(continued->summary.memoryEventCount, 3u);
         }
-        const i64 values[] = { test.first, test.second };
+        const Array<i64, 2> values = { test.first, test.second };
         for(const i64 value : values){
             const auto expected = StringFormat(testArena.arena, "\"usedBytes\": {}", value);
             EXPECT_NE(json.find(AStringView(expected)), AStringView::npos);
@@ -313,7 +318,7 @@ TEST(Telemetry, MemoryReportMarksUnrepresentableTotalsWithoutChangingIndividualR
         recorder.clear();
         delta.usedBytes = 0;
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_ProjectArenaText, snapshot, delta));
-        const auto reset = Log::BuildTelemetryReport(testArena.arena, recorder.view(), testArena.scratchArena);
+        const auto reset = Log::BuildTelemetryReport(recorder.view(), testArena.arena, testArena.scratchArena);
         ASSERT_TRUE(reset);
         EXPECT_TRUE(reset->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaValid);
         EXPECT_EQ(reset->summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope].totalUsedDeltaBytes, 0);

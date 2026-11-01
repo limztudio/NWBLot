@@ -24,3 +24,4 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))
+

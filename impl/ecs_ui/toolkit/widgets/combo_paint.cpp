@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../builder.h"
-#include "../rect_math.h"
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <global/simplemath.h>
 
@@ -31,21 +30,21 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!field || !arrow)
         return false;
-    const Rect clip = StoreRectangle(loadVisibleClip(LoadRectangle(box.clip)));
+    const Rect clip = visibleClip(box.clip);
     m_paint.pushClip(clip);
     const b8 fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
     const SIMDVectorSingle content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height), VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
-    const SIMDVectorSingle contentHeightVector = VectorSplatW(content);
-    const f32 contentHeight = VectorGetX(contentHeightVector);
-    const f32 extent = VectorGetZ(VectorMin(VectorReplicate(frame.arrowExtent), VectorMin(contentHeightVector, content)));
-    const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorAndInt(contentHeightVector, s_SIMDMaskXY), VectorSet(extent, item.textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
+    const f32 contentWidth = VectorGetZ(content);
+    const f32 contentHeight = VectorGetW(content);
+    const f32 extent = Min(frame.arrowExtent, Min(contentWidth, contentHeight));
+    const SIMDVectorSingle centered = VectorMax(VectorZero(), VectorScale(VectorSubtract(VectorSet(contentHeight, contentHeight, 0.0f, 0.0f), VectorSet(extent, item.textBounds.height, 0.0f, 0.0f)), s_RectCenterFraction));
     const SIMDVectorSingle iconBase = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, 0.0f, 0.0f), VectorSet(box.rectangle.width, item.padding.top, 0.0f, 0.0f));
     const SIMDVectorSingle iconOrigin = VectorSubtract(VectorSubtract(iconBase, VectorXorInt(VectorPermute<4, 0, 6, 7>(centered, VectorSet(item.padding.right, 0.0f, 0.0f, 0.0f)), s_SIMDFlipY)), VectorSet(extent, 0.0f, 0.0f, 0.0f));
     const Rect icon{ VectorGetX(iconOrigin), VectorGetY(iconOrigin), extent, extent };
     const b8 arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon, item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, s_StyleDisabledIconAlpha });
     const SIMDVectorSingle textOrigin = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.x, box.rectangle.y), VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top));
-    const SIMDVectorSingle textExtent = VectorMax(VectorZero(), VectorSubtract(VectorSubtract(VectorSubtract(VectorSet(icon.x, contentHeight, 0.0f, 0.0f), VectorSet(frame.style.arrowGap, 0.0f, 0.0f, 0.0f)), VectorSet(box.rectangle.x, 0.0f, 0.0f, 0.0f)), VectorSet(item.padding.left, 0.0f, 0.0f, 0.0f)));
-    const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin), VectorGetX(textExtent), contentHeight };
+    const f32 textWidth = Max(0.0f, ((icon.x - frame.style.arrowGap) - box.rectangle.x) - item.padding.left);
+    const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin), textWidth, contentHeight };
     m_paint.pushClip(textClip);
     const SIMDVectorSingle shiftedOrigin = VectorAdd(textOrigin, VectorSwizzle<2, 1, 2, 1>(centered));
     const SIMDVectorSingle alignedOrigin = VectorSubtract(shiftedOrigin, VectorSet(item.textBounds.x, item.textBounds.y, item.textBounds.x, item.textBounds.y));
@@ -69,8 +68,7 @@ b8 Builder::paintCombo(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, target))
         return false;
     frame.state->m_bounds = box.rectangle;
-    const SIMDVectorSingle visible = IntersectRectValue(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height));
-    frame.visibleField = { VectorGetX(visible), VectorGetY(visible), VectorGetZ(visible), VectorGetW(visible) };
+    frame.visibleField = StoreRect(IntersectRectValue(LoadRect(box.rectangle), LoadRect(clip)));
     return true;
 }
 
@@ -108,10 +106,7 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
     const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
     if(!placement)
         return false;
-    const SIMDVectorSingle firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top, frame.popupStyle.padding.right, frame.popupStyle.padding.bottom);
-    const SIMDVectorSingle secondPadding = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
-    const SIMDVectorSingle paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
-    const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
+    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);
     PopupScope scope;
     scope.token = frame.popupToken;
     scope.parent = frame.parentToken;
@@ -140,8 +135,8 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
         listItem.state = frame.rows;
         listItem.list = frame.list;
         LayoutBox box;
-        const SIMDVectorSingle inset = InsetRectValue(VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
-        box.rectangle = { VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
+        const SIMDVectorSingle inset = InsetRectValue(LoadRect(placement->bounds), VectorSet(padding.left, padding.top, padding.right, padding.bottom));
+        box.rectangle = StoreRect(inset);
         box.clip = placement->bounds;
         painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }

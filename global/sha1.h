@@ -42,8 +42,6 @@ using ShaBe32Detail::s_HexDigitsPerByte;
 
 inline constexpr u32 s_StateWordCount = 5u;
 inline constexpr u32 s_RoundCount = 80u;
-inline constexpr u32 s_HexNibbleBits = 4u;
-inline constexpr u8 s_HexNibbleMask = 0x0fu;
 inline constexpr u32 s_HexTextLength = s_HexDigitsPerByte * Sha1Digest::s_ByteCount;
 inline constexpr u32 s_ScheduleLagA = 3u;
 inline constexpr u32 s_ScheduleLagB = 8u;
@@ -59,9 +57,8 @@ inline constexpr u32 s_RoundConstantPhase1 = 0x5a827999u;
 inline constexpr u32 s_RoundConstantPhase2 = 0x6ed9eba1u;
 inline constexpr u32 s_RoundConstantPhase3 = 0x8f1bbcdcu;
 inline constexpr u32 s_RoundConstantPhase4 = 0xca62c1d6u;
-inline constexpr AStringView s_HexDigits = "0123456789abcdef";
 
-inline constexpr u32 s_InitialState[s_StateWordCount] = {
+inline constexpr Array<u32, s_StateWordCount> s_InitialState = {
     0x67452301u,
     0xefcdab89u,
     0x98badcfeu,
@@ -77,9 +74,9 @@ inline constexpr u32 s_InitialState[s_StateWordCount] = {
     return (value << count) | (value >> (s_WordBits - count));
 }
 
-inline void Compress(u32 (&state)[s_StateWordCount], const u8 (&block)[s_BlockByteCount])noexcept{
-    u32 words[s_RoundCount];
-    ShaBe32Detail::UnpackBlockWords(block, words);
+inline void Compress(Array<u32, s_StateWordCount>& state, const Array<u8, s_BlockByteCount>& block)noexcept{
+    Array<u32, s_RoundCount> words = {};
+    ShaBe32Detail::UnpackBlockWords(block, words.data());
     for(u32 index = s_BlockWordCount; index < s_RoundCount; ++index){
         const u32 mixed = words[index - s_ScheduleLagA] ^ words[index - s_ScheduleLagB] ^ words[index - s_ScheduleLagC] ^ words[index - s_ScheduleLagD];
         words[index] = RotateLeft(mixed, s_ScheduleRotateLeft);
@@ -148,8 +145,8 @@ template<typename StringT>
 inline void AppendSha1Hex(const Sha1Digest& digest, StringT& outText){
     for(u32 index = 0u; index < Sha1Digest::s_ByteCount; ++index){
         const u8 byte = digest.bytes[index];
-        outText += Sha1Detail::s_HexDigits[byte >> Sha1Detail::s_HexNibbleBits];
-        outText += Sha1Detail::s_HexDigits[byte & Sha1Detail::s_HexNibbleMask];
+        outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte >> s_HexNibbleBits));
+        outText += NumericTextDetail::HexDigit<char>(static_cast<usize>(byte & s_HexNibbleMask));
     }
 }
 

@@ -33,10 +33,10 @@ constexpr AStringView s_PanelKey = "panel";
 constexpr AStringView s_CaptionKey = "caption";
 constexpr AStringView s_ApplyKey = "apply";
 
-class UiBuilderTests : public testing::Test{
+class UiBuilderTests : public UiTestSupport::InputTestFixtureBase{
 public:
     UiBuilderTests()
-        : m_arena(Name("tests/ui/builder"))
+        : InputTestFixtureBase(Name("tests/ui/builder"))
         , m_font(m_arena, Name(UiWidgetTests::s_TestLatinFontPath))
         , m_text(m_arena)
         , m_skin(m_arena, Name(UiWidgetTests::s_TestSkinPath))
@@ -85,7 +85,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId id(const AStringView stableKey)const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_PanelKey)), stableKey));
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_PanelKey), stableKey);
     }
 
     [[nodiscard]] const WidgetState* state(const WidgetId widget)const noexcept{
@@ -115,19 +115,10 @@ protected:
         return MakeUnexpected(Failure{});
     }
 
-    InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_context.input().queue(UiTestSupport::NativeInput(event)));
-        return m_context.input().process();
-    }
-
-    void click(const Point& point){
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryDown }).pointerConsumed);
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::PrimaryUp }).pointerConsumed);
-    }
+    [[nodiscard]] virtual InputRouter& inputRouter()noexcept override{ return m_context.input(); }
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
     Font m_font;
     TextService m_text;
     UiSkin m_skin;
@@ -285,8 +276,8 @@ TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
     ASSERT_TRUE(finish());
     ASSERT_TRUE(m_context.commitFrame(1u));
     const WidgetId rowId = id("actions");
-    const WidgetId firstId = UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "first"));
-    const WidgetId secondId = UiTestSupport::RequireWidgetId(MakeWidgetId(rowId, "second"));
+    const WidgetId firstId = UiTestSupport::RequireWidgetId(rowId, "first");
+    const WidgetId secondId = UiTestSupport::RequireWidgetId(rowId, "second");
     const HitTarget* secondTarget = UiTestSupport::FindHitTarget(m_context.input().targets(), secondId);
     ASSERT_NE(secondTarget, nullptr);
     EXPECT_FLOAT_EQ(secondTarget->clip.width, 18.0f);
@@ -310,8 +301,8 @@ TEST_F(UiBuilderTests, ScopedKeysRemainDistinctAndDuplicateDeclarationsRejectPub
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId left = UiTestSupport::RequireWidgetId(MakeWidgetId(id("left"), s_CaptionKey));
-    const WidgetId right = UiTestSupport::RequireWidgetId(MakeWidgetId(id("right"), s_CaptionKey));
+    const WidgetId left = UiTestSupport::RequireWidgetId(id("left"), s_CaptionKey);
+    const WidgetId right = UiTestSupport::RequireWidgetId(id("right"), s_CaptionKey);
     EXPECT_NE(left, right);
     EXPECT_NE(state(left), nullptr);
     EXPECT_NE(state(right), nullptr);

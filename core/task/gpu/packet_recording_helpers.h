@@ -34,22 +34,9 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline GpuTimingScopeDefinition TimingScopeDefinition(const Name& identity, const AStringView markerLabel)noexcept{
-    GpuTimingScopeDefinition definition;
-    definition.identity = identity;
-    definition.markerLabel = markerLabel;
-    return definition;
-}
+[[nodiscard]] GpuTimingScopeDefinition TimingScopeDefinition(const Name& identity, AStringView markerLabel)noexcept;
 
-[[nodiscard]] inline Expected<Name> PacketTimingScopeName(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet){
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
-        return MakeUnexpected(Failure{});
-    const GpuTaskGraphTaskView task = declarationAccess.taskAt(packetView.tasks[0u].index);
-    if(task.id != packetView.tasks[0u])
-        return MakeUnexpected(Failure{});
-    return GpuTaskPacketTimingScopeName(task.identity);
-}
+[[nodiscard]] Expected<Name> PacketTimingScopeName(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId& packet);
 
 [[nodiscard]] b8 PrepareCompiledTimingQueries(const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, Alloc::ScratchArena& scratchArena, GpuTimingRecorder* const timingRecorder);
 

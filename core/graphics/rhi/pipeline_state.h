@@ -104,7 +104,7 @@ struct BlendState{
         [[nodiscard]] b8 usesConstantColor()const noexcept;
     };
 
-    RenderTarget targets[s_MaxRenderTargets];
+    Array<RenderTarget, s_MaxRenderTargets> targets;
     b8 alphaToCoverageEnable = false;
 
 

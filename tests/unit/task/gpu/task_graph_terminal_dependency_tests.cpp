@@ -48,98 +48,98 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
         ASSERT_GE(readerCount, 3u);
     }
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     Core::Alloc::ScratchArena declarationScratch(Name("tests/terminal_dependency/declarations"));
-    Vector<Graphics::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(declarationScratch);
-    Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> readers(declarationScratch);
-    Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> finalizers(declarationScratch);
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(declarationScratch);
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> readers(declarationScratch);
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> finalizers(declarationScratch);
+    const Array<Core::GpuPhysicalQueueInfo, 2u> queues = { GraphicsQueue(), DedicatedComputeQueue() };
     const usize pairCount = scenario == TerminalDependencyScenario::ReadPairs ? readerCount : 1u;
     resources.reserve(pairCount * 2u);
     readers.reserve(readerCount);
     finalizers.reserve(pairCount);
     for(usize resourceIndex = 0u; resourceIndex < pairCount * 2u; ++resourceIndex){
-        char identityText[32u] = {};
+        Array<char, 32u> identityText = {};
         const auto identityNameResult = DeriveName(Name("tests/terminal_dependency/resource/"), FormatDecimal(resourceIndex, identityText));
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto resourceResult = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
+            Core::GpuGraphResourceDesc{}
                 .setIdentity(identity)
                 .setMarkerLabel("Terminal Dependency Buffer")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
-                .setInitialState(Graphics::ResourceStates::ShaderResource)
-                .setExternalFinalState(Graphics::ResourceStates::CopySource)
+                .setType(Core::GpuGraphResourceType::Buffer)
+                .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .setInitialState(Core::ResourceStates::ShaderResource)
+                .setExternalFinalState(Core::ResourceStates::CopySource)
         );
         ASSERT_TRUE(resourceResult);
-        const Graphics::GpuGraphResourceId resource = *resourceResult;
+        const Core::GpuGraphResourceId resource = *resourceResult;
         ASSERT_TRUE(resource.valid());
         resources.push_back(resource);
     }
     const auto resourceUse = [&](const usize resourceIndex)noexcept{
-        return Graphics::GpuTaskResourceUse{
+        return Core::GpuTaskResourceUse{
             .resource = resources[resourceIndex],
-            .range = { .bufferRange = Graphics::BufferRange(0u, 64u) },
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
+            .range = { .bufferRange = Core::BufferRange(0u, 64u) },
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
             .hasIndependentStateSource = true,
         };
     };
-    Graphics::GpuTaskSchedulingHint scheduling;
+    Core::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.overlapPreferred = false;
     scheduling.avoidQueueCrossing = true;
     for(usize readerIndex = 0u; readerIndex < readerCount; ++readerIndex){
         const usize pairIndex = scenario == TerminalDependencyScenario::ReadPairs ? readerIndex : 0u;
-        Array<Graphics::GpuTaskResourceUse, 4u> uses{ resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u), {}, {} };
+        Array<Core::GpuTaskResourceUse, 4u> uses{ resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u), {}, {} };
         usize useCount = 2u;
         if(lateFallback && readerIndex == 1u){
             uses[2u] = resourceUse((pairCount - 1u) * 2u);
             uses[3u] = resourceUse((pairCount - 1u) * 2u + 1u);
             useCount = uses.size();
         }
-        char identityText[32u] = {};
-        Graphics::GpuTaskDesc desc;
+        Array<char, 32u> identityText = {};
+        Core::GpuTaskDesc desc;
         const auto readerNameResult = DeriveName(Name("tests/terminal_dependency/reader/"), FormatDecimal(readerIndex, identityText));
         ASSERT_TRUE(readerNameResult);
-        desc.setIdentity(*readerNameResult).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(uses.data(), useCount);
+        desc.setIdentity(*readerNameResult).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(Span(uses.data(), useCount));
         if(scenario == TerminalDependencyScenario::Chain && !readers.empty())
-            desc.setDependencies(&readers.back(), 1u);
+            desc.setDependencies(Span(&readers.back(), 1u));
         const usize queueIndex = scenario == TerminalDependencyScenario::ReadPairs && !lateFallback ? 0u : readerIndex % 2u;
         const auto readerResult = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
         ASSERT_TRUE(readerResult);
-        const Graphics::GpuTaskId reader = *readerResult;
+        const Core::GpuTaskId reader = *readerResult;
         ASSERT_TRUE(reader.valid());
         readers.push_back(reader);
     }
     for(usize pairIndex = 0u; pairIndex < pairCount; ++pairIndex){
-        const Graphics::GpuTaskResourceUse uses[] = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
-        char identityText[32u] = {};
-        Graphics::GpuTaskDesc desc;
+        const Array<Core::GpuTaskResourceUse, 2u> uses = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
+        Array<char, 32u> identityText = {};
+        Core::GpuTaskDesc desc;
         const auto secondReaderNameResult = DeriveName(Name("tests/terminal_dependency/finalizer/"), FormatDecimal(pairIndex, identityText));
         ASSERT_TRUE(secondReaderNameResult);
-        desc.setIdentity(*secondReaderNameResult).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses, LengthOf(uses));
+        desc.setIdentity(*secondReaderNameResult).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses);
         if(scenario == TerminalDependencyScenario::Chain)
-            desc.setDependencies(&readers.back(), 1u);
+            desc.setDependencies(Span(&readers.back(), 1u));
         else if(lateFallback && pairIndex + 1u == pairCount)
-            desc.setDependencies(&finalizers[1u], 1u);
+            desc.setDependencies(Span(&finalizers[1u], 1u));
         const usize queueIndex = scenario == TerminalDependencyScenario::ReadPairs ? (lateFallback ? (pairIndex + 1u) % 2u : 1u) : readerCount % 2u;
         const auto finalizerResult = graph.addTask(desc, queueIndex == 0u ? GraphicsCommands() : ComputeCommands());
         ASSERT_TRUE(finalizerResult);
-        const Graphics::GpuTaskId finalizer = *finalizerResult;
+        const Core::GpuTaskId finalizer = *finalizerResult;
         ASSERT_TRUE(finalizer.valid());
         finalizers.push_back(finalizer);
     }
 
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues) };
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Core::GpuCompiledGraph compiledGraph(testArena.arena);
     Core::Alloc::ScratchArena scratchArena(Name("tests/terminal_dependency/compilation"));
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(analysis, assignments, compiledGraph, scratchArena, graph, topology));
 
-    const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
+    const Core::GpuCompiledGraph::ReadView plan(compiledGraph);
     ASSERT_EQ(plan.taskCount(), readers.size() + finalizers.size());
     ASSERT_EQ(plan.packetCount(), readers.size() + finalizers.size());
     const auto& statistics = plan.compileStatistics();
@@ -148,10 +148,10 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     EXPECT_EQ(statistics.logicalOwnershipTransferCount, 0u);
     EXPECT_EQ(statistics.packetDependencyCount, readerCount + (lateFallback ? 1u : 0u));
     for(usize readerIndex = 0u; readerIndex < readers.size(); ++readerIndex){
-        const Graphics::GpuSubmissionPacketId packet = plan.packetForTask(readers[readerIndex]);
+        const Core::GpuSubmissionPacketId packet = plan.packetForTask(readers[readerIndex]);
         ASSERT_TRUE(packet.valid());
         EXPECT_EQ(packet.index, readerIndex);
-        const Graphics::GpuCompiledPacketView view = plan.packet(packet);
+        const Core::GpuCompiledPacketView view = plan.packet(packet);
         ASSERT_TRUE(view.valid());
         const b8 chained = scenario == TerminalDependencyScenario::Chain && readerIndex != 0u;
         ASSERT_EQ(view.plan->dependencyCount, chained ? 1u : 0u);
@@ -159,10 +159,10 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
             EXPECT_EQ(view.dependencies[0u].producer, plan.packetForTask(readers[readerIndex - 1u]));
     }
     for(usize pairIndex = 0u; pairIndex < finalizers.size(); ++pairIndex){
-        const Graphics::GpuSubmissionPacketId packet = plan.packetForTask(finalizers[pairIndex]);
+        const Core::GpuSubmissionPacketId packet = plan.packetForTask(finalizers[pairIndex]);
         ASSERT_TRUE(packet.valid());
         EXPECT_EQ(packet.index, readers.size() + pairIndex);
-        const Graphics::GpuCompiledPacketView view = plan.packet(packet);
+        const Core::GpuCompiledPacketView view = plan.packet(packet);
         ASSERT_TRUE(view.valid());
         EXPECT_EQ(view.plan->recordingFrontier, 0u);
         const b8 delayedFallback = lateFallback && pairIndex + 1u == pairCount;
@@ -178,17 +178,17 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
             EXPECT_EQ(view.dependencies[0u].producer, plan.packetForTask(readers[pairIndex]));
         else{
             for(usize dependencyIndex = 0u; dependencyIndex < dependencyCount; ++dependencyIndex){
-                const Graphics::GpuSubmissionPacketId producer = plan.packetForTask(readers[readerCount - dependencyIndex - 1u]);
+                const Core::GpuSubmissionPacketId producer = plan.packetForTask(readers[readerCount - dependencyIndex - 1u]);
                 EXPECT_EQ(view.dependencies[dependencyIndex].producer, producer);
             }
         }
         for(usize dependencyIndex = 0u; dependencyIndex < dependencyCount; ++dependencyIndex)
             EXPECT_EQ(view.dependencies[dependencyIndex].consumer, packet);
-        const Graphics::GpuCompiledTaskView task = plan.findTask(finalizers[pairIndex]);
+        const Core::GpuCompiledTaskView task = plan.findTask(finalizers[pairIndex]);
         ASSERT_TRUE(task.valid());
         ASSERT_EQ(task.plan->epilogueBarrierCount, 2u);
         for(usize barrierIndex = 0u; barrierIndex < 2u; ++barrierIndex){
-            EXPECT_EQ(task.epilogueBarriers[barrierIndex].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
+            EXPECT_EQ(task.epilogueBarriers[barrierIndex].type, Core::GpuCompiledBarrierType::BufferStateExport);
             EXPECT_EQ(task.epilogueBarriers[barrierIndex].resource, resources[pairIndex * 2u + barrierIndex]);
         }
     }

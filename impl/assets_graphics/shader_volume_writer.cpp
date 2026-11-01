@@ -8,11 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "shader_volume_writer.h"
+#include "shader_cook_plan.h"
 
 #include "csg_shader_variants.h"
 
-#include <impl/assets_shader/binary_payload.h>
+#include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/slang_compiler.h>
 
 #include <core/graphics/shader_archive.h>
@@ -37,16 +37,12 @@ namespace __hidden_shader_volume_writer{
 
 
 using namespace AssetsGraphicsCookDetail;
+using Core::Assets::CookString;
+using Core::Assets::ScratchArena;
+using Core::Assets::ScratchString;
+using Core::Assets::CookEntryPathHashSet;
 
 using ScratchPath = ::Path<ScratchArena>;
-
-namespace CacheReadStatus{
-    enum Enum : u8{
-        Hit = 0,
-        Miss,
-        Error
-    };
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,33 +50,33 @@ namespace CacheReadStatus{
 
 static ScratchPath BuildVariantCachePath(const Path& cacheDirectory, const AStringView configurationSafeName, const AStringView sourceChecksumHex, ScratchArena& scratchArena){
     ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
-    bytecodeFileName += ".spv";
+    bytecodeFileName += s_ShaderVariantBytecodeExtension;
     return ScratchPath(scratchArena, cacheDirectory) / configurationSafeName / bytecodeFileName;
 }
 
-static CacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
+static ShaderVariantCacheReadStatus::Enum TryReadCachedBytecode(const ShaderCook::ShaderEntry& entry, const ScratchPath& bytecodePath, Core::GraphicsBytes& outBytecode){
     const auto read = ReadBinaryFile(bytecodePath, outBytecode);
     if(read){
         const auto stageName = ToName(entry.stage);
         if(!stageName){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: shader stage contains an embedded null for entry '{}'"), ConvertString(entry.name));
-            return CacheReadStatus::Error;
+            return ShaderVariantCacheReadStatus::Error;
         }
         const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(*stageName ? **stageName : s_NameNone);
         if(Core::ResolveSpirvEntryPointName(BinaryByteView{ outBytecode.data(), outBytecode.size() }, AStringView(entry.entryPoint), Core::ShaderType::ToMask(shaderType)))
-            return CacheReadStatus::Hit;
+            return ShaderVariantCacheReadStatus::Hit;
 
         outBytecode.clear();
-        return CacheReadStatus::Miss;
+        return ShaderVariantCacheReadStatus::Miss;
     }
 
     if(!IsMissingPathError(read.error())){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to read bytecode cache '{}' for entry '{}': {}"), PathToString<tchar>(bytecodePath), ConvertString(entry.name), ConvertString(read.error().message()));
-        return CacheReadStatus::Error;
+        return ShaderVariantCacheReadStatus::Error;
     }
 
     outBytecode.clear();
-    return CacheReadStatus::Miss;
+    return ShaderVariantCacheReadStatus::Miss;
 }
 
 
@@ -102,10 +98,10 @@ static b8 GetVariantBytecode(
 
     outBytecode.clear();
 
-    const CacheReadStatus::Enum bytecodeCacheStatus = TryReadCachedBytecode(entry, bytecodeCachePath, outBytecode);
-    if(bytecodeCacheStatus == CacheReadStatus::Error)
+    const ShaderVariantCacheReadStatus::Enum bytecodeCacheStatus = TryReadCachedBytecode(entry, bytecodeCachePath, outBytecode);
+    if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Error)
         return false;
-    if(bytecodeCacheStatus == CacheReadStatus::Hit)
+    if(bytecodeCacheStatus == ShaderVariantCacheReadStatus::Hit)
         return true;
 
     HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena);
@@ -116,15 +112,15 @@ static b8 GetVariantBytecode(
     for(const auto& [defineName, value] : entry.implicitDefines)
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
 
-    Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
+    Vector<ShaderBinaryPayload::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: entry '{}' has too many merged defines for shader compilation"), ConvertString(entry.name));
         return false;
     }
     compileDefines.reserve(mergedDefines.size());
     for(const auto& [defineName, value] : mergedDefines)
-        compileDefines.push_back(ShaderCook::ShaderMacroDefinition{ defineName, value });
-    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs)noexcept{
+        compileDefines.push_back(ShaderBinaryPayload::ShaderMacroDefinition{ defineName, value });
+    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderBinaryPayload::ShaderMacroDefinition& lhs, const ShaderBinaryPayload::ShaderMacroDefinition& rhs)noexcept{
         return lhs.name < rhs.name;
     });
 
@@ -140,13 +136,12 @@ static b8 GetVariantBytecode(
         .stage = entry.stage,
         .entryPoint = entry.entryPoint,
         .variantName = variantName,
-        .defines = compileDefines.data(),
+        .defines = compileDefines,
         .includeDirectories = includeDirectories,
         .dependencies = dependencies,
         .externallyPlannedMacroIncludes = AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes,
         .sourcePath = sourcePath,
         .outputPath = bytecodeCachePath,
-        .defineCount = static_cast<u32>(compileDefines.size()),
         .optimizationLevel = entry.optimizationLevel,
         .rayQuery = entry.rayQuery,
         .compilerInputsHaveBom = compilerInputsHaveBom,
@@ -155,7 +150,7 @@ static b8 GetVariantBytecode(
 }
 
 
-static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShaderEntry> preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& inOutShaderIndexRecords){
+static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShaderEntry> preparedEntries, Vector<Core::ShaderArchive::Record, ScratchArena>& outShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -169,9 +164,9 @@ static Expected<usize> ReserveShaderIndexRecords(const Span<const PreparedShader
         return MakeUnexpected(Failure{});
     }
 
-    inOutShaderIndexRecords.clear();
+    outShaderIndexRecords.clear();
     const usize count = static_cast<usize>(shaderRecordCount);
-    inOutShaderIndexRecords.reserve(count);
+    outShaderIndexRecords.reserve(count);
     return count;
 }
 
@@ -179,8 +174,8 @@ static b8 AppendShaderIndexToManifest(
     const Span<const Core::ShaderArchive::Record> shaderIndexRecords,
     ShaderCook::CookArena& cookArena,
     ScratchArena& scratchArena,
-    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
+    Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& inOutManifest,
+    CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
@@ -188,12 +183,12 @@ static b8 AppendShaderIndexToManifest(
         return false;
     }
 
-    const auto indexBinary = Core::ShaderArchive::SerializeIndex(cookArena, shaderIndexRecords, scratchArena);
+    const auto indexBinary = Core::ShaderArchive::SerializeIndex(shaderIndexRecords, cookArena, scratchArena);
     if(!indexBinary){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to serialize shader index"));
         return false;
     }
-    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, *indexBinary))
+    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(shaderIndexVirtualPath, *indexBinary, inOutManifest))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("GraphicsCook: failed to append shader index to manifest"));
@@ -201,7 +196,6 @@ static b8 AppendShaderIndexToManifest(
 }
 
 static u64 BuildShaderVariantCookKeyHash(const NameHash& virtualPathHash, const u64 sourceChecksum, const u64 bytecodeChecksum)noexcept{
-    static constexpr u32 s_ShaderVariantCookKeyVersion = 2u;
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
     Fnv64AppendValue(hash, virtualPathHash);
@@ -229,14 +223,14 @@ namespace AssetsGraphicsCookDetail{
 b8 AppendPreparedShadersToManifest(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    ShaderCook::CookArena& cookArena,
-    ScratchArena& scratchArena,
-    ShaderCook& shaderCook,
     const Span<const PreparedShaderEntry> preparedEntries,
+    ShaderCook::CookArena& cookArena,
+    Core::Assets::ScratchArena& scratchArena,
+    ShaderCook& shaderCook,
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
+    Core::Assets::CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
-    Vector<Core::ShaderArchive::Record, ScratchArena> shaderIndexRecords{scratchArena};
+    Vector<Core::ShaderArchive::Record, Core::Assets::ScratchArena> shaderIndexRecords{scratchArena};
     const auto shaderRecordCount = __hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords);
     if(!shaderRecordCount)
         return false;
@@ -266,10 +260,10 @@ b8 AppendPreparedShadersToManifest(
         const Name stageName = **stageNameResult;
 
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> b8{
-            const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
+            const Core::Assets::CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
-            const u64 sourceChecksum = shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
-            const ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
+            const u64 sourceChecksum = ShaderCook::ComputeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, compilerFingerprint, scratchArena);
+            const Core::Assets::ScratchString sourceChecksumHex = FormatHex64A(scratchArena, sourceChecksum);
 
             const __hidden_shader_volume_writer::ScratchPath bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(cacheDirectory, configurationSafeName, sourceChecksumHex, scratchArena);
             if(!__hidden_shader_volume_writer::GetVariantBytecode(
@@ -306,7 +300,7 @@ b8 AppendPreparedShadersToManifest(
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})"), ConvertString(virtualPath.resolvedText()), static_cast<u32>(payloadFailure));
                 return false;
             }
-            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, shaderAssetPayload, cookKeyHash)){
+            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(virtualPath, shaderAssetPayload, manifest, cookKeyHash)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader payload '{}' to manifest"), ConvertString(virtualPath.resolvedText()));
                 return false;
             }
@@ -335,7 +329,7 @@ b8 AppendPreparedShadersToManifest(
                 return false;
 
             if(preparedEntry.supportsCsgClipVariant || preparedEntry.supportsAvboitCsgClipVariant){
-                const auto csgDefineCombo = AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(cookArena, AStringView(entry.name), defineCombo);
+                const auto csgDefineCombo = AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(AStringView(entry.name), defineCombo, cookArena);
                 if(!csgDefineCombo)
                     return false;
 

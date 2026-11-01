@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "backend.h"
+#include "raytracing_internal.h"
 #include "arena_names.h"
 
 #include <core/common/log.h>
@@ -53,7 +53,6 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation mode is invalid"));
         return;
     }
-    constexpr u32 s_MaxPositionTruncateBitCount = 32u;
     constexpr u32 s_SupportedOperationFlags =
         static_cast<u32>(RayTracingClusterOperationFlags::FastTrace)
         | static_cast<u32>(RayTracingClusterOperationFlags::FastBuild)
@@ -120,7 +119,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             opDesc.params.clas.maxTriangleCount > properties.maxTrianglesPerCluster
             || opDesc.params.clas.maxVertexCount > properties.maxVerticesPerCluster
             || opDesc.params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
-            || opDesc.params.clas.minPositionTruncateBitCount > s_MaxPositionTruncateBitCount
+            || opDesc.params.clas.minPositionTruncateBitCount > VulkanDetail::s_MaxPositionTruncateBitCount
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster parameters exceed device limits"));
             return;
@@ -218,12 +217,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     constexpr ResourceStates::Mask s_ClusterIndirectInputState = static_cast<ResourceStates::Mask>(static_cast<u32>(ResourceStates::AccelStructBuildInput) | static_cast<u32>(ResourceStates::IndirectArgument));
-    constexpr VkBufferUsageFlags s_ClusterBuildInputUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     constexpr VkBufferUsageFlags s_ClusterStorageArrayUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     constexpr VkBufferUsageFlags s_ClusterAccelStructStorageUsage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     if(
-        !validateBufferForGpuState(indirectArgsBuffer, s_ClusterIndirectInputState, s_OperationName, s_ClusterBuildInputUsage)
-        || (indirectArgCountBuffer && !validateBufferForGpuState(indirectArgCountBuffer, s_ClusterIndirectInputState, s_OperationName, s_ClusterBuildInputUsage))
+        !validateBufferForGpuState(indirectArgsBuffer, s_ClusterIndirectInputState, s_OperationName, VulkanDetail::s_AccelStructBuildInputUsage)
+        || (indirectArgCountBuffer && !validateBufferForGpuState(indirectArgCountBuffer, s_ClusterIndirectInputState, s_OperationName, VulkanDetail::s_AccelStructBuildInputUsage))
         || (outSizesBuffer && !validateBufferForGpuState(outSizesBuffer, ResourceStates::AccelStructWrite, s_OperationName, s_ClusterStorageArrayUsage))
         || (inOutAddressesBuffer && !validateBufferForGpuState(inOutAddressesBuffer, ResourceStates::AccelStructWrite, s_OperationName, s_ClusterStorageArrayUsage))
         || (outAccelerationStructuresBuffer && !validateBufferForGpuState(outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite, s_OperationName, s_ClusterAccelStructStorageUsage))

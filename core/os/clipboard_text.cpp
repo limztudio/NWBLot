@@ -54,11 +54,11 @@ ClipboardStatus::Enum DecodeClipboardLatin1(const AStringView text, AString<Allo
     if(outputSize > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
     output.reserve(outputSize);
-    char encoded[s_Utf8MaxSequenceBytes];
+    Array<char, s_Utf8MaxSequenceBytes> encoded{};
     for(const char character : text){
         const auto encodedLength = EncodeUtf8CodePoint(static_cast<u8>(character), encoded);
         NWB_ASSERT(encodedLength);
-        output.append(encoded, *encodedLength);
+        output.append(encoded.data(), *encodedLength);
     }
     return ClipboardStatus::Success;
 }

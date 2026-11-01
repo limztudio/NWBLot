@@ -11,6 +11,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+#include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/presentation_contributor.h>
 
@@ -64,8 +65,8 @@ private:
 
 
 public:
-    FramebufferCapture(ProjectRuntimeContext& context, AStringView outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
-    FramebufferCapture(ProjectRuntimeContext& context, ::Path<Core::Alloc::GlobalArena>&& outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
+    FramebufferCapture(AStringView outputPath, u32 captureFrameCount, ProjectRuntimeContext& context, FramebufferCaptureOptions options = {});
+    FramebufferCapture(::Path<Core::Alloc::GlobalArena>&& outputPath, u32 captureFrameCount, ProjectRuntimeContext& context, FramebufferCaptureOptions options = {});
     virtual ~FramebufferCapture()noexcept override;
 
 
@@ -104,8 +105,8 @@ private:
 
 private:
     ProjectRuntimeContext& m_context;
-    FramebufferCaptureOptions m_options;
     ::Path<Core::Alloc::GlobalArena> m_outputPath;
+    FramebufferCaptureOptions m_options;
     RefCountPtr<CompletionState> m_completionState;
     Core::StagingTextureHandle m_readback;
     Core::TextureDesc m_captureDescription;
@@ -124,44 +125,6 @@ private:
     b8 m_stopped = false;
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Return a started observer when capture is configured.
-[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
-    ProjectRuntimeContext& context,
-    Core::Alloc::ScratchArena& scratchArena,
-    const TStringView projectName,
-    const u32 defaultFrameCount,
-    const FramebufferCaptureOptions& options = {}
-){
-    const auto outputPath = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
-    if(!outputPath)
-        return UniquePtr<FramebufferCapture>{};
-
-    u32 captureFrameCount = defaultFrameCount;
-    const auto frameCountText = ReadSmokeEnvironmentText(scratchArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
-    if(frameCountText){
-        const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
-        if(!parsedFrameCount || *parsedFrameCount == 0u || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
-            return MakeUnexpected(Failure{});
-        }
-        captureFrameCount = static_cast<u32>(*parsedFrameCount);
-    }
-
-    auto capture = MakeUnique<FramebufferCapture>(context, AStringView(outputPath->data(), outputPath->size()), captureFrameCount, options);
-    if(!capture || !capture->start())
-        return MakeUnexpected(Failure{});
-    return capture;
-}
-
-[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(ProjectRuntimeContext& context, const TStringView projectName, const u32 defaultFrameCount, const FramebufferCaptureOptions& options = {}){
-    Core::Alloc::ScratchArena scratchArena(s_SmokeEnvironmentArena);
-    return ConfigureSmokeFramebufferCapture(context, scratchArena, projectName, defaultFrameCount, options);
-}
-
 struct SmokeCaptureSeries{
     Vector<::Path<Core::Alloc::GlobalArena>, Core::Alloc::GlobalArena> paths;
     UniquePtr<FramebufferCapture> capture;
@@ -173,18 +136,27 @@ public:
     {}
 };
 
-[[nodiscard]] inline Expected<SmokeCaptureSeries> PrepareSmokeCaptureSeries(ProjectRuntimeContext& context, const AStringView outputPath, const u32 sampleCount, const FramebufferCaptureOptions& options){
-    SmokeCaptureSeries result(context.objectArena);
-    result.paths.reserve(sampleCount);
-    for(u32 sample = 0u; sample < sampleCount; ++sample){
-        const auto path = sample + 1u == sampleCount ? SmokeEnvironmentString(outputPath, context.objectArena) : StringFormat(context.objectArena, "{}.{}.bmp", outputPath, sample);
-        result.paths.emplace_back(context.objectArena, AStringView(path));
-    }
-    result.capture = MakeUnique<FramebufferCapture>(context, Move(result.paths.front()), 1u, options);
-    if(!result.capture || !result.capture->start())
-        return MakeUnexpected(Failure{});
-    return result;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Return a started observer when capture is configured.
+[[nodiscard]] Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
+    TStringView projectName,
+    u32 defaultFrameCount,
+    const FramebufferCaptureOptions& options,
+    ProjectRuntimeContext& context,
+    Core::Alloc::ScratchArena& scratchArena
+);
+[[nodiscard]] Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
+    TStringView projectName,
+    u32 defaultFrameCount,
+    const FramebufferCaptureOptions& options,
+    ProjectRuntimeContext& context
+);
+[[nodiscard]] Expected<SmokeCaptureSeries> PrepareSmokeCaptureSeries(AStringView outputPath, u32 sampleCount, const FramebufferCaptureOptions& options, ProjectRuntimeContext& context);
+[[nodiscard]] b8 TickSmokeWorld(f32 delta, Core::ECS::World& world);
+[[nodiscard]] b8 TickSmokeWorldWithCapture(f32 delta, Core::ECS::World& world, UniquePtr<FramebufferCapture>& capture);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

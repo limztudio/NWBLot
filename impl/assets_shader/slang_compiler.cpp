@@ -51,6 +51,7 @@ namespace __hidden_slang_compiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using namespace ShaderBinaryPayload;
 using ScratchPath = SlangCompilerWorkspace::ScratchPath;
 using ScratchString = SlangCompilerWorkspace::ScratchString;
 template<typename T>
@@ -62,37 +63,26 @@ using ScratchVector = SlangCompilerWorkspace::ScratchVector<T>;
 
 // Slang's SPIR-V 1.5 profile does not include the standard capability set used by the generated Vulkan shaders.
 // Declare it explicitly so Slang produces the same output without silently rewriting the requested profile.
-static constexpr AStringView s_SpirvBaselineCapabilities[]{ "SPV_KHR_non_semantic_info", "SPV_GOOGLE_user_type", "spvDerivativeControl", "spvImageQuery", "spvImageGatherExtended", "spvSparseResidency", "spvMinLod", "spvFragmentFullyCoveredEXT", };
+static constexpr Array<AStringView, 8u> s_SpirvBaselineCapabilities = { "SPV_KHR_non_semantic_info", "SPV_GOOGLE_user_type", "spvDerivativeControl", "spvImageQuery", "spvImageGatherExtended", "spvSparseResidency", "spvMinLod", "spvFragmentFullyCoveredEXT", };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_CommonCompilerArguments[]{
+static constexpr Array<AStringView, 8u> s_CommonCompilerArguments = {
     "-target", "spirv",
     "-emit-spirv-directly",
     "-fvk-use-entrypoint-name",
     "-warnings-as-errors", "all",
-    "-profile", SlangShaderCompiler::s_Spirv15TargetProfileText,
+    "-profile", ShaderBinaryPayload::s_Spirv15TargetProfileText,
 };
-static constexpr AStringView s_CapabilityArgument = "-capability";
-static constexpr AStringView s_EntryPointArgument = "-entry";
-static constexpr AStringView s_StageArgument = "-stage";
-static constexpr AStringView s_IncludeArgument = "-I";
-static constexpr AStringView s_DefineArgument = "-D";
-static constexpr AStringView s_OutputArgument = "-o";
-static constexpr usize s_BaseCompilerArgumentCount = 8u + LengthOf(s_CommonCompilerArguments) + LengthOf(s_SpirvBaselineCapabilities) * 2u;
-static constexpr usize s_MaxTargetProfileCapabilityCount = 1u;
-static constexpr usize s_MaxOptimizationArgumentCount = 1u;
-static constexpr usize s_FixedOwnedArgumentCount = 2u;
-static constexpr usize s_FingerprintReadBufferBytes = 8192u;
-static constexpr usize s_QuotePairByteCount = 2u;
+static constexpr usize s_BaseCompilerArgumentCount = 8u + s_CommonCompilerArguments.size() + s_SpirvBaselineCapabilities.size() * 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderCook::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Alloc::ScratchArena& scratchArena){
+[[nodiscard]] static Expected<ScratchString> BuildCompilerDefineArgument(const ShaderBinaryPayload::ShaderMacroDefinition& define, const ShaderCook::ShaderCompilerRequest& request, const ScratchPath& overlayRoot, Alloc::ScratchArena& scratchArena){
     const b8 plannedMacroInclude = request.compilerInputsHaveBom && FindIf(request.externallyPlannedMacroIncludes.begin(), request.externallyPlannedMacroIncludes.end(), [&define](const AStringView name)noexcept{
             return name == define.name;
         }) != request.externallyPlannedMacroIncludes.end();
@@ -113,16 +103,16 @@ static constexpr usize s_QuotePairByteCount = 2u;
             return MakeUnexpected(Failure{});
         }
         const auto capacity = SlangCompilerWorkspace::CompilerPathTextCapacity(*overlayIncludePath);
-        if(!capacity || *capacity > Limit<usize>::s_Max - s_QuotePairByteCount)
+        if(!capacity || *capacity > Limit<usize>::s_Max - s_SlangQuotePairByteCount)
             return MakeUnexpected(Failure{});
-        valueCapacity = *capacity + s_QuotePairByteCount;
+        valueCapacity = *capacity + s_SlangQuotePairByteCount;
     }
-    const usize fixedBytes = s_DefineArgument.size() + (!define.value.empty() ? 1u : 0u);
+    const usize fixedBytes = s_SlangDefineArgument.size() + (!define.value.empty() ? 1u : 0u);
     if(define.name.size() > Limit<usize>::s_Max - fixedBytes || valueCapacity > Limit<usize>::s_Max - fixedBytes - define.name.size())
         return MakeUnexpected(Failure{});
     ScratchString argument{scratchArena};
     argument.reserve(fixedBytes + define.name.size() + valueCapacity);
-    argument += s_DefineArgument;
+    argument += s_SlangDefineArgument;
     argument += define.name;
     if(!define.value.empty()){
         argument += '=';
@@ -142,27 +132,22 @@ static constexpr usize s_QuotePairByteCount = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SlangStageMapping{
-    AStringView stage;
-    AStringView slangStage;
-};
-
-static constexpr SlangStageMapping s_StageMappings[]{
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage), "vertex" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::HullStage), "hull" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::DomainStage), "domain" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::GeometryStage), "geometry" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage), "fragment" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage), "compute" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AmplificationStage), "amplification" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage), "mesh" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::RayGenerationStage), "raygeneration" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AnyHitStage), "anyhit" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ClosestHitStage), "closesthit" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MissStage), "miss" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::IntersectionStage), "intersection" },
-    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::CallableStage), "callable" },
-};
+static const Array<SlangStageMapping, 14u> s_StageMappings = {{
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage), s_SlangStageVertex },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::HullStage), s_SlangStageHull },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::DomainStage), s_SlangStageDomain },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::GeometryStage), s_SlangStageGeometry },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage), s_SlangStageFragment },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage), s_SlangStageCompute },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AmplificationStage), s_SlangStageAmplification },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage), s_SlangStageMesh },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::RayGenerationStage), s_SlangStageRayGeneration },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AnyHitStage), s_SlangStageAnyHit },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ClosestHitStage), s_SlangStageClosestHit },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MissStage), s_SlangStageMiss },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::IntersectionStage), s_SlangStageIntersection },
+    { Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::CallableStage), s_SlangStageCallable },
+}};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -181,20 +166,6 @@ static Expected<AStringView> TryMapStageToSlangStage(const AStringView stage)noe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AStringView SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept{
-    switch(optimizationLevel){
-    case ShaderOptimizationLevel::None: return "-O0";
-    case ShaderOptimizationLevel::Default: return {};
-    case ShaderOptimizationLevel::High: return "-O2";
-    case ShaderOptimizationLevel::Maximal: return "-O3";
-    default: return {};
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -202,20 +173,22 @@ static AStringView SlangOptimizationArgument(const ShaderOptimizationLevel::Enum
 
 
 Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& temporaryRoot, Alloc::ScratchArena& scratchArena){
+    using namespace __hidden_slang_compiler;
+
     u64 fingerprint = s_Fnv64OffsetBasis;
-    const __hidden_slang_compiler::ScratchPath compilerPath(scratchArena, NWB_SLANGC_EXECUTABLE);
+    const ScratchPath compilerPath(scratchArena, NWB_SLANGC_EXECUTABLE);
     InputFileStream compilerStream(compilerPath, s_FileOpenBinary);
     if(!compilerStream.is_open()){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to open configured compiler '{}' for fingerprinting"), PathToString<tchar>(compilerPath));
         return MakeUnexpected(Failure{});
     }
 
-    Array<char, __hidden_slang_compiler::s_FingerprintReadBufferBytes> compilerBytes{};
+    Array<char, s_SlangFingerprintReadBufferBytes> compilerBytes{};
     for(;;){
         compilerStream.read(compilerBytes.data(), static_cast<StreamSize>(compilerBytes.size()));
         const StreamSize bytesRead = compilerStream.gcount();
         if(bytesRead > 0)
-            fingerprint = UpdateFnv64(fingerprint, reinterpret_cast<const u8*>(compilerBytes.data()), static_cast<usize>(bytesRead));
+            fingerprint = UpdateFnv64TextExact(fingerprint, AStringView(compilerBytes.data(), static_cast<usize>(bytesRead)));
         if(compilerStream.eof() && !compilerStream.bad())
             break;
         if(!compilerStream.good()){
@@ -224,16 +197,16 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
         }
     }
 
-    const auto workDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(__hidden_slang_compiler::ScratchPath(scratchArena, temporaryRoot), scratchArena);
+    const auto workDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(ScratchPath(scratchArena, temporaryRoot), scratchArena);
     if(!workDirectoryResult)
         return MakeUnexpected(Failure{});
-    const __hidden_slang_compiler::ScratchPath& workDirectory = *workDirectoryResult;
+    const ScratchPath& workDirectory = *workDirectoryResult;
     SlangCompilerWorkspace::ScopedDirectoryCleanupGuard workDirectoryCleanup(workDirectory);
-    const __hidden_slang_compiler::ScratchPath versionPath = workDirectory / "compiler.version";
+    const ScratchPath versionPath = workDirectory / s_SlangVersionFileName;
     const auto versionPathText = SlangCompilerWorkspace::BuildCompilerPathText(versionPath, scratchArena);
     if(!versionPathText)
         return MakeUnexpected(Failure{});
-    const AStringView arguments[]{ AStringView(NWB_SLANGC_EXECUTABLE), "-version" };
+    const Array<AStringView, 2u> arguments = { AStringView(NWB_SLANGC_EXECUTABLE), s_SlangVersionArgument };
     const auto exitCode = RunProcessRedirectedToFile(scratchArena, arguments, AStringView(*versionPathText));
     if(!exitCode){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to execute configured compiler '{}' for version query: process execution failure {}"), PathToString<tchar>(compilerPath), static_cast<u32>(exitCode.error()));
@@ -243,7 +216,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: configured compiler '{}' version query failed with exit code {}"), PathToString<tchar>(compilerPath), *exitCode);
         return MakeUnexpected(Failure{});
     }
-    __hidden_slang_compiler::ScratchString versionText(scratchArena);
+    ScratchString versionText(scratchArena);
     const auto versionRead = ReadBinaryFile(versionPath, versionText);
     if(!versionRead){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read configured compiler version '{}': {}:{}"), PathToString<tchar>(versionPath), ConvertString(versionRead.error().category().name()), versionRead.error().value());
@@ -255,28 +228,28 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
     }
 
     const auto appendText = [&fingerprint](const AStringView text)noexcept{
-        Fnv64AppendBuffer(fingerprint, reinterpret_cast<const u8*>(text.data()), text.size());
+        fingerprint = UpdateFnv64TextExact(fingerprint, text);
     };
     // The version identifies the loaded Slang compiler library as well as its executable launcher.
     appendText(TrimView(versionText));
-    for(const AStringView argument : __hidden_slang_compiler::s_CommonCompilerArguments)
+    for(const AStringView argument : s_CommonCompilerArguments)
         appendText(argument);
-    for(const AStringView capability : __hidden_slang_compiler::s_SpirvBaselineCapabilities){
-        appendText(__hidden_slang_compiler::s_CapabilityArgument);
+    for(const AStringView capability : s_SpirvBaselineCapabilities){
+        appendText(s_SlangCapabilityArgument);
         appendText(capability);
     }
-    appendText(SlangShaderCompiler::s_SpvRayQueryCapabilityText);
-    appendText(__hidden_slang_compiler::s_EntryPointArgument);
-    appendText(__hidden_slang_compiler::s_StageArgument);
-    appendText(__hidden_slang_compiler::s_IncludeArgument);
-    appendText(__hidden_slang_compiler::s_DefineArgument);
-    appendText(__hidden_slang_compiler::s_OutputArgument);
-    for(const __hidden_slang_compiler::SlangStageMapping& mapping : __hidden_slang_compiler::s_StageMappings){
+    appendText(ShaderBinaryPayload::s_SpvRayQueryCapabilityText);
+    appendText(s_SlangEntryPointArgument);
+    appendText(s_SlangStageArgument);
+    appendText(s_SlangIncludeArgument);
+    appendText(s_SlangDefineArgument);
+    appendText(s_SlangOutputArgument);
+    for(const SlangStageMapping& mapping : s_StageMappings){
         appendText(mapping.stage);
         appendText(mapping.slangStage);
     }
-    for(u8 optimizationLevel = 0u; optimizationLevel < ShaderOptimizationLevel::kCount; ++optimizationLevel)
-        appendText(__hidden_slang_compiler::SlangOptimizationArgument(static_cast<ShaderOptimizationLevel::Enum>(optimizationLevel)));
+    for(u8 optimizationLevel = 0u; optimizationLevel < ShaderBinaryPayload::ShaderOptimizationLevel::kCount; ++optimizationLevel)
+        appendText(SlangOptimizationArgument(static_cast<ShaderBinaryPayload::ShaderOptimizationLevel::Enum>(optimizationLevel)));
     return fingerprint;
 }
 
@@ -285,6 +258,8 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(const Path& tempor
 
 
 b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& request, Core::Alloc::ScratchArena& scratchArena, ShaderCook::CookVector<u8>& outBytecode){
+    using namespace __hidden_slang_compiler;
+
     outBytecode.clear();
 
     if(request.sourcePath.empty()){
@@ -302,45 +277,45 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         return false;
     }
 
-    const auto slangStage = __hidden_slang_compiler::TryMapStageToSlangStage(request.stage);
+    const auto slangStage = TryMapStageToSlangStage(request.stage);
     if(!slangStage){
         NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), ConvertString(request.stage), ConvertString(request.shaderName));
         return false;
     }
 
-    const AStringView optimizationArgument = __hidden_slang_compiler::SlangOptimizationArgument(request.optimizationLevel);
-    if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
+    const AStringView optimizationArgument = SlangOptimizationArgument(request.optimizationLevel);
+    if(request.optimizationLevel >= ShaderBinaryPayload::ShaderOptimizationLevel::kCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}"), ConvertString(request.shaderName), static_cast<u32>(request.optimizationLevel));
         return false;
     }
 
-    const __hidden_slang_compiler::ScratchPath outputParent = request.outputPath.parentPath();
-    const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? __hidden_slang_compiler::ScratchPath(scratchArena, ".") : outputParent, scratchArena);
+    const ScratchPath outputParent = request.outputPath.parentPath();
+    const auto compilerWorkDirectoryResult = SlangCompilerWorkspace::CreateCompilerWorkDirectory(outputParent.empty() ? ScratchPath(scratchArena, ".") : outputParent, scratchArena);
     if(!compilerWorkDirectoryResult)
         return false;
-    const __hidden_slang_compiler::ScratchPath& compilerWorkDirectory = *compilerWorkDirectoryResult;
+    const ScratchPath& compilerWorkDirectory = *compilerWorkDirectoryResult;
     SlangCompilerWorkspace::ScopedDirectoryCleanupGuard workDirectoryCleanup(compilerWorkDirectory);
-    const __hidden_slang_compiler::ScratchPath diagnosticsPath = compilerWorkDirectory / "compiler.diag";
-    const __hidden_slang_compiler::ScratchPath compilerOutputPath = compilerWorkDirectory / "module.spv";
-    const __hidden_slang_compiler::ScratchPath compilerOverlayRoot = compilerWorkDirectory / "sources";
+    const ScratchPath diagnosticsPath = compilerWorkDirectory / "compiler.diag";
+    const ScratchPath compilerOutputPath = compilerWorkDirectory / "module.spv";
+    const ScratchPath compilerOverlayRoot = compilerWorkDirectory / "sources";
     const auto compilerInputs = SlangCompilerWorkspace::PrepareBomStrippedCompilerInputs(request, compilerOverlayRoot, scratchArena);
     if(!compilerInputs)
         return false;
-    const __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchPath>& compilerIncludeDirectories = compilerInputs->includeDirectories;
+    const ScratchVector<ScratchPath>& compilerIncludeDirectories = compilerInputs->includeDirectories;
 
     const usize includeDirectoryCount = compilerIncludeDirectories.size();
-    const usize defineCount = static_cast<usize>(request.defineCount);
-    constexpr usize s_MaxFixedArgumentCount = __hidden_slang_compiler::s_BaseCompilerArgumentCount + __hidden_slang_compiler::s_MaxTargetProfileCapabilityCount * 2u + __hidden_slang_compiler::s_MaxOptimizationArgumentCount;
+    const usize defineCount = request.defines.size();
+    constexpr usize s_MaxFixedArgumentCount = s_BaseCompilerArgumentCount + s_SlangMaxTargetProfileCapabilityCount * 2u + s_SlangMaxOptimizationArgumentCount;
     if(AddOverflows<usize>(s_MaxFixedArgumentCount, defineCount) || includeDirectoryCount > (Limit<usize>::s_Max - s_MaxFixedArgumentCount - defineCount) / 2u){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), ConvertString(request.shaderName));
         return false;
     }
 
     const usize argumentReserve = s_MaxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
-    const usize ownedArgumentCount = __hidden_slang_compiler::s_FixedOwnedArgumentCount + includeDirectoryCount + defineCount;
-    __hidden_slang_compiler::ScratchVector<AStringView> arguments(scratchArena);
+    const usize ownedArgumentCount = s_SlangFixedOwnedArgumentCount + includeDirectoryCount + defineCount;
+    ScratchVector<AStringView> arguments(scratchArena);
     arguments.reserve(argumentReserve);
-    __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> ownedArguments(scratchArena);
+    ScratchVector<ScratchString> ownedArguments(scratchArena);
     // Retire nested string allocations before the owner array, independently of STL destruction order.
     ScopeExit retireArguments([&ownedArguments]()noexcept{
         while(!ownedArguments.empty())
@@ -355,24 +330,24 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         return false;
     ownedArguments.push_back(Move(*sourcePathText));
     arguments.push_back(AStringView(ownedArguments.back()));
-    for(const AStringView argument : __hidden_slang_compiler::s_CommonCompilerArguments)
+    for(const AStringView argument : s_CommonCompilerArguments)
         arguments.push_back(argument);
     if(!optimizationArgument.empty())
         arguments.push_back(optimizationArgument);
     if(request.rayQuery){
-        arguments.push_back(__hidden_slang_compiler::s_CapabilityArgument);
-        arguments.push_back(SlangShaderCompiler::s_SpvRayQueryCapabilityText);
+        arguments.push_back(s_SlangCapabilityArgument);
+        arguments.push_back(ShaderBinaryPayload::s_SpvRayQueryCapabilityText);
     }
-    for(const AStringView capability : __hidden_slang_compiler::s_SpirvBaselineCapabilities){
-        arguments.push_back(__hidden_slang_compiler::s_CapabilityArgument);
+    for(const AStringView capability : s_SpirvBaselineCapabilities){
+        arguments.push_back(s_SlangCapabilityArgument);
         arguments.push_back(capability);
     }
-    arguments.push_back(__hidden_slang_compiler::s_EntryPointArgument);
+    arguments.push_back(s_SlangEntryPointArgument);
     arguments.push_back(request.entryPoint);
-    arguments.push_back(__hidden_slang_compiler::s_StageArgument);
+    arguments.push_back(s_SlangStageArgument);
     arguments.push_back(*slangStage);
-    for(const __hidden_slang_compiler::ScratchPath& includeDirectory : compilerIncludeDirectories){
-        arguments.push_back(__hidden_slang_compiler::s_IncludeArgument);
+    for(const ScratchPath& includeDirectory : compilerIncludeDirectories){
+        arguments.push_back(s_SlangIncludeArgument);
         auto includeDirectoryText = SlangCompilerWorkspace::BuildCompilerPathText(includeDirectory, scratchArena);
         if(!includeDirectoryText)
             return false;
@@ -380,15 +355,15 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         arguments.push_back(AStringView(ownedArguments.back()));
     }
 
-    for(u32 i = 0u; i < request.defineCount; ++i){
-        auto defineArgument = __hidden_slang_compiler::BuildCompilerDefineArgument(request.defines[i], request, compilerOverlayRoot, scratchArena);
+    for(const ShaderBinaryPayload::ShaderMacroDefinition& define : request.defines){
+        auto defineArgument = BuildCompilerDefineArgument(define, request, compilerOverlayRoot, scratchArena);
         if(!defineArgument)
             return false;
         ownedArguments.push_back(Move(*defineArgument));
         arguments.push_back(AStringView(ownedArguments.back()));
     }
 
-    arguments.push_back(__hidden_slang_compiler::s_OutputArgument);
+    arguments.push_back(s_SlangOutputArgument);
     auto outputPathText = SlangCompilerWorkspace::BuildCompilerPathText(compilerOutputPath, scratchArena);
     if(!outputPathText)
         return false;
@@ -402,7 +377,7 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
     if(!exitCode || *exitCode != 0){
         const TStringView failureStage = exitCode ? NWB_TEXT("compiler exit code") : NWB_TEXT("process execution failure");
         const i64 failureCode = exitCode ? static_cast<i64>(*exitCode) : static_cast<i64>(exitCode.error());
-        __hidden_slang_compiler::ScratchString diagnostics{scratchArena};
+        ScratchString diagnostics{scratchArena};
         const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
         if(!diagnosticsRead){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}'): {} {}; diagnostics read '{}' failed: {}:{}")
@@ -422,7 +397,7 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
         return false;
     }
 
-    __hidden_slang_compiler::ScratchString diagnostics{scratchArena};
+    ScratchString diagnostics{scratchArena};
     const auto diagnosticsRead = ReadBinaryFile(diagnosticsPath, diagnostics);
     if(!diagnosticsRead){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler diagnostics '{}' for '{}' (variant '{}'): {}:{}")
@@ -469,7 +444,7 @@ b8 SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest& 
 
     auto renamePathResult = RenamePath(compilerOutputPath, request.outputPath);
     if(!renamePathResult){
-        __hidden_slang_compiler::ScratchVector<u8> publishedBytecode(scratchArena);
+        ScratchVector<u8> publishedBytecode(scratchArena);
         if(
             ReadBinaryFile(request.outputPath, publishedBytecode)
             && publishedBytecode.size() == outBytecode.size()

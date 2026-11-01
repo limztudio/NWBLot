@@ -29,11 +29,11 @@ struct OwnerTransferTag{};
 template<typename T, typename Deleter>
 class Storage{
 public:
-    typedef Deleter deleter_type;
-    typedef T element_type;
-    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
-    typedef typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter_param_type;
-    typedef typename RemoveReference<deleter_type>::type&& deleter_rvalue_param_type;
+    using deleter_type = Deleter;
+    using element_type = T;
+    using pointer = typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type;
+    using deleter_param_type = typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type;
+    using deleter_rvalue_param_type = typename RemoveReference<deleter_type>::type&&;
 
 
 protected:
@@ -126,7 +126,7 @@ private:
     { \
         base_type::AssertDefaultConstructedDeleterValid(); \
     } \
-    constexpr UniquePtr(std::nullptr_t)noexcept \
+    constexpr UniquePtr(Nullptr)noexcept \
         : base_type(pointer()) \
     { \
         base_type::AssertDefaultConstructedDeleterValid(); \
@@ -138,13 +138,13 @@ class UniquePtr : private UniquePtrDetail::Storage<T, Deleter>{
 
 
 public:
-    typedef Deleter deleter_type;
-    typedef T element_type;
-    typedef UniquePtr<element_type, deleter_type> this_type;
-    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
-    typedef UniquePtrDetail::Storage<element_type, deleter_type> base_type;
-    typedef typename base_type::deleter_param_type deleter_param_type;
-    typedef typename base_type::deleter_rvalue_param_type deleter_rvalue_param_type;
+    using deleter_type = Deleter;
+    using element_type = T;
+    using this_type = UniquePtr<element_type, deleter_type>;
+    using pointer = typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type;
+    using base_type = UniquePtrDetail::Storage<element_type, deleter_type>;
+    using deleter_param_type = typename base_type::deleter_param_type;
+    using deleter_rvalue_param_type = typename base_type::deleter_rvalue_param_type;
 
 
 public:
@@ -168,8 +168,8 @@ public:
         : base_type(static_cast<pointer>(value), deleter_type(deleter, value))
     {}
     template<typename E>
-    requires(SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type> && IsConstructible_V<deleter_type, E&, std::nullptr_t>)
-    UniquePtr(std::nullptr_t, E&& deleter)noexcept
+    requires(SmartPtrDetail::IsArenaDeleterConversion_V<E, deleter_type> && IsConstructible_V<deleter_type, E&, Nullptr>)
+    UniquePtr(Nullptr, E&& deleter)noexcept
         : base_type(pointer(), deleter_type(deleter, nullptr))
     {}
     UniquePtr(this_type&& x)noexcept
@@ -218,7 +218,7 @@ public:
         return *this;
     }
 
-    this_type& operator=(std::nullptr_t)noexcept{
+    this_type& operator=(Nullptr)noexcept{
         reset();
         return *this;
     }
@@ -242,13 +242,13 @@ public:
 template<typename T, typename Deleter>
 class UniquePtr<T[], Deleter> : private UniquePtrDetail::Storage<T, Deleter>{
 public:
-    typedef Deleter deleter_type;
-    typedef T element_type;
-    typedef UniquePtr<element_type[], deleter_type> this_type;
-    typedef typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type pointer;
-    typedef UniquePtrDetail::Storage<element_type, deleter_type> base_type;
-    typedef typename base_type::deleter_param_type deleter_param_type;
-    typedef typename base_type::deleter_rvalue_param_type deleter_rvalue_param_type;
+    using deleter_type = Deleter;
+    using element_type = T;
+    using this_type = UniquePtr<element_type[], deleter_type>;
+    using pointer = typename SmartPtrDetail::UniquePointerType<element_type, deleter_type>::type;
+    using base_type = UniquePtrDetail::Storage<element_type, deleter_type>;
+    using deleter_param_type = typename base_type::deleter_param_type;
+    using deleter_rvalue_param_type = typename base_type::deleter_rvalue_param_type;
 
 
 public:
@@ -300,7 +300,7 @@ public:
         return *this;
     }
 
-    this_type& operator=(std::nullptr_t)noexcept{
+    this_type& operator=(Nullptr)noexcept{
         reset();
         return *this;
     }
@@ -333,15 +333,15 @@ private:
 
 
 public:
-    typedef T element_type;
-    typedef Deleter deleter_type;
-    typedef UniquePtr<element_type, deleter_type> owner_type;
-    typedef typename owner_type::pointer pointer;
+    using element_type = T;
+    using deleter_type = Deleter;
+    using owner_type = UniquePtr<element_type, deleter_type>;
+    using pointer = typename owner_type::pointer;
 
 
 public:
     NotNullUniquePtr() = delete;
-    NotNullUniquePtr(std::nullptr_t) = delete;
+    NotNullUniquePtr(Nullptr) = delete;
     explicit NotNullUniquePtr(owner_type&& owner)noexcept
         : m_owner(Move(owner))
     {
@@ -356,7 +356,7 @@ public:
 
     NotNullUniquePtr& operator=(const NotNullUniquePtr&) = delete;
 
-    NotNullUniquePtr& operator=(std::nullptr_t) = delete;
+    NotNullUniquePtr& operator=(Nullptr) = delete;
 
     typename AddLValueReference<element_type>::type operator*()const noexcept(noexcept(*m_owner)){
         return *m_owner;
@@ -388,7 +388,7 @@ inline typename EnableIf<!IsArray<T>::value, UniquePtr<T>>::type MakeUnique(Args
 
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, UniquePtr<T>>::type MakeUnique(usize n)noexcept(noexcept(UniquePtr<T>(new typename RemoveExtent<T>::type[n]))){
-    typedef typename RemoveExtent<T>::type TBase;
+    using TBase = typename RemoveExtent<T>::type;
     return UniquePtr<T>(new TBase[n]);
 }
 template<typename T, typename... Args>

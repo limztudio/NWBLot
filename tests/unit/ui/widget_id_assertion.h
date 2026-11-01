@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/id.h>
-
-#include <gtest/gtest.h>
+#include <impl/ecs_ui/toolkit/id.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,12 +18,9 @@ namespace UiTestSupport{
 
 
 // Assert valid widget IDs and return a fallback ID only after recording a test failure.
-[[nodiscard]] inline NWB::Impl::Ui::WidgetId RequireWidgetId(const Expected<NWB::Impl::Ui::WidgetId>& result){
-    EXPECT_TRUE(result);
-    if(!result)
-        return {};
-    return *result;
-}
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireRootId(const NWB::Impl::Ui::WidgetRoot& root);
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetId(NWB::Impl::Ui::WidgetId parent, AStringView stableKey);
+[[nodiscard]] NWB::Impl::Ui::WidgetId RequireWidgetPartId(NWB::Impl::Ui::WidgetId parent, u64 partKey);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

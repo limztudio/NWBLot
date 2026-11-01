@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/unit/ui/native_input.h>
+
 #include <impl/ecs_ui/toolkit/input/router.h>
 
 #include <gtest/gtest.h>
@@ -41,37 +43,23 @@ static constexpr InputSource s_Cursor{ 12u, 1u };
     return target;
 }
 
-[[nodiscard]] static PointerInput Pointer(const PointerPhase::Enum phase, const InputSource& source, const Point& position = { 20.0f, 20.0f }, const PointerIntent::Enum intent = PointerIntent::Activate, const b8 hoverCapable = false)noexcept{
-    PointerInput input;
-    input.phase = phase;
-    input.source = source;
-    input.position = position;
-    input.intent = intent;
-    input.hoverCapable = hoverCapable;
-    return input;
-}
+using UiTestSupport::Pointer;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiPointerSourceTests : public testing::Test{
+class UiPointerSourceTests : public UiTestSupport::RouterTestFixture{
 public:
     UiPointerSourceTests()
-        : m_arena(Name("tests/ui/pointer_sources"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/pointer_sources"))
         , m_targets{ Target(1u, 10.0f), Target(2u, 110.0f) }
     {}
 
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    }
-
-    InputRoutingResult send(const PointerInput& input){
-        EXPECT_TRUE(m_router.queuePointer(input));
-        return m_router.process();
+        ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     }
 
     void cancelCommand(){
@@ -89,8 +77,6 @@ protected:
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Array<HitTarget, 2u> m_targets;
 };
 
@@ -147,7 +133,7 @@ TEST_F(UiPointerSourceTests, SceneAdmissionCannotTransferToAChangedUiLayoutDurin
     EXPECT_FALSE(send(Pointer(PointerPhase::Press, s_First, scene)).pointerConsumed);
     EXPECT_FALSE(m_router.ownsPointerSource(s_First));
     m_targets[0u].rectangle.x = 230.0f;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_FALSE(send(Pointer(PointerPhase::Move, s_First, scene)).pointerConsumed);
     EXPECT_FALSE(send(Pointer(PointerPhase::Release, s_First, scene)).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
@@ -182,9 +168,9 @@ TEST_F(UiPointerSourceTests, RecreatedCapturedOwnerCannotReviveTheOriginalContac
     EXPECT_TRUE(send(Pointer(PointerPhase::Press, s_First)).pointerConsumed);
     m_router.invalidateTarget(m_targets[0u].id);
     ++m_targets[0u].declarationGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     --m_targets[0u].declarationGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_TRUE(m_router.ownsPointerSource(s_First));
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_TRUE(send(Pointer(PointerPhase::Release, s_First)).pointerConsumed);
@@ -223,7 +209,7 @@ TEST_F(UiPointerSourceTests, ExactSourceCancellationPreservesOtherHoldsAndComple
 
 TEST_F(UiPointerSourceTests, TouchMovementAndSubmissionPreserveTheHoverCapableCursorGeometry){
     const Point cursor{ 140.0f, 30.0f };
-    send(Pointer(PointerPhase::Move, s_Cursor, cursor, PointerIntent::Activate, true));
+    send(Pointer(PointerPhase::Move, s_Cursor, cursor, true));
     EXPECT_TRUE(m_router.pointerKnown());
     ASSERT_EQ(m_router.hover(), m_targets[1u].id);
     EXPECT_TRUE(send(Pointer(PointerPhase::Press, s_First)).pointerConsumed);
@@ -242,13 +228,13 @@ TEST_F(UiPointerSourceTests, TouchMovementAndSubmissionPreserveTheHoverCapableCu
 }
 
 TEST_F(UiPointerSourceTests, ContextIntentCannotBeReleasedByAnotherRoleOrSource){
-    EXPECT_TRUE(send(Pointer(PointerPhase::Press, s_First, { 20.0f, 20.0f }, PointerIntent::ContextMenu)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(PointerPhase::Press, s_First, { 20.0f, 20.0f }, false, PointerIntent::ContextMenu)).pointerConsumed);
     EXPECT_FALSE(m_router.consumeContextMenu(m_targets[0u].id, 7u));
     send(Pointer(PointerPhase::Release, s_First));
-    send(Pointer(PointerPhase::Release, s_Second, { 20.0f, 20.0f }, PointerIntent::ContextMenu));
+    send(Pointer(PointerPhase::Release, s_Second, { 20.0f, 20.0f }, false, PointerIntent::ContextMenu));
     EXPECT_TRUE(m_router.ownsPointerSource(s_First, PointerIntent::ContextMenu));
     EXPECT_FALSE(m_router.consumeContextMenu(m_targets[0u].id, 7u));
-    EXPECT_TRUE(send(Pointer(PointerPhase::Release, s_First, { 30.0f, 25.0f }, PointerIntent::ContextMenu)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(PointerPhase::Release, s_First, { 30.0f, 25.0f }, false, PointerIntent::ContextMenu)).pointerConsumed);
     const auto action = m_router.consumeContextMenu(m_targets[0u].id, 7u);
     ASSERT_TRUE(action);
     EXPECT_FLOAT_EQ(action->position.x, 20.0f);
@@ -259,10 +245,10 @@ TEST_F(UiPointerSourceTests, ContextIntentCannotBeReleasedByAnotherRoleOrSource)
 
 TEST_F(UiPointerSourceTests, QueuedTouchCapabilityChangesCannotPublishCursorHover){
     ASSERT_TRUE(m_router.queuePointer(Pointer(PointerPhase::Press, s_First)));
-    const auto move = m_router.queuePointer(Pointer(PointerPhase::Move, s_First, { 30.0f, 25.0f }, PointerIntent::Activate, true));
+    const auto move = m_router.queuePointer(Pointer(PointerPhase::Move, s_First, { 30.0f, 25.0f }, true));
     ASSERT_TRUE(move);
     EXPECT_FALSE(move->hoverCapable);
-    const auto release = m_router.queuePointer(Pointer(PointerPhase::Release, s_First, { 30.0f, 25.0f }, PointerIntent::Activate, true));
+    const auto release = m_router.queuePointer(Pointer(PointerPhase::Release, s_First, { 30.0f, 25.0f }, true));
     ASSERT_TRUE(release);
     EXPECT_FALSE(release->hoverCapable);
     const auto routed = m_router.process();
@@ -315,7 +301,7 @@ TEST_F(UiPointerSourceTests, QueuedTerminalDiscardedByResetRetiresTheContactWith
         EXPECT_FALSE(m_router.primaryDown());
         EXPECT_FALSE(m_router.activePointerSource().valid());
         EXPECT_TRUE(m_router.actions().empty());
-        ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+        ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
         const auto fresh = m_router.queuePointer(Pointer(PointerPhase::Press, s_First));
         ASSERT_TRUE(fresh);
         EXPECT_FALSE(fresh->repeat);
@@ -335,7 +321,7 @@ TEST_F(UiPointerSourceTests, QueuedReleaseBeforeResetReclaimsAFullSourceSlotAndR
     m_router.reset();
     EXPECT_FALSE(m_router.ownsPointerSource(s_First));
     EXPECT_TRUE(m_router.ownsPointerSource(s_Second));
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     const InputSource replacement{ 11u, s_InputMaxSources + 1u };
     const InputSource overflow{ 11u, s_InputMaxSources + 2u };
     ASSERT_TRUE(m_router.queuePointer(Pointer(PointerPhase::Press, replacement)));
@@ -359,7 +345,7 @@ TEST_F(UiPointerSourceTests, QueuedReleaseBeforeResetReclaimsAFullSourceSlotAndR
 TEST_F(UiPointerSourceTests, DiscardedQueuedPressCannotAcquireUiOwnershipOnItsRepeatAfterReset){
     ASSERT_TRUE(m_router.queuePointer(Pointer(PointerPhase::Press, s_First)));
     m_router.reset();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     const auto repeated = m_router.queuePointer(Pointer(PointerPhase::Press, s_First));
     ASSERT_TRUE(repeated);
     EXPECT_TRUE(repeated->repeat);
@@ -388,7 +374,7 @@ TEST_F(UiPointerSourceTests, CancelConsumesARetainedUiContactWithoutClaimingAnId
     EXPECT_TRUE(m_router.ownsPointerSource(s_Second));
     EXPECT_TRUE(send(Pointer(PointerPhase::Release, s_Second)).pointerConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    send(Pointer(PointerPhase::Move, s_Cursor, { 20.0f, 20.0f }, PointerIntent::Activate, true));
+    send(Pointer(PointerPhase::Move, s_Cursor, { 20.0f, 20.0f }, true));
     ASSERT_EQ(m_router.hover(), m_targets[0u].id);
     InputEvent cancel;
     cancel.type = InputEventType::CommandDown;

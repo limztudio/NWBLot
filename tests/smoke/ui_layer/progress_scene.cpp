@@ -73,9 +73,7 @@ b8 UiProgressSmokeScene::paint(Impl::UiPaintContext& context){
     return true;
 }
 
-b8 UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)noexcept{
-    static_cast<void>(scancode);
-    static_cast<void>(mods);
+b8 UiProgressSmokeScene::keyboardUpdate(const i32 key, const i32, const i32 action, const i32)noexcept{
     return HandlePassiveSmokeKeyboard(key, action, m_phase, m_parent, m_child);
 }
 
@@ -95,7 +93,7 @@ b8 UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect& 
     for(usize index = 0u; index < s_Keys.size(); ++index){
         if(!ui.progress(s_Keys[index], s_Fractions[index]))
             return false;
-        m_declared.rectangles[index + 2u] = StoreSmokeRect(VectorSelect(row, VectorMultiplyAddExpression(VectorReplicate(static_cast<f32>(index)), VectorReplicate(40.0f), row), s_SIMDMaskY));
+        m_declared.rectangles[index + 2u] = { VectorGetX(row), VectorGetY(row) + static_cast<f32>(index) * 40.0f, VectorGetZ(row), VectorGetW(row) };
     }
     if(ui.button("after", "After progress", button))
         ++m_afterClicks;
@@ -154,7 +152,7 @@ b8 UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.progress("parent_value", 0.25))
         return false;
     PopupOptions child;
-    child.anchor = { VectorGetX(VectorAdd(VectorReplicate(right), VectorReplicate(100.0f))), 392.0f, 8.0f, 16.0f };
+    child.anchor = { right + 100.0f, 392.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 120.0f };
     if(ui.beginPopup("progress_child", m_child, child)){
         if(!ui.progress("child_value", 0.75))

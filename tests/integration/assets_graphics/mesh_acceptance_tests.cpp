@@ -5,7 +5,6 @@
 #include "assets_graphics_fixture.h"
 
 #include <impl/assets_mesh/skin_asset.h>
-#include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 
 #include <gtest/gtest.h>
@@ -26,20 +25,12 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_assets_graphics_mesh_acceptance_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -48,16 +39,22 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 template<typename MeshT>
 static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex)noexcept(noexcept(
-    NWB::Impl::DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()))
+    NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()), DeclVal<NWB::Impl::MeshletPositionStreamRef&>())
 )){
-    return NWB::Impl::DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()));
+    NWB::Impl::MeshletPositionStreamRef ref;
+    if(!NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()), ref))
+        return MakeUnexpected(Failure{});
+    return ref;
 }
 
 template<typename MeshT>
 static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localAttributeIndex)noexcept(noexcept(
-    NWB::Impl::DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), meshlet, localAttributeIndex)
+    NWB::Impl::TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), meshlet, localAttributeIndex, DeclVal<NWB::Impl::MeshletAttributeStreamRef&>())
 )){
-    return NWB::Impl::DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), meshlet, localAttributeIndex);
+    NWB::Impl::MeshletAttributeStreamRef ref;
+    if(!NWB::Impl::TryDecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas(), meshlet, localAttributeIndex, ref))
+        return MakeUnexpected(Failure{});
+    return ref;
 }
 
 template<
@@ -150,8 +147,8 @@ template<typename MeshT>
     return count;
 }
 
-static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(TestArena& testArena, AStringView assetFilename, const Name assetName, const AssetsGraphicsFixture::CookCase& cookCase){
-    const b8 cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, testArena, cookCase);
+static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(AStringView assetFilename, const Name assetName, const AssetsGraphicsFixture::CookCase& cookCase, TestArena& testArena){
+    const b8 cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, cookCase, testArena);
     EXPECT_TRUE(cooked);
     if(!cooked)
         return MakeUnexpected(Failure{});
@@ -166,7 +163,7 @@ static void RunSmokeMeshAcceptance(AStringView assetFilename, const AStringView 
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, caseName);
     ASSERT_TRUE(cookCase);
-    auto loadedAssetResult = CookAndLoadSmokeMesh(testArena, assetFilename, assetName, *cookCase);
+    auto loadedAssetResult = CookAndLoadSmokeMesh(assetFilename, assetName, *cookCase, testArena);
     if(loadedAssetResult){
         const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(**loadedAssetResult);
         Forward<CallbackT>(callback)(loadedMesh);
@@ -203,12 +200,12 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
         const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
         const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
         EXPECT_EQ(localRefs[0u].localDeformedPosition, localRefs[3u].localDeformedPosition);
-        EXPECT_EQ(localRefs[s_ThirdElementIndex].localDeformedPosition, localRefs[4u].localDeformedPosition);
+        EXPECT_EQ(localRefs[2u].localDeformedPosition, localRefs[4u].localDeformedPosition);
         EXPECT_NE(localRefs[0u].localAttribute, localRefs[3u].localAttribute);
-        EXPECT_NE(localRefs[s_ThirdElementIndex].localAttribute, localRefs[4u].localAttribute);
+        EXPECT_NE(localRefs[2u].localAttribute, localRefs[4u].localAttribute);
 
         const auto attributeRef0 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute);
-        const auto attributeRef2 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[s_ThirdElementIndex].localAttribute);
+        const auto attributeRef2 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[2u].localAttribute);
         const auto attributeRef3 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute);
         const auto attributeRef4 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute);
         ASSERT_TRUE(attributeRef0);
@@ -216,7 +213,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
         ASSERT_TRUE(attributeRef3);
         ASSERT_TRUE(attributeRef4);
         EXPECT_EQ(attributeRef0->uv0, 0u);
-        EXPECT_EQ(attributeRef2->uv0, s_ExpectedDualCount);
+        EXPECT_EQ(attributeRef2->uv0, 2u);
         EXPECT_EQ(attributeRef3->uv0, 1u);
         EXPECT_EQ(attributeRef4->uv0, 3u);
         EXPECT_EQ(attributeRef0->tangent, 0u);
@@ -228,7 +225,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
 
 TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
     RunSmokeMeshAcceptance("mirrored_uv_quad.nwb", "mirrored_uv_quad", Name("project/meshes/mirrored_uv_quad"), [](const NWB::Impl::Mesh& loadedMesh){
-        EXPECT_EQ(loadedMesh.tangentStream().size(), s_ExpectedDualCount);
+        EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
         EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
         EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
 
@@ -254,8 +251,8 @@ TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
 TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
     RunSmokeMeshAcceptance("large_mesh_many_meshlets.nwb", "large_mesh_many_meshlets", Name("project/meshes/large_mesh_many_meshlets"), [](const NWB::Impl::Mesh& loadedMesh){
         const usize expectedPrimitiveCount = static_cast<usize>(NWB::Impl::s_MeshMaxMeshletTriangles) + 1u;
-        const usize expectedMeshletCount = s_ExpectedDualCount;
-        EXPECT_EQ(loadedMesh.meshlets().size(), s_ExpectedDualCount);
+        const usize expectedMeshletCount = 2u;
+        EXPECT_EQ(loadedMesh.meshlets().size(), 2u);
         EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), expectedPrimitiveCount * 3u);
         if(loadedMesh.meshlets().size() < expectedMeshletCount)
             return;
@@ -271,7 +268,7 @@ TEST(AssetsGraphics, MeshFailedReloadPreservesEveryPreviouslyPublishedStream){
     TestArena testArena;
     auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "mesh_failed_reload");
     ASSERT_TRUE(cookCase);
-    auto result = CookAndLoadSmokeMesh(testArena, "uv_seam_quad.nwb", Name("project/meshes/uv_seam_quad"), *cookCase);
+    auto result = CookAndLoadSmokeMesh("uv_seam_quad.nwb", Name("project/meshes/uv_seam_quad"), *cookCase, testArena);
     ASSERT_TRUE(result);
     auto& mesh = static_cast<Impl::Mesh&>(**result);
     Impl::MeshAssetCodec codec;

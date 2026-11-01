@@ -17,7 +17,20 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 CrashUploadAuthorizationMatches(AStringView expectedToken, AStringView authorizationHeader)noexcept;
+[[nodiscard]] inline b8 CrashUploadAuthorizationMatches(const AStringView expectedToken, const AStringView authorizationHeader)noexcept{
+    if(expectedToken.empty())
+        return true;
+    if(authorizationHeader.empty())
+        return false;
+
+    constexpr AStringView s_BearerPrefix("Bearer ");
+    if(authorizationHeader.size() != s_BearerPrefix.size() + expectedToken.size())
+        return false;
+    if(authorizationHeader.substr(0u, s_BearerPrefix.size()) != s_BearerPrefix)
+        return false;
+
+    return authorizationHeader.substr(s_BearerPrefix.size()) == expectedToken;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

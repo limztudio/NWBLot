@@ -121,16 +121,15 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
 void UploadManager::submitChunks(
     const GpuPhysicalQueueId queue,
     const u64 submittedVersion,
-    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
-    const usize submittedCommandListCount,
+    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists,
     const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
 )noexcept{
-    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners)), "accepted upload-chunk retirement must remain non-throwing");
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedCommandLists || submittedCommandListCount == 0u)
+    static_assert(noexcept(retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedOwners)), "accepted upload-chunk retirement must remain non-throwing");
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || submittedCommandLists.empty())
         return;
 
     NothrowScopedLock lock(m_mutex);
-    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedCommandListCount, submittedOwners);
+    retireSubmittedChunksLocked(queue, submittedVersion, submittedCommandLists, submittedOwners);
 }
 
 void UploadManager::discardChunks(const GpuPhysicalQueueId queue, TrackedCommandBuffer* const owner, const u64 nativeRecordingID, const u64 reusableVersion)noexcept{
@@ -238,8 +237,7 @@ void UploadManager::retireChunkLocked(QueueChunkLedger& ledger, BufferChunk& chu
 void UploadManager::retireSubmittedChunksLocked(
     const GpuPhysicalQueueId queue,
     const u64 version,
-    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
-    const usize submittedCommandListCount,
+    const Span<const Queue::SubmissionCommandListIdentity> submittedCommandLists,
     const VulkanDetail::SubmittedCommandBufferOwnerLookup& submittedOwners
 )noexcept{
     QueueChunkLedger* const ledger = findQueueLedgerLocked(queue);
@@ -254,8 +252,7 @@ void UploadManager::retireSubmittedChunksLocked(
         if(submittedOwners.indexed())
             submitted = submittedOwners.contains(*chunk->owner, chunk->nativeRecordingID);
         else{
-            for(usize i = 0u; i < submittedCommandListCount; ++i){
-                const Queue::SubmissionCommandListIdentity& commandList = submittedCommandLists[i];
+            for(const Queue::SubmissionCommandListIdentity& commandList : submittedCommandLists){
                 if(commandList.owner == chunk->owner && commandList.nativeRecordingID == chunk->nativeRecordingID){
                     submitted = true;
                     break;

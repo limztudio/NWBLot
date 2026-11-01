@@ -35,7 +35,12 @@ private:
 
 
 public:
-    ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept;
+    ObjectGeometryCacheGraph(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, RendererMeshSystem& meshSystem, Core::Alloc::ScratchArena& arena)noexcept
+        : m_graph(graph)
+        , m_materialSystem(materialSystem)
+        , m_meshSystem(meshSystem)
+        , m_entries(arena)
+    {}
 
 
 public:

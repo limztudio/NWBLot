@@ -44,7 +44,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
+Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::GlobalArena& arena, [[maybe_unused]] void* const nativeWindowHandle){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(nativeWindowHandle){
         auto service = MakeGlobalUnique<Win32TextInputService>(arena, arena, MakeNotNull(nativeWindowHandle));
@@ -52,8 +52,6 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateTextInputService(Alloc::Globa
             return MakeUnexpected(Failure{});
         return service;
     }
-#else
-    static_cast<void>(nativeWindowHandle);
 #endif
     auto service = MakeGlobalUnique<__hidden_text_input_factory::UnsupportedTextInputService>(arena, arena);
     if(!service)

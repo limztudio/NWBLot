@@ -49,7 +49,7 @@ protected:
     }
 
     [[nodiscard]] WidgetId parentHost()const{
-        return UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeWidgetId(UiTestSupport::RequireWidgetId(MakeRootId(m_root)), s_ParentPopupKey)), s_RadioGroupKey));
+        return UiTestSupport::RequireWidgetId(UiTestSupport::RequireWidgetId(UiTestSupport::RequireRootId(m_root), s_ParentPopupKey), s_RadioGroupKey);
     }
 
     [[nodiscard]] b8 beginParent(const u64 generation){

@@ -37,12 +37,6 @@ inline constexpr TStringView s_SubsystemAssetsPayloadLabel = NWB_TEXT("assets");
 template<typename TAsset>
 using SubsystemAssetRefVector = Core::Assets::AssetVector<Core::Assets::AssetRef<TAsset>>;
 
-struct SubsystemFieldValueDescriptor{
-    AStringView fieldName;
-    Name expectedAssetType = s_NameNone;
-    b8 isArray = false;
-};
-
 interface ISubsystem : Core::Assets::IAsset{
 public:
     using SubsystemRef = Core::Assets::AssetRef<ISubsystem>;
@@ -54,11 +48,9 @@ public:
 
 
 public:
-    SubsystemRefVector subsystems;
-
-
-public:
     virtual ~ISubsystem()noexcept override = 0;
+
+
 protected:
     explicit ISubsystem(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
@@ -82,6 +74,10 @@ public:
     [[nodiscard]] virtual Name fieldValue(usize index, usize elementIndex = 0u)const noexcept = 0;
     virtual void clearFieldValues(usize index)noexcept = 0;
     virtual void appendFieldValue(usize index, const Name& value) = 0;
+
+
+public:
+    SubsystemRefVector subsystems;
 };
 
 
@@ -108,8 +104,7 @@ template<typename SubsystemT, typename TAsset, Core::Assets::AssetRef<TAsset> Su
         [](const SubsystemT&)noexcept -> usize{
             return 1u;
         },
-        [](const SubsystemT& subsystem, const usize elementIndex)noexcept -> Name{
-            static_cast<void>(elementIndex);
+        [](const SubsystemT& subsystem, [[maybe_unused]] const usize elementIndex)noexcept -> Name{
             NWB_ASSERT(elementIndex == 0u);
             return (subsystem.*Member).name();
         },
@@ -156,7 +151,7 @@ namespace SubsystemAssetRuntime{
 
 void DeduplicateSubsystemRefs(ISubsystem::SubsystemRefVector& subsystems)noexcept;
 [[nodiscard]] b8 ValidatePayload(const ISubsystem& subsystem);
-[[nodiscard]] b8 LoadBinary(ISubsystem& subsystem, Span<const u8> binary);
+[[nodiscard]] b8 LoadBinary(Span<const u8> binary, ISubsystem& outSubsystem);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,7 +191,7 @@ public:
 
 public:
     [[nodiscard]] virtual b8 loadBinary(const Span<const u8> binary)override{
-        return SubsystemAssetRuntime::LoadBinary(*this, binary);
+        return SubsystemAssetRuntime::LoadBinary(binary, *this);
     }
 
     [[nodiscard]] virtual b8 validatePayload()const override{
@@ -245,24 +240,8 @@ TypedSubsystem<SubsystemT>::~TypedSubsystem()noexcept = default;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SubsystemInstanceFactory = UniquePtr<ISubsystem>(*)(Core::Assets::AssetArena& arena, const Name& virtualPath);
-
-class SubsystemTypeAutoRegistrar final : NoCopy{
-public:
-    SubsystemTypeAutoRegistrar(const Name& assetType, SubsystemInstanceFactory create)noexcept;
-
-
-public:
-    [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
-    [[nodiscard]] SubsystemInstanceFactory create()const noexcept{ return m_create; }
-    [[nodiscard]] const SubsystemTypeAutoRegistrar* next()const noexcept{ return m_next; }
-
-
-private:
-    Name m_assetType = s_NameNone;
-    SubsystemInstanceFactory m_create = nullptr;
-    const SubsystemTypeAutoRegistrar* m_next = nullptr;
-};
+using SubsystemInstanceFactory = Core::Assets::PolymorphicAssetInstanceFactory<ISubsystem>;
+using SubsystemTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<ISubsystem>;
 
 [[nodiscard]] const ISubsystem* CastSubsystem(const Core::Assets::IAsset* asset)noexcept;
 
@@ -278,7 +257,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(Core::Assets::AssetArena& arena, const Name& virtualPath, Span<const u8> binary)const override;
+    [[nodiscard]] virtual Expected<UniquePtr<Core::Assets::IAsset>> deserialize(const Name& virtualPath, Span<const u8> binary, Core::Assets::AssetArena& arena)const override;
 #if defined(NWB_COOK)
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
@@ -295,6 +274,7 @@ class TypedSubsystemAssetCodec final : public Core::Assets::AssetCodec<Subsystem
 public:
     TypedSubsystemAssetCodec()noexcept(noexcept(DeclVal<void(*)(const Name&)noexcept>()(SubsystemT::AssetTypeName()))) = default;
 
+
 #if defined(NWB_COOK)
 public:
     virtual b8 serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override{
@@ -307,24 +287,7 @@ public:
 };
 
 template<typename SubsystemT>
-class TypedSubsystemAutoRegistrar final : NoCopy{
-private:
-    [[nodiscard]] static UniquePtr<ISubsystem> CreateInstance(Core::Assets::AssetArena& arena, const Name& virtualPath){
-        return MakeUnique<SubsystemT>(arena, virtualPath);
-    }
-
-
-public:
-    TypedSubsystemAutoRegistrar()noexcept
-        : m_typeRegistrar(SubsystemT::AssetTypeName(), &CreateInstance)
-        , m_codecRegistrar(&Core::Assets::CreateAssetCodec<TypedSubsystemAssetCodec<SubsystemT>>)
-    {}
-
-
-private:
-    SubsystemTypeAutoRegistrar m_typeRegistrar;
-    Core::Assets::AssetCodecAutoRegistrar m_codecRegistrar;
-};
+using TypedSubsystemAutoRegistrar = Core::Assets::TypedPolymorphicAssetAutoRegistrar<ISubsystem, SubsystemT, TypedSubsystemAssetCodec<SubsystemT>>;
 
 #define NWB_DEFINE_SUBSYSTEM_ASSET_REGISTRAR(registrarVariable, subsystemType) \
     TypedSubsystemAutoRegistrar<subsystemType> registrarVariable

@@ -20,47 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_light_space_resources{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr StringView s_LightSpaceNoCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0";
-static constexpr StringView s_LightSpaceNoCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1";
-static constexpr StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0";
-static constexpr StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
-static constexpr StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
-static constexpr StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
-
-// Inclusive index ranges into the compute shader/pipeline tables of ensureLightSpaceShadowPipelines.
-static constexpr u32 s_FirstCsgOnlyPipelineIndex = 6u;
-static constexpr u32 s_LastCsgOnlyPipelineIndex = 10u;
-static constexpr u32 s_FirstCsgResolvePipelineIndex = 7u;
-static constexpr u32 s_LastCsgResolvePipelineIndex = 8u;
-static constexpr u32 s_FirstCsgFallbackPipelineIndex = 9u;
-static constexpr u32 s_LastCsgFallbackPipelineIndex = 10u;
-static constexpr u32 s_CaptureVertexShaderIndex = 12u;
-static constexpr u32 s_CapturePixelShaderIndex = 13u;
-static constexpr u32 s_CapturePipelineKindCount = 2u;
-static constexpr u32 s_CountsBufferIndex = 0u;
-static constexpr u32 s_EventsBufferIndex = 1u;
-static constexpr u32 s_ViewsBufferIndex = 2u;
-static constexpr u32 s_DrawArgumentsBufferIndex = 3u;
-static constexpr u32 s_DepthDescriptorIndex = 4u;
-static constexpr usize s_LightSpaceBufferCount = 4u;
-static constexpr usize s_LightSpaceDescriptorCount = 5u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
@@ -94,7 +53,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     }
     using ComputeShaderMember = const Core::Assets::AssetRef<ComputeShader> ShadowSubsystem::*;
     const ComputeShaderMember csgResolveMember = hardwareCsg ? &ShadowSubsystem::lightSpaceResolveHwCs : &ShadowSubsystem::lightSpaceResolveCs;
-    const ComputeShaderMember computeMembers[] = {
+    const Array<ComputeShaderMember, 12u> computeMembers = {
         &ShadowSubsystem::lightSpaceViewCs,
         &ShadowSubsystem::lightSpaceResolveCs,
         &ShadowSubsystem::lightSpaceResolveCs,
@@ -108,54 +67,54 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         &ShadowSubsystem::lightSpaceFallbackCs,
         &ShadowSubsystem::lightSpaceCullCs
     };
-    const AStringView computeVariants[] = {
+    const Array<AStringView, 12u> computeVariants = {
         Core::ShaderArchive::s_DefaultVariant,
-        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder0,
-        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder1,
-        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder0,
-        __hidden_light_space_resources::s_LightSpaceNoCsgOccluder1,
-        __hidden_light_space_resources::s_LightSpaceCsgShade0,
-        __hidden_light_space_resources::s_LightSpaceCsgShade1,
-        __hidden_light_space_resources::s_LightSpaceCsgOccluder0,
-        __hidden_light_space_resources::s_LightSpaceCsgOccluder1,
-        __hidden_light_space_resources::s_LightSpaceCsgOccluder0,
-        __hidden_light_space_resources::s_LightSpaceCsgOccluder1,
+        s_LightSpaceNoCsgOccluder0,
+        s_LightSpaceNoCsgOccluder1,
+        s_LightSpaceNoCsgOccluder0,
+        s_LightSpaceNoCsgOccluder1,
+        s_LightSpaceCsgShade0,
+        s_LightSpaceCsgShade1,
+        s_LightSpaceCsgOccluder0,
+        s_LightSpaceCsgOccluder1,
+        s_LightSpaceCsgOccluder0,
+        s_LightSpaceCsgOccluder1,
         Core::ShaderArchive::s_DefaultVariant
     };
-    const NotNull<Core::ComputePipelineHandle*> outputs[] = { MakeNotNull(&snapshot.viewPipeline), MakeNotNull(&snapshot.opaqueResolve), MakeNotNull(&snapshot.transparentResolve),
+    const Array<NotNull<Core::ComputePipelineHandle*>, 12u> outputs = { MakeNotNull(&snapshot.viewPipeline), MakeNotNull(&snapshot.opaqueResolve), MakeNotNull(&snapshot.transparentResolve),
         MakeNotNull(&snapshot.opaqueFallback), MakeNotNull(&snapshot.transparentFallback), MakeNotNull(&snapshot.shadePipeline), MakeNotNull(&snapshot.csgShadePipeline),
         MakeNotNull(&snapshot.csgOpaqueResolve), MakeNotNull(&snapshot.csgTransparentResolve), MakeNotNull(&snapshot.csgOpaqueFallback), MakeNotNull(&snapshot.csgTransparentFallback), MakeNotNull(&snapshot.cullPipeline) };
-    static_assert(LengthOf(computeMembers) == LengthOf(outputs));
-    static_assert(LengthOf(computeVariants) == LengthOf(outputs));
-    for(u32 index = 0u; index < LengthOf(outputs); ++index){
-        if(!csg && index >= __hidden_light_space_resources::s_FirstCsgOnlyPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgOnlyPipelineIndex)
+    static_assert(computeMembers.size() == outputs.size());
+    static_assert(computeVariants.size() == outputs.size());
+    for(u32 index = 0u; index < outputs.size(); ++index){
+        if(!csg && index >= s_LightSpaceFirstCsgOnlyPipelineIndex && index <= s_LightSpaceLastCsgOnlyPipelineIndex)
             continue;
-        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgFallbackPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgFallbackPipelineIndex)
+        if(hardwareCsg && index >= s_LightSpaceFirstCsgFallbackPipelineIndex && index <= s_LightSpaceLastCsgFallbackPipelineIndex)
             continue;
-        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader>(state.m_shaders[index], computeMembers[index], computeVariants[index], Name("ECSRender_LightSpaceShadow"))){
+        if(!state.m_shaders[index] && !m_shaderSystem.loadShader<ComputeShader>(computeMembers[index], computeVariants[index], Name("ECSRender_LightSpaceShadow"), state.m_shaders[index])){
             state.m_pipelineFailed = true;
             return false;
         }
     }
-    Core::ShaderHandle& captureVs = state.m_shaders[__hidden_light_space_resources::s_CaptureVertexShaderIndex];
-    Core::ShaderHandle& capturePs = state.m_shaders[__hidden_light_space_resources::s_CapturePixelShaderIndex];
+    Core::ShaderHandle& captureVs = state.m_shaders[s_LightSpaceCaptureVertexShaderIndex];
+    Core::ShaderHandle& capturePs = state.m_shaders[s_LightSpaceCapturePixelShaderIndex];
     if(
-        (!captureVs && !m_shaderSystem.loadShader<VertexShader>(captureVs, &ShadowSubsystem::lightSpaceCaptureVs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow")))
-        || (!capturePs && !m_shaderSystem.loadShader<PixelShader>(capturePs, &ShadowSubsystem::lightSpaceCapturePs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow")))
+        (!captureVs && !m_shaderSystem.loadShader<VertexShader>(&ShadowSubsystem::lightSpaceCaptureVs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow"), captureVs))
+        || (!capturePs && !m_shaderSystem.loadShader<PixelShader>(&ShadowSubsystem::lightSpaceCapturePs, Core::ShaderArchive::s_DefaultVariant, Name("ECSRender_LightSpaceShadow"), capturePs))
     ){
         state.m_pipelineFailed = true;
         return false;
     }
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
-        if(!csg && index >= __hidden_light_space_resources::s_FirstCsgOnlyPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgOnlyPipelineIndex)
+        if(!csg && index >= s_LightSpaceFirstCsgOnlyPipelineIndex && index <= s_LightSpaceLastCsgOnlyPipelineIndex)
             continue;
-        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgFallbackPipelineIndex && index <= __hidden_light_space_resources::s_LastCsgFallbackPipelineIndex)
+        if(hardwareCsg && index >= s_LightSpaceFirstCsgFallbackPipelineIndex && index <= s_LightSpaceLastCsgFallbackPipelineIndex)
             continue;
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
         desc.setComputeShader(state.m_shaders[index]).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-        if(hardwareCsg && index >= __hidden_light_space_resources::s_FirstCsgResolvePipelineIndex && index <= __hidden_light_space_resources::s_LastCsgResolvePipelineIndex)
+        if(hardwareCsg && index >= s_LightSpaceFirstCsgResolvePipelineIndex && index <= s_LightSpaceLastCsgResolvePipelineIndex)
             desc.addBindingLayout(heap.getAccelStructLayout());
         auto outputsResult = device.createComputePipeline(desc);
         if(outputsResult)
@@ -165,7 +124,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(!outputsResult)
             return false;
     }
-    for(u32 transparent = 0u; transparent < __hidden_light_space_resources::s_CapturePipelineKindCount; ++transparent){
+    for(u32 transparent = 0u; transparent < s_LightSpaceCapturePipelineKindCount; ++transparent){
         auto& output = transparent != 0u ? snapshot.transparentCapture : snapshot.opaqueCapture;
         if(output)
             continue;
@@ -176,9 +135,9 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         Core::RenderState render;
         render.setRasterState(raster).setDepthStencilState(depth);
         Core::GraphicsPipelineDesc desc;
-        desc.setVertexShader(state.m_shaders[__hidden_light_space_resources::s_CaptureVertexShaderIndex]).setRenderState(render).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+        desc.setVertexShader(state.m_shaders[s_LightSpaceCaptureVertexShaderIndex]).setRenderState(render).addBindingLayout(snapshot.layout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
         if(transparent != 0u)
-            desc.setPixelShader(state.m_shaders[__hidden_light_space_resources::s_CapturePixelShaderIndex]);
+            desc.setPixelShader(state.m_shaders[s_LightSpaceCapturePixelShaderIndex]);
         auto outputResult = device.createGraphicsPipeline(desc, Core::FramebufferInfo{}.setDepthFormat(Core::Format::D32));
         if(outputResult)
             output = Move(*outputResult);
@@ -194,7 +153,7 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     auto& snapshot = m_lightSpaceShadow.m_snapshot;
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
-    const u64 sizes[] = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
+    const Array<u64, 4u> sizes = { plan.countByteSize, plan.eventByteSize, plan.viewByteSize, plan.drawArgumentByteSize };
     const u64 maximumRange = device.getMaxStorageBufferRange();
     NWB_ASSERT(
         sizes[0] != 0u && sizes[0] <= maximumRange && sizes[0] <= Limit<u32>::s_Max
@@ -224,12 +183,12 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
         if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
             return false;
         if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
-            Core::BufferHandle csgBuffers[2];
-            Core::GpuDescriptorHandle csgDescriptors[2];
+            Array<Core::BufferHandle, 2u> csgBuffers{};
+            Array<Core::GpuDescriptorHandle, 2u> csgDescriptors{};
             Core::GpuDescriptorRetirementGuard retireCsg(heap, Span<const Core::GpuDescriptorHandle>(csgDescriptors));
-            const u64 csgSizes[] = { contextSize, plan.countByteSize };
-            const Name csgNames[] = { Name("light_space_csg_context"), Name("light_space_csg_opaque_depth") };
-            for(u32 index = 0u; index < LengthOf(csgBuffers); ++index){
+            const Array<u64, 2u> csgSizes = { contextSize, plan.countByteSize };
+            const Array<Name, 2u> csgNames = { Name("light_space_csg_context"), Name("light_space_csg_opaque_depth") };
+            for(u32 index = 0u; index < csgBuffers.size(); ++index){
                 Core::BufferDesc desc;
                 desc
                     .setByteSize(csgSizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
@@ -270,15 +229,15 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
         && snapshot.depth->getCreationDescription().arraySize == plan.viewCount
     )
         return true;
-    Core::BufferHandle buffers[__hidden_light_space_resources::s_LightSpaceBufferCount];
-    Core::GpuDescriptorHandle descriptors[__hidden_light_space_resources::s_LightSpaceDescriptorCount];
+    Array<Core::BufferHandle, s_LightSpaceBufferCount> buffers{};
+    Array<Core::GpuDescriptorHandle, s_LightSpaceDescriptorCount> descriptors{};
     Core::GpuDescriptorRetirementGuard retireUnpublished(heap, Span<const Core::GpuDescriptorHandle>(descriptors));
-    const Name names[] = { Name("light_space_counts"), Name("light_space_events"), Name("light_space_views"), Name("light_space_draw_arguments") };
-    for(u32 index = 0u; index < LengthOf(buffers); ++index){
+    const Array<Name, 4u> names = { Name("light_space_counts"), Name("light_space_events"), Name("light_space_views"), Name("light_space_draw_arguments") };
+    for(u32 index = 0u; index < buffers.size(); ++index){
         Core::BufferDesc desc;
         desc
             .setByteSize(sizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
-            .setIsDrawIndirectArgs(index == __hidden_light_space_resources::s_DrawArgumentsBufferIndex)
+            .setIsDrawIndirectArgs(index == s_LightSpaceDrawArgumentsBufferIndex)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(names[index])
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -308,8 +267,8 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     const Expected<Core::GpuDescriptorHandle> depthDescriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
     if(!depthDescriptor)
         return false;
-    descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex] = *depthDescriptor;
-    if(!heap.write(descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
+    descriptors[s_LightSpaceDepthDescriptorIndex] = *depthDescriptor;
+    if(!heap.write(descriptors[s_LightSpaceDepthDescriptorIndex], Core::DescriptorWriteItem::TextureSrv(0u, depth.get(), Core::Format::D32, Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray)))
         return false;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> opaque;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * s_PointLightViewCount> transparent;
@@ -336,16 +295,16 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
     RayTracingDetail::RetireHeapHandle(heap, snapshot.drawArgumentsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.depthDescriptor);
     m_lightSpaceShadow.m_captureHistory.invalidate();
-    snapshot.counts = Move(buffers[__hidden_light_space_resources::s_CountsBufferIndex]);
-    snapshot.events = Move(buffers[__hidden_light_space_resources::s_EventsBufferIndex]);
-    snapshot.views = Move(buffers[__hidden_light_space_resources::s_ViewsBufferIndex]);
-    snapshot.drawArguments = Move(buffers[__hidden_light_space_resources::s_DrawArgumentsBufferIndex]);
+    snapshot.counts = Move(buffers[s_LightSpaceCountsBufferIndex]);
+    snapshot.events = Move(buffers[s_LightSpaceEventsBufferIndex]);
+    snapshot.views = Move(buffers[s_LightSpaceViewsBufferIndex]);
+    snapshot.drawArguments = Move(buffers[s_LightSpaceDrawArgumentsBufferIndex]);
     snapshot.depth = Move(depth);
-    snapshot.countsDescriptor = descriptors[__hidden_light_space_resources::s_CountsBufferIndex];
-    snapshot.eventsDescriptor = descriptors[__hidden_light_space_resources::s_EventsBufferIndex];
-    snapshot.viewsDescriptor = descriptors[__hidden_light_space_resources::s_ViewsBufferIndex];
-    snapshot.drawArgumentsDescriptor = descriptors[__hidden_light_space_resources::s_DrawArgumentsBufferIndex];
-    snapshot.depthDescriptor = descriptors[__hidden_light_space_resources::s_DepthDescriptorIndex];
+    snapshot.countsDescriptor = descriptors[s_LightSpaceCountsBufferIndex];
+    snapshot.eventsDescriptor = descriptors[s_LightSpaceEventsBufferIndex];
+    snapshot.viewsDescriptor = descriptors[s_LightSpaceViewsBufferIndex];
+    snapshot.drawArgumentsDescriptor = descriptors[s_LightSpaceDrawArgumentsBufferIndex];
+    snapshot.depthDescriptor = descriptors[s_LightSpaceDepthDescriptorIndex];
     snapshot.opaqueFramebuffers = Move(opaque);
     snapshot.transparentFramebuffers = Move(transparent);
     for(auto& descriptor : descriptors)

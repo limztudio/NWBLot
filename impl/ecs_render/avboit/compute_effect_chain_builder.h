@@ -6,7 +6,7 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/avboit/avboit_frame_targets.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
@@ -63,7 +63,10 @@ struct AvboitIntegrationStageInputs{
 
 class AvboitComputeEffectChainBuilder final : NoCopy{
 public:
-    AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept;
+    AvboitComputeEffectChainBuilder(Core::GpuTaskGraph& graph, RendererAvboitSystem& avboitSystem)noexcept
+        : m_graph(graph)
+        , m_avboitSystem(avboitSystem)
+    {}
 
 
 public:

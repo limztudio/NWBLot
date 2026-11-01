@@ -5,11 +5,13 @@
 #pragma once
 
 
+#include "array.h"
 #include "basic_string.h"
 #include "expected.h"
 #include "error_code.h"
 #include "limit.h"
 #include "simplemath.h"
+#include "span.h"
 
 #include <charconv>
 
@@ -55,23 +57,23 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 
 
 // Caller-owned bounded storage keeps scalar formatting independent of an allocator or locale.
-template<usize N>
-[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatI64(const i64 value, char (&buffer)[N])noexcept{
-    const auto result = std::to_chars(buffer, buffer + N, value);
+[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatI64(const i64 value, const Span<char> buffer)noexcept{
+    char* const begin = buffer.data();
+    const auto result = std::to_chars(begin, begin + buffer.size(), value);
     if(result.ec != ErrorCondition{})
         return MakeUnexpected(MakeErrorCode(result.ec));
-    return AStringView(buffer, static_cast<usize>(result.ptr - buffer));
+    return AStringView(begin, static_cast<usize>(result.ptr - begin));
 }
 
 // The shortest general representation roundtrips to the same finite double, including signed zero.
-template<usize N>
-[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatF64(const f64 value, char (&buffer)[N])noexcept{
+[[nodiscard]] inline Expected<AStringView, ErrorCode> FormatF64(const f64 value, const Span<char> buffer)noexcept{
     if(!IsFinite(value))
         return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
-    const auto result = std::to_chars(buffer, buffer + N, value);
+    char* const begin = buffer.data();
+    const auto result = std::to_chars(begin, begin + buffer.size(), value);
     if(result.ec != ErrorCondition{})
         return MakeUnexpected(MakeErrorCode(result.ec));
-    return AStringView(buffer, static_cast<usize>(result.ptr - buffer));
+    return AStringView(begin, static_cast<usize>(result.ptr - begin));
 }
 
 
@@ -79,9 +81,13 @@ template<usize N>
 
 
 // Full-range caller storage makes decimal formatting total, including zero and the largest usize.
-template<usize N>
-    requires (N >= s_UsizeDecimalDigitCount)
-[[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
+namespace TextDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline constexpr AStringView FormatDecimalBuffer(const usize value, char* const buffer)noexcept{
     usize remaining = value;
     usize length = 0u;
     do{
@@ -95,6 +101,24 @@ template<usize N>
         buffer[right] = digit;
     }
     return AStringView(buffer, length);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+template<usize N>
+    requires (N >= s_UsizeDecimalDigitCount)
+[[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, char (&buffer)[N])noexcept{
+    return TextDetail::FormatDecimalBuffer(value, buffer);
+}
+
+template<usize N>
+    requires (N >= s_UsizeDecimalDigitCount)
+[[nodiscard]] inline constexpr AStringView FormatDecimal(const usize value, Array<char, N>& buffer)noexcept{
+    return TextDetail::FormatDecimalBuffer(value, buffer.data());
 }
 
 

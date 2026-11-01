@@ -19,72 +19,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitGeometryPreparationBuilder::AvboitGeometryPreparationBuilder(Core::GpuTaskGraph& graph, RendererMaterialSystem& materialSystem, Core::Alloc::ScratchArena& scratchArena)noexcept
-    : m_graph(graph)
-    , m_materialSystem(materialSystem)
-    , m_scratchArena(scratchArena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_avboit_geometry_preparation_builder{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct PhaseIdentities{
-    NameText<char> geometryIdentity;
-    AStringView geometryLabel;
-    NameText<char> sampledIdentity;
-    AStringView sampledLabel;
-};
-
-[[nodiscard]] PhaseIdentities IdentitiesForPhase(AvboitGeometryPhase::Enum phase)noexcept{
-    switch(phase){
-    case AvboitGeometryPhase::Extinction:
-        return PhaseIdentities{
-            .geometryIdentity = "render.avboit.extinction.material_geometry",
-            .geometryLabel = "AVBOIT Extinction Material Geometry",
-            .sampledIdentity = "render.avboit.extinction.material_sampled_textures",
-            .sampledLabel = "AVBOIT Extinction Material Sampled Textures",
-        };
-    case AvboitGeometryPhase::Accumulation:
-        return PhaseIdentities{
-            .geometryIdentity = "render.avboit.accumulation.material_geometry",
-            .geometryLabel = "AVBOIT Accumulation Material Geometry",
-            .sampledIdentity = "render.avboit.accumulation.material_sampled_textures",
-            .sampledLabel = "AVBOIT Accumulation Material Sampled Textures",
-        };
-    case AvboitGeometryPhase::Occupancy:
-    default:
-        return PhaseIdentities{
-            .geometryIdentity = "render.avboit.occupancy.material_geometry",
-            .geometryLabel = "AVBOIT Occupancy Material Geometry",
-            .sampledIdentity = "render.avboit.occupancy.material_sampled_textures",
-            .sampledLabel = "AVBOIT Occupancy Material Sampled Textures",
-        };
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(const AvboitGeometryPreparationInputs& inputs){
     AvboitGeometryPreparationResult result{};
     if(inputs.drawItemSets.empty())
         return MakeUnexpected(Failure{});
-    const __hidden_avboit_geometry_preparation_builder::PhaseIdentities identities = __hidden_avboit_geometry_preparation_builder::IdentitiesForPhase(inputs.phase);
-    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(inputs.drawItemSets, Name(identities.geometryIdentity), identities.geometryLabel, m_graph, m_scratchArena);
+    const AvboitGeometryPhaseIdentities identities = ResolveAvboitGeometryPhaseIdentities(inputs.phase);
+    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(inputs.drawItemSets, identities.geometryIdentity, identities.geometryLabel, m_graph, m_scratchArena);
     result.geometryOwned = materialGeometrySetResult.has_value();
     if(materialGeometrySetResult)
         result.materialGeometrySet = *materialGeometrySetResult;
@@ -94,7 +34,7 @@ struct PhaseIdentities{
     }
     result.sampledTexturesCollected = false;
     if(result.geometryOwned){
-        const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(m_materialSystem, inputs.drawItemSets, Name(identities.sampledIdentity), identities.sampledLabel, m_graph, m_scratchArena);
+        const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(m_materialSystem, inputs.drawItemSets, identities.sampledIdentity, identities.sampledLabel, m_graph, m_scratchArena);
         result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
         if(materialSampledTextureSetResult)
             result.materialSampledTextureSet = *materialSampledTextureSetResult;

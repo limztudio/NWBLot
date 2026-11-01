@@ -5,10 +5,11 @@
 #include "task_graph_gbuffer_task.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/deferred/format_private.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/material_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/graphics/backend_selection.h>
 
@@ -28,8 +29,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    static_cast<void>(context);
+[[nodiscard]] b8 GbufferGraphTask::Record(const Payload& payload, Core::CommandList& commandList, [[maybe_unused]] const Core::GpuTaskRecordContext& context){
     if(!payload.opaqueDrawSnapshot.captured)
         return false;
 
@@ -42,7 +42,7 @@ namespace ECSRenderDetail{
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const b8 frameSetupReady = ECSRenderDetail::FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
+    const b8 frameSetupReady = FrameSetupReady(payload.meshViewSetupReady, payload.sceneShadingSetupReady);
     const MaterialPassDrawItemPartitionsView opaqueDrawItems = frameSetupReady ? payload.opaqueDrawSnapshot.drawItemsView() : MaterialPassDrawItemPartitionsView{};
     const CsgFrameGpuDataView csgFrameData = frameSetupReady ? payload.opaqueDrawSnapshot.csgFrameDataView() : CsgFrameGpuDataView{};
 
@@ -103,7 +103,7 @@ namespace ECSRenderDetail{
         }
 
         Core::ViewportState csgIntervalViewportState;
-        csgIntervalViewportState.addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height));
+        csgIntervalViewportState.addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height)));
         const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
             commandList,
             deferredTargets.framebuffer.get(),

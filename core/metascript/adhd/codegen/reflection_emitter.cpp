@@ -405,16 +405,16 @@ void EmitContainerAssetDependencyLoop(MString& out, const MStringView fieldName,
         out.append("        ");
     }
     if(elemName == "AssetRef"){
-        out.append(isMapContainer ? "for(const auto& [__k, __dep] : " : "for(const auto& __dep : ");
+        out.append(isMapContainer ? "for([[maybe_unused]] const auto& [__k, __dep] : " : "for(const auto& __dep : ");
         out.append(containerDerefPrefix.data(), containerDerefPrefix.size());
         out.append(fieldName.data(), fieldName.size());
-        out.append(isMapContainer ? "){ (void)__k; if(__dep.valid()) callback(__dep.virtualPath); }" : "){ if(__dep.valid()) callback(__dep.virtualPath); }");
+        out.append("){ if(__dep.valid()) callback(__dep.virtualPath); }");
     }
     else{
-        out.append(isMapContainer ? "for(const auto& [__k, __item] : " : "for(const auto& __item : ");
+        out.append(isMapContainer ? "for([[maybe_unused]] const auto& [__k, __item] : " : "for(const auto& __item : ");
         out.append(containerDerefPrefix.data(), containerDerefPrefix.size());
         out.append(fieldName.data(), fieldName.size());
-        out.append(isMapContainer ? "){ (void)__k; __item.forEachAssetDependency(callback); }" : ") __item.forEachAssetDependency(callback);");
+        out.append(") __item.forEachAssetDependency(callback);");
     }
     out.append(isOptional ? " }\r\n" : "\r\n");
 }
@@ -429,7 +429,7 @@ void EmitContainerAssetDependencyLoop(MString& out, const MStringView fieldName,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReflectionEmitter::emitInterfaceReflectionDeclarations(MString& out, const InterfaceDecl& decl, MetaArena& arena)const{
+void ReflectionEmitter::emitInterfaceReflectionDeclarations(const InterfaceDecl& decl, MetaArena& arena, MString& out)const{
     using namespace __hidden_adhd_reflection_emitter;
 
     EmitAssetTypeNameDecl(out, decl.assetTypeName, "\r\n    ");
@@ -444,77 +444,11 @@ void ReflectionEmitter::emitInterfaceReflectionDeclarations(MString& out, const 
 }
 
 void ReflectionEmitter::emitClassReflectionDeclarations(MString& out, const ClassDecl& decl)const{
-    using namespace __hidden_adhd_reflection_emitter;
-
-    const MVector<FieldDecl*>& activeFields = decl.orderedFields;
-
-    out.append("public:\r\n");
-    EmitAssetTypeNameDecl(out, decl.assetTypeName);
-
-    if(decl.isSerialize){
-        EmitSerializedBinarySizeMethod(out, activeFields, m_symbols);
-        out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, usize bufferCapacity)const noexcept;\r\n");
-        out.append("    [[nodiscard]] b8 deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
-    }
-
-    if(decl.isSerialize || decl.isReflect || !decl.assetTypeName.empty()){
-        usize nonTransientCount = 0u;
-        usize assetRefCount = 0u;
-        CountReflectedFields(activeFields, m_symbols, nonTransientCount, assetRefCount);
-        const usize methodCount = CountReflectedMethods(decl.methods);
-
-        EmitReflectedCountMethod(out, "reflectedFieldCount", nonTransientCount);
-        out.append("    [[nodiscard]] static AStringView reflectedFieldName(usize index)noexcept;\r\n");
-        EmitReflectedCountMethod(out, "reflectedMethodCount", methodCount);
-        out.append("    [[nodiscard]] static AStringView reflectedMethodName(usize index)noexcept;\r\n");
-        EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
-        out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
-        emitDeserializeNwbMethod(out, activeFields);
-        emitAssetDependencyMethods(out, activeFields);
-        emitExtractNwbAssetDependenciesMethod(out, activeFields);
-    }
+    emitClassReflectionMembers(out, decl, decl.orderedFields, false);
 }
 
 void ReflectionEmitter::emitInlineClassReflection(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields)const{
-    using namespace __hidden_adhd_reflection_emitter;
-
-    out.append("public:\r\n");
-    EmitAssetTypeNameDecl(out, decl.assetTypeName);
-
-    if(decl.isSerialize){
-        EmitSerializedBinarySizeMethod(out, fields, m_symbols);
-        out.append("    [[nodiscard]] usize serializeBinary([[maybe_unused]] u8* outBuffer, [[maybe_unused]] const usize bufferCapacity)const noexcept{\r\n");
-        EmitSerializeBinaryBody(out, fields, m_symbols, "        ");
-        out.append("    }\r\n");
-
-        out.append("    [[nodiscard]] b8 deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
-        EmitDeserializeBinaryBody(out, fields, m_symbols, "        ");
-        out.append("    }\r\n");
-    }
-
-    usize nonTransientCount = 0u;
-    usize assetRefCount = 0u;
-    CountReflectedFields(fields, m_symbols, nonTransientCount, assetRefCount);
-    const usize methodCount = CountReflectedMethods(decl.methods);
-
-    EmitReflectedCountMethod(out, "reflectedFieldCount", nonTransientCount);
-    out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-    EmitFieldNameLookupBody(out, fields, m_symbols, false, "        ");
-    out.append("    }\r\n");
-
-    EmitReflectedCountMethod(out, "reflectedMethodCount", methodCount);
-    out.append("    [[nodiscard]] static AStringView reflectedMethodName([[maybe_unused]] const usize index)noexcept{\r\n");
-    EmitMethodNameLookupBody(out, decl.methods, "        ");
-    out.append("    }\r\n");
-
-    EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
-    out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
-    EmitFieldNameLookupBody(out, fields, m_symbols, true, "        ");
-    out.append("    }\r\n");
-
-    emitDeserializeNwbMethod(out, fields);
-    emitAssetDependencyMethods(out, fields);
-    emitExtractNwbAssetDependenciesMethod(out, fields);
+    emitClassReflectionMembers(out, decl, fields, true);
 }
 
 void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const ClassDecl& decl)const{
@@ -557,6 +491,72 @@ void ReflectionEmitter::emitClassReflectionDefinitions(MString& out, const Class
     }
 }
 
+void ReflectionEmitter::emitClassReflectionMembers(MString& out, const ClassDecl& decl, const Span<const FieldDecl* const> fields, const b8 inlineBodies)const{
+    using namespace __hidden_adhd_reflection_emitter;
+
+    out.append("public:\r\n");
+    EmitAssetTypeNameDecl(out, decl.assetTypeName);
+
+    if(decl.isSerialize){
+        EmitSerializedBinarySizeMethod(out, fields, m_symbols);
+        if(inlineBodies){
+            out.append("    [[nodiscard]] usize serializeBinary([[maybe_unused]] u8* outBuffer, [[maybe_unused]] const usize bufferCapacity)const noexcept{\r\n");
+            EmitSerializeBinaryBody(out, fields, m_symbols, "        ");
+            out.append("    }\r\n");
+
+            out.append("    [[nodiscard]] b8 deserializeBinary([[maybe_unused]] const u8* inBuffer, [[maybe_unused]] const usize bufferSize)noexcept{\r\n");
+            EmitDeserializeBinaryBody(out, fields, m_symbols, "        ");
+            out.append("    }\r\n");
+        }
+        else{
+            out.append("    [[nodiscard]] usize serializeBinary(u8* outBuffer, usize bufferCapacity)const noexcept;\r\n");
+            out.append("    [[nodiscard]] b8 deserializeBinary(const u8* inBuffer, usize bufferSize)noexcept;\r\n");
+        }
+    }
+
+    if(!inlineBodies && !decl.isSerialize && !decl.isReflect && decl.assetTypeName.empty())
+        return;
+
+    usize nonTransientCount = 0u;
+    usize assetRefCount = 0u;
+    CountReflectedFields(fields, m_symbols, nonTransientCount, assetRefCount);
+    const usize methodCount = CountReflectedMethods(decl.methods);
+
+    EmitReflectedCountMethod(out, "reflectedFieldCount", nonTransientCount);
+    if(inlineBodies){
+        out.append("    [[nodiscard]] static AStringView reflectedFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
+        EmitFieldNameLookupBody(out, fields, m_symbols, false, "        ");
+        out.append("    }\r\n");
+    }
+    else{
+        out.append("    [[nodiscard]] static AStringView reflectedFieldName(usize index)noexcept;\r\n");
+    }
+
+    EmitReflectedCountMethod(out, "reflectedMethodCount", methodCount);
+    if(inlineBodies){
+        out.append("    [[nodiscard]] static AStringView reflectedMethodName([[maybe_unused]] const usize index)noexcept{\r\n");
+        EmitMethodNameLookupBody(out, decl.methods, "        ");
+        out.append("    }\r\n");
+    }
+    else{
+        out.append("    [[nodiscard]] static AStringView reflectedMethodName(usize index)noexcept;\r\n");
+    }
+
+    EmitReflectedCountMethod(out, "assetDependencyFieldCount", assetRefCount);
+    if(inlineBodies){
+        out.append("    [[nodiscard]] static AStringView assetDependencyFieldName([[maybe_unused]] const usize index)noexcept{\r\n");
+        EmitFieldNameLookupBody(out, fields, m_symbols, true, "        ");
+        out.append("    }\r\n");
+    }
+    else{
+        out.append("    [[nodiscard]] static AStringView assetDependencyFieldName(usize index)noexcept;\r\n");
+    }
+
+    emitDeserializeNwbMethod(out, fields);
+    emitAssetDependencyMethods(out, fields);
+    emitExtractNwbAssetDependenciesMethod(out, fields);
+}
+
 void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<const FieldDecl* const> fields)const{
     out.append("    template<typename DependencyCallback>\r\n");
     out.append("    void forEachAssetDependency([[maybe_unused]] DependencyCallback&& callback)const noexcept{\r\n");
@@ -565,7 +565,7 @@ void ReflectionEmitter::emitAssetDependencyMethods(MString& out, const Span<cons
             continue;
         b8 isOptional = false;
         MStringView tname;
-        [[maybe_unused]] const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, tname);
+        const TypeRef* effectiveTypeRef = UnwrapOptionalFieldType(field->type, m_symbols, isOptional, tname);
         const MStringView memberDotOrArrow = isOptional ? "->" : ".";
         const MStringView containerDerefPrefix = isOptional ? "*this->" : "this->";
 

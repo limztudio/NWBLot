@@ -366,15 +366,13 @@ void BuildSchedulingEdges(
 void BuildSchedulingTaskAdjacency(
     const Span<const GpuTaskDependencyEdge> schedulingEdges,
     const usize taskCount,
-    const u64 graphGeneration,
+    [[maybe_unused]] const u64 graphGeneration,
     Alloc::ScratchArena& scratchArena,
     GraphicsVector<usize>& outOutgoingOffsets,
     GraphicsVector<u32>& outOutgoingConsumers,
     GraphicsVector<usize>& outIncomingOffsets,
     GraphicsVector<u32>& outIncomingProducers
 ){
-    static_cast<void>(graphGeneration);
-
     outOutgoingOffsets.clear();
     outOutgoingConsumers.clear();
     outIncomingOffsets.clear();

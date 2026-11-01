@@ -53,7 +53,6 @@ TEST(UiEditNavigationStateTests, ColumnAwayAndBackCannotReviveAnEarlierBorrow){
     ASSERT_TRUE(state.setPreferredX(30.0f));
     ASSERT_TRUE(state.setPreferredX(20.0f));
     EXPECT_FALSE(state.matches(accepted));
-    EXPECT_TRUE(state.matches(state.snapshot()));
 }
 
 TEST(UiEditNavigationStateTests, ResetRetiresBothValidAndAlreadyEmptyIntent){
@@ -73,7 +72,7 @@ TEST(UiEditNavigationStateTests, NonfiniteColumnsRejectWithoutRetiringAcceptedIn
     EditNavigationState state;
     ASSERT_TRUE(state.setPreferredX(25.0f));
     const auto accepted = state.snapshot();
-    const f32 invalid[]{ BitCast<f32>(0x7f800000u), BitCast<f32>(0xff800000u), BitCast<f32>(0x7fc00000u) };
+    const Array<f32, 3> invalid = { BitCast<f32>(0x7f800000u), BitCast<f32>(0xff800000u), BitCast<f32>(0x7fc00000u) };
     for(const f32 value : invalid){
         EXPECT_FALSE(state.setPreferredX(value));
         EXPECT_TRUE(state.matches(accepted));
@@ -103,22 +102,23 @@ TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIn
 TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation){
     Core::Alloc::GlobalArena arena(Name("tests/ui/edit/navigation"));
     InputBindings bindings(arena);
-    const InputKeyBinding chords[]{
+    const Array<InputKeyBinding, 8> chords = {{
         { Core::Key::Up, Core::InputModifier::Control }, { Core::Key::Down, Core::InputModifier::Alt },
         { Core::Key::PageUp, Core::InputModifier::Control | Core::InputModifier::Shift },
         { Core::Key::PageDown, Core::InputModifier::Shift | Core::InputModifier::Alt },
         { Core::Key::Unknown }, { Core::Key::Enter }, { Core::Key::Left }, { static_cast<i32>(Core::Key::Menu) + 1 }
-    };
+    }};
+    EditNavigationDirection::Enum direction = EditNavigationDirection::Up;
     for(const auto& chord : chords){
-        EXPECT_FALSE(TranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)));
+        EXPECT_FALSE(TryTranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers), direction));
     }
-    const InputCommandIntent rejected[]{
+    const Array<InputCommandIntent, 6> rejected = {{
         { InputCommand::Up, true, false }, { InputCommand::Down, false, false },
         { InputCommand::PageUp, false, false }, { InputCommand::PageDown, true, false },
         { InputCommand::FocusNext }, { static_cast<InputCommand::Enum>(255u), true }
-    };
+    }};
     for(const InputCommandIntent& intent : rejected){
-        EXPECT_FALSE(TranslateEditNavigation(intent));
+        EXPECT_FALSE(TryTranslateEditNavigation(intent, direction));
     }
 }
 

@@ -33,6 +33,8 @@ class PaintTextFixture : public testing::Test{
 public:
     static constexpr u64 s_DefaultAtlasIdentity = 11u;
 
+
+public:
     static void ExpectClippedQuad(const DrawSnapshot& snapshot);
 
 

@@ -38,68 +38,12 @@ inline constexpr AStringView s_MenuKey = "menu";
 class PopupToolsSource final : public IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override{ return generation; }
-
-    [[nodiscard]] virtual u64 revision()const noexcept override{
-        if(closeComboOnRevision){
-            ComboState& state = *MakeNotNull(Exchange(closeComboOnRevision, nullptr));
-            state.close();
-        }
-        return contentRevision;
-    }
-
+    [[nodiscard]] virtual u64 revision()const noexcept override;
     [[nodiscard]] virtual u64 rowCount()const noexcept override{ return count; }
-
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{ return index < count ? index + 1u : 0u; }
-
-    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const noexcept override{
-        u64 index = 0u;
-        if(value == 0u || value > count)
-            return MakeUnexpected(Failure{});
-        index = value - 1u;
-        return index;
-    }
-
-    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        u64 index = 0u;
-        if(start >= count)
-            return MakeUnexpected(Failure{});
-        index = start;
-        if(index + 1u != 3u)
-            return index;
-        if(reverse){
-            if(index == 0u)
-                return MakeUnexpected(Failure{});
-            --index;
-        }
-        else{
-            ++index;
-            if(index >= count)
-                return MakeUnexpected(Failure{});
-        }
-        return index;
-    }
-
-    [[nodiscard]] virtual StringView text(const u64 index)const noexcept override{
-        if(changeRevisionOnText){
-            changeRevisionOnText = false;
-            ++contentRevision;
-        }
-        if(closeOnText){
-            ContextMenuState& state = *MakeNotNull(Exchange(closeOnText, nullptr));
-            state.close();
-        }
-        if(resetTooltipOnText){
-            TooltipState& state = *MakeNotNull(Exchange(resetTooltipOnText, nullptr));
-            state.reset();
-        }
-        if(selectListOnText){
-            ListState& state = *MakeNotNull(Exchange(selectListOnText, nullptr));
-            state.select(selectListKey);
-        }
-        constexpr StringView s_Labels[]{ "One", "Two", "Three", "Four", "Five" };
-        return index < count && index < 5u ? s_Labels[index] : StringView{};
-    }
-
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 value)const noexcept override;
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
     [[nodiscard]] virtual b8 enabled(const u64 index)const noexcept override{ return index < count && index + 1u != 3u; }
 
 
@@ -108,11 +52,11 @@ public:
     u64 count = 5u;
     u64 selectListKey = 4u;
     mutable u64 contentRevision = 1u;
-    mutable b8 changeRevisionOnText = false;
     mutable ContextMenuState* closeOnText = nullptr;
     mutable TooltipState* resetTooltipOnText = nullptr;
     mutable ListState* selectListOnText = nullptr;
     mutable ComboState* closeComboOnRevision = nullptr;
+    mutable b8 changeRevisionOnText = false;
 };
 
 
@@ -121,90 +65,20 @@ public:
 
 class PopupToolsFixture : public WidgetFixture{
 protected:
-    virtual void SetUp()override{
-        WidgetFixture::SetUp();
-        m_anchorOptions.width = { LayoutSizePolicy::Fixed, 220.0f };
-        m_anchorOptions.height = { LayoutSizePolicy::Fixed, 32.0f };
-        m_tooltipOptions.delaySeconds = 0.0f;
-        m_menuOptions.size = { 240.0f, 220.0f };
-    }
-
-    [[nodiscard]] b8 declareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
-        if(!begin(generation) || !m_builder.beginPanel(s_PopupToolsPanelKey, bounds))
-            return false;
-        m_builder.setDeltaSeconds(m_deltaSeconds);
-        m_anchorActivated = m_builder.button(s_AnchorKey, "Anchor", m_anchorOptions);
-        m_menuResult = {};
-        if(tooltip && !m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Helpful text", m_tooltip, m_tooltipOptions))
-            return false;
-        if(menu){
-            m_menuResult = m_builder.contextMenu(s_MenuKey, s_AnchorKey, m_source, m_menu, m_menuOptions);
-            if(!m_menuResult.valid)
-                return false;
-        }
-        return true;
-    }
-
+    virtual void SetUp()override;
+    [[nodiscard]] b8 declareTools(u64 generation, b8 tooltip = true, b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f });
     [[nodiscard]] b8 prepareTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return declareTools(generation, tooltip, menu, bounds) && finishPanel();
     }
-
     [[nodiscard]] b8 acceptTools(const u64 generation, const b8 tooltip = true, const b8 menu = true, const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
         return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
     }
-
-    [[nodiscard]] b8 acceptPopupTooltip(const u64 generation){
-        if(!begin(generation))
-            return false;
-        PopupOptions options;
-        options.anchor = { 40.0f, 40.0f, 40.0f, 24.0f };
-        options.size = { 320.0f, 220.0f };
-        m_builder.setDeltaSeconds(m_deltaSeconds);
-        if(!m_builder.beginPopup("plain", m_plainPopup, options))
-            return false;
-        m_anchorActivated = m_builder.button(s_AnchorKey, "Popup anchor", m_anchorOptions);
-        return m_builder.tooltip(s_TooltipKey, s_AnchorKey, "Overlay help", m_tooltip, m_tooltipOptions) && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
-    }
-
-    [[nodiscard]] WidgetId anchor(const AStringView parent = s_PopupToolsPanelKey)const{ return id(s_AnchorKey, parent); }
-
-    [[nodiscard]] const HitTarget* menuHost()const noexcept{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.navigable && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-                return &entry;
-        }
-        return nullptr;
-    }
-
-    [[nodiscard]] const HitTarget* menuRow(const u64 key)const noexcept{
-        for(const HitTarget& entry : m_context.input().targets()){
-            if(entry.value == key && entry.popup.instanceGeneration == m_menu.instanceGeneration())
-                return &entry;
-        }
-        return nullptr;
-    }
-
-    [[nodiscard]] b8 moveToAnchor(const AStringView parent = s_PopupToolsPanelKey){
-        const HitTarget* accepted = target(anchor(parent));
-        if(!accepted)
-            return false;
-        const Point point = Center(accepted->rectangle);
-        return send({ .position = point , .type = InputEventType::PointerMove }).hover == anchor(parent);
-    }
-
-    void secondaryClick(const Point& point){
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryDown }).pointerConsumed);
-        EXPECT_TRUE(send({ .position = point , .type = InputEventType::SecondaryUp }).pointerConsumed);
-    }
-
-    [[nodiscard]] b8 openBySecondary(const u64 generation){
-        const HitTarget* accepted = target(anchor());
-        if(!accepted)
-            return false;
-        const Point point = Center(accepted->rectangle);
-        secondaryClick(point);
-        return acceptTools(generation, false) && m_menu.isOpen();
-    }
+    [[nodiscard]] b8 acceptPopupTooltip(u64 generation);
+    [[nodiscard]] const HitTarget* menuHost()const noexcept;
+    [[nodiscard]] const HitTarget* menuRow(u64 key)const noexcept;
+    [[nodiscard]] b8 moveToAnchor(AStringView parent = s_PopupToolsPanelKey);
+    void secondaryClick(const Point& point);
+    [[nodiscard]] b8 openBySecondary(u64 generation);
 
 
 protected:

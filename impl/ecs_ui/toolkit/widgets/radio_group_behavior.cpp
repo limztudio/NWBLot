@@ -23,45 +23,6 @@ namespace __hidden_ui_radio_group_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static b8 ValidChoices(const RadioGroupChoices& choices)noexcept{
-    if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.count > s_RadioGroupMaxChoices)
-        return false;
-    for(u32 index = 0u; index < choices.count; ++index){
-        if(choices.rows[index].key == 0u)
-            return false;
-        for(u32 previous = 0u; previous < index; ++previous){
-            if(choices.rows[previous].key == choices.rows[index].key)
-                return false;
-        }
-    }
-    return true;
-}
-
-[[nodiscard]] static Expected<u32> FindChoice(const RadioGroupChoices& choices, const u64 key)noexcept{
-    if(key == 0u)
-        return MakeUnexpected(Failure{});
-    for(u32 candidate = 0u; candidate < choices.count; ++candidate){
-        if(choices.rows[candidate].key == key)
-            return candidate;
-    }
-    return MakeUnexpected(Failure{});
-}
-
-[[nodiscard]] static u64 FindEnabled(const RadioGroupChoices& choices, const u32 start, const b8 reverse)noexcept{
-    if(choices.count == 0u || start >= choices.count)
-        return 0u;
-    u32 index = start;
-    for(u32 visited = 0u; visited < choices.count; ++visited){
-        if(choices.rows[index].enabled)
-            return choices.rows[index].key;
-        if(reverse)
-            index = index == 0u ? choices.count - 1u : index - 1u;
-        else
-            index = index + 1u == choices.count ? 0u : index + 1u;
-    }
-    return 0u;
-}
-
 [[nodiscard]] static b8 StateCurrent(const RadioGroupState& state, const RadioGroupSnapshot& snapshot, const b8& reentryObserved, const IRadioGroupReconcileGuard* const guard){
     if(reentryObserved || !state.matches(snapshot) || (guard && !guard->current()))
         return false;
@@ -79,25 +40,6 @@ namespace __hidden_ui_radio_group_behavior{
         return false;
     const u64 count = source.rowCount();
     return StateCurrent(state, snapshot, reentryObserved, guard) && count == choices.count;
-}
-
-[[nodiscard]] static b8 ValidOptions(const RadioGroupOptions& options)noexcept{
-    return options.enabled && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f && (options.width.policy != LayoutSizePolicy::Stretch || options.width.value > 0.0f);
-}
-
-[[nodiscard]] static u64 NavigationTarget(const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind)noexcept{
-    if(choices.count == 0u)
-        return 0u;
-    if(kind == ControlActionKind::Home)
-        return FindEnabled(choices, 0u, false);
-    if(kind == ControlActionKind::End)
-        return FindEnabled(choices, choices.count - 1u, true);
-    const b8 reverse = kind == ControlActionKind::Up || kind == ControlActionKind::Left;
-    const auto current = FindChoice(choices, cursor);
-    if(!current)
-        return FindEnabled(choices, reverse ? choices.count - 1u : 0u, reverse);
-    const u32 start = reverse ? (*current == 0u ? choices.count - 1u : *current - 1u) : (*current + 1u == choices.count ? 0u : *current + 1u);
-    return FindEnabled(choices, start, reverse);
 }
 
 
@@ -157,13 +99,14 @@ Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state
     const b8 replacement = snapshot.sourceGeneration != 0u && snapshot.sourceGeneration != candidate.sourceGeneration;
     u64 selected = replacement ? 0u : snapshot.selectedKey;
     u64 cursor = replacement ? 0u : snapshot.cursorKey;
-    if(!FindChoice(candidate, selected))
+    u32 selectedIndex = 0u;
+    if(!TryFindRadioGroupChoice(candidate, selected, selectedIndex))
         selected = 0u;
-    const auto cursorIndex = FindChoice(candidate, cursor);
-    if(!cursorIndex)
-        cursor = FindEnabled(candidate, 0u, false);
-    else if(!candidate.rows[*cursorIndex].enabled)
-        cursor = FindEnabled(candidate, *cursorIndex + 1u == candidate.count ? 0u : *cursorIndex + 1u, false);
+    u32 cursorIndex = 0u;
+    if(!TryFindRadioGroupChoice(candidate, cursor, cursorIndex))
+        cursor = FindEnabledRadioGroupChoice(candidate, 0u, false);
+    else if(!candidate.rows[cursorIndex].enabled)
+        cursor = FindEnabledRadioGroupChoice(candidate, cursorIndex + 1u == candidate.count ? 0u : cursorIndex + 1u, false);
     // A second observation catches one-shot metadata mutation from the preceding final count callback.
     if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
         return MakeUnexpected(Failure{});
@@ -180,13 +123,12 @@ Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(RadioGroupState& state
 }
 
 b8 RadioGroupBehavior::Apply(RadioGroupState& state, RadioGroupResult& result, const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action)noexcept{
-    using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;
         return false;
     }
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
-    if(!ValidOptions(options) || !ValidChoices(choices) || !token.valid() || token != action.control || choices.sourceGeneration != token.contentGeneration || choices.sourceRevision != token.contentRevision)
+    if(!IsValidRadioGroupOptions(options) || !IsValidRadioGroupChoices(choices) || !token.valid() || token != action.control || choices.sourceGeneration != token.contentGeneration || choices.sourceRevision != token.contentRevision)
         return false;
     u64 candidate = 0u;
     b8 activate = false;
@@ -197,13 +139,13 @@ b8 RadioGroupBehavior::Apply(RadioGroupState& state, RadioGroupResult& result, c
     case ControlActionKind::Right:
     case ControlActionKind::Home:
     case ControlActionKind::End:
-        candidate = NavigationTarget(choices, state.m_cursor, action.kind);
+        candidate = ResolveRadioGroupNavigationTarget(choices, state.m_cursor, action.kind);
         break;
     case ControlActionKind::Submit:
     case ControlActionKind::Activate:{
         candidate = action.kind == ControlActionKind::Activate ? action.value : state.m_cursor;
-        const auto index = FindChoice(choices, candidate);
-        if(!index || !choices.rows[*index].enabled){
+        u32 index = 0u;
+        if(!TryFindRadioGroupChoice(choices, candidate, index) || !choices.rows[index].enabled){
             if(action.kind == ControlActionKind::Activate)
                 return false;
             candidate = 0u;

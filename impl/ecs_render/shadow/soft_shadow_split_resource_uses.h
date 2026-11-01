@@ -9,7 +9,7 @@
 #include <impl/ecs_render/shadow/light_space_settings.adhd.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
 
 #include <core/alloc/scratch.h>
 #include <core/task/gpu/task_graph.h>
@@ -29,7 +29,7 @@ struct SoftShadowSplitResourceInputs{
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources;
     const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan;
     const RayTracingSceneGraphReads& hardwareSceneReads;
-    const Core::GpuGraphResourceId (&hardwareTransparentScratch)[s_HardwareTransparentShadowScratchCount];
+    Span<const Core::GpuGraphResourceId> hardwareTransparentScratch{};
     SoftShadowSplitRoute route;
     Span<const Core::GpuGraphResourceId> traceGeometryResources{};
     Core::GpuGraphResourceId worldPosition;
@@ -53,16 +53,16 @@ struct SoftShadowSplitResourceUses{
     static constexpr usize s_MaxTransparentFoldUses = 9u;
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaque;
-    Core::GpuTaskResourceUse opaqueFirstWavelet[s_MaxOpaqueFirstWaveletUses] = {};
+    Array<Core::GpuTaskResourceUse, s_MaxOpaqueFirstWaveletUses> opaqueFirstWavelet{};
     usize opaqueFirstWaveletCount = 0u;
-    Core::GpuTaskResourceUse opaqueResolve[s_MaxOpaqueResolveUses] = {};
+    Array<Core::GpuTaskResourceUse, s_MaxOpaqueResolveUses> opaqueResolve{};
     usize opaqueResolveCount = 0u;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTrace;
-    Core::GpuTaskResourceUse transparentTemporalMerge[s_MaxTransparentTemporalMergeUses] = {};
+    Array<Core::GpuTaskResourceUse, s_MaxTransparentTemporalMergeUses> transparentTemporalMerge{};
     usize transparentTemporalMergeCount = 0u;
-    Core::GpuTaskResourceUse transparentFirstWavelet[s_MaxTransparentFirstWaveletUses] = {};
+    Array<Core::GpuTaskResourceUse, s_MaxTransparentFirstWaveletUses> transparentFirstWavelet{};
     usize transparentFirstWaveletCount = 0u;
-    Core::GpuTaskResourceUse transparentFold[s_MaxTransparentFoldUses] = {};
+    Array<Core::GpuTaskResourceUse, s_MaxTransparentFoldUses> transparentFold{};
     usize transparentFoldCount = 0u;
     b8 graphOwnsTransparentTemporalMergeEntryStates = false;
 

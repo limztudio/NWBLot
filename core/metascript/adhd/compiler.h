@@ -48,8 +48,12 @@ public:
     [[nodiscard]] static b8 Compile(MStringView source, MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver = nullptr, MStringView customNamespace = {}, Span<const MString> macroDefinitions = {});
 
     [[nodiscard]] static MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);
-    [[nodiscard]] static MString DeriveHeaderFilename(MStringView virtualFilePath, MetaArena& arena);
-    [[nodiscard]] static MString DeriveSourceFilename(MStringView virtualFilePath, MetaArena& arena);
+    [[nodiscard]] static MString DeriveHeaderFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.h", arena); }
+    [[nodiscard]] static MString DeriveSourceFilename(const MStringView virtualFilePath, MetaArena& arena){ return DeriveOutputFilename(virtualFilePath, ".adhd.cpp", arena); }
+
+
+private:
+    [[nodiscard]] static MString DeriveOutputFilename(MStringView virtualFilePath, MStringView suffix, MetaArena& arena);
 };
 
 

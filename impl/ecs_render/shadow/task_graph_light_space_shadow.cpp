@@ -88,6 +88,8 @@ inline constexpr usize s_FixedResourceUseCount = 5u;
 struct ViewTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+
+public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         const b8& shadowPrepared;
@@ -103,7 +105,7 @@ public:
             return true;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowViews, payload.graphics.getDevice(), commandList);
 
-        return RecordLightSpaceViews(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot);
+        return RecordLightSpaceViews(payload.snapshot, commandList, payload.graphics.getDevice().getDescriptorHeap());
     }
 };
 
@@ -123,7 +125,7 @@ public:
             return true;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowShade, payload.graphics.getDevice(), commandList);
 
-        if(!RecordLightSpaceShade(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot))
+        if(!RecordLightSpaceShade(payload.snapshot, commandList, payload.graphics.getDevice().getDescriptorHeap()))
             return false;
         if(payload.snapshot.captureHistory)
             payload.snapshot.captureHistory->recordCapture(payload.snapshot.captureTicket);
@@ -134,6 +136,8 @@ public:
 struct DiagnosticTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, };
 
+
+public:
     struct Payload{
         const b8& shadowPrepared;
         Core::BufferHandle context;
@@ -209,13 +213,15 @@ public:
             return true;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowCull, payload.graphics.getDevice(), commandList);
 
-        return RecordLightSpaceCull(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.frozenSnapshot());
+        return RecordLightSpaceCull(payload.frozenSnapshot(), commandList, payload.graphics.getDevice().getDescriptorHeap());
     }
 };
 
 struct CaptureTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics };
 
+
+public:
     struct Payload : CasterPayload{
         b8 transparent;
 
@@ -239,7 +245,7 @@ public:
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), scope, payload.graphics.getDevice(), commandList);
 
         for(u32 view = 0u; view < snapshot.plan.viewCount; ++view){
-            if(!RecordLightSpaceCapture(commandList, payload.graphics.getDevice().getDescriptorHeap(), snapshot, view, payload.transparent))
+            if(!RecordLightSpaceCapture(snapshot, view, payload.transparent, commandList, payload.graphics.getDevice().getDescriptorHeap()))
                 return false;
         }
         return true;
@@ -269,7 +275,7 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceSha
     if(!readbackResult)
         return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId readback = *readbackResult;
-    const Core::GpuTaskResourceUse uses[]{ ReadWriteUse(context, Core::ResourceStates::UnorderedAccess), WriteUse(readback, Core::ResourceStates::CopyDest), };
+    const Array<Core::GpuTaskResourceUse, 2u> uses{ ReadWriteUse(context, Core::ResourceStates::UnorderedAccess), WriteUse(readback, Core::ResourceStates::CopyDest), };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
@@ -281,9 +287,9 @@ Expected<Core::GpuTaskId> DeclareLightSpaceShadowDiagnostics(const LightSpaceSha
     desc
         .setIdentity(__hidden_task_graph_light_space_shadow::s_DiagnosticsIdentity)
         .setMarkerLabel(__hidden_task_graph_light_space_shadow::s_DiagnosticsLabel)
-        .setScheduling(scheduling).setDependencies(&inputs.dependency, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses, LengthOf(uses))
+        .setScheduling(scheduling).setDependencies({ &inputs.dependency, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
     ;
     return graph.addTask<__hidden_task_graph_light_space_shadow::DiagnosticTask>(
         desc,
@@ -300,13 +306,10 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     const auto& snapshot = inputs.snapshot;
     if(!snapshot.ready || !inputs.dependency.valid() || snapshot.casters.empty())
         return MakeUnexpected(Failure{});
-    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return graph.importBuffer(buffer, BufferResourceDesc(identity, label).setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
-    };
     LightSpaceShadowGraph result;
-    const auto countsResult = importBuffer(snapshot.counts, Name("render.light_space_shadow.counts"), "Light-Space Crossing Counts");
-    const auto eventsResult = importBuffer(snapshot.events, Name("render.light_space_shadow.events"), "Light-Space Crossings");
-    const auto viewsResult = importBuffer(snapshot.views, Name("render.light_space_shadow.views"), "Light-Space Views");
+    const auto countsResult = ImportExternalBuffer(graph, snapshot.counts, Name("render.light_space_shadow.counts"), "Light-Space Crossing Counts", Core::ResourceStates::Common, Core::ResourceStates::Common);
+    const auto eventsResult = ImportExternalBuffer(graph, snapshot.events, Name("render.light_space_shadow.events"), "Light-Space Crossings", Core::ResourceStates::Common, Core::ResourceStates::Common);
+    const auto viewsResult = ImportExternalBuffer(graph, snapshot.views, Name("render.light_space_shadow.views"), "Light-Space Views", Core::ResourceStates::Common, Core::ResourceStates::Common);
     // Opaque capture clears every layer. Unknown preserves fresh Undefined; accepted state sources retain native states.
     const auto depthResult = graph.importTexture(snapshot.depth, TextureResourceDesc(Name("render.light_space_shadow.depth"), "Light-Space Opaque Depth").setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
     if(!countsResult || !eventsResult || !viewsResult || !depthResult)
@@ -317,8 +320,8 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     result.depth = *depthResult;
     const b8 csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
     if(csg){
-        const auto csgContextResult = importBuffer(snapshot.csgContext, Name("render.light_space_shadow.csg_context"), "CSG Shadow Context");
-        const auto csgOpaqueDepthResult = importBuffer(snapshot.csgOpaqueDepth, Name("render.light_space_shadow.csg_depth"), "CSG Shadow Depth");
+        const auto csgContextResult = ImportExternalBuffer(graph, snapshot.csgContext, Name("render.light_space_shadow.csg_context"), "CSG Shadow Context", Core::ResourceStates::Common, Core::ResourceStates::Common);
+        const auto csgOpaqueDepthResult = ImportExternalBuffer(graph, snapshot.csgOpaqueDepth, Name("render.light_space_shadow.csg_depth"), "CSG Shadow Depth", Core::ResourceStates::Common, Core::ResourceStates::Common);
         if(!csgContextResult || !csgOpaqueDepthResult)
             return MakeUnexpected(Failure{});
         result.csgContext = *csgContextResult;
@@ -330,7 +333,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         return result;
     }
     // A retained draw buffer is untouched during reuse; importing its final state would promise an unowned graph export.
-    const auto drawArgumentsResult = importBuffer(snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments");
+    const auto drawArgumentsResult = ImportExternalBuffer(graph, snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments", Core::ResourceStates::Common, Core::ResourceStates::Common);
     if(!drawArgumentsResult)
         return MakeUnexpected(Failure{});
     result.drawArguments = *drawArgumentsResult;
@@ -344,7 +347,11 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setScheduling(scheduling).setDependencies(&inputs.dependency, 1u).setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size());
+    uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity)
+        .setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel)
+        .setScheduling(scheduling)
+        .setDependencies({ &inputs.dependency, 1u })
+        .setExternalStateSources(inputs.stateSources);
     Core::GpuTaskId csgUpload;
     if(csg){
         if(!snapshot.diagnostics || snapshot.csgContextBytes.size() < NWB_CSG_RAY_CONTEXT_BYTES)
@@ -370,13 +377,13 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
             if(!payloadResult)
                 return MakeUnexpected(Failure{});
             const Core::GpuUploadBlobId payload = *payloadResult;
-            uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload").setDependencies(&csgUpload, 1u);
+            uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload").setDependencies({ &csgUpload, 1u });
             const auto csgUploadResult2 = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = payload, .destination = result.csgContext, .destinationOffsetBytes = s_PayloadOffset, .finalState = Core::ResourceStates::Common, });
             if(!csgUploadResult2)
                 return MakeUnexpected(Failure{});
             csgUpload = *csgUploadResult2;
         }
-        uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setDependencies(&csgUpload, 1u);
+        uploadDesc.setIdentity(__hidden_task_graph_light_space_shadow::s_ViewUploadIdentity).setMarkerLabel(__hidden_task_graph_light_space_shadow::s_ViewUploadLabel).setDependencies({ &csgUpload, 1u });
     }
     const auto viewUploadResult = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{ .source = upload, .destination = result.views, .finalState = Core::ResourceStates::Common, });
     if(!viewUploadResult){
@@ -385,7 +392,11 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     }
     result.viewUpload = *viewUploadResult;
     Core::GpuTaskDesc clearDesc;
-    clearDesc.setIdentity(Name("render.light_space_shadow.counts_clear")).setMarkerLabel("Light-Space Crossing Clear").setScheduling(scheduling).setDependencies(&result.viewUpload, 1u).setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size());
+    clearDesc.setIdentity(Name("render.light_space_shadow.counts_clear"))
+        .setMarkerLabel("Light-Space Crossing Clear")
+        .setScheduling(scheduling)
+        .setDependencies({ &result.viewUpload, 1u })
+        .setExternalStateSources(inputs.stateSources);
     const auto countsClearResult = graph.addClearBufferTask(clearDesc, Core::GpuClearBufferTaskDesc{ .destination = result.counts, .clearValue = 0u, });
     if(!countsClearResult){
         result.countsClear = {};
@@ -405,10 +416,10 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         .setIdentity(Name("render.light_space_shadow.view_fit"))
         .setMarkerLabel("Light-Space View Fit")
         .setScheduling(scheduling)
-        .setDependencies(&result.countsClear, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.data(), uses.size())
-        .setResourceSetUses(inputs.sceneReadSets.data(), inputs.sceneReadSets.size())
+        .setDependencies({ &result.countsClear, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
+        .setResourceSetUses(inputs.sceneReadSets)
     ;
     const auto viewFitResult = graph.addTask<__hidden_task_graph_light_space_shadow::ViewTask>(viewDesc, __hidden_task_graph_light_space_shadow::ViewTask::Payload{ inputs.graphics, inputs.shadowPrepared, snapshot, });
     if(!viewFitResult){
@@ -423,7 +434,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
     for(const auto& caster : snapshot.casters){
         if(caster.meshletCount == 0u)
             continue;
-        const ReferenceWrapper<const Core::BufferHandle> buffers[] = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
+        const Array<ReferenceWrapper<const Core::BufferHandle>, 2u> buffers = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
         for(const Core::BufferHandle& buffer : buffers){
             if(!buffer)
                 return MakeUnexpected(Failure{});
@@ -433,7 +444,7 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
                 resource = declarations.findImportedBuffer(buffer);
             }
             if(!resource.valid()){
-                const auto importedResource = importBuffer(buffer, buffer->getCreationDescription().debugName, "Light-Space Meshlet Bounds");
+                const auto importedResource = ImportExternalBuffer(graph, buffer, buffer->getCreationDescription().debugName, "Light-Space Meshlet Bounds", Core::ResourceStates::Common, Core::ResourceStates::Common);
                 if(!importedResource)
                     return MakeUnexpected(Failure{});
                 resource = *importedResource;
@@ -449,10 +460,10 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         .setIdentity(Name("render.light_space_shadow.draw_cull"))
         .setMarkerLabel("Light-Space Meshlet Cull")
         .setScheduling(scheduling)
-        .setDependencies(&result.viewFit, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.data(), uses.size())
-        .setResourceSetUses(inputs.sceneReadSets.data(), inputs.sceneReadSets.size())
+        .setDependencies({ &result.viewFit, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
+        .setResourceSetUses(inputs.sceneReadSets)
     ;
     const auto drawCullResult = graph.addTask<__hidden_task_graph_light_space_shadow::CullTask>(cullDesc, __hidden_task_graph_light_space_shadow::CullTask::Payload(inputs));
     if(!drawCullResult){
@@ -475,9 +486,9 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         .setIdentity(Name("render.light_space_shadow.opaque_capture"))
         .setMarkerLabel("Light-Space Opaque Capture")
         .setScheduling(scheduling)
-        .setDependencies(&result.drawCull, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.data(), uses.size())
+        .setDependencies({ &result.drawCull, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
     ;
     const auto opaqueCaptureResult = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(opaqueDesc, __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, false));
     if(!opaqueCaptureResult){
@@ -495,9 +506,9 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         .setIdentity(Name("render.light_space_shadow.transparent_capture"))
         .setMarkerLabel("Light-Space Transparent Capture")
         .setScheduling(scheduling)
-        .setDependencies(&result.opaqueCapture, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.data(), uses.size())
+        .setDependencies({ &result.opaqueCapture, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
     ;
     const auto transparentCaptureResult = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(transparentDesc, __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, true));
     if(!transparentCaptureResult){
@@ -521,10 +532,10 @@ Expected<LightSpaceShadowGraph> DeclareLightSpaceShadowMaps(const LightSpaceShad
         .setIdentity(Name("render.light_space_shadow.shade"))
         .setMarkerLabel("Light-Space Crossing Shade")
         .setScheduling(scheduling)
-        .setDependencies(&result.transparentCapture, 1u)
-        .setExternalStateSources(inputs.stateSources.data(), inputs.stateSources.size())
-        .setResourceUses(uses.data(), uses.size())
-        .setResourceSetUses(inputs.sceneReadSets.data(), inputs.sceneReadSets.size())
+        .setDependencies({ &result.transparentCapture, 1u })
+        .setExternalStateSources(inputs.stateSources)
+        .setResourceUses(uses)
+        .setResourceSetUses(inputs.sceneReadSets)
     ;
     const auto shadeResult = graph.addTask<__hidden_task_graph_light_space_shadow::ShadeTask>(shadeDesc, __hidden_task_graph_light_space_shadow::ShadeTask::Payload{ inputs.graphics, inputs.shadowPrepared, snapshot, });
     if(!shadeResult)

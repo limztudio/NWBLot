@@ -262,8 +262,8 @@ private:
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess,
-        GpuTaskGraph& graph,
         GpuTimingRecorder* timingRecorder,
+        GpuTaskGraph& graph,
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
@@ -273,12 +273,9 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
         const GpuSubmissionPacketRange& range,
-        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
-        usize taskTimingTicketCount,
-        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
-        usize taskAcceptedCallbackCount,
-        const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks,
-        usize taskSubmissionHookCount,
+        Span<const GpuTaskGraphTaskTimingTicket> taskTimingTickets,
+        Span<const GpuTaskGraphTaskAcceptedCallback> taskAcceptedCallbacks,
+        Span<const GpuTaskGraphTaskSubmissionHook> taskSubmissionHooks,
         Alloc::ScratchArena& scratchArena,
         GpuTaskGraph& graph,
         GpuGraphSubmissionTransaction& transaction,
@@ -292,11 +289,10 @@ private:
         const GpuRecordedGraph& recordedGraph,
         const GpuRecordedGraph::ArtifactOperation& artifactAccess,
         const GpuSubmissionPacketId& packetID,
-        usize timingTicketCount,
+        Span<const NotNull<GpuTimingSubmissionTicket*>> timingTickets,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
         const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks,
         Alloc::ScratchArena& scratchArena,
-        const NotNull<GpuTimingSubmissionTicket*>* timingTickets,
         GpuTaskGraph& graph,
         GpuGraphSubmissionTransaction& transaction
     )const;

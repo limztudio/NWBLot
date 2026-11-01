@@ -47,19 +47,19 @@ TEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes){
     TestArena testArena;
     Core::GpuCrashTracker crashTracker(testArena.arena);
     Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
-    char label[] = { 'O', 'u', 't', 'e', 'r', 'X' };
-    const usize outerHash = commandListTracker.pushEvent(AStringView(label, 5u));
+    Array<char, 6u> label = { 'O', 'u', 't', 'e', 'r', 'X' };
+    const usize outerHash = commandListTracker.pushEvent(AStringView(label.data(), 5u));
     label[0] = 'x';
 
-    const char nestedLabel[] = { 'I', '\0', 'n' };
-    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel, sizeof(nestedLabel)));
+    const Array<char, 3u> nestedLabel = { 'I', '\0', 'n' };
+    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel.data(), nestedLabel.size()));
     const Core::ResolvedMarker outer = crashTracker.resolveMarker(outerHash);
     const Core::ResolvedMarker nested = crashTracker.resolveMarker(nestedHash);
     ASSERT_TRUE(outer.first());
     ASSERT_TRUE(nested.first());
     EXPECT_EQ(outer.second(), AStringView("Outer"));
-    constexpr char s_Expected[] = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
-    EXPECT_EQ(nested.second(), AStringView(s_Expected, sizeof(s_Expected)));
+    constexpr Array<char, 9u> s_Expected = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
+    EXPECT_EQ(nested.second(), AStringView(s_Expected.data(), s_Expected.size()));
 }
 
 
@@ -100,8 +100,8 @@ TEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandList
 TEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable){
     TestArena testArena;
     Core::GpuCrashTracker crashTracker(testArena.arena);
-    constexpr AStringView s_MarkerNames[] = { "Destroyed command list 0", "Destroyed command list 1", "Destroyed command list 2", "Destroyed command list 3", "Destroyed command list 4", "Destroyed command list 5", };
-    usize markerHashes[6] = {};
+    constexpr Array<AStringView, 6u> s_MarkerNames = { "Destroyed command list 0", "Destroyed command list 1", "Destroyed command list 2", "Destroyed command list 3", "Destroyed command list 4", "Destroyed command list 5", };
+    Array<usize, 6u> markerHashes = {};
 
     usize markerIndex = 0u;
     for(const AStringView markerName : s_MarkerNames){
@@ -132,7 +132,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     ASSERT_TRUE(retained.first());
     ASSERT_EQ(retained.second(), AStringView("Retained marker view"));
 
-    constexpr AStringView s_FirstWriterMarkerNames[] = {
+    constexpr Array<AStringView, 16> s_FirstWriterMarkerNames = {
         "Concurrent writer A marker 00", "Concurrent writer A marker 01",
         "Concurrent writer A marker 02", "Concurrent writer A marker 03",
         "Concurrent writer A marker 04", "Concurrent writer A marker 05",
@@ -142,7 +142,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
         "Concurrent writer A marker 12", "Concurrent writer A marker 13",
         "Concurrent writer A marker 14", "Concurrent writer A marker 15",
     };
-    constexpr AStringView s_SecondWriterMarkerNames[] = {
+    constexpr Array<AStringView, 16> s_SecondWriterMarkerNames = {
         "Concurrent writer B marker 00", "Concurrent writer B marker 01",
         "Concurrent writer B marker 02", "Concurrent writer B marker 03",
         "Concurrent writer B marker 04", "Concurrent writer B marker 05",
@@ -156,12 +156,12 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     Latch growthMidpoint(3u);
     Atomic<u32> activeWriters{ 2u };
     Atomic<b8> invalidObservation{ false };
-    const auto insertMarkers = [&]<usize MarkerCount>(const AStringView (&markerNames)[MarkerCount]){
+    const auto insertMarkers = [&](const Span<const AStringView> markerNames){
         {
             Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
             growthStart.arrive_and_wait();
-            for(usize markerIndex = 0u; markerIndex < MarkerCount; ++markerIndex){
-                if(markerIndex == MarkerCount / 2u)
+            for(usize markerIndex = 0u; markerIndex < markerNames.size(); ++markerIndex){
+                if(markerIndex == markerNames.size() / 2u)
                     growthMidpoint.arrive_and_wait();
 
                 commandListTracker.resetEventStack();

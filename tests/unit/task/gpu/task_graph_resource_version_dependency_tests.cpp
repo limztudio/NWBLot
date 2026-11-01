@@ -2,11 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "gpu_task_graph_read_views.h"
 #include "task_graph_resource_version_test_utils.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
-
-#include <tests/common/gpu_task_graph_read_views.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,12 +18,6 @@ NWB_BEGIN
 
 
 namespace Tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,45 +36,45 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/ordered_resource"));
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
+    const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
-    const Graphics::GpuTaskResourceRange versionRange = BufferRange(16u, 32u);
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced, versionRange);
+    const Core::GpuTaskResourceRange versionRange = BufferRange(16u, 32u);
+    const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, versionRange);
     ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(resource, versionRange, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
-    const auto consumerResult = AddTask(graph, Name("tests/task_graph_resource_version/ordered_consumer"), &consumerResourceUse, 1u, &consumerVersionUse, 1u);
+    const Core::GpuTaskResourceUse consumerResourceUse = ResourceUse(resource, versionRange, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
+    const Core::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(version, Core::GpuTaskResourceVersionRole::Consume);
+    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/ordered_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
+    const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
 
     const VersionProducerUses producerUses = ProducerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(graph, Name("tests/task_graph_resource_version/ordered_producer"), &producerResourceUse, 1u, &producerVersionUse, 1u);
+    const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
+    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/ordered_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
+    const Core::GpuTaskId producer = *producerResult;
     ASSERT_TRUE(producer.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Core::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(analysis, assignments, compiledGraph, operationScratchArena, graph));
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_TRUE(analysis.validFor(declarations));
     }
-    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
+    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
     EXPECT_EQ(analysis.topologicalOrder()[0], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1], consumer);
-    EXPECT_TRUE(HasResourceVersionEdge(analysis, producer, consumer, resource, version, Graphics::GpuTaskHazardType::VersionDependency));
+    EXPECT_TRUE(HasResourceVersionEdge(analysis, producer, consumer, resource, version, Core::GpuTaskHazardType::VersionDependency));
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     EXPECT_TRUE(analysis.hasInferredEdge(producer, consumer));
 
@@ -91,43 +84,43 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/telemetry_resource"));
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
+    const Core::GpuGraphResourceId resource = *resourceResult;
+    const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
     ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
     const VersionProducerUses producerUses = ProducerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(graph, Name("tests/task_graph_resource_version/telemetry_producer"), &producerResourceUse, 1u, &producerVersionUse, 1u);
+    const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
+    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/telemetry_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
+    const Core::GpuTaskId producer = *producerResult;
     ASSERT_TRUE(producer.valid());
 
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(graph, Name("tests/task_graph_resource_version/telemetry_consumer"), &consumerResourceUse, 1u, &consumerVersionUse, 1u, &producer, 1u);
+    const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
+    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/telemetry_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), Span(&producer, 1u), {}, graph);
     ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
+    const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
 
-    const Graphics::GpuTaskResourceUse overwriterResourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write);
-    const auto overwriterResult = AddTask(graph, Name("tests/task_graph_resource_version/telemetry_overwriter"), &overwriterResourceUse, 1u, nullptr, 0u);
+    const Core::GpuTaskResourceUse overwriterResourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
+    const auto overwriterResult = AddTask(Name("tests/task_graph_resource_version/telemetry_overwriter"), Span(&overwriterResourceUse, 1u), {}, {}, {}, graph);
     ASSERT_TRUE(overwriterResult);
-    const Graphics::GpuTaskId overwriter = *overwriterResult;
+    const Core::GpuTaskId overwriter = *overwriterResult;
     ASSERT_TRUE(overwriter.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(TaskGraphTestUtils::Analyze(scratchArena, graph, analysis));
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(graph, scratchArena, analysis));
     EXPECT_TRUE(analysis.hasExplicitEdge(producer, consumer));
-    EXPECT_TRUE(HasResourceVersionEdge(analysis, producer, consumer, resource, version, Graphics::GpuTaskHazardType::VersionDependency));
-    EXPECT_TRUE(HasResourceVersionEdge(analysis, consumer, overwriter, resource, version, Graphics::GpuTaskHazardType::VersionLifetime));
+    EXPECT_TRUE(HasResourceVersionEdge(analysis, producer, consumer, resource, version, Core::GpuTaskHazardType::VersionDependency));
+    EXPECT_TRUE(HasResourceVersionEdge(analysis, consumer, overwriter, resource, version, Core::GpuTaskHazardType::VersionLifetime));
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -135,9 +128,9 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
     Telemetry::FrameGraphBuilder builder(scratchArena, nodes, edges, pendingEdges);
     u32 taskNodeOffset = 0u;
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
-        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena));
+        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(analysis, scratchArena, builder));
         taskNodeOffset = static_cast<u32>(declarations.resourceCount());
     }
     const u32 producerNode = taskNodeOffset + producer.index;
@@ -150,11 +143,11 @@ TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplici
             continue;
         if(edge.fromNodeIndex == producerNode && edge.toNodeIndex == consumerNode){
             foundDependency = true;
-            EXPECT_EQ(edge.flags, Graphics::GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency | Graphics::GpuTaskGraphTelemetryEdgeFlag::InferredDependency | Graphics::GpuTaskGraphTelemetryEdgeFlag::VersionDependency);
+            EXPECT_EQ(edge.flags, Core::GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency | Core::GpuTaskGraphTelemetryEdgeFlag::InferredDependency | Core::GpuTaskGraphTelemetryEdgeFlag::VersionDependency);
         }
         if(edge.fromNodeIndex == consumerNode && edge.toNodeIndex == overwriterNode){
             foundLifetime = true;
-            EXPECT_EQ(edge.flags, Graphics::GpuTaskGraphTelemetryEdgeFlag::InferredDependency | Graphics::GpuTaskGraphTelemetryEdgeFlag::VersionLifetime);
+            EXPECT_EQ(edge.flags, Core::GpuTaskGraphTelemetryEdgeFlag::InferredDependency | Core::GpuTaskGraphTelemetryEdgeFlag::VersionLifetime);
         }
     }
     EXPECT_TRUE(foundDependency);
@@ -165,64 +158,64 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/queue_score_resource"));
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
+    const Core::GpuGraphResourceId resource = *resourceResult;
+    const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced, BufferRange(0u, 64u));
     ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
+    const Core::GpuTaskCommandRequirements graphicsCommands{ Core::GpuQueueCapability::Graphics };
     const VersionProducerUses producerUses = ProducerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    Graphics::GpuTaskDesc producerDesc;
-    producerDesc.setIdentity(Name("tests/task_graph_resource_version/queue_score_producer")).setMarkerLabel("Resource Version Queue Score Producer").setResourceUses(&producerResourceUse, 1u).setResourceVersionUses(&producerVersionUse, 1u);
+    const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
+    Core::GpuTaskDesc producerDesc;
+    producerDesc.setIdentity(Name("tests/task_graph_resource_version/queue_score_producer")).setMarkerLabel("Resource Version Queue Score Producer").setResourceUses(Span(&producerResourceUse, 1u)).setResourceVersionUses(Span(&producerVersionUse, 1u));
     const auto producerResult = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
+    const Core::GpuTaskId producer = *producerResult;
 
-    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
+    const Core::GpuTaskCommandRequirements computeCommands{ Core::GpuQueueCapability::Compute };
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    Graphics::GpuTaskDesc consumerDesc;
-    consumerDesc.setIdentity(Name("tests/task_graph_resource_version/queue_score_consumer")).setMarkerLabel("Resource Version Queue Score Consumer").setResourceUses(&consumerResourceUse, 1u).setResourceVersionUses(&consumerVersionUse, 1u);
+    const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
+    Core::GpuTaskDesc consumerDesc;
+    consumerDesc.setIdentity(Name("tests/task_graph_resource_version/queue_score_consumer")).setMarkerLabel("Resource Version Queue Score Consumer").setResourceUses(Span(&consumerResourceUse, 1u)).setResourceVersionUses(Span(&consumerVersionUse, 1u));
     const auto consumerResult = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
+    const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
-    ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(graph, operationScratchArena, analysis));
+    ASSERT_EQ(analysis.inferredEdges().size(), 2u);
     ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
     b8 foundVersionDependency = false;
     b8 foundPhysicalRaw = false;
-    for(const Graphics::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
-        foundVersionDependency |= edge.hazard == Graphics::GpuTaskHazardType::VersionDependency;
-        foundPhysicalRaw |= edge.hazard == Graphics::GpuTaskHazardType::ReadAfterWrite;
+    for(const Core::GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
+        foundVersionDependency |= edge.hazard == Core::GpuTaskHazardType::VersionDependency;
+        foundPhysicalRaw |= edge.hazard == Core::GpuTaskHazardType::ReadAfterWrite;
     }
     EXPECT_TRUE(foundVersionDependency);
     EXPECT_TRUE(foundPhysicalRaw);
 
     // The graphics queue has no compute support, so the compute consumer must cross queues.
-    const Graphics::GpuPhysicalQueueInfo queues[] = { TaskGraphTestUtils::GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)), TaskGraphTestUtils::DedicatedComputeQueue(), };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues), };
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    const Array<Core::GpuPhysicalQueueInfo, 2u> queues = { TaskGraphTestUtils::GraphicsQueue(0u, TaskGraphTestUtils::QueueCapabilities(Core::GpuQueueCapability::Graphics, Core::GpuQueueCapability::Transfer)), TaskGraphTestUtils::DedicatedComputeQueue(), };
+    const Core::GpuPhysicalQueueTopology topology{ .queues = queues.data(), .queueCount = LengthOf(queues), };
+    Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(assignments, operationScratchArena, graph, analysis, topology));
-    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
-    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+    const Core::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    const Core::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);
     ASSERT_NE(consumerAssignment, nullptr);
-    EXPECT_EQ(producerAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(producerAssignment->queueClass, Core::CommandQueue::Graphics);
     EXPECT_EQ(producerAssignment->score.outgoingCrossings, 1);
     EXPECT_EQ(producerAssignment->score.ownershipTransfers, 1);
-    EXPECT_EQ(consumerAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(consumerAssignment->queueClass, Core::CommandQueue::Compute);
     EXPECT_EQ(consumerAssignment->score.incomingCrossings, 1);
     EXPECT_EQ(consumerAssignment->score.ownershipTransfers, 1);
 }
@@ -231,43 +224,43 @@ TEST(GpuTaskGraphResourceVersion, RetainsExternalCompletionForImportedRootConsum
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/imported_root_resource"));
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
+    const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
+    const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::ImportedRoot);
     ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(version.valid());
-    const auto completionResult = graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph_resource_version/imported_root_completion")).setMarkerLabel("Imported Root Completion"));
+    const auto completionResult = graph.importExternalCompletion(Core::GpuExternalCompletionDesc{}.setIdentity(Name("tests/task_graph_resource_version/imported_root_completion")).setMarkerLabel("Imported Root Completion"));
     ASSERT_TRUE(completionResult);
-    const Graphics::GpuExternalCompletionId completion = *completionResult;
+    const Core::GpuExternalCompletionId completion = *completionResult;
     ASSERT_TRUE(completion.valid());
-    const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read);
-    const Graphics::GpuTaskResourceVersionUse versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
-    const auto consumerResult = AddTask(graph, Name("tests/task_graph_resource_version/imported_root_consumer"), &resourceUse, 1u, &versionUse, 1u, nullptr, 0u, &completion, 1u);
+    const Core::GpuTaskResourceUse resourceUse = ResourceUse(resource, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
+    const Core::GpuTaskResourceVersionUse versionUse = VersionUse(version, Core::GpuTaskResourceVersionRole::Consume);
+    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/imported_root_consumer"), Span(&resourceUse, 1u), Span(&versionUse, 1u), {}, Span(&completion, 1u), graph);
     ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
+    const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(TaskGraphTestUtils::Analyze(graph, operationScratchArena, analysis));
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 0u);
     ASSERT_EQ(analysis.externalDependencies().size(), 1u);
     u64 analyzedRevision = 0u;
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_TRUE(analysis.validFor(declarations));
         analyzedRevision = declarations.declarationRevision();
     }
-    const auto lateVersionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
+    const auto lateVersionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::ImportedRoot);
     ASSERT_TRUE(lateVersionResult);
-    const Graphics::GpuGraphResourceVersionId lateVersion = *lateVersionResult;
+    const Core::GpuGraphResourceVersionId lateVersion = *lateVersionResult;
     ASSERT_TRUE(lateVersion.valid());
     {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.valid());
         EXPECT_NE(declarations.declarationRevision(), analyzedRevision);
         EXPECT_FALSE(analysis.validFor(declarations));
@@ -278,51 +271,51 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedPureResourceVersionCycle){
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceAResult = AddBuffer(graph, Name("tests/task_graph_resource_version/pure_cycle_resource_a"));
     ASSERT_TRUE(resourceAResult);
-    const Graphics::GpuGraphResourceId resourceA = *resourceAResult;
+    const Core::GpuGraphResourceId resourceA = *resourceAResult;
     const auto resourceBResult = AddBuffer(graph, Name("tests/task_graph_resource_version/pure_cycle_resource_b"));
     ASSERT_TRUE(resourceBResult);
-    const Graphics::GpuGraphResourceId resourceB = *resourceBResult;
-    const auto versionAResult = AddVersion(graph, resourceA, Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
+    const Core::GpuGraphResourceId resourceB = *resourceBResult;
+    const auto versionAResult = AddVersion(graph, resourceA, Core::GpuGraphResourceVersionOrigin::TaskProduced);
     ASSERT_TRUE(versionAResult);
-    const Graphics::GpuGraphResourceVersionId versionA = *versionAResult;
-    const auto versionBResult = AddVersion(graph, resourceB, Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
+    const Core::GpuGraphResourceVersionId versionA = *versionAResult;
+    const auto versionBResult = AddVersion(graph, resourceB, Core::GpuGraphResourceVersionOrigin::TaskProduced);
     ASSERT_TRUE(versionBResult);
-    const Graphics::GpuGraphResourceVersionId versionB = *versionBResult;
+    const Core::GpuGraphResourceVersionId versionB = *versionBResult;
     ASSERT_TRUE(resourceA.valid());
     ASSERT_TRUE(resourceB.valid());
     ASSERT_TRUE(versionA.valid());
     ASSERT_TRUE(versionB.valid());
 
-    const Graphics::GpuTaskResourceUse resourceUsesA[] = {
-        ResourceUse(resourceA, BufferRange(0u, 64u), Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write),
-        ResourceUse(resourceB, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read),
+    const Array<Core::GpuTaskResourceUse, 2u> resourceUsesA = {
+        ResourceUse(resourceA, BufferRange(0u, 64u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write),
+        ResourceUse(resourceB, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read),
     };
-    const Graphics::GpuTaskResourceVersionUse versionUsesA[] = { VersionUse(versionA, Graphics::GpuTaskResourceVersionRole::Produce), VersionUse(versionB, Graphics::GpuTaskResourceVersionRole::Consume), };
-    const auto taskAResult = AddTask(graph, Name("tests/task_graph_resource_version/pure_cycle_task_a"), resourceUsesA, LengthOf(resourceUsesA), versionUsesA, LengthOf(versionUsesA));
+    const Array<Core::GpuTaskResourceVersionUse, 2u> versionUsesA = { VersionUse(versionA, Core::GpuTaskResourceVersionRole::Produce), VersionUse(versionB, Core::GpuTaskResourceVersionRole::Consume), };
+    const auto taskAResult = AddTask(Name("tests/task_graph_resource_version/pure_cycle_task_a"), Span(resourceUsesA), Span(versionUsesA), {}, {}, graph);
     ASSERT_TRUE(taskAResult);
-    const Graphics::GpuTaskId taskA = *taskAResult;
+    const Core::GpuTaskId taskA = *taskAResult;
 
-    const Graphics::GpuTaskResourceUse resourceUsesB[] = {
-        ResourceUse(resourceB, BufferRange(0u, 64u), Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write),
-        ResourceUse(resourceA, BufferRange(0u, 64u), Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read),
+    const Array<Core::GpuTaskResourceUse, 2u> resourceUsesB = {
+        ResourceUse(resourceB, BufferRange(0u, 64u), Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write),
+        ResourceUse(resourceA, BufferRange(0u, 64u), Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read),
     };
-    const Graphics::GpuTaskResourceVersionUse versionUsesB[] = { VersionUse(versionB, Graphics::GpuTaskResourceVersionRole::Produce), VersionUse(versionA, Graphics::GpuTaskResourceVersionRole::Consume), };
-    const auto taskBResult = AddTask(graph, Name("tests/task_graph_resource_version/pure_cycle_task_b"), resourceUsesB, LengthOf(resourceUsesB), versionUsesB, LengthOf(versionUsesB));
+    const Array<Core::GpuTaskResourceVersionUse, 2u> versionUsesB = { VersionUse(versionB, Core::GpuTaskResourceVersionRole::Produce), VersionUse(versionA, Core::GpuTaskResourceVersionRole::Consume), };
+    const auto taskBResult = AddTask(Name("tests/task_graph_resource_version/pure_cycle_task_b"), Span(resourceUsesB), Span(versionUsesB), {}, {}, graph);
     ASSERT_TRUE(taskBResult);
-    const Graphics::GpuTaskId taskB = *taskBResult;
+    const Core::GpuTaskId taskB = *taskBResult;
     ASSERT_TRUE(taskA.valid());
     ASSERT_TRUE(taskB.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
-    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
-    EXPECT_EQ(analysis.resourceVersionEdgeCount(), s_ExpectedDualCount);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(graph, operationScratchArena, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::Cycle);
+    EXPECT_EQ(analysis.resourceVersionEdgeCount(), 2u);
     ExpectClosedCycle(analysis);
-    for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
-        EXPECT_EQ(edge.hazard, Graphics::GpuTaskHazardType::VersionDependency);
+    for(const Core::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
+        EXPECT_EQ(edge.hazard, Core::GpuTaskHazardType::VersionDependency);
         EXPECT_TRUE(edge.resource.valid());
         EXPECT_TRUE(edge.resourceVersion.valid());
     }
@@ -333,42 +326,42 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedMixedExplicitAndResourceVersionCy
     Core::Alloc::ScratchArena operationScratchArena(::NWB::Tests::TaskGraphResourceVersionTestUtils::s_ResourceVersionScratchArena);
 
     TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::GpuTaskGraph graph(testArena.arena);
     const auto resourceResult = AddBuffer(graph, Name("tests/task_graph_resource_version/mixed_cycle_resource"));
     ASSERT_TRUE(resourceResult);
-    const Graphics::GpuGraphResourceId resource = *resourceResult;
-    const auto versionResult = AddVersion(graph, resource, Graphics::GpuGraphResourceVersionOrigin::TaskProduced);
+    const Core::GpuGraphResourceId resource = *resourceResult;
+    const auto versionResult = AddVersion(graph, resource, Core::GpuGraphResourceVersionOrigin::TaskProduced);
     ASSERT_TRUE(versionResult);
-    const Graphics::GpuGraphResourceVersionId version = *versionResult;
+    const Core::GpuGraphResourceVersionId version = *versionResult;
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
-    const auto consumerResult = AddTask(graph, Name("tests/task_graph_resource_version/mixed_cycle_consumer"), &consumerResourceUse, 1u, &consumerVersionUse, 1u);
+    const Core::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
+    const auto consumerResult = AddTask(Name("tests/task_graph_resource_version/mixed_cycle_consumer"), Span(&consumerResourceUse, 1u), Span(&consumerVersionUse, 1u), {}, {}, graph);
     ASSERT_TRUE(consumerResult);
-    const Graphics::GpuTaskId consumer = *consumerResult;
+    const Core::GpuTaskId consumer = *consumerResult;
     ASSERT_TRUE(consumer.valid());
 
     const VersionProducerUses producerUses = ProducerUses(resource, version);
-    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
-    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
-    const auto producerResult = AddTask(graph, Name("tests/task_graph_resource_version/mixed_cycle_producer"), &producerResourceUse, 1u, &producerVersionUse, 1u, &consumer, 1u);
+    const Core::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Core::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
+    const auto producerResult = AddTask(Name("tests/task_graph_resource_version/mixed_cycle_producer"), Span(&producerResourceUse, 1u), Span(&producerVersionUse, 1u), Span(&consumer, 1u), {}, graph);
     ASSERT_TRUE(producerResult);
-    const Graphics::GpuTaskId producer = *producerResult;
+    const Core::GpuTaskId producer = *producerResult;
     ASSERT_TRUE(producer.valid());
 
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    EXPECT_FALSE(TaskGraphTestUtils::Analyze(operationScratchArena, graph, analysis));
-    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
+    Core::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(TaskGraphTestUtils::Analyze(graph, operationScratchArena, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::Cycle);
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     ExpectClosedCycle(analysis);
     b8 foundExplicit = false;
     b8 foundVersion = false;
-    for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
-        foundExplicit |= edge.hazard == Graphics::GpuTaskHazardType::Explicit;
-        foundVersion |= edge.hazard == Graphics::GpuTaskHazardType::VersionDependency;
+    for(const Core::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
+        foundExplicit |= edge.hazard == Core::GpuTaskHazardType::Explicit;
+        foundVersion |= edge.hazard == Core::GpuTaskHazardType::VersionDependency;
     }
     EXPECT_TRUE(foundExplicit);
     EXPECT_TRUE(foundVersion);

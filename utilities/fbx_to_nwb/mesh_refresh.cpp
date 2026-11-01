@@ -31,12 +31,6 @@ namespace __hidden_mesh_refresh{
 
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
 static constexpr usize s_MaxMeshReplacementCount = 8u;
-inline constexpr StringView s_PositionStreamLabel = "position";
-inline constexpr StringView s_NormalStreamLabel = "normal";
-inline constexpr StringView s_TangentStreamLabel = "tangent";
-inline constexpr StringView s_Uv0StreamLabel = "uv0";
-inline constexpr StringView s_ColorsStreamLabel = "color";
-inline constexpr StringView s_SkinStreamLabel = "skin";
 
 template<typename Value>
 struct StreamSortEntry{
@@ -47,14 +41,6 @@ struct StreamSortEntry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] b8 LessF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(lhs) < FloatingHashBits(rhs);
-}
-
-[[nodiscard]] b8 SameF32(const f32 lhs, const f32 rhs)noexcept{
-    return FloatingHashBits(lhs) == FloatingHashBits(rhs);
-}
 
 [[nodiscard]] b8 LessEmittedF32(const f32 lhs, const f32 rhs)noexcept{
     return FloatingHashBits(TextWrite::CleanFloat(lhs)) < FloatingHashBits(TextWrite::CleanFloat(rhs));
@@ -89,13 +75,15 @@ struct StreamSortEntry{
 }
 
 [[nodiscard]] b8 LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)noexcept{
-    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
+    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
             return lhs.joint[i] < rhs.joint[i];
     }
-    for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
-        if(!SameF32(lhs.weight.raw[i], rhs.weight.raw[i]))
-            return LessF32(lhs.weight.raw[i], rhs.weight.raw[i]);
+    for(usize i = 0u; i < Impl::s_SkinInfluenceJointCount; ++i){
+        const u32 lhsBits = FloatingHashBits(lhs.weight.raw[i]);
+        const u32 rhsBits = FloatingHashBits(rhs.weight.raw[i]);
+        if(lhsBits != rhsBits)
+            return lhsBits < rhsBits;
     }
     return false;
 }
@@ -119,22 +107,22 @@ struct StreamSortEntry{
 }
 
 template<typename Value>
-[[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(UtilityVector<Value>& stream, Core::CpuTaskScheduler& cpuScheduler, const AStringView streamName, Core::Alloc::ScratchArena& scratchArena){
+[[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(const AStringView streamName, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, UtilityVector<Value>& inOutStream){
     UtilityVector<u32> outRemap;
-    outRemap.reserve(stream.size());
-    outRemap.resize(stream.size());
+    outRemap.reserve(inOutStream.size());
+    outRemap.resize(inOutStream.size());
 
-    if(stream.empty())
+    if(inOutStream.empty())
         return outRemap;
 
     UtilityScratchVector<StreamSortEntry<Value>> sortedEntries(scratchArena);
-    sortedEntries.resize(stream.size());
+    sortedEntries.resize(inOutStream.size());
 
     auto fillEntry = [&](const usize index)noexcept(noexcept(DeclVal<Value&>() = DeclVal<const Value&>())){
-        sortedEntries[index].value = stream[index];
+        sortedEntries[index].value = inOutStream[index];
         sortedEntries[index].sourceIndex = index;
     };
-    const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), stream.size(), s_DeduplicateParallelGrainSize, fillEntry);
+    const auto parallelWork = cpuScheduler.parallelFor(static_cast<usize>(0), inOutStream.size(), s_DeduplicateParallelGrainSize, fillEntry);
     if(!parallelWork){
         NWB_LOGGER_ERROR(NWB_TEXT("FBX: stream deduplication preparation rejected CPU work: {}"), static_cast<u32>(parallelWork.error()));
         return MakeUnexpected(Failure{});
@@ -154,13 +142,13 @@ template<typename Value>
             ++uniqueCount;
     }
 
-    if(uniqueCount == stream.size()){
+    if(uniqueCount == inOutStream.size()){
         for(usize i = 0u; i < outRemap.size(); ++i)
             outRemap[i] = static_cast<u32>(i);
         return outRemap;
     }
 
-    if(uniqueCount >= static_cast<usize>(s_MissingSourceStreamIndex)){
+    if(uniqueCount >= static_cast<usize>(Impl::s_MeshMissingStreamIndex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), ConvertString(streamName));
         return MakeUnexpected(Failure{});
     }
@@ -171,7 +159,7 @@ template<typename Value>
     u32 compactIndex = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
         if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
-            NWB_ASSERT(compact.size() < static_cast<usize>(s_MissingSourceStreamIndex));
+            NWB_ASSERT(compact.size() < static_cast<usize>(Impl::s_MeshMissingStreamIndex));
             compactIndex = static_cast<u32>(compact.size());
             compact.push_back(sortedEntries[sortedIndex].value);
         }
@@ -179,11 +167,11 @@ template<typename Value>
         outRemap[sortedEntries[sortedIndex].sourceIndex] = compactIndex;
     }
 
-    stream = Move(compact);
+    inOutStream = Move(compact);
     return outRemap;
 }
 
-[[nodiscard]] b8 RemapRequiredIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
+[[nodiscard]] b8 RemapRequiredIndex(const Span<const u32> remap, const AStringView streamName, u32& inOutIndex){
     if(inOutIndex < remap.size()){
         inOutIndex = remap[inOutIndex];
         return true;
@@ -193,41 +181,41 @@ template<typename Value>
     return false;
 }
 
-[[nodiscard]] b8 RemapOptionalIndex(u32& inOutIndex, const Span<const u32> remap, const AStringView streamName){
-    if(inOutIndex == s_MissingSourceStreamIndex)
+[[nodiscard]] b8 RemapOptionalIndex(const Span<const u32> remap, const AStringView streamName, u32& inOutIndex){
+    if(inOutIndex == Impl::s_MeshMissingStreamIndex)
         return true;
-    return RemapRequiredIndex(inOutIndex, remap, streamName);
+    return RemapRequiredIndex(remap, streamName, inOutIndex);
 }
 
-[[nodiscard]] b8 RemapComponentRefs(SourceMeshStreams& mesh, const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin){
-    for(SourceVertexRef& ref : mesh.vertexRefs){
-        if(!RemapRequiredIndex(ref.position, positions, s_PositionStreamLabel))
+[[nodiscard]] b8 RemapComponentRefs(const Span<const u32> positions, const Span<const u32> normals, const Span<const u32> tangents, const Span<const u32> uv0, const Span<const u32> colors, const Span<const u32> skin, SourceMeshStreams& inOutMesh){
+    for(SourceVertexRef& ref : inOutMesh.vertexRefs){
+        if(!RemapRequiredIndex(positions, Impl::s_VertexRefPositionName, ref.position))
             return false;
-        if(!RemapRequiredIndex(ref.normal, normals, s_NormalStreamLabel))
+        if(!RemapRequiredIndex(normals, Impl::s_VertexRefNormalName, ref.normal))
             return false;
-        if(!RemapRequiredIndex(ref.tangent, tangents, s_TangentStreamLabel))
+        if(!RemapRequiredIndex(tangents, Impl::s_VertexRefTangentName, ref.tangent))
             return false;
-        if(!RemapRequiredIndex(ref.uv0, uv0, s_Uv0StreamLabel))
+        if(!RemapRequiredIndex(uv0, Impl::s_MeshUv0FieldNameView, ref.uv0))
             return false;
-        if(!RemapRequiredIndex(ref.color, colors, s_ColorsStreamLabel))
+        if(!RemapRequiredIndex(colors, Impl::s_VertexRefColorName, ref.color))
             return false;
-        if(!RemapOptionalIndex(ref.skin, skin, s_SkinStreamLabel))
+        if(!RemapOptionalIndex(skin, s_SkinStreamLabel, ref.skin))
             return false;
     }
     return true;
 }
 
-[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(SourceMeshStreams& mesh, const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
-    if(mesh.positions.size() != skinInfluences.size()){
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(const Span<const MeshSkinInfluence> skinInfluences, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
+    if(inOutMesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return MakeUnexpected(Failure{});
     }
 
     SourceMeshCanonicalizeReport report;
-    report.before = CountSourceMeshStreams(mesh);
+    report.before = CountSourceMeshStreams(inOutMesh);
     report.before.skin = skinInfluences.size();
 
-    UtilityScratchVector<u32> positionRemap(mesh.positions.size(), scratchArena);
+    UtilityScratchVector<u32> positionRemap(inOutMesh.positions.size(), scratchArena);
     UtilityScratchVector<u32> skinRemap(skinInfluences.size(), scratchArena);
 
     for(usize i = 0u; i < positionRemap.size(); ++i)
@@ -235,23 +223,23 @@ template<typename Value>
     for(usize i = 0u; i < skinRemap.size(); ++i)
         skinRemap[i] = static_cast<u32>(i);
 
-    const auto normalRemap = DeduplicateStream(mesh.normals, cpuScheduler, s_NormalStreamLabel, scratchArena);
+    const auto normalRemap = DeduplicateStream(Impl::s_VertexRefNormalName, cpuScheduler, scratchArena, inOutMesh.normals);
     if(!normalRemap)
         return MakeUnexpected(Failure{});
-    const auto tangentRemap = DeduplicateStream(mesh.tangents, cpuScheduler, s_TangentStreamLabel, scratchArena);
+    const auto tangentRemap = DeduplicateStream(Impl::s_VertexRefTangentName, cpuScheduler, scratchArena, inOutMesh.tangents);
     if(!tangentRemap)
         return MakeUnexpected(Failure{});
-    const auto uv0Remap = DeduplicateStream(mesh.uv0, cpuScheduler, s_Uv0StreamLabel, scratchArena);
+    const auto uv0Remap = DeduplicateStream(Impl::s_MeshUv0FieldNameView, cpuScheduler, scratchArena, inOutMesh.uv0);
     if(!uv0Remap)
         return MakeUnexpected(Failure{});
-    const auto colorRemap = DeduplicateStream(mesh.colors, cpuScheduler, s_ColorsStreamLabel, scratchArena);
+    const auto colorRemap = DeduplicateStream(Impl::s_MeshColorsFieldNameView, cpuScheduler, scratchArena, inOutMesh.colors);
     if(!colorRemap)
         return MakeUnexpected(Failure{});
 
-    if(!RemapComponentRefs(mesh, positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap))
+    if(!RemapComponentRefs(positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap, inOutMesh))
         return MakeUnexpected(Failure{});
 
-    report.after = CountSourceMeshStreams(mesh);
+    report.after = CountSourceMeshStreams(inOutMesh);
     report.after.skin = skinInfluences.size();
     return report;
 }
@@ -279,24 +267,24 @@ template<typename Value>
 }
 
 
-void AccumulateReport(SourceMeshCanonicalizeReport& total, const SourceMeshCanonicalizeReport& item)noexcept{
-    total.before.positions += item.before.positions;
-    total.before.normals += item.before.normals;
-    total.before.tangents += item.before.tangents;
-    total.before.uv0 += item.before.uv0;
-    total.before.colors += item.before.colors;
-    total.before.skin += item.before.skin;
-    total.before.vertexRefs += item.before.vertexRefs;
-    total.before.indices += item.before.indices;
+void AccumulateReport(const SourceMeshCanonicalizeReport& item, SourceMeshCanonicalizeReport& inOutTotal)noexcept{
+    inOutTotal.before.positions += item.before.positions;
+    inOutTotal.before.normals += item.before.normals;
+    inOutTotal.before.tangents += item.before.tangents;
+    inOutTotal.before.uv0 += item.before.uv0;
+    inOutTotal.before.colors += item.before.colors;
+    inOutTotal.before.skin += item.before.skin;
+    inOutTotal.before.vertexRefs += item.before.vertexRefs;
+    inOutTotal.before.indices += item.before.indices;
 
-    total.after.positions += item.after.positions;
-    total.after.normals += item.after.normals;
-    total.after.tangents += item.after.tangents;
-    total.after.uv0 += item.after.uv0;
-    total.after.colors += item.after.colors;
-    total.after.skin += item.after.skin;
-    total.after.vertexRefs += item.after.vertexRefs;
-    total.after.indices += item.after.indices;
+    inOutTotal.after.positions += item.after.positions;
+    inOutTotal.after.normals += item.after.normals;
+    inOutTotal.after.tangents += item.after.tangents;
+    inOutTotal.after.uv0 += item.after.uv0;
+    inOutTotal.after.colors += item.after.colors;
+    inOutTotal.after.skin += item.after.skin;
+    inOutTotal.after.vertexRefs += item.after.vertexRefs;
+    inOutTotal.after.indices += item.after.indices;
 }
 
 
@@ -322,33 +310,33 @@ SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh)noex
     return counts;
 }
 
-Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena){
+Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(Core::CpuTaskScheduler& cpuScheduler, Core::Alloc::ScratchArena& scratchArena, SourceMeshStreams& inOutMesh){
     SourceMeshCanonicalizeReport report;
-    report.before = CountSourceMeshStreams(mesh);
+    report.before = CountSourceMeshStreams(inOutMesh);
 
 
-    const auto positionRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, __hidden_mesh_refresh::s_PositionStreamLabel, scratchArena);
+    const auto positionRemap = __hidden_mesh_refresh::DeduplicateStream(Impl::s_VertexRefPositionName, cpuScheduler, scratchArena, inOutMesh.positions);
     if(!positionRemap)
         return MakeUnexpected(Failure{});
-    const auto normalRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, __hidden_mesh_refresh::s_NormalStreamLabel, scratchArena);
+    const auto normalRemap = __hidden_mesh_refresh::DeduplicateStream(Impl::s_VertexRefNormalName, cpuScheduler, scratchArena, inOutMesh.normals);
     if(!normalRemap)
         return MakeUnexpected(Failure{});
-    const auto tangentRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, __hidden_mesh_refresh::s_TangentStreamLabel, scratchArena);
+    const auto tangentRemap = __hidden_mesh_refresh::DeduplicateStream(Impl::s_VertexRefTangentName, cpuScheduler, scratchArena, inOutMesh.tangents);
     if(!tangentRemap)
         return MakeUnexpected(Failure{});
-    const auto uv0Remap = __hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, __hidden_mesh_refresh::s_Uv0StreamLabel, scratchArena);
+    const auto uv0Remap = __hidden_mesh_refresh::DeduplicateStream(Impl::s_MeshUv0FieldNameView, cpuScheduler, scratchArena, inOutMesh.uv0);
     if(!uv0Remap)
         return MakeUnexpected(Failure{});
-    const auto colorRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, __hidden_mesh_refresh::s_ColorsStreamLabel, scratchArena);
+    const auto colorRemap = __hidden_mesh_refresh::DeduplicateStream(Impl::s_VertexRefColorName, cpuScheduler, scratchArena, inOutMesh.colors);
     if(!colorRemap)
         return MakeUnexpected(Failure{});
-    const auto skinRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, __hidden_mesh_refresh::s_SkinStreamLabel, scratchArena);
+    const auto skinRemap = __hidden_mesh_refresh::DeduplicateStream(s_SkinStreamLabel, cpuScheduler, scratchArena, inOutMesh.skin);
     if(!skinRemap)
         return MakeUnexpected(Failure{});
-    if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, *positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap))
+    if(!__hidden_mesh_refresh::RemapComponentRefs(*positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap, inOutMesh))
         return MakeUnexpected(Failure{});
 
-    report.after = CountSourceMeshStreams(mesh);
+    report.after = CountSourceMeshStreams(inOutMesh);
     return report;
 }
 
@@ -404,27 +392,25 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         const AStringView skinVariableName = skinReference->variableName;
         const Core::Metascript::Value* skinValue = skinReference->value;
         if(skinValue){
-            auto influences = MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName, scratchArena);
+            auto influences = MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName);
             if(!influences)
                 return MakeUnexpected(Failure{});
             UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
-            const auto canonicalized = __hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(mesh, skinInfluences, cpuScheduler, scratchArena);
+            const auto canonicalized = __hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(skinInfluences, cpuScheduler, scratchArena, mesh);
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh, scratchArena))
-                return MakeUnexpected(Failure{});
         }
         else{
-            const auto canonicalized = CanonicalizeSourceMeshStreams(mesh, cpuScheduler, scratchArena);
+            const auto canonicalized = CanonicalizeSourceMeshStreams(cpuScheduler, scratchArena, mesh);
             if(!canonicalized)
                 return MakeUnexpected(Failure{});
             itemReport = *canonicalized;
-            if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, itemReport.before, mesh, scratchArena))
-                return MakeUnexpected(Failure{});
         }
+        if(!MeshRefreshTextDetail::AppendMeshReplacements(source, meshVariableName, itemReport.before, mesh, scratchArena, replacements))
+            return MakeUnexpected(Failure{});
 
-        __hidden_mesh_refresh::AccumulateReport(outReport, itemReport);
+        __hidden_mesh_refresh::AccumulateReport(itemReport, outReport);
     }
 
     if(!sawMesh){
@@ -432,7 +418,7 @@ Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const ScratchPath& in
         return MakeUnexpected(Failure{});
     }
 
-    MeshRefreshTextDetail::ApplyTextReplacements(source, replacements);
+    MeshRefreshTextDetail::ApplyTextReplacements(replacements, source);
     NormalizeLineEndingsInPlace(source, useCrlf);
 
     const auto written = WriteTextFile(outputPath, source);

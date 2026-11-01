@@ -5,12 +5,28 @@
 #pragma once
 
 
+#include <engine_namespace.h>
+
+#include <core/alloc/scratch.h>
 #include <core/assets/global.h>
 
 #include <global/optional.h>
 #include <global/terminal_entry.h>
 
 #include <CLI.hpp>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_PIPELINE_BEGIN NWB_BEGIN namespace Pipeline{
+#define NWB_PIPELINE_END }; NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,14 +60,14 @@ inline constexpr AStringView s_PipelineValidateOnlyFlag = "--validate-only";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> inputs;
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> assetRoots;
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> includeDirectories;
-    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> macroDefinitions;
-    NWB::Core::Assets::AssetString repoRoot;
-    NWB::Core::Assets::AssetString outputPath;
-    NWB::Core::Assets::AssetString depfilePath;
-    NWB::Core::Assets::AssetString customNamespace;
+    Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
+    Core::Assets::AssetVector<Core::Assets::AssetString> assetRoots;
+    Core::Assets::AssetVector<Core::Assets::AssetString> includeDirectories;
+    Core::Assets::AssetVector<Core::Assets::AssetString> macroDefinitions;
+    Core::Assets::AssetString repoRoot;
+    Core::Assets::AssetString outputPath;
+    Core::Assets::AssetString depfilePath;
+    Core::Assets::AssetString customNamespace;
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
@@ -59,7 +75,7 @@ struct PipelineOptions{
 
 
 public:
-    explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)noexcept
+    explicit PipelineOptions(Core::Assets::AssetArena& arena)noexcept
         : inputs(arena)
         , assetRoots(arena)
         , includeDirectories(arena)
@@ -79,14 +95,13 @@ public:
 
 
 public:
-    [[nodiscard]] Expected<PipelineOptions> parse(int argc, char** argv, NWB::Core::Assets::AssetArena& arena);
+    [[nodiscard]] Expected<PipelineOptions> parse(int argc, char** argv, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] int exit(const CLI::ParseError& error)const;
 
-public:
     template<typename ToolBody>
-    [[nodiscard]] int run(const int argc, char** argv, NWB::Core::Assets::AssetArena& arena, ToolBody&& body){
+    [[nodiscard]] int run(const int argc, char** argv, ToolBody&& body, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena){
         return ::InvokeTerminalEntry<CLI::ParseError>([&](){
-            auto options = parse(argc, argv, arena);
+            auto options = parse(argc, argv, arena, scratchArena);
             if(!options)
                 return s_PipelineExitFailure;
             return body(*options);
@@ -113,6 +128,12 @@ private:
 };
 
 int RunPipelineTool(int argc, char** argv);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_PIPELINE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

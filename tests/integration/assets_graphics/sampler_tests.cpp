@@ -34,9 +34,7 @@ constexpr AStringView s_AssetsDirectory = "assets";
 constexpr AStringView s_SamplersDirectory = "samplers";
 constexpr AStringView s_LinearClampMetadataFilename = "linear_clamp.nwb";
 
-using AString = AssetsGraphicsFixture::AString;
-using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using Path = AssetsGraphicsFixture::Path;
+using AString = TestAString;
 using TestArena = AssetsGraphicsFixture::TestArena;
 
 
@@ -81,7 +79,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
         NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::SamplerBinaryHeader, reductionType), sizeof(reductionValue), &reductionValue, sizeof(reductionValue));
-        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
+        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
 
         description.reductionType = reduction;
         sampler.setDescription(description);
@@ -97,7 +95,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
         binary = validBinary;
         const f32 nonblack = 1.0f;
         NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
-        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
+        EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), binary, testArena.arena));
     }
 
     description.reductionType = NWB::Core::SamplerReductionType::Standard;
@@ -110,7 +108,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     sampler.setDescription(description);
     ASSERT_TRUE(codec.serialize(sampler, binary));
     UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
-    auto recoveredResult = codec.deserialize(testArena.arena, sampler.virtualPath(), binary);
+    auto recoveredResult = codec.deserialize(sampler.virtualPath(), binary, testArena.arena);
     ASSERT_TRUE(recoveredResult);
     recoveredAsset = Move(*recoveredResult);
     ASSERT_NE(recoveredAsset.get(), nullptr);
@@ -194,7 +192,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsWideEnumAliasesBeforeNarrowingAndPreserv
             NWB::Core::Assets::AssetBytes retained(testArena.arena);
             ASSERT_TRUE(codec.serialize(sampler, retained));
             EXPECT_EQ(retained, binary) << offset << ":" << rawValue;
-            EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), malformed)) << offset << ":" << rawValue;
+            EXPECT_FALSE(codec.deserialize(sampler.virtualPath(), malformed, testArena.arena)) << offset << ":" << rawValue;
         }
     }
     EXPECT_EQ(logger.errorCount(), 16u);
@@ -214,7 +212,7 @@ TEST(AssetsGraphics, SamplerCookerRequiresTheAssetField){
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
-    static constexpr AStringView s_UnsupportedAssignments[] = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n" };
+    static constexpr Array<AStringView, 3u> s_UnsupportedAssignments = { "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n", "asset.reduction = \"minimum\";\n", "asset.reduction = \"maximum\";\n" };
 
     for(const AStringView assignment : s_UnsupportedAssignments){
         CapturingLogger logger;

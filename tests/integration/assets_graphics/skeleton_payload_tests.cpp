@@ -30,12 +30,6 @@ static constexpr AStringView s_Right = "right";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB;
 using namespace NWB::Impl;
 
@@ -69,7 +63,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndRecoversWithValidParen
         switch(invalidCase){
         case 0u: inputs.entry.joints[0u].parent = Name(s_Left); break;
         case 1u: inputs.entry.joints[1u].parent = Name(s_Left); break;
-        case s_ExpectedDualCount: inputs.entry.joints[3u].parent = Name("missing"); break;
+        case 2u: inputs.entry.joints[3u].parent = Name("missing"); break;
         case 3u: inputs.entry.joints[1u].parent = Name(s_Right); break;
         }
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena)) << invalidCase;
@@ -91,7 +85,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
         inputs.entry.joints[3u].parent = duplicate;
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.arena, inputs.scratchArena));
     }
-    EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
+    EXPECT_EQ(logger.errorCount(), 2u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
 }
 
@@ -129,7 +123,7 @@ TEST(SkeletonPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndInva
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
         Skeleton::JointIndexMap jointIndices(inputs.skeleton.jointIndices());
-        const b8 valid = iteration % s_ExpectedDualCount == 0u;
+        const b8 valid = iteration % 2u == 0u;
         jointIndices.at(Name(s_Left)) = valid ? 1u : 0u;
         inputs.skeleton.setJoints(Skeleton::JointVector(inputs.skeleton.joints()), Move(jointIndices));
         EXPECT_EQ(inputs.skeleton.validatePayload(inputs.scratchArena), valid);

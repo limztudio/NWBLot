@@ -40,7 +40,7 @@ constexpr f64 s_MillisecondsPerSecond = 1000.0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Span<const Core::Perf::MemorySnapshot> snapshots){
+void RendererGatherBenchmarkProbe::WriteMemory(const Span<const Core::Perf::MemorySnapshot> snapshots, OutputFileStream& output){
     output << '{';
     for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
         if(scope != 0u)
@@ -94,7 +94,7 @@ b8 RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, c
         sample.milliseconds[scope + 1u] = VectorDoubleGetY(milliseconds);
     }
     if(scope < s_CpuScopeCount)
-        sample.milliseconds[scope] = VectorDoubleGetX(VectorDoubleScale(VectorDoubleReplicate(sample.milliseconds[scope]), __hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond));
+        sample.milliseconds[scope] = sample.milliseconds[scope] * (__hidden_renderer_gather_benchmark_probe::s_MillisecondsPerSecond);
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
             const auto arenaName = Name::FromText(s_ArenaNames[scope]);
@@ -149,7 +149,7 @@ b8 RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView
         << ",\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}\n";
     if(memoryEnabled){
         output << "{\"type\":\"memory_baseline\",\"arenas\":";
-        WriteMemory(output, m_memoryBaseline);
+        WriteMemory(m_memoryBaseline, output);
         output << "}\n";
     }
     for(const CpuSample& sample : m_cpu){
@@ -162,7 +162,7 @@ b8 RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView
         output << '}';
         if(memoryEnabled){
             output << ",\"arenas\":";
-            WriteMemory(output, sample.memory);
+            WriteMemory(sample.memory, output);
         }
         output << "}\n";
     }

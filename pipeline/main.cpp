@@ -16,10 +16,10 @@ static int RunTool(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(NWB_TEXT(NWB_PIPELINE_TOOL_NAME))){
         NWB_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
-        return s_PipelineExitFatal;
+        return NWB::Pipeline::s_PipelineExitFatal;
     }
     NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    return RunPipelineTool(argc, argv);
+    return NWB::Pipeline::RunPipelineTool(argc, argv);
 }
 
 #if !defined(NWB_PLATFORM_WINDOWS) || !defined(NWB_UNICODE)

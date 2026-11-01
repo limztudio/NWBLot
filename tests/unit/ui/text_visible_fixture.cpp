@@ -46,13 +46,22 @@ void ExpectSamePaint(const DrawSnapshot& actual, const DrawSnapshot& expected){
         const DrawCommand& a = actual.commands()[index];
         const DrawCommand& e = expected.commands()[index];
         UiPaintAssertions::ExpectSameCommandFields(a, e);
-        ExpectRect(a.clip, e.clip);
+        UiPaintAssertions::ExpectRect(a.clip, e.clip);
     }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+SIMDVectorSingle TextVisibleFixture::LoadOutlinePosition(const PlacedGlyph& glyph, const Point origin)noexcept{
+    return VectorAdd(VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), VectorSet(glyph.position.x, glyph.position.y, 0.0f, 0.0f)), VectorSet(glyph.ink.x, glyph.ink.y, 0.0f, 0.0f));
+}
+
+Rect TextVisibleFixture::OutlineRectangle(const PlacedGlyph& glyph, const Point origin)noexcept{
+    const SIMDVectorSingle position = LoadOutlinePosition(glyph, origin);
+    return Rect{ VectorGetX(position), VectorGetY(position), glyph.ink.width, glyph.ink.height };
+}
 
 TextVisibleFixture::TextVisibleFixture()
     : m_arena(Name("tests/ui/text/visible"))
@@ -65,14 +74,14 @@ TextVisibleFixture::TextVisibleFixture()
 {}
 
 void TextVisibleFixture::SetUp(){
-    ASSERT_TRUE(loadFont(m_latin, "latin.font"));
-    ASSERT_TRUE(loadFont(m_korean, "korean.font"));
+    ASSERT_TRUE(loadFont("latin.font", m_latin));
+    ASSERT_TRUE(loadFont("korean.font", m_korean));
     ASSERT_TRUE(installCoverageFonts());
     UiSkin::RegionVector regions(m_arena);
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
 }
 
-b8 TextVisibleFixture::loadFont(Font& font, const StringView filename){
+b8 TextVisibleFixture::loadFont(const StringView filename, Font& font){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
     Core::Assets::AssetBytes bytes(m_arena);
     auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
@@ -85,11 +94,11 @@ b8 TextVisibleFixture::loadFont(Font& font, const StringView filename){
 
 b8 TextVisibleFixture::installCoverageFonts(){
     Core::Alloc::ScratchArena fontScratchArena(Name("tests/ui/fonts/operation_scratch"));
-    const FontSource sources[]{
-        { Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
-        { Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
+    const Array<FontSource, 2u> sources = {
+        FontSource{ Core::Assets::AssetRef<Font>(s_LatinFontPath), m_latin, 1u },
+        FontSource{ Core::Assets::AssetRef<Font>(s_KoreanFontPath), m_korean, 1u },
     };
-    return m_text.setFonts(fontScratchArena, sources, 2u);
+    return m_text.setFonts(fontScratchArena, sources);
 }
 
 void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& display){

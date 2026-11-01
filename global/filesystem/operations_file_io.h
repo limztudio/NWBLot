@@ -141,12 +141,12 @@ template<typename ArenaT>
     if(!stream.is_open())
         return false;
     constexpr usize s_VerifyChunkSize = 4096u;
-    u8 buffer[s_VerifyChunkSize];
+    Array<u8, s_VerifyChunkSize> buffer = {};
     const u8* const expectedBytes = static_cast<const u8*>(expected);
     for(usize offset = 0u; offset < count;){
         const usize remaining = count - offset;
-        const usize chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
-        if(!ReadStreamExact(stream, NotNull<void*>(buffer), chunk) || NWB_MEMCMP(buffer, expectedBytes + offset, chunk) != 0)
+        const usize chunk = remaining < buffer.size() ? remaining : buffer.size();
+        if(!ReadStreamExact(stream, NotNull<void*>(buffer.data()), chunk) || NWB_MEMCMP(buffer.data(), expectedBytes + offset, chunk) != 0)
             return false;
         offset += chunk;
     }

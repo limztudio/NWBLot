@@ -61,7 +61,7 @@ public:
 
 public:
     // Release the borrowed renderer pointer before world destruction.
-    [[nodiscard]] b8 start(Impl::RendererSystem& renderer, AStringView path);
+    [[nodiscard]] b8 start(AStringView path, Impl::RendererSystem& renderer);
     void stop();
     [[nodiscard]] b8 write()const;
     virtual b8 shouldRenderUnfocused()noexcept override{ return true; }

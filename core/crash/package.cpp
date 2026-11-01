@@ -43,9 +43,9 @@ inline constexpr StringView s_FramePointerFieldPrefix = "\nframe_pointer=";
 
 template<typename ArenaT>
 static void AppendUnsignedText(CrashStringT<ArenaT>& out, const u64 value){
-    char buffer[s_UnsignedTextBufferCapacity] = {};
+    Array<char, s_UnsignedTextBufferCapacity> buffer = {};
     AppendUnsignedToFixedBuffer(buffer, value);
-    out += buffer;
+    out += FixedBufferView(buffer);
 }
 
 template<typename ArenaT>
@@ -80,15 +80,15 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     manifest += PackageNames::s_ManifestFormatValue;
     manifest += '"';
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestCrashIdKey, false);
-    AppendJsonQuotedText(manifest, request.crashId);
+    AppendJsonQuotedText(manifest, request.crashId.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestApplicationKey, false);
-    AppendJsonQuotedText(manifest, request.applicationName);
+    AppendJsonQuotedText(manifest, request.applicationName.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestVersionKey, false);
-    AppendJsonQuotedText(manifest, request.versionText);
+    AppendJsonQuotedText(manifest, request.versionText.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestBuildIdKey, false);
-    AppendJsonQuotedText(manifest, request.buildId);
+    AppendJsonQuotedText(manifest, request.buildId.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestAbiKey, false);
-    AppendJsonQuotedText(manifest, request.abi);
+    AppendJsonQuotedText(manifest, request.abi.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestPlatformKey, false);
     AppendJsonQuotedText(manifest, PlatformKindName(request.platform));
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonKindKey, false);
@@ -115,15 +115,15 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFramePointerKey, false);
     AppendUnsignedText(manifest, request.framePointer);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestEventKey, false);
-    AppendJsonQuotedText(manifest, request.event);
+    AppendJsonQuotedText(manifest, request.event.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerCategoryKey, false);
-    AppendJsonQuotedText(manifest, request.triggerCategory);
+    AppendJsonQuotedText(manifest, request.triggerCategory.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerExpressionKey, false);
-    AppendJsonQuotedText(manifest, request.triggerExpression);
+    AppendJsonQuotedText(manifest, request.triggerExpression.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerMessageKey, false);
-    AppendJsonQuotedText(manifest, request.triggerMessage);
+    AppendJsonQuotedText(manifest, request.triggerMessage.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerFileKey, false);
-    AppendJsonQuotedText(manifest, request.triggerFile);
+    AppendJsonQuotedText(manifest, request.triggerFile.data());
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
     AppendUnsignedText(manifest, request.triggerLine);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
@@ -140,9 +140,9 @@ template<typename ArenaT>
 static CrashStringT<ArenaT> BuildMetadataText(ArenaT& arena, const CrashRequest& request){
     CrashStringT<ArenaT> text{arena};
     for(u32 i = 0u; i < request.metadataCount; ++i){
-        text += request.metadata[i].key;
+        text += request.metadata[i].key.data();
         text += '=';
-        text += request.metadata[i].value;
+        text += request.metadata[i].value.data();
         text += '\n';
     }
     return text;
@@ -154,9 +154,9 @@ static CrashStringT<ArenaT> BuildBreadcrumbText(ArenaT& arena, const CrashReques
     for(u32 i = 0u; i < request.breadcrumbCount; ++i){
         AppendUnsignedText(text, request.breadcrumbs[i].order);
         text += " [";
-        text += request.breadcrumbs[i].category;
+        text += request.breadcrumbs[i].category.data();
         text += "] ";
-        text += request.breadcrumbs[i].message;
+        text += request.breadcrumbs[i].message.data();
         text += '\n';
     }
     return text;
@@ -184,15 +184,15 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     text += s_FramePointerFieldPrefix;
     AppendUnsignedText(text, request.framePointer);
     text += "\nevent=";
-    text += request.event;
+    text += request.event.data();
     text += "\ntrigger_category=";
-    text += request.triggerCategory;
+    text += request.triggerCategory.data();
     text += "\ntrigger_expression=";
-    text += request.triggerExpression;
+    text += request.triggerExpression.data();
     text += "\ntrigger_message=";
-    text += request.triggerMessage;
+    text += request.triggerMessage.data();
     text += "\ntrigger_file=";
-    text += request.triggerFile;
+    text += request.triggerFile.data();
     text += "\ntrigger_line=";
     AppendUnsignedText(text, request.triggerLine);
     text += "\n";
@@ -366,12 +366,12 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
     }
 
     b8 copied = true;
-    char buffer[s_LinuxCopyBufferBytes];
+    Array<char, s_LinuxCopyBufferBytes> buffer;
     for(;;){
-        input.read(buffer, static_cast<StreamSize>(sizeof(buffer)));
+        input.read(buffer.data(), static_cast<StreamSize>(sizeof(buffer)));
         const StreamSize bytesRead = input.gcount();
         if(bytesRead > 0)
-            output.write(buffer, bytesRead);
+            output.write(buffer.data(), bytesRead);
         if(!output.good()){
             copied = false;
             break;
@@ -395,18 +395,23 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
 
 template<typename ArenaT>
 static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStringView procName, const AStringView outputName){
-    char procPath[s_LinuxProcPathTextCapacity];
+    Array<char, s_LinuxProcPathTextCapacity> procPath;
     CopyFixedBuffer(procPath, PackageNames::s_LinuxProcRootPath);
     AppendUnsignedToFixedBuffer(procPath, request.processId);
     AppendFixedBuffer(procPath, "/");
     AppendFixedBuffer(procPath, procName);
 
-    CopyFileToPackage(arena, request, procPath, outputName);
+    CopyFileToPackage(arena, request, FixedBufferView(procPath), outputName);
 }
 #endif
 
-template<typename ArenaT>
-static b8 WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request){
+void CaptureCrashPackageFilesystemFailure(const AStringView operation, const ErrorCode& error)noexcept{
+    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash package I/O failure: {} {}", error.category().name(), error.value());
+    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Warning, .category = s_PackageErrorCategory, .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
+}
+
+b8 WriteCrashPackage(const CrashRequest& request){
+    auto& arena = DumpArena();
     if(!IsCurrentCrashRequest(request))
         return false;
     if(!WriteCrashPackageBasics(arena, request))
@@ -447,15 +452,6 @@ static b8 WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& request)
     return true;
 }
 
-void CaptureCrashPackageFilesystemFailure(const AStringView operation, const ErrorCode& error)noexcept{
-    const DiagnosticEventText diagnostic = MakeDiagnosticEventText("Crash package I/O failure: {} {}", error.category().name(), error.value());
-    CaptureDiagnosticEvent(DiagnosticEventRecord{ .event = s_WarningEventName, .category = s_PackageErrorCategory, .expression = operation, .message = diagnostic.view(), .file = __FILE__, .line = __LINE__, });
-}
-
-b8 WriteCrashPackage(const CrashRequest& request){
-    return WriteCrashPackageWithArena(DumpArena(), request);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -467,9 +463,9 @@ static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
 
 template<typename ArenaT>
 static void AppendArchiveUnsigned(CrashBytesT<ArenaT>& out, const u64 value){
-    char buffer[s_UnsignedTextBufferCapacity] = {};
+    Array<char, s_UnsignedTextBufferCapacity> buffer = {};
     AppendUnsignedToFixedBuffer(buffer, value);
-    AppendArchiveText(out, buffer);
+    AppendArchiveText(out, FixedBufferView(buffer));
 }
 
 template<typename ArenaT, typename PathArenaT>

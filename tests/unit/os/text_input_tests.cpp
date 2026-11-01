@@ -22,13 +22,6 @@ using namespace NWB::Core;
 
 class FakeTextInputService final : public QueuedTextInputService{
 public:
-    explicit FakeTextInputService(Alloc::GlobalArena& arena)
-        : QueuedTextInputService(arena)
-        , m_nativeSurrounding(arena)
-    {}
-
-
-public:
     using QueuedTextInputService::cancelSession;
     using QueuedTextInputService::emitCommit;
     using QueuedTextInputService::emitPreedit;
@@ -38,6 +31,15 @@ public:
     using QueuedTextInputService::surroundingAnchorByte;
     using QueuedTextInputService::caretRect;
 
+
+public:
+    explicit FakeTextInputService(Alloc::GlobalArena& arena)
+        : QueuedTextInputService(arena)
+        , m_nativeSurrounding(arena)
+    {}
+
+
+public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override{
         return m_supported ? TextInputCapabilities{ true, true, true, true } : TextInputCapabilities{};
     }

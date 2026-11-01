@@ -120,7 +120,7 @@ TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverage
     ASSERT_TRUE(sdfCreationResult);
     const SharedSdfAtlasPage sdf = Move(*sdfCreationResult);
     ASSERT_TRUE(sdf);
-    ASSERT_TRUE(m_builder.prepareImages(coverage.data(), coverage.size(), &sdf, 1u));
+    ASSERT_TRUE(m_builder.prepareImages(coverage, Span(&sdf, 1u)));
     ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, { 1.0f, 1.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     auto upgradeCreationResult = makeCoverage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult);
@@ -128,7 +128,7 @@ TEST_F(UiPaintSdfTests, RejectedMixedAdmissionAtCapacityPreservesEarlierCoverage
     auto overflowCreationResult = makeSdfPage(99u);
     ASSERT_TRUE(overflowCreationResult);
     const SharedSdfAtlasPage overflow = Move(*overflowCreationResult);
-    EXPECT_FALSE(m_builder.prepareImages(&upgrade, 1u, &overflow, 1u));
+    EXPECT_FALSE(m_builder.prepareImages(Span(&upgrade, 1u), Span(&overflow, 1u)));
     EXPECT_FALSE(m_builder.drawSdfGlyph(overflow, 0u, { 10.0f, 10.0f, 4.0f, 4.0f }, { 0.0f, 0.0f, 0.5f, 0.5f }));
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 1u);
@@ -149,8 +149,8 @@ TEST_F(UiPaintSdfTests, EqualIdentityCannotAliasDifferentDistanceBytes){
     ASSERT_TRUE(conflictingCreationResult);
     const SharedSdfAtlasPage conflicting = Move(*conflictingCreationResult);
     ASSERT_TRUE(original && conflicting);
-    ASSERT_TRUE(m_builder.prepareSdfPages(&original, 1u));
-    EXPECT_FALSE(m_builder.prepareSdfPages(&conflicting, 1u));
+    ASSERT_TRUE(m_builder.prepareSdfPages(Span(&original, 1u)));
+    EXPECT_FALSE(m_builder.prepareSdfPages(Span(&conflicting, 1u)));
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     EXPECT_EQ(snapshot.sdfPages()[0].get(), original.get());
@@ -179,7 +179,7 @@ TEST_F(UiPaintSdfTests, DuplicateCandidatesConsumeOneImageSlot){
     const SharedSdfAtlasPage reconstructed = Move(*reconstructedCreationResult);
     ASSERT_TRUE(page && reconstructed);
     const Array<SharedSdfAtlasPage, 3u> candidates{ page, reconstructed, page };
-    ASSERT_TRUE(m_builder.prepareSdfPages(candidates.data(), candidates.size()));
+    ASSERT_TRUE(m_builder.prepareSdfPages(candidates));
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     EXPECT_EQ(snapshot.sdfPages()[0].get(), page.get());

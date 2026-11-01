@@ -3,12 +3,9 @@
 
 
 #include "system.h"
-
-#include <impl/ecs_mesh/skinning/submission_state.adhd.h>
 #include "runtime_mesh_liveness.h"
 #include "timing_names.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/gpu_timing.h>
@@ -24,24 +21,34 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_skinning_system{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr b8 s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
-static constexpr b8 s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+b8 MeshSkinningSystem::RuntimeResources::hasPersistentHeapDescriptors(const b8 hasActiveSkin, const b8 hasAttributeBuffer)const noexcept{
+    const auto storageHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    };
+    const auto uniformHandle = [](const Core::GpuDescriptorHandle handle)noexcept{
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
+    };
+    const b8 common =
+        bindlessResourceSlotsBuffer != nullptr
+        && uniformHandle(bindlessHeapHandles.resourceSlots)
+        && storageHandle(bindlessHeapHandles.restPosition)
+        && storageHandle(bindlessHeapHandles.skinnedPosition)
+        && storageHandle(bindlessHeapHandles.restNormal)
+        && storageHandle(bindlessHeapHandles.skinnedNormal)
+        && storageHandle(bindlessHeapHandles.restTangent)
+        && storageHandle(bindlessHeapHandles.skinnedTangent)
+        && storageHandle(bindlessHeapHandles.meshletDesc)
+        && storageHandle(bindlessHeapHandles.positionRefDeltas)
+        && storageHandle(bindlessHeapHandles.attributeRefDeltas)
+        && storageHandle(bindlessHeapHandles.attributeSkins)
+        && storageHandle(bindlessHeapHandles.localVertexRefs)
+        && storageHandle(bindlessHeapHandles.primitiveIndices)
+        && storageHandle(bindlessHeapHandles.meshletBounds)
+        && storageHandle(bindlessHeapHandles.meshletLocalBounds)
+        && storageHandle(bindlessHeapHandles.localBounds)
+    ;
+    return common && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette))) && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer));
+}
 
 MeshSkinningSystem::MeshSkinningSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager, IRuntimeMeshRegistry& runtimeMeshRegistry, ShaderPathResolveCallback shaderPathResolver)
     : Core::ECS::ISystem(arena)
@@ -84,14 +91,10 @@ MeshSkinningSystem::~MeshSkinningSystem()noexcept{
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 
-void MeshSkinningSystem::prepare(Core::ECS::World& world){
-    static_cast<void>(world);
+void MeshSkinningSystem::prepare([[maybe_unused]] Core::ECS::World& world){
     m_runtimeSetupReady = false;
-    if(!m_activeSceneSubsystems){
-        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
-            return;
-        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
-    }
+    if(!ensureActiveSceneSubsystems())
+        return;
     if(!isSkinningFeatureEnabled()){
         m_runtimeSetupReady = true;
         return;
@@ -119,27 +122,16 @@ void MeshSkinningSystem::prepare(Core::ECS::World& world){
     m_runtimeSetupReady = ready;
 }
 
-Expected<void, Core::CpuTaskAdmissionError::Enum> MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta)noexcept{
-    static_cast<void>(world);
-    static_cast<void>(delta);
-    return {};
-}
-
-b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
-    static_cast<void>(sampleCount);
+b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, [[maybe_unused]] const u32 sampleCount){
     if(width == 0 || height == 0)
         return true;
-    if(!m_activeSceneSubsystems){
-        if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
-            return false;
-        m_activeSceneSubsystems = &m_defaultSceneSubsystems;
-    }
+    if(!ensureActiveSceneSubsystems())
+        return false;
     if(!isSkinningFeatureEnabled())
         return true;
 
     auto& device = m_graphics.getDevice();
 
-    constexpr u32 s_PerRuntimeMeshTimingQueries = 128u;
     const b8 timingReady =
         m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
@@ -157,8 +149,7 @@ b8 MeshSkinningSystem::validateResources(const u32 width, const u32 height, cons
     return true;
 }
 
-b8 MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
-    static_cast<void>(framebuffer);
+b8 MeshSkinningSystem::prepareResources([[maybe_unused]] Core::Framebuffer* framebuffer){
     Core::Alloc::ScratchArena scratchArena(s_PrepareRuntimeArena);
     // Frames may lack native submissions; filter retired buffers so handles pin nothing.
     if(m_acceptedSkinningState.valid() && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)){
@@ -169,8 +160,7 @@ b8 MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     return m_runtimeSetupReady;
 }
 
-void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
-    static_cast<void>(framebuffer);
+void MeshSkinningSystem::render([[maybe_unused]] Core::Framebuffer* framebuffer){
     if(!isSkinningFeatureEnabled())
         return;
 
@@ -206,18 +196,28 @@ Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
     const MeshSkinningRuntimeInstance* const instance = runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(runtimeMesh) : nullptr;
-    return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, __hidden_skinning_system::s_RuntimeSkinningMeshletFrustumCullingEnabled, __hidden_skinning_system::s_RuntimeSkinningMeshletConeCullingEnabled);
-}
-
-b8 MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const noexcept{
-    return m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
+    return BuildSkinnedRuntimeMeshDesc(entity, runtimeMesh, instance, s_RuntimeSkinningMeshletFrustumCullingEnabled, s_RuntimeSkinningMeshletConeCullingEnabled);
 }
 
 void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
-    MarkLiveSkinnedRuntimeMeshes(m_world, [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding){
+    if(requests.complete())
+        return;
+    for(auto&& [entity, binding] : m_world.view<SkinnedMeshBindingComponent>()){
         const MeshSkinningRuntimeInstance* const instance = binding.runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(binding.runtimeMesh) : nullptr;
-        return ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance);
-    }, requests);
+        if(const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance))
+            requests.markLive(identity->meshKey, identity->version);
+        if(requests.complete())
+            return;
+    }
+}
+
+b8 MeshSkinningSystem::ensureActiveSceneSubsystems(){
+    if(m_activeSceneSubsystems)
+        return true;
+    if(!m_defaultSceneSubsystems.loadProjectStartScene(m_assetManager))
+        return false;
+    m_activeSceneSubsystems = &m_defaultSceneSubsystems;
+    return true;
 }
 
 void MeshSkinningSystem::pruneRuntimeResources(){

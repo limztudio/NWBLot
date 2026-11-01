@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class InputLayout final : public RefCounter<GraphicsResource>, NoCopy{
+class InputLayout final : public RefCounter<GraphicsResource>{
     friend class Device;
     friend class CommandList;
 

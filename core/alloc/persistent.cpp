@@ -8,8 +8,6 @@
 #include <global/overflow.h>
 #include <global/simplemath.h>
 
-#include <new>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -168,15 +166,11 @@ inline void StoreBlockForAllocation(NotNull<void*> p, Block& block)noexcept{
     return *new(address.get()) Block{ .spanBytes = spanBytes, .requestedBytes = 0u, .previous = previous, .next = next, .isFree = isFree, };
 }
 
-inline void InitializeLinks(Block& block, Block* const previous, Block* const next)noexcept{
-    new(BlockData(block).get()) FreeLinks{ .previous = previous, .next = next, };
-}
-
 inline void InsertFreeBlock(void*& freeHead, Block& block)noexcept{
     NWB_ASSERT(block.isFree);
 
     Block* const next = static_cast<Block*>(freeHead);
-    InitializeLinks(block, nullptr, next);
+    new(BlockData(block).get()) FreeLinks{ .previous = nullptr, .next = next, };
     if(next)
         Links(*next).previous = &block;
     freeHead = &block;
@@ -284,10 +278,6 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-usize PersistentArena::StructureAlignedSize(const usize byte){
-    return StructureAlignedSize(byte, alignof(MaxAlign));
-}
 
 usize PersistentArena::StructureAlignedSize(const usize byte, const usize align){
     if(!IsSupportedAlignmentValue(align)){
@@ -421,9 +411,7 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     return replacement->pointer.get();
 }
 
-void PersistentArena::deallocate(void* const p, const usize align, const usize size)noexcept{
-    static_cast<void>(align);
-    static_cast<void>(size);
+void PersistentArena::deallocate(void* const p, [[maybe_unused]] const usize align, [[maybe_unused]] const usize size)noexcept{
     if(!p)
         return;
 

@@ -3,7 +3,7 @@
 
 
 #include <impl/assets_mesh/cook.h>
-#include <impl/assets_mesh/binary_payload.h>
+#include <impl/assets_mesh/binary_payload_io.h>
 #include <impl/assets_mesh/cook_meshlets.h>
 #include <impl/assets_mesh/meshlet_triangle_visit.h>
 
@@ -38,8 +38,19 @@ namespace __hidden_mesh_solid_codec_tests{
 
 
 // Declarations for testing non-noexcept callback traits without calling them.
-struct ThrowingPositionStreamGeometry : Impl::MeshGeometryPayload{
+struct ThrowingPositionStreamGeometry{
     [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const;
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletDesc>& meshlets()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletBounds>& meshletBounds()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<Impl::MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept;
 };
 
 struct NoThrowCornerVisitor{
@@ -63,8 +74,8 @@ using OneLocalVertex = Array<Impl::MeshletLocalVertexRef, 1u>;
 using OnePrimitive = Array<u8, 1u>;
 using OneTriangle = Array<u32, 1u>;
 
-static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<usize&>(), DeclVal<const Impl::Mesh&>())));
-static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<usize&>(), DeclVal<const ThrowingPositionStreamGeometry&>())));
+static_assert(noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const Impl::Mesh&>(), DeclVal<usize&>())));
+static_assert(!noexcept(Impl::MeshAssetBinaryPayload::AddMeshBaseReserveBytes(DeclVal<const ThrowingPositionStreamGeometry&>(), DeclVal<usize&>())));
 static_assert(noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<NoThrowCornerVisitor&>())));
 static_assert(!noexcept(Impl::ForEachMeshletTriangleCorner(DeclVal<const OneMeshlet&>(), DeclVal<const OneLocalVertex&>(), DeclVal<const OnePrimitive&>(), DeclVal<ThrowingCornerVisitor&>())));
 static_assert(noexcept(Impl::MeshletCandidateSearch::ComputeMeshletScoreConeCutoff(DeclVal<const OneTriangle&>(), VectorZero(), 0u, false, DeclVal<const NoThrowTriangleNormal&>())));
@@ -212,7 +223,7 @@ TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone)
         bounds[index].conePacked = words[index * 5u + 4u];
     }
     Core::Assets::AssetBytes binary(arena);
-    ASSERT_TRUE(Core::Assets::AppendVectorPayload(binary, bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")));
+    ASSERT_TRUE(Core::Assets::AppendVectorPayload(bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds"), binary));
     ASSERT_EQ(binary.size(), sizeof(u32) * words.size());
     usize wordCursor = 0u;
     for(const u32 word : words){

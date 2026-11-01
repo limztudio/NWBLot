@@ -10,6 +10,8 @@
 
 #include "bind_typed_value.h"
 
+#include <global/simd/convert.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,71 +27,6 @@ namespace MaterialBindDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Expected<MaterialTypedValueParser::MaterialParameterCall> MaterialTypedValueParser::SplitMaterialParameterCall(const AStringView text)noexcept{
-    const AStringView trimmed = TrimView(text);
-    usize openParen = Limit<usize>::s_Max;
-    for(usize i = 0u; i < trimmed.size(); ++i){
-        if(trimmed[i] == '('){
-            openParen = i;
-            break;
-        }
-    }
-    if(openParen == Limit<usize>::s_Max || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
-        return MakeUnexpected(Failure{});
-
-    const AStringView type = TrimView(trimmed.substr(0u, openParen));
-    const AStringView arguments = TrimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
-    if(type.empty() || arguments.empty())
-        return MakeUnexpected(Failure{});
-    return MaterialParameterCall{ type, arguments };
-}
-
-Expected<AStringView> MaterialTypedValueParser::ReadMaterialParameterToken(const AStringView text, usize& inOutCursor)noexcept{
-    while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == ','))
-        ++inOutCursor;
-    if(inOutCursor >= text.size())
-        return MakeUnexpected(Failure{});
-
-    const usize begin = inOutCursor;
-    while(inOutCursor < text.size() && !IsAsciiSpace(text[inOutCursor]) && text[inOutCursor] != ',')
-        ++inOutCursor;
-
-    const AStringView token = TrimView(text.substr(begin, inOutCursor - begin));
-    if(token.empty())
-        return MakeUnexpected(Failure{});
-    return token;
-}
-
-Expected<MaterialTypedValueParser::MaterialParameterTokens> MaterialTypedValueParser::SplitMaterialParameterTokens(const AStringView text)noexcept{
-    MaterialParameterTokens tokens;
-    usize cursor = 0u;
-    while(const auto token = ReadMaterialParameterToken(text, cursor)){
-        if(tokens.count >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
-            return MakeUnexpected(Failure{});
-        tokens.values[tokens.count] = *token;
-        ++tokens.count;
-    }
-    if(tokens.count == 0u)
-        return MakeUnexpected(Failure{});
-    return tokens;
-}
-
-Expected<u32> MaterialTypedValueParser::ParseMaterialBoolToken(const AStringView token)noexcept{
-    if(token == s_BoolTrueTextToken || token == s_BoolTrueNumberToken)
-        return 1u;
-    if(token == s_BoolFalseTextToken || token == s_BoolFalseNumberToken)
-        return 0u;
-    return MakeUnexpected(Failure{});
-}
-
-AStringView MaterialTypedValueParser::StripMaterialNumericSuffix(const AStringView token, const char suffixLower, const char suffixUpper)noexcept{
-    if(token.size() <= 1u)
-        return token;
-
-    const char suffix = token[token.size() - 1u];
-    return (suffix == suffixLower || suffix == suffixUpper) ? token.substr(0u, token.size() - 1u) : token;
-}
 
 Expected<f32> MaterialTypedValueParser::ParseMaterialParameterF32Token(const AStringView token)noexcept{
     const auto parsed = ParseF64FromChars(token);
@@ -121,24 +58,28 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterUnsignedToken(cons
 Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type)noexcept{
     AStringView numericToken = token;
     if(type == MaterialParameterValueType::f32)
-        numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
+        numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('f'), static_cast<u8>('F'));
     else if(type == MaterialParameterValueType::f16){
-        numericToken = StripMaterialNumericSuffix(token, 'h', 'H');
+        numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('h'), static_cast<u8>('H'));
         if(numericToken == token)
-            numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
+            numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('f'), static_cast<u8>('F'));
     }
     else if(type == MaterialParameterValueType::u8 || type == MaterialParameterValueType::u16 || type == MaterialParameterValueType::u32)
-        numericToken = StripMaterialNumericSuffix(token, 'u', 'U');
+        numericToken = StripMaterialNumericSuffix(token, static_cast<u8>('u'), static_cast<u8>('U'));
 
     switch(type){
-    case MaterialParameterValueType::b8:
-        return ParseMaterialBoolToken(token);
+    case MaterialParameterValueType::b8:{
+        u32 parsedValue = 0u;
+        if(!TryParseMaterialBoolToken(token, parsedValue))
+            return MakeUnexpected(Failure{});
+        return parsedValue;
+    }
     case MaterialParameterValueType::i8:
-        return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i8>::s_Min), static_cast<i64>(Limit<i8>::s_Max), NWB_MATERIAL_TYPED_BYTE_MASK);
+        return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i8>::s_Min), static_cast<i64>(Limit<i8>::s_Max), Limit<u8>::s_Max);
     case MaterialParameterValueType::u8:
         return ParseMaterialParameterUnsignedToken(numericToken, static_cast<u64>(Limit<u8>::s_Max));
     case MaterialParameterValueType::i16:
-        return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i16>::s_Min), static_cast<i64>(Limit<i16>::s_Max), NWB_MATERIAL_TYPED_U16_MASK);
+        return ParseMaterialParameterSignedToken(numericToken, static_cast<i64>(Limit<i16>::s_Min), static_cast<i64>(Limit<i16>::s_Max), Limit<u16>::s_Max);
     case MaterialParameterValueType::u16:
         return ParseMaterialParameterUnsignedToken(numericToken, static_cast<u64>(Limit<u16>::s_Max));
     case MaterialParameterValueType::i32:
@@ -163,37 +104,35 @@ Expected<u32> MaterialTypedValueParser::ParseMaterialParameterToken(const AStrin
     }
 }
 
-b8 MaterialTypedValueParser::StoreMaterialTypedValueBytes(MaterialTypedValueData& outParameter, const usize byteOffset, const NotNull<const void*> bytes, const usize byteSize)noexcept{
-    if(byteOffset > sizeof(outParameter.data) || byteSize > sizeof(outParameter.data) - byteOffset)
+template<typename ValueType>
+b8 MaterialTypedValueParser::StoreMaterialTypedValueScalar(const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept(IsArithmetic_V<ValueType>){
+    const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
+    if(byteOffset > sizeof(outParameter.data) || sizeof(ValueType) > sizeof(outParameter.data) - byteOffset)
         return false;
 
-    const NotNull<u8*> outBytes(reinterpret_cast<u8*>(&outParameter.data));
-    NWB_MEMCPY(outBytes.get() + byteOffset, sizeof(outParameter.data) - byteOffset, bytes.get(), byteSize);
+    const ValueType typedValue = static_cast<ValueType>(value);
+    Array<u8, sizeof(outParameter.data)> packedBytes{};
+    NWB_MEMCPY(packedBytes.data(), sizeof(packedBytes), &outParameter.data, sizeof(outParameter.data));
+    NWB_MEMCPY(packedBytes.data() + byteOffset, sizeof(packedBytes) - byteOffset, &typedValue, sizeof(typedValue));
+    NWB_MEMCPY(&outParameter.data, sizeof(outParameter.data), packedBytes.data(), sizeof(packedBytes));
     return true;
 }
 
-template<typename ValueType>
-b8 MaterialTypedValueParser::StoreMaterialTypedValueScalar(MaterialTypedValueData& outParameter, const u32 componentIndex, const u32 value)noexcept(IsArithmetic_V<ValueType>){
-    const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
-    const ValueType typedValue = static_cast<ValueType>(value);
-    return StoreMaterialTypedValueBytes(outParameter, byteOffset, NotNull<const void*>(&typedValue), sizeof(typedValue));
-}
-
-b8 MaterialTypedValueParser::StoreMaterialTypedValueComponent(MaterialTypedValueData& outParameter, const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value)noexcept{
-    if(componentIndex >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
+b8 MaterialTypedValueParser::StoreMaterialTypedValueComponent(const MaterialParameterValueType::Enum valueType, const u32 componentIndex, const u32 value, MaterialTypedValueData& outParameter)noexcept{
+    if(componentIndex >= s_MaterialTypedValueComponentCount)
         return false;
 
     switch(valueType){
     case MaterialParameterValueType::b8:
-        return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value != 0u ? 1u : 0u);
+        return StoreMaterialTypedValueScalar<u8>(componentIndex, value != 0u ? 1u : 0u, outParameter);
     case MaterialParameterValueType::i8:
     case MaterialParameterValueType::u8:
-        return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value);
+        return StoreMaterialTypedValueScalar<u8>(componentIndex, value, outParameter);
     case MaterialParameterValueType::i16:
     case MaterialParameterValueType::u16:
-        return StoreMaterialTypedValueScalar<u16>(outParameter, componentIndex, value);
+        return StoreMaterialTypedValueScalar<u16>(componentIndex, value, outParameter);
     case MaterialParameterValueType::f16:
-        return StoreMaterialTypedValueScalar<Half>(outParameter, componentIndex, value);
+        return StoreMaterialTypedValueScalar<Half>(componentIndex, value, outParameter);
     default:
         outParameter.data.raw[componentIndex] = value;
         return true;
@@ -205,35 +144,28 @@ Expected<MaterialTypedValueData> MaterialTypedValueParser::Parse(const AStringVi
     if(key.empty() || key.size() > ACompactString::s_MaxLength || value.empty() || value.size() > ACompactString::s_MaxLength)
         return MakeUnexpected(Failure{});
 
-    const auto call = SplitMaterialParameterCall(TrimView(value));
-    if(!call)
+    MaterialParameterCall call;
+    if(!SplitMaterialParameterCall(TrimView(value), call))
         return MakeUnexpected(Failure{});
-    const auto type = ParseMaterialParameterTypeText(call->type);
-    if(!type)
+    MaterialParameterType type;
+    if(!TryParseMaterialParameterTypeText(call.typeText, type))
         return MakeUnexpected(Failure{});
-    const auto tokens = SplitMaterialParameterTokens(call->arguments);
-    if(!tokens || tokens->count != type->componentCount)
+    MaterialParameterTokens tokens;
+    if(!SplitMaterialParameterTokens(call.arguments, tokens) || tokens.count != type.componentCount)
         return MakeUnexpected(Failure{});
 
-    for(u32 i = 0u; i < tokens->count; ++i){
-        const auto parsedValue = ParseMaterialParameterToken(tokens->values[i], type->valueType);
-        if(!parsedValue || !StoreMaterialTypedValueComponent(parameter, type->valueType, i, *parsedValue))
+    for(u32 i = 0u; i < tokens.count; ++i){
+        const auto parsedValue = ParseMaterialParameterToken(tokens.values[i], type.valueType);
+        if(!parsedValue || !StoreMaterialTypedValueComponent(type.valueType, i, *parsedValue, parameter))
             return MakeUnexpected(Failure{});
     }
 
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(key);
     parameter.meta.x = static_cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask);
     parameter.meta.y = static_cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift);
-    parameter.meta.z = static_cast<u32>(type->valueType);
-    parameter.meta.w = type->componentCount;
+    parameter.meta.z = static_cast<u32>(type.valueType);
+    parameter.meta.w = type.componentCount;
     return parameter;
-}
-
-UInt4U MaterialTypedValueParser::ToLayoutValue(const MaterialTypedValueData& parameter)noexcept{
-    UInt4U result = {};
-    for(u32 i = 0u; i < NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT; ++i)
-        result.raw[i] = parameter.data.raw[i];
-    return result;
 }
 
 

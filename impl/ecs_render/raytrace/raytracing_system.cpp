@@ -20,46 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererRayTracingSystem::RendererRayTracingSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    RendererShaderSystem& shaderSystem,
-    RendererMeshSystem& meshSystem,
-    RendererMaterialSystem& materialSystem,
-    RendererRayTracingState& rayTracingState,
-    const RendererOpticalVolumeSelection& opticalVolumes,
-    const CsgShapeRegistry& csgShapeRegistry
-)noexcept
-    : m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_shaderSystem(shaderSystem)
-    , m_meshSystem(meshSystem)
-    , m_materialSystem(materialSystem)
-    , m_rayTracingState(rayTracingState)
-    , m_opticalVolumes(opticalVolumes)
-    , m_csgShapeRegistry(csgShapeRegistry)
-    , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
-    , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
-    , m_sceneSwBvhRefit(arena, graphics)
-    , m_lightSpaceShadow(arena)
-    , m_refractionStatistics(arena, graphics)
-    , m_preparedShadowTraceGeometryBuffers(arena)
-    , m_acceptedShadowTraceGeometryBuffers(arena)
-    , m_preparedShadowTraceMaterialSampledTextures(arena)
-    , m_preparedCausticEmissionTargetBytes(arena)
-    , m_preparedShadowMaterialContext(arena)
-    , m_preparedSceneBvh(arena)
-    , m_preparedSceneTlas(arena)
-    , m_preparedSceneSwBvhMeshes(arena)
-    , m_preparedMeshBlasBuilds(arena)
-    , m_preparedMeshSwBvhBuilds(arena)
-{}
-
-RendererRayTracingSystem::~RendererRayTracingSystem()noexcept = default;
-
-
 b8 RendererRayTracingSystem::preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena){
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
     m_lightSpaceShadow.m_captureHistory.beginFrame();
@@ -376,10 +336,6 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noe
     clearPreparedShadowTraceMaterialSampledTextures();
 }
 
-Expected<PreparedSceneBvhUploads> RendererRayTracingSystem::retainPreparedSceneBvhUploads(Core::GpuTaskGraph& graph)const{
-    return m_preparedSceneBvh.retainUploads(m_rayTracingState, graph);
-}
-
 void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
     if(m_preparedSceneBvh.publishAcceptedUpload(m_rayTracingState))
         clearPreparedSceneBvh();
@@ -390,22 +346,10 @@ Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialStat
     return state.m_tlasBackingFresh ? Core::ResourceStates::Common : Core::ResourceStates::Unknown;
 }
 
-void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
-    m_preparedSceneTlas.confirm(m_rayTracingState);
-}
-
-b8 RendererRayTracingSystem::preparedTraversalStorageMatchesCurrent()const noexcept{
-    return m_preparedSceneBvh.storageMatches(m_rayTracingState) && m_preparedShadowMaterialContext.storageMatches(m_rayTracingState);
-}
-
 b8 RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(const MaterialSurfaceInfo& materialInfo, ShadowMaterialSampledTextureCollector& collector){
     return collector.collect(materialInfo, [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
         return m_materialSystem.appendPreparedMaterialSurfaceSampledTextures(material, pending);
     });
-}
-
-void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()noexcept{
-    m_preparedShadowTraceMaterialSampledTextures.clear();
 }
 
 b8 RendererRayTracingSystem::capturePreparedSceneBvh(

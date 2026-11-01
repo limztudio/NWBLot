@@ -87,15 +87,6 @@ b8 MergePreparedShadowMaterialSampledTextures(const Span<const Core::TextureHand
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShadowMaterialSampledTextureCollector::ShadowMaterialSampledTextureCollector(Vector<Core::TextureHandle, Core::Alloc::GlobalArena>& textures, Core::Alloc::ScratchArena& scratchArena)
-    : m_output(textures, scratchArena)
-    , m_scratchArena(scratchArena)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 

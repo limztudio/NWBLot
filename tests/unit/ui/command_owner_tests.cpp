@@ -46,23 +46,16 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key, const b8 repeat = false)noexcept{
-    InputEvent event;
-    event.type = type;
-    event.key = key;
-    event.repeat = repeat;
-    return event;
-}
+using UiTestSupport::Key;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiCommandOwnerTests : public testing::Test{
+class UiCommandOwnerTests : public UiTestSupport::RouterTestFixture{
 public:
     UiCommandOwnerTests()
-        : m_arena(Name("tests/ui/keyboard_owner"))
-        , m_router(m_arena)
+        : RouterTestFixture(Name("tests/ui/keyboard_owner"))
     {
         m_targets = { Editor(), List(), List(3u, 140.0f) };
         m_targets[2u].control.instanceGeneration = 32u;
@@ -81,11 +74,6 @@ protected:
         m_targets[0u].commandOwner = {};
         m_targets[0u].commandOwnerDeclarationGeneration = 0u;
         m_targets[0u].commandControl = {};
-    }
-
-    [[nodiscard]] InputRoutingResult send(const InputEvent& event){
-        EXPECT_TRUE(m_router.queue(UiTestSupport::NativeInput(event)));
-        return m_router.process();
     }
 
     void press(const Core::Key::Enum key){
@@ -119,8 +107,6 @@ protected:
 
 
 protected:
-    Core::Alloc::GlobalArena m_arena;
-    InputRouter m_router;
     Array<HitTarget, 3u> m_targets;
 };
 
@@ -129,7 +115,7 @@ protected:
 
 
 TEST_F(UiCommandOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     press(Core::Key::Down);
     press(Core::Key::Enter);
@@ -156,7 +142,7 @@ TEST_F(UiCommandOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActiv
 }
 
 TEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     m_targets[1u].pageRows = 17u;
     m_targets[1u].rectangle.height = 180.0f;
@@ -166,7 +152,7 @@ TEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandid
     ASSERT_TRUE(actionResult1);
     action = *actionResult1;
     EXPECT_EQ(action.pageRows, 5u);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     press(Core::Key::PageDown);
     const auto actionResult2 = take();
     ASSERT_TRUE(actionResult2);
@@ -176,31 +162,31 @@ TEST_F(UiCommandOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandid
 }
 
 TEST_F(UiCommandOwnerTests, MissingDisabledAndNonNavigableOwnersRejectCandidateAcceptance){
-    EXPECT_FALSE(m_router.commitTargets(&m_targets[0u], 1u, 1u));
+    EXPECT_FALSE(m_router.commitTargets(Span(&m_targets[0u], 1u), 1u));
     m_targets[1u].enabled = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[1u].enabled = true;
     m_targets[1u].navigable = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[1u].navigable = true;
     m_targets[1u].focusable = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     EXPECT_TRUE(m_router.targets().empty());
 }
 
 TEST_F(UiCommandOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwallowingEditorKeys){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     ++m_targets[0u].commandOwnerDeclarationGeneration;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     bind(m_targets[1u]);
     ++m_targets[0u].commandControl.contentRevision;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     bind(m_targets[1u]);
     m_targets[0u].commandOwner = {};
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 2u));
     press(Core::Key::Down);
     ControlAction action;
     const auto actionResult = take();
@@ -211,39 +197,39 @@ TEST_F(UiCommandOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwal
 
 TEST_F(UiCommandOwnerTests, NonEditableDisabledAndPartSourcesCannotBorrowNavigation){
     m_targets[0u].textEditable = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[0u].textEditable = true;
     m_targets[0u].enabled = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[0u].enabled = true;
     m_targets[0u].focusable = false;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     m_targets[0u].focusable = true;
     m_targets[0u].owner = m_targets[1u].id;
     m_targets[0u].ownerDeclarationGeneration = m_targets[1u].declarationGeneration;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
 }
 
 TEST_F(UiCommandOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejected){
     m_targets[0u].commandOwner = m_targets[0u].id;
     m_targets[0u].commandOwnerDeclarationGeneration = m_targets[0u].declarationGeneration;
     m_targets[0u].commandControl = m_targets[0u].control;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
     bind(m_targets[1u]);
     m_targets[0u].navigable = true;
-    EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    EXPECT_FALSE(m_router.commitTargets(m_targets, 1u));
 }
 
 TEST_F(UiCommandOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     bind(m_targets[2u]);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     bind(m_targets[1u]);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
@@ -255,14 +241,14 @@ TEST_F(UiCommandOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitial
 }
 
 TEST_F(UiCommandOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrReviveItsRelease){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     bind(m_targets[2u]);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     bind(m_targets[1u]);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());
     EXPECT_FALSE(take(2u));
@@ -274,13 +260,13 @@ TEST_F(UiCommandOwnerTests, RebindingEditorWhileSubmitIsHeldCannotRedirectOrRevi
 }
 
 TEST_F(UiCommandOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
-    ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 2u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&m_targets[1u], 2u), 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     m_targets[1u].focusOnCommit = true;
-    ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 3u));
+    ASSERT_TRUE(m_router.commitTargets(Span(&m_targets[1u], 2u), 3u));
     EXPECT_EQ(m_router.focus(), m_targets[1u].id);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -288,37 +274,37 @@ TEST_F(UiCommandOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvive
 }
 
 TEST_F(UiCommandOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     clearBinding();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_TRUE(m_router.controlActions().empty());
     press(Core::Key::Left);
     bind(m_targets[1u]);
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).commandConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).commandConsumed);
 }
 
 TEST_F(UiCommandOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     press(Core::Key::Down);
     ++m_targets[0u].declarationGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     focus();
     press(Core::Key::Down);
     ++m_targets[0u].control.instanceGeneration;
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 3u));
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
 TEST_F(UiCommandOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).commandConsumed);
     ControlToken replacement = m_targets[1u].control;
@@ -345,7 +331,7 @@ TEST_F(UiCommandOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCross
     barrier.popup = scope.token;
     barrier.layer = scope.layer;
     Array<HitTarget, 4u> targets{ barrier, m_targets[0u], m_targets[1u], m_targets[2u] };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u, &scope, 1u));
+    ASSERT_TRUE(m_router.commitTargets(targets, 1u, Span(&scope, 1u)));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     press(Core::Key::Down);
     ControlAction action;
@@ -355,13 +341,13 @@ TEST_F(UiCommandOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCross
     EXPECT_EQ(action.popup, scope.token);
     targets[2u].popup = {};
     targets[2u].layer = 0u;
-    EXPECT_FALSE(m_router.commitTargets(targets.data(), targets.size(), 2u, &scope, 1u));
+    EXPECT_FALSE(m_router.commitTargets(targets, 2u, Span(&scope, 1u)));
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
 TEST_F(UiCommandOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    ASSERT_TRUE(m_router.commitTargets(m_targets, 1u));
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).commandConsumed);
     EXPECT_FALSE(take());

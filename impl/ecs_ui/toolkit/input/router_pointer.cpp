@@ -65,7 +65,7 @@ void InputRouter::routePointer(const InputEvent& event, const HitTarget* hit, In
     if(m_primaryDown && m_pointerSequenceConsumed && m_pointerSubmitArmed && hit != nullptr && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable && hit->popup == m_capturePopup && hit->control == m_captureControl){
         const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
         if(host != nullptr)
-            appendControlAction(result, *host, *hit, ControlActionKind::Activate, 0.0);
+            appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
         else
             appendActivation(*hit, InputActionSource::Pointer, event.source, result);
     }

@@ -248,6 +248,8 @@ void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8
             binding->readBeforeWrite = true;
         if(requireStorage)
             binding->needsStorageSync = true;
+        else
+            binding->readAsRegister = true;
         return;
     }
 
@@ -358,9 +360,11 @@ void ScanStmtsForSimdBindings(const Span<const Stmt* const> statements, const Sy
 
         switch(stmt->kind){
         case StmtKind::VarDecl:{
-            AnalyzeSimdExprReads(stmt->expr, symbols, false, false, arena, bindings);
+            const b8 isSimdLocalDecl = !ResolveLocalVarDeclSimdType(*stmt, symbols).empty();
+            AnalyzeSimdExprReads(stmt->expr, symbols, !isSimdLocalDecl, false, arena, bindings);
+            const b8 isSimdCopyCtor = isSimdLocalDecl && stmt->arguments.size() == 1u && stmt->arguments[0] && !stmt->arguments[0]->resolvedSimdType.empty();
             for(const Expr* arg : stmt->arguments)
-                AnalyzeSimdExprReads(arg, symbols, false, false, arena, bindings);
+                AnalyzeSimdExprReads(arg, symbols, !isSimdCopyCtor, false, arena, bindings);
             break;
         }
         case StmtKind::ExprStmt:{
@@ -368,7 +372,19 @@ void ScanStmtsForSimdBindings(const Span<const Stmt* const> statements, const Sy
             break;
         }
         case StmtKind::Return:{
-            AnalyzeSimdExprReads(stmt->expr, symbols, stmt->wrapReturnNotNull, false, arena, bindings);
+            b8 returnRequiresStorage = stmt->wrapReturnNotNull;
+            if(!returnRequiresStorage && stmt->expr && (stmt->expr->kind == ExprKind::Identifier || stmt->expr->kind == ExprKind::ThisMember)){
+                returnRequiresStorage = true;
+                if(stmt->expr->kind == ExprKind::Identifier){
+                    for(const SimdVarBinding& b : bindings){
+                        if(!b.isThisMember && b.name == stmt->expr->text && b.isLocalDecl){
+                            returnRequiresStorage = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            AnalyzeSimdExprReads(stmt->expr, symbols, returnRequiresStorage, false, arena, bindings);
             ioHasSeenPossibleReturn = true;
             break;
         }
@@ -529,27 +545,26 @@ void CollectScopedSimdBindings(const Span<const Stmt* const> statements, const S
     MVector<b8> seenIsLoop(arena);
     MVector<MStringView> conflictedNames(arena);
     CollectLocalDeclConflicts(statements, symbols, seenNames, seenSimdTypes, seenIsLoop, conflictedNames);
-    if(!conflictedNames.empty()){
-        usize writeIdx = 0u;
-        for(usize readIdx = 0u; readIdx < bindings.size(); ++readIdx){
-            b8 isConflicted = false;
-            if(!bindings[readIdx].isThisMember){
-                for(const MStringView cname : conflictedNames){
-                    if(bindings[readIdx].name == cname){
-                        isConflicted = true;
-                        break;
-                    }
+    usize writeIdx = 0u;
+    for(usize readIdx = 0u; readIdx < bindings.size(); ++readIdx){
+        const SimdVarBinding& candidate = bindings[readIdx];
+        b8 shouldRemove = !candidate.isLocalDecl && !candidate.readAsRegister && !candidate.written;
+        if(!shouldRemove && !candidate.isThisMember){
+            for(const MStringView cname : conflictedNames){
+                if(candidate.name == cname){
+                    shouldRemove = true;
+                    break;
                 }
             }
-            if(!isConflicted){
-                if(writeIdx != readIdx)
-                    bindings[writeIdx] = bindings[readIdx];
-                ++writeIdx;
-            }
         }
-        while(bindings.size() > writeIdx)
-            bindings.pop_back();
+        if(!shouldRemove){
+            if(writeIdx != readIdx)
+                bindings[writeIdx] = bindings[readIdx];
+            ++writeIdx;
+        }
     }
+    while(bindings.size() > writeIdx)
+        bindings.pop_back();
 }
 
 

@@ -6,8 +6,7 @@
 
 
 #include "builder_scope.h"
-
-#include <global/simd/vector.h>
+#include "rect_math.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,12 +33,6 @@ private:
     using ContextMenuFrame = BuilderScopeFrame::ContextMenuFrame;
 
 
-private:
-    [[nodiscard]] static SIMDVectorSingle LoadRectangle(const Rect& rectangle)noexcept{ return VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height); }
-
-    [[nodiscard]] static Rect StoreRectangle(const SIMDVectorSingle rectangle)noexcept{ return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) }; }
-
-
 public:
     Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
 
@@ -55,12 +48,12 @@ public:
     // Popups begin after a balanced panel/window or within another popup. Only a visible begin requires endPopup().
     [[nodiscard]] b8 beginPopup(AStringView stableKey, PopupState& state, const PopupOptions& options = {});
     [[nodiscard]] b8 endPopup();
-    [[nodiscard]] b8 beginRow(AStringView stableKey, const ContainerOptions& options = {});
-    [[nodiscard]] b8 beginColumn(AStringView stableKey, const ContainerOptions& options = {});
+    [[nodiscard]] b8 beginRow(const AStringView stableKey, const ContainerOptions& options = {}){ return beginContainer(stableKey, LayoutDirection::Row, options); }
+    [[nodiscard]] b8 beginColumn(const AStringView stableKey, const ContainerOptions& options = {}){ return beginContainer(stableKey, LayoutDirection::Column, options); }
     [[nodiscard]] b8 endContainer()noexcept;
-    [[nodiscard]] b8 label(AStringView stableKey, StringView text, const WidgetOptions& options = {});
+    [[nodiscard]] b8 label(const AStringView stableKey, const StringView text, const WidgetOptions& options = {}){ return addItem(stableKey, text, WidgetKind::Label, options).has_value(); }
     // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
-    [[nodiscard]] b8 button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
+    b8 button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
     [[nodiscard]] b8 checkbox(AStringView stableKey, StringView text, b8& checked, const WidgetOptions& options = {});
     [[nodiscard]] b8 selectable(AStringView stableKey, StringView text, b8 selected, const WidgetOptions& options = {});
     // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
@@ -80,13 +73,13 @@ public:
     [[nodiscard]] b8 publishImageFrame(const WidgetState& widget, ImageFrame&& frame);
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
-    [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
+    [[nodiscard]] ComboResult comboBox(const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {}){ return declareCombo(stableKey, source, options, nullptr, state); }
     [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source, SearchComboState& state, const SearchComboOptions& options = {});
     // Attach to a preceding item in this same container. Models are borrowed until the enclosing scope ends.
     [[nodiscard]] b8 tooltip(AStringView stableKey, AStringView anchorKey, StringView text, TooltipState& state, const TooltipOptions& options = {});
     [[nodiscard]] ContextMenuResult contextMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] b8 separator(AStringView stableKey, const SeparatorOptions& options = {});
-    [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
+    [[nodiscard]] EditBoxResult editBox(const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {}){ return declareEditBox(stableKey, options, model, state); }
     // Multiline model and viewport remain lent through the enclosing scope or outermost popup end.
     [[nodiscard]] EditBoxResult textArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options = {});
     // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
@@ -120,10 +113,16 @@ public:
 
 private:
     [[nodiscard]] b8 declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
-    [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const noexcept;
+    [[nodiscard]] b8 panelDeclarationBlocked()const noexcept{ return declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed(); }
+    [[nodiscard]] b8 itemDeclarationBlocked()const noexcept{ return panelDeclarationBlocked() || m_scope->m_items.size() >= s_LayoutMaxNodes; }
+    [[nodiscard]] ShapeRequest textShapeRequest(const StringView text, const f32 fontSize)const noexcept{
+        return { text, StringView(m_textLanguage.data(), m_textLanguage.size()), fontSize, m_textScriptTag, TextDirection::LeftToRight };
+    }
     [[nodiscard]] b8 beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Expected<NotNull<Item*>> addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
+    [[nodiscard]] b8 addItemNode(const LayoutNodeDesc& description, Item& item);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
+    [[nodiscard]] Insets resolveRegionsPadding(const Insets& initial, Span<const Name> names, const Name& fallback)const noexcept;
     void loadButtonMetrics(SIMDVectorSingle& size, SIMDVectorSingle& padding)const noexcept;
     [[nodiscard]] b8 paintPanel();
     [[nodiscard]] b8 paintWindow();
@@ -147,7 +146,8 @@ private:
     [[nodiscard]] b8 numericEditMatches(const Item& item)const noexcept;
     [[nodiscard]] b8 numericStateAvailable(const EditBoxState& state)const noexcept;
     [[nodiscard]] SIMDVectorSingle loadEditMinimumSize()const noexcept;
-    [[nodiscard]] b8 prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
+    void resolveEditIntrinsicSize(const Item& item, Point& outSize)const noexcept;
+    [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
     [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] b8 paintSelectable(const Item& item, const LayoutBox& box);
     [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
@@ -156,7 +156,7 @@ private:
     [[nodiscard]] b8 paintList(const Item& item, const LayoutBox& box);
     [[nodiscard]] b8 paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] b8 paintRadioGroup(const Item& item, const LayoutBox& box);
-    [[nodiscard]] b8 radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept;
+    [[nodiscard]] b8 radioGroupStateMatches(const RadioGroupFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     [[nodiscard]] b8 radioGroupMatches(const RadioGroupFrame& frame)const;
     [[nodiscard]] b8 prepareRadioGroup(RadioGroupFrame& frame);
     [[nodiscard]] b8 prepareSlider(SliderFrame& frame)noexcept;
@@ -166,7 +166,7 @@ private:
     // Image and progress paints share one clip-pop plus hit-target tail.
     [[nodiscard]] b8 finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, b8 painted);
     [[nodiscard]] b8 applySliderInput(SliderFrame& frame, const SliderPlacement& placement, b8 interactive);
-    [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept;
+    [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     void publishSliderResults(b8 valid)noexcept;
     [[nodiscard]] b8 applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     [[nodiscard]] ComboResult declareCombo(
@@ -185,12 +185,14 @@ private:
     void snapshotComboQuery(ComboFrame& frame)noexcept;
     [[nodiscard]] b8 paintComboQuery(ComboFrame& frame, LayoutBox& content);
     [[nodiscard]] Item* annotationAnchor(AStringView stableKey)noexcept;
-    [[nodiscard]] b8 paintDeferred();
-    [[nodiscard]] b8 paintDeferredContents();
+    [[nodiscard]] b8 paintDeferred(){ return paintDeferredContents() && validateDeferredSources() && validateDeferredStates(); }
+    [[nodiscard]] b8 paintDeferredContents(){ return paintContextMenus() && paintCombos() && paintTooltips(); }
     [[nodiscard]] b8 validateDeferredSources()const;
     [[nodiscard]] b8 validateDeferredStates()const noexcept;
     void releaseDeferredLoans()noexcept;
-    [[nodiscard]] b8 listStateMatches(const ListFrame& frame)const noexcept;
+    [[nodiscard]] b8 listStateMatches(const ListFrame& frame)const noexcept{
+        return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
+    }
     [[nodiscard]] b8 listMatches(const ListFrame& frame)const;
     [[nodiscard]] b8 paintTooltips();
     [[nodiscard]] b8 prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
@@ -202,7 +204,9 @@ private:
     [[nodiscard]] b8 paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] b8 paintPopup();
     [[nodiscard]] b8 synchronizePopup()noexcept;
-    [[nodiscard]] b8 popupFrameVisible(const BuilderScopeFrame& frame)const noexcept;
+    [[nodiscard]] b8 popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
+        return frame.m_popupState && frame.m_popupState->isOpen() && frame.m_popupState->instanceGeneration() == frame.m_popupToken.instanceGeneration && frame.m_popupState->openGeneration() == frame.m_popupToken.openGeneration;
+    }
     [[nodiscard]] b8 popupAncestorsVisible()const noexcept;
     [[nodiscard]] b8 finishPopupFamily();
     [[nodiscard]] b8 paintPopupFamily(BuilderScopeFrame& frame);
@@ -210,6 +214,7 @@ private:
     void releasePopupFamily()noexcept;
     [[nodiscard]] b8 reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
     [[nodiscard]] SIMDVectorSingle loadVisibleClip(SIMDVectorSingle clip)const noexcept;
+    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept{ return StoreRect(loadVisibleClip(LoadRect(clip))); }
 
 
 private:

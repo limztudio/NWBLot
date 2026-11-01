@@ -2,14 +2,79 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/avboit_private.h>
+#include <impl/ecs_render/avboit/avboit.h>
+#include <impl/ecs_render/avboit/avboit_system.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
+#include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/refraction/push_constants.h>
+
+#include <core/common/log.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererAvboitState::invalidateResources()noexcept{
+    m_linearSampler.reset();
+    m_depthWarpComputeShader.reset();
+    m_integrateComputeShader.reset();
+    m_depthWarpPipeline.reset();
+    m_integratePipeline.reset();
+    m_targetsNeedClear = true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 AvboitFrameTargets::valid()const noexcept{
+#if defined(NWB_DEBUG)
+    return
+        fullWidth > 0
+        && fullHeight > 0
+        && lowWidth > 0
+        && lowHeight > 0
+        && virtualSliceCount > 0
+        && physicalSliceCount > 0
+        && lowRasterFormat != Core::Format::UNKNOWN
+        && accumColorFormat != Core::Format::UNKNOWN
+        && accumExtinctionFormat != Core::Format::UNKNOWN
+        && transmittanceFormat != Core::Format::UNKNOWN
+        && lowRasterTarget != nullptr
+        && accumColor != nullptr
+        && accumExtinction != nullptr
+        && transmittanceTexture != nullptr
+        && lowFramebuffer != nullptr
+        && accumulationFramebuffer != nullptr
+        && coverageBuffer != nullptr
+        && depthWarpBuffer != nullptr
+        && controlBuffer != nullptr
+        && extinctionBuffer != nullptr
+        && extinctionOverflowBuffer != nullptr
+        && refractionTileList != nullptr
+        && refractionTileArguments != nullptr
+        && coverageBufferDescriptor.valid()
+        && depthWarpBufferDescriptor.valid()
+        && controlBufferDescriptor.valid()
+        && extinctionBufferDescriptor.valid()
+        && extinctionOverflowBufferDescriptor.valid()
+        && transmittanceTextureStorageDescriptor.valid()
+        && refractionTileListDescriptor.valid()
+        && refractionTileArgumentsDescriptor.valid()
+        && deferredSlotsBufferDescriptor.valid()
+    ;
+#else
+    return accumulationFramebuffer != nullptr;
+#endif
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,6 +129,55 @@ static Expected<Core::BufferHandle> CreateU32Buffer(Core::GraphicsRuntime& graph
     return graphics.createBuffer(desc);
 }
 
+static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
+    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!allocated)
+        return MakeUnexpected(allocated.error());
+    const Core::GpuDescriptorHandle handle = *allocated;
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
+
+    if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer))){
+        return MakeUnexpected(Failure{});
+    }
+
+    retireUnpublished.release();
+    return handle;
+}
+
+static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture& texture, const Core::Format::Enum format){
+    const Expected<Core::GpuDescriptorHandle> allocated = heap.allocate(Core::GpuDescriptorClass::StorageImage);
+    if(!allocated)
+        return MakeUnexpected(allocated.error());
+    const Core::GpuDescriptorHandle handle = *allocated;
+    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, handle);
+
+    if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(0u, &texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D))){
+        return MakeUnexpected(Failure{});
+    }
+
+    retireUnpublished.release();
+    return handle;
+}
+
+static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTargets& targets){
+    heap.free(targets.coverageBufferDescriptor);
+    heap.free(targets.depthWarpBufferDescriptor);
+    heap.free(targets.controlBufferDescriptor);
+    heap.free(targets.extinctionBufferDescriptor);
+    heap.free(targets.extinctionOverflowBufferDescriptor);
+    heap.free(targets.transmittanceTextureStorageDescriptor);
+    heap.free(targets.refractionTileListDescriptor);
+    heap.free(targets.refractionTileArgumentsDescriptor);
+    targets.coverageBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.depthWarpBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.controlBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.refractionTileListDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.refractionTileArgumentsDescriptor = Core::GpuDescriptorHandle::Invalid();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,16 +191,8 @@ static Expected<Core::BufferHandle> CreateU32Buffer(Core::GraphicsRuntime& graph
 void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     // Release owned descriptors only; the slot payload is borrowed.
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(targets.coverageBufferDescriptor);
-        heap.free(targets.depthWarpBufferDescriptor);
-        heap.free(targets.controlBufferDescriptor);
-        heap.free(targets.extinctionBufferDescriptor);
-        heap.free(targets.extinctionOverflowBufferDescriptor);
-        heap.free(targets.transmittanceTextureStorageDescriptor);
-        heap.free(targets.refractionTileListDescriptor);
-        heap.free(targets.refractionTileArgumentsDescriptor);
-    }
+    if(heap.isInitialized())
+        __hidden_avboit_targets::RetireTargetDescriptors(heap, targets);
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();
@@ -119,19 +225,19 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
         return false;
     }
 
+    AvboitTargetLayout layout;
+    if(!TryResolveAvboitTargetLayout(createdTargets.width, createdTargets.height, NWB_REFRACTION_GROUP_SIZE, layout)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: invalid AVBOIT target layout dimensions"));
+        return false;
+    }
+
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
-    const u64 lowWidth = Max<u64>(1u, DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(ECSRenderAvboitDetail::s_AvboitDownsample)));
-    const u64 lowHeight = Max<u64>(1u, DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(ECSRenderAvboitDetail::s_AvboitDownsample)));
-    if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
-        return false;
-    }
-    avboitTargets.lowWidth = static_cast<u32>(lowWidth);
-    avboitTargets.lowHeight = static_cast<u32>(lowHeight);
-    avboitTargets.virtualSliceCount = ECSRenderAvboitDetail::s_AvboitVirtualSlices;
-    avboitTargets.physicalSliceCount = ECSRenderAvboitDetail::s_AvboitPhysicalSlices;
+    avboitTargets.lowWidth = layout.lowWidth;
+    avboitTargets.lowHeight = layout.lowHeight;
+    avboitTargets.virtualSliceCount = layout.virtualSliceCount;
+    avboitTargets.physicalSliceCount = layout.physicalSliceCount;
     avboitTargets.lowRasterFormat = lowRasterFormat;
     avboitTargets.accumColorFormat = accumColorFormat;
     avboitTargets.accumExtinctionFormat = accumExtinctionFormat;
@@ -221,7 +327,7 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
         return false;
     }
 
-    Core::FramebufferAttachment accumulationAttachments[NWB_AVBOIT_ACCUM_TARGET_COUNT] = {};
+    Array<Core::FramebufferAttachment, NWB_AVBOIT_ACCUM_TARGET_COUNT> accumulationAttachments = {};
     accumulationAttachments[NWB_AVBOIT_ACCUM_COLOR_LOCATION].setTexture(avboitTargets.accumColor.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
     accumulationAttachments[NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION].setTexture(avboitTargets.accumExtinction.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
     accumulationAttachments[NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION].setTexture(avboitTargets.foregroundAccumColor.get()).setSubresources(ECSRenderDetail::s_FramebufferSubresources);
@@ -241,22 +347,10 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
         return false;
     }
 
-    const u32 coverageWordCount = DivideUp(avboitTargets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
-    const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
-    const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
-    const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;
-    if(lowPixelCount > static_cast<u64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution pixel count exceeds u32 limits"));
-        return false;
-    }
-    const u32 physicalExtinctionWordCount = DivideUp(avboitTargets.physicalSliceCount, ECSRenderAvboitDetail::s_AvboitExtinctionSlicesPerWord);
-    if(physicalExtinctionWordCount == 0 || lowPixelCount > static_cast<u64>(Limit<u32>::s_Max) / physicalExtinctionWordCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT packed extinction word count exceeds u32 limits"));
-        return false;
-    }
-    const u64 extinctionWordCount = lowPixelCount * physicalExtinctionWordCount;
-    const u64 extinctionBytes = extinctionWordCount * sizeof(u32);
-    const u64 extinctionOverflowBytes = lowPixelCount * sizeof(u32);
+    const u64 coverageBytes = layout.coverageWordCount * sizeof(u32);
+    const u64 depthWarpBytes = layout.depthWarpWordCount * sizeof(u32);
+    const u64 extinctionBytes = layout.extinctionWordCount * sizeof(u32);
+    const u64 extinctionOverflowBytes = layout.pixelCount * sizeof(u32);
 
     auto coverageBufferResult = __hidden_avboit_targets::CreateU32Buffer(m_graphics, coverageBytes, "engine/avboit/depth_coverage");
     if(!coverageBufferResult){
@@ -272,7 +366,7 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     }
     avboitTargets.depthWarpBuffer = Move(*depthWarpBufferResult);
 
-    auto controlBufferResult = __hidden_avboit_targets::CreateU32Buffer(m_graphics, static_cast<u64>(ECSRenderAvboitDetail::s_AvboitControlWordCount) * sizeof(u32), "engine/avboit/control");
+    auto controlBufferResult = __hidden_avboit_targets::CreateU32Buffer(m_graphics, static_cast<u64>(s_AvboitControlWordCount) * sizeof(u32), "engine/avboit/control");
     if(!controlBufferResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
         return false;
@@ -300,9 +394,7 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     }
     avboitTargets.transmittanceTexture = Move(*transmittanceTextureResult);
 
-    const u64 tileCount = DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE)) * DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(NWB_REFRACTION_GROUP_SIZE));
-    if(tileCount == 0u || tileCount > static_cast<u64>(Limit<u32>::s_Max) / sizeof(u32))
-        return false;
+    const u64 tileCount = layout.refractionTileCount;
     const auto createTileBuffer = [&](const u64 byteSize, const Name name, const b8 indirect){
         Core::BufferDesc desc;
         desc.setByteSize(byteSize).setStructStride(sizeof(u32)).setCanHaveUAVs(true).setCanHaveRawViews(true).setIsDrawIndirectArgs(indirect)
@@ -322,6 +414,91 @@ b8 RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& createdT
     createdTargets.avboit = Move(avboitTargets);
     m_avboitState.m_targetsNeedClear = true;
     return true;
+}
+
+b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets){
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
+        return false;
+    }
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    NWB_ASSERT(!createdTargets.bindless.slotsUploaded);
+    NWB_ASSERT(avboitTargets.coverageBuffer);
+    NWB_ASSERT(avboitTargets.depthWarpBuffer);
+    NWB_ASSERT(avboitTargets.controlBuffer);
+    NWB_ASSERT(avboitTargets.extinctionBuffer);
+    NWB_ASSERT(avboitTargets.extinctionOverflowBuffer);
+    NWB_ASSERT(avboitTargets.transmittanceTexture);
+    NWB_ASSERT(avboitTargets.refractionTileList);
+    NWB_ASSERT(avboitTargets.refractionTileArguments);
+    NWB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.refractionTileListDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
+
+    const auto targetResourcesRegistered = [&]() -> Expected<void>{
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.coverageBuffer); descriptor)
+            avboitTargets.coverageBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.depthWarpBuffer); descriptor)
+            avboitTargets.depthWarpBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.controlBuffer); descriptor)
+            avboitTargets.controlBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.extinctionBuffer); descriptor)
+            avboitTargets.extinctionBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.extinctionOverflowBuffer); descriptor)
+            avboitTargets.extinctionOverflowBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterTransmittanceStorageTexture(heap, *avboitTargets.transmittanceTexture, avboitTargets.transmittanceFormat); descriptor)
+            avboitTargets.transmittanceTextureStorageDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.refractionTileList); descriptor)
+            avboitTargets.refractionTileListDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.refractionTileArguments); descriptor)
+            avboitTargets.refractionTileArgumentsDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        return {};
+    };
+    if(!targetResourcesRegistered()){
+        __hidden_avboit_targets::RetireTargetDescriptors(heap, avboitTargets);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
+        return false;
+    }
+
+    // Borrow the shared slot payload; populate it before deferred uploads it.
+    avboitTargets.deferredSlotsBufferDescriptor = createdTargets.bindless.slotsBufferDescriptor;
+    createdTargets.bindless.slots.avboitCoverage = avboitTargets.coverageBufferDescriptor.slot();
+    createdTargets.bindless.slots.avboitDepthWarp = avboitTargets.depthWarpBufferDescriptor.slot();
+    createdTargets.bindless.slots.avboitControl = avboitTargets.controlBufferDescriptor.slot();
+    createdTargets.bindless.slots.avboitExtinction = avboitTargets.extinctionBufferDescriptor.slot();
+    createdTargets.bindless.slots.avboitExtinctionOverflow = avboitTargets.extinctionOverflowBufferDescriptor.slot();
+    createdTargets.bindless.slots.avboitTransmittanceStorage = avboitTargets.transmittanceTextureStorageDescriptor.slot();
+
+    return true;
+}
+
+Core::Sampler& RendererAvboitSystem::linearSampler()const noexcept{
+    NWB_ASSERT(m_avboitState.m_linearSampler);
+    return *m_avboitState.m_linearSampler;
 }
 
 

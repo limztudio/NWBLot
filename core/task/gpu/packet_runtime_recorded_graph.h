@@ -58,10 +58,10 @@ struct GpuRecordedPacket{
 
     GpuSubmissionPacketId packet;
     // Native recording retains its acquired lists through submission.
-    CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
-    CommandList* commandLists[s_MaxCommandLists] = {};
+    Array<CommandListHandle, s_MaxCommandLists> ownedCommandLists{};
+    Array<CommandList*, s_MaxCommandLists> commandLists{};
     // Exact identities let reset/destruction revoke an unsubmitted list without touching a later reuse of the same object.
-    u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
+    Array<u64, s_MaxCommandLists> commandListRecordingLeaseSerials{};
     // Written before commandListCount publishes the slot. They describe post-lowering packet work for compile tooling.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
@@ -106,12 +106,7 @@ struct GpuTaskGraphRecordingStatistics{
 
 
 public:
-    // The utilization is splat across all lanes.
-    [[nodiscard]] SIMDVectorDouble readyFrontierWorkerUtilization()const noexcept{
-        if(!(readyFrontierWorkerCapacitySeconds > 0.0))
-            return VectorDoubleZero();
-        return VectorDoubleSaturate(VectorDoubleDivide(VectorDoubleReplicate(readyFrontierWorkerBusySeconds), VectorDoubleReplicate(readyFrontierWorkerCapacitySeconds)));
-    }
+    [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept;
     [[nodiscard]] b8 valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
@@ -168,18 +163,7 @@ private:
         [[nodiscard]] static b8 Active()noexcept{ return s_ActiveOperation != nullptr; }
         [[nodiscard]] static b8 ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
         [[nodiscard]] static b8 ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
-        [[nodiscard]] static b8 ActiveScopeIs(const ArtifactOperation& operation)noexcept{
-            if(!operation.m_ownsAdmission || !operation.m_recordedGraph)
-                return false;
-            b8 foundOperation = false;
-            for(const ArtifactOperation* active = s_ActiveOperation; active; active = active->m_previousOperation){
-                if(active->m_recordedGraph != operation.m_recordedGraph)
-                    return false;
-                if(active == &operation)
-                    foundOperation = true;
-            }
-            return foundOperation;
-        }
+        [[nodiscard]] static b8 ActiveScopeIs(const ArtifactOperation& operation)noexcept;
 
 
     public:
@@ -260,6 +244,14 @@ public:
     void reset(const GpuCompiledGraph& compiledGraph);
     // Join graph/native work before releasing device-bound cached recording objects.
     [[nodiscard]] b8 releaseCommandListCache()noexcept;
+    [[nodiscard]] b8 validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
+    // Owned aggregate from packet slots under artifact admission. The plan proof guards metadata and rejects foreign artifacts.
+    [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
+    // Owned per-queue aggregate. Bad queue IDs or a foreign artifact give an empty result.
+    [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
 
 
 private:
@@ -276,20 +268,6 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const ArtifactOperation& artifactAccess
     )const noexcept;
-
-
-public:
-    [[nodiscard]] b8 validFor(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    [[nodiscard]] b8 validFor(const GpuTaskGraph& graph, const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Owned aggregate from packet slots under artifact admission. The plan proof guards metadata and rejects foreign artifacts.
-    [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess)const noexcept;
-    // Owned per-queue aggregate. Bad queue IDs or a foreign artifact give an empty result.
-    [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const GpuPhysicalQueueId& queue)const noexcept;
-    [[nodiscard]] Optional<GpuRecordedPacket> packetSnapshot(const GpuSubmissionPacketId& packet)const noexcept;
-
-
-private:
     void discardPacketTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess);
     void abandonPacketTimingTicketWithoutCallbacks(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)noexcept;
     [[nodiscard]] GpuTimingSubmissionTicket* packetTimingTicket(const GpuSubmissionPacketId& packet, const ArtifactOperation& artifactAccess)const noexcept;
@@ -314,7 +292,7 @@ private:
     [[nodiscard]] u64 recordingAttemptGenerationWithinArtifactOperation(const ArtifactOperation& artifactAccess)const noexcept;
     void addRecordingElapsedSeconds(f64 elapsedSeconds, const ArtifactOperation& artifactAccess)noexcept;
     void addReadyFrontierStatistics(f64 elapsedSeconds, f64 workerBusySeconds, f64 workerCapacitySeconds, const ArtifactOperation& artifactAccess)noexcept;
-    void cachePacketRecordingOverlaps(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const u32> packetIndices, Alloc::ScratchArena& scratchArena, const ArtifactOperation& artifactAccess);
+    void cachePacketRecordingOverlaps(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, Span<const u32> packetIndices, const ArtifactOperation& artifactAccess, Alloc::ScratchArena& scratchArena);
 
 
 private:

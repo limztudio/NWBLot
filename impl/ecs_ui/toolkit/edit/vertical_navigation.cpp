@@ -39,14 +39,6 @@ EditNavigationState::EditNavigationState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_vertical_navigation::s_NextIdentity))
 {}
 
-EditNavigationSnapshot EditNavigationState::snapshot()const noexcept{
-    return { m_instanceGeneration, m_generation, m_preferredX, m_valid };
-}
-
-b8 EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const noexcept{
-    return snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid;
-}
-
 b8 EditNavigationState::setPreferredX(const f32 preferredX)noexcept{
     if(!IsFinite(preferredX))
         return false;

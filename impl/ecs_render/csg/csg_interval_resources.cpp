@@ -6,12 +6,10 @@
 #include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
-#include <impl/ecs_render/shared/renderer_frame_types.h>
-#include <impl/ecs_render/csg/renderer_csg_state.h>
-#include <impl/assets_graphics/csg/subsystem.adhd.h>
+#include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/assets_graphics/components.adhd.h>
 
 #include <core/common/log.h>
-#include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/shader_archive.h>
 
@@ -48,7 +46,7 @@ namespace CsgIntervalDetail{
     return static_cast<b8>(layoutResult);
 }
 
-[[nodiscard]] static b8 CreateIntervalPeelPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalBindingLayout, Core::ComputePipelineHandle& pipeline){
+[[nodiscard]] static b8 CreateCsgIntervalComputePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& bindingLayout, Core::ComputePipelineHandle& pipeline){
     if(pipeline)
         return true;
 
@@ -56,43 +54,7 @@ namespace CsgIntervalDetail{
     if(!heap.isInitialized())
         return false;
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(intervalBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto pipelineResult = device.createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
-}
-
-[[nodiscard]] static b8 CreateReceiverSpanBuildPipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& receiverSpanBuildBindingLayout, Core::ComputePipelineHandle& pipeline){
-    if(pipeline)
-        return true;
-
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(receiverSpanBuildBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
-
-    auto pipelineResult = device.createComputePipeline(pipelineDesc);
-    if(pipelineResult)
-        pipeline = Move(*pipelineResult);
-    else
-        pipeline.reset();
-    return static_cast<b8>(pipelineResult);
-}
-
-[[nodiscard]] static b8 CreateIntervalCombinePipeline(Core::Device& device, const Core::ShaderHandle& shader, const Core::BindingLayoutHandle& intervalCombineBindingLayout, Core::ComputePipelineHandle& pipeline){
-    if(pipeline)
-        return true;
-
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(shader).addBindingLayout(intervalCombineBindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
+    pipelineDesc.setComputeShader(shader).addBindingLayout(bindingLayout).addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout());
 
     auto pipelineResult = device.createComputePipeline(pipelineDesc);
     if(pipelineResult)
@@ -189,17 +151,17 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targe
     }
 
     if(!m_csgState.m_intervalPeelComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalPeelComputeShader, &CsgSubsystem::intervalPeelCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalPeelCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(&CsgSubsystem::intervalPeelCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalPeelCS", m_csgState.m_intervalPeelComputeShader))
             return false;
     }
 
     if(!m_csgState.m_receiverSpanBuildComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_receiverSpanBuildComputeShader, &CsgSubsystem::receiverSpanBuildCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSpanBuildCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(&CsgSubsystem::receiverSpanBuildCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgReceiverSpanBuildCS", m_csgState.m_receiverSpanBuildComputeShader))
             return false;
     }
 
     if(!m_csgState.m_intervalCombineComputeShader){
-        if(!m_shaderSystem.loadShader<ComputeShader>(m_csgState.m_intervalCombineComputeShader, &CsgSubsystem::intervalCombineCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCombineCS"))
+        if(!m_shaderSystem.loadShader<ComputeShader>(&CsgSubsystem::intervalCombineCs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCombineCS", m_csgState.m_intervalCombineComputeShader))
             return false;
     }
 
@@ -208,22 +170,22 @@ b8 RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targe
             return false;
 
         if(!m_csgState.m_intervalCapFillPixelShader){
-            if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_intervalCapFillPixelShader, &CsgSubsystem::intervalCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCapFillPS"))
+            if(!m_shaderSystem.loadShader<PixelShader>(&CsgSubsystem::intervalCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgIntervalCapFillPS", m_csgState.m_intervalCapFillPixelShader))
                 return false;
         }
     }
 
-    if(!CsgIntervalDetail::CreateIntervalPeelPipeline(device, m_csgState.m_intervalPeelComputeShader, m_csgState.m_intervalPeelBindingLayout, m_csgState.m_intervalPeelPipeline)){
+    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_intervalPeelComputeShader, m_csgState.m_intervalPeelBindingLayout, m_csgState.m_intervalPeelPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateReceiverSpanBuildPipeline(device, m_csgState.m_receiverSpanBuildComputeShader, m_csgState.m_receiverSpanBuildBindingLayout, m_csgState.m_receiverSpanBuildPipeline)){
+    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_receiverSpanBuildComputeShader, m_csgState.m_receiverSpanBuildBindingLayout, m_csgState.m_receiverSpanBuildPipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
         return false;
     }
 
-    if(!CsgIntervalDetail::CreateIntervalCombinePipeline(device, m_csgState.m_intervalCombineComputeShader, m_csgState.m_intervalCombineBindingLayout, m_csgState.m_intervalCombinePipeline)){
+    if(!CsgIntervalDetail::CreateCsgIntervalComputePipeline(device, m_csgState.m_intervalCombineComputeShader, m_csgState.m_intervalCombineBindingLayout, m_csgState.m_intervalCombinePipeline)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
         return false;
     }
@@ -277,7 +239,7 @@ b8 RendererCsgSystem::prepareRefractionIntervalCapResources(const DeferredFrameT
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
     if(!m_csgState.m_refractionCapFillPixelShader){
-        if(!m_shaderSystem.loadShader<PixelShader>(m_csgState.m_refractionCapFillPixelShader, &CsgSubsystem::refractionCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS"))
+        if(!m_shaderSystem.loadShader<PixelShader>(&CsgSubsystem::refractionCapFillPs, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CsgRefractionCapFillPS", m_csgState.m_refractionCapFillPixelShader))
             return false;
     }
     if(!CsgIntervalDetail::CreateIntervalCapFillPipeline(

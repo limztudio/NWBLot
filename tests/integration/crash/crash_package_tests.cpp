@@ -8,8 +8,6 @@
 #include <dbghelp.h>
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-#include <errno.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -26,6 +24,10 @@ namespace __hidden_crash_package_tests{
 
 
 using namespace CrashTestSupport;
+using namespace NWB::Tests;
+using CrashTestSupport::TestArena;
+using namespace NWB::Tests::CrashTestPaths;
+namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,10 +45,10 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     const CrashTestPath spoolDirectory = blocked / s_SpoolDirectory;
     const auto expectedFailure = EnsureDirectories(spoolDirectory / CrashNames::s_PendingDirectoryName);
     ASSERT_FALSE(expectedFailure);
-    char expectedCategory[64u] = {};
+    Array<char, 64u> expectedCategory = {};
     CopyFixedBuffer(expectedCategory, "category=");
     AppendFixedBuffer(expectedCategory, AStringView(expectedFailure.error().category().name()));
-    char expectedCode[32u] = {};
+    Array<char, 32u> expectedCode = {};
     CopyFixedBuffer(expectedCode, "code=");
     const i64 nativeCode = expectedFailure.error().value();
     if(nativeCode < 0)
@@ -67,9 +69,9 @@ TEST(Crash, SpoolAdmissionPreservesFilesystemCategoryAndCodeAfterUnlock){
     EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);
     EXPECT_EQ(s_NativeLifecycleDiagnostics, 1u);
     EXPECT_EQ(s_UnlockedLifecycleDiagnostics, 1u);
-    EXPECT_EQ(AStringView(s_LastLifecycleOperation), AStringView("prepare_spool"));
-    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find(AStringView(expectedCategory)), AStringView::npos);
-    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find(AStringView(expectedCode)), AStringView::npos);
+    EXPECT_EQ(FixedBufferView(s_LastLifecycleOperation), AStringView("prepare_spool"));
+    EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCategory)), AStringView::npos);
+    EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find(FixedBufferView(expectedCode)), AStringView::npos);
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -123,22 +125,22 @@ TEST(Crash, FailedExecutableAdmissionReleasesResourcesAndObservesFailureAfterUnl
 #endif
     EXPECT_EQ(s_NativeLifecycleDiagnostics, 5u);
     EXPECT_EQ(s_UnlockedLifecycleDiagnostics, s_NativeLifecycleDiagnostics);
-    EXPECT_NE(AStringView(s_LastLifecycleDiagnostic).find("code="), AStringView::npos);
+    EXPECT_NE(FixedBufferView(s_LastLifecycleDiagnostic).find("code="), AStringView::npos);
     NWB::Core::Crash::UninstallCrashHandler();
     RemoveTestArtifacts(arena, s_Group);
 }
 #endif
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-alignas(MaxAlign) static u8 g_ForeignSignalStack[256u * 1024u] = {};
+alignas(MaxAlign) static Array<u8, 256u * 1024u> g_ForeignSignalStack = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void OriginalSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+static void OriginalSignalOwner(const int)noexcept{}
 
-static void ForeignSignalOwner(const int signalNumber)noexcept{ static_cast<void>(signalNumber); }
+static void ForeignSignalOwner(const int)noexcept{}
 
 [[noreturn]] static void OriginalTerminateOwner()noexcept{ _exit(123); }
 
@@ -213,8 +215,8 @@ TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){
     ASSERT_EQ(sigemptyset(&foreignAction.sa_mask), 0);
     ASSERT_EQ(sigaction(SIGILL, &foreignAction, nullptr), 0);
     stack_t foreignStack = {};
-    foreignStack.ss_sp = g_ForeignSignalStack;
-    foreignStack.ss_size = sizeof(g_ForeignSignalStack);
+    foreignStack.ss_sp = g_ForeignSignalStack.data();
+    foreignStack.ss_size = g_ForeignSignalStack.size();
     ASSERT_EQ(sigaltstack(&foreignStack, nullptr), 0);
     ExchangeTerminateHandler(ForeignTerminateOwner);
     NWB::Core::Crash::UninstallCrashHandler();
@@ -222,7 +224,7 @@ TEST(Crash, UninstallPreservesNewerForeignNativeHookOwners){
     struct sigaction retainedAction = {};
     ASSERT_EQ(sigaltstack(nullptr, &retainedStack), 0);
     ASSERT_EQ(sigaction(SIGILL, nullptr, &retainedAction), 0);
-    EXPECT_EQ(retainedStack.ss_sp, g_ForeignSignalStack);
+    EXPECT_EQ(retainedStack.ss_sp, g_ForeignSignalStack.data());
     EXPECT_EQ(retainedAction.sa_handler, ForeignSignalOwner);
     EXPECT_EQ(QueryTerminateHandler(), ForeignTerminateOwner);
     EXPECT_FALSE(NWB::Core::Crash::CrashDetail::g_State.platformRestorePending);

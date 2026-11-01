@@ -537,6 +537,35 @@ b8 IsAssetDependencyType(const TypeRef* const type, const SymbolTable& symbols, 
     return false;
 }
 
+const TypeRef* DeduceTemplateParamTypeRef(const TypeRef* const paramType, const TypeRef* const argType, const MStringView tpName, const SymbolTable& symbols, const u32 depth)noexcept{
+    if(!paramType || !argType || depth > 8u)
+        return nullptr;
+    if(paramType->name == tpName && paramType->templateArgs.empty())
+        return argType;
+    const TypeRef* up = symbols.unwrapTypeAlias(paramType);
+    const TypeRef* ua = symbols.unwrapTypeAlias(argType);
+    if(!up || !ua)
+        return nullptr;
+    if(up->name == tpName && up->templateArgs.empty())
+        return ua;
+    if(up->name == ua->name && up->templateArgs.size() == ua->templateArgs.size()){
+        for(usize k = 0u; k < up->templateArgs.size(); ++k){
+            if(const TypeRef* found = DeduceTemplateParamTypeRef(up->templateArgs[k].type, ua->templateArgs[k].type, tpName, symbols, depth + 1u))
+                return found;
+        }
+    }
+    else if(
+        up->name == "Span"
+        && up->templateArgs.size() == 1u
+        && !ua->templateArgs.empty()
+        && (ua->name == "Vector" || ua->name == "ParallelVector" || ua->name == "Array" || ua->name == "FixedVector")
+    ){
+        if(const TypeRef* found = DeduceTemplateParamTypeRef(up->templateArgs[0].type, ua->templateArgs[0].type, tpName, symbols, depth + 1u))
+            return found;
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -545,4 +574,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

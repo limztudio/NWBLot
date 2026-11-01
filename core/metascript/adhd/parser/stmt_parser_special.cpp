@@ -231,8 +231,8 @@ b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attri
                 return false;
             }
             seenCore = true;
-            if(attr.arguments.size() != 1u){
-                m_cursor.error(attr.line, attr.column, "'core' attribute requires exactly one argument (Heavy, Light, MainThread, or Any)");
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){
+                m_cursor.error(attr.line, attr.column, "'core' attribute requires a single identifier argument (Heavy, Light, MainThread, or Any)");
                 return false;
             }
             if(!TryParseParallelCoreKind(attr.arguments[0].text, outCore)){
@@ -246,8 +246,8 @@ b8 StmtParser::applySchedulingAttributes(const Span<const ParsedAttribute> attri
                 return false;
             }
             seenPriority = true;
-            if(attr.arguments.size() != 1u){
-                m_cursor.error(attr.line, attr.column, "'priority' attribute requires exactly one argument (Critical, Normal, or Background)");
+            if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){
+                m_cursor.error(attr.line, attr.column, "'priority' attribute requires a single identifier argument (Critical, Normal, or Background)");
                 return false;
             }
             if(!TryParseParallelPriorityKind(attr.arguments[0].text, outPriority)){
@@ -271,4 +271,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

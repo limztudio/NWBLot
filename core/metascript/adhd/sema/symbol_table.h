@@ -79,7 +79,7 @@ public:
     [[nodiscard]] const TypeRef* unwrapTypeAlias(const TypeRef* type)const noexcept;
     [[nodiscard]] ParamPassingMode::Enum resolveRefMode(const TypeRef* type)const noexcept;
     [[nodiscard]] MStringView resolveBaseTypeName(MStringView typeName)const noexcept;
-    [[nodiscard]] b8 isSelfDefaultedType(MStringView typeName)const noexcept;
+    [[nodiscard]] b8 isSelfDefaultedType(MStringView typeName, const ClassDecl* callerClass = nullptr)const noexcept;
     [[nodiscard]] b8 isSmallValueType(MStringView typeName)const noexcept;
     [[nodiscard]] b8 hasTypeSymbol(MStringView name)const noexcept;
 
@@ -102,4 +102,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -267,9 +267,24 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
         const b8 recvIsConst = expr.lhs ? isReceiverConst(ownerClass, method, *expr.lhs, scope) : false;
         const ClassDecl* opDeclCls = nullptr;
         const MethodDecl* customOpIdx = resolveCustomOperator(ownerClass, &method, containerTypeRef, lhsBaseType, "[]", 1u, recvIsConst, &opDeclCls);
-        if(opDeclCls && !customOpIdx){
-            reportError(errors, expr.span, "indexing custom class requires 'operator[]' to be defined on the class");
-            ok = false;
+        if(!customOpIdx){
+            if(opDeclCls || m_symbols.findInterface(lhsBaseType) || FindTemplateParam(ownerClass, &method, lhsBaseType)){
+                reportError(errors, expr.span, "indexing custom class, interface, or template parameter requires 'operator[]' to be defined");
+                ok = false;
+            }
+            else if(!lhsBaseType.empty() && IsKnownConcreteTypeName(lhsBaseType, m_symbols)){
+                const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsBaseType);
+                const b8 isBuiltinIndexable = (genericInfo && (genericInfo->isIndexableSequence || genericInfo->isReflectedMap))
+                    || lhsBaseType == "String"
+                    || lhsBaseType == "CompactString"
+                    || lhsBaseType == "StringView"
+                    || SymbolTable::IsSimdType(lhsBaseType)
+                    || SymbolTable::IsUnalignedVectorType(lhsBaseType);
+                if(!isBuiltinIndexable){
+                    reportError(errors, expr.span, "type does not support subscripting with 'operator[]'");
+                    ok = false;
+                }
+            }
         }
         else if(customOpIdx){
             if(opDeclCls && ownerClass != opDeclCls && customOpIdx->access != AccessSpecifier::Public){
@@ -325,9 +340,19 @@ b8 TypeChecker::checkExpr(ClassDecl* ownerClass, const Span<const ScopedVarInfo>
                     ok = false;
                 }
             }
-            if(opDeclCls && !opMethod){
-                reportError(errors, expr.span, "unary operator is not defined on custom class");
-                ok = false;
+            if(!opMethod){
+                if(opDeclCls || m_symbols.findInterface(lhsType) || FindTemplateParam(ownerClass, &method, lhsType)){
+                    reportError(errors, expr.span, "unary operator is not defined on operand type");
+                    ok = false;
+                }
+                else if((expr.op == TokenType::PlusPlus || expr.op == TokenType::MinusMinus) && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsNumericScalarType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                    reportError(errors, expr.span, "increment and decrement operators require a numeric scalar operand");
+                    ok = false;
+                }
+                else if(expr.op == TokenType::Tilde && !lhsType.empty() && !m_symbols.findEnum(lhsType) && !IsIntegerScalarType(lhsType) && !SymbolTable::IsSimdType(lhsType) && IsKnownConcreteTypeName(lhsType, m_symbols)){
+                    reportError(errors, expr.span, "bitwise '~' requires an integer, SIMD, or 'flag' operand");
+                    ok = false;
+                }
             }
             else if(opMethod){
                 if(opDeclCls && ownerClass != opDeclCls && opMethod->access != AccessSpecifier::Public){
@@ -440,8 +465,32 @@ b8 TypeChecker::applyInterfaceRefRebind(
 ){
     assignExpr.lhs->derefNotNull = false;
     assignExpr.isNotNullRebind = true;
-    if(targetRefMode == ParamPassingMode::Mut)
+    if(targetRefMode == ParamPassingMode::Mut){
         inOutRhsNeedsMut = true;
+    }
+    else if(targetRefMode == ParamPassingMode::In && assignExpr.rhs){
+        b8 isRvalueRebind = (
+            assignExpr.rhs->kind == ExprKind::IntegerLiteral
+            || assignExpr.rhs->kind == ExprKind::FloatLiteral
+            || assignExpr.rhs->kind == ExprKind::DoubleLiteral
+            || assignExpr.rhs->kind == ExprKind::StringLiteral
+            || assignExpr.rhs->kind == ExprKind::BoolLiteral
+            || assignExpr.rhs->kind == ExprKind::Binary
+            || assignExpr.rhs->kind == ExprKind::Cast
+            || assignExpr.rhs->kind == ExprKind::BitCast
+            || assignExpr.rhs->kind == ExprKind::Lambda
+            || assignExpr.rhs->kind == ExprKind::ScopeAccess
+        );
+        if(!isRvalueRebind && (assignExpr.rhs->kind == ExprKind::Call || assignExpr.rhs->kind == ExprKind::Unary)){
+            const TypeRef* rhsRetType = inferExprTypeRef(ownerClass, &method, *assignExpr.rhs, scope);
+            if(m_symbols.resolveRefMode(rhsRetType) == ParamPassingMode::None)
+                isRvalueRebind = true;
+        }
+        if(isRvalueRebind){
+            reportError(errors, assignExpr.span, "cannot rebind 'in' reference to a literal or rvalue temporary");
+            return false;
+        }
+    }
     const MStringView baseTypeName = targetType ? m_symbols.resolveBaseTypeName(targetType->name) : MStringView{};
     if(assignExpr.rhs && !baseTypeName.empty() && m_symbols.findInterface(baseTypeName)){
         return verifyConcreteClassImplementsInterface(ownerClass, method, *assignExpr.rhs, targetType, scope, assignExpr.span, errorMessage, errors);
@@ -479,6 +528,10 @@ b8 TypeChecker::checkBinaryExpr(ClassDecl* ownerClass, const Span<const ScopedVa
                 lhsNeedsMut = true;
             if(!opMethod->params.empty() && opMethod->params[0].mode == ParamPassingMode::Mut)
                 rhsNeedsMut = true;
+        }
+        else if(opDeclCls || m_symbols.findInterface(lhsType) || FindTemplateParam(ownerClass, &method, lhsType)){
+            reportError(errors, expr.span, "binary operator is not defined on operand type");
+            ok = false;
         }
     }
     const FieldDecl* lhsThisField = nullptr;
@@ -709,4 +762,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

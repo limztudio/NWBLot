@@ -38,6 +38,8 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
     if(text.size() < 3u || text.front() != '\'' || text.back() != '\'')
         return false;
     if(text[1] != '\\'){
+        if(text.size() != 3u)
+            return false;
         outValue = static_cast<i64>(static_cast<u8>(text[1]));
         return true;
     }
@@ -45,40 +47,91 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
         return false;
 
     switch(text[2]){
-    case 'n': outValue = '\n'; return true;
-    case 'r': outValue = '\r'; return true;
-    case 't': outValue = '\t'; return true;
-    case '\\': outValue = '\\'; return true;
-    case '\'': outValue = '\''; return true;
-    case '"': outValue = '"'; return true;
-    case 'a': outValue = '\a'; return true;
-    case 'b': outValue = '\b'; return true;
-    case 'f': outValue = '\f'; return true;
-    case 'v': outValue = '\v'; return true;
+    case 'n':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\n';
+        return true;
+    case 'r':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\r';
+        return true;
+    case 't':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\t';
+        return true;
+    case '\\':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\\';
+        return true;
+    case '\'':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\'';
+        return true;
+    case '"':
+        if(text.size() != 4u)
+            return false;
+        outValue = '"';
+        return true;
+    case '?':
+        if(text.size() != 4u)
+            return false;
+        outValue = '?';
+        return true;
+    case 'a':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\a';
+        return true;
+    case 'b':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\b';
+        return true;
+    case 'f':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\f';
+        return true;
+    case 'v':
+        if(text.size() != 4u)
+            return false;
+        outValue = '\v';
+        return true;
     case 'x':
     case 'X':
     case 'u':
     case 'U':{
+        if(text.size() <= 4u)
+            return false;
         u64 val = 0u;
         for(usize i = 3u; i + 1u < text.size(); ++i){
             const MChar ch = text[i];
-            if(!IsHexDigit(ch))
+            if(!IsHexDigit(ch) || val > (Limit<u64>::s_Max >> 4u))
                 return false;
             val = (val << 4u) | static_cast<u64>(HexDigitValue(ch));
         }
+        if((text[2] == 'u' || text[2] == 'U') && (val > 0x10FFFFu || (val >= 0xD800u && val <= 0xDFFFu)))
+            return false;
         outValue = static_cast<i64>(val);
         return true;
     }
     default:
         if(text[2] >= '0' && text[2] <= '7'){
             u64 val = 0u;
-            for(usize i = 2u; i + 1u < text.size() && text[i] >= '0' && text[i] <= '7'; ++i)
+            for(usize i = 2u; i + 1u < text.size(); ++i){
+                if(text[i] < '0' || text[i] > '7' || val > (Limit<u64>::s_Max >> 3u))
+                    return false;
                 val = (val << 3u) | static_cast<u64>(text[i] - '0');
+            }
             outValue = static_cast<i64>(val);
             return true;
         }
-        outValue = static_cast<i64>(static_cast<u8>(text[2]));
-        return true;
+        return false;
     }
 }
 
@@ -102,44 +155,56 @@ inline constexpr MStringView s_IncludePopMarker = "/*__adhd_inc_pop__*/";
 
     if(text.size() > 2u && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')){
         u64 val = 0u;
+        b8 hasDigit = false;
         for(usize i = 2u; i < text.size(); ++i){
             const MChar ch = text[i];
             if(ch == '\'')
                 continue;
-            if(!IsHexDigit(ch))
+            if(!IsHexDigit(ch) || val > (Limit<u64>::s_Max >> 4u))
                 return false;
+            hasDigit = true;
             val = (val << 4u) | static_cast<u64>(HexDigitValue(ch));
         }
+        if(!hasDigit)
+            return false;
         outValue = val;
         return true;
     }
 
     if(text.size() > 2u && text[0] == '0' && (text[1] == 'b' || text[1] == 'B')){
         u64 val = 0u;
+        b8 hasDigit = false;
         for(usize i = 2u; i < text.size(); ++i){
             const MChar ch = text[i];
             if(ch == '\'')
                 continue;
-            if(!IsBinaryDigit(ch))
+            if(!IsBinaryDigit(ch) || val > (Limit<u64>::s_Max >> 1u))
                 return false;
+            hasDigit = true;
             val = (val << 1u) | static_cast<u64>(ch - '0');
         }
+        if(!hasDigit)
+            return false;
         outValue = val;
         return true;
     }
 
     u64 val = 0u;
+    b8 hasDigit = false;
     for(usize i = 0u; i < text.size(); ++i){
         const MChar ch = text[i];
         if(ch == '\'')
             continue;
         if(!IsAsciiDigit(ch))
             return false;
+        hasDigit = true;
         const u64 digit = static_cast<u64>(ch - '0');
         if(val > (Limit<u64>::s_Max - digit) / 10u)
             return false;
         val = val * 10u + digit;
     }
+    if(!hasDigit)
+        return false;
     outValue = val;
     return true;
 }
@@ -276,4 +341,5 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

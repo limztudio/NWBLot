@@ -518,10 +518,10 @@ MStringView SymbolTable::resolveBaseTypeName(MStringView typeName)const noexcept
     return typeName;
 }
 
-b8 SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
+b8 SymbolTable::isSelfDefaultedType(const MStringView typeName, const ClassDecl* callerClass)const noexcept{
     if(const TypeAliasDecl* aliasDecl = findTypeAlias(typeName)){
         if(aliasDecl->aliasedType && aliasDecl->aliasedType->isFuncType)
-            return true;
+            return false;
     }
     const MStringView baseName = resolveBaseTypeName(typeName);
     if(const ClassDecl* cls = findClass(baseName)){
@@ -529,7 +529,7 @@ b8 SymbolTable::isSelfDefaultedType(const MStringView typeName)const noexcept{
         for(const MethodDecl* m : cls->methods){
             if(m && m->isConstructor){
                 hasAnyCtor = true;
-                if(m->params.empty())
+                if(m->params.empty() && (callerClass == cls || m->access == AccessSpecifier::Public))
                     return true;
             }
         }
@@ -567,4 +567,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -33,6 +33,7 @@ void AppendIntSimdLaneExtract(MString& out, MStringView varName, u32 lane, b8 is
 [[nodiscard]] MStringView SimdLoadFunctionCpp(MStringView simdType)noexcept;
 [[nodiscard]] MStringView SimdStoreFunctionCpp(MStringView simdType)noexcept;
 [[nodiscard]] MStringView MapBuiltinMathFunction(MStringView name)noexcept;
+[[nodiscard]] b8 IsSimdScalarReductionFunction(MStringView callee)noexcept;
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(MStringView callee, b8 isDouble)noexcept;
 void AppendSimdLaneCountIntrinsicPrefix(MString& out, b8 isDouble, u32 effLanes, MStringView suffix);
 [[nodiscard]] TokenType::Enum MapSimdAssignToBinaryOp(TokenType::Enum op)noexcept;
@@ -56,4 +57,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

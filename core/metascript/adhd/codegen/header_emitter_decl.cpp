@@ -96,14 +96,36 @@ void HeaderEmitter::emitEnumDecl(MString& out, const EnumDecl& decl)const{
     }
     out.append("        return {};\r\n    }\r\n");
     if(reflectedEntryCount > 0u){
+        usize namedEnumCaseCount = reflectedEntryCount;
+        for(const EnumEntry& entry : decl.entries){
+            if(entry.name == "kCount")
+                continue;
+            MString snakeName(m_arena);
+            AppendCamelToSnakeCase(snakeName, entry.name);
+            if(MStringView(snakeName.data(), snakeName.size()) != entry.name)
+                ++namedEnumCaseCount;
+        }
         out.append("    inline constexpr Array<::NamedEnumCase<Enum>, ");
-        AppendAdhdUnsigned(out, reflectedEntryCount);
+        AppendAdhdUnsigned(out, namedEnumCaseCount);
         out.append("u> s_NamedEnumCases = {{\r\n");
         for(const EnumEntry& entry : decl.entries){
             if(entry.name == "kCount")
                 continue;
             out.append("        { \"");
             out.append(entry.name.data(), entry.name.size());
+            out.append("\", ");
+            out.append(entry.name.data(), entry.name.size());
+            out.append(" },\r\n");
+        }
+        for(const EnumEntry& entry : decl.entries){
+            if(entry.name == "kCount")
+                continue;
+            MString snakeName(m_arena);
+            AppendCamelToSnakeCase(snakeName, entry.name);
+            if(MStringView(snakeName.data(), snakeName.size()) == entry.name)
+                continue;
+            out.append("        { \"");
+            out.append(snakeName.data(), snakeName.size());
             out.append("\", ");
             out.append(entry.name.data(), entry.name.size());
             out.append(" },\r\n");
@@ -193,4 +215,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

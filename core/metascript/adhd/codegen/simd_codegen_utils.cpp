@@ -121,6 +121,14 @@ void AppendIntSimdLaneExtract(MString& out, const MStringView varName, const u32
     return fnInfo ? fnInfo->cppExportName : MStringView{};
 }
 
+[[nodiscard]] b8 IsSimdScalarReductionFunction(const MStringView callee)noexcept{
+#define NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION(adhdName, laneIntrinsicSuffix) \
+    if(callee == adhdName) return true;
+#include "../export_functions.h"
+#undef NWB_ADHD_EXPORT_SIMD_SCALAR_REDUCTION
+    return false;
+}
+
 [[nodiscard]] MStringView MapSimdUnaryFloatIntrinsic(const MStringView callee, const b8 isDouble)noexcept{
 #define NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC(adhdName, floatIntrinsicPrefix, doubleIntrinsicPrefix) \
     if(callee == adhdName) return isDouble ? doubleIntrinsicPrefix : floatIntrinsicPrefix;
@@ -219,9 +227,11 @@ void AppendSimdLaneCountIntrinsicPrefix(MString& out, const b8 isDouble, const u
         if(!MapBuiltinMathFunction(callee).empty()){
             if(IsRegisterPromotableSimdType(expr->resolvedSimdType))
                 return true;
-            for(const Expr* arg : expr->arguments){
-                if(arg && IsRegisterPromotableSimdType(arg->resolvedSimdType))
-                    return true;
+            if(IsSimdScalarReductionFunction(callee)){
+                for(const Expr* arg : expr->arguments){
+                    if(arg && IsRegisterPromotableSimdType(arg->resolvedSimdType))
+                        return true;
+                }
             }
         }
     }
@@ -244,4 +254,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -109,18 +109,10 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         if(!IsTextAsciiAlpha(letter))
             return TextLayoutStatus::InvalidParameters;
     }
-    b8 validLanguage = true;
-    const StringView language = request.language;
-    native(in language, mut validLanguage){
-        for(const char character : language){
-            if(!IsTextAsciiAlphaNumericOrHyphen(static_cast<u8>(character))){
-                validLanguage = false;
-                break;
-            }
-        }
+    for(usize i = 0u; i < request.language.size(); ++i){
+        if(!IsTextAsciiAlphaNumericOrHyphen(cast<u32>(cast<u8>(request.language[i]))))
+            return TextLayoutStatus::InvalidParameters;
     }
-    if(!validLanguage)
-        return TextLayoutStatus::InvalidParameters;
     TextLayoutStatus utf8Status = TextLayoutStatus::Success;
     const StringView text = request.text;
     native(in text, in allowLineBreaks, mut utf8Status){
@@ -337,4 +329,5 @@ f32 RoundMeasuredTextBound(in f64 value, in b8 upper){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -124,12 +124,8 @@ class ContextStateClaim{
 }
 
 usize ContextStateClaimHash(in ContextStateClaim claim){
-    usize hash = 0u;
-    native(in claim, mut hash){
-        hash = Hasher<u64>{}(claim.instanceGeneration);
-        HashCombine(hash, static_cast<u8>(claim.kind));
-    }
-    return hash;
+    const usize seed = hashValue(claim.instanceGeneration);
+    return hashCombineValue(seed, cast<u8>(claim.kind));
 }
 
 [inline]
@@ -187,10 +183,8 @@ b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId out
         return false;
     u64 hash = UpdateWidgetFnv64U64LittleEndian(s_WidgetFnv64OffsetBasis, parent.value);
     hash = UpdateWidgetFnv64U64LittleEndian(hash, cast<u64>(stableKey.size()));
-    native(in stableKey, mut hash){
-        for(const char byte : stableKey)
-            hash = UpdateWidgetFnv64Byte(hash, static_cast<u8>(byte));
-    }
+    for(usize i = 0u; i < stableKey.size(); ++i)
+        hash = UpdateWidgetFnv64Byte(hash, cast<u8>(stableKey[i]));
     if(hash == 0u)
         outId.value = 1u;
     else
@@ -200,4 +194,5 @@ b8 TryMakeWidgetId(in WidgetId parent, in StringView stableKey, mut WidgetId out
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

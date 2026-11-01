@@ -309,8 +309,31 @@ Expr* ExprParser::parsePrimary(){
 
     if(m_cursor.match(TokenType::LeftParen)){
         if(m_cursor.check(TokenType::Identifier)){
+            const MStringView prohibitedTypeErr = FindProhibitedTypeKeywordError(m_cursor.current().text);
+            if(!prohibitedTypeErr.empty()){
+                m_cursor.error(prohibitedTypeErr);
+                return nullptr;
+            }
             const ParserCursor::Checkpoint cp = m_cursor.save();
             TypeRef* maybeType = m_typeParser.parseType(false, false);
+            if(!maybeType && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))){
+                while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+                    m_cursor.advance();
+                if(m_cursor.match(TokenType::RightParen)){
+                    const b8 nextIsCastOperand = m_cursor.check(TokenType::Identifier)
+                        || m_cursor.check(TokenType::IntegerLiteral)
+                        || m_cursor.check(TokenType::FloatLiteral)
+                        || m_cursor.check(TokenType::DoubleLiteral)
+                        || m_cursor.check(TokenType::StringLiteral)
+                        || m_cursor.check(TokenType::LeftParen)
+                        || m_cursor.check(TokenType::Bang)
+                        || m_cursor.check(TokenType::Tilde)
+                        || m_cursor.check(TokenType::Plus)
+                        || m_cursor.check(TokenType::Minus);
+                    if(nextIsCastOperand)
+                        return nullptr;
+                }
+            }
             if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.match(TokenType::RightParen)){
                 const b8 isKnownType = maybeType->refMode != ParamPassingMode::None || maybeType->isFuncType || !maybeType->templateArgs.empty() || IsBuiltinTypeName(maybeType->name);
                 const b8 looksLikeType = isKnownType || (!maybeType->name.empty() && IsAsciiUpper(maybeType->name[0]));
@@ -490,4 +513,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

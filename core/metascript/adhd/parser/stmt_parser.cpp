@@ -156,10 +156,48 @@ Stmt* StmtParser::parseStatement(){
         return nullptr;
 
     if(m_cursor.check(TokenType::Identifier)){
+        const b8 startsWithRefOrProhibitedType = m_cursor.checkIdentifier("in")
+            || m_cursor.checkIdentifier("mut")
+            || !FindProhibitedTypeKeywordError(m_cursor.current().text).empty();
         const ParserCursor::Checkpoint cp = m_cursor.save();
         TypeRef* maybeType = m_typeParser.parseType(true, true);
         if(maybeType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier) && !m_cursor.checkIdentifier("as"))
             return parseVarDeclWithType(maybeType, span, false);
+        if(startsWithRefOrProhibitedType){
+            if(maybeType)
+                m_cursor.errorExpected("expected variable name");
+            return nullptr;
+        }
+        if(!maybeType && m_cursor.failed()){
+            if(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand)){
+                const MStringView firstIdent = cp.current.text;
+                while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+                    m_cursor.advance();
+                if(IsBuiltinTypeName(firstIdent))
+                    return nullptr;
+                if(m_cursor.check(TokenType::Identifier)){
+                    m_cursor.advance();
+                    if(m_cursor.check(TokenType::Equal) || m_cursor.check(TokenType::Semicolon))
+                        return nullptr;
+                }
+            }
+            else if(m_cursor.check(TokenType::LeftBracket)){
+                const MStringView firstIdent = cp.current.text;
+                if(IsBuiltinTypeName(firstIdent))
+                    return nullptr;
+                u32 bracketDepth = 1u;
+                m_cursor.advance();
+                while(bracketDepth > 0u && !m_cursor.check(TokenType::EndOfFile)){
+                    if(m_cursor.check(TokenType::LeftBracket))
+                        ++bracketDepth;
+                    else if(m_cursor.check(TokenType::RightBracket))
+                        --bracketDepth;
+                    m_cursor.advance();
+                }
+                if(bracketDepth == 0u && m_cursor.check(TokenType::Identifier))
+                    return nullptr;
+            }
+        }
         m_cursor.restore(cp);
         m_typeParser.resetPendingRightAngles();
     }
@@ -509,4 +547,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

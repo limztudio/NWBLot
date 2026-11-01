@@ -336,6 +336,24 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
     else if(expr.kind == ExprKind::MemberAccess && expr.lhs){
         const TypeRef* lhsTypeRef = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &lhsTypeRef);
+        if(lhsType == "AssetRef" && expr.text == "virtualPath"){
+            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+            synth->name = "Name";
+            return synth;
+        }
+        if(lhsType == "NameHash" && expr.text == "qwords"){
+            TypeRef* elemType = AllocateAstNode<TypeRef>(m_arena);
+            elemType->name = "u64";
+            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+            synth->name = "Array";
+            TypeArg elemArg;
+            elemArg.type = elemType;
+            TypeArg countArg;
+            countArg.constantText = "8u";
+            synth->templateArgs.push_back(elemArg);
+            synth->templateArgs.push_back(countArg);
+            return synth;
+        }
         if(const ClassDecl* cls = m_symbols.findClass(lhsType)){
             if(const FieldDecl* field = SymbolTable::FindClassField(*cls, expr.text)){
                 if(!field->type)
@@ -348,6 +366,11 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
     else if(expr.kind == ExprKind::Index && expr.lhs){
         const TypeRef* containerType = nullptr;
         const MStringView lhsType = inferExprBaseType(ownerClass, method, *expr.lhs, scope, &containerType);
+        if(lhsType == "String" || lhsType == "CompactString" || lhsType == "StringView"){
+            TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+            synth->name = "u8";
+            return synth;
+        }
         if(containerType){
             if(const BuiltinGenericTypeInfo* genericInfo = FindBuiltinGenericType(lhsType)){
                 if(genericInfo->isReflectedMap && containerType->templateArgs.size() >= 2u && containerType->templateArgs[1].type)
@@ -394,9 +417,17 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text, &callArgCount, argTypeHints, argIsMutHints)){
                 if(!fn->returnType)
                     return nullptr;
-                const TypeRef* rt = (!fn->templateParams.empty() && !expr.callTemplateArgs.empty())
-                    ? m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, expr.callTemplateArgs)
-                    : fn->returnType;
+                const TypeRef* rt = fn->returnType;
+                if(!fn->templateParams.empty()){
+                    if(!expr.callTemplateArgs.empty()){
+                        rt = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, expr.callTemplateArgs);
+                    }
+                    else{
+                        MVector<TypeArg> deducedArgs(m_arena);
+                        if(deduceCallTemplateArgs(ownerClass, method, *fn, expr.arguments, scope, deducedArgs))
+                            rt = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, deducedArgs);
+                    }
+                }
                 return m_symbols.unwrapTypeAlias(rt);
             }
             if(const ScopedVarInfo* local = FindScopedVar(scope, expr.lhs->text)){
@@ -418,9 +449,17 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
             if(const MethodDecl* m = m_symbols.findClassMethod(*ownerClass, expr.lhs->text, &callArgCount, isConstThis, false, argTypeHints, argIsMutHints)){
                 if(!m->returnType)
                     return nullptr;
-                const TypeRef* rt = (!m->templateParams.empty() && !expr.callTemplateArgs.empty())
-                    ? m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs)
-                    : m->returnType;
+                const TypeRef* rt = m->returnType;
+                if(!m->templateParams.empty()){
+                    if(!expr.callTemplateArgs.empty()){
+                        rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, expr.callTemplateArgs);
+                    }
+                    else{
+                        MVector<TypeArg> deducedArgs(m_arena);
+                        if(deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs))
+                            rt = m_symbols.substituteTypeParams(*m->returnType, m->templateParams, deducedArgs);
+                    }
+                }
                 return m_symbols.unwrapTypeAlias(rt);
             }
             if(const FieldDecl* field = SymbolTable::FindClassField(*ownerClass, expr.lhs->text)){
@@ -452,8 +491,16 @@ const TypeRef* TypeChecker::inferExprTypeRef(const ClassDecl* ownerClass, const 
                     if(!m->returnType)
                         return nullptr;
                     TypeRef* rt = m_symbols.substituteTypeParams(m->returnType, cls->templateParams, recvTypeRef);
-                    if(!m->templateParams.empty() && !expr.callTemplateArgs.empty())
-                        rt = m_symbols.substituteTypeParams(*rt, m->templateParams, expr.callTemplateArgs);
+                    if(!m->templateParams.empty()){
+                        if(!expr.callTemplateArgs.empty()){
+                            rt = m_symbols.substituteTypeParams(*rt, m->templateParams, expr.callTemplateArgs);
+                        }
+                        else{
+                            MVector<TypeArg> deducedArgs(m_arena);
+                            if(deduceCallTemplateArgs(ownerClass, method, *m, expr.arguments, scope, deducedArgs))
+                                rt = m_symbols.substituteTypeParams(*rt, m->templateParams, deducedArgs);
+                        }
+                    }
                     return m_symbols.unwrapTypeAlias(rt);
                 }
                 if(const FieldDecl* field = SymbolTable::FindClassField(*cls, mName)){
@@ -501,6 +548,56 @@ MStringView TypeChecker::inferExprBaseType(const ClassDecl* ownerClass, const Me
         : inferExprTypeName(ownerClass, method, expr, scope);
 }
 
+b8 TypeChecker::deduceCallTemplateArgs(
+    const ClassDecl* ownerClass,
+    const MethodDecl* enclosingMethod,
+    const MethodDecl& targetCallable,
+    const Span<const Expr* const> arguments,
+    const Span<const ScopedVarInfo> scope,
+    MVector<TypeArg>& outDeducedArgs
+)const{
+    outDeducedArgs.clear();
+    outDeducedArgs.reserve(targetCallable.templateParams.size());
+    b8 anyDeduced = false;
+    for(const TemplateParamDecl& tp : targetCallable.templateParams){
+        TypeArg dArg;
+        if(!tp.constValueType){
+            for(usize k = 0u; k < arguments.size() && k < targetCallable.params.size(); ++k){
+                const Expr* arg = arguments[k];
+                const TypeRef* pType = targetCallable.params[k].type;
+                if(!arg || !pType)
+                    continue;
+                if(pType->name == tp.name && pType->templateArgs.empty()){
+                    const TypeRef* argRef = nullptr;
+                    const MStringView argBase = inferExprBaseType(ownerClass, enclosingMethod, *arg, scope, &argRef);
+                    if(argRef){
+                        dArg.type = const_cast<TypeRef*>(argRef);
+                        anyDeduced = true;
+                        break;
+                    }
+                    if(!argBase.empty()){
+                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                        synth->name = argBase;
+                        dArg.type = synth;
+                        anyDeduced = true;
+                        break;
+                    }
+                }
+                else if(!pType->templateArgs.empty()){
+                    const TypeRef* argRef = inferExprTypeRef(ownerClass, enclosingMethod, *arg, scope);
+                    if(const TypeRef* sub = DeduceTemplateParamTypeRef(pType, argRef, tp.name, m_symbols)){
+                        dArg.type = const_cast<TypeRef*>(sub);
+                        anyDeduced = true;
+                        break;
+                    }
+                }
+            }
+        }
+        outDeducedArgs.push_back(dArg);
+    }
+    return anyDeduced;
+}
+
 void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, const Span<const ScopedVarInfo> scope, const usize savedScopeSize)const noexcept{
     for(usize i = savedScopeSize; i < scope.size(); ++i){
         const ScopedVarInfo& local = scope[i];
@@ -513,14 +610,15 @@ void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, 
                 lastUseIndex = s;
         }
 
-        if(SymbolTable::IsSimdType(resolveScopedVarBaseType(local)))
+        const MStringView localBaseType = resolveScopedVarBaseType(local);
+        if(SymbolTable::IsSimdType(localBaseType) || m_symbols.isSmallValueType(localBaseType))
             continue;
 
         b8 capturedOrAsyncOrAliased = false;
         for(usize j = savedScopeSize; j < scope.size(); ++j){
             if(const Expr* lam = scope[j].lambdaExpr){
                 for(const LambdaCapture& cap : lam->lambdaCaptures){
-                    if(cap.mode == ParamPassingMode::Mut && cap.name == local.name){
+                    if(cap.name == local.name){
                         capturedOrAsyncOrAliased = true;
                         break;
                     }
@@ -540,6 +638,7 @@ void TypeChecker::analyzeBlockMoveAtLastUse(const Span<Stmt* const> statements, 
 
         Stmt* lastStmt = statements[lastUseIndex];
         const b8 isDirectCallStmt = (lastStmt->kind == StmtKind::ExprStmt && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
+            || (lastStmt->kind == StmtKind::Return && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call)
             || (lastStmt->kind == StmtKind::VarDecl && lastStmt->name != local.name && lastStmt->expr && lastStmt->expr->kind == ExprKind::Call);
         if(!isDirectCallStmt || __hidden_adhd_type_checker_infer::ExprReferencesIdentifier(lastStmt->expr->lhs, local.name))
             continue;
@@ -566,4 +665,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -326,10 +326,21 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.advance();
         b8 isMethodSig = m_cursor.check(TokenType::RightParen) || MatchParamPassingMode(m_cursor) != ParamPassingMode::None;
         if(!isMethodSig && m_cursor.check(TokenType::Identifier)){
-            TypeRef* maybeParamType = m_typeParser.parseType(false, false);
-            if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
+            if(!FindProhibitedTypeKeywordError(m_cursor.current().text).empty()){
                 isMethodSig = true;
-            m_typeParser.resetPendingRightAngles();
+            }
+            else{
+                TypeRef* maybeParamType = m_typeParser.parseType(false, false);
+                if(maybeParamType && !m_typeParser.hasPendingRightAngles() && m_cursor.check(TokenType::Identifier))
+                    isMethodSig = true;
+                else if(!maybeParamType && (m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))){
+                    while(m_cursor.check(TokenType::Star) || m_cursor.check(TokenType::Ampersand))
+                        m_cursor.advance();
+                    if(m_cursor.check(TokenType::Identifier))
+                        isMethodSig = true;
+                }
+                m_typeParser.resetPendingRightAngles();
+            }
         }
         m_cursor.restore(cp);
 
@@ -383,4 +394,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

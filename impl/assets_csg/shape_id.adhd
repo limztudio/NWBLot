@@ -50,13 +50,10 @@ b8 TryResolveCsgShapeTypeIdFromName(in Name shapeName, mut CsgShapeTypeId outTyp
         return false;
 
     // HashValue returns usize and would make the cooked ID host-dependent.
-    u64 foldedHash = 0ul;
-    native(in shapeName, mut foldedHash){
-        const NameHash& shapeHash = shapeName.hash();
-        foldedHash = shapeHash.qwords[0u];
-        for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane)
-            foldedHash ^= shapeHash.qwords[lane] + s_CsgShapeHashGoldenRatio64 + (foldedHash << s_CsgShapeHashLeftShift) + (foldedHash >> s_CsgShapeHashRightShift);
-    }
+    const NameHash shapeHash = shapeName.hash();
+    u64 foldedHash = shapeHash.qwords[0u];
+    for(usize lane = 1u; lane < shapeHash.qwords.size(); ++lane)
+        foldedHash ^= shapeHash.qwords[lane] + s_CsgShapeHashGoldenRatio64 + (foldedHash << s_CsgShapeHashLeftShift) + (foldedHash >> s_CsgShapeHashRightShift);
 
     const CsgShapeTypeId typeId = cast<CsgShapeTypeId>(foldedHash ^ (foldedHash >> s_CsgShapeHashFoldShiftBits));
     if(typeId != s_InvalidCsgShapeTypeId)
@@ -68,4 +65,5 @@ b8 TryResolveCsgShapeTypeIdFromName(in Name shapeName, mut CsgShapeTypeId outTyp
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

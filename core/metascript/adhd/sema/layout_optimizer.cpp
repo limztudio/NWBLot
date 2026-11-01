@@ -182,6 +182,8 @@ b8 TypeRefReferencesSymbolByValue(const TypeRef& type, const MStringView targetN
         if(unwrapped != &type && TypeRefReferencesSymbolByValue(*unwrapped, targetName, symbols, depth + 1u))
             return true;
     }
+    if(symbols.resolveBaseTypeName(type.name) == "AssetRef")
+        return false;
     if(const ClassDecl* cls = symbols.findClass(type.name)){
         if(!cls->templateParams.empty() && __hidden_adhd_layout_optimizer::ClassDependsOnClassByValue(*cls, targetName, symbols, depth + 1u))
             return true;
@@ -555,4 +557,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

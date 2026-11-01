@@ -65,7 +65,7 @@ private:
         MStringView missingTerminatorMessage
     );
     [[nodiscard]] b8 parseClassMember(ClassDecl& classDecl);
-    [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams);
+    [[nodiscard]] b8 parseCallableOwnerOrTemplateHeader(b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outOwnerTemplateParamDecls, MVector<TemplateParamDecl>& outTemplateParams);
     [[nodiscard]] MethodDecl* parseFreeOrOutOfLineCallable(SourceSpan span, Span<const ParsedAttribute> attributes);
     [[nodiscard]] b8 applyCallableAttributes(Span<const ParsedAttribute> attributes, MethodDecl& decl);
     [[nodiscard]] b8 parseOperatorName(MStringView& outOpName);
@@ -88,4 +88,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

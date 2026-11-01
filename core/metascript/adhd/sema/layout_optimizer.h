@@ -63,6 +63,8 @@ private:
     void collectTemplateInstantiationsInCallable(const MethodDecl& callable, TranslationUnit& unit);
     void collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit);
     void collectTemplateInstantiationsInExpr(const Expr& expr, TranslationUnit& unit);
+    void collectSubstitutedTemplateInstantiationsInStmt(const Stmt& stmt, Span<const TemplateParamDecl> params, Span<const TypeArg> args, TranslationUnit& unit);
+    void collectSubstitutedTemplateInstantiationsInExpr(const Expr& expr, Span<const TemplateParamDecl> params, Span<const TypeArg> args, TranslationUnit& unit);
     void collectTemplateInstantiationsInType(const TypeRef& type, u32 depth, TranslationUnit& unit);
     void collectTemplateInstantiationsInType(const TypeRef& type, TranslationUnit& unit){ collectTemplateInstantiationsInType(type, 0u, unit); }
     void instantiateClassTemplate(const ClassDecl& templateDecl, Span<const TypeArg> templateArgs, TranslationUnit& unit);
@@ -83,4 +85,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

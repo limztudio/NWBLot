@@ -88,14 +88,14 @@ void EmitNwbValueConversionExpr(MString& out, const MStringView typeName, const 
         out.append(".asInteger()))");
     }
     else if(typeName == "Name"){
-        out.append("::Name(");
+        out.append("::Name::FromText(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString())");
+        out.append(".asString()).value_or(::Name{})");
     }
     else{
-        out.append("{::Name(");
+        out.append("{::Name::FromText(");
         out.append(valueAccessor.data(), valueAccessor.size());
-        out.append(".asString())}");
+        out.append(".asString()).value_or(::Name{})}");
     }
 }
 
@@ -140,7 +140,7 @@ void EmitNwbMapKeyExpr(MString& out, const MStringView keyName, const b8 isEnumK
     else if(keyName == "CompactString")
         out.append("ACompactString(__k)");
     else if(keyName == "Name")
-        out.append("::Name(__k)");
+        out.append("::Name::FromText(__k).value_or(::Name{})");
     else
         out.append("Path(::ConvertString(__k))");
 }
@@ -681,4 +681,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

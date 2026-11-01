@@ -80,6 +80,7 @@ struct Expr{
     Expr* rhs = nullptr;
     TypeRef* targetType = nullptr;
     MVector<TypeArg> callTemplateArgs;
+    MVector<TypeArg> deducedTemplateArgs;
     MVector<Expr*> arguments;
     MVector<MStringView> scopeChain;
     MVector<LambdaCapture> lambdaCaptures;
@@ -107,6 +108,7 @@ struct Expr{
 public:
     explicit Expr(MetaArena& arena)noexcept
         : callTemplateArgs(arena)
+        , deducedTemplateArgs(arena)
         , arguments(arena)
         , scopeChain(arena)
         , lambdaCaptures(arena)
@@ -123,4 +125,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

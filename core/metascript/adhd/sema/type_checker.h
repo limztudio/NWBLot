@@ -150,6 +150,14 @@ private:
     [[nodiscard]] MStringView inferExprTypeName(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] const TypeRef* inferExprTypeRef(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope)const noexcept;
     [[nodiscard]] MStringView inferExprBaseType(const ClassDecl* ownerClass, const MethodDecl* method, const Expr& expr, Span<const ScopedVarInfo> scope, const TypeRef** outTypeRef = nullptr)const noexcept;
+    [[nodiscard]] b8 deduceCallTemplateArgs(
+        const ClassDecl* ownerClass,
+        const MethodDecl* enclosingMethod,
+        const MethodDecl& targetCallable,
+        Span<const Expr* const> arguments,
+        Span<const ScopedVarInfo> scope,
+        MVector<TypeArg>& outDeducedArgs
+    )const;
     void analyzeBlockMoveAtLastUse(Span<Stmt* const> statements, Span<const ScopedVarInfo> scope, usize savedScopeSize)const noexcept;
 
 
@@ -176,4 +184,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

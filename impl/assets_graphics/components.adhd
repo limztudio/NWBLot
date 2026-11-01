@@ -90,10 +90,8 @@ class RendererComponentPayloadBinary{
 
 RendererComponentPayloadBinary PackRendererComponentPayloadBinary(in RendererComponent component){
     RendererComponentPayloadBinary binaryPayload;
-    native(in component, mut binaryPayload){
-        binaryPayload.materialHash = component.material.name().hash();
-        binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
-    }
+    binaryPayload.materialHash = component.material.name().hash();
+    binaryPayload.opticalVolumeGroupHash = component.opticalVolumeGroup.hash();
     binaryPayload.opticalVolumePriority = component.opticalVolumePriority;
     binaryPayload.opticalMediumPriority = component.opticalMediumPriority;
     if(component.visible)
@@ -117,10 +115,8 @@ b8 UnpackRendererComponentPayloadBinary(in RendererComponentPayloadBinary binary
     )
         return false;
     outComponent = RendererComponent();
-    native(in binaryPayload, mut outComponent){
-        outComponent.material.virtualPath = Name(binaryPayload.materialHash);
-        outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);
-    }
+    outComponent.material.virtualPath = Name(binaryPayload.materialHash);
+    outComponent.opticalVolumeGroup = Name(binaryPayload.opticalVolumeGroupHash);
     outComponent.visible = binaryPayload.visible != 0u;
     outComponent.opticalVolumeCoincidence = cast<OpticalVolumeCoincidence>(binaryPayload.opticalVolumeCoincidence);
     outComponent.opticalVolumePriority = binaryPayload.opticalVolumePriority;
@@ -279,4 +275,5 @@ class TransparentSubsystem{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

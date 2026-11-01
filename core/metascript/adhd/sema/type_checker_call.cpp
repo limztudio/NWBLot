@@ -152,22 +152,53 @@ b8 TypeChecker::checkCallableArguments(
         }
         const auto checkUnboundTemplateParams = [&](const Span<const TemplateParamDecl> tparams){
             for(const TemplateParamDecl& tp : tparams){
-                if(tp.name != expectedParamTypeRef->name || tp.interfaceBounds.empty())
+                if(tp.constValueType || tp.interfaceBounds.empty())
                     continue;
-                for(const TypeRef* boundRef : tp.interfaceBounds){
-                    if(!boundRef)
-                        continue;
-                    if(!verifyConcreteClassImplementsInterface(
-                        ownerClass,
-                        method,
-                        *arg,
-                        boundRef,
-                        scope,
-                        arg->span,
-                        "template type argument does not implement required interface bound",
-                        errors
-                    )){
-                        ok = false;
+                if(tp.name == expectedParamTypeRef->name && expectedParamTypeRef->templateArgs.empty()){
+                    const TypeRef* argTypeRef = nullptr;
+                    const MStringView argBase = inferExprBaseType(ownerClass, &method, *arg, scope, &argTypeRef);
+                    MVector<TypeArg> singleArgList(m_arena);
+                    TypeArg singleArg;
+                    if(argTypeRef){
+                        singleArg.type = const_cast<TypeRef*>(argTypeRef);
+                    }
+                    else if(!argBase.empty()){
+                        TypeRef* synth = AllocateAstNode<TypeRef>(m_arena);
+                        synth->name = argBase;
+                        singleArg.type = synth;
+                    }
+                    singleArgList.push_back(singleArg);
+                    const TemplateParamDecl singleParam = tp;
+                    for(const TypeRef* boundRef : tp.interfaceBounds){
+                        if(!boundRef)
+                            continue;
+                        const TypeRef* effectiveBound = singleArg.type
+                            ? m_symbols.substituteTypeParams(*boundRef, Span<const TemplateParamDecl>(&singleParam, 1u), singleArgList)
+                            : boundRef;
+                        if(!verifyConcreteClassImplementsInterface(
+                            ownerClass,
+                            method,
+                            *arg,
+                            effectiveBound,
+                            scope,
+                            arg->span,
+                            "template type argument does not implement required interface bound",
+                            errors
+                        )){
+                            ok = false;
+                        }
+                    }
+                }
+                else if(!expectedParamTypeRef->templateArgs.empty()){
+                    const TypeRef* argTypeRef = inferExprTypeRef(ownerClass, &method, *arg, scope);
+                    if(const TypeRef* deducedSub = DeduceTemplateParamTypeRef(expectedParamTypeRef, argTypeRef, tp.name, m_symbols)){
+                        MVector<TypeArg> singleArgList(m_arena);
+                        TypeArg singleArg;
+                        singleArg.type = const_cast<TypeRef*>(deducedSub);
+                        singleArgList.push_back(singleArg);
+                        const TemplateParamDecl singleParam = tp;
+                        if(!checkTemplateArgBounds(Span<const TemplateParamDecl>(&singleParam, 1u), singleArgList, ownerClass, &method, arg->span, errors))
+                            ok = false;
                     }
                 }
             }
@@ -176,6 +207,38 @@ b8 TypeChecker::checkCallableArguments(
             checkUnboundTemplateParams(targetCallable->templateParams);
         if(targetOwnerCls && expectedParamTypeRef && (!recvTypeRef || recvTypeRef->templateArgs.empty()) && !targetOwnerCls->templateParams.empty())
             checkUnboundTemplateParams(targetOwnerCls->templateParams);
+    }
+    if(targetCallable && callTemplateArgs.empty() && !targetCallable->templateParams.empty()){
+        for(const TemplateParamDecl& tp : targetCallable->templateParams){
+            if(tp.constValueType)
+                continue;
+            MStringView firstDeducedBase;
+            for(usize i = 0u; i < arguments.size() && i < targetCallable->params.size(); ++i){
+                const Expr* arg = arguments[i];
+                const TypeRef* pType = targetCallable->params[i].type;
+                if(!arg || !pType)
+                    continue;
+                MStringView curDeducedBase;
+                if(pType->name == tp.name && pType->templateArgs.empty()){
+                    curDeducedBase = inferExprBaseType(ownerClass, &method, *arg, scope);
+                }
+                else if(!pType->templateArgs.empty()){
+                    const TypeRef* argTypeRef = inferExprTypeRef(ownerClass, &method, *arg, scope);
+                    if(const TypeRef* sub = DeduceTemplateParamTypeRef(pType, argTypeRef, tp.name, m_symbols))
+                        curDeducedBase = m_symbols.resolveBaseTypeName(sub->name);
+                }
+                if(curDeducedBase.empty())
+                    continue;
+                if(firstDeducedBase.empty()){
+                    firstDeducedBase = curDeducedBase;
+                }
+                else if(firstDeducedBase != curDeducedBase && !(IsNumericScalarType(firstDeducedBase) && IsNumericScalarType(curDeducedBase))){
+                    reportError(errors, arg->span, "conflicting argument types deduced for template parameter");
+                    ok = false;
+                    break;
+                }
+            }
+        }
     }
     return ok;
 }
@@ -449,6 +512,9 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
         ok = false;
     }
 
+    if(targetCallable && expr.callTemplateArgs.empty() && !targetCallable->templateParams.empty())
+        (void)deduceCallTemplateArgs(ownerClass, &method, *targetCallable, expr.arguments, scope, expr.deducedTemplateArgs);
+
     return ok;
 }
 
@@ -578,4 +644,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

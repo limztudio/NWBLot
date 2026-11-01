@@ -404,6 +404,10 @@ b8 Preprocessor::expandLineMacros(const MStringView lineText, const u32 line, MS
                 usize argStart = argScan;
                 while(argScan < current.size() && parenDepth > 0u){
                     const MChar ch = current[argScan];
+                    if(ch == '\'' && argScan > lookahead + 1u && (IsAsciiDigit(current[argScan - 1u]) || IsAsciiIdentifierChar(current[argScan - 1u]))){
+                        ++argScan;
+                        continue;
+                    }
                     if(ch == '"' || ch == '\''){
                         argScan = SkipQuotedLiteral(currentView, argScan);
                         continue;
@@ -572,4 +576,5 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

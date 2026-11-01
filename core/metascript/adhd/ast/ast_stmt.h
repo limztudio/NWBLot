@@ -80,6 +80,7 @@ struct Stmt{
     MVector<Stmt*> elseStatements;
 
     TypeRef* varType = nullptr;
+    TypeRef* inferredAutoType = nullptr;
     MStringView name;
     Expr* expr = nullptr;
     Expr* condition = nullptr;
@@ -125,4 +126,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

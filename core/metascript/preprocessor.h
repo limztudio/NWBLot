@@ -83,7 +83,7 @@ public:
 
 
 public:
-    Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver = nullptr);
+    Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver = nullptr, b8 allowNwbInclude = true);
 
 
 public:
@@ -118,6 +118,7 @@ private:
     IncludedList m_includedFiles;
     IncludedList m_resolvedIncludedFiles;
     IncludedRangeList m_includedByteRanges;
+    b8 m_allowNwbInclude = true;
 };
 
 
@@ -128,4 +129,5 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -99,6 +99,8 @@ void LayoutOptimizer::collectTemplateInstantiationsInCallable(const MethodDecl& 
 void LayoutOptimizer::collectTemplateInstantiationsInStmt(const Stmt& stmt, TranslationUnit& unit){
     if(stmt.varType)
         collectTemplateInstantiationsInType(*stmt.varType, unit);
+    if(stmt.inferredAutoType)
+        collectTemplateInstantiationsInType(*stmt.inferredAutoType, unit);
     if(stmt.expr)
         collectTemplateInstantiationsInExpr(*stmt.expr, unit);
     if(stmt.condition)
@@ -140,16 +142,41 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
         if(targ.type)
             collectTemplateInstantiationsInType(*targ.type, unit);
     }
+    for(const TypeArg& targ : expr.deducedTemplateArgs){
+        if(targ.type)
+            collectTemplateInstantiationsInType(*targ.type, unit);
+    }
+    const Span<const TypeArg> effectiveTemplateArgs = !expr.callTemplateArgs.empty()
+        ? Span<const TypeArg>(expr.callTemplateArgs)
+        : Span<const TypeArg>(expr.deducedTemplateArgs);
     if(expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
-        if(!expr.callTemplateArgs.empty()){
+        if(!effectiveTemplateArgs.empty()){
             if(const ClassDecl* cls = m_symbols.findClass(expr.lhs->text)){
-                if(!cls->templateParams.empty() && expr.callTemplateArgs.size() == cls->templateParams.size())
-                    instantiateClassTemplate(*cls, expr.callTemplateArgs, unit);
+                if(!cls->templateParams.empty() && effectiveTemplateArgs.size() == cls->templateParams.size())
+                    instantiateClassTemplate(*cls, effectiveTemplateArgs, unit);
             }
             else if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(expr.lhs->text)){
-                if(aliasDecl->aliasedType && !aliasDecl->templateParams.empty() && expr.callTemplateArgs.size() == aliasDecl->templateParams.size()){
-                    const TypeRef* resolvedAlias = m_symbols.substituteTypeParams(*aliasDecl->aliasedType, aliasDecl->templateParams, expr.callTemplateArgs);
+                if(aliasDecl->aliasedType && !aliasDecl->templateParams.empty() && effectiveTemplateArgs.size() == aliasDecl->templateParams.size()){
+                    const TypeRef* resolvedAlias = m_symbols.substituteTypeParams(*aliasDecl->aliasedType, aliasDecl->templateParams, effectiveTemplateArgs);
                     collectTemplateInstantiationsInType(*resolvedAlias, unit);
+                }
+            }
+            else if(const MethodDecl* fn = m_symbols.findFreeFunction(expr.lhs->text)){
+                if(!fn->templateParams.empty() && effectiveTemplateArgs.size() == fn->templateParams.size() && IsConcreteTemplateArgList(fn->templateParams, effectiveTemplateArgs, m_symbols)){
+                    if(fn->returnType){
+                        if(const TypeRef* subRet = m_symbols.substituteTypeParams(*fn->returnType, fn->templateParams, effectiveTemplateArgs))
+                            collectTemplateInstantiationsInType(*subRet, unit);
+                    }
+                    for(const ParamDecl& p : fn->params){
+                        if(!p.type)
+                            continue;
+                        if(const TypeRef* subParam = m_symbols.substituteTypeParams(*p.type, fn->templateParams, effectiveTemplateArgs))
+                            collectTemplateInstantiationsInType(*subParam, unit);
+                    }
+                    for(const Stmt* s : fn->body){
+                        if(s)
+                            collectSubstitutedTemplateInstantiationsInStmt(*s, fn->templateParams, effectiveTemplateArgs, unit);
+                    }
                 }
             }
         }
@@ -175,6 +202,75 @@ void LayoutOptimizer::collectTemplateInstantiationsInExpr(const Expr& expr, Tran
     for(const Stmt* s : expr.lambdaBody){
         if(s)
             collectTemplateInstantiationsInStmt(*s, unit);
+    }
+}
+
+void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInStmt(const Stmt& stmt, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
+    if(stmt.varType){
+        if(const TypeRef* sub = m_symbols.substituteTypeParams(*stmt.varType, params, args))
+            collectTemplateInstantiationsInType(*sub, unit);
+    }
+    if(stmt.inferredAutoType){
+        if(const TypeRef* sub = m_symbols.substituteTypeParams(*stmt.inferredAutoType, params, args))
+            collectTemplateInstantiationsInType(*sub, unit);
+    }
+    if(stmt.expr)
+        collectSubstitutedTemplateInstantiationsInExpr(*stmt.expr, params, args, unit);
+    if(stmt.condition)
+        collectSubstitutedTemplateInstantiationsInExpr(*stmt.condition, params, args, unit);
+    if(stmt.stepExpr)
+        collectSubstitutedTemplateInstantiationsInExpr(*stmt.stepExpr, params, args, unit);
+    for(const Expr* arg : stmt.arguments){
+        if(arg)
+            collectSubstitutedTemplateInstantiationsInExpr(*arg, params, args, unit);
+    }
+    if(stmt.initStmt)
+        collectSubstitutedTemplateInstantiationsInStmt(*stmt.initStmt, params, args, unit);
+    for(const Stmt* sub : stmt.statements){
+        if(sub)
+            collectSubstitutedTemplateInstantiationsInStmt(*sub, params, args, unit);
+    }
+    for(const Stmt* sub : stmt.elseStatements){
+        if(sub)
+            collectSubstitutedTemplateInstantiationsInStmt(*sub, params, args, unit);
+    }
+    for(const SwitchCase& sc : stmt.switchCases){
+        if(sc.matchExpr)
+            collectSubstitutedTemplateInstantiationsInExpr(*sc.matchExpr, params, args, unit);
+        for(const Stmt* sub : sc.statements){
+            if(sub)
+                collectSubstitutedTemplateInstantiationsInStmt(*sub, params, args, unit);
+        }
+    }
+}
+
+void LayoutOptimizer::collectSubstitutedTemplateInstantiationsInExpr(const Expr& expr, const Span<const TemplateParamDecl> params, const Span<const TypeArg> args, TranslationUnit& unit){
+    if(expr.targetType){
+        if(const TypeRef* sub = m_symbols.substituteTypeParams(*expr.targetType, params, args))
+            collectTemplateInstantiationsInType(*sub, unit);
+    }
+    const Span<const TypeArg> effectiveArgs = !expr.callTemplateArgs.empty()
+        ? Span<const TypeArg>(expr.callTemplateArgs)
+        : Span<const TypeArg>(expr.deducedTemplateArgs);
+    if(!effectiveArgs.empty() && expr.kind == ExprKind::Call && expr.lhs && expr.lhs->kind == ExprKind::Identifier){
+        TypeRef tempCallType(m_arena);
+        tempCallType.name = expr.lhs->text;
+        for(const TypeArg& targ : effectiveArgs)
+            tempCallType.templateArgs.push_back(targ);
+        if(const TypeRef* sub = m_symbols.substituteTypeParams(tempCallType, params, args))
+            collectTemplateInstantiationsInType(*sub, unit);
+    }
+    if(expr.lhs)
+        collectSubstitutedTemplateInstantiationsInExpr(*expr.lhs, params, args, unit);
+    if(expr.rhs)
+        collectSubstitutedTemplateInstantiationsInExpr(*expr.rhs, params, args, unit);
+    for(const Expr* arg : expr.arguments){
+        if(arg)
+            collectSubstitutedTemplateInstantiationsInExpr(*arg, params, args, unit);
+    }
+    for(const Stmt* s : expr.lambdaBody){
+        if(s)
+            collectSubstitutedTemplateInstantiationsInStmt(*s, params, args, unit);
     }
 }
 
@@ -299,4 +395,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

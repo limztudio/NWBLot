@@ -227,10 +227,28 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
     }
 
     for(Stmt* gc : unit.globalConstants){
-        if(!gc || gc->isImported)
+        if(!gc)
             continue;
         MethodDecl dummyGlobalCtx(m_arena);
         MVector<ScopedVarInfo> emptyScope(m_arena);
+        if(gc->isImported){
+            if(gc->expr && gc->varType && gc->varType->isAuto){
+                if(const TypeRef* inferredRef = inferExprTypeRef(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope); inferredRef && !inferredRef->isAuto){
+                    const SourceSpan savedSpan = gc->varType->span;
+                    *gc->varType = *inferredRef;
+                    gc->varType->span = savedSpan;
+                    gc->varType->isAuto = false;
+                }
+                else{
+                    const MStringView inferredName = inferExprTypeName(nullptr, &dummyGlobalCtx, *gc->expr, emptyScope);
+                    if(!inferredName.empty()){
+                        gc->varType->isAuto = false;
+                        gc->varType->name = inferredName;
+                    }
+                }
+            }
+            continue;
+        }
         if(gc->varType){
             if(!checkTypeRef(*gc->varType, nullptr, nullptr, errors))
                 ok = false;
@@ -354,6 +372,30 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                 ok = false;
                 ownerTemplateNamesMatch = false;
                 break;
+            }
+            if(tIdx < ool->ownerTemplateParamDecls.size()){
+                const TemplateParamDecl& clsTp = cls->templateParams[tIdx];
+                const TemplateParamDecl& oolOwnerTp = ool->ownerTemplateParamDecls[tIdx];
+                if(
+                    (clsTp.constValueType != nullptr) != (oolOwnerTp.constValueType != nullptr)
+                    || (clsTp.constValueType && oolOwnerTp.constValueType && !AreTypeRefsEquivalent(clsTp.constValueType, oolOwnerTp.constValueType, m_symbols))
+                    || clsTp.interfaceBounds.size() != oolOwnerTp.interfaceBounds.size()
+                ){
+                    reportError(errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
+                    ok = false;
+                    ownerTemplateNamesMatch = false;
+                    break;
+                }
+                for(usize bIdx = 0u; bIdx < clsTp.interfaceBounds.size(); ++bIdx){
+                    if(!AreTypeRefsEquivalent(clsTp.interfaceBounds[bIdx], oolOwnerTp.interfaceBounds[bIdx], m_symbols)){
+                        reportError(errors, ool->span, "out-of-line method owner class template parameter constraints do not match class declaration");
+                        ok = false;
+                        ownerTemplateNamesMatch = false;
+                        break;
+                    }
+                }
+                if(!ownerTemplateNamesMatch)
+                    break;
             }
         }
         if(!ownerTemplateNamesMatch)
@@ -493,6 +535,34 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
             if(!prev || prev->name != fn->name || prev->templateParams.size() != fn->templateParams.size())
                 continue;
             if(!DoParamListsMatch(prev->params, fn->params, m_symbols))
+                continue;
+            b8 fnTemplateParamsMatch = true;
+            for(usize tIdx = 0u; tIdx < prev->templateParams.size(); ++tIdx){
+                const TemplateParamDecl& prevTp = prev->templateParams[tIdx];
+                const TemplateParamDecl& curTp = fn->templateParams[tIdx];
+                if(
+                    prevTp.name != curTp.name
+                    || (prevTp.constValueType != nullptr) != (curTp.constValueType != nullptr)
+                    || (prevTp.constValueType && curTp.constValueType && !AreTypeRefsEquivalent(prevTp.constValueType, curTp.constValueType, m_symbols))
+                    || prevTp.interfaceBounds.size() != curTp.interfaceBounds.size()
+                ){
+                    reportError(errors, fn->span, "free function template parameter list does not match previous declaration");
+                    ok = false;
+                    fnTemplateParamsMatch = false;
+                    break;
+                }
+                for(usize bIdx = 0u; bIdx < prevTp.interfaceBounds.size(); ++bIdx){
+                    if(!AreTypeRefsEquivalent(prevTp.interfaceBounds[bIdx], curTp.interfaceBounds[bIdx], m_symbols)){
+                        reportError(errors, fn->span, "free function template parameter constraints do not match previous declaration");
+                        ok = false;
+                        fnTemplateParamsMatch = false;
+                        break;
+                    }
+                }
+                if(!fnTemplateParamsMatch)
+                    break;
+            }
+            if(!fnTemplateParamsMatch)
                 continue;
             if(!AreTypeRefsEquivalent(prev->returnType, fn->returnType, m_symbols)){
                 reportError(errors, fn->span, "conflicting return type for free function declaration");
@@ -692,4 +762,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

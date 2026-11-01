@@ -65,7 +65,7 @@ void AppendPascalCaseSegment(const MStringView segment, MString& out){
 b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions){
     Alloc::ScratchArena scratchArena(MetascriptArenaScope::s_ParserScratch);
 
-    Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver);
+    Preprocessor preprocessor(arena, scratchArena, outResult.errors, includeResolver, false);
     for(const MString& defText : macroDefinitions){
         const MStringView defView(defText.data(), defText.size());
         if(defView.empty())
@@ -85,8 +85,13 @@ b8 Compiler::Compile(const MStringView source, const MStringView virtualFilePath
     if(!preprocessor.process(source, outResult.preprocessedSource))
         return false;
 
-    for(const MString& inc : preprocessor.includedFiles())
+    for(const MString& inc : preprocessor.includedFiles()){
+        if(!HasAdhdExtension(MStringView(inc.data(), inc.size()))){
+            outResult.errors.push_back(ParseError{1u, 1u, MString("outside 'native { ... }', '#include' in adhd may only include '.adhd' files; place C++ '#include' directives inside a 'native' block", arena)});
+            return false;
+        }
         outResult.unit.includedAdhdFiles.push_back(inc);
+    }
     for(const MString& resInc : preprocessor.resolvedIncludedFiles())
         outResult.unit.resolvedIncludedFiles.push_back(resInc);
 
@@ -170,4 +175,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -394,6 +394,124 @@ TEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEval
     EXPECT_FALSE(Compiler::Compile(s_BadInRefRvalueSource, "impl/sim/bad_in_bind.adhd", arena.arena, badInBindRes));
 }
 
+TEST(AdhdCompiler, ValidatesHexFloatsSnakeCaseEnumParsingNestedDeductionAndStrictTypeRules){
+    AdhdTestArena arena;
+
+    static constexpr MStringView s_ValidModernFeaturesSource =
+        "#define THRESHOLD 1'000\r\n"
+        "#if THRESHOLD == 1'000\r\n"
+        "const f32 kHexFloat = 0x1.5p-4f;\r\n"
+        "const f32 kTrailingDot = 1.f;\r\n"
+        "#endif\r\n"
+        "enum<u8> BlendStep {\r\n"
+        "    StepTowards,\r\n"
+        "    HoldValue,\r\n"
+        "}\r\n"
+        "interface IComparable<T> {\r\n"
+        "    b8 equals(in T other)const;\r\n"
+        "}\r\n"
+        "class Item : IComparable<Item> {\r\n"
+        "    public i32 id = 0;\r\n"
+        "    public b8 equals(in Item other)const override {\r\n"
+        "        return this.id == other.id;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "b8 checkFirst<T : IComparable<T>>(in Span<T> items, in T target) {\r\n"
+        "    if(items.empty())\r\n"
+        "        return false;\r\n"
+        "    return items[0u].equals(target);\r\n"
+        "}\r\n"
+        "b8 useDeducedSpan(in Span<Item> items, in Item target) {\r\n"
+        "    return checkFirst(items, target) && (kHexFloat < kTrailingDot);\r\n"
+        "}\r\n";
+    CompileResult validRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_ValidModernFeaturesSource, "impl/sim/modern_features.adhd", arena.arena, validRes));
+    const MStringView hdrView(validRes.generatedHeader.data(), validRes.generatedHeader.size());
+    EXPECT_NE(hdrView.find("{ \"StepTowards\", StepTowards },"), MStringView::npos);
+    EXPECT_NE(hdrView.find("{ \"step_towards\", StepTowards },"), MStringView::npos);
+
+    static constexpr MStringView s_BadNwbIncludeSource =
+        "#include \"some_asset.nwb\"\r\n"
+        "const i32 kVal = 1;\r\n";
+    CompileResult badNwbIncRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadNwbIncludeSource, "impl/sim/bad_nwb_inc.adhd", arena.arena, badNwbIncRes));
+
+    static constexpr MStringView s_BadDefineDefinedSource =
+        "#define defined 1\r\n"
+        "const i32 kVal = 1;\r\n";
+    CompileResult badDefDefinedRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadDefineDefinedSource, "impl/sim/bad_def_defined.adhd", arena.arena, badDefDefinedRes));
+
+    static constexpr MStringView s_BadPrivateDefaultCtorSource =
+        "class Secret {\r\n"
+        "    public i32 x = 0;\r\n"
+        "    private Secret() {}\r\n"
+        "}\r\n"
+        "void makeSecret() {\r\n"
+        "    Secret s;\r\n"
+        "}\r\n";
+    CompileResult badPrivCtorRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadPrivateDefaultCtorSource, "impl/sim/bad_priv_ctor.adhd", arena.arena, badPrivCtorRes));
+
+    static constexpr MStringView s_BadConflictingDeducedSource =
+        "void sameType<T>(in T a, in T b) {}\r\n"
+        "void callMismatch() {\r\n"
+        "    sameType(1, \"hello\");\r\n"
+        "}\r\n";
+    CompileResult badConflictRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadConflictingDeducedSource, "impl/sim/bad_conflict.adhd", arena.arena, badConflictRes));
+
+    static constexpr MStringView s_BadSwitchContainerSource =
+        "void badSwitchVec(in Vector<i32> v) {\r\n"
+        "    switch(v) {\r\n"
+        "    default:\r\n"
+        "        break;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badSwitchVecRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadSwitchContainerSource, "impl/sim/bad_switch_vec.adhd", arena.arena, badSwitchVecRes));
+
+    static constexpr MStringView s_BadComparisonReturnSource =
+        "class BadCmp {\r\n"
+        "    public i32 x = 0;\r\n"
+        "    public i32 operator==(in BadCmp rhs)const {\r\n"
+        "        return 1;\r\n"
+        "    }\r\n"
+        "}\r\n";
+    CompileResult badCmpRetRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadComparisonReturnSource, "impl/sim/bad_cmp_ret.adhd", arena.arena, badCmpRetRes));
+
+    static constexpr MStringView s_DeducedInstantiationAndSimdHashSource =
+        "class Box<T> {\r\n"
+        "    public T value;\r\n"
+        "    public Box(in T v) {\r\n"
+        "        this.value = v;\r\n"
+        "    }\r\n"
+        "}\r\n"
+        "Box<T> wrapInBox<T>(in T v) {\r\n"
+        "    return Box<T>(v);\r\n"
+        "}\r\n"
+        "[reflect]\r\n"
+        "class NameTable {\r\n"
+        "    public Vector<Name> names;\r\n"
+        "    public HashMap<Name, u32> lookup;\r\n"
+        "}\r\n"
+        "usize hashSimdAndWrap(in f32x4 a, in f32x4 b) {\r\n"
+        "    auto wrapped = wrapInBox(42u);\r\n"
+        "    f32x4 sum = a + b;\r\n"
+        "    return hashCombineValue(usize(wrapped.value), sum);\r\n"
+        "}\r\n";
+    CompileResult instSimdRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_DeducedInstantiationAndSimdHashSource, "impl/sim/inst_simd.adhd", arena.arena, instSimdRes));
+    const MStringView instHdr(instSimdRes.generatedHeader.data(), instSimdRes.generatedHeader.size());
+    const MStringView instSrc(instSimdRes.generatedSource.data(), instSimdRes.generatedSource.size());
+    EXPECT_NE(instHdr.find("template<>\r\nclass Box<u32> final"), MStringView::npos);
+    EXPECT_NE(instHdr.find("::Name::FromText(__f->asList()[__i].asString()).value_or(::Name{})"), MStringView::npos);
+    EXPECT_NE(instHdr.find("::Name::FromText(__k).value_or(::Name{})"), MStringView::npos);
+    EXPECT_NE(instSrc.find("::StoreFloat(__adhd_simd_sum, sum);"), MStringView::npos);
+    EXPECT_NE(instSrc.find("::HashCombineValue(usize(wrapped.value), sum)"), MStringView::npos);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -402,4 +520,5 @@ TEST(AdhdCompiler, ValidatesDigitSeparatorsEnumForwardRefsFlagOpsSwitchConstEval
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

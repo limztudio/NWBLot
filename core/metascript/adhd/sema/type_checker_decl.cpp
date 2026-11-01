@@ -198,6 +198,31 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
     b8 ok = checkTemplateParamBounds(method.templateParams, enclosingClass, &method, errors);
     if(method.returnType && !checkReturnTypeRef(*method.returnType, enclosingClass, &method, method.span, errors))
         ok = false;
+    if(method.isOperator){
+        if(!method.templateParams.empty()){
+            reportError(errors, method.span, "operator overload cannot declare template parameters");
+            ok = false;
+        }
+        if(method.params.size() == 1u && method.params[0].mode == ParamPassingMode::Mut){
+            reportError(errors, method.params[0].span, "operator overload parameter must be passed by 'in', not 'mut'");
+            ok = false;
+        }
+        if(
+            method.name == "=="
+            || method.name == "!="
+            || method.name == "<"
+            || method.name == "<="
+            || method.name == ">"
+            || method.name == ">="
+            || method.name == "!"
+        ){
+            const MStringView retBase = method.returnType ? m_symbols.resolveBaseTypeName(method.returnType->name) : MStringView{};
+            if(!method.returnType || retBase != "b8" || m_symbols.resolveRefMode(method.returnType) != ParamPassingMode::None){
+                reportError(errors, method.span, "comparison and logical '!' operator overloads must return 'b8' by value");
+                ok = false;
+            }
+        }
+    }
     for(usize pIdx = 0u; pIdx < method.params.size(); ++pIdx){
         const ParamDecl& p = method.params[pIdx];
         if(p.type && !checkTypeRef(*p.type, enclosingClass, &method, errors))
@@ -216,9 +241,11 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
 }
 
 b8 TypeChecker::hasFieldInlineOrAutoDefault(const ClassDecl& classDecl, const FieldDecl& field)const noexcept{
+    const TypeRef* unwrappedFieldType = field.type ? m_symbols.unwrapTypeAlias(field.type) : nullptr;
     const b8 isAutoDefaultField = field.type && m_symbols.resolveRefMode(field.type) == ParamPassingMode::None && (
         field.type->isFuncType
-        || m_symbols.isSelfDefaultedType(field.type->name)
+        || (unwrappedFieldType && unwrappedFieldType->isFuncType)
+        || m_symbols.isSelfDefaultedType(field.type->name, &classDecl)
         || FindTemplateParam(&classDecl, nullptr, field.type->name) != nullptr
     );
     return (field.defaultExpr != nullptr) || field.hasCtorInit || isAutoDefaultField;
@@ -292,6 +319,11 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             ok = false;
             continue;
         }
+        if(!m_symbols.findInterface(ifaceName)){
+            reportError(errors, ifaceType->span, "unknown interface in class implementation list; classes may only implement declared 'interface' types");
+            ok = false;
+            continue;
+        }
         if(!checkTypeRef(*ifaceType, &classDecl, nullptr, errors))
             ok = false;
         MVector<MethodDecl*> requiredInterfaceMethods(m_arena);
@@ -304,7 +336,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         for(MethodDecl* req : requiredInterfaceMethods){
             MethodDecl* impl = nullptr;
             for(MethodDecl* m : classDecl.methods){
-                if(!m->isConstructor && !m->isDestructor && m->isOperator == req->isOperator && m->name == req->name && m->params.size() == req->params.size()){
+                if(!m->isConstructor && !m->isDestructor && m->templateParams.empty() && m->isOperator == req->isOperator && m->name == req->name && m->params.size() == req->params.size()){
                     b8 exactParamsMatch = (m->isConst == req->isConst);
                     if(exactParamsMatch){
                         for(usize pIdx = 0u; pIdx < req->params.size(); ++pIdx){
@@ -366,6 +398,11 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
 
     for(MethodDecl* m : classDecl.methods){
         if(m->isOverride){
+            if(!m->templateParams.empty()){
+                reportError(errors, m->span, "templated methods cannot be marked 'override'");
+                ok = false;
+                continue;
+            }
             b8 matchesInterface = false;
             for(const MethodDecl* matchedImpl : matchedOverrideImpls){
                 if(matchedImpl == m){
@@ -435,10 +472,36 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             }
         }
         if(field->defaultExpr || field->hasCtorInit){
+            const ParamPassingMode::Enum fieldRefMode = field->type ? m_symbols.resolveRefMode(field->type) : ParamPassingMode::None;
             const b8 savedClassArenaCtx = m_inClassArenaContext;
             m_inClassArenaContext = true;
-            if(field->defaultExpr && !checkExpr(&classDecl, emptyScope, false, fieldInitDummy, *field->defaultExpr, errors))
-                ok = false;
+            if(field->defaultExpr){
+                if(!checkExpr(&classDecl, emptyScope, fieldRefMode == ParamPassingMode::Mut, fieldInitDummy, *field->defaultExpr, errors))
+                    ok = false;
+                if(fieldRefMode == ParamPassingMode::In){
+                    b8 isRvalueDefault = (
+                        field->defaultExpr->kind == ExprKind::IntegerLiteral
+                        || field->defaultExpr->kind == ExprKind::FloatLiteral
+                        || field->defaultExpr->kind == ExprKind::DoubleLiteral
+                        || field->defaultExpr->kind == ExprKind::StringLiteral
+                        || field->defaultExpr->kind == ExprKind::BoolLiteral
+                        || field->defaultExpr->kind == ExprKind::Binary
+                        || field->defaultExpr->kind == ExprKind::Cast
+                        || field->defaultExpr->kind == ExprKind::BitCast
+                        || field->defaultExpr->kind == ExprKind::Lambda
+                        || field->defaultExpr->kind == ExprKind::ScopeAccess
+                    );
+                    if(!isRvalueDefault && (field->defaultExpr->kind == ExprKind::Call || field->defaultExpr->kind == ExprKind::Unary)){
+                        const TypeRef* exprRetType = inferExprTypeRef(&classDecl, &fieldInitDummy, *field->defaultExpr, emptyScope);
+                        if(m_symbols.resolveRefMode(exprRetType) == ParamPassingMode::None)
+                            isRvalueDefault = true;
+                    }
+                    if(isRvalueDefault){
+                        reportError(errors, field->span, "cannot bind 'in' reference member default initializer to a literal or rvalue temporary");
+                        ok = false;
+                    }
+                }
+            }
             if(field->hasCtorInit){
                 if(!checkConstructorInitArguments(&classDecl, unwrappedFieldType, emptyScope, field->span, fieldInitDummy, field->ctorArgs, errors))
                     ok = false;
@@ -530,4 +593,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

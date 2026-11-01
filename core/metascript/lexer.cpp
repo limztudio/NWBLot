@@ -381,8 +381,82 @@ Token Lexer::readNumber()noexcept{
         return tok;
     };
 
-    if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X'))
-        return finishRadixInteger(IsHexDigit, MStringView("invalid hexadecimal integer literal"), MStringView("invalid suffix on hexadecimal integer literal"));
+    if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
+        advance();
+        advance();
+        b8 hasHexDigits = false;
+        if(!isAtEnd() && IsHexDigit(peek())){
+            hasHexDigits = true;
+            while(!isAtEnd() && (IsHexDigit(peek()) || (peek() == '\'' && IsHexDigit(peekNext()))))
+                advance();
+        }
+        if(!isAtEnd() && peek() == '\''){
+            advance();
+            return makeErrorToken(MStringView("invalid hexadecimal integer literal"), startLine, startColumn);
+        }
+        if(!isAtEnd() && peek() == '.' && (hasHexDigits || IsHexDigit(peekNext()))){
+            isDouble = true;
+            advance();
+            if(!isAtEnd() && IsHexDigit(peek())){
+                hasHexDigits = true;
+                while(!isAtEnd() && (IsHexDigit(peek()) || (peek() == '\'' && IsHexDigit(peekNext()))))
+                    advance();
+            }
+            if(!isAtEnd() && peek() == '\''){
+                advance();
+                return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
+            }
+        }
+        if(!hasHexDigits)
+            return makeErrorToken(MStringView("invalid hexadecimal integer literal"), startLine, startColumn);
+        if(!isAtEnd() && (peek() == 'p' || peek() == 'P')){
+            isDouble = true;
+            advance();
+            if(!isAtEnd() && (peek() == '+' || peek() == '-'))
+                advance();
+            if(isAtEnd() || !IsAsciiDigit(peek()))
+                return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
+            while(!isAtEnd() && (IsAsciiDigit(peek()) || (peek() == '\'' && IsAsciiDigit(peekNext()))))
+                advance();
+            if(!isAtEnd() && peek() == '\''){
+                advance();
+                return makeErrorToken(MStringView("invalid digit separator in numeric literal"), startLine, startColumn);
+            }
+            if(!isAtEnd() && (peek() == 'f' || peek() == 'F')){
+                isFloat = true;
+                advance();
+            }
+            if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
+                while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+                    advance();
+                return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
+            }
+            Token tok;
+            tok.type = isFloat ? TokenType::FloatLiteral : TokenType::DoubleLiteral;
+            tok.text = m_source.substr(start, m_current - start);
+            tok.line = startLine;
+            tok.column = startColumn;
+            return tok;
+        }
+        if(isDouble){
+            while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+                advance();
+            return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
+        }
+        while(!isAtEnd() && (peek() == 'u' || peek() == 'U' || peek() == 'l' || peek() == 'L'))
+            advance();
+        if(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.')){
+            while(!isAtEnd() && (IsAsciiIdentifierChar(peek()) || peek() == '.'))
+                advance();
+            return makeErrorToken(MStringView("invalid suffix on hexadecimal integer literal"), startLine, startColumn);
+        }
+        Token tok;
+        tok.type = TokenType::IntegerLiteral;
+        tok.text = m_source.substr(start, m_current - start);
+        tok.line = startLine;
+        tok.column = startColumn;
+        return tok;
+    }
 
     if(peek() == '0' && (peekNext() == 'b' || peekNext() == 'B'))
         return finishRadixInteger(IsBinaryDigit, MStringView("invalid binary integer literal"), MStringView("invalid suffix on binary integer literal"));
@@ -392,7 +466,10 @@ Token Lexer::readNumber()noexcept{
 
     if(!isAtEnd() && peek() == '.'){
         const MChar afterDot = peekNext();
-        if(IsAsciiDigit(afterDot)){
+        const b8 isTrailingFloatSuffix = (afterDot == 'f' || afterDot == 'F') && !IsAsciiIdentifierChar(peekAt(2u));
+        const b8 isTrailingExponent = (afterDot == 'e' || afterDot == 'E') && (IsAsciiDigit(peekAt(2u)) || ((peekAt(2u) == '+' || peekAt(2u) == '-') && IsAsciiDigit(peekAt(3u))));
+        const b8 isBareTrailingDot = afterDot != '.' && !IsAsciiIdentifierStart(afterDot);
+        if(IsAsciiDigit(afterDot) || isTrailingFloatSuffix || isTrailingExponent || isBareTrailingDot){
             isDouble = true;
             advance();
             while(!isAtEnd() && (IsAsciiDigit(peek()) || (peek() == '\'' && IsAsciiDigit(peekNext()))))
@@ -458,6 +535,27 @@ Token Lexer::readString()noexcept{
                 return makeErrorToken(__hidden_metascript_lexer::s_UnterminatedStringMessage, startLine, startColumn);
             if(peek() == '\n' || peek() == '\r')
                 return makeErrorToken(__hidden_metascript_lexer::s_NewlineInStringMessage, startLine, startColumn);
+
+            const MChar esc = advance();
+            if(esc == 'x'){
+                if(isAtEnd() || !IsHexDigit(peek()))
+                    return makeErrorToken(MStringView("invalid hexadecimal escape sequence in string literal"), startLine, startColumn);
+                while(!isAtEnd() && IsHexDigit(peek()))
+                    advance();
+            }
+            else if(esc == 'u' || esc == 'U'){
+                const usize expectedHex = (esc == 'u') ? 4u : 8u;
+                u32 codePoint = 0u;
+                for(usize h = 0u; h < expectedHex; ++h){
+                    if(isAtEnd() || !IsHexDigit(peek()))
+                        return makeErrorToken(MStringView("invalid unicode escape sequence in string literal"), startLine, startColumn);
+                    const MChar hc = advance();
+                    codePoint = (codePoint << 4u) | HexDigitValue(hc);
+                }
+                if(codePoint > 0x10FFFFu || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
+                    return makeErrorToken(MStringView("invalid unicode code point in string literal"), startLine, startColumn);
+            }
+            continue;
         }
 
         advance();
@@ -504,8 +602,12 @@ Token Lexer::readCharLiteral()noexcept{
         if(esc == 'x' || esc == 'X'){
             if(isAtEnd() || !IsHexDigit(peek()))
                 return makeErrorToken(s_UnterminatedCharMessage, startLine, startColumn);
-            while(!isAtEnd() && IsHexDigit(peek()))
-                advance();
+            u64 hexVal = 0u;
+            while(!isAtEnd() && IsHexDigit(peek())){
+                if(hexVal > (Limit<u32>::s_Max >> 4u))
+                    return makeErrorToken(MStringView("hexadecimal escape sequence out of range in character literal"), startLine, startColumn);
+                hexVal = (hexVal << 4u) | static_cast<u64>(HexDigitValue(advance()));
+            }
         }
         else if(esc == 'u' || esc == 'U'){
             const usize expectedHex = (esc == 'u') ? 4u : 8u;
@@ -526,6 +628,9 @@ Token Lexer::readCharLiteral()noexcept{
                 else
                     break;
             }
+        }
+        else if(esc != 'n' && esc != 'r' && esc != 't' && esc != '\\' && esc != '\'' && esc != '"' && esc != '?' && esc != 'a' && esc != 'b' && esc != 'f' && esc != 'v'){
+            return makeErrorToken(MStringView("invalid escape sequence in character literal"), startLine, startColumn);
         }
     }
     else{
@@ -592,4 +697,5 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

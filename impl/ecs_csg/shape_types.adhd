@@ -56,16 +56,12 @@ b8 ValidCsgShapeTypeId(in CsgShapeTypeId id){
 b8 ValidCsgShaderModuleIncludeText(in StringView includeText){
     if(includeText.empty())
         return false;
-    b8 valid = true;
-    native(in includeText, mut valid){
-        for(const char ch : includeText){
-            if(ch == '"' || ch == ';' || ch == '=' || ch == '\0' || ch == '\r' || ch == '\n'){
-                valid = false;
-                break;
-            }
-        }
+    for(usize i = 0u; i < includeText.size(); ++i){
+        const u8 ch = cast<u8>(includeText[i]);
+        if(ch == '"' || ch == ';' || ch == '=' || ch == '\0' || ch == '\r' || ch == '\n')
+            return false;
     }
-    return valid;
+    return true;
 }
 
 b8 ValidCsgShapeParameterByteCounts(in u32 parameterByteSize, in usize defaultParameterByteCount){

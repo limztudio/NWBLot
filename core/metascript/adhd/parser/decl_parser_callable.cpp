@@ -14,7 +14,7 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outTemplateParams){
+b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplateParams, MVector<MStringView>& outOwnerTemplateParams, MVector<TemplateParamDecl>& outOwnerTemplateParamDecls, MVector<TemplateParamDecl>& outTemplateParams){
     if(!m_cursor.check(TokenType::Less))
         return true;
 
@@ -39,6 +39,7 @@ b8 DeclParser::parseCallableOwnerOrTemplateHeader(const b8 failOnInvalidTemplate
     if(m_cursor.check(TokenType::ColonColon)){
         for(const TemplateParamDecl& tp : parsedTemplateParams)
             outOwnerTemplateParams.push_back(tp.name);
+        outOwnerTemplateParamDecls = Move(parsedTemplateParams);
     }
     else{
         outTemplateParams = Move(parsedTemplateParams);
@@ -59,8 +60,9 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
         m_cursor.advance();
 
         MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
+        MVector<TemplateParamDecl> parsedOwnerTemplateParamDecls(m_cursor.arena());
         MVector<TemplateParamDecl> ignoredLookaheadTemplateParams(m_cursor.arena());
-        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, ignoredLookaheadTemplateParams) && m_cursor.match(TokenType::ColonColon)){
+        if(parseCallableOwnerOrTemplateHeader(false, parsedOwnerTemplateParams, parsedOwnerTemplateParamDecls, ignoredLookaheadTemplateParams) && m_cursor.match(TokenType::ColonColon)){
             if(decl->isReflect){
                 m_cursor.error(span.line, span.column, "'reflect' attribute is not permitted on constructors or destructors");
                 return nullptr;
@@ -73,6 +75,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
                 m_cursor.advance();
                 decl->ownerClassName = maybeClass;
                 decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
+                decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
                 decl->name = maybeClass;
                 decl->isDestructor = true;
                 if(!parseDestructorEmptyParams("expected '(' in out-of-line destructor"))
@@ -87,6 +90,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
                 m_cursor.advance();
                 decl->ownerClassName = maybeClass;
                 decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
+                decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
                 decl->name = maybeClass;
                 decl->isConstructor = true;
                 if(!parseConstructorParamsAndRejectInitList(decl->params))
@@ -119,12 +123,14 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
     m_cursor.advance();
 
     MVector<MStringView> parsedOwnerTemplateParams(m_cursor.arena());
-    if(!parseCallableOwnerOrTemplateHeader(true, parsedOwnerTemplateParams, decl->templateParams))
+    MVector<TemplateParamDecl> parsedOwnerTemplateParamDecls(m_cursor.arena());
+    if(!parseCallableOwnerOrTemplateHeader(true, parsedOwnerTemplateParams, parsedOwnerTemplateParamDecls, decl->templateParams))
         return nullptr;
 
     if(m_cursor.match(TokenType::ColonColon)){
         decl->ownerClassName = firstName;
         decl->ownerTemplateParams = Move(parsedOwnerTemplateParams);
+        decl->ownerTemplateParamDecls = Move(parsedOwnerTemplateParamDecls);
         if(m_cursor.matchIdentifier("operator")){
             MStringView opName;
             if(!parseOperatorName(opName))
@@ -239,4 +245,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

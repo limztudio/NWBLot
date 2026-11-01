@@ -2,14 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-native{
-#include <global/texture_payload.h>
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Name s_TextureUploadScratchArena = "impl/assets_texture/upload";
 
 const StringView s_TextureDiagnosticPrefix = "Texture meta";
@@ -25,6 +17,7 @@ const u32 s_TextureRgbaBytesPerTexel = 4u;
 const u32 s_TextureRgba16FloatComponentCount = 4u;
 const u32 s_TextureRgba16FloatBytesPerTexel = 8u;
 const u32 s_TextureRgba16FloatAlphaByteOffset = 6u;
+const u64 s_TextureUastcBytesPerBlock = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,17 +96,12 @@ b8 TryComputeUastcSliceLayout(in TextureMipLevel mip, in u32 sliceIndex, mut Uas
     )
         return false;
 
-    u64 bytesPerBlock = 0u;
-    native(mut bytesPerBlock){
-        bytesPerBlock = TextureFormat::s_UastcBytesPerBlock;
-    }
-
-    u64 blockCount = cast<u64>(mip.blockCountX) * cast<u64>(mip.blockCountY);
-    if(blockCount > 0xFFFFFFFFFFFFFFFFu / bytesPerBlock)
+    const u64 blockCount = cast<u64>(mip.blockCountX) * cast<u64>(mip.blockCountY);
+    if(blockCount > u64.max / s_TextureUastcBytesPerBlock)
         return false;
 
-    u64 sliceByteCount = mip.sizeBytes / cast<u64>(mip.sliceCount);
-    if(sliceByteCount != blockCount * bytesPerBlock)
+    const u64 sliceByteCount = mip.sizeBytes / cast<u64>(mip.sliceCount);
+    if(sliceByteCount != blockCount * s_TextureUastcBytesPerBlock)
         return false;
 
     UastcSliceLayout layout;
@@ -126,4 +114,5 @@ b8 TryComputeUastcSliceLayout(in TextureMipLevel mip, in u32 sliceIndex, mut Uas
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -384,16 +384,10 @@ MaterialResourceReferenceBinary PackMaterialResourceReferenceBinary(in MaterialR
     MaterialResourceReferenceBinary resourceReferenceBinary;
     resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
     resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
-    if(resourceReference.resourceKind == MaterialResourceKind::SampledImage2D){
-        native(in resourceReference, mut resourceReferenceBinary){
-            resourceReferenceBinary.resourceNameHash = resourceReference.textureAsset.name().hash();
-        }
-    }
-    else{
-        native(in resourceReference, mut resourceReferenceBinary){
-            resourceReferenceBinary.resourceNameHash = resourceReference.samplerAsset.name().hash();
-        }
-    }
+    if(resourceReference.resourceKind == MaterialResourceKind::SampledImage2D)
+        resourceReferenceBinary.resourceNameHash = resourceReference.textureAsset.name().hash();
+    else
+        resourceReferenceBinary.resourceNameHash = resourceReference.samplerAsset.name().hash();
     resourceReferenceBinary.resourceKind = cast<u32>(resourceReference.resourceKind);
     resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
     return resourceReferenceBinary;
@@ -537,35 +531,70 @@ b8 HasValidMaterialAvboitPixelShaderContract(
     return !accumulatePixelShader.valid() && !occupancyPixelShader.valid() && !extinctionPixelShader.valid();
 }
 
+const u64 s_MaterialFnv64OffsetBasis = 14695981039346656037ull;
+const u64 s_MaterialFnv64Prime = 1099511628211ull;
+const StringView s_MaterialTypedLayoutHashHeader = "NWB_MATERIAL_TYPED_LAYOUT_V1";
+
+u64 UpdateMaterialFnv64Byte(in u64 hash, in u8 byteValue){
+    return (hash ^ cast<u64>(byteValue)) * s_MaterialFnv64Prime;
+}
+
+u64 UpdateMaterialFnv64U32(in u64 hash, in u32 value){
+    u64 result = hash;
+    for(u32 byteIndex = 0u; byteIndex < 4u; ++byteIndex){
+        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffu);
+        result = UpdateMaterialFnv64Byte(result, byteValue);
+    }
+    return result;
+}
+
+u64 UpdateMaterialFnv64U64(in u64 hash, in u64 value){
+    u64 result = hash;
+    for(u32 byteIndex = 0u; byteIndex < 8u; ++byteIndex){
+        const u8 byteValue = cast<u8>((value >> (byteIndex * 8u)) & 0xffull);
+        result = UpdateMaterialFnv64Byte(result, byteValue);
+    }
+    return result;
+}
+
+u64 UpdateMaterialFnv64NameHash(in u64 hash, in NameHash nameHash){
+    u64 result = hash;
+    for(usize lane = 0u; lane < nameHash.qwords.size(); ++lane)
+        result = UpdateMaterialFnv64U64(result, nameHash.qwords[lane]);
+    return result;
+}
+
 u64 ComputeMaterialTypedLayoutHash(in Span<MaterialTypedLayoutBlock> blocks, in Span<MaterialTypedLayoutField> fields){
     if(blocks.empty() && fields.empty())
         return 0u;
 
-    u64 hash = 0u;
-    native(in blocks, in fields, mut hash){
-        hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
-        Fnv64AppendValue(hash, static_cast<u32>(blocks.size()));
-        Fnv64AppendValue(hash, static_cast<u32>(fields.size()));
-        for(const MaterialTypedLayoutBlock& block : blocks){
-            Fnv64AppendValue(hash, block.blockName.hash());
-            Fnv64AppendValue(hash, static_cast<u32>(block.blockClass));
-            Fnv64AppendValue(hash, block.fieldBegin);
-            Fnv64AppendValue(hash, block.fieldCount);
-            Fnv64AppendValue(hash, block.byteSize);
-        }
-        for(const MaterialTypedLayoutField& field : fields){
-            Fnv64AppendValue(hash, field.fieldName.hash());
-            Fnv64AppendValue(hash, static_cast<u32>(field.fieldType));
-            Fnv64AppendValue(hash, field.offset);
-            Fnv64AppendValue(hash, field.defaultValue.x);
-            Fnv64AppendValue(hash, field.defaultValue.y);
-            Fnv64AppendValue(hash, field.defaultValue.z);
-            Fnv64AppendValue(hash, field.defaultValue.w);
-        }
+    u64 hash = s_MaterialFnv64OffsetBasis;
+    for(usize i = 0u; i < s_MaterialTypedLayoutHashHeader.size(); ++i)
+        hash = UpdateMaterialFnv64Byte(hash, cast<u8>(s_MaterialTypedLayoutHashHeader[i]));
+    hash = UpdateMaterialFnv64U32(hash, cast<u32>(blocks.size()));
+    hash = UpdateMaterialFnv64U32(hash, cast<u32>(fields.size()));
+    for(usize i = 0u; i < blocks.size(); ++i){
+        const MaterialTypedLayoutBlock block = blocks[i];
+        hash = UpdateMaterialFnv64NameHash(hash, block.blockName.hash());
+        hash = UpdateMaterialFnv64U32(hash, cast<u32>(block.blockClass));
+        hash = UpdateMaterialFnv64U32(hash, block.fieldBegin);
+        hash = UpdateMaterialFnv64U32(hash, block.fieldCount);
+        hash = UpdateMaterialFnv64U32(hash, block.byteSize);
+    }
+    for(usize i = 0u; i < fields.size(); ++i){
+        const MaterialTypedLayoutField field = fields[i];
+        hash = UpdateMaterialFnv64NameHash(hash, field.fieldName.hash());
+        hash = UpdateMaterialFnv64U32(hash, cast<u32>(field.fieldType));
+        hash = UpdateMaterialFnv64U32(hash, field.offset);
+        hash = UpdateMaterialFnv64U32(hash, field.defaultValue.x);
+        hash = UpdateMaterialFnv64U32(hash, field.defaultValue.y);
+        hash = UpdateMaterialFnv64U32(hash, field.defaultValue.z);
+        hash = UpdateMaterialFnv64U32(hash, field.defaultValue.w);
     }
     return hash;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -192,6 +192,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
 [[nodiscard]] const TypeRef* UnwrapOptionalFieldType(const TypeRef* fieldType, const SymbolTable& symbols, b8& outIsOptional, MStringView& outBaseTypeName)noexcept;
 [[nodiscard]] b8 IsAssetDependencyType(const TypeRef* type, const SymbolTable& symbols, u32 depth = 0u)noexcept;
+[[nodiscard]] const TypeRef* DeduceTemplateParamTypeRef(const TypeRef* paramType, const TypeRef* argType, MStringView tpName, const SymbolTable& symbols, u32 depth = 0u)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -201,4 +202,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

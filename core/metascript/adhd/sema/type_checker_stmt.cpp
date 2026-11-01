@@ -104,6 +104,20 @@ b8 TypeChecker::checkConstructorInitArguments(ClassDecl* ownerClass, const TypeR
             reportError(errors, errorSpan, "wrong number of arguments to built-in vector/matrix constructor");
             ok = false;
         }
+        else if(
+            arguments.size() > 1u
+            && (
+                IsScalarType(baseTargetName)
+                || m_symbols.findEnum(baseTargetName) != nullptr
+                || baseTargetName == "StringView"
+                || baseTargetName == "Name"
+                || baseTargetName == "Path"
+                || baseTargetName == "Optional"
+            )
+        ){
+            reportError(errors, errorSpan, "scalar, enum, or single-value constructor accepts at most 1 argument");
+            ok = false;
+        }
         if(const BuiltinSimdVectorInfo* simdVecInfo = FindBuiltinSimdVectorType(baseTargetName); simdVecInfo && simdVecInfo->isMixed && arguments.size() == 1u && arguments[0]){
             const MStringView arg0Type = inferExprTypeName(ownerClass, &method, *arguments[0], scope);
             if(arg0Type != baseTargetName){
@@ -160,7 +174,16 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
                 ok = false;
             }
         }
-        if(!stmt.expr && !stmt.isCtorInit && (varRefMode != ParamPassingMode::None || !m_symbols.isSelfDefaultedType(stmt.varType->name))){
+        b8 isSelfDefaultedVar = m_symbols.isSelfDefaultedType(stmt.varType->name, ownerClass);
+        if(isSelfDefaultedVar && baseVarTypeName == "Array"){
+            if(const TypeRef* unwrappedArr = m_symbols.unwrapTypeAlias(stmt.varType); unwrappedArr && !unwrappedArr->templateArgs.empty() && unwrappedArr->templateArgs[0].type){
+                const TypeRef* elemRef = unwrappedArr->templateArgs[0].type;
+                const MStringView elemBase = m_symbols.resolveBaseTypeName(elemRef->name);
+                if(m_symbols.resolveRefMode(elemRef) != ParamPassingMode::None || (m_symbols.findClass(elemBase) && !m_symbols.isSelfDefaultedType(elemBase, ownerClass)))
+                    isSelfDefaultedVar = false;
+            }
+        }
+        if(!stmt.expr && !stmt.isCtorInit && (varRefMode != ParamPassingMode::None || !isSelfDefaultedVar)){
             reportError(errors, stmt.span, "uninitialized variable declaration is prohibited in adhd; every local variable must be initialized at declaration");
             ok = false;
         }
@@ -262,7 +285,8 @@ b8 TypeChecker::checkVarDeclStatement(ClassDecl* ownerClass, MethodDecl& method,
             info.type = stmt.varType;
         }
         else if(exprTypeRef){
-            info.type = const_cast<TypeRef*>(exprTypeRef);
+            stmt.inferredAutoType = const_cast<TypeRef*>(exprTypeRef);
+            info.type = stmt.inferredAutoType;
         }
     }
     info.mode = varRefMode;
@@ -482,8 +506,9 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 ok = false;
             const TypeRef* subjTypeRef = inferExprTypeRef(ownerClass, &method, *stmt.expr, scope);
             const MStringView subjectType = inferExprTypeName(ownerClass, &method, *stmt.expr, scope);
-            if(!subjectType.empty() && (IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType))){
-                reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, and 'void' types cannot be switched on");
+            const b8 isNonSwitchableBuiltin = IsFloatScalarType(subjectType) || subjectType == "void" || SymbolTable::IsSimdType(subjectType) || SymbolTable::IsUnalignedVectorType(subjectType) || FindBuiltinGenericType(subjectType) != nullptr;
+            if(!subjectType.empty() && (isNonSwitchableBuiltin || (subjTypeRef && subjTypeRef->isFuncType))){
+                reportError(errors, stmt.span, "invalid 'switch' subject type; floating-point, SIMD, container, callable, and 'void' types cannot be switched on");
                 ok = false;
             }
             if(SymbolTable::IsStringSwitchType(subjectType)){
@@ -502,6 +527,13 @@ b8 TypeChecker::checkStatement(ClassDecl* ownerClass, MethodDecl& method, Stmt& 
                 else if(subjTypeRef && m_symbols.findInterface(subjectType)){
                     if(!eqOp){
                         reportError(errors, stmt.span, "switch on interface requires 'operator==' to be declared on the interface");
+                        ok = false;
+                    }
+                    stmt.lowerSwitchToIfChain = true;
+                }
+                else if(FindTemplateParam(ownerClass, &method, subjectType)){
+                    if(!eqOp){
+                        reportError(errors, stmt.span, "switch on template parameter requires 'operator==' in its interface bounds");
                         ok = false;
                     }
                     stmt.lowerSwitchToIfChain = true;
@@ -743,4 +775,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

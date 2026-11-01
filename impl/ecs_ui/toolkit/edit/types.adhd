@@ -268,64 +268,58 @@ b8 ValidateFloatBounds(in FloatBounds bounds){
 }
 
 usize SkipNumericSign(in StringView text){
-    usize skipped = 0u;
-    native(in text, mut skipped){
-        skipped = !text.empty() && (text.front() == '+' || text.front() == '-') ? 1u : 0u;
-    }
-    return skipped;
+    if(!text.empty() && (text[0u] == '+' || text[0u] == '-'))
+        return 1u;
+    return 0u;
 }
 
 NumericParseStatus ValidateIntegerGrammar(in StringView text){
     const usize begin = SkipNumericSign(text);
     if(begin == text.size())
         return NumericParseStatus::Incomplete;
-    NumericParseStatus status = NumericParseStatus::Complete;
-    native(in text, in begin, mut status){
-        for(usize index = begin; index < text.size(); ++index){
-            const char ch = text[index];
-            if(ch < '0' || ch > '9'){
-                status = NumericParseStatus::Invalid;
-                break;
-            }
-        }
+    for(usize index = begin; index < text.size(); ++index){
+        const u8 ch = cast<u8>(text[index]);
+        if(ch < '0' || ch > '9')
+            return NumericParseStatus::Invalid;
     }
-    return status;
+    return NumericParseStatus::Complete;
 }
 
 NumericParseStatus ValidateFloatGrammar(in StringView text){
     usize index = SkipNumericSign(text);
-    NumericParseStatus status = NumericParseStatus::Complete;
-    native(in text, mut index, mut status){
-        b8 digits = false;
+    b8 digits = false;
+    while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
+        digits = true;
+        ++index;
+    }
+    if(index < text.size() && text[index] == '.'){
+        ++index;
         while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
             digits = true;
             ++index;
         }
-        if(index < text.size() && text[index] == '.'){
-            ++index;
-            while(index < text.size() && text[index] >= '0' && text[index] <= '9'){
-                digits = true;
-                ++index;
-            }
-        }
-        if(!digits)
-            status = index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
-        else if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
-            ++index;
-            if(index < text.size() && (text[index] == '+' || text[index] == '-'))
-                ++index;
-            const usize exponent = index;
-            while(index < text.size() && text[index] >= '0' && text[index] <= '9')
-                ++index;
-            if(exponent == index)
-                status = index == text.size() ? NumericParseStatus::Incomplete : NumericParseStatus::Invalid;
-            else
-                status = index == text.size() ? NumericParseStatus::Complete : NumericParseStatus::Invalid;
-        }
-        else
-            status = index == text.size() ? NumericParseStatus::Complete : NumericParseStatus::Invalid;
     }
-    return status;
+    if(!digits){
+        if(index == text.size())
+            return NumericParseStatus::Incomplete;
+        return NumericParseStatus::Invalid;
+    }
+    if(index < text.size() && (text[index] == 'e' || text[index] == 'E')){
+        ++index;
+        if(index < text.size() && (text[index] == '+' || text[index] == '-'))
+            ++index;
+        const usize exponent = index;
+        while(index < text.size() && text[index] >= '0' && text[index] <= '9')
+            ++index;
+        if(exponent == index){
+            if(index == text.size())
+                return NumericParseStatus::Incomplete;
+            return NumericParseStatus::Invalid;
+        }
+    }
+    if(index == text.size())
+        return NumericParseStatus::Complete;
+    return NumericParseStatus::Invalid;
 }
 
 enum<u8> EditNavigationRunClass{
@@ -427,4 +421,5 @@ EditNavigationRunClass ClassifyEditNavigationScalar(in u32 scalar){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

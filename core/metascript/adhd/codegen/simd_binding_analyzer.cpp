@@ -276,7 +276,9 @@ void AnalyzeSimdExprReads(const Expr* expr, const SymbolTable& symbols, const b8
         if(expr->lhs && expr->lhs->kind == ExprKind::Identifier){
             const MStringView callee = expr->lhs->text;
             const MStringView baseCallee = symbols.resolveBaseTypeName(callee);
-            if(SymbolTable::IsSimdType(baseCallee) || !MapBuiltinMathFunction(callee).empty())
+            if(IsRegisterPromotableSimdType(expr->resolvedSimdType) && (SymbolTable::IsSimdType(baseCallee) || !MapBuiltinMathFunction(callee).empty()))
+                isSimdIntrinsicOrCtor = true;
+            else if(IsSimdScalarReductionFunction(callee))
                 isSimdIntrinsicOrCtor = true;
         }
         if(!isSimdIntrinsicOrCtor)
@@ -575,4 +577,5 @@ NWB_ADHD_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

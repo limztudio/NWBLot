@@ -177,6 +177,11 @@ usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index
             out.push_back(text[index++]);
             continue;
         }
+        if(c == '\'' && index + 1u < text.size() && (IsAsciiDigit(text[index + 1u]) || IsAsciiIdentifierChar(text[index + 1u]))){
+            out.push_back(text[index++]);
+            out.push_back(text[index++]);
+            continue;
+        }
         if(IsAsciiDigit(c) || IsAsciiIdentifierChar(c) || c == '.'){
             out.push_back(text[index++]);
             continue;
@@ -190,7 +195,7 @@ usize Preprocessor::AppendPreprocessorNumber(const MStringView text, usize index
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver)
+Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, MVector<ParseError>& errors, IIncludeResolver* includeResolver, const b8 allowNwbInclude)
     : m_arena(arena)
     , m_scratchArena(scratchArena)
     , m_errors(errors)
@@ -200,6 +205,7 @@ Preprocessor::Preprocessor(MetaArena& arena, Alloc::ScratchArena& scratchArena, 
     , m_includedFiles(arena)
     , m_resolvedIncludedFiles(arena)
     , m_includedByteRanges(arena)
+    , m_allowNwbInclude(allowNwbInclude)
 {
 #if defined(NWB_DEBUG) && NWB_DEBUG
     defineObjectMacro("NWB_DEBUG", "1");
@@ -481,11 +487,15 @@ b8 Preprocessor::handleDirective(const MStringView directiveLine, const u32 line
                 return false;
         }
         else{
-            if(rest.empty()){
+            if(rest.empty() || !IsAsciiIdentifierStart(rest[0])){
                 m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #ifdef/#ifndef", m_arena)});
                 return false;
             }
             const MStringView macroName = ExtractLeadingIdentifier(rest);
+            if(!TrimView(rest.substr(macroName.size())).empty()){
+                m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after macro name in #ifdef/#ifndef", m_arena)});
+                return false;
+            }
             const b8 defined = isMacroDefined(macroName);
             condResult = (cmd == "ifdef") ? defined : !defined;
         }
@@ -566,10 +576,14 @@ b8 Preprocessor::handleInclude(const MStringView rest, const u32 line, const u32
         m_errors.push_back(ParseError{line, 1u, MString("unterminated #include path", m_arena)});
         return false;
     }
+    if(!TrimView(rest.substr(closePos + 1u)).empty()){
+        m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after #include path", m_arena)});
+        return false;
+    }
 
     const MStringView includePath = rest.substr(1u, closePos - 1u);
     const b8 hasAdhdExt = includePath.size() > 5u && includePath.substr(includePath.size() - 5u) == ".adhd";
-    const b8 hasNwbExt = includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
+    const b8 hasNwbExt = m_allowNwbInclude && includePath.size() > 4u && includePath.substr(includePath.size() - 4u) == ".nwb";
     if(!hasAdhdExt && !hasNwbExt){
         m_errors.push_back(ParseError{line, 1u, MString("outside 'native { ... }', '#include' may only include '.adhd' or '.nwb' files; place C++ '#include' directives inside a 'native' block", m_arena)});
         return false;
@@ -593,14 +607,23 @@ b8 Preprocessor::handleInclude(const MStringView rest, const u32 line, const u32
     }
 
     m_includedSet.emplace(Move(scopedIncludeKey), true);
+    if(depth == 0u){
+        b8 alreadyListed = false;
+        for(const MString& existing : m_includedFiles){
+            if(MStringView(existing.data(), existing.size()) == includePath){
+                alreadyListed = true;
+                break;
+            }
+        }
+        if(!alreadyListed)
+            m_includedFiles.push_back(MString(includePath.data(), includePath.size(), m_arena));
+    }
     if(m_includedSet.find(resolvedKey) != m_includedSet.end()){
         m_includeResolver->popIncludeScope();
         return true;
     }
 
     m_includedSet.emplace(MString(resolvedKey.data(), resolvedKey.size(), m_arena), true);
-    if(depth == 0u)
-        m_includedFiles.push_back(MString(includePath.data(), includePath.size(), m_arena));
     m_resolvedIncludedFiles.push_back(MString(resolvedKey.data(), resolvedKey.size(), m_arena));
 
     const usize startOffset = outProcessed.size();
@@ -624,6 +647,10 @@ b8 Preprocessor::handleDefine(const MStringView rest, const u32 line){
     }
 
     const MStringView name = ExtractLeadingIdentifier(rest);
+    if(name == "defined"){
+        m_errors.push_back(ParseError{line, 1u, MString("'defined' cannot be used as a macro name", m_arena)});
+        return false;
+    }
     const usize nameEnd = name.size();
     PreprocessorMacro macro(m_arena);
     macro.name.assign(name.data(), name.size());
@@ -678,7 +705,16 @@ b8 Preprocessor::handleUndef(const MStringView rest, const u32 line){
         m_errors.push_back(ParseError{line, 1u, MString("expected macro name after #undef", m_arena)});
         return false;
     }
-    undefineMacro(__hidden_metascript_preprocessor::ExtractLeadingIdentifier(rest));
+    const MStringView name = __hidden_metascript_preprocessor::ExtractLeadingIdentifier(rest);
+    if(name == "defined"){
+        m_errors.push_back(ParseError{line, 1u, MString("'defined' cannot be undefined", m_arena)});
+        return false;
+    }
+    if(!TrimView(rest.substr(name.size())).empty()){
+        m_errors.push_back(ParseError{line, 1u, MString("unexpected tokens after macro name in #undef", m_arena)});
+        return false;
+    }
+    undefineMacro(name);
     return true;
 }
 
@@ -690,4 +726,5 @@ NWB_METASCRIPT_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

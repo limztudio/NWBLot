@@ -32,13 +32,16 @@ inline constexpr u64 s_DoubleInfinityBits = 0x7FF0000000000000ull;
 inline constexpr u64 s_DoubleMinimumNormalBits = 0x0010000000000000ull;
 
 [[nodiscard]] NWB_INLINE b8 HasExceptionalDurationPack(const SIMDVectorDouble pack)noexcept{
-    using DurationBits = u64 __attribute__((ext_vector_type(4)));
-    const DurationBits absoluteMask{ s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask, s_DoubleMagnitudeBitsMask };
-    const DurationBits infinity{ s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits, s_DoubleInfinityBits };
-    const DurationBits minimumNormal{ s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits, s_DoubleMinimumNormalBits };
-    const DurationBits magnitude = BitCast<DurationBits>(pack) & absoluteMask;
-    const auto exceptional = (magnitude >= infinity) | ((magnitude != DurationBits{}) & (magnitude < minimumNormal));
-    return __builtin_reduce_or(exceptional) != 0;
+    const Array<f64, 4u> lanes = { pack[0], pack[1], pack[2], pack[3] };
+    for(const f64 lane : lanes){
+        const u64 bits = BitCast<u64>(lane);
+        const u64 magnitude = bits & s_DoubleMagnitudeBitsMask;
+        if(magnitude >= s_DoubleInfinityBits)
+            return true;
+        if(magnitude != 0u && magnitude < s_DoubleMinimumNormalBits)
+            return true;
+    }
+    return false;
 }
 #endif
 
@@ -58,21 +61,20 @@ template<usize Count>
 template<usize Count>
 [[nodiscard]] static b8 DurationsAreValid(const Array<SIMDVectorDouble, Count>& durations)noexcept{
 #pragma STDC FENV_ACCESS ON
-    for(const SIMDVectorDouble pack : durations){
-        if(__builtin_reduce_or(pack < SIMDVectorDouble{}) != 0)
+    for(const SIMDVectorDouble pack : durations)
+        if(pack[0] < 0.0 || pack[1] < 0.0 || pack[2] < 0.0 || pack[3] < 0.0)
             return false;
-    }
     return true;
 }
 
 [[nodiscard]] static b8 DurationsDoNotExceed(const SIMDVectorDouble durations, const SIMDVectorDouble limits)noexcept{
 #pragma STDC FENV_ACCESS ON
-    return __builtin_reduce_or(durations > limits) == 0;
+    return !(durations[0] > limits[0] || durations[1] > limits[1] || durations[2] > limits[2] || durations[3] > limits[3]);
 }
 
 [[nodiscard]] static b8 DurationsAreZero(const SIMDVectorDouble durations)noexcept{
 #pragma STDC FENV_ACCESS ON
-    return __builtin_reduce_or(durations != SIMDVectorDouble{}) == 0;
+    return durations[0] == 0.0 && durations[1] == 0.0 && durations[2] == 0.0 && durations[3] == 0.0;
 }
 
 

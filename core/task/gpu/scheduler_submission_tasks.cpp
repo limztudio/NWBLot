@@ -55,7 +55,7 @@ b8 GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         || !recordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
-        || !acceptedCallbacks.resolve(declarationAccess, planAccess, range, taskAcceptedCallbacks)
+        || !acceptedCallbacks.resolve(declarationAccess, planAccess, range, taskAcceptedCallbacks.data(), taskAcceptedCallbacks.size())
     )
         return false;
 

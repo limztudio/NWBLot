@@ -134,7 +134,7 @@ b8 GpuTaskScheduler::submitGraph(
             (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
             || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
             || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-            || !recordedCallbacks.resolve(declarationAccess, planAccess, normalRange, Span<const GpuTaskGraphTaskRecordedCallback>(desc.taskRecordedCallbacks, desc.taskRecordedCallbackCount))
+            || !recordedCallbacks.resolve(declarationAccess, planAccess, normalRange, desc.taskRecordedCallbacks, desc.taskRecordedCallbackCount)
         )
             return false;
 

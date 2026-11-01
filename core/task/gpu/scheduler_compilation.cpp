@@ -186,13 +186,14 @@ b8 TaskCallbackBindings<TaskCallback>::resolve(
     const GpuTaskGraph::DeclarationReadView& declarations,
     const GpuCompiledGraph::ReadView& plan,
     const GpuSubmissionPacketRange& range,
-    const Span<const TaskCallback> callbacks
+    const TaskCallback* const callbacks,
+    const usize callbackCount
 ){
-    m_callbacks = {};
+    m_callbacks = nullptr;
+    m_callbackCount = 0u;
     m_generation = 0u;
     m_indices.reset();
-    const usize callbackCount = callbacks.size();
-    if((callbackCount != 0u && !callbacks.data()) || !plan.validFor(declarations) || !plan.validPacketRange(range) || callbackCount > declarations.taskCount())
+    if((callbackCount != 0u && !callbacks) || !plan.validFor(declarations) || !plan.validPacketRange(range) || callbackCount > declarations.taskCount())
         return false;
     if(callbackCount > s_InlineCallbackCount)
         m_indices.emplace(AddSize(callbackCount, callbackCount), m_scratchArena);
@@ -219,21 +220,22 @@ b8 TaskCallbackBindings<TaskCallback>::resolve(
         }
     }
     m_callbacks = callbacks;
+    m_callbackCount = callbackCount;
     m_generation = declarations.generation();
     return true;
 }
 
 template<typename TaskCallback>
 const TaskCallback* TaskCallbackBindings<TaskCallback>::find(const GpuTaskId task)const noexcept{
-    if(m_callbacks.empty() || !task.valid() || task.generation != m_generation)
+    if(m_callbackCount == 0u || !m_callbacks || !task.valid() || task.generation != m_generation)
         return nullptr;
     if(m_indices){
         const auto found = m_indices->find(task.index);
         return found == m_indices->end() ? nullptr : &m_callbacks[found.value()];
     }
-    for(const TaskCallback& callback : m_callbacks){
-        if(callback.task == task)
-            return &callback;
+    for(usize callbackIndex = 0u; callbackIndex < m_callbackCount; ++callbackIndex){
+        if(m_callbacks[callbackIndex].task == task)
+            return &m_callbacks[callbackIndex];
     }
     return nullptr;
 }

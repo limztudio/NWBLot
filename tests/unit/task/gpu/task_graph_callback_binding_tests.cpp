@@ -177,7 +177,7 @@ void CheckReorderedBindings(TestArena& testArena, Core::Alloc::ScratchArena& scr
         callbacks.push_back(MakeCallback<Callback>(task, contexts.back()));
     }
     TaskCallbackBindings<Callback> bindings(scratch);
-    ASSERT_TRUE(bindings.resolve(declarations, plan, plan.allPacketRange(), Span<const Callback>(callbacks.data(), callbacks.size())));
+    ASSERT_TRUE(bindings.resolve(declarations, plan, plan.allPacketRange(), callbacks.data(), callbacks.size()));
     const ArenaMemoryStats before = scratch.memoryStats();
     for(const Core::GpuTaskId task : fixture.tasks){
         const Callback* const callback = bindings.find(task);
@@ -216,13 +216,13 @@ void CheckInvalidBindings(TestArena& testArena, Core::Alloc::ScratchArena& scrat
     TaskCallbackBindings<Callback> bindings(scratch);
     const Callback saved = callbacks.back();
     const auto expectRejectedAndReset = [&](){
-        EXPECT_FALSE(bindings.resolve(declarations, plan, range, Span<const Callback>(callbacks.data(), callbacks.size())));
+        EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
         EXPECT_EQ(bindings.find(callbacks.front().task), nullptr);
         callbacks.back() = saved;
-        EXPECT_TRUE(bindings.resolve(declarations, plan, range, Span<const Callback>(callbacks.data(), callbacks.size())));
+        EXPECT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
         EXPECT_NE(bindings.find(saved.task), nullptr);
     };
-    ASSERT_TRUE(bindings.resolve(declarations, plan, range, Span<const Callback>(callbacks.data(), callbacks.size())));
+    ASSERT_TRUE(bindings.resolve(declarations, plan, range, callbacks.data(), callbacks.size()));
     callbacks.back().task = callbacks.front().task;
     expectRejectedAndReset();
     ++callbacks.back().task.generation;
@@ -234,16 +234,16 @@ void CheckInvalidBindings(TestArena& testArena, Core::Alloc::ScratchArena& scrat
     callbacks.back().task.index = static_cast<u32>(fixture.tasks.size());
     expectRejectedAndReset();
     EXPECT_EQ(bindings.find(fixture.tasks.back()), nullptr);
-    EXPECT_FALSE(bindings.resolve(declarations, plan, range, Span<const Callback>(static_cast<const Callback*>(nullptr), callbackCount)));
+    EXPECT_FALSE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), callbackCount));
     EXPECT_EQ(bindings.find(saved.task), nullptr);
-    EXPECT_TRUE(bindings.resolve(declarations, plan, range, {}));
+    EXPECT_TRUE(bindings.resolve(declarations, plan, range, static_cast<const Callback*>(nullptr), 0u));
     EXPECT_EQ(bindings.find(saved.task), nullptr);
     const ArenaMemoryStats beforeOversized = scratch.memoryStats();
-    EXPECT_FALSE(bindings.resolve(declarations, plan, range, Span<const Callback>(callbacks.data(), Limit<usize>::s_Max)));
-    EXPECT_FALSE(bindings.resolve(declarations, plan, range, Span<const Callback>(callbacks.data(), fixture.tasks.size() + 1u)));
+    EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), Limit<usize>::s_Max));
+    EXPECT_FALSE(bindings.resolve(declarations, plan, range, callbacks.data(), fixture.tasks.size() + 1u));
     ExpectMemoryStatsEqual(beforeOversized, scratch.memoryStats());
     EXPECT_EQ(bindings.find(saved.task), nullptr);
-    EXPECT_FALSE(bindings.resolve(declarations, plan, {}, Span<const Callback>(callbacks.data(), callbacks.size())));
+    EXPECT_FALSE(bindings.resolve(declarations, plan, {}, callbacks.data(), callbacks.size()));
     EXPECT_EQ(bindings.find(saved.task), nullptr);
 }
 

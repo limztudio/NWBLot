@@ -47,14 +47,15 @@ public:
 
 public:
     // Resolve before recording or native submission. The caller retains the immutable callback array through publication.
-    [[nodiscard]] b8 resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, Span<const TaskCallback> callbacks);
+    [[nodiscard]] b8 resolve(const GpuTaskGraph::DeclarationReadView& declarations, const GpuCompiledGraph::ReadView& plan, const GpuSubmissionPacketRange& range, const TaskCallback* const callbacks, const usize callbackCount);
 
     [[nodiscard]] const TaskCallback* find(GpuTaskId task)const noexcept;
 
 
 private:
     Alloc::ScratchArena& m_scratchArena;
-    Span<const TaskCallback> m_callbacks = {};
+    const TaskCallback* m_callbacks = nullptr;
+    usize m_callbackCount = 0u;
     u64 m_generation = 0u;
     Optional<HashMap<u32, usize, Alloc::ScratchArena>> m_indices;
 };

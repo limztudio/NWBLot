@@ -25,6 +25,7 @@
 #include "../basic_string.h"
 #include "../generic.h"
 #include "../expected.h"
+#include "../error_code.h"
 #include "../scope_exit.h"
 #include "../limit.h"
 #include "../not_null.h"

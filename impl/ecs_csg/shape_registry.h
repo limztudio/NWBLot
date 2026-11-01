@@ -34,6 +34,33 @@ struct alignas(SIMDVectorSingle) CsgShapeBounds{
 static_assert(alignof(Expected<CsgShapeBounds>) >= alignof(CsgShapeBounds));
 
 using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes);
+using CsgShapeSignedDistanceCallback = Expected<f32>(*)(SIMDVectorSingle shapePosition, Span<const u8> parameterBytes);
+
+[[nodiscard]] Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept;
+
+template<typename ShapeT>
+[[nodiscard]] Expected<CsgShapeBounds> EvaluateCsgShapeBoundsCallback(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
+    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
+
+    const ShapeT shape{};
+    CsgShapeLocalBounds localBounds;
+    if(!ComputeCsgShapeLocalBoundsFromBytes(shape, parameterBytes, localBounds))
+        return MakeUnexpected(Failure{});
+    return BuildCsgShapeWorldBoundsFromLocal(shapeToWorld, localBounds);
+}
+
+template<typename ShapeT>
+[[nodiscard]] Expected<f32> EvaluateCsgShapeSignedDistanceCallback(const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)noexcept{
+    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
+
+    const ShapeT shape{};
+    Float4 shapePositionFloat4;
+    StoreFloat(shapePosition, shapePositionFloat4);
+    f32 distance = 0.0f;
+    if(!EvaluateCsgShapeSignedDistanceFromBytes(shape, shapePositionFloat4, parameterBytes, distance))
+        return MakeUnexpected(Failure{});
+    return distance;
+}
 
 struct CsgShapeTypeDesc{
     using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
@@ -47,6 +74,7 @@ public:
     u32 parameterByteSize = 0u;
     DefaultParameterByteVector defaultParameterBytes;
     CsgShapeBoundsCallback boundsCallback = nullptr;
+    CsgShapeSignedDistanceCallback signedDistanceCallback = nullptr;
 
 
 public:
@@ -54,6 +82,23 @@ public:
         : shaderModuleInclude(arena)
     {}
 };
+
+template<typename ShapeT>
+[[nodiscard]] CsgShapeTypeDesc MakeCsgShapeTypeDesc(Core::Alloc::GlobalArena& arena, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
+    static_assert(IsBaseOf_V<ICsgShape, ShapeT>, "ShapeT must implement ICsgShape");
+
+    const ShapeT shape{};
+    CsgShapeTypeDesc desc(arena);
+    desc.name = shape.shapeTypeName();
+    desc.shaderModule = shaderModule;
+    desc.shaderModuleInclude = shaderModuleInclude;
+    desc.parameterByteSize = shape.parameterByteSize();
+    const CsgShapeInlineParameters defaults = shape.defaultParameters();
+    (void)PackCsgShapeDefaultParameterBytes(desc.parameterByteSize, defaults, desc.defaultParameterBytes);
+    desc.boundsCallback = &EvaluateCsgShapeBoundsCallback<ShapeT>;
+    desc.signedDistanceCallback = &EvaluateCsgShapeSignedDistanceCallback<ShapeT>;
+    return desc;
+}
 
 struct CsgShapeTypeInfo{
     CsgShapeTypeId id = s_InvalidCsgShapeTypeId;
@@ -104,6 +149,11 @@ public:
 public:
     [[nodiscard]] Expected<CsgShapeTypeId> registerShapeType(const CsgShapeTypeDesc& desc, b8 replaceExisting = false);
 
+    template<typename ShapeT>
+    [[nodiscard]] Expected<CsgShapeTypeId> registerShape(const b8 replaceExisting = false, const Name& shaderModule = s_NameNone, const AStringView shaderModuleInclude = {}){
+        return registerShapeType(MakeCsgShapeTypeDesc<ShapeT>(m_shapeTypes.get_allocator().arena(), shaderModule, shaderModuleInclude), replaceExisting);
+    }
+
 
 public:
     [[nodiscard]] CsgShapeTypeId findShapeTypeId(const Name& name)const noexcept;
@@ -119,6 +169,11 @@ public:
         return buildShapeBounds(findShapeTypeId(name), shapeToWorld, parameterBytes);
     }
     [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)const;
+
+    [[nodiscard]] Expected<f32> evaluateSignedDistance(const Name& name, const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)const{
+        return evaluateSignedDistance(findShapeTypeId(name), shapePosition, parameterBytes);
+    }
+    [[nodiscard]] Expected<f32> evaluateSignedDistance(CsgShapeTypeId typeId, SIMDVectorSingle shapePosition, Span<const u8> parameterBytes)const;
 
 
 private:
@@ -147,4 +202,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

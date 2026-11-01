@@ -10,35 +10,44 @@
 
 const usize s_CsgShapeInlineParameterFloat4Count = 2u;
 const usize s_CsgShapeInlineParameterMaxBytes = 16u * s_CsgShapeInlineParameterFloat4Count;
+const u32 s_CsgShapeParameterRegisterBytes = 16u;
 const f32 s_CsgShapeBoundsW = 0.0f;
 const u32 s_CsgCapsuleAxisSelectX = 0u;
 const u32 s_CsgCapsuleAxisSelectY = 1u;
 const u32 s_CsgCapsuleAxisSelectZ = 0u;
 const u32 s_CsgCapsuleAxisSelectW = 0u;
+const f32x4 s_CsgZeroShapeParameter(0.0f, 0.0f, 0.0f, 0.0f);
 const f32x4 s_CsgPlaneDefaultNormalDistance(0.0f, 1.0f, 0.0f, 0.0f);
 const f32x4 s_CsgBoxDefaultHalfExtents(1.0f, 1.0f, 1.0f, 0.0f);
 const f32x4 s_CsgSphereDefaultRadius(1.0f, 0.0f, 0.0f, 0.0f);
 const f32x4 s_CsgCapsuleDefaultRadiusHalfHeight(1.0f, 1.0f, 0.0f, 0.0f);
 
-[reflect]
-class CsgPlaneShapeParameters{
-    public f32x4 normalDistance = s_CsgPlaneDefaultNormalDistance;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgShapeInlineParameters{
+    public f32x4 parameter0 = s_CsgZeroShapeParameter;
+    public f32x4 parameter1 = s_CsgZeroShapeParameter;
 }
 
-[reflect]
-class CsgBoxShapeParameters{
-    public f32x4 halfExtents = s_CsgBoxDefaultHalfExtents;
+class CsgShapeLocalBounds{
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, s_CsgShapeBoundsW);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, s_CsgShapeBoundsW);
+    public b8 finiteBounds = false;
 }
 
-[reflect]
-class CsgSphereShapeParameters{
-    public f32x4 radius = s_CsgSphereDefaultRadius;
+interface ICsgShape{
+    Name shapeTypeName()const;
+    u32 parameterByteSize()const;
+    CsgShapeInlineParameters defaultParameters()const;
+    b8 computeLocalBounds(in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds)const;
+    f32 evaluateSignedDistance(in f32x4 shapePosition, in CsgShapeInlineParameters parameters)const;
 }
 
-[reflect]
-class CsgCapsuleShapeParameters{
-    public f32x4 radiusHalfHeight = s_CsgCapsuleDefaultRadiusHalfHeight;
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 b8 ValidCsgShapeTypeId(in CsgShapeTypeId id){
     return id != s_InvalidCsgShapeTypeId;
@@ -66,6 +75,338 @@ b8 ValidCsgShapeParameterByteCounts(in u32 parameterByteSize, in usize defaultPa
     return defaultParameterByteCount == 0u || defaultParameterByteCount == requiredByteCount;
 }
 
+b8 ValidCsgFinitePositiveScalar(in f32 value){
+    return isFinite(value) && value > 0.0f;
+}
+
+b8 ValidCsgFiniteNonNegativeScalar(in f32 value){
+    return isFinite(value) && value >= 0.0f;
+}
+
+b8 ValidCsgFiniteVector3(in f32x4 value){
+    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z);
+}
+
+b8 ValidCsgFiniteVector4(in f32x4 value){
+    return isFinite(value.x) && isFinite(value.y) && isFinite(value.z) && isFinite(value.w);
+}
+
+b8 ValidCsgPositiveVector3(in f32x4 value){
+    return ValidCsgFinitePositiveScalar(value.x) && ValidCsgFinitePositiveScalar(value.y) && ValidCsgFinitePositiveScalar(value.z);
+}
+
+b8 ValidCsgLocalBounds(in f32x4 minBounds, in f32x4 maxBounds){
+    return
+        ValidCsgFiniteVector3(minBounds)
+        && ValidCsgFiniteVector3(maxBounds)
+        && minBounds.x <= maxBounds.x
+        && minBounds.y <= maxBounds.y
+        && minBounds.z <= maxBounds.z
+    ;
+}
+
+CsgShapeInlineParameters MakeCsgShapeInlineParameters(in f32x4 parameter0, in f32x4 parameter1){
+    CsgShapeInlineParameters out;
+    out.parameter0 = parameter0;
+    out.parameter1 = parameter1;
+    return out;
+}
+
+b8 MakeCsgUnboundedLocalBounds(mut CsgShapeLocalBounds outBounds){
+    outBounds.minBounds = f32x4(0.0f, 0.0f, 0.0f, s_CsgShapeBoundsW);
+    outBounds.maxBounds = f32x4(0.0f, 0.0f, 0.0f, s_CsgShapeBoundsW);
+    outBounds.finiteBounds = false;
+    return true;
+}
+
+b8 MakeCsgLocalBounds(in f32x4 minBounds, in f32x4 maxBounds, mut CsgShapeLocalBounds outBounds){
+    if(!ValidCsgLocalBounds(minBounds, maxBounds))
+        return false;
+
+    outBounds.minBounds = f32x4(minBounds.x, minBounds.y, minBounds.z, s_CsgShapeBoundsW);
+    outBounds.maxBounds = f32x4(maxBounds.x, maxBounds.y, maxBounds.z, s_CsgShapeBoundsW);
+    outBounds.finiteBounds = true;
+    return true;
+}
+
+b8 MakeCsgSymmetricLocalBounds(in f32x4 halfExtents, mut CsgShapeLocalBounds outBounds){
+    if(!ValidCsgPositiveVector3(halfExtents))
+        return false;
+
+    const f32x4 localMin(-halfExtents.x, -halfExtents.y, -halfExtents.z, s_CsgShapeBoundsW);
+    const f32x4 localMax(halfExtents.x, halfExtents.y, halfExtents.z, s_CsgShapeBoundsW);
+    return MakeCsgLocalBounds(localMin, localMax, outBounds);
+}
+
+f32 ReadCsgShapeParameterFloatLane(in Span<u8> parameterBytes, in usize byteOffset){
+    u32 word = 0u;
+    const usize size = parameterBytes.size();
+    if(byteOffset < size)
+        word = word | cast<u32>(parameterBytes[byteOffset]);
+    if(byteOffset + 1u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 1u]) << 8u);
+    if(byteOffset + 2u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 2u]) << 16u);
+    if(byteOffset + 3u < size)
+        word = word | (cast<u32>(parameterBytes[byteOffset + 3u]) << 24u);
+    return bit_cast<f32>(word);
+}
+
+f32x4 ReadCsgShapeParameter0(in Span<u8> parameterBytes){
+    if(parameterBytes.empty())
+        return s_CsgZeroShapeParameter;
+
+    return f32x4(
+        ReadCsgShapeParameterFloatLane(parameterBytes, 0u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 4u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 8u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 12u)
+    );
+}
+
+f32x4 ReadCsgShapeParameter1(in Span<u8> parameterBytes){
+    if(parameterBytes.size() <= 16u)
+        return s_CsgZeroShapeParameter;
+
+    return f32x4(
+        ReadCsgShapeParameterFloatLane(parameterBytes, 16u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 20u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 24u),
+        ReadCsgShapeParameterFloatLane(parameterBytes, 28u)
+    );
+}
+
+CsgShapeInlineParameters ReadCsgShapeInlineParameters(in Span<u8> parameterBytes){
+    return MakeCsgShapeInlineParameters(ReadCsgShapeParameter0(parameterBytes), ReadCsgShapeParameter1(parameterBytes));
+}
+
+void WriteCsgShapeParameterFloatLane(in f32 value, in usize byteOffset, mut FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> outBytes){
+    if(byteOffset + 4u > outBytes.size())
+        return;
+
+    const u32 word = bit_cast<u32>(value);
+    outBytes[byteOffset] = cast<u8>(word & 0xffu);
+    outBytes[byteOffset + 1u] = cast<u8>((word >> 8u) & 0xffu);
+    outBytes[byteOffset + 2u] = cast<u8>((word >> 16u) & 0xffu);
+    outBytes[byteOffset + 3u] = cast<u8>((word >> 24u) & 0xffu);
+}
+
+b8 PackCsgShapeDefaultParameterBytes(in u32 parameterByteSize, in CsgShapeInlineParameters parameters, mut FixedVector<u8, s_CsgShapeInlineParameterMaxBytes> outBytes){
+    const usize byteCount = cast<usize>(parameterByteSize);
+    if(byteCount > s_CsgShapeInlineParameterMaxBytes)
+        return false;
+
+    outBytes.clear();
+    outBytes.resize(byteCount);
+    for(usize index = 0u; index < byteCount; ++index)
+        outBytes[index] = 0u;
+    if(byteCount == 0u)
+        return true;
+
+    WriteCsgShapeParameterFloatLane(parameters.parameter0.x, 0u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter0.y, 4u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter0.z, 8u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter0.w, 12u, outBytes);
+    if(byteCount <= 16u)
+        return true;
+
+    WriteCsgShapeParameterFloatLane(parameters.parameter1.x, 16u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter1.y, 20u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter1.z, 24u, outBytes);
+    WriteCsgShapeParameterFloatLane(parameters.parameter1.w, 28u, outBytes);
+    return true;
+}
+
+b8 ComputeCsgShapeLocalBoundsFromBytes(in ICsgShape shape, in Span<u8> parameterBytes, mut CsgShapeLocalBounds outBounds){
+    if(parameterBytes.size() != cast<usize>(shape.parameterByteSize()))
+        return false;
+
+    const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(parameterBytes);
+    return shape.computeLocalBounds(parameters, outBounds);
+}
+
+b8 EvaluateCsgShapeSignedDistanceFromBytes(in ICsgShape shape, in f32x4 shapePosition, in Span<u8> parameterBytes, mut f32 outDistance){
+    if(parameterBytes.size() != cast<usize>(shape.parameterByteSize()))
+        return false;
+
+    const CsgShapeInlineParameters parameters = ReadCsgShapeInlineParameters(parameterBytes);
+    outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[reflect]
+class CsgPlaneShapeParameters{
+    public f32x4 normalDistance = s_CsgPlaneDefaultNormalDistance;
+}
+
+[reflect]
+class CsgBoxShapeParameters{
+    public f32x4 halfExtents = s_CsgBoxDefaultHalfExtents;
+}
+
+[reflect]
+class CsgSphereShapeParameters{
+    public f32x4 radius = s_CsgSphereDefaultRadius;
+}
+
+[reflect]
+class CsgCapsuleShapeParameters{
+    public f32x4 radiusHalfHeight = s_CsgCapsuleDefaultRadiusHalfHeight;
+}
+
+class CsgPlaneShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return s_CsgPlaneShapeName;
+    }
+
+    public u32 parameterByteSize()const override{
+        return s_CsgShapeParameterRegisterBytes;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return MakeCsgShapeInlineParameters(s_CsgPlaneDefaultNormalDistance, s_CsgZeroShapeParameter);
+    }
+
+    public b8 computeLocalBounds(in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds)const override{
+        if(!ValidCsgFiniteVector4(parameters.parameter0))
+            return false;
+        return MakeCsgUnboundedLocalBounds(outBounds);
+    }
+
+    public f32 evaluateSignedDistance(in f32x4 shapePosition, in CsgShapeInlineParameters parameters)const override{
+        return dot(shapePosition.xyz, parameters.parameter0.xyz) + parameters.parameter0.w;
+    }
+}
+
+class CsgBoxShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return s_CsgBoxShapeName;
+    }
+
+    public u32 parameterByteSize()const override{
+        return s_CsgShapeParameterRegisterBytes;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return MakeCsgShapeInlineParameters(s_CsgBoxDefaultHalfExtents, s_CsgZeroShapeParameter);
+    }
+
+    public b8 computeLocalBounds(in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds)const override{
+        return MakeCsgSymmetricLocalBounds(parameters.parameter0, outBounds);
+    }
+
+    public f32 evaluateSignedDistance(in f32x4 shapePosition, in CsgShapeInlineParameters parameters)const override{
+        const f32x4 halfExtents(parameters.parameter0.x, parameters.parameter0.y, parameters.parameter0.z, s_CsgShapeBoundsW);
+        const f32x4 q = abs(shapePosition) - halfExtents;
+        const f32 outside = length(max(q, s_CsgZeroShapeParameter).xyz);
+        const f32 inside = min(min(q.x, min(q.y, q.z)), 0.0f);
+        return outside + inside;
+    }
+}
+
+class CsgSphereShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return s_CsgSphereShapeName;
+    }
+
+    public u32 parameterByteSize()const override{
+        return s_CsgShapeParameterRegisterBytes;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return MakeCsgShapeInlineParameters(s_CsgSphereDefaultRadius, s_CsgZeroShapeParameter);
+    }
+
+    public b8 computeLocalBounds(in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds)const override{
+        const f32 radius = parameters.parameter0.x;
+        return MakeCsgSymmetricLocalBounds(f32x4(radius, radius, radius, s_CsgShapeBoundsW), outBounds);
+    }
+
+    public f32 evaluateSignedDistance(in f32x4 shapePosition, in CsgShapeInlineParameters parameters)const override{
+        return length(shapePosition.xyz) - parameters.parameter0.x;
+    }
+}
+
+class CsgCapsuleShape : ICsgShape{
+    public Name shapeTypeName()const override{
+        return s_CsgCapsuleShapeName;
+    }
+
+    public u32 parameterByteSize()const override{
+        return s_CsgShapeParameterRegisterBytes;
+    }
+
+    public CsgShapeInlineParameters defaultParameters()const override{
+        return MakeCsgShapeInlineParameters(s_CsgCapsuleDefaultRadiusHalfHeight, s_CsgZeroShapeParameter);
+    }
+
+    public b8 computeLocalBounds(in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds)const override{
+        const f32 radius = parameters.parameter0.x;
+        const f32 halfHeight = parameters.parameter0.y;
+        if(!ValidCsgFinitePositiveScalar(radius) || !ValidCsgFiniteNonNegativeScalar(halfHeight))
+            return false;
+
+        const f32 yExtent = halfHeight + radius;
+        return MakeCsgSymmetricLocalBounds(f32x4(radius, yExtent, radius, s_CsgShapeBoundsW), outBounds);
+    }
+
+    public f32 evaluateSignedDistance(in f32x4 shapePosition, in CsgShapeInlineParameters parameters)const override{
+        const f32 halfHeight = parameters.parameter0.y;
+        const f32 clampedY = clamp(shapePosition.y, -halfHeight, halfHeight);
+        const f32x4 delta = shapePosition - f32x4(0.0f, clampedY, 0.0f, 0.0f);
+        return length(delta.xyz) - parameters.parameter0.x;
+    }
+}
+
+b8 TryComputeBuiltInCsgShapeLocalBounds(in Name shapeType, in CsgShapeInlineParameters parameters, mut CsgShapeLocalBounds outBounds){
+    if(shapeType == s_CsgPlaneShapeName){
+        CsgPlaneShape shape;
+        return shape.computeLocalBounds(parameters, outBounds);
+    }
+    if(shapeType == s_CsgBoxShapeName){
+        CsgBoxShape shape;
+        return shape.computeLocalBounds(parameters, outBounds);
+    }
+    if(shapeType == s_CsgSphereShapeName){
+        CsgSphereShape shape;
+        return shape.computeLocalBounds(parameters, outBounds);
+    }
+    if(shapeType == s_CsgCapsuleShapeName){
+        CsgCapsuleShape shape;
+        return shape.computeLocalBounds(parameters, outBounds);
+    }
+    return false;
+}
+
+b8 TryEvaluateBuiltInCsgShapeSignedDistance(in Name shapeType, in f32x4 shapePosition, in CsgShapeInlineParameters parameters, mut f32 outDistance){
+    if(shapeType == s_CsgPlaneShapeName){
+        CsgPlaneShape shape;
+        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
+        return true;
+    }
+    if(shapeType == s_CsgBoxShapeName){
+        CsgBoxShape shape;
+        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
+        return true;
+    }
+    if(shapeType == s_CsgSphereShapeName){
+        CsgSphereShape shape;
+        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
+        return true;
+    }
+    if(shapeType == s_CsgCapsuleShapeName){
+        CsgCapsuleShape shape;
+        outDistance = shape.evaluateSignedDistance(shapePosition, parameters);
+        return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

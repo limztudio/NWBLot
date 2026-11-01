@@ -84,12 +84,13 @@ Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
     ScratchArena& scratchArena,
     const CsgDeformShape& shape,
     const SIMDVectorSingle epsilon,
+    const CsgShapeRegistry* shapeRegistry,
     CsgDeformTriangleVector<ScratchArena>& scratchKept,
     Vector<f32, ScratchArena>& scratchDistances,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles
 ){
-    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, scratchDistances);
+    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, shapeRegistry, scratchDistances);
     if(!shapeDistances)
         return MakeUnexpected(shapeDistances.error());
 
@@ -172,4 +173,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

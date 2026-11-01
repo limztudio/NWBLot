@@ -59,16 +59,6 @@ namespace __hidden_shape_registry{
     return ValidShaderModuleInclude(desc);
 }
 
-template<typename ParameterT>
-[[nodiscard]] Expected<ParameterT> LoadShapeParameters(const Span<const u8> parameterBytes)noexcept{
-    if(parameterBytes.size() != sizeof(ParameterT) || !parameterBytes.data())
-        return MakeUnexpected(Failure{});
-
-    ParameterT parameters;
-    NWB_MEMCPY(&parameters, sizeof(ParameterT), parameterBytes.data(), sizeof(ParameterT));
-    return parameters;
-}
-
 [[nodiscard]] b8 ValidBoundsVectors(const SIMDVectorSingle minBounds, const SIMDVectorSingle maxBounds, const b8 finiteBounds)noexcept{
     if(!finiteBounds)
         return true;
@@ -76,96 +66,35 @@ template<typename ParameterT>
     return AabbTests::Valid(minBounds, maxBounds);
 }
 
-[[nodiscard]] b8 ValidPlaneParameters(const SIMDVectorSingle normalDistance)noexcept{
-    return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
-}
-
-[[nodiscard]] Expected<AabbTests::Bounds> BuildBoxBounds(const SIMDMatrix& shapeToWorld, const SIMDVectorSingle halfExtents)noexcept{
-    if(Vector3IsNaN(halfExtents) || Vector3IsInfinite(halfExtents) || !Vector3Greater(halfExtents, VectorZero()))
-        return MakeUnexpected(Failure{});
-
-    return AabbTests::Transform(shapeToWorld, VectorSetW(VectorNegate(halfExtents), s_CsgShapeBoundsW), halfExtents);
-}
-
-[[nodiscard]] Expected<AabbTests::Bounds> BuildSphereBounds(const SIMDMatrix& shapeToWorld, const SIMDVectorSingle radius)noexcept{
-    if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
-        return MakeUnexpected(Failure{});
-
-    const SIMDVectorSingle localMax = VectorSetW(radius, s_CsgShapeBoundsW);
-    return AabbTests::Transform(shapeToWorld, VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW), localMax);
-}
-
-[[nodiscard]] Expected<AabbTests::Bounds> BuildCapsuleBounds(const SIMDMatrix& shapeToWorld, const SIMDVectorSingle radiusHalfHeight)noexcept{
-    const SIMDVectorSingle radius = VectorSplatX(radiusHalfHeight);
-    const SIMDVectorSingle halfHeight = VectorSplatY(radiusHalfHeight);
-    if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || Vector3IsNaN(halfHeight) || Vector3IsInfinite(halfHeight) || !Vector3Greater(radius, VectorZero()) || !Vector3GreaterOrEqual(halfHeight, VectorZero()))
-        return MakeUnexpected(Failure{});
-
-    const SIMDVectorSingle yExtent = VectorAdd(halfHeight, radius);
-    const SIMDVectorSingle capsuleSelect = VectorSelectControl(s_CsgCapsuleAxisSelectX, s_CsgCapsuleAxisSelectY, s_CsgCapsuleAxisSelectZ, s_CsgCapsuleAxisSelectW);
-    const SIMDVectorSingle localMax = VectorSetW(VectorSelect(radius, yExtent, capsuleSelect), s_CsgShapeBoundsW);
-    return AabbTests::Transform(shapeToWorld, VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW), localMax);
-}
-
-[[nodiscard]] Expected<CsgShapeBounds> BuildShapeBoundsForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes){
+[[nodiscard]] Expected<Span<const u8>> ResolveShapeParameterBytes(const CsgShapeTypeInfo& shapeType, Span<const u8> parameterBytes)noexcept{
     if(parameterBytes.empty() && !parameterBytes.data() && !shapeType.desc.defaultParameterBytes.empty())
         parameterBytes = Span<const u8>(shapeType.desc.defaultParameterBytes.data(), shapeType.desc.defaultParameterBytes.size());
 
     if(shapeType.desc.parameterByteSize != parameterBytes.size())
         return MakeUnexpected(Failure{});
+    return parameterBytes;
+}
 
-    auto bounds = shapeType.desc.boundsCallback(shapeToWorld, parameterBytes);
+[[nodiscard]] Expected<CsgShapeBounds> BuildShapeBoundsForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes){
+    const auto resolvedBytes = ResolveShapeParameterBytes(shapeType, parameterBytes);
+    if(!resolvedBytes)
+        return MakeUnexpected(Failure{});
+
+    auto bounds = shapeType.desc.boundsCallback(shapeToWorld, *resolvedBytes);
     if(!bounds || !ValidBoundsVectors(bounds->minBounds, bounds->maxBounds, bounds->finiteBounds))
         return MakeUnexpected(Failure{});
     return bounds;
 }
 
-[[nodiscard]] Expected<CsgShapeBounds> PlaneBounds([[maybe_unused]] const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
-    const auto parameters = LoadShapeParameters<CsgPlaneShapeParameters>(parameterBytes);
-    if(!parameters || !ValidPlaneParameters(LoadFloat(parameters->normalDistance)))
+[[nodiscard]] Expected<f32> EvaluateSignedDistanceForShapeType(const CsgShapeTypeInfo& shapeType, const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes){
+    if(!shapeType.desc.signedDistanceCallback)
         return MakeUnexpected(Failure{});
-    return CsgShapeBounds{};
-}
 
-[[nodiscard]] Expected<CsgShapeBounds> BoxBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
-    const auto parameters = LoadShapeParameters<CsgBoxShapeParameters>(parameterBytes);
-    if(!parameters)
+    const auto resolvedBytes = ResolveShapeParameterBytes(shapeType, parameterBytes);
+    if(!resolvedBytes)
         return MakeUnexpected(Failure{});
-    const auto bounds = BuildBoxBounds(shapeToWorld, VectorSetW(LoadFloat(parameters->halfExtents), s_CsgShapeBoundsW));
-    if(!bounds)
-        return MakeUnexpected(Failure{});
-    return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
-}
 
-[[nodiscard]] Expected<CsgShapeBounds> SphereBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
-    const auto parameters = LoadShapeParameters<CsgSphereShapeParameters>(parameterBytes);
-    if(!parameters)
-        return MakeUnexpected(Failure{});
-    const auto bounds = BuildSphereBounds(shapeToWorld, VectorSplatX(LoadFloat(parameters->radius)));
-    if(!bounds)
-        return MakeUnexpected(Failure{});
-    return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
-}
-
-[[nodiscard]] Expected<CsgShapeBounds> CapsuleBounds(const SIMDMatrix& shapeToWorld, const Span<const u8> parameterBytes)noexcept{
-    const auto parameters = LoadShapeParameters<CsgCapsuleShapeParameters>(parameterBytes);
-    if(!parameters)
-        return MakeUnexpected(Failure{});
-    const auto bounds = BuildCapsuleBounds(shapeToWorld, LoadFloat(parameters->radiusHalfHeight));
-    if(!bounds)
-        return MakeUnexpected(Failure{});
-    return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
-}
-
-template<typename ParameterT>
-[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(Core::Alloc::GlobalArena& arena, const Name& name, const ParameterT& defaultParameters, decltype(*DeclVal<CsgShapeBoundsCallback>()) boundsCallback){
-    CsgShapeTypeDesc desc(arena);
-    desc.name = name;
-    desc.parameterByteSize = sizeof(ParameterT);
-    desc.defaultParameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(desc.defaultParameterBytes.data(), desc.defaultParameterBytes.size(), &defaultParameters, sizeof(ParameterT));
-    desc.boundsCallback = &boundsCallback;
-    return desc;
+    return shapeType.desc.signedDistanceCallback(shapePosition, *resolvedBytes);
 }
 
 
@@ -183,6 +112,18 @@ Expected<CsgShapeTypeId> CsgShapeTypeIdFromName(const Name& shapeName)noexcept{
     if(!TryResolveCsgShapeTypeIdFromName(shapeName, typeId))
         return MakeUnexpected(Failure{});
     return typeId;
+}
+
+Expected<CsgShapeBounds> BuildCsgShapeWorldBoundsFromLocal(const SIMDMatrix& shapeToWorld, const CsgShapeLocalBounds& localBounds)noexcept{
+    if(!localBounds.finiteBounds)
+        return CsgShapeBounds{};
+
+    const SIMDVectorSingle localMin = VectorSetW(LoadFloat(localBounds.minBounds), s_CsgShapeBoundsW);
+    const SIMDVectorSingle localMax = VectorSetW(LoadFloat(localBounds.maxBounds), s_CsgShapeBoundsW);
+    const auto transformed = AabbTests::Transform(shapeToWorld, localMin, localMax);
+    if(!transformed)
+        return MakeUnexpected(Failure{});
+    return CsgShapeBounds{ transformed->minBounds, transformed->maxBounds, true };
 }
 
 
@@ -325,6 +266,13 @@ Expected<CsgShapeBounds> CsgShapeRegistry::buildShapeBounds(const CsgShapeTypeId
     return __hidden_shape_registry::BuildShapeBoundsForShapeType(*shapeType, shapeToWorld, parameterBytes);
 }
 
+Expected<f32> CsgShapeRegistry::evaluateSignedDistance(const CsgShapeTypeId typeId, const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)const{
+    const auto shapeType = findShapeType(typeId);
+    if(!shapeType)
+        return MakeUnexpected(Failure{});
+    return __hidden_shape_registry::EvaluateSignedDistanceForShapeType(*shapeType, shapePosition, parameterBytes);
+}
+
 
 Expected<CsgShapeTypeInfo> CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId typeId)const{
     if(!ValidCsgShapeTypeId(typeId))
@@ -342,13 +290,12 @@ Expected<CsgShapeTypeInfo> CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId 
 
 
 b8 RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
-    Core::Alloc::GlobalArena& arena = registry.m_shapeTypes.get_allocator().arena();
     b8 result = true;
 
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgBoxShapeName, CsgBoxShapeParameters{}, __hidden_shape_registry::BoxBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgCapsuleShapeName, CsgCapsuleShapeParameters{}, __hidden_shape_registry::CapsuleBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgPlaneShapeName, CsgPlaneShapeParameters{}, __hidden_shape_registry::PlaneBounds), true) && result;
-    result = registry.registerShapeType(__hidden_shape_registry::BuiltInShapeDesc(arena, s_CsgSphereShapeName, CsgSphereShapeParameters{}, __hidden_shape_registry::SphereBounds), true) && result;
+    result = static_cast<b8>(registry.registerShape<CsgBoxShape>(true)) && result;
+    result = static_cast<b8>(registry.registerShape<CsgCapsuleShape>(true)) && result;
+    result = static_cast<b8>(registry.registerShape<CsgPlaneShape>(true)) && result;
+    result = static_cast<b8>(registry.registerShape<CsgSphereShape>(true)) && result;
 
     return result;
 }
@@ -361,4 +308,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -8,6 +8,7 @@
 #include <impl/global.h>
 
 #include <impl/ecs_csg/deform_types.adhd.h>
+#include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/scratch.h>
 
 #include <global/simd/vector.h>
@@ -22,19 +23,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns cutter classification and per-vertex distances with the shared epsilon snap; walls and caps agree.
+// Owns cutter dispatch and per-vertex distances with the shared epsilon snap; walls and caps agree.
 class CsgDeformCutterField final : NoCopy{
 public:
-    // SIMD-domain cores: inputs and outputs stay on vector lanes (replicated distance), never touch storage.
-    [[nodiscard]] static SIMDVectorSingle PlaneSignedDistanceVec(const SIMDVectorSingle shapePosition, const SIMDVectorSingle parameter0)noexcept{
-        return VectorAdd(Vector3Dot(shapePosition, parameter0), VectorSplatW(parameter0));
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
+        const CsgDeformShape& shape,
+        Span<const CsgDeformVertex> vertices,
+        SIMDVectorSingle epsilon,
+        const CsgShapeRegistry* shapeRegistry,
+        Vector<f32, Core::Alloc::ScratchArena>& outDistances
+    );
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
+        const CsgDeformShape& shape,
+        const Span<const CsgDeformVertex> vertices,
+        const SIMDVectorSingle epsilon,
+        Vector<f32, Core::Alloc::ScratchArena>& outDistances
+    ){
+        return ShapeDistances(shape, vertices, epsilon, nullptr, outDistances);
     }
-    [[nodiscard]] static SIMDVectorSingle BoxSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
-    [[nodiscard]] static SIMDVectorSingle SphereSignedDistanceVec(const SIMDVectorSingle shapePosition, const SIMDVectorSingle parameter0)noexcept{
-        return VectorSubtract(Vector3Length(shapePosition), VectorSplatX(parameter0));
-    }
-    [[nodiscard]] static SIMDVectorSingle CapsuleSignedDistanceVec(SIMDVectorSingle shapePosition, SIMDVectorSingle parameter0)noexcept;
-    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(const CsgDeformShape& shape, Span<const CsgDeformVertex> vertices, const SIMDVectorSingle epsilon, Vector<f32, Core::Alloc::ScratchArena>& outDistances);
 
 
 public:
@@ -49,4 +55,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

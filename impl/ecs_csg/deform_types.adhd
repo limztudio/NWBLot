@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_csg/shape_id.adhd>
+#include <impl/ecs_csg/shape_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +54,7 @@ class CsgDeformShape{
     public Name shapeType = s_NameNone;
     public f32x3x4 worldToShape(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public f32x4 parameter0 = s_DefaultShapeParameter;
+    public f32x4 parameter1 = s_CsgZeroShapeParameter;
 }
 
 class CsgDeformCutDesc{
@@ -64,14 +65,6 @@ class CsgDeformCutDesc{
 class CsgDeformBuildOptions{
     public f32 distanceEpsilon = s_DefaultDistanceEpsilon;
     public b8 fillCaps = true;
-}
-
-enum<u8> CsgDeformShapeKind{
-    Invalid,
-    Plane,
-    Box,
-    Sphere,
-    Capsule,
 }
 
 enum<u8> CsgDeformViabilityReason{
@@ -182,18 +175,11 @@ b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexC
     return true;
 }
 
-CsgDeformShapeKind ClassifyCsgDeformShape(in Name shapeType){
-    if(shapeType == s_CsgPlaneShapeName)
-        return CsgDeformShapeKind::Plane;
-    if(shapeType == s_CsgBoxShapeName)
-        return CsgDeformShapeKind::Box;
-    if(shapeType == s_CsgSphereShapeName)
-        return CsgDeformShapeKind::Sphere;
-    if(shapeType == s_CsgCapsuleShapeName)
-        return CsgDeformShapeKind::Capsule;
-    return CsgDeformShapeKind::Invalid;
+CsgShapeInlineParameters MakeCsgDeformShapeInlineParameters(in CsgDeformShape shape){
+    return MakeCsgShapeInlineParameters(shape.parameter0, shape.parameter1);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

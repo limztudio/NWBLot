@@ -8,6 +8,7 @@
 #include <impl/global.h>
 
 #include <impl/ecs_csg/deform_types.adhd.h>
+#include <impl/ecs_csg/shape_registry.h>
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
 
@@ -52,12 +53,24 @@ public:
     [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformShape& shape,
-        const SIMDVectorSingle epsilon,
+        SIMDVectorSingle epsilon,
+        const CsgShapeRegistry* shapeRegistry,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
         Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
     );
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
+        Core::Alloc::ScratchArena& scratchArena,
+        const CsgDeformShape& shape,
+        const SIMDVectorSingle epsilon,
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
+        Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
+        CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles
+    ){
+        return ClipShell(scratchArena, shape, epsilon, nullptr, scratchKept, scratchDistances, inOutVertices, inOutTriangles);
+    }
 
 
 public:
@@ -72,4 +85,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

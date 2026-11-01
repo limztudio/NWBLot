@@ -27,11 +27,12 @@ CsgDeformViability CheckCsgDeformCutsViability(
     const Span<const CsgDeformVertex> inputVertices,
     const Span<const CsgDeformTriangle> inputTriangles,
     const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options
+    const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry
 ){
     CsgDeformVertexVector<ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<ScratchArena> triangles(scratchArena);
-    const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, vertices, triangles);
+    const auto result = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, vertices, triangles);
     return result ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok } : CsgDeformViability{ false, result.error().reason };
 }
 
@@ -41,6 +42,7 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     const Span<const CsgDeformTriangle> inputTriangles,
     const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry,
     CsgDeformVertexVector<ScratchArena>& outVertices,
     CsgDeformTriangleVector<ScratchArena>& outTriangles
 ){
@@ -80,7 +82,7 @@ Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     for(const CsgDeformCutDesc& cut : cuts){
         if(!cut.active)
             continue;
-        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, scratchKept, scratchDistances, outVertices, outTriangles);
+        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, shapeRegistry, scratchKept, scratchDistances, outVertices, outTriangles);
         if(!clipped)
             return MakeUnexpected(MakeCsgDeformFailure(clipped.error(), stats));
         ++appliedCuts;
@@ -114,6 +116,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     const Span<const CsgDeformTriangle> inputTriangles,
     const Span<const CsgDeformCutDesc> cuts,
     const CsgDeformBuildOptions& options,
+    const CsgShapeRegistry* shapeRegistry,
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
 ){
@@ -124,7 +127,7 @@ Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
     CsgDeformVertexVector<ScratchArena> previewVertices(scratchArena);
     CsgDeformTriangleVector<ScratchArena> previewTriangles(scratchArena);
-    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
+    const auto preview = PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, shapeRegistry, previewVertices, previewTriangles);
     if(!preview)
         return MakeUnexpected(preview.error());
     outVertices.reserve(previewVertices.size());
@@ -144,4 +147,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

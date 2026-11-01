@@ -492,6 +492,104 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     EXPECT_EQ(wrongTriangles.front().indices[0u], inputTriangles[0u].indices[0u]);
 }
 
+class TestProjectSlabShape final : public NWB::Impl::ICsgShape{
+public:
+    virtual Name shapeTypeName()const noexcept override{
+        return Name("project/csg/slab");
+    }
+
+    virtual u32 parameterByteSize()const noexcept override{
+        return NWB::Impl::s_CsgShapeParameterRegisterBytes;
+    }
+
+    virtual NWB::Impl::CsgShapeInlineParameters defaultParameters()const noexcept override{
+        return NWB::Impl::MakeCsgShapeInlineParameters(Float4(0.5f, 1.0f, 1.0f, 0.0f), NWB::Impl::s_CsgZeroShapeParameter);
+    }
+
+    virtual b8 computeLocalBounds(const NWB::Impl::CsgShapeInlineParameters& parameters, NWB::Impl::CsgShapeLocalBounds& outBounds)const noexcept override{
+        return NWB::Impl::MakeCsgSymmetricLocalBounds(parameters.parameter0, outBounds);
+    }
+
+    virtual f32 evaluateSignedDistance(const Float4& shapePosition, const NWB::Impl::CsgShapeInlineParameters& parameters)const noexcept override{
+        return shapePosition.x + parameters.parameter0.x;
+    }
+};
+
+TEST(Csg, ProjectDefinedICsgShapeRegistersBoundsSignedDistanceAndDeformCuts){
+    TestWorld testWorld;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const auto slabId = registry.registerShape<TestProjectSlabShape>(false, Name("project/csg/custom"), "project/csg/generated/custom.slangi");
+    ASSERT_TRUE(slabId);
+    EXPECT_EQ(registry.shapeTypeCount(), 5u);
+
+    const auto defaultBounds = registry.buildShapeBounds(*slabId, MatrixIdentity(), Span<const u8>{});
+    ASSERT_TRUE(defaultBounds);
+    EXPECT_TRUE(defaultBounds->finiteBounds);
+    EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->minBounds), -0.5f);
+    EXPECT_FLOAT_EQ(VectorGetX(defaultBounds->maxBounds), 0.5f);
+
+    const auto defaultDistance = registry.evaluateSignedDistance(*slabId, VectorSet(-0.25f, 0.0f, 0.0f, 1.0f), Span<const u8>{});
+    ASSERT_TRUE(defaultDistance);
+    EXPECT_FLOAT_EQ(*defaultDistance, 0.25f);
+
+    auto makeVertex = [](const f32 x, const f32 y, const f32 z)noexcept{
+        NWB::Impl::CsgDeformVertex vertex;
+        vertex.position = Float3U(x, y, z);
+        vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+        vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+        vertex.uv0 = Float2U(0.5f, 0.5f);
+        vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+        return vertex;
+    };
+
+    const Array<NWB::Impl::CsgDeformVertex, 8u> inputVertices = {
+        makeVertex(-1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, 1.0f, 1.0f),
+        makeVertex(-1.0f, 1.0f, 1.0f),
+    };
+    const Array<NWB::Impl::CsgDeformTriangle, 12u> inputTriangles = {
+        NWB::Impl::CsgDeformTriangle{ { 0u, 1u, 2u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 2u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 4u, 6u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 4u, 7u, 6u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 4u, 5u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 5u, 1u } },
+        NWB::Impl::CsgDeformTriangle{ { 2u, 6u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 2u, 7u, 3u } },
+        NWB::Impl::CsgDeformTriangle{ { 0u, 3u, 7u } }, NWB::Impl::CsgDeformTriangle{ { 0u, 7u, 4u } },
+        NWB::Impl::CsgDeformTriangle{ { 1u, 5u, 6u } }, NWB::Impl::CsgDeformTriangle{ { 1u, 6u, 2u } },
+    };
+
+    NWB::Impl::CsgDeformCutDesc cut;
+    cut.active = true;
+    cut.shape.shapeType = Name("project/csg/slab");
+    cut.shape.worldToShape = ::MatrixIdentity<Float34>();
+    cut.shape.parameter0 = Float4(0.5f, 1.0f, 1.0f, 0.0f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+    const Span<const NWB::Impl::CsgDeformCutDesc> cuts(&cut, 1u);
+    EXPECT_FALSE(NWB::Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options).viable);
+    EXPECT_TRUE(NWB::Impl::CheckCsgDeformCutsViability(scratchArena, inputVertices, inputTriangles, cuts, options, &registry).viable);
+
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, &registry, commitVertices, commitTriangles);
+    ASSERT_TRUE(commit);
+    EXPECT_EQ(commit->appliedCutCount, 1u);
+    ASSERT_FALSE(commitTriangles.empty());
+    for(const NWB::Impl::CsgDeformTriangle& triangle : commitTriangles){
+        for(const u32 index : triangle.indices){
+            ASSERT_LT(index, commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
+        }
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -500,4 +598,5 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

@@ -495,6 +495,34 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
     ASSERT_TRUE(Compiler::Compile(s_ScalarLimitsValid, "impl/scalar_limits.adhd", arena.arena, scalarLimitsRes));
     EXPECT_NE(MStringView(scalarLimitsRes.generatedHeader.data(), scalarLimitsRes.generatedHeader.size()).find("::Limit<::u32>::s_Max"), MStringView::npos);
     EXPECT_NE(MStringView(scalarLimitsRes.generatedHeader.data(), scalarLimitsRes.generatedHeader.size()).find("::Limit<::f32>::s_Min"), MStringView::npos);
+
+    static constexpr MStringView s_SingleArgExpectedAndNumericBuiltins =
+        "Expected<i64> parseTrimmedInt(in StringView text) {\r\n"
+        "    const StringView trimmed = trimView(text);\r\n"
+        "    if(trimmed.empty()) {\r\n"
+        "        return makeUnexpected(Failure());\r\n"
+        "    }\r\n"
+        "    StringView number = trimmed;\r\n"
+        "    if(trimmed.front() == '+') {\r\n"
+        "        number = trimmed.substr(1u);\r\n"
+        "    }\r\n"
+        "    const Expected<i64> parsed = parseI64(number);\r\n"
+        "    if(!parsed.has_value()) {\r\n"
+        "        return makeUnexpected(parsed.error());\r\n"
+        "    }\r\n"
+        "    return parsed.value();\r\n"
+        "}\r\n";
+    CompileResult expectedBuiltinsRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_SingleArgExpectedAndNumericBuiltins, "impl/expected_builtins.adhd", arena.arena, expectedBuiltinsRes));
+    EXPECT_NE(MStringView(expectedBuiltinsRes.generatedHeader.data(), expectedBuiltinsRes.generatedHeader.size()).find("Expected<i64> parseTrimmedInt("), MStringView::npos);
+    EXPECT_NE(MStringView(expectedBuiltinsRes.generatedSource.data(), expectedBuiltinsRes.generatedSource.size()).find("::TrimView("), MStringView::npos);
+    EXPECT_NE(MStringView(expectedBuiltinsRes.generatedSource.data(), expectedBuiltinsRes.generatedSource.size()).find("::MakeUnexpected("), MStringView::npos);
+    EXPECT_NE(MStringView(expectedBuiltinsRes.generatedSource.data(), expectedBuiltinsRes.generatedSource.size()).find("::ParseI64("), MStringView::npos);
+
+    static constexpr MStringView s_BadExpectedThreeArgs =
+        "Expected<i32, Failure, u8> badExpected() { return 0; }\r\n";
+    CompileResult badExpectedRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadExpectedThreeArgs, "impl/bad_expected_args.adhd", arena.arena, badExpectedRes));
 }
 
 

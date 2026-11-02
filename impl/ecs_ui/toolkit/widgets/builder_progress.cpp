@@ -39,7 +39,7 @@ b8 Builder::progress(const AStringView stableKey, const f64 fraction, const Prog
         m_context.fail();
         return false;
     }
-    const auto metrics = ProgressLayout::Measure(options, frame.style, *track, *fill, m_skin->referenceDensity());
+    const auto metrics = MeasureProgress(options, frame.style, *track, *fill, m_skin->referenceDensity());
     if(!metrics){
         m_context.fail();
         return false;
@@ -64,7 +64,7 @@ b8 Builder::paintProgress(const Item& item, const LayoutBox& box){
     if(item.progress >= m_scope->m_progress.size())
         return false;
     const ProgressFrame& frame = m_scope->m_progress[item.progress];
-    const auto placement = ProgressLayout::Place(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
+    const auto placement = PlaceProgress(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction);
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);

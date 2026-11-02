@@ -40,7 +40,7 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
         return false;
     }
     const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
-    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!background || !placement){
         m_context.fail();
         return false;
@@ -236,7 +236,7 @@ void Builder::releasePopupFamily()noexcept{
 b8 Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
     PopupOptions options;
     options.size = { 1.0f, 1.0f };
-    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
     PopupScope scope;

@@ -22,18 +22,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
-[[nodiscard]] inline Expected<usize> HitEditCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
-    usize committedByte = 0u;
-    if(!TryHitEditCaretGeometry(lines, stops, localPoint, committedByte))
-        return MakeUnexpected(Failure{});
-    return committedByte;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Owns source bytes, exact font versions and LTR hard-line caret data; no model or service is retained.
 class EditCaretGeometry final{
 public:

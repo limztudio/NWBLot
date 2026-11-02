@@ -95,7 +95,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     frame.m_style = m_radioGroupStyle;
     frame.m_widgetStyle = m_style;
     // Reject options and style before invoking application callbacks or changing reconciliation state.
-    const auto metrics = RadioGroupLayout::Measure(0u, {}, options, frame.m_style);
+    const auto metrics = MeasureRadioGroup(0u, {}, options, frame.m_style);
     if(!metrics){
         m_context.fail();
         return result;
@@ -221,7 +221,7 @@ b8 Builder::prepareRadioGroup(RadioGroupFrame& frame){
         indicatorExtent = Max(indicatorExtent, Max(minimum.x, minimum.y));
     }
     frame.m_style.indicatorExtent = indicatorExtent;
-    const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
+    const auto metrics = MeasureRadioGroup(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;

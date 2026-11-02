@@ -387,6 +387,20 @@ b8 TryComputeSliderDragValue(in f64 currentValue, in f64 baseline, in SliderOpti
     return true;
 }
 
+Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle style){
+    SliderMetrics candidate;
+    if(!TryMeasureSlider(options, style, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
+Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMetrics metrics, in f64 normalized){
+    SliderPlacement candidate;
+    if(!TryPlaceSlider(bounds, clip, metrics, normalized, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

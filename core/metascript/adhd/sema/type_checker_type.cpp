@@ -279,6 +279,16 @@ b8 TypeChecker::checkTypeRef(const TypeRef& typeRef, const ClassDecl* enclosingC
             ok = false;
         }
     }
+    else if(IsOneOrTwoTypeParamBuiltinGeneric(typeRef.name)){
+        if(
+            (typeRef.templateArgs.size() != 1u && typeRef.templateArgs.size() != 2u)
+            || !typeRef.templateArgs[0].type
+            || (typeRef.templateArgs.size() == 2u && !typeRef.templateArgs[1].type)
+        ){
+            reportError(errors, typeRef.span, "built-in generic type requires 1 or 2 type arguments");
+            ok = false;
+        }
+    }
     else if(IsTypeAndCountBuiltinGeneric(typeRef.name)){
         b8 validCapacity = typeRef.templateArgs.size() == 2u
             && typeRef.templateArgs[0].type != nullptr

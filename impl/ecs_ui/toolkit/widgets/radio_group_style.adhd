@@ -354,6 +354,20 @@ b8 TryPlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices
     return true;
 }
 
+Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabel, in RadioGroupOptions options, in RadioGroupStyle style){
+    RadioGroupMetrics candidate;
+    if(!TryMeasureRadioGroup(count, maximumLabel, options, style, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
+Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
+    RadioGroupPlacement candidate;
+    if(!TryPlaceRadioGroup(bounds, clip, choices, metrics, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

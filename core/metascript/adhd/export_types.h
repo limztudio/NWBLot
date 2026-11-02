@@ -102,6 +102,8 @@ NWB_ADHD_EXPORT_OBJECT_TYPE("Name",          "",                           8u,  
 NWB_ADHD_EXPORT_OBJECT_TYPE("Path",          "",                           32u,  8u, false, true,  false, false, false, true)
 NWB_ADHD_EXPORT_OBJECT_TYPE("NameHash",      "::NameHash",                 64u,  8u, false, true,  false, false, false, false)
 NWB_ADHD_EXPORT_OBJECT_TYPE("EntityID",      "::NWB::Core::ECS::EntityID", 4u,   4u, false, true,  true,  false, false, false)
+NWB_ADHD_EXPORT_OBJECT_TYPE("Failure",       "::Failure",                  1u,   1u, false, true,  true,  false, false, false)
+NWB_ADHD_EXPORT_OBJECT_TYPE("ErrorCode",     "::ErrorCode",                16u,  8u, false, true,  true,  false, false, false)
 
 NWB_ADHD_EXPORT_GENERIC_TYPE("Vector",             "",                              SingleType,   32u, 8u, true,  true,  false, true,  false, true,  true,  false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("ParallelVector",     "",                              SingleType,   32u, 8u, true,  true,  false, false, false, true,  true,  false)
@@ -123,7 +125,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("Span",               "",                          
 NWB_ADHD_EXPORT_GENERIC_TYPE("Optional",           "",                              SingleType,   0u,  0u, false, true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("AssetRef",           "::NWB::Core::Assets::AssetRef", SingleType,   8u,  8u, false, true,  false, false, false, false, false, false)
 NWB_ADHD_EXPORT_GENERIC_TYPE("Atomic",             "",                              SingleType,   0u,  0u, false, false, false, false, false, false, false, false)
-NWB_ADHD_EXPORT_GENERIC_TYPE("Expected",           "",                              TwoType,      0u,  0u, false, false, false, false, false, false, false, false)
+NWB_ADHD_EXPORT_GENERIC_TYPE("Expected",           "",                              OneOrTwoType, 0u,  0u, false, false, false, false, false, false, false, false)
 
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('x', 'r', 0u)
 NWB_ADHD_EXPORT_SWIZZLE_COMPONENT('y', 'g', 1u)

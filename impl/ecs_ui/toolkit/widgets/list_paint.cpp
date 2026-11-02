@@ -67,7 +67,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
             return MakeUnexpected(Failure{});
     }
     for(;;){
-        auto candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+        auto candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
         if(!candidate)
             return MakeUnexpected(Failure{});
         if(revealCursor){
@@ -77,7 +77,7 @@ Expected<ScrollPlacement> Builder::measureListPlacement(ListFrame& frame, const 
                 return MakeUnexpected(Failure{});
         }
         if(revealCursor)
-            candidate = ScrollLayout::Calculate(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+            candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
         if(!candidate || candidate->endRow - candidate->firstRow > s_ListMaxPreparedRows)
             return MakeUnexpected(Failure{});
         f32 height = frame.rowHeight;
@@ -209,7 +209,7 @@ b8 Builder::paintListRows(const Item& item, const ListFrame& frame, const Scroll
         WidgetId part;
         if(!TryMakeWidgetPartId(rowsId, key, part))
             return false;
-        const auto rectangle = ScrollLayout::RowBounds(index, placement, frame.rowHeight);
+        const auto rectangle = CalculateScrollRowBounds(index, placement, frame.rowHeight);
         if(!rectangle)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key, m_context.input().hover() == part, focused && frame.state->cursorKey() == key };

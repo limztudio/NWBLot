@@ -20,6 +20,32 @@ UiSkinSelectionState MakeUiSkinSelectionState(in AssetRef<UiSkin> requested){
     return state;
 }
 
+// Commits a skin identity only after its complete asset and GPU binding succeeds.
+UiSkinSelectionResult EnsureUiSkinSelection<TTryBind>(
+    mut UiSkinSelectionState state,
+    in AssetRef<UiSkin> basicSkin,
+    in TTryBind tryBind
+){
+    if(state.selected.valid()){
+        if(tryBind(state.selected))
+            return UiSkinSelectionResult::Selected;
+        return UiSkinSelectionResult::Failed;
+    }
+    if(!basicSkin.valid())
+        return UiSkinSelectionResult::Failed;
+    AssetRef<UiSkin> preferred = basicSkin;
+    if(state.requested.valid())
+        preferred = state.requested;
+    if(tryBind(preferred)){
+        state.selected = preferred;
+        return UiSkinSelectionResult::Selected;
+    }
+    if(preferred == basicSkin || !tryBind(basicSkin))
+        return UiSkinSelectionResult::Failed;
+    state.selected = basicSkin;
+    return UiSkinSelectionResult::DefaultFallback;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

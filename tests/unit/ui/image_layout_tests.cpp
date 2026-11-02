@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/image_layout.h>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 
 #include <gtest/gtest.h>
 
@@ -50,12 +50,12 @@ TEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExt
     region.minimumWidth = 120.0f;
     region.minimumHeight = 30.0f;
     ImageMetrics metrics;
-    const auto metricsResult = ImageLayout::Measure({}, region, 2.0f);
+    const auto metricsResult = MeasureImage({}, region, 2.0f);
     ASSERT_TRUE(metricsResult);
     metrics = *metricsResult;
     ExpectMetrics(metrics, { { 120.0f, 50.0f } });
     region.minimumHeight = 80.0f;
-    const auto metricsResult2 = ImageLayout::Measure({}, region, 2.0f);
+    const auto metricsResult2 = MeasureImage({}, region, 2.0f);
     ASSERT_TRUE(metricsResult2);
     metrics = *metricsResult2;
     ExpectMetrics(metrics, { { 120.0f, 80.0f } });
@@ -64,12 +64,12 @@ TEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExt
 TEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins){
     const Rect bounds{ -100.0f, -50.0f, 200.0f, 100.0f };
     ImagePlacement placement;
-    const auto placementResult = ImageLayout::Place(bounds, { 150.0f, 0.0f, 20.0f, 20.0f });
+    const auto placementResult = PlaceImage(bounds, { 150.0f, 0.0f, 20.0f, 20.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     UiWidgetTests::ExpectRectExact(placement.bounds, bounds);
     UiWidgetTests::ExpectRectExact(placement.clip, { 150.0f, 0.0f, 0.0f, 20.0f });
-    const auto placementResult2 = ImageLayout::Place({ -10.0f, -20.0f, 0.0f, 0.0f }, bounds);
+    const auto placementResult2 = PlaceImage({ -10.0f, -20.0f, 0.0f, 0.0f }, bounds);
     ASSERT_TRUE(placementResult2);
     placement = *placementResult2;
     UiWidgetTests::ExpectRectExact(placement.bounds, { -10.0f, -20.0f, 0.0f, 0.0f });
@@ -80,13 +80,13 @@ TEST(UiImageLayoutTests, SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainV
     const f32 tiny = BitCast<f32>(u32{ 1u });
     const Rect small{ 0.0f, 0.0f, tiny, tiny };
     ImagePlacement placement;
-    const auto placementResult = ImageLayout::Place(small, small);
+    const auto placementResult = PlaceImage(small, small);
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     UiWidgetTests::ExpectRectExact(placement.bounds, small);
     UiWidgetTests::ExpectRectExact(placement.clip, small);
     const Rect large{ -Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f };
-    const auto placementResult2 = ImageLayout::Place(large, large);
+    const auto placementResult2 = PlaceImage(large, large);
     ASSERT_TRUE(placementResult2);
     placement = *placementResult2;
     UiWidgetTests::ExpectRectExact(placement.bounds, large);
@@ -115,7 +115,7 @@ TEST(UiImageLayoutTests, InvalidLayoutSizesTintsAndDensityRejectMeasurement){
         case 13u: density = Limit<f32>::s_Infinity; break;
         default: density = Limit<f32>::s_QuietNaN; break;
         }
-        EXPECT_FALSE(ImageLayout::Measure(options, region, density));
+        EXPECT_FALSE(MeasureImage(options, region, density));
     }
 }
 
@@ -136,19 +136,19 @@ TEST(UiImageLayoutTests, InvalidRegionExtentMinimumsAndSliceMetadataRejectMeasur
             region.sliceInsets.bottom = 101u;
             break;
         }
-        EXPECT_FALSE(ImageLayout::Measure({}, region, 2.0f));
+        EXPECT_FALSE(MeasureImage({}, region, 2.0f));
     }
     UiSkinRegion region = valid;
     region.drawMode = UiSkinDrawMode::NineSlice;
     region.rectangle.width = Limit<u32>::s_Max;
     region.sliceInsets.left = Limit<u32>::s_Max;
     region.sliceInsets.right = Limit<u32>::s_Max;
-    EXPECT_FALSE(ImageLayout::Measure({}, region, 2.0f));
+    EXPECT_FALSE(MeasureImage({}, region, 2.0f));
 }
 
 TEST(UiImageLayoutTests, UnrepresentableNaturalExtentRejectsMeasurement){
     const UiSkinRegion region = Sprite();
-    EXPECT_FALSE(ImageLayout::Measure({}, region, BitCast<f32>(u32{ 1u })));
+    EXPECT_FALSE(MeasureImage({}, region, BitCast<f32>(u32{ 1u })));
 }
 
 TEST(UiImageLayoutTests, InvalidAndCollapsedProspectiveEndpointsRejectPlacement){
@@ -162,8 +162,8 @@ TEST(UiImageLayoutTests, InvalidAndCollapsedProspectiveEndpointsRejectPlacement)
         Rect{ Limit<f32>::s_Max, 0.0f, 1.0f, 1.0f },
         Rect{ 0.0f, Limit<f32>::s_Max, 1.0f, 1.0f }
     }){
-        EXPECT_FALSE(ImageLayout::Place(invalid, normal));
-        EXPECT_FALSE(ImageLayout::Place(normal, invalid));
+        EXPECT_FALSE(PlaceImage(invalid, normal));
+        EXPECT_FALSE(PlaceImage(normal, invalid));
     }
 }
 

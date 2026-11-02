@@ -147,7 +147,8 @@ f32 ComputePaddedWidth(in ElementBox box){
   - **SIMD**: `f32x4`, `i32x4`, `u32x4`, `f32x3_i32`, `f32x3_u32`, `f32x3x4`, `f32x4x4`, `f64x2`, `f64x3`, `f64x4`, `i64x4`, `u64x4`, `f64x3_i64`, `f64x3_u64`, `f64x3x3`, `f64x3x4`, `f64x4x4`. Supports `.x`/`.y`/`.z`/`.w`, `.r`/`.g`/`.b`/`.a`, multi-lane swizzles (`.xyz`, `.zwxy`), and built-in math/SIMD functions (`abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`, `dot`, `cross`, `length`, `lengthSq`, `normalize`, `mul`, `transpose`, `inverse`, `isFinite`, `isNaN`, `hashValue`, `hashCombineValue`).
   - **Containers**: `Array<T, N>`, `FixedVector<T, N>`, `Vector<T>`, `ParallelVector<T>`, `ForwardList<T>`, `List<T>`, `Deque<T>`, `Set<T>`, `HashSet<T>`, `ParallelHashSet<T>`, `Map<K, V>`, `HashMap<K, V>`, `ParallelHashMap<K, V>`, `Queue<T>`, `ParallelQueue<T>`, `ParallelBlockQueue<T, BlockSize>`. Owning containers are automatically bound to `s_ClassArena` (class fields) or a function-local `ScratchArena` (local variables).
   - **Spans**: `Span<T>` in `.adhd` is always read-only (`Span<const T>` in C++). Use `mut Vector<T>` or `mut FixedVector<T, N>` for mutable buffer outputs.
-  - **Strings**: UTF-8 exclusively (`String`, `StringView`, `CompactString`, `Name`, `Path`). Write plain `"..."` literals (never `NWB_TEXT("...")`).
+  - **Strings & Text Parsing**: UTF-8 exclusively (`String`, `StringView`, `CompactString`, `Name`, `Path`). Write plain `"..."` literals (never `NWB_TEXT("...")`). Built-in text/number helpers include `trimView`, `trimLeftView`, `parseI64`, `parseU64`, `parseF32`, and `parseF64`, plus `.front()`, `.back()`, `.substr(...)`, `.starts_with(...)`, and `.ends_with(...)`.
+  - **Result & Error Types**: `Optional<T>`, `Expected<T>` (defaulting to `Failure`), `Expected<T, E>`, `Failure`, `ErrorCode`, and `makeUnexpected(...)`.
 
 ---
 

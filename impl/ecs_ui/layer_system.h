@@ -9,7 +9,7 @@
 #include <impl/ecs_ui/layer_types.adhd.h>
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/edit_box_host.h>
-#include <impl/ecs_ui/skin_selection.h>
+#include <impl/ecs_ui/skin_selection.adhd.h>
 
 #include <impl/assets_scene/asset.h>
 #include <impl/assets_ui_skin/types.adhd.h>

@@ -9,7 +9,7 @@
 #include "layout/tree.h"
 #include "text/service.h"
 #include <impl/ecs_ui/toolkit/widgets/style.adhd.h>
-#include "widgets/window.h"
+#include <impl/ecs_ui/toolkit/widgets/window_style.adhd.h>
 #include "widgets/edit_box_state.h"
 #include "widgets/text_area.h"
 #include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
@@ -19,8 +19,8 @@
 #include "widgets/list.h"
 #include "widgets/radio_group_frame.h"
 #include "widgets/slider_frame.h"
-#include "widgets/progress_layout.h"
-#include "widgets/image_layout.h"
+#include <impl/ecs_ui/toolkit/widgets/progress_style.adhd.h>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 #include "widgets/combo.h"
 #include <impl/ecs_ui/toolkit/widgets/combo_style.adhd.h>
 #include "widgets/search_combo.h"

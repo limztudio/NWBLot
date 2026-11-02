@@ -351,6 +351,14 @@ void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect 
     }
 }
 
+// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
+Expected<usize> HitEditCaretGeometry(in Span<EditCaretLine> lines, in Span<EditBoxCaretStop> stops, in Point localPoint){
+    usize committedByte = 0u;
+    if(!TryHitEditCaretGeometry(lines, stops, localPoint, committedByte))
+        return makeUnexpected(Failure());
+    return committedByte;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

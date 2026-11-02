@@ -33,12 +33,12 @@ using namespace Impl::Ui;
 
 
 TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
-    const auto first = SliderLayout::Place(bounds, bounds, *metrics, 0.0);
+    const auto first = PlaceSlider(bounds, bounds, *metrics, 0.0);
     ASSERT_TRUE(first);
-    const auto last = SliderLayout::Place(bounds, bounds, *metrics, 1.0);
+    const auto last = PlaceSlider(bounds, bounds, *metrics, 1.0);
     ASSERT_TRUE(last);
     EXPECT_FLOAT_EQ(first->thumb.x, first->travelBounds.x);
     // Lanes are the thumb end and the travel end.
@@ -47,12 +47,12 @@ TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
 }
 
 TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
-    const auto full = SliderLayout::Place(bounds, bounds, *metrics, 0.25);
+    const auto full = PlaceSlider(bounds, bounds, *metrics, 0.25);
     ASSERT_TRUE(full);
-    const auto clipped = SliderLayout::Place(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, *metrics, 0.25);
+    const auto clipped = PlaceSlider(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, *metrics, 0.25);
     ASSERT_TRUE(clipped);
     UiPaintAssertions::ExpectRect(clipped->clip, { 50.0f, 25.0f, 100.0f, 10.0f });
     UiPaintAssertions::ExpectRect(clipped->travelBounds, full->travelBounds);
@@ -62,10 +62,10 @@ TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeo
 }
 
 TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 12.0f };
-    const auto placement = SliderLayout::Place(bounds, bounds, *metrics, 0.5);
+    const auto placement = PlaceSlider(bounds, bounds, *metrics, 0.5);
     ASSERT_TRUE(placement);
     UiPaintAssertions::ExpectRect(placement->travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
     UiPaintAssertions::ExpectRect(placement->thumb, placement->travelBounds);
@@ -76,10 +76,10 @@ TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafel
 }
 
 TEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     for(const Rect bounds : { Rect{ 10.0f, 20.0f, 4.0f, 3.0f }, Rect{ 10.0f, 20.0f, 0.0f, 0.0f } }){
-        const auto placement = SliderLayout::Place(bounds, bounds, *metrics, 1.0);
+        const auto placement = PlaceSlider(bounds, bounds, *metrics, 1.0);
         ASSERT_TRUE(placement);
         EXPECT_FLOAT_EQ(placement->travelBounds.width, 0.0f);
         EXPECT_FLOAT_EQ(placement->travelBounds.height, 0.0f);
@@ -108,7 +108,7 @@ TEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsRejectMetrics){
         case 11u: style.disabledTint.a = Limit<f32>::s_QuietNaN; break;
         default: style.padding.right = Limit<f32>::s_Infinity; break;
         }
-        EXPECT_FALSE(SliderLayout::Measure(options, style));
+        EXPECT_FALSE(MeasureSlider(options, style));
     }
 }
 
@@ -116,11 +116,11 @@ TEST(UiSliderLayoutTests, OverflowingIntrinsicMetricsAreRejected){
     SliderStyle style;
     style.thumbExtent.x = Limit<f32>::s_Max;
     style.padding.left = Limit<f32>::s_Max;
-    EXPECT_FALSE(SliderLayout::Measure({}, style));
+    EXPECT_FALSE(MeasureSlider({}, style));
 }
 
 TEST(UiSliderLayoutTests, InvalidProspectivePlacementRejectsGeometry){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     const Rect normal{ 10.0f, 20.0f, 240.0f, 32.0f };
     for(u32 field = 0u; field < 10u; ++field){
@@ -140,15 +140,15 @@ TEST(UiSliderLayoutTests, InvalidProspectivePlacementRejectsGeometry){
         case 8u: normalized = Limit<f64>::s_Infinity; break;
         default: normalized = Limit<f64>::s_QuietNaN; break;
         }
-        EXPECT_FALSE(SliderLayout::Place(bounds, clip, invalid, normalized));
+        EXPECT_FALSE(PlaceSlider(bounds, clip, invalid, normalized));
     }
 }
 
 TEST(UiSliderLayoutTests, PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected){
-    const auto metrics = SliderLayout::Measure({}, {});
+    const auto metrics = MeasureSlider({}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ Limit<f32>::s_Max, 0.0f, 1.0f, 32.0f };
-    EXPECT_FALSE(SliderLayout::Place(bounds, bounds, *metrics, 0.5));
+    EXPECT_FALSE(PlaceSlider(bounds, bounds, *metrics, 0.5));
 }
 
 

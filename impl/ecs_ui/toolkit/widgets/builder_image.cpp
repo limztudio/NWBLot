@@ -33,7 +33,7 @@ b8 Builder::image(const AStringView stableKey, const Name& regionName, const Ima
         m_context.fail();
         return false;
     }
-    const auto metrics = ImageLayout::Measure(options, *skinRegion, m_skin->referenceDensity());
+    const auto metrics = MeasureImage(options, *skinRegion, m_skin->referenceDensity());
     if(!metrics){
         m_context.fail();
         return false;
@@ -60,7 +60,7 @@ b8 Builder::image(const AStringView stableKey, const SharedImageSource& source, 
         m_context.fail();
         return false;
     }
-    const auto metrics = ImageLayout::Measure(frame.options, *frame.source);
+    const auto metrics = MeasureImage(frame.options, *frame.source);
     if(!metrics){
         m_context.fail();
         return false;
@@ -88,7 +88,7 @@ b8 Builder::paintImage(const Item& item, const LayoutBox& box){
     if(item.image >= m_scope->m_images.size())
         return false;
     const ImageFrame& frame = m_scope->m_images[item.image];
-    const auto placement = ImageLayout::Place(box.rectangle, visibleClip(box.clip));
+    const auto placement = PlaceImage(box.rectangle, visibleClip(box.clip));
     if(!placement)
         return false;
     m_paint.pushClip(placement->clip);

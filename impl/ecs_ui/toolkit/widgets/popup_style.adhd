@@ -164,6 +164,14 @@ b8 TryPlacePopup(in PopupOptions options, in DisplayMetrics display, mut PopupPl
     return true;
 }
 
+// Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
+Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics display){
+    PopupPlacement placement;
+    if(!TryPlacePopup(options, display, placement))
+        return makeUnexpected(Failure());
+    return placement;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

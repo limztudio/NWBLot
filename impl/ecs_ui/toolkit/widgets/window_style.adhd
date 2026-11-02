@@ -237,6 +237,25 @@ b8 TryConstrainWindow(in DisplayMetrics display, in f32 titleHeight, mut WindowS
     return true;
 }
 
+Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
+    if(
+        !isFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
+        || !isFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
+        || !isFinite(style.gap) || style.gap < 0.0f
+        || !isFinite(density) || density <= 0.0f
+        || !IsValidUiExtent(options.minimumSize)
+    )
+        return makeUnexpected(Failure());
+    f32 collapseExtent = 0.0f;
+    if(options.collapsible)
+        collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
+    const f32 resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
+    WindowMetrics metrics;
+    if(!TryMeasureWindow(frame, title, collapseExtent, resizeExtent, style, options, titleSize, density, metrics))
+        return makeUnexpected(Failure());
+    return metrics;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

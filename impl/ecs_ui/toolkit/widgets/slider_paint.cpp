@@ -26,7 +26,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     if(!normalized)
         return false;
     const Rect clip = visibleClip(box.clip);
-    auto placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
+    auto placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement || !SliderBehavior::Admit(frame.m_state, frame.m_options, *placement))
         return false;
     frame.m_snapshot = frame.m_state.snapshot();
@@ -47,7 +47,7 @@ b8 Builder::paintSlider(const Item& item, const LayoutBox& box){
     normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
     if(!normalized)
         return false;
-    placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
+    placement = PlaceSlider(box.rectangle, clip, frame.m_metrics, *normalized);
     if(!placement)
         return false;
     WidgetId trackId;

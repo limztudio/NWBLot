@@ -61,6 +61,34 @@ b8 TryPlaceImage(in Rect bounds, in Rect clip, mut ImagePlacement outPlacement){
     return true;
 }
 
+type ImageFrame = ImageFrameRecord<SharedImageSource>;
+
+// Natural atlas extent uses reference density and logical minima; region padding does not inset images.
+Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
+    ImageMetrics candidate;
+    if(!TryMeasureRegionImage(options, region, density, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
+// Engine images use one logical unit per texel without atlas density, slices or control padding.
+Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource source){
+    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
+        return makeUnexpected(Failure());
+    // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.
+    ImageMetrics metrics;
+    metrics.contentSize = Point(cast<f32>(source.texture().width()), cast<f32>(source.texture().height()));
+    return metrics;
+}
+
+// Empty visibility remains a valid placement.
+Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
+    ImagePlacement candidate;
+    if(!TryPlaceImage(bounds, clip, candidate))
+        return makeUnexpected(Failure());
+    return candidate;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

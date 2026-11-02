@@ -46,7 +46,7 @@ b8 Builder::beginWindow(const AStringView stableKey, const StringView title, Win
         return false;
     }
     m_scope->m_window.titleBounds = *titleBounds;
-    const auto metrics = WindowLayout::Measure(*frame, *header, collapse, resize, m_style, options, { titleBounds->width, titleBounds->height }, m_skin->referenceDensity());
+    const auto metrics = MeasureWindow(*frame, *header, collapse ? *collapse : UiSkinRegion{}, resize ? *resize : UiSkinRegion{}, m_style, options, { titleBounds->width, titleBounds->height }, m_skin->referenceDensity());
     if(!metrics){
         m_context.fail();
         return false;

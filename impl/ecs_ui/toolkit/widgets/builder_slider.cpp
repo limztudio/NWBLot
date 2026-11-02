@@ -40,7 +40,7 @@ b8 Builder::slider(const AStringView stableKey, SliderState& state, const Slider
         m_context.fail();
         return false;
     }
-    const auto metrics = SliderLayout::Measure(options, frame.m_style);
+    const auto metrics = MeasureSlider(options, frame.m_style);
     if(!metrics){
         m_context.fail();
         return false;
@@ -85,7 +85,7 @@ b8 Builder::prepareSlider(SliderFrame& frame)noexcept{
             return false;
         frame.m_style.thumbExtent = { Max(frame.m_style.thumbExtent.x, minimum.x), Max(frame.m_style.thumbExtent.y, minimum.y) };
     }
-    const auto metrics = SliderLayout::Measure(frame.m_options, frame.m_style);
+    const auto metrics = MeasureSlider(frame.m_options, frame.m_style);
     if(!metrics)
         return false;
     frame.m_metrics = *metrics;

@@ -26,7 +26,7 @@ b8 Builder::paintTextArea(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
     const Rect& visualBounds = item.editView.visualBounds();
-    const auto viewport = ScrollbarLayout::Calculate(box.rectangle, clip, item.padding, { visualBounds.width, visualBounds.height }, caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
+    const auto viewport = CalculateScrollViewportPlacement(box.rectangle, clip, item.padding, { visualBounds.width, visualBounds.height }, caretWidth, state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb);
     if(!viewport)
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;

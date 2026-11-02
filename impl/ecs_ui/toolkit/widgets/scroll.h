@@ -44,43 +44,6 @@ private:
     f64 m_offset = 0.0;
 };
 
-namespace ScrollLayout{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Extents and offsets are logical doubles; only the clipped visible row interval reaches float paint geometry.
-// Reject viewports that cannot be represented within the double content extent.
-[[nodiscard]] inline Expected<ScrollPlacement> Calculate(
-    const Rect& bounds,
-    const Rect& inheritedClip,
-    const Insets& padding,
-    const f32 scrollbarWidth,
-    const f32 minimumThumb,
-    const u64 rowCount,
-    const f32 rowHeight,
-    const f64 offset
-)noexcept{
-    ScrollPlacement placement;
-    if(!TryCalculateScrollPlacement(bounds, inheritedClip, padding, scrollbarWidth, minimumThumb, rowCount, rowHeight, offset, placement))
-        return MakeUnexpected(Failure{});
-    return placement;
-}
-
-[[nodiscard]] inline Expected<Rect> RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight)noexcept{
-    Rect row;
-    if(!TryCalculateScrollRowBounds(index, placement, rowHeight, row))
-        return MakeUnexpected(Failure{});
-    return row;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

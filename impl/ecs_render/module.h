@@ -9,7 +9,6 @@
 #include <impl/ecs_render/gi/quality_settings.adhd.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/reflection/settings.adhd.h>
-#include <impl/ecs_render/reflection/statistics.h>
 #include <impl/ecs_render/refraction/statistics.h>
 #include <impl/ecs_render/deferred/presentation_settings.adhd.h>
 #include <impl/ecs_render/shadow/light_space_settings.adhd.h>

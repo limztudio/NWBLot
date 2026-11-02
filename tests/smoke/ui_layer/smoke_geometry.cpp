@@ -30,7 +30,7 @@ Expected<Impl::Ui::Rect> SmokeListRowBounds(const Impl::Ui::ScrollPlacement& pla
     if(placement.rowCount == 0u)
         return MakeUnexpected(Failure{});
     const f32 height = static_cast<f32>(static_cast<f64>(placement.contentHeight) / static_cast<f64>(placement.rowCount));
-    return Impl::Ui::ScrollLayout::RowBounds(index, placement, height);
+    return Impl::Ui::CalculateScrollRowBounds(index, placement, height);
 }
 
 Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, const u64 index)noexcept{

@@ -43,9 +43,9 @@ using namespace Impl::Ui;
 
 TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
     const RadioGroupChoices choices = Choices(3u);
-    auto metrics = RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
-    auto placement = RadioGroupLayout::Place({ 10.0f, 20.0f, 140.0f, 112.0f }, { 30.0f, 30.0f, 70.0f, 80.0f }, choices, *metrics);
+    auto placement = PlaceRadioGroup({ 10.0f, 20.0f, 140.0f, 112.0f }, { 30.0f, 30.0f, 70.0f, 80.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     UiPaintAssertions::ExpectRect(placement->clip, { 30.0f, 30.0f, 70.0f, 80.0f });
     UiPaintAssertions::ExpectRect(placement->rows[0u].clip, { 30.0f, 30.0f, 70.0f, 18.0f });
@@ -55,10 +55,10 @@ TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
 
 TEST(UiRadioGroupLayoutTests, FullChoiceBoundProducesAllRowsWithoutVirtualization){
     const RadioGroupChoices choices = Choices(s_RadioGroupMaxChoices);
-    auto metrics = RadioGroupLayout::Measure(choices.count, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(choices.count, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
     EXPECT_FLOAT_EQ(metrics->contentSize.y, 1796.0f);
-    auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 140.0f, 1796.0f }, { 0.0f, 0.0f, 140.0f, 1796.0f }, choices, *metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 140.0f, 1796.0f }, { 0.0f, 0.0f, 140.0f, 1796.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     EXPECT_EQ(placement->count, 64u);
     EXPECT_EQ(placement->rows[63u].key, 64u);
@@ -68,11 +68,11 @@ TEST(UiRadioGroupLayoutTests, FullChoiceBoundProducesAllRowsWithoutVirtualizatio
 
 TEST(UiRadioGroupLayoutTests, EmptyGroupHasOnlyPaddingAndNoChoiceGeometry){
     const RadioGroupChoices choices = Choices(0u);
-    auto metrics = RadioGroupLayout::Measure(0u, {}, {}, {});
+    auto metrics = MeasureRadioGroup(0u, {}, {}, {});
     ASSERT_TRUE(metrics);
     EXPECT_FLOAT_EQ(metrics->contentSize.x, 8.0f);
     EXPECT_FLOAT_EQ(metrics->contentSize.y, 8.0f);
-    auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 8.0f, 8.0f }, choices, *metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 8.0f, 8.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     EXPECT_EQ(placement->count, 0u);
     UiPaintAssertions::ExpectRect(placement->content, { 4.0f, 4.0f, 0.0f, 0.0f });
@@ -81,9 +81,9 @@ TEST(UiRadioGroupLayoutTests, EmptyGroupHasOnlyPaddingAndNoChoiceGeometry){
 
 TEST(UiRadioGroupLayoutTests, NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabelArea){
     const RadioGroupChoices choices = Choices(1u);
-    auto metrics = RadioGroupLayout::Measure(1u, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(1u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
-    auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 20.0f, 40.0f }, { 0.0f, 0.0f, 20.0f, 40.0f }, choices, *metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 20.0f, 40.0f }, { 0.0f, 0.0f, 20.0f, 40.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     UiPaintAssertions::ExpectRect(placement->rows[0u].indicator, { 4.0f, 10.0f, 12.0f, 12.0f });
     EXPECT_FLOAT_EQ(placement->rows[0u].mark.width, 4.8f);
@@ -92,14 +92,14 @@ TEST(UiRadioGroupLayoutTests, NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabel
 
 TEST(UiRadioGroupLayoutTests, TinyAndZeroBoundsSafelyClipEveryChoice){
     const RadioGroupChoices choices = Choices(2u);
-    auto metrics = RadioGroupLayout::Measure(2u, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(2u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
-    auto placement = RadioGroupLayout::Place({ 0.0f, 0.0f, 2.0f, 2.0f }, { 0.0f, 0.0f, 2.0f, 2.0f }, choices, *metrics);
+    auto placement = PlaceRadioGroup({ 0.0f, 0.0f, 2.0f, 2.0f }, { 0.0f, 0.0f, 2.0f, 2.0f }, choices, *metrics);
     ASSERT_TRUE(placement);
     EXPECT_EQ(placement->count, 2u);
     EXPECT_FLOAT_EQ(placement->rows[0u].indicator.width, 0.0f);
     EXPECT_FLOAT_EQ(placement->rows[0u].clip.height, 0.0f);
-    placement = RadioGroupLayout::Place({}, {}, choices, *metrics);
+    placement = PlaceRadioGroup({}, {}, choices, *metrics);
     ASSERT_TRUE(placement);
     EXPECT_EQ(placement->count, 2u);
     EXPECT_FLOAT_EQ(placement->rows[1u].textClip.width, 0.0f);
@@ -109,11 +109,11 @@ TEST(UiRadioGroupLayoutTests, TinyAndZeroBoundsSafelyClipEveryChoice){
 TEST(UiRadioGroupLayoutTests, InvalidOptionsOrChoiceCountsRejectMetrics){
     RadioGroupOptions options;
     options.width = { LayoutSizePolicy::Fixed, -1.0f };
-    EXPECT_FALSE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, options, {}));
+    EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, options, {}));
     options.width = { LayoutSizePolicy::Fixed, Limit<f32>::s_QuietNaN };
-    EXPECT_FALSE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, options, {}));
-    EXPECT_FALSE(RadioGroupLayout::Measure(65u, { 100.0f, 16.0f }, {}, {}));
-    EXPECT_FALSE(RadioGroupLayout::Measure(3u, { -1.0f, 16.0f }, {}, {}));
+    EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, options, {}));
+    EXPECT_FALSE(MeasureRadioGroup(65u, { 100.0f, 16.0f }, {}, {}));
+    EXPECT_FALSE(MeasureRadioGroup(3u, { -1.0f, 16.0f }, {}, {}));
 }
 
 TEST(UiRadioGroupLayoutTests, InvalidStyleMetricsAndTintsRejectMetrics){
@@ -129,17 +129,17 @@ TEST(UiRadioGroupLayoutTests, InvalidStyleMetricsAndTintsRejectMetrics){
         case 6u: style.pressedTint.g = -1.0f; break;
         case 7u: style.disabledTint.a = 1.1f; break;
         }
-        EXPECT_FALSE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, style));
+        EXPECT_FALSE(MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, style));
     }
 }
 
 TEST(UiRadioGroupLayoutTests, OverflowingContentHeightRejectsMetrics){
-    EXPECT_FALSE(RadioGroupLayout::Measure(64u, { 100.0f, Limit<f32>::s_Max }, {}, {}));
+    EXPECT_FALSE(MeasureRadioGroup(64u, { 100.0f, Limit<f32>::s_Max }, {}, {}));
 }
 
 TEST(UiRadioGroupLayoutTests, InvalidAndUnrepresentableBoundsRejectPlacement){
     const RadioGroupChoices choices = Choices(3u);
-    auto metrics = RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
     const Array<Rect, 4> invalid{
@@ -147,26 +147,26 @@ TEST(UiRadioGroupLayoutTests, InvalidAndUnrepresentableBoundsRejectPlacement){
         Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 112.0f }, Rect{ 0.0f, 1.0e20f, 140.0f, 112.0f },
     };
     for(const Rect& rectangle : invalid){
-        EXPECT_FALSE(RadioGroupLayout::Place(rectangle, bounds, choices, *metrics));
+        EXPECT_FALSE(PlaceRadioGroup(rectangle, bounds, choices, *metrics));
     }
-    EXPECT_FALSE(RadioGroupLayout::Place(bounds, { 0.0f, 0.0f, 140.0f, -1.0f }, choices, *metrics));
+    EXPECT_FALSE(PlaceRadioGroup(bounds, { 0.0f, 0.0f, 140.0f, -1.0f }, choices, *metrics));
 }
 
 TEST(UiRadioGroupLayoutTests, MismatchedCountKeysOrMetricsRejectPlacement){
     RadioGroupChoices choices = Choices(3u);
-    auto metrics = RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {});
+    auto metrics = MeasureRadioGroup(3u, { 100.0f, 16.0f }, {}, {});
     ASSERT_TRUE(metrics);
     const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
     choices.count = 2u;
-    EXPECT_FALSE(RadioGroupLayout::Place(bounds, bounds, choices, *metrics));
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
     choices.count = 3u;
     choices.rows[1u].key = 1u;
-    EXPECT_FALSE(RadioGroupLayout::Place(bounds, bounds, choices, *metrics));
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
     choices.rows[1u].key = 0u;
-    EXPECT_FALSE(RadioGroupLayout::Place(bounds, bounds, choices, *metrics));
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
     choices.rows[1u].key = 2u;
     metrics->contentSize.y = 0.0f;
-    EXPECT_FALSE(RadioGroupLayout::Place(bounds, bounds, choices, *metrics));
+    EXPECT_FALSE(PlaceRadioGroup(bounds, bounds, choices, *metrics));
 }
 
 

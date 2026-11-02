@@ -100,7 +100,7 @@ b8 Builder::paintComboPopup(ComboFrame& frame){
     PopupOptions options;
     options.anchor = anchor;
     options.size = { anchor.width, frame.options.popupHeight };
-    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
     const Insets padding = MaxUiPadding(frame.popupStyle.padding, background->padding);

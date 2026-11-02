@@ -43,13 +43,13 @@ protected:
     }
 
     [[nodiscard]] b8 refresh()noexcept{
-        const auto metrics = SliderLayout::Measure(m_options, {});
+        const auto metrics = MeasureSlider(m_options, {});
         if(!metrics)
             return false;
         const auto normalized = SliderBehavior::Normalize(m_options.minimum, m_options.maximum, m_state.value());
         if(!normalized)
             return false;
-        const auto placement = SliderLayout::Place(m_bounds, m_bounds, *metrics, *normalized);
+        const auto placement = PlaceSlider(m_bounds, m_bounds, *metrics, *normalized);
         if(!placement)
             return false;
         m_placement = *placement;

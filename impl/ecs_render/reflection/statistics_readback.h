@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include "statistics.h"
 #include "history.h"
 
 #include <impl/ecs_render/shared/statistics_readback_state.h>

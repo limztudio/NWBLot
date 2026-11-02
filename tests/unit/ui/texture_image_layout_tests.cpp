@@ -4,7 +4,7 @@
 
 #include "paint_image_fixture.h"
 
-#include <impl/ecs_ui/toolkit/widgets/image_layout.h>
+#include <impl/ecs_ui/toolkit/widgets/image_style.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,17 +41,17 @@ TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDi
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
     ImageMetrics metrics;
-    const auto metricsResult = ImageLayout::Measure({}, *first);
+    const auto metricsResult = MeasureImage({}, *first);
     ASSERT_TRUE(metricsResult);
     metrics = *metricsResult;
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-    const auto metricsResult2 = ImageLayout::Measure({}, *second);
+    const auto metricsResult2 = MeasureImage({}, *second);
     ASSERT_TRUE(metricsResult2);
     metrics = *metricsResult2;
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 9.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 7.0f);
-    const auto metricsResult3 = ImageLayout::Measure({}, *first);
+    const auto metricsResult3 = MeasureImage({}, *first);
     ASSERT_TRUE(metricsResult3);
     metrics = *metricsResult3;
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
@@ -67,13 +67,13 @@ TEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid){
     options.width = { LayoutSizePolicy::Fixed, 0.0f };
     options.height = { LayoutSizePolicy::Fixed, 0.0f };
     ImageMetrics metrics;
-    const auto metricsResult = ImageLayout::Measure(options, *image);
+    const auto metricsResult = MeasureImage(options, *image);
     ASSERT_TRUE(metricsResult);
     metrics = *metricsResult;
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 8.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 4.0f);
     ImagePlacement placement;
-    const auto placementResult = ImageLayout::Place({ 10.0f, 20.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 100.0f, 100.0f });
+    const auto placementResult = PlaceImage({ 10.0f, 20.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 100.0f, 100.0f });
     ASSERT_TRUE(placementResult);
     placement = *placementResult;
     EXPECT_FLOAT_EQ(placement.bounds.width, 0.0f);
@@ -97,7 +97,7 @@ TEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesRejectMeasurement)
         case 6u: options.width.value = Limit<f32>::s_QuietNaN; break;
         default: options.height.value = Limit<f32>::s_Infinity; break;
         }
-        EXPECT_FALSE(ImageLayout::Measure(options, *image));
+        EXPECT_FALSE(MeasureImage(options, *image));
     }
 }
 
@@ -118,7 +118,7 @@ TEST_F(TextureImageLayoutFixture, InvalidTintRejectsMeasurement){
         case 6u: options.tint.a = -0.01f; break;
         default: options.tint.a = 1.01f; break;
         }
-        EXPECT_FALSE(ImageLayout::Measure(options, *image));
+        EXPECT_FALSE(MeasureImage(options, *image));
     }
 }
 

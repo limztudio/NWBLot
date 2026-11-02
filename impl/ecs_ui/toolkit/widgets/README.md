@@ -18,7 +18,7 @@ The title supplies pointer dragging. The bottom-right corner supplies resizing w
 
 Chrome targets capture the complete committed window bounds as their pointer gesture reference. Each press uses the geometry that received the native event, even when the host model already describes a GPU-pending candidate. Active updates retain that press reference; a completed press survives until the next callback. Numeric admission and behavior updates validate candidates before publishing changes.
 
-`windowMetrics()` is available during an open window scope, including a collapsed window. `WindowLayout::Visible`, `Content`, `Collapse`, and `Resize` compute matching logical geometry from those metrics and the host state.
+`windowMetrics()` is available during an open window scope, including a collapsed window. `ResolveVisibleWindowBounds`, `ResolveWindowContentBounds`, `ResolveWindowCollapseBounds`, and `ResolveWindowResizeBounds` compute matching logical geometry from those metrics and the host state.
 
 ## Skin parts and separators
 
@@ -30,7 +30,7 @@ A separator does not receive focus or activation. Its direction selects a horizo
 
 `BuilderScopeFrame` owns transient layout, declarations, borrowed control loans and the active window/popup state. `Builder` retains shared text, paint, skin, styles and edit services. Ended popup child frames retain their layout and control loans at stable arena-owned addresses until the outermost popup ends.
 
-- `window.cpp` owns initialization, dragging, resizing, viewport constraints, candidate validation, skin-derived metrics, and chrome/content geometry.
+- `window_style.adhd` owns initialization, dragging, resizing, viewport constraints, candidate validation, skin-derived metrics, and chrome/content geometry.
 - `builder_window.cpp` owns window declaration and balanced content arrangement.
 - `window_paint.cpp` owns chrome painting and matching hit targets.
 - `widget_builder_controls.cpp` owns divider declaration; `controls_paint.cpp` paints arranged content.
@@ -47,7 +47,7 @@ Selection and navigation cursor are stable keys. Reordering preserves valid enab
 
 Wheel scrolling preserves selection and uses the accepted step/range. Scrollbar dragging uses its accepted track, thumb and maximum as the press baseline. Multiple pending gestures and control actions are consumed in sequence; coalesced movement carries the sequence of its latest update. A source revision or explicit state change fences old intentions and cancels old capture. Held keys retain release ownership, and a lost control owner cannot revive after a later token reuse. A previously focused list restores focus only when the replacement frame is accepted, with native focus-loss and popup guards.
 
-`ScrollState` stores double offsets; `ScrollLayout` computes logical padded viewport, clipping, proportional/minimum thumb, visible `[firstRow, endRow)` and row bounds. Ancestor clipping culls rows without altering the logical scroll range. The list retains one widget state and emits only visible part targets; shaping is bounded by the provisional visible intervals and painting uses the final interval. More than 1,024 visible rows rejects a frame, and the existing 4,096-target limit still bounds the complete context. This bound is independent of dataset size. Variable-height rows, horizontal scrolling, multi-selection and generic scroll containers remain future controls.
+`ScrollState` stores double offsets; `CalculateScrollPlacement` and `CalculateScrollRowBounds` in `scrollbar_style.adhd` compute logical padded viewport, clipping, proportional/minimum thumb, visible `[firstRow, endRow)` and row bounds. Ancestor clipping culls rows without altering the logical scroll range. The list retains one widget state and emits only visible part targets; shaping is bounded by the provisional visible intervals and painting uses the final interval. More than 1,024 visible rows rejects a frame, and the existing 4,096-target limit still bounds the complete context. This bound is independent of dataset size. Variable-height rows, horizontal scrolling, multi-selection and generic scroll containers remain future controls.
 
 `Builder::listStyle()` resolves `list.background`, `list.row.normal/hover/selected/disabled`, `scroll.track`, `scroll.thumb` and optional `focus.overlay` from the selected skin. The default and alternate atlases reuse existing texture tiles for new semantic regions. Missing regions use explicitly named panel/button fallbacks within that skin. `SelectablePainter` is shared by standalone rows and list rows. Geometry/state, keyed model behavior, declaration/input, row painting and shared selectable painting live in separate source files.
 
@@ -112,7 +112,7 @@ The stack `TextAreaNavigationResolver` freshly shapes the event-position model f
 
 TextAreaState, declaration, resolver, paint and loan validation have separate owners/sources. Layout remains hard-line LTR; soft wrapping and paragraph bidi are later capabilities. Wheel input and draggable scrollbars operate on both axes. `wheelLines` defaults to three; positive horizontal wheel input moves right and positive vertical input moves up. `scrollbarStyle()` supplies replaceable atlas names and metrics. Read-only fields retain scrolling; disabled fields publish no active scrollbar parts.
 
-The reusable `ScrollbarLayout` reserves both bars through coupled visibility, clamps offsets and computes thumbs in f64. Text-area input uses complete copied model/state/policy/viewport stamps. Geometry changes retire queued scrolling before application; ordinary offset repaint preserves drag baselines. A scrollbar press focuses its editor without starting text selection. Track release pages by the accepted viewport. Explicit wheel/thumb scrolling suppresses automatic caret reveal until a later accepted text, selection or ownership intent. Edit events and scroll events have separate queues: when edits change the document first, older copied scrolling is retired and caret reveal takes precedence.
+The reusable `CalculateScrollViewportPlacement` in `scrollbar_style.adhd` reserves both bars through coupled visibility, clamps offsets and computes thumbs in f64. Text-area input uses complete copied model/state/policy/viewport stamps. Geometry changes retire queued scrolling before application; ordinary offset repaint preserves drag baselines. A scrollbar press focuses its editor without starting text selection. Track release pages by the accepted viewport. Explicit wheel/thumb scrolling suppresses automatic caret reveal until a later accepted text, selection or ownership intent. Edit events and scroll events have separate queues: when edits change the document first, older copied scrolling is retired and caret reveal takes precedence.
 
 
 ## Radio groups

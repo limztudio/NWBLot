@@ -68,6 +68,13 @@ NWB_ADHD_EXPORT_FUNCTION("divideUp",         "::DivideUp",             2u, Promo
 NWB_ADHD_EXPORT_FUNCTION("alignUp",          "::AlignUp",              2u, PromoteSimd)
 NWB_ADHD_EXPORT_FUNCTION("hashValue",        "::HashValue",            1u, Usize)
 NWB_ADHD_EXPORT_FUNCTION("hashCombineValue", "::HashCombineValue",     2u, Usize)
+NWB_ADHD_EXPORT_FUNCTION("makeUnexpected",   "::MakeUnexpected",       1u, Unexpected)
+NWB_ADHD_EXPORT_FUNCTION("trimView",         "::TrimView",             1u, StringView)
+NWB_ADHD_EXPORT_FUNCTION("trimLeftView",     "::TrimLeftView",         1u, StringView)
+NWB_ADHD_EXPORT_FUNCTION("parseI64",         "::ParseI64",             1u, ExpectedI64)
+NWB_ADHD_EXPORT_FUNCTION("parseU64",         "::ParseU64",             1u, ExpectedU64)
+NWB_ADHD_EXPORT_FUNCTION("parseF32",         "::ParseF32FromChars",    1u, ExpectedF32)
+NWB_ADHD_EXPORT_FUNCTION("parseF64",         "::ParseF64FromChars",    1u, ExpectedF64)
 
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("min",     "::VectorMin(",                  "::VectorDoubleMin(")
 NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC("max",     "::VectorMax(",                  "::VectorDoubleMax(")

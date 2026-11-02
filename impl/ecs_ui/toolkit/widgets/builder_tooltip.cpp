@@ -107,7 +107,7 @@ b8 Builder::paintTooltips(){
         options.size = { Min(paddedWidth, frame.options.maximumWidth), paddedHeight };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
-        const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+        const auto placement = PlacePopup(options, m_paint.displayMetrics());
         if(!placement || !m_paint.beginOverlay(frame.layer))
             return false;
         m_paint.pushClip(placement->bounds);

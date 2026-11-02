@@ -252,7 +252,7 @@ b8 Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     options.anchor = frame.state->m_anchor;
     options.size = frame.options.size;
     options.gap = 0.0f;
-    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    const auto placement = PlacePopup(options, m_paint.displayMetrics());
     if(!placement)
         return false;
     PopupScope scope;

@@ -21,6 +21,7 @@ namespace GenericParamKind{
     enum Enum : u8{
         SingleType,
         TwoType,
+        OneOrTwoType,
         TypeAndCount,
     };
 };
@@ -46,6 +47,12 @@ namespace BuiltinFunctionReturnRule{
         MatrixMultiply,
         Bool,
         Usize,
+        StringView,
+        ExpectedI64,
+        ExpectedU64,
+        ExpectedF32,
+        ExpectedF64,
+        Unexpected,
     };
 };
 
@@ -169,6 +176,7 @@ struct BuiltinGlobalConstantInfo{
 [[nodiscard]] b8 IsNonThreadSafeContainer(MStringView typeName)noexcept;
 [[nodiscard]] b8 IsSingleTypeParamBuiltinGeneric(MStringView name)noexcept;
 [[nodiscard]] b8 IsTwoTypeParamBuiltinGeneric(MStringView name)noexcept;
+[[nodiscard]] b8 IsOneOrTwoTypeParamBuiltinGeneric(MStringView name)noexcept;
 [[nodiscard]] b8 IsTypeAndCountBuiltinGeneric(MStringView name)noexcept;
 [[nodiscard]] b8 CheckSwizzlePattern(MStringView text, u32 maxLanes, b8& outIsPattern, b8& outValidLanes)noexcept;
 

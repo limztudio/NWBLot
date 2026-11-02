@@ -8,7 +8,7 @@
 #include "framebuffer_capture.h"
 #include "reflection_optical_scene.h"
 
-#include <impl/ecs_render/reflection/statistics.h>
+#include <impl/ecs_render/reflection/types.adhd.h>
 
 #include <core/alloc/scratch.h>
 

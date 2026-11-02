@@ -227,6 +227,12 @@ b8 IsTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
     return false;
 }
 
+b8 IsOneOrTwoTypeParamBuiltinGeneric(const MStringView name)noexcept{
+    if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
+        return info->paramKind == GenericParamKind::OneOrTwoType;
+    return false;
+}
+
 b8 IsTypeAndCountBuiltinGeneric(const MStringView name)noexcept{
     if(const BuiltinGenericTypeInfo* info = FindBuiltinGenericType(name))
         return info->paramKind == GenericParamKind::TypeAndCount;
@@ -355,7 +361,7 @@ TypeRef* ExtractUnderlyingFuncType(TypeRef* type, const SymbolTable& symbols)noe
                 continue;
             }
         }
-        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name)) && !type->templateArgs.empty() && type->templateArgs[0].type){
+        if((IsSingleTypeParamBuiltinGeneric(type->name) || IsOneOrTwoTypeParamBuiltinGeneric(type->name) || IsTypeAndCountBuiltinGeneric(type->name)) && !type->templateArgs.empty() && type->templateArgs[0].type){
             type = type->templateArgs[0].type;
             continue;
         }

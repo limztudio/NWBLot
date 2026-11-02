@@ -427,13 +427,14 @@ void LayoutOptimizer::resolveTypeSizeAndAlign(const TypeRef& type, const u32 dep
     }
 
     if(name == "Expected"){
-        if(type.templateArgs.size() >= 2u && type.templateArgs[0].type && type.templateArgs[1].type){
+        if(!type.templateArgs.empty() && type.templateArgs[0].type){
             usize valSize = 8u;
             usize valAlign = 8u;
-            usize errSize = 8u;
-            usize errAlign = 8u;
+            usize errSize = 1u;
+            usize errAlign = 1u;
             resolveTypeSizeAndAlign(*type.templateArgs[0].type, depth + 1u, valSize, valAlign);
-            resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
+            if(type.templateArgs.size() >= 2u && type.templateArgs[1].type)
+                resolveTypeSizeAndAlign(*type.templateArgs[1].type, depth + 1u, errSize, errAlign);
             outAlign = valAlign > errAlign ? valAlign : errAlign;
             const usize payloadSize = valSize > errSize ? valSize : errSize;
             outSize = ::AlignUp(payloadSize + 1u, outAlign);

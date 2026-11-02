@@ -156,7 +156,7 @@ template<typename VisitTriangle>
     outNormals.reserve(mesh.num_vertices);
 
     if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
-        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> positions = {};
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> positions = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex)
             positions[triangleCornerIndex] = LoadCornerOutputPositionVector(mesh, node, options, wantsSkinning, cornerIndices[triangleCornerIndex]);
 
@@ -249,8 +249,8 @@ b8 FbxMeshBuild::AppendInstanceMesh(
 
     return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, [&](const Array<u32, Impl::s_MeshletTriangleIndexCount>& cornerIndices){
         Array<SourceTriangleCorner, Impl::s_MeshletTriangleIndexCount> triangleCorners = {};
-        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> trianglePositions = {};
-        Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> triangleNormals = {};
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> trianglePositions = {};
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, Impl::s_MeshletTriangleIndexCount> triangleNormals = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < Impl::s_MeshletTriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];

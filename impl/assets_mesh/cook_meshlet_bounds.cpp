@@ -31,7 +31,7 @@ void MeshletBoundsBuilder::ConeCutoffAccumulator::operator()(const SIMDVectorSin
 MeshletBounds MeshletBoundsBuilder::BuildMeshletBounds(const MeshCookEntry& entry, const MeshletDesc& meshlet)noexcept{
     const u32 positionCount = MeshletPositionCount(meshlet);
     NWB_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
-    Array<SIMDVectorSingle, s_MeshMaxMeshletVertices> positions{};
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_MeshMaxMeshletVertices> positions{};
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
         positions[localPositionIndex] = VectorSetW(LoadFloat(entry.positions[ref.position]), 0.0f);

@@ -132,7 +132,7 @@ TEST(CurrentMathContractBoundaries, OrientedBoxTransformationAppliesTheNewRotati
 TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPlaneAndRetainsClosedDegenerateContacts){
     const BoundingBox box(Float3U(0.0f, 0.0f, 0.0f), Float3U(1.0f, 1.0f, 1.0f));
     const BoundingOrientedBox oriented(Float3U(0.0f, 0.0f, 0.0f), Float3U(1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 1.0f));
-    const Array<Array<SIMDVectorSingle, 3u>, 5u> triangles = {{
+    alignas(SIMDVectorSingle) const Array<Array<SIMDVectorSingle, 3u>, 5u> triangles = {{
         { VectorSet(4.0f, 0.0f, 0.0f, 0.0f), VectorSet(0.0f, 4.0f, 0.0f, 0.0f), VectorSet(0.0f, 0.0f, 4.0f, 0.0f) },
         { VectorSet(1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, -1.0f, 0.0f), VectorSet(1.0f, 0.0f, 1.0f, 0.0f) },
         { VectorSet(-2.0f, 0.0f, 0.0f, 0.0f), VectorSet(2.0f, 0.0f, 0.0f, 0.0f), VectorSet(2.0f, 0.0f, 0.0f, 0.0f) },
@@ -148,7 +148,7 @@ TEST(CurrentMathContractBoundaries, TriangleBoxIntersectionRejectsASeparatingPla
 
     const BoundingDoubleBox doubleBox(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 1.0));
     const BoundingDoubleOrientedBox doubleOriented(Double3U(0.0, 0.0, 0.0), Double3U(1.0, 1.0, 1.0), Double4(0.0, 0.0, 0.0, 1.0));
-    const Array<Array<SIMDVectorDouble, 3u>, 5u> doubleTriangles = {{
+    alignas(SIMDVectorDouble) const Array<Array<SIMDVectorDouble, 3u>, 5u> doubleTriangles = {{
         { SIMDVectorDouble{ 4.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 0.0, 4.0, 0.0, 0.0 }, SIMDVectorDouble{ 0.0, 0.0, 4.0, 0.0 } },
         { SIMDVectorDouble{ 1.0, -1.0, -1.0, 0.0 }, SIMDVectorDouble{ 1.0, 1.0, -1.0, 0.0 }, SIMDVectorDouble{ 1.0, 0.0, 1.0, 0.0 } },
         { SIMDVectorDouble{ -2.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 2.0, 0.0, 0.0, 0.0 }, SIMDVectorDouble{ 2.0, 0.0, 0.0, 0.0 } },
@@ -330,7 +330,7 @@ TEST(CurrentMathContractBoundaries, DoubleQuaternionExtractionKeepsBranchTiesAnd
     const auto originalEnvironment = HoldFloatingPointExceptions();
     ASSERT_TRUE(originalEnvironment);
     NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
-    const Array<SIMDVectorDouble, 9u> inputs = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 9u> inputs = {
         SIMDVectorDouble{ 1.0, 0.2, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, 1.0, -0.3, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 1.0, 0.1 }, SIMDVectorDouble{ 0.2, -0.3, 0.1, 1.0 },
         SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5 + 0x1p-40, 0.5, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5 + 0x1p-40, 0.5, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5 + 0x1p-40, 0.5 }, SIMDVectorDouble{ 0.5, 0.5, 0.5, 0.5 + 0x1p-40 }
     };

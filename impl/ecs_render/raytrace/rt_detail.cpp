@@ -130,8 +130,8 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
     }
 
     // Per-axis bins: AABB, count, summed leaf cost. s_SceneBvhSahBinCount bins keeps the grid cache-resident.
-    Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMin;
-    Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMax;
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMin;
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_SceneBvhSahBinCount> binMax;
     Array<f32, s_SceneBvhSahBinCount> binCost;
     Array<u32, s_SceneBvhSahBinCount> binCount;
 
@@ -167,8 +167,8 @@ u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimi
         }
 
         // Right-to-left suffix stats make every boundary's right side exact; then sweep left building the prefix SAH.
-        Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMin;
-        Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMax;
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMin;
+        alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_SceneBvhSahBinCount> suffixMax;
         Array<f32, s_SceneBvhSahBinCount> suffixCost;
         Array<u32, s_SceneBvhSahBinCount> suffixCount;
         {

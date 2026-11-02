@@ -44,8 +44,8 @@ static void CheckWindingAndOperandOrder(const Span<const VectorT> first, const S
 }
 
 static void CheckBothPrecisions(const Span<const VertexCoords> first, const Span<const VertexCoords> second, const b8 expected){
-    Array<SIMDVectorSingle, 3> firstSingle{}, secondSingle{};
-    Array<SIMDVectorDouble, 3> firstDouble{}, secondDouble{};
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, 3> firstSingle{}, secondSingle{};
+    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> firstDouble{}, secondDouble{};
     for(u32 index = 0u; index < 3u; ++index){
         firstDouble[index] = VectorDoubleSet(first[index][0], first[index][1], first[index][2], 0.0);
         secondDouble[index] = VectorDoubleSet(second[index][0], second[index][1], second[index][2], 0.0);
@@ -139,9 +139,9 @@ TEST(MathTriangleIntersection, TinyCoplanarTrianglesRetainSeparatingAxes){
 
 TEST(MathTriangleIntersection, DoubleCoplanarSeparationAndTouchSurviveLargeTranslation){
     constexpr f64 s_Base = 0x1p+40;
-    const Array<SIMDVectorDouble, 3> first = { VectorDoubleSet(s_Base, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base, s_Base + 2.0, 0.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> separated = { VectorDoubleSet(s_Base + 1.5, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 1.5, s_Base + 2.0, 0.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> touching = { VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 3.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> first = { VectorDoubleSet(s_Base, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base, s_Base + 2.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> separated = { VectorDoubleSet(s_Base + 1.5, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.5, 0.0, 0.0), VectorDoubleSet(s_Base + 1.5, s_Base + 2.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> touching = { VectorDoubleSet(s_Base + 2.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 3.0, s_Base, 0.0, 0.0), VectorDoubleSet(s_Base + 2.0, s_Base + 1.0, 0.0, 0.0) };
     CheckWindingAndOperandOrder<SIMDVectorDouble>(first, separated, false);
     CheckWindingAndOperandOrder<SIMDVectorDouble>(first, touching, true);
 }
@@ -153,12 +153,12 @@ TEST(MathTriangleIntersection, InactiveSignalingNaNsDoNotRaiseInvalidDuringInter
     NWB::Tests::FloatingPointEnvironmentGuard restoreEnvironment(*originalEnvironment);
     volatile u32 singleInactiveBits = 0x7f800001u;
     volatile u64 doubleInactiveBits = 0x7ff0000000000001u;
-    const Array<SIMDVectorSingle, 3> firstSingle = {
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> firstSingle = {
         VectorSetIntW(VectorSet(0.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
         VectorSetIntW(VectorSet(2.0f, 0.0f, 0.0f, 0.0f), singleInactiveBits),
         VectorSetIntW(VectorSet(0.0f, 2.0f, 0.0f, 0.0f), singleInactiveBits)
     };
-    const Array<SIMDVectorDouble, 3> firstDouble = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = {
         VectorDoubleSetIntW(VectorDoubleSet(0.0, 0.0, 0.0, 0.0), doubleInactiveBits),
         VectorDoubleSetIntW(VectorDoubleSet(2.0, 0.0, 0.0, 0.0), doubleInactiveBits),
         VectorDoubleSetIntW(VectorDoubleSet(0.0, 2.0, 0.0, 0.0), doubleInactiveBits)
@@ -183,13 +183,13 @@ TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesSingleProjecti
 }
 
 TEST(MathTriangleIntersection, ExactlyContainedDyadicPointSurvivesDoubleProjectionCancellation){
-    const Array<SIMDVectorDouble, 3> first = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> first = {
         VectorDoubleSet(495456340.0, -271487682.75, 212747462.0, 0.0),
         VectorDoubleSet(48651637.25, -531182607.0, 473308109.25, 0.0),
         VectorDoubleSet(-155700933.5, -479176747.0, 416710936.25, 0.0)
     };
     // Interior point remains coplanar even when near-zero dot products round differently.
-    const Array<SIMDVectorDouble, 3> contained = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> contained = {
         VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),
         VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0),
         VectorDoubleSet(220965845.9375, -388333679.875, 328878492.375, 0.0)
@@ -207,10 +207,10 @@ TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesSmallRealGaps
     CheckBothPrecisions(sloped, displaced, false);
 
     constexpr f64 s_DoubleGap = 0x1p-40;
-    const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 0.0, 0.0), VectorDoubleSet(0.0, 2.0, 0.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> outsideDouble = { VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> slopedDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 2.0, 0.0), VectorDoubleSet(0.0, 2.0, -2.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> displacedDouble = { VectorDoubleSet(0.0, 0.0, s_DoubleGap, 0.0), VectorDoubleSet(2.0, 0.0, 2.0 + s_DoubleGap, 0.0), VectorDoubleSet(0.0, 2.0, -2.0 + s_DoubleGap, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 0.0, 0.0), VectorDoubleSet(0.0, 2.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> outsideDouble = { VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0), VectorDoubleSet(1.0 + s_DoubleGap, 1.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> slopedDouble = { VectorDoubleSet(0.0, 0.0, 0.0, 0.0), VectorDoubleSet(2.0, 0.0, 2.0, 0.0), VectorDoubleSet(0.0, 2.0, -2.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> displacedDouble = { VectorDoubleSet(0.0, 0.0, s_DoubleGap, 0.0), VectorDoubleSet(2.0, 0.0, 2.0 + s_DoubleGap, 0.0), VectorDoubleSet(0.0, 2.0, -2.0 + s_DoubleGap, 0.0) };
     CheckWindingAndOperandOrder<SIMDVectorDouble>(firstDouble, outsideDouble, false);
     CheckWindingAndOperandOrder<SIMDVectorDouble>(slopedDouble, displacedDouble, false);
 }
@@ -223,8 +223,8 @@ TEST(MathTriangleIntersection, ProjectionRoundoffAllowancePreservesTranslatedOne
     CheckBothPrecisions(first, outside, false);
 
     constexpr f64 s_DoubleBase = 0x1p+40, s_DoubleGap = 0x1p-12;
-    const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(s_DoubleBase, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase + 2.0, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase, s_DoubleBase + 2.0, 0.0, 0.0) };
-    const Array<SIMDVectorDouble, 3> outsideDouble = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> firstDouble = { VectorDoubleSet(s_DoubleBase, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase + 2.0, s_DoubleBase, 0.0, 0.0), VectorDoubleSet(s_DoubleBase, s_DoubleBase + 2.0, 0.0, 0.0) };
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 3> outsideDouble = {
         VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),
         VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0),
         VectorDoubleSet(s_DoubleBase + 1.0 + s_DoubleGap, s_DoubleBase + 1.0, 0.0, 0.0)

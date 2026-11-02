@@ -274,7 +274,7 @@ TEST(Math, DoubleModAnglesKeepsLargeFiniteArgumentsAndTiesEvenAtPiBoundaries){
 
 TEST(Math, DoubleNormalizationRejectsDegenerateNonfiniteAndUnderflowedLengths){
     const SIMDVectorDouble fallback{ 0.0, 1.0, 0.0, 9.0 };
-    const Array<SIMDVectorDouble, 4u> invalid = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4u> invalid = {
         SIMDVectorDouble{ 0.0, 0.0, 0.0, 5.0 },
         SIMDVectorDouble{ Limit<f64>::s_Infinity, 0.0, 0.0, 0.0 },
         SIMDVectorDouble{ 0.0, Limit<f64>::s_QuietNaN, 0.0, 0.0 },
@@ -428,7 +428,7 @@ TEST(Math, FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary){
     frustum.leftSlope = -1.0f;
     frustum.topSlope = 1.0f;
     frustum.bottomSlope = -1.0f;
-    Array<SIMDVectorSingle, CollisionDetail::s_FrustumPlaneCount> planes{};
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, CollisionDetail::s_FrustumPlaneCount> planes{};
     frustum.getPlanes(&planes[0], &planes[1], &planes[2], &planes[3], &planes[4], &planes[5]);
     const Array<f32, 6u> centers = { 0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f };
     const Array<ContainmentType::Enum, 6u> expected = { ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains, ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains, };
@@ -504,7 +504,7 @@ TEST(Math, DegeneratePlaneNormalUsesFallback){
 }
 
 TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
-    const Array<SIMDMatrix, 4u> matrices = {
+    alignas(SIMDMatrix) const Array<SIMDMatrix, 4u> matrices = {
         MatrixSet(-1.0f, 0.0f, 0.0f, 3.0f, -1.0f, 0.0f, 0.0f, -2.0f, -1.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
         MatrixSet(0.0f, -1.0f, 0.0f, 3.0f, 0.0f, -1.0f, 0.0f, -2.0f, 0.0f, -1.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
         MatrixSet(0.0f, 0.0f, -1.0f, 3.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f, 0.0f, -1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),

@@ -47,8 +47,8 @@ struct TrianglePair{
 };
 
 struct TrianglePairVectors{
-    Array<SIMDVectorDouble, 3> first{};
-    Array<SIMDVectorDouble, 3> second{};
+    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> first{};
+    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 3> second{};
 };
 
 inline constexpr u32 s_FixtureCount = 64u;

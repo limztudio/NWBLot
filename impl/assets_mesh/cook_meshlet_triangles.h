@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 
 struct MeshletTriangleVectors{
-    Array<SIMDVectorSingle, s_MeshletTriangleIndexCount> positions = {};
+    alignas(SIMDVectorSingle) Array<SIMDVectorSingle, s_MeshletTriangleIndexCount> positions = {};
     SIMDVectorSingle centroid = {};
     SIMDVectorSingle areaNormal = {};
 };

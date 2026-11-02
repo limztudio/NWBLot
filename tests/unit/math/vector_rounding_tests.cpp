@@ -279,7 +279,8 @@ TEST(Math, MultiplySubtractRetainsCancellationDirectionAndSignedZero){
 }
 
 TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
-    const Array<SIMDVectorDouble, 6> inputs = {{
+    // The Windows standard library may under-align arrays of vector types.
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 6> inputs = {{
         { 0.0, -0.0, 0x1p-1022, -0x1p-1022 },
         { BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }), -BitCast<f64>(u64{ 3u }) },
         { 0x1.fffffffffffffp-1, 0x1.0000000000001p+0, -0x1.fffffffffffffp-1, -0x1.0000000000001p+0 },
@@ -306,13 +307,13 @@ TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
 }
 
 TEST(Math, DoubleVectorRoundPreservesTiesSignedZeroAndLargeIntegralLanes){
-    const Array<SIMDVectorDouble, 4> inputs = {{
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> inputs = {{
         { 0.5, -0.5, 1.5, -1.5 },
         { 2.5, -2.5, 0x1.fffffffffffffp-2, -0x1.fffffffffffffp-2 },
         { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
         { -0.0, 0.0, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
     }};
-    const Array<SIMDVectorDouble, 4> expected = {{
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> expected = {{
         { 0.0, -0.0, 2.0, -2.0 },
         { 2.0, -2.0, 0.0, -0.0 },
         { 0x1p+53, -0x1p+53, 0x1.0000000000001p+52, -0x1.0000000000001p+52 },
@@ -369,7 +370,7 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
         ASSERT_TRUE(SetFloatingPointRoundingMode(mode));
         for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
             const SIMDVectorSingle input = VectorSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            const Array<SIMDVectorSingle, 4> results = { VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
+            alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> results = { VectorRound(input), VectorTruncate(input), VectorFloor(input), VectorCeiling(input) };
             for(usize operation = 0u; operation < LengthOf(results); ++operation){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(VectorGetIntByIndex(results[operation], lane), BitCast<u32>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;
@@ -377,7 +378,7 @@ TEST(Math, SingleFixedRoundingPreservesTiesSignedZeroAndSpecialValuesAcrossAmbie
         }
         const SIMDVectorSingle special = VectorSetInt(specialBits[0], specialBits[1], specialBits[2], specialBits[3]);
         ASSERT_TRUE(ClearFloatingPointExceptions(FE_ALL_EXCEPT));
-        const Array<SIMDVectorSingle, 4> specialResults = { VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
+        alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 4> specialResults = { VectorRound(special), VectorTruncate(special), VectorFloor(special), VectorCeiling(special) };
         const i32 invalid = TestFloatingPointExceptions(FE_INVALID);
         EXPECT_EQ(invalid, 0) << mode;
         for(usize operation = 0u; operation < LengthOf(specialResults); ++operation){
@@ -400,7 +401,7 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
         { -0.0, 0.0, 0x1p+53, -0x1p+53 },
         { 0x1p-1074, -0x1p-1074, 0x1.fffffffffffffp+51, -0x1.fffffffffffffp+51 },
     }};
-    const Array<Array<SIMDVectorDouble, 4>, 4> expected = {{
+    alignas(SIMDVectorDouble) const Array<Array<SIMDVectorDouble, 4>, 4> expected = {{
         {{
             { 0.0, -0.0, 2.0, -2.0 },
             { 0.0, -0.0, 2.0, -2.0 },
@@ -433,7 +434,7 @@ TEST(Math, DoubleFixedRoundingIgnoresAmbientDirectedModesAndKeepsNearestTiesAndS
             continue;
         for(usize row = 0u; row < LengthOf(runtimeInputs); ++row){
             const SIMDVectorDouble input = VectorDoubleSet(runtimeInputs[row][0], runtimeInputs[row][1], runtimeInputs[row][2], runtimeInputs[row][3]);
-            const Array<SIMDVectorDouble, 4> results = { VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input) };
+            alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 4> results = { VectorDoubleRound(input), VectorDoubleTruncate(input), VectorDoubleFloor(input), VectorDoubleCeiling(input) };
             for(usize operation = 0u; operation < LengthOf(results); ++operation){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(BitCast<u64>(results[operation][lane]), BitCast<u64>(expected[operation][row][lane])) << mode << ':' << operation << ':' << row << ':' << lane;

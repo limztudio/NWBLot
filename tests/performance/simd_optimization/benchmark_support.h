@@ -153,7 +153,7 @@ VerificationSweep VerifyRoundingModes(Verify&& verify)noexcept(noexcept(DeclVal<
 
 template<usize LanesPerIteration, typename ReduceFn>
 NWB_NOINLINE SIMDVectorDouble ThroughputWorkload(const Dataset& data, const usize iterations, ReduceFn&& reduce)noexcept{
-    Array<SIMDVectorDouble, 8> accumulators = {};
+    alignas(SIMDVectorDouble) Array<SIMDVectorDouble, 8> accumulators = {};
     for(usize lane = 0u; lane < 8u; ++lane)
         accumulators[lane] = VectorDoubleSet(0.125, 0.25, 0.5, 1.0);
     for(usize iteration = 0u; iteration < iterations; ++iteration){

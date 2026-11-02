@@ -442,7 +442,8 @@ template<typename StatisticsT>
 }
 
 b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept{
-    const Array<SIMDVectorDouble, 6u> durations = {
+    // The Windows standard library may under-align arrays of vector types.
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 6u> durations = {
         VectorDoubleSet(statistics.compile.declarationSeconds, statistics.compile.analysisSeconds, statistics.compile.validationSeconds, statistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(statistics.compile.hazardAnalysisSeconds, statistics.compile.topologicalOrderSeconds, statistics.compile.queueAssignmentSeconds, statistics.compile.planningSeconds),
         VectorDoubleSet(statistics.compile.packetizationSeconds, statistics.compile.resourceStatePlanningSeconds, statistics.compile.packetDependencyPlanningSeconds, statistics.compile.totalSeconds),
@@ -460,7 +461,7 @@ b8 IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statist
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
-    const Array<SIMDVectorDouble, 2u> durations = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 2u> durations = {
         VectorDoubleSet(statistics.recording.commandListAcquisitionSeconds, statistics.recording.graphBarrierRecordingSeconds, statistics.recording.taskRecordSeconds, statistics.recording.recordingSeconds),
         VectorDoubleSet(statistics.submission.submissionSeconds, 0.0, 0.0, 0.0),
     };
@@ -478,7 +479,7 @@ b8 IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueue
 }
 
 b8 IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
-    const Array<SIMDVectorDouble, 7u> durations = {
+    alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 7u> durations = {
         VectorDoubleSet(ownerStatistics.compile.declarationSeconds, ownerStatistics.compile.analysisSeconds, ownerStatistics.compile.validationSeconds, ownerStatistics.compile.dependencyAnalysisSeconds),
         VectorDoubleSet(ownerStatistics.compile.hazardAnalysisSeconds, ownerStatistics.compile.topologicalOrderSeconds, ownerStatistics.compile.queueAssignmentSeconds, ownerStatistics.compile.planningSeconds),
         VectorDoubleSet(ownerStatistics.compile.packetizationSeconds, ownerStatistics.compile.resourceStatePlanningSeconds, ownerStatistics.compile.packetDependencyPlanningSeconds, ownerStatistics.compile.totalSeconds),

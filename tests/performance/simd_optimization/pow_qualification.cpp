@@ -388,14 +388,14 @@ void PrintCounts(const StringView category, const Counts& counts){
 
 [[nodiscard]] i32 VerifyTraps([[maybe_unused]] const NotNull<Evaluate> evaluate){
 #if defined(NWB_PLATFORM_WINDOWS)
-    const Array<SIMDVectorSingle, 5> x = {
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> x = {
         VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(0x1.fffffep127f, 1.0f, 1.0f, 1.0f),
         VectorSet(0.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(0x1.fffffep127f, -1.0f, 1.0f, 1.0f),
         VectorSet(-1.0f, 0x1.fffffep127f, 1.0f, 1.0f),
     };
-    const Array<SIMDVectorSingle, 5> y = {
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 5> y = {
         VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
         VectorSet(2.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(-1.0f, 1.0f, 1.0f, 1.0f),
@@ -503,12 +503,12 @@ struct TrapEdgeObservation{
 #else
     constexpr Array<u32, 1> s_DenormalModes = { _DN_SAVE };
 #endif
-    const Array<SIMDVectorSingle, 3> x = {
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> x = {
         VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
         VectorSet(0.5f, 1.0f, 1.0f, 1.0f),
         VectorSetInt(1u, 0x3f800000u, 0x3f800000u, 0x3f800000u),
     };
-    const Array<SIMDVectorSingle, 3> y = {
+    alignas(SIMDVectorSingle) const Array<SIMDVectorSingle, 3> y = {
         VectorSet(149.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(127.0f, 1.0f, 1.0f, 1.0f),
         VectorSet(0.0f, 1.0f, 1.0f, 1.0f),

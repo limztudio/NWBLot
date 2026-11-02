@@ -15,10 +15,10 @@
 TEST(FrustumAffineBoundaries, NonuniformScaleAndShearRetainInteriorPoints){
     const BoundingFrustum source(Float3U(0.0f, 0.0f, 0.0f), Float4(0.0f, 0.0f, 0.0f, 1.0f), 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 2.0f);
     const BoundingDoubleFrustum doubleSource(Double3U(0.0, 0.0, 0.0), Double4(0.0, 0.0, 0.0, 1.0), 1.0, -1.0, 1.0, -1.0, 1.0, 2.0);
-    Array<SIMDMatrix, 5u> matrices = { MatrixScaling(2.0f, 1.0f, 1.0f), MatrixIdentity(), MatrixScaling(-2.0f, 1.0f, 1.0f), MatrixIdentity(), MatrixScaling(1.0f, 1.0f, 0.0f) };
+    alignas(SIMDMatrix) Array<SIMDMatrix, 5u> matrices = { MatrixScaling(2.0f, 1.0f, 1.0f), MatrixIdentity(), MatrixScaling(-2.0f, 1.0f, 1.0f), MatrixIdentity(), MatrixScaling(1.0f, 1.0f, 0.0f) };
     matrices[1].v[0] = VectorSet(1.0f, 1.0f, 0.0f, 0.0f);
     matrices[3].v[2] = VectorSet(2.0f, 0.0f, 1.0f, 0.0f);
-    Array<SIMDMatrixDouble, 5u> doubleMatrices = { MatrixDoubleScaling(2.0, 1.0, 1.0), MatrixDoubleIdentity(), MatrixDoubleScaling(-2.0, 1.0, 1.0), MatrixDoubleIdentity(), MatrixDoubleScaling(1.0, 1.0, 0.0) };
+    alignas(SIMDMatrixDouble) Array<SIMDMatrixDouble, 5u> doubleMatrices = { MatrixDoubleScaling(2.0, 1.0, 1.0), MatrixDoubleIdentity(), MatrixDoubleScaling(-2.0, 1.0, 1.0), MatrixDoubleIdentity(), MatrixDoubleScaling(1.0, 1.0, 0.0) };
     doubleMatrices[1].v[0] = SIMDVectorDouble{ 1.0, 1.0, 0.0, 0.0 };
     doubleMatrices[3].v[2] = SIMDVectorDouble{ 2.0, 0.0, 1.0, 0.0 };
     for(usize index = 0u; index < LengthOf(matrices); ++index){

@@ -219,7 +219,7 @@ TEST(Math, DoubleRawIntegerEqualityRequiresBoth32BitHalvesOfEveryLane){
     for(usize changedLane = 0u; changedLane < 4u; ++changedLane){
         for(const u64 difference : differences){
             const SIMDVectorDouble second = VectorDoubleSetIntByIndex(first, firstBits[changedLane] ^ difference, changedLane);
-            const Array<SIMDVectorDouble, 2> equality = { VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
+            alignas(SIMDVectorDouble) const Array<SIMDVectorDouble, 2> equality = { VectorDoubleEqualInt(first, second), VectorDoubleEqualInt(second, first) };
             for(const SIMDVectorDouble mask : equality){
                 for(usize lane = 0u; lane < 4u; ++lane)
                     EXPECT_EQ(VectorDoubleGetIntByIndex(mask, lane), lane == changedLane ? 0u : Limit<u64>::s_Max) << changedLane << ':' << difference << ':' << lane;

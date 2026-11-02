@@ -190,7 +190,7 @@ template<typename Scalar, b8 Candidate, b8 Latency>
             data[index].threshold = 1e-12f;
         }
     }
-    Array<Vector, 8> accumulators = {};
+    alignas(Vector) Array<Vector, 8> accumulators = {};
     for(auto& accumulator : accumulators){
         if constexpr(IsSame_V<Scalar, f64>)
             accumulator = LoadDouble(data[0].position);

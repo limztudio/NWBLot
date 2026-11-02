@@ -25,7 +25,6 @@ NWB_CORE_BEGIN
 // A heap resource is addressed everywhere (C++ and shader) by one opaque 32-bit GpuDescriptorHandle.
 // Bit-layout and class taxonomy are shared; the Vulkan renderer resolves handles through its global heap.
 
-
 // Resource classes a shader selects between.
 // Each class maps to exactly one heap register space, so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
@@ -52,7 +51,6 @@ namespace GpuDescriptorClass{
 
     // AccelStruct selects a distinct immutable descriptor-buffer block per live TLAS generation.
 };
-
 
 // One opaque 32-bit integer: the only thing that crosses the C++/shader boundary.
 //   bits 31..28 (4): class tag - GpuDescriptorClass::Enum (<= Count classes, fits with headroom)
@@ -96,7 +94,6 @@ inline constexpr b8 operator!=(const GpuDescriptorHandle lhs, const GpuDescripto
 static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
-
 // Values connecting the generic descriptor heap to the shared shader ABI.
 // Core validates this payload without depending on the implementation-owned macro contract; stricter layout checks run at initialize().
 struct GpuDescriptorHeapAbi{
@@ -137,7 +134,6 @@ public:
     }
 };
 
-
 // Capacities are hard ceilings (no mid-frame growth).
 // Effective caps clamp to device limits at initialize() and are logged; zero means "use the renderer default".
 struct GpuDescriptorHeapDesc{
@@ -147,13 +143,9 @@ struct GpuDescriptorHeapDesc{
 
 
 public:
-    constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value)noexcept{ resourceCapacity = value; return *this; }
-
-    constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value)noexcept{ samplerCapacity = value; return *this; }
 
     constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value)noexcept{ bindlessHeapAbi = value; return *this; }
 };
-
 
 // Coherent-by-value lifecycle snapshot for the descriptor-buffer global heap.
 // The Vulkan backend samples every field while holding its heap mutex.

@@ -98,18 +98,8 @@ public:
         }
     }
 
-    template<typename CutterHandler>
-    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const noexcept(noexcept(forEachReceiverCutter(DeclVal<const CsgReceiverDrawState&>(), handler))){
-        const auto range = resolveReceiverCutterRange(entity);
-        if(!range)
-            return;
-
-        forEachReceiverCutter(MakeCsgReceiverDrawState(CsgReceiverKind::Static, *range), handler);
-    }
-
 
 private:
-    [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(Core::ECS::EntityID entity)const noexcept;
     [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(const CsgReceiverComponent& receiver)const noexcept;
 
 

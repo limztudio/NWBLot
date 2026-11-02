@@ -5,7 +5,6 @@
 #include "fixture_text_shaping.h"
 
 #include <global/algorithm.h>
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,10 +39,16 @@ void ReverseGlyphs(Impl::Ui::ShapedRun& run)noexcept{
 }
 
 Expected<Impl::Ui::ShapedRun, Impl::Ui::TextLayoutStatus::Enum> FixtureShaper::shape(const Impl::Ui::ShapeRequest& request){
+    if(request.text == "FAIL")
+        return MakeUnexpected(Impl::Ui::TextLayoutStatus::MissingGlyph);
     Impl::Ui::ShapedRun run(m_arena);
     run.metrics = { 8.0f, 2.0f, 2.0f };
     if(request.text == "ffi")
         run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 30.0f, 0.0f }, {} });
+    else if(request.text == "A\xcc\x81"){
+        run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, { -1.0f, -8.0f, 12.0f, 10.0f } });
+        run.glyphs.push_back({ {}, 2u, 0u, 3u, { -4.0f, -2.0f }, {}, { 0.0f, -8.0f, 3.0f, 2.0f } });
+    }
     else if(request.text == "A\xcc\x81" "B"){
         run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, {} });
         run.glyphs.push_back({ {}, 2u, 3u, 4u, {}, { 10.0f, 0.0f }, {} });

@@ -8,8 +8,8 @@ import platform
 import sys
 
 from combo_native import ComboNativeInput
-from combo_probe_common import center
 from combo_probe import COMBO_PROBE
+from probe_common import center
 from window_smoke import parse_args
 from window_capture_smoke import run_smoke_main
 from keyed_run import KeyedRun, run_keyed_fixture

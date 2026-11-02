@@ -22,8 +22,21 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename Source>
+[[nodiscard]] inline Expected<u64> FindEnabledListSourceRow(const Source& source, const u64 start, const b8 reverse)noexcept{
+    if(start >= source.rowCount())
+        return MakeUnexpected(Failure{});
+    for(u64 candidate = start; candidate < source.rowCount(); reverse ? --candidate : ++candidate){
+        if(source.enabled(candidate))
+            return candidate;
+        if(reverse && candidate == 0u)
+            break;
+    }
+    return MakeUnexpected(Failure{});
+}
+
 // Immutable demo rows share key navigation without adding per-source row or label storage.
-template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource>
+template<typename Source, usize LabelCount, u64 DisabledKey = 0u, typename Interface = NWB::Impl::Ui::IListDataSource>
 class UiImmutableListSource : public Interface, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
@@ -41,28 +54,14 @@ public:
     }
 
     virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override final{
-        if(start >= LabelCount)
-            return MakeUnexpected(Failure{});
-        if(enabled(start))
-            return start;
-        u64 index = 0u;
-        if(reverse){
-            if(start == 0u)
-                return MakeUnexpected(Failure{});
-            index = start - 1u;
-        }
-        else{
-            if(start + 1u >= LabelCount)
-                return MakeUnexpected(Failure{});
-            index = start + 1u;
-        }
-        if(!enabled(index))
-            return MakeUnexpected(Failure{});
-        return index;
+        return FindEnabledListSourceRow(*this, start, reverse);
     }
 
-    virtual StringView text(const u64 index)const noexcept override final{
-        return index < LabelCount ? Source::s_Labels[index] : StringView{};
+    virtual StringView text(const u64 index)const noexcept override{
+        if constexpr(requires{ Source::s_Labels; })
+            return index < LabelCount ? Source::s_Labels[index] : StringView{};
+        else
+            return {};
     }
 
     virtual b8 enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
@@ -101,16 +100,7 @@ private:
         }
 
         virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-            if(start >= rowCount())
-                return MakeUnexpected(Failure{});
-            for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
-                if(enabled(candidate)){
-                    return candidate;
-                }
-                if(reverse && candidate == 0u)
-                    break;
-            }
-            return MakeUnexpected(Failure{});
+            return FindEnabledListSourceRow(*this, start, reverse);
         }
 
         virtual StringView text(const u64 index)const noexcept override{

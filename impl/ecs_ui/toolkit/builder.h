@@ -173,6 +173,10 @@ private:
     [[nodiscard]] b8 prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item);
     [[nodiscard]] b8 paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] b8 paintSelectable(const Item& item, const LayoutBox& box);
+    [[nodiscard]] const UiSkinRegion* prepareListFrame(
+        const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token,
+        u64 rowCount, b8 focusOnCommit, WidgetId commandFocus, ListFrame& outFrame
+    );
     [[nodiscard]] b8 prepareListMetrics(ListFrame& frame);
     [[nodiscard]] Expected<ListRow> prepareListRow(const ListFrame& frame, u64 index);
     [[nodiscard]] Expected<ScrollPlacement> measureListPlacement(ListFrame& frame, const LayoutBox& box, const Rect& clip);
@@ -191,7 +195,58 @@ private:
     [[nodiscard]] b8 applySliderInput(SliderFrame& frame, const SliderPlacement& placement, b8 interactive);
     [[nodiscard]] b8 sliderMatches(const SliderFrame& frame)const noexcept{ return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot); }
     void publishSliderResults(b8 valid)noexcept;
+    enum class ListActionOutcome : u8{
+        Continue,
+        Stop,
+        Failed,
+    };
+
     [[nodiscard]] b8 applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
+    template<typename MatchF, typename ApplyActionF>
+    [[nodiscard]] b8 consumeListInput(
+        const WidgetState& rows, const ControlToken& token, const b8 enabled, const PopupToken* const popup,
+        ListState& state, MatchF&& matches, ApplyActionF&& applyAction
+    ){
+        WidgetId thumb;
+        if(!TryMakeWidgetId(rows.id, s_WidgetPartScrollbar, thumb))
+            return false;
+        const auto nextGesture = [&](){
+            return popup ? m_context.input().consumePointerGesture(thumb, rows.declarationGeneration) : m_context.takePartPointerGesture(rows, thumb, enabled);
+        };
+        const auto validGesture = [&](const Expected<PointerGesture>& gesture)noexcept{
+            return gesture && gesture->control == token && (!popup || gesture->popup == *popup);
+        };
+        const auto nextAction = [&](){
+            return popup ? m_context.input().consumeControlAction(rows.id, rows.declarationGeneration, token) : m_context.takeControlAction(rows, enabled, token);
+        };
+        const auto validAction = [&](const Expected<ControlAction>& action)noexcept{
+            return action && (!popup || action->popup == *popup);
+        };
+        auto gesture = nextGesture();
+        b8 haveGesture = validGesture(gesture);
+        auto action = nextAction();
+        b8 haveAction = validAction(action);
+        while(haveGesture || haveAction){
+            if(!matches())
+                return false;
+            if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
+                if(!applyListGesture(state, *gesture))
+                    return false;
+                gesture = nextGesture();
+                haveGesture = validGesture(gesture);
+            }
+            else{
+                const ListActionOutcome outcome = applyAction(*action);
+                if(outcome == ListActionOutcome::Failed)
+                    return false;
+                if(outcome == ListActionOutcome::Stop)
+                    return true;
+                action = nextAction();
+                haveAction = validAction(action);
+            }
+        }
+        return matches();
+    }
     [[nodiscard]] ComboResult declareCombo(
         AStringView stableKey, const IListDataSource& source,
         const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state,

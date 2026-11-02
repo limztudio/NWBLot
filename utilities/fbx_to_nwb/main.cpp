@@ -20,21 +20,7 @@ namespace __hidden_fbx_to_nwb_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_LoggerAppName = NWB_TEXT("fbx_to_nwb");
-inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[fbx_to_nwb] logger.init() failed");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-int Run(const int argc, char** argv){
-    NWB::Log::ClientStandalone logger;
-    if(!logger.init(s_LoggerAppName)){
-        NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
-        return NWB::FbxToNwb::s_FbxToNwbEntryFailure;
-    }
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-
+static int Run(const int argc, char** argv){
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = NWB::FbxToNwb::ComputeWorkerCount(coreCount);
     NWB::Core::CpuTaskScheduler cpuScheduler(workerCount);
@@ -52,6 +38,7 @@ int Run(const int argc, char** argv){
     return result;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -61,7 +48,7 @@ int Run(const int argc, char** argv){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(__hidden_fbx_to_nwb_main::Run)
+NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, NWB_TEXT("fbx_to_nwb"), NWB::FbxToNwb::s_FbxToNwbEntryFailure, __hidden_fbx_to_nwb_main::Run)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

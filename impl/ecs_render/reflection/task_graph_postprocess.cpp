@@ -37,14 +37,9 @@ namespace __hidden_task_graph_postprocess{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TemporalParameters = ReflectionTemporalPushConstants;
-static_assert(sizeof(TemporalParameters) == NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
-
-using SpatialParameters = ReflectionSpatialPushConstants;
-static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES);
-
-using DepthReduceParameters = ReflectionDepthReducePushConstants;
-static_assert(sizeof(DepthReduceParameters) == NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES);
+static_assert(sizeof(ReflectionTemporalPushConstants) == NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
+static_assert(sizeof(ReflectionSpatialPushConstants) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES);
+static_assert(sizeof(ReflectionDepthReducePushConstants) == NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES);
 
 struct DepthReduceTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -54,7 +49,7 @@ public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;
-        DepthReduceParameters parameters;
+        ReflectionDepthReducePushConstants parameters;
     };
 
 
@@ -101,7 +96,7 @@ public:
         if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)
             return true;
         commandList.endRenderPass();
-        TemporalParameters parameters;
+        ReflectionTemporalPushConstants parameters;
         parameters.width = payload.width;
         parameters.height = payload.height;
         parameters.currentRadianceUavSlot = payload.snapshot.current.storageSlot;
@@ -140,7 +135,7 @@ public:
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;
-        SpatialParameters parameters;
+        ReflectionSpatialPushConstants parameters;
     };
 
 
@@ -271,7 +266,7 @@ Expected<Core::GpuTaskId> DeclareReflectionDepthPyramidTasks(
     for(u32 mipIndex = 0u; mipIndex < pyramid.mipCount; ++mipIndex){
         const ReflectionDepthPyramidMip& destination = pyramid.mips[mipIndex];
         const ReflectionDepthPyramidMip& source = pyramid.mips[mipIndex == 0u ? 0u : mipIndex - 1u];
-        DepthReduceParameters parameters;
+        ReflectionDepthReducePushConstants parameters;
         parameters.sourceSlot = mipIndex == 0u ? pyramid.sourceDepthSlot : source.sampledSlot;
         parameters.destinationSlot = destination.storageSlot;
         parameters.sourceWidth = source.width;
@@ -345,7 +340,7 @@ Expected<Core::GpuTaskId> DeclareReflectionPostprocessTasks(
     desc = ReflectionTaskDesc(s_ReflectionSpatialTaskName, s_ReflectionSpatialTaskLabel, dependency);
     desc.setResourceUses(uses);
     desc.setTiming(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
-    SpatialParameters spatialParameters;
+    ReflectionSpatialPushConstants spatialParameters;
     spatialParameters.width = resources.parameters.width;
     spatialParameters.height = resources.parameters.height;
     spatialParameters.sourceRadianceSrvSlot = snapshot.current.sampledSlot;

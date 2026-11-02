@@ -33,7 +33,7 @@ inline constexpr TStringView s_MeshSerializeContext = NWB_TEXT("MeshAssetCodec::
 #endif
 inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
 
-static_assert(sizeof(MeshBinaryHeader) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 14u), "MeshBinaryHeader layout drifted");
+static_assert(sizeof(MeshBinaryHeader) == sizeof(u32) + (sizeof(u64) * 11u), "MeshBinaryHeader layout drifted");
 static_assert(alignof(MeshBinaryHeader) == 1u, "MeshBinaryHeader must stay packed");
 
 

@@ -94,35 +94,17 @@ b8 Context::endPopupScope(const b8 visible)noexcept{
 
 void Context::discardPopupScope(const PopupToken& token)noexcept{
     Array<b8, s_InputMaxPopups> removed{};
-    b8 found = false;
-    for(usize index = 0u; index < m_popups.size(); ++index){
-        removed[index] = m_popups[index].scope.token == token;
-        for(usize ancestor = 0u; ancestor < index && !removed[index]; ++ancestor)
-            removed[index] = removed[ancestor] && m_popups[index].scope.parent == m_popups[ancestor].scope.token;
-        found |= removed[index];
-        if(!removed[index])
-            continue;
-        for(usize active = 0u; active < m_popupDepth; ++active){
-            if(m_popupStack[active] == m_popups[index].scope.token){
-                fail();
-                return;
-            }
+    if(!MarkRemovedPopupSubtree(m_popups, [&](const PopupToken& candidate)noexcept{ return candidate == token; }, removed))
+        return;
+    for(usize active = 0u; active < m_popupDepth; ++active){
+        if(IsRemovedPopupToken(m_popups, removed, m_popupStack[active])){
+            fail();
+            return;
         }
     }
-    if(!found)
-        return;
     m_input.closePopup(token);
-    for(usize index = m_targets.size(); index > 0u; --index){
-        b8 remove = false;
-        for(usize popup = 0u; popup < m_popups.size(); ++popup)
-            remove |= removed[popup] && m_targets[index - 1u].target.popup == m_popups[popup].scope.token;
-        if(remove)
-            m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
-    }
-    for(usize index = m_popups.size(); index > 0u; --index){
-        if(removed[index - 1u])
-            m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
-    }
+    EraseIfRemovedPopupToken(m_targets, m_popups, removed, [](const ContextOwnedTarget& owned)noexcept -> const PopupToken&{ return owned.target.popup; });
+    EraseRemovedPopups(m_popups, removed);
 }
 
 u32 Context::popupLayer(const PopupToken& token)const noexcept{

@@ -91,9 +91,6 @@ template<typename CONTAINER>
 constexpr BackInsertIterator<CONTAINER> BackInserter(CONTAINER& container)noexcept{ return BackInsertIterator<CONTAINER>(container); }
 
 template<typename CONTAINER>
-constexpr FrontInsertIterator<CONTAINER> FrontInserter(CONTAINER& container)noexcept{ return FrontInsertIterator<CONTAINER>(container); }
-
-template<typename CONTAINER>
 constexpr auto LengthOf(const CONTAINER& container)noexcept(noexcept(container.size()))->decltype(container.size()){ return container.size(); }
 
 template<typename T, size_t Size>

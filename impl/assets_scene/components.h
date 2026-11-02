@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <impl/assets_subsystem/asset.h>
+
 #include <core/assets/auto_registration.h>
 #include <core/assets/module.h>
 #include <core/common/log.h>
@@ -134,7 +136,6 @@ TypedComponent<ComponentT>::~TypedComponent()noexcept = default;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ComponentInstanceFactory = Core::Assets::PolymorphicAssetInstanceFactory<IComponent>;
 using ComponentTypeAutoRegistrar = Core::Assets::PolymorphicAssetTypeAutoRegistrar<IComponent>;
 
 

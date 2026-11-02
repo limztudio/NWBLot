@@ -81,8 +81,7 @@ void DeclareGraph(Core::GpuTaskGraph& graph, const usize taskCount, const Shape:
         scheduling.cost = static_cast<Core::GpuTaskCostHint::Enum>(taskIndex % Core::GpuTaskCostHint::Count);
         scheduling.mergeWithPrevious = shape == Shape::MergedPairs && taskIndex % 2u != 0u;
         const b8 graphicsTask = shape == Shape::MergedPairs ? (taskIndex / 2u) % 2u == 0u : taskIndex % 2u == 0u;
-        Array<char, 32u> identityText = {};
-        const auto derivedNameResult = DeriveName(Name("tests/queue_partial_dag/"), FormatDecimal(taskIndex, identityText));
+        const auto derivedNameResult = IndexedName(Name("tests/queue_partial_dag/"), taskIndex);
         ASSERT_TRUE(derivedNameResult);
         const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Partial DAG Task", graphicsTask ? GraphicsCommands() : ComputeCommands(), scheduling, {}, Span(dependencies.data(), dependencies.size()), graph);
         ASSERT_TRUE(taskResult);
@@ -353,10 +352,9 @@ TEST(GpuTaskQueueScoring, OrderedAndUnusedReachabilityAvoidMaskAllocationsAcross
         Core::GpuTaskGraph graph(testArena.arena);
         Core::GpuTaskId preceding;
         for(usize index = 0u; index < s_TaskCount; ++index){
-            Array<char, 32u> identityText = {};
             Core::GpuTaskSchedulingHint scheduling;
             scheduling.cost = Core::GpuTaskCostHint::Large;
-            const auto derivedNameResult = DeriveName(Name("tests/queue_no_masks/"), FormatDecimal(index, identityText));
+            const auto derivedNameResult = IndexedName(Name("tests/queue_no_masks/"), index);
             ASSERT_TRUE(derivedNameResult);
             const auto precedingTaskAdmission = AddTaskWithCommands(*derivedNameResult, "Ordered Queue Task", ComputeCommands(), scheduling, {}, preceding.valid() ? Span(&preceding, 1u) : Span<const Core::GpuTaskId>{}, graph);
             ASSERT_TRUE(precedingTaskAdmission);

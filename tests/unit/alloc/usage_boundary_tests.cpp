@@ -8,7 +8,6 @@
 
 #include <global/arena_memory.h>
 #include <global/limit.h>
-#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 #include <tbb/scalable_allocator.h>
@@ -24,7 +23,7 @@ namespace __hidden_allocator_usage_boundary_tests{
 
 
 using namespace NWB::Core::Alloc;
-using ArenaOwnerTestSupport::OwnerStats;
+using NWB::Tests::OwnerStats;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

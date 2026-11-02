@@ -87,12 +87,12 @@ protected:
 
 TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
     m_options.assetType.clear();
-    EXPECT_FALSE(Builder::BuildAssets(m_options));
+    EXPECT_FALSE(Builder::BuildAssets(m_options, m_scratchArena));
     EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
     EXPECT_EQ(m_logger.errorCount(), 1u);
 
     ASSERT_TRUE(m_options.assetType.assign(Assets::AssetsVolumeCookDetail::s_AssetVolumeName));
-    EXPECT_FALSE(Builder::BuildAssets(m_options));
+    EXPECT_FALSE(Builder::BuildAssets(m_options, m_scratchArena));
     EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
     EXPECT_EQ(m_logger.errorCount(), 2u);
 }

@@ -225,8 +225,8 @@ b8 DescriptorBufferManager::reserveInitialCapacityForBindingGeneration(const u32
         return false;
 
     const u32 alignmentBytes = getOffsetAlignmentBytes();
-    const auto resourceCapacityBytes = AlignUpU32Checked(Max(resourceBytes, m_resourceSegment.capacityBytes), alignmentBytes);
-    const auto samplerCapacityBytes = AlignUpU32Checked(Max(samplerBytes, m_samplerSegment.capacityBytes), alignmentBytes);
+    const auto resourceCapacityBytes = AlignUpChecked<u32>(Max(resourceBytes, m_resourceSegment.capacityBytes), alignmentBytes);
+    const auto samplerCapacityBytes = AlignUpChecked<u32>(Max(samplerBytes, m_samplerSegment.capacityBytes), alignmentBytes);
     if(!resourceCapacityBytes || !samplerCapacityBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Initial descriptor-buffer layout capacity exceeds aligned 32-bit storage."));
         return false;
@@ -315,7 +315,7 @@ Expected<DescriptorBufferSegment> DescriptorBufferManager::allocateForBindingGen
         FreeRange range = segment.freeRanges[i];
         NWB_ASSERT(range.sizeBytes <= UINT32_MAX - range.offsetBytes);
 
-        const auto alignedOffset = AlignUpU32Checked(range.offsetBytes, alignmentBytes);
+        const auto alignedOffset = AlignUpChecked<u32>(range.offsetBytes, alignmentBytes);
         if(!alignedOffset)
             continue;
 
@@ -344,7 +344,7 @@ Expected<DescriptorBufferSegment> DescriptorBufferManager::allocateForBindingGen
         return finishAllocation(*alignedOffset);
     }
 
-    const auto alignedOffset = AlignUpU32Checked(segment.writableOffsetBytes, alignmentBytes);
+    const auto alignedOffset = AlignUpChecked<u32>(segment.writableOffsetBytes, alignmentBytes);
     if(!alignedOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer alignment overflows 32-bit offsets."));
         return MakeUnexpected(Failure{});

@@ -75,21 +75,6 @@ NWB_INLINE NotNull<T*> StridePointer(NotNull<T*> pointer, usize stride, usize in
     return MakeNotNull(reinterpret_cast<T*>(reinterpret_cast<ByteT*>(pointer.get()) + stride * index));
 }
 
-template<typename T> requires(IsIntegral_V<T>)
-NWB_INLINE T ComparisonMaskR(T mask, T activeMask)noexcept{
-    mask &= activeMask;
-    if(mask == activeMask)
-        return static_cast<T>(s_CRMASK_CR6TRUE);
-    if(mask == 0)
-        return static_cast<T>(s_CRMASK_CR6FALSE);
-    return T{ 0 };
-}
-
-template<typename T> requires(IsIntegral_V<T>)
-NWB_INLINE T BoundsMaskR(T mask, T activeMask)noexcept{
-    return (mask & activeMask) == activeMask ? static_cast<T>(s_CRMASK_CR6BOUNDS) : T{ 0 };
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -363,18 +348,6 @@ NWB_INLINE u32 NWB_SIMD_CALL GetIntLane(SIMDVectorSingle value)noexcept{
 #endif
     }
 #endif
-}
-
-template<u32 Lane>
-NWB_INLINE void NWB_SIMD_CALL StoreLane(f32& out, SIMDVectorSingle value)noexcept{
-    static_assert(Lane < 4u);
-    out = GetLane<Lane>(value);
-}
-
-template<u32 Lane>
-NWB_INLINE void NWB_SIMD_CALL StoreIntLane(u32& out, SIMDVectorSingle value)noexcept{
-    static_assert(Lane < 4u);
-    out = GetIntLane<Lane>(value);
 }
 
 template<u32 Lane>

@@ -50,7 +50,6 @@ b8 Builder::beginPopup(const AStringView stableKey, PopupState& state, const Pop
     scope.parent = m_context.popupToken();
     scope.bounds = placement->bounds;
     scope.viewport = placement->viewport;
-    scope.modal = options.modal;
     scope.dismissOutside = options.dismissOutside;
     scope.dismissCancel = options.dismissCancel;
     scope.autofocus = options.autofocus;

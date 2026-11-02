@@ -46,8 +46,8 @@ struct AvboitComputeEffectRecordInputs{
     mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 };
 
-template<typename DispatchFn>
-[[nodiscard]] inline b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, DispatchFn&& dispatch){
+template<typename DispatchMethod>
+[[nodiscard]] inline b8 RecordAvboitComputeEffect(const AvboitComputeEffectRecordInputs& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context, const DispatchMethod dispatch){
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     b8 timingRecorded = false;
     const auto timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
@@ -56,7 +56,7 @@ template<typename DispatchFn>
         return false;
     }
     payload.timingAttribution = *timingAttribution;
-    dispatch(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
+    (payload.avboitSystem.*dispatch)(commandList, payload.targets, payload.timingAttribution, &timingRecorded);
     if(!timingRecorded && payload.timingFeedback){
         payload.timingFeedback->discardRecording(payload.timingAttribution);
         payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
@@ -75,6 +75,26 @@ inline void DiscardAvboitComputeEffect(AvboitComputeEffectRecordInputs& payload)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
+
+struct AvboitComputeEffectGraphTaskBase{
+    // The avboit system, the frame targets, and the timing ticket are required: effects always dispatch against this frame's targets.
+    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
+    using Payload = AvboitComputeEffectRecordInputs;
+
+
+public:
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
+
+public:
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        AcceptAvboitComputeEffect(payload, token);
+    }
+
+    static void Discarded(Payload& payload)noexcept{
+        DiscardAvboitComputeEffect(payload);
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -72,11 +72,7 @@ struct MaterialPassMeshResourceSnapshot{
 
 
 public:
-    [[nodiscard]] b8 geometryHeapHandlesReady()const noexcept;
-
-    [[nodiscard]] b8 valid()const noexcept{
-        return sourceBuffers.buffersValid() && geometryHeapHandlesReady() && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
-    }
+    [[nodiscard]] b8 valid()const noexcept;
 };
 
 struct MaterialPassPipelineResourceSnapshot{
@@ -138,6 +134,10 @@ public:
 
 
 using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
+
+namespace ECSRenderDetail{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

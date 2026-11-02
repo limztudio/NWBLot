@@ -7,6 +7,7 @@
 
 #include "namespace.h"
 #include "CoolStuff/Testbed/ui_gallery_constants.adhd.h"
+#include "ui_immutable_list_source.h"
 
 #include <impl/ecs_ui/paint_context.h>
 #include <impl/ecs_ui/toolkit/widgets/list.h>
@@ -23,19 +24,9 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiListSource final : public NWB::Impl::Ui::IListDataSource, NoCopy{
+class UiListSource final : public UiImmutableListSource<UiListSource, s_VirtualListRowCount>{
 public:
-    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
-
-    virtual u64 revision()const noexcept override{ return 1u; }
-
-    virtual u64 rowCount()const noexcept override{ return s_VirtualListRowCount; }
-
-    virtual u64 key(u64 index)const noexcept override{ return index < rowCount() ? index + 1u : 0u; }
-    virtual Expected<u64> indexOf(u64 keyValue)const noexcept override;
-    virtual Expected<u64> findEnabled(u64 start, b8 reverse)const noexcept override;
     virtual StringView text(u64 index)const noexcept override;
-    [[nodiscard]] virtual b8 enabled(u64 index)const noexcept override{ return index < rowCount(); }
 
 
 private:

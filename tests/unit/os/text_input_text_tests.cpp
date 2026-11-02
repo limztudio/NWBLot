@@ -4,8 +4,6 @@
 
 #include <core/os/text_input_text.h>
 
-#include <tests/common/test_context.h>
-
 #include <gtest/gtest.h>
 
 

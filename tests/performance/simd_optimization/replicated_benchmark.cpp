@@ -46,7 +46,6 @@ inline constexpr Array<StringView, Operation::Count> s_OperationNames = {
     "length2", "length3", "length4", "reciprocal2", "reciprocal3", "reciprocal4", "normalize2", "normalize3", "normalize4", "clamp2", "clamp3", "clamp4",
 };
 using SimdOptimizationBenchmark::Dataset;
-using SimdOptimizationBenchmark::EqualBits;
 using SimdOptimizationBenchmark::InitializeDataset;
 using SimdOptimizationBenchmark::s_DataCount;
 

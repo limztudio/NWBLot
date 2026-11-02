@@ -71,11 +71,9 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     tickets.reserve(taskCount);
     const Core::GpuTaskCommandRequirements commands{ Core::GpuQueueCapability::Graphics };
     for(usize index = 0u; index < taskCount; ++index){
-        Array<char, 32u> text = {};
-        const AStringView suffix = FormatDecimal(index, text);
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % mergeGroupSize != 0u;
-        const auto derivedNameResult = DeriveName(Name("tests/submission_bindings/task/"), suffix);
+        const auto derivedNameResult = IndexedName(Name("tests/submission_bindings/task/"), index);
         if(!derivedNameResult)
             return false;
         const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Submission Binding", commands, scheduling, {}, scheduling.mergeWithPrevious ? Span(&tasks.back(), 1u) : Span<const Core::GpuTaskId>{}, graph);

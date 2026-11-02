@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_graph_test_utils.h"
+
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/task_graph.h>
-
-#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -35,6 +35,7 @@ namespace __hidden_task_graph_storage_tests{
 constexpr AStringView s_CompletionLabel = "Storage Completion";
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphStorageTestsTag>;
+using TaskGraphTestUtils::IndexedName;
 inline constexpr Name s_StorageScratchArena("tests/task/gpu/storage_scratch");
 
 
@@ -48,8 +49,7 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_TaskCount);
     for(usize index = 0u; index < s_TaskCount; ++index){
-        Array<char, 32u> indexText = {};
-        const auto derivedNameResult = DeriveName(Name("tests/graph_storage/task/"), FormatDecimal(index, indexText));
+        const auto derivedNameResult = IndexedName(Name("tests/graph_storage/task/"), index);
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
     }
@@ -121,8 +121,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
     Vector<Name, Core::Alloc::ScratchArena> identities(scratchArena);
     identities.reserve(s_RecordCount);
     for(usize index = 0u; index < s_RecordCount; ++index){
-        Array<char, 32u> indexText = {};
-        const auto derivedNameResult = DeriveName(Name("tests/graph_storage/record/"), FormatDecimal(index, indexText));
+        const auto derivedNameResult = IndexedName(Name("tests/graph_storage/record/"), index);
         ASSERT_TRUE(derivedNameResult);
         identities.push_back(*derivedNameResult);
     }

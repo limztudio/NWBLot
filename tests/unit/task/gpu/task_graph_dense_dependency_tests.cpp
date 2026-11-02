@@ -53,8 +53,7 @@ static void DeclareDenseDependencies(Core::GpuTaskGraph& graph, const usize task
     uses.reserve(scenario == Scenario::Explicit ? 0u : taskCount);
     if(scenario != Scenario::Explicit){
         for(usize index = 0u; index < taskCount; ++index){
-            Array<char, 32u> text = {};
-            const auto resourceNameResult = DeriveName(Name("tests/dense_dependencies/resource/"), FormatDecimal(index, text));
+            const auto resourceNameResult = IndexedName(Name("tests/dense_dependencies/resource/"), index);
             ASSERT_TRUE(resourceNameResult);
             const auto gpuTaskAdmission = AddHazardDomain(graph, *resourceNameResult, "Dense Hazard");
             ASSERT_TRUE(gpuTaskAdmission);
@@ -74,8 +73,7 @@ static void DeclareDenseDependencies(Core::GpuTaskGraph& graph, const usize task
                 });
             }
         }
-        Array<char, 32u> text = {};
-        const auto derivedNameResult = DeriveName(Name("tests/dense_dependencies/task/"), FormatDecimal(index, text));
+        const auto derivedNameResult = IndexedName(Name("tests/dense_dependencies/task/"), index);
         ASSERT_TRUE(derivedNameResult);
         const auto taskResult = AddTask(*derivedNameResult, "Dense Dependency Task", scenario == Scenario::Inferred ? Span<const Core::GpuTaskId>{} : Span(tasks.data(), tasks.size()), Span(uses.data(), uses.size()), {}, {}, {}, graph);
         ASSERT_TRUE(taskResult);

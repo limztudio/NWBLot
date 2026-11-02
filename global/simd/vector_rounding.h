@@ -250,42 +250,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleModAngles(SIMDVectorDouble
     return VectorDoubleSet(Remainder(angles[0], s_Double2PI), Remainder(angles[1], s_Double2PI), Remainder(angles[2], s_Double2PI), Remainder(angles[3], s_Double2PI));
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorAddAngles(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    SIMDVectorSingle result = VectorAdd(v0, v1);
-    SIMDVectorSingle mask = VectorLess(result, s_SIMDNegativePi);
-    SIMDVectorSingle offset = VectorSelect(VectorZero(), s_SIMDTwoPi, mask);
-    mask = VectorGreaterOrEqual(result, s_SIMDPi);
-    offset = VectorSelect(offset, s_SIMDNegativeTwoPi, mask);
-    return VectorAdd(result, offset);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleAddAngles(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    SIMDVectorDouble result = VectorDoubleAdd(v0, v1);
-    SIMDVectorDouble mask = VectorDoubleLess(result, s_DoubleSIMDNegativePi);
-    SIMDVectorDouble offset = VectorDoubleSelect(VectorDoubleZero(), s_DoubleSIMDTwoPi, mask);
-    mask = VectorDoubleGreaterOrEqual(result, s_DoubleSIMDPi);
-    offset = VectorDoubleSelect(offset, s_DoubleSIMDNegativeTwoPi, mask);
-    return VectorDoubleAdd(result, offset);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSubtractAngles(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    SIMDVectorSingle result = VectorSubtract(v0, v1);
-    SIMDVectorSingle mask = VectorLess(result, s_SIMDNegativePi);
-    SIMDVectorSingle offset = VectorSelect(VectorZero(), s_SIMDTwoPi, mask);
-    mask = VectorGreaterOrEqual(result, s_SIMDPi);
-    offset = VectorSelect(offset, s_SIMDNegativeTwoPi, mask);
-    return VectorAdd(result, offset);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSubtractAngles(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    SIMDVectorDouble result = VectorDoubleSubtract(v0, v1);
-    SIMDVectorDouble mask = VectorDoubleLess(result, s_DoubleSIMDNegativePi);
-    SIMDVectorDouble offset = VectorDoubleSelect(VectorDoubleZero(), s_DoubleSIMDTwoPi, mask);
-    mask = VectorDoubleGreaterOrEqual(result, s_DoubleSIMDPi);
-    offset = VectorDoubleSelect(offset, s_DoubleSIMDNegativeTwoPi, mask);
-    return VectorDoubleAdd(result, offset);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -38,8 +38,6 @@ inline constexpr usize s_MergeGroupSize = 2u;
 inline constexpr usize s_ExtraRangeTasks = 4u;
 inline constexpr usize s_ExcludedPacketCount = 1u;
 
-inline constexpr usize s_NumberBufferBytes = 32u;
-
 inline constexpr u64 s_AcceptedTokenValue = 7u;
 
 
@@ -83,10 +81,9 @@ CallbackGraph::CallbackGraph(TestArena& testArena, Core::Alloc::ScratchArena& sc
 b8 CallbackGraph::prepare(const usize taskCount){
     tasks.reserve(taskCount);
     for(usize index = 0u; index < taskCount; ++index){
-        Array<char, s_NumberBufferBytes> suffix = {};
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = index % s_MergeGroupSize != 0u;
-        const auto derivedNameResult = DeriveName(Name("tests/callback_bindings/task/"), FormatDecimal(index, suffix));
+        const auto derivedNameResult = IndexedName(Name("tests/callback_bindings/task/"), index);
         if(!derivedNameResult)
             return false;
         const auto taskResult = AddTaskWithCommands(*derivedNameResult, "Callback Binding Task", GraphicsCommands(), scheduling, {}, scheduling.mergeWithPrevious ? Span(&tasks.back(), 1u) : Span<const Core::GpuTaskId>{}, graph);

@@ -29,31 +29,11 @@ u64 PopupToolsSource::revision()const noexcept{
 }
 
 Expected<u64> PopupToolsSource::indexOf(const u64 value)const noexcept{
-    u64 index = 0u;
-    if(value == 0u || value > count)
-        return MakeUnexpected(Failure{});
-    index = value - 1u;
-    return index;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, false, value);
 }
 
 Expected<u64> PopupToolsSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
-    u64 index = 0u;
-    if(start >= count)
-        return MakeUnexpected(Failure{});
-    index = start;
-    if(index + 1u != 3u)
-        return index;
-    if(reverse){
-        if(index == 0u)
-            return MakeUnexpected(Failure{});
-        --index;
-    }
-    else{
-        ++index;
-        if(index >= count)
-            return MakeUnexpected(Failure{});
-    }
-    return index;
+    return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, reverse, 3u, [](const u64 index)noexcept{ return index + 1u; });
 }
 
 StringView PopupToolsSource::text(const u64 index)const noexcept{

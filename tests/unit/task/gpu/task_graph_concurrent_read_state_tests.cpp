@@ -89,8 +89,7 @@ void CheckSingleLaneStateChangeScratch(usize& scratchPeak, const usize taskCount
     const Core::GpuGraphResourceId resource = *resourceResult;
     ASSERT_TRUE(resource.valid());
     for(usize index = 0u; index < taskCount; ++index){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/task_graph/single_lane_read_state/"), FormatDecimal(index, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/task_graph/single_lane_read_state/"), index);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const Core::GpuTaskResourceUse use{ .resource = resource, .range = {}, .requiredState = index % 2u == 0u ? Core::ResourceStates::ShaderResource : Core::ResourceStates::CopySource, .access = Core::GpuTaskResourceAccess::Read, };

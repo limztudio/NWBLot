@@ -20,7 +20,7 @@
 
 #define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
 #define g_NwbSwShadowPush g_NwbLightSpacePush
-#define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
+#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
 #define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
 #include "light_space_receiver.slangi"
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z

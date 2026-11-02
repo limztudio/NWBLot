@@ -53,7 +53,6 @@ b8 RendererRayTracingSystem::renderSoftShadowTerminalUpsample(Core::CommandList&
     push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
     push.normalSlot = bindless.gbufferNormal.slot();
     push.inputColorSlot = transparentReady ? bindless.shadowSoftHalfA.slot() : bindless.shadowSoftHalfB.slot();
-    push.softHalfSlot = push.inputColorSlot;
     push.momentsSlot = push.inputColorSlot;
     push.outputStorageSlot = bindless.shadowVisibilityStorage.slot();
     push.visibilityStorageSlot = bindless.shadowVisibilityStorage.slot();

@@ -10,7 +10,9 @@ import time
 from contextlib import contextmanager
 
 from interaction_smoke import INPUT_SETTLE_SECONDS, KEY_REPEAT_INTERVAL_SECONDS, PRESS_HOLD_SECONDS, NativeInput, WinInput, WinKeyboardInput
-from window_capture_smoke import LinuxXEvent, SmokeFailure, SmokeSkip, WinPoint
+from window_capture_smoke import SmokeFailure, SmokeSkip
+from window_capture_win32 import WinPoint
+from window_capture_x11 import LinuxXEvent
 
 LIT_AGGREGATE_KEY_MESSAGES_ARE_WIN32_ONLY = "aggregate key messages are Win32-only"
 LIT_UTF_16_LE = "utf-16-le"

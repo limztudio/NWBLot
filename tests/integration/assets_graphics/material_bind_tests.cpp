@@ -383,7 +383,9 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     Path& outputDirectory = cookCase->outputDirectory;
 
     const Path assetRoot = root / s_AssetsDir;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(testArena, assetRoot, AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
+        testArena, assetRoot, AssetsGraphicsFixture::s_MinimalMaterialBindSource, AssetsGraphicsFixture::s_BlockScopedMaterialMeta, AssetsGraphicsFixture::s_MaterialBindShaderProbeSource
+    ));
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 

@@ -8,6 +8,7 @@
 
 #include <global/floating_point_environment.h>
 #include <global/scope_exit.h>
+#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -100,10 +101,10 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     const AStringView firstDotRecord = dot.substr(firstDotGraph, secondDotGraph - firstDotGraph);
     const AStringView secondDotRecord = dot.substr(secondDotGraph, thirdDotGraph - secondDotGraph);
     const AStringView thirdDotRecord = dot.substr(thirdDotGraph);
-    EXPECT_TRUE(ContainsText(firstDotRecord, "GBuffer Pass\\n41.000 ms"));
-    EXPECT_TRUE(ContainsText(secondDotRecord, "Second GBuffer Pass\\n42.000 ms"));
-    EXPECT_TRUE(ContainsText(thirdDotRecord, "Unmatched GBuffer Pass"));
-    EXPECT_FALSE(ContainsText(thirdDotRecord, " ms"));
+    EXPECT_TRUE(Contains(firstDotRecord, "GBuffer Pass\\n41.000 ms"));
+    EXPECT_TRUE(Contains(secondDotRecord, "Second GBuffer Pass\\n42.000 ms"));
+    EXPECT_TRUE(Contains(thirdDotRecord, "Unmatched GBuffer Pass"));
+    EXPECT_FALSE(Contains(thirdDotRecord, " ms"));
 }
 
 TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
@@ -132,10 +133,10 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(reportResult2);
     report = Move(*reportResult2);
     const AStringView dot(report.graph.data(), report.graph.size());
-    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_43_7_0"));
-    EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_44_8_1"));
-    EXPECT_FALSE(ContainsText(dot, " ms"));
-    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "gpu,gbuffer"));
+    EXPECT_TRUE(Contains(dot, "digraph frame_graph_43_7_0"));
+    EXPECT_TRUE(Contains(dot, "digraph frame_graph_44_8_1"));
+    EXPECT_FALSE(Contains(dot, " ms"));
+    EXPECT_TRUE(Contains(AStringView(report.perfCsv.data(), report.perfCsv.size()), "gpu,gbuffer"));
 }
 
 TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsentStatistics){
@@ -159,8 +160,8 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     exactReport = Move(*reportResult3);
     const AStringView exactJson(exactReport.json.data(), exactReport.json.size());
     const AStringView exactDot(exactReport.graph.data(), exactReport.graph.size());
-    EXPECT_TRUE(ContainsText(exactJson, "\"packetSubmissions\": []"));
-    EXPECT_TRUE(ContainsText(exactDot, "runtime_packet_submission_count=0"));
+    EXPECT_TRUE(Contains(exactJson, "\"packetSubmissions\": []"));
+    EXPECT_TRUE(Contains(exactDot, "runtime_packet_submission_count=0"));
 
     Telemetry::Recorder absentRecorder(testArena.arena);
     absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -171,8 +172,8 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     absentReport = Move(*reportResult4);
     const AStringView absentJson(absentReport.json.data(), absentReport.json.size());
     const AStringView absentDot(absentReport.graph.data(), absentReport.graph.size());
-    EXPECT_TRUE(ContainsText(absentJson, "\"packetSubmissions\": null"));
-    EXPECT_TRUE(ContainsText(absentDot, "runtime_packet_submission_count=\"unknown\""));
+    EXPECT_TRUE(Contains(absentJson, "\"packetSubmissions\": null"));
+    EXPECT_TRUE(Contains(absentDot, "runtime_packet_submission_count=\"unknown\""));
 }
 
 TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
@@ -205,7 +206,7 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     EXPECT_EQ(report.summary.eventCount, LengthOf(unsupportedVersions) + 1u);
     EXPECT_EQ(report.summary.parseFailureCount, LengthOf(unsupportedVersions));
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
+    EXPECT_TRUE(Contains(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
 }
 
 TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
@@ -240,9 +241,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView firstPassJson = json.substr(firstPassJsonOffset, resourceJsonOffset - firstPassJsonOffset);
     const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
     const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
-    EXPECT_TRUE(ContainsText(firstPassJson, s_RuntimeStatisticsNullJson));
-    EXPECT_TRUE(ContainsText(resourceJson, s_ResourceWithNullStatisticsJson));
-    EXPECT_TRUE(ContainsText(secondPassJson, s_RuntimeStatisticsNullJson));
+    EXPECT_TRUE(Contains(firstPassJson, s_RuntimeStatisticsNullJson));
+    EXPECT_TRUE(Contains(resourceJson, s_ResourceWithNullStatisticsJson));
+    EXPECT_TRUE(Contains(secondPassJson, s_RuntimeStatisticsNullJson));
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const usize firstPassDotOffset = dot.find("  n0 [");
@@ -260,9 +261,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView firstPassDot = dot.substr(firstPassDotOffset, resourceDotOffset - firstPassDotOffset);
     const AStringView resourceDot = dot.substr(resourceDotOffset, secondPassDotOffset - resourceDotOffset);
     const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
-    EXPECT_TRUE(ContainsText(firstPassDot, s_RuntimeStatisticsNone));
-    EXPECT_TRUE(ContainsText(resourceDot, s_RuntimeStatisticsNone));
-    EXPECT_TRUE(ContainsText(secondPassDot, s_RuntimeStatisticsNone));
+    EXPECT_TRUE(Contains(firstPassDot, s_RuntimeStatisticsNone));
+    EXPECT_TRUE(Contains(resourceDot, s_RuntimeStatisticsNone));
+    EXPECT_TRUE(Contains(secondPassDot, s_RuntimeStatisticsNone));
 }
 
 TEST(Telemetry, TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow){
@@ -297,13 +298,13 @@ TEST(Telemetry, TelemetryReportRetainsFiniteRecordsWhenTimingTotalsOverflow){
     EXPECT_EQ(report->summary.gpuTimingEventCount, 2u);
 
     const AStringView json(report->json.data(), report->json.size());
-    EXPECT_TRUE(ContainsText(json, "\"cpuTimingSeconds\": null"));
-    EXPECT_TRUE(ContainsText(json, "\"gpuTimingSeconds\": null"));
+    EXPECT_TRUE(Contains(json, "\"cpuTimingSeconds\": null"));
+    EXPECT_TRUE(Contains(json, "\"gpuTimingSeconds\": null"));
     const AStringView csv(report->perfCsv.data(), report->perfCsv.size());
-    EXPECT_TRUE(ContainsText(csv, "cpu,large_first,"));
-    EXPECT_TRUE(ContainsText(csv, "cpu,large_second,"));
-    EXPECT_TRUE(ContainsText(csv, "gpu,large_first,"));
-    EXPECT_TRUE(ContainsText(csv, "gpu,large_second,"));
+    EXPECT_TRUE(Contains(csv, "cpu,large_first,"));
+    EXPECT_TRUE(Contains(csv, "cpu,large_second,"));
+    EXPECT_TRUE(Contains(csv, "gpu,large_first,"));
+    EXPECT_TRUE(Contains(csv, "gpu,large_second,"));
 }
 
 

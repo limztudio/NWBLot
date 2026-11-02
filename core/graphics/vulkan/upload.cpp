@@ -43,7 +43,7 @@ Expected<BufferSuballocation> UploadManager::suballocateBuffer(const u64 size, T
     auto& activeLedger = findOrCreateQueueLedgerLocked(queue);
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk)noexcept -> Expected<BufferSuballocation>{
-        const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
+        const auto alignedOffset = AlignUpChecked<u64>(chunk.allocated, static_cast<u64>(alignment));
         if(!alignedOffset)
             return MakeUnexpected(Failure{});
         if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)

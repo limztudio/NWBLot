@@ -97,10 +97,6 @@ void EnableCausticResolveBarriers(Core::CommandList& commandList, DeferredFrameT
     return { targets.causticResolveHalf.get(), targets.bindless.causticResolveHalf.slot(), targets.bindless.causticResolveHalfStorage.slot() };
 }
 
-[[nodiscard]] inline CausticResolvePassResources MakeCausticIrradianceResolvePassResources(DeferredFrameTargets& targets)noexcept{
-    return { targets.causticIrradiance.get(), targets.bindless.causticIrradiance.slot(), targets.bindless.causticIrradianceStorage.slot() };
-}
-
 void DispatchCausticResolvePass(
     Core::CommandList& commandList,
     Core::GpuDescriptorHeap& heap,

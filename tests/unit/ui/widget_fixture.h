@@ -6,6 +6,7 @@
 
 
 #include <tests/unit/ui/native_input.h>
+#include "arithmetic_fixture_rows.h"
 #include "paint_assertions.h"
 #include "widget_id_assertion.h"
 
@@ -130,29 +131,6 @@ inline constexpr AStringView s_ChildPopupKey = "child";
 [[nodiscard]] PopupOptions LargeLoanParentOptions()noexcept;
 [[nodiscard]] PopupOptions LargeLoanChildOptions()noexcept;
 [[nodiscard]] NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept;
-[[nodiscard]] u64 ArithmeticFixtureRowKey(u64 count, u64 removed, b8 reverse, u64 index)noexcept;
-[[nodiscard]] Expected<u64> FindArithmeticFixtureRowIndex(u64 count, u64 removed, b8 reverse, u64 value)noexcept;
-
-template<typename KeyLookup>
-[[nodiscard]] Expected<u64> FindSingleDisabledFixtureRow(const u64 count, const u64 start, const b8 backwards, const u64 disabled, KeyLookup&& rawKey)noexcept(noexcept(static_cast<b8>(rawKey(DeclVal<u64&>()) != disabled))){
-    u64 index = 0u;
-    if(start >= count)
-        return MakeUnexpected(Failure{});
-    index = start;
-    if(rawKey(index) != disabled)
-        return index;
-    if(backwards){
-        if(index == 0u)
-            return MakeUnexpected(Failure{});
-        --index;
-    }
-    else{
-        if(index + 1u == count)
-            return MakeUnexpected(Failure{});
-        ++index;
-    }
-    return index;
-}
 
 struct SkinPaintSample{
     usize quads = 0u;

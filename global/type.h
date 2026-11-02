@@ -68,14 +68,11 @@ using Nullptr = std::nullptr_t;
 inline constexpr usize s_ByteTypeByteSize = 1u;
 inline constexpr usize s_AlignRemainderZero = 0u;
 
-
 using GeneralException = std::exception;
 
 using RuntimeException = std::runtime_error;
 
-
 using ErrorCode = std::error_code;
-
 
 template<typename T>
 using InitializerList = std::initializer_list<T>;
@@ -90,31 +87,6 @@ using InitializerList = std::initializer_list<T>;
 #define NWB_DETAIL_TEXT(x) x
 #endif
 #define NWB_TEXT(x) NWB_DETAIL_TEXT(x)
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#if __has_declspec_attribute(dllexport)
-#define NWB_DLL_EXPORT __declspec(dllexport)
-#define NWB_DLL_IMPORT __declspec(dllimport)
-#elif __has_attribute(dllexport)
-#define NWB_DLL_EXPORT __attribute__((dllexport))
-#define NWB_DLL_IMPORT __attribute__((dllimport))
-#else
-#define NWB_DLL_EXPORT
-#define NWB_DLL_IMPORT
-#endif
-#elif (defined(NWB_PLATFORM_UNIX) || defined(NWB_PLATFORM_APPLE))
-#define NWB_DLL_EXPORT __attribute__((visibility("default")))
-#define NWB_DLL_IMPORT
-#else
-#define NWB_DLL_EXPORT
-#define NWB_DLL_IMPORT
-#endif
-
-#if defined(NWB_EXPORT_DLL)
-#define NWB_DLL_API NWB_DLL_EXPORT
-#else
-#define NWB_DLL_API NWB_DLL_IMPORT
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

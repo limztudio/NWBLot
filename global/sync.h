@@ -11,10 +11,6 @@
 #include <intrin.h>
 #endif
 
-#include <tbb/spin_mutex.h>
-#include <tbb/queuing_mutex.h>
-#include <tbb/spin_rw_mutex.h>
-#include <tbb/queuing_rw_mutex.h>
 #include <mutex>
 #include <condition_variable>
 #include <semaphore>
@@ -39,14 +35,13 @@ inline void YieldThread()noexcept{ SwitchToThread(); }
 inline void YieldThread()noexcept{ std::this_thread::yield(); }
 #endif
 
-
 inline void MachinePause([[maybe_unused]] i32 delay)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_HAS_NEON64)
     while(delay > 0){
         __yield();
         --delay;
     }
-#elif defined(__ARM_ARCH_7A__) || defined(NWB_HAS_NEON64)
+#elif defined(NWB_HAS_NEON64)
     while(delay > 0){
         __asm__ __volatile__("yield");
         --delay;
@@ -66,33 +61,12 @@ inline void MachinePause([[maybe_unused]] i32 delay)noexcept{
 
 
 using RecursiveMutex = std::recursive_mutex;
-using OnceFlag = std::once_flag;
-using SpinMutex = tbb::spin_mutex;
-using QueuingMutex = tbb::queuing_mutex;
-using SharedMutex = tbb::spin_rw_mutex;
-using SharedQueuingMutex = tbb::queuing_rw_mutex;
-
-using ConditionVariable = std::condition_variable;
 using ConditionVariableAny = std::condition_variable_any;
 
 template<isize LeastMaxValue = static_cast<isize>(INT_MAX)> using Semaphore = std::counting_semaphore<LeastMaxValue>;
-using BinarySemaphore = Semaphore<1>;
 
-template<typename Mutex>
-using LockGuard = std::lock_guard<Mutex>;
 template<typename Mutex>
 using UniqueLock = std::unique_lock<Mutex>;
-
-inline constexpr auto s_TryToLock = std::try_to_lock;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Function, typename... Args>
-inline void CallOnce(OnceFlag& flag, Function&& function, Args&&... args){
-    std::call_once(flag, Forward<Function>(function), Forward<Args>(args)...);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,7 +219,6 @@ private:
 };
 template<isize LeastMaxValue>
 ScopedLock(Semaphore<LeastMaxValue>&) -> ScopedLock<Semaphore<LeastMaxValue>>;
-
 
 template<typename Mutex>
 class NothrowScopedLock final : NoCopy{

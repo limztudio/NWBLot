@@ -30,12 +30,12 @@ namespace __hidden_asset_builder{
 static b8 ResolveRoots(const PipelineOptions& parsed, Core::Assets::ScratchArena& scratchArena, AssetBuilder::AssetBuildOptions& options){
     namespace Assets = Core::Assets;
     auto& arena = options.assetRoots.get_allocator().arena();
-    auto repoRoot = ResolvePipelineRepoRoot(AStringView(options.repoRoot), NWB_TEXT("AssetBuilder"), arena);
+    auto repoRoot = ResolvePipelineRepoRoot(AStringView(parsed.repoRoot), NWB_TEXT("AssetBuilder"), arena);
     if(!repoRoot)
         return false;
-    options.resolvedRepoRoot = Move(*repoRoot);
+    options.repoRoot = Move(*repoRoot);
     auto roots = ResolvePipelineAssetRoots(
-        options.resolvedRepoRoot,
+        options.repoRoot,
         parsed.inputs,
         parsed.assetRoots,
         Assets::AssetRootDuplicatePolicy::ExactText,
@@ -69,8 +69,7 @@ int RunPipelineTool(const int argc, char** argv){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
         Core::CpuTaskScheduler cpuScheduler(AssetBuilder::ComputeWorkerCoreCount(cores));
         AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
-        buildOptions.repoRoot = options.repoRoot;
-        buildOptions.outputDirectory = options.outputPath;
+        buildOptions.outputDirectory = Path(arena, options.outputPath);
         buildOptions.configuration = options.configuration;
         if(options.assetType)
             buildOptions.assetType = *options.assetType;

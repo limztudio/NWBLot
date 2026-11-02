@@ -3,12 +3,11 @@
 
 
 #include "gpu_task_graph_read_views.h"
+#include "task_graph_test_utils.h"
 
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
-
-#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -35,6 +34,7 @@ namespace __hidden_task_graph_analysis_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphAnalysisTestsTag>;
+using TaskGraphTestUtils::IndexedName;
 
 inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
 
@@ -48,9 +48,8 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
     const Span<const Core::GpuTaskId> dependencies = {},
     const Span<const Core::GpuTaskResourceUse> resourceUses = {}
 ){
-    Array<char, 32u> taskIndexBuffer = {};
     Core::GpuTaskDesc desc;
-    const auto resourceNameResult = DeriveName(Name("tests/task_graph_analysis/task_"), FormatDecimal(taskIndex, taskIndexBuffer));
+    const auto resourceNameResult = IndexedName(Name("tests/task_graph_analysis/task_"), taskIndex);
     if(!resourceNameResult)
         return MakeUnexpected(Failure{});
     desc.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Test Task").setDependencies(dependencies).setResourceUses(resourceUses);
@@ -382,8 +381,7 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
     Core::GpuTaskGraph graph(testArena.arena);
     Array<Core::GpuGraphResourceId, 3u> resources = {};
     for(usize resourceIndex = 0u; resourceIndex < LengthOf(resources); ++resourceIndex){
-        Array<char, 32u> resourceIndexBuffer = {};
-        const auto resourceNameResult = DeriveName(Name("tests/task_graph_analysis/resource_"), FormatDecimal(resourceIndex, resourceIndexBuffer));
+        const auto resourceNameResult = IndexedName(Name("tests/task_graph_analysis/resource_"), resourceIndex);
         ASSERT_TRUE(resourceNameResult);
         const auto resourceTaskAdmission = graph.importHazardDomain(Core::GpuGraphResourceDesc{}.setIdentity(*resourceNameResult).setMarkerLabel("Analysis Hazard Domain").setType(Core::GpuGraphResourceType::HazardDomain));
         ASSERT_TRUE(resourceTaskAdmission);

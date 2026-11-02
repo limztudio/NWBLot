@@ -26,11 +26,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma warning(push)
-#pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapReflectionMaterialContexts[];
-#pragma warning(pop)
-#define g_NwbReflectionMaterialContext g_NwbHeapReflectionMaterialContexts[g_NwbReflectionParameters.materialContextSlot]
+#define g_NwbReflectionMaterialContext nwbHeapMaterialContextSlots(g_NwbReflectionParameters.materialContextSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

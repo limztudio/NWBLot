@@ -9,6 +9,7 @@
 #include <core/common/log.h>
 
 #include <global/bit.h>
+#include <global/hash_utils.h>
 #include <global/simplemath.h>
 
 
@@ -103,7 +104,7 @@ b8 UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
         && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;
     const auto& navigation = m_state.navigation();
-    current.values = { static_cast<u64>(m_model.text().size()), HashSmokeText(m_model.text()), static_cast<u64>(m_model.anchor()),
+    current.values = { static_cast<u64>(m_model.text().size()), ComputeFnv32TextHash(m_model.text()), static_cast<u64>(m_model.anchor()),
         static_cast<u64>(m_model.caret()), static_cast<u64>(m_state.focused()), static_cast<u64>(m_enabled),
         static_cast<u64>(m_readOnly), static_cast<u64>(m_compact), static_cast<u64>(m_longDocument),
         static_cast<u64>(navigation.hasPreferredX()), BitCast<u32>(navigation.preferredX()), m_submits, m_cancels, m_blurs,

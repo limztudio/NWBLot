@@ -90,12 +90,7 @@ using namespace SceneAssetCook;
 
 
 b8 ComponentAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    const IComponent* const component = ComponentTypeAutoRegistrar::Cast(&asset);
-    if(!component){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: unexpected asset type '{}'"), ConvertString(s_ComponentSerializeContext), ConvertString(asset.assetType().resolvedText()));
-        return false;
-    }
-    return ComponentAssetSerialization::Serialize(*component, outBinary);
+    return PolymorphicAssetCodecDetail::SerializePolymorphicAsset<IComponent, &ComponentAssetSerialization::Serialize>(asset, s_ComponentSerializeContext, outBinary);
 }
 
 

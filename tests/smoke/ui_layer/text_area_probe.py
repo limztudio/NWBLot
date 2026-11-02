@@ -4,8 +4,9 @@ from __future__ import annotations
 import math
 import re
 
-from numeric_edit_probe import center, ink_coverage, text_hash
+from numeric_edit_probe import ink_coverage
 from edit_probe import caret_pixel_column
+from probe_common import center, text_hash
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 

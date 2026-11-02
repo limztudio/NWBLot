@@ -480,8 +480,7 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
     Array<Core::GpuTaskResourceUse, s_BufferCount * 2u> cutUses;
     Array<Core::GpuTaskResourceUse, s_BufferCount> readUses;
     for(usize index = 0u; index < s_BufferCount; ++index){
-        Array<char, 32u> text = {};
-        const auto identityNameResult = DeriveName(Name("tests/fragment_order/buffer/"), FormatDecimal(index, text));
+        const auto identityNameResult = IndexedName(Name("tests/fragment_order/buffer/"), index);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto gpuTaskAdmission = graph.importResource(Core::GpuGraphResourceDesc{}

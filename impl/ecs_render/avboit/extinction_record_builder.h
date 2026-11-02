@@ -7,12 +7,8 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/avboit/record_inputs_base.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
-#include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/task_graph.h>
@@ -60,14 +56,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AvboitExtinctionRecordBuilder final : NoCopy{
+class AvboitExtinctionRecordBuilder final : public AvboitRecordBuilderBase{
 public:
-    AvboitExtinctionRecordBuilder(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
-        : m_graph(graph)
-        , m_graphics(graphics)
-        , m_materialSystem(materialSystem)
-        , m_avboitSystem(avboitSystem)
-    {}
+    using AvboitRecordBuilderBase::AvboitRecordBuilderBase;
 
 
 public:
@@ -79,13 +70,6 @@ public:
         RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
         RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload
     );
-
-
-private:
-    Core::GpuTaskGraph& m_graph;
-    Core::GraphicsRuntime& m_graphics;
-    RendererMaterialSystem& m_materialSystem;
-    RendererAvboitSystem& m_avboitSystem;
 };
 
 

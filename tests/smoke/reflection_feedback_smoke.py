@@ -16,7 +16,8 @@ from reflection_smoke import (DEFAULT_RAY_BUDGET, SmokeFailure, analyze_panels, 
 from reflection_roughness_smoke import compare_exact_scene
 from reflection_smoke import parse_statistics, validate_statistics
 from refraction_gallery_smoke import png_rgb_bytes
-from window_capture_smoke import SKIP_EXIT_CODE, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE
 from smoke_volume_identity import authored_volume_hashes, file_identity
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90

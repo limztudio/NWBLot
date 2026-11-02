@@ -26,12 +26,8 @@
 [[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
 
 // Scene-shading CB + light list come from the frame selector payload. Per-hit dispatch reads the shadow material buffers.
-#pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticHwMaterialContextSlots[];
-#pragma warning(pop)
 #define g_NwbCausticHwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticHwPushConstants.deferredResourcesHeapSlot]
-#define g_NwbCausticHwMaterialContextSlots g_NwbHeapCausticHwMaterialContextSlots[g_NwbCausticHwPushConstants.materialContextSlotsHeapSlot]
+#define g_NwbCausticHwMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbCausticHwPushConstants.materialContextSlotsHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.w
 

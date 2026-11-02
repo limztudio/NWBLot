@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,14 +48,15 @@ b8 SamplerAssetLoader::Create(const Sampler& samplerAsset, const Name& debugName
         return false;
     }
     const Core::GpuDescriptorHandle samplerHandle = *samplerHandleResult;
+    Core::GpuDescriptorRetirementGuard releaseDescriptor(heap, samplerHandle);
     if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
-        heap.free(samplerHandle);
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), ownerName, ConvertString(samplerName.resolvedText()));
         return false;
     }
 
     outResource.sampler = Move(sampler);
     outResource.samplerHeapHandle = samplerHandle;
+    releaseDescriptor.release();
     return true;
 }
 

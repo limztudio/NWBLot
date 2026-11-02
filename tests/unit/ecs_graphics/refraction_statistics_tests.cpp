@@ -6,8 +6,6 @@
 
 #include <impl/ecs_render/refraction/statistics_readback.h>
 
-#include <core/alloc/general.h>
-
 #include <gtest/gtest.h>
 
 
@@ -22,13 +20,10 @@ namespace __hidden_refraction_statistics_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
+using ReflectionStatisticsTestHelpers::Token;
+using StatisticsContext = ReflectionStatisticsTestHelpers::StatisticsContext<RefractionStatisticsControl>;
 
 inline constexpr usize s_RefractionCounterWordCount = NWB_REFRACTION_DIAGNOSTIC_COUNTER_SIZE / sizeof(u32);
-
-struct StatisticsContext{
-    Core::Alloc::GlobalArena arena{Name("tests/refraction/statistics")};
-    RefractionStatisticsControlHandle control = CreateStatisticsControl<RefractionStatisticsControl>(arena, 7u).value_or(RefractionStatisticsControlHandle{});
-};
 
 [[nodiscard]] RefractionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
     RefractionStatistics value;
@@ -40,10 +35,6 @@ struct StatisticsContext{
     value.hardwareAvailable = true;
     value.csgHardwareEnabled = true;
     return value;
-}
-
-[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u)noexcept{
-    return ReflectionStatisticsTestHelpers::Token<7u, 20u>(value);
 }
 
 

@@ -73,20 +73,6 @@ NWB::Impl::Ui::ListOptions LargeLoanListOptions()noexcept{
     return options;
 }
 
-u64 ArithmeticFixtureRowKey(const u64 count, const u64 removed, const b8 reverse, const u64 index)noexcept{
-    const u64 forward = reverse ? count - 1u - index : index;
-    const u64 value = forward + 1u;
-    return value + (removed != 0u && value >= removed ? 1u : 0u);
-}
-
-Expected<u64> FindArithmeticFixtureRowIndex(const u64 count, const u64 removed, const b8 reverse, const u64 value)noexcept{
-    if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
-        return MakeUnexpected(Failure{});
-    const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
-    const u64 index = reverse ? count - 1u - forward : forward;
-    return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
-}
-
 b8 LoadBundledFixtureFont(Core::Alloc::GlobalArena& arena, const StringView filename, Font& font){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(arena, NWB_TEST_FONT_DIRECTORY) / filename;
     Core::Assets::AssetBytes bytes(arena);

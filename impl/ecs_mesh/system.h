@@ -42,7 +42,6 @@ public:
 
 
 public:
-    [[nodiscard]] MeshComponent* findMesh(Core::ECS::EntityID entity)noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
     [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const noexcept{ return m_world.tryGetComponent<MeshComponent>(entity); }
     [[nodiscard]] Expected<Core::Assets::AssetRef<Mesh>> resolveMesh(Core::ECS::EntityID entity)const noexcept;
     // Distinguish non-rendering owners from temporarily unavailable meshes.

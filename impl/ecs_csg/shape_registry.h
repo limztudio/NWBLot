@@ -161,10 +161,6 @@ public:
         return buildShapeBounds(findShapeTypeId(name), shapeToWorld, parameterBytes);
     }
     [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(CsgShapeTypeId typeId, const SIMDMatrix& shapeToWorld, Span<const u8> parameterBytes)const;
-
-    [[nodiscard]] Expected<f32> evaluateSignedDistance(const Name& name, const SIMDVectorSingle shapePosition, const Span<const u8> parameterBytes)const{
-        return evaluateSignedDistance(findShapeTypeId(name), shapePosition, parameterBytes);
-    }
     [[nodiscard]] Expected<f32> evaluateSignedDistance(CsgShapeTypeId typeId, SIMDVectorSingle shapePosition, Span<const u8> parameterBytes)const;
 
 

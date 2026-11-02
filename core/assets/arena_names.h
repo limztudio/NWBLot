@@ -40,7 +40,6 @@ inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_
 inline constexpr Name s_CookDependencyQueueArena("core/assets/cook_dependency_auto_registration_queue");
 
 inline constexpr Name s_GatherMergeQueueArena("core/assets/gather_merge_queue");
-inline constexpr Name s_GatherMergeQueryScratch("core/assets/gather_merge_query_scratch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

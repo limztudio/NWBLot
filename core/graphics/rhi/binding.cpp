@@ -27,7 +27,6 @@ DescriptorWriteItem DescriptorWriteItem::Base(const u32 slot, const ResourceType
     result.rawData[0] = 0;
     result.rawData[1] = 0;
     result.reserved = 0;
-    result.reserved2 = 0;
     return result;
 }
 

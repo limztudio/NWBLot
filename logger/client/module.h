@@ -89,7 +89,6 @@ protected:
 
 protected:
     void enqueue(MessageType&& data);
-    void enqueue(const MessageType& data);
     b8 tryDequeueMessage(MessageType& msg);
 
 

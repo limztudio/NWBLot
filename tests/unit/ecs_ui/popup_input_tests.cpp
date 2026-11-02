@@ -32,7 +32,7 @@ TEST_F(UiPopupInputTests, PreparedPopupPreservesBaseSessionAndAcceptedFocusCance
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_EQ(m_textInput.starts, starts);
     EXPECT_EQ(m_textInput.ends, ends + 1u);
-    EXPECT_EQ(m_textInput.commit(baseSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(baseSession, "late"), TextInputAdmission::InvalidSession);
     EXPECT_EQ(m_baseModel.text(), "base");
     EXPECT_EQ(m_popupModel.text(), "popup");
 }
@@ -59,7 +59,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelFencesQueuedNativeAndLocalIntentionsB
     const TextInputSessionToken oldSession = m_textInput.activeSession();
     const usize anchor = m_popupModel.anchor();
     const usize caret = m_popupModel.caret();
-    ASSERT_EQ(m_textInput.commit(oldSession, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.emitCommit(oldSession, "late"), TextInputAdmission::Accepted);
     key(Core::Key::Backspace);
     EXPECT_EQ(m_popupModel.text(), "popup");
     m_popupState.close();
@@ -72,7 +72,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelFencesQueuedNativeAndLocalIntentionsB
     EXPECT_FALSE(m_popupResult.textChanged);
     EXPECT_FALSE(m_popupResult.focused);
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commit(oldSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(oldSession, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(commit());
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     ASSERT_TRUE(frame());
@@ -146,7 +146,7 @@ TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreA
     EXPECT_TRUE(dispatch({ .position = {} , .type = Ui::InputEventType::FocusLost}).commandConsumed);
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_EQ(m_textInput.commit(popupSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(popupSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(frame());
     EXPECT_FALSE(m_popupState.isOpen());
     EXPECT_FALSE(m_context.input().hasPopup());
@@ -189,14 +189,14 @@ TEST_F(UiPopupInputTests, DeferredEditorRejectsQueuedNativeCommitWhenPopupLifeti
     ASSERT_TRUE(prepareDeferred() && commit());
     const auto old = m_textInput.activeSession();
     ASSERT_TRUE(old.valid());
-    ASSERT_EQ(m_textInput.commit(old, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.emitCommit(old, "late"), TextInputAdmission::Accepted);
     m_popupState.close();
     m_popupState.open();
     ASSERT_TRUE(prepareDeferred());
     EXPECT_EQ(m_popupModel.text(), "popup");
     EXPECT_FALSE(m_popupResult.textChanged);
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commit(old, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(old, "later"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(commit());
 }
 
@@ -247,7 +247,7 @@ TEST_F(UiPopupInputTests, DeferredEditorRejectsNativeIntentionAfterCompositionRe
     ASSERT_TRUE(prepareDeferred() && commit());
     const auto old = m_textInput.activeSession();
     ASSERT_TRUE(old.valid());
-    ASSERT_EQ(m_textInput.commit(old, "late"), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.emitCommit(old, "late"), TextInputAdmission::Accepted);
     const u64 revision = m_popupModel.revision();
     const u64 generation = m_popupModel.compositionGeneration();
     ASSERT_TRUE(m_popupModel.beginComposition());
@@ -260,7 +260,7 @@ TEST_F(UiPopupInputTests, DeferredEditorRejectsNativeIntentionAfterCompositionRe
     EXPECT_FALSE(m_popupResult.textChanged);
     EXPECT_FALSE(m_popupModel.canUndo());
     EXPECT_NE(m_textInput.activeSession(), old);
-    EXPECT_EQ(m_textInput.commit(old, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(old, "later"), TextInputAdmission::InvalidSession);
 }
 
 

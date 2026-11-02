@@ -37,7 +37,6 @@
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>
 #include <core/common/module.h>
-#include <core/mesh/classification.h>
 #include <core/metascript/parser.h>
 #include <core/filesystem/factory.h>
 #include <core/graphics/api.h>
@@ -86,11 +85,6 @@ struct CookCase{
     Path outputDirectory;
 };
 
-struct MinimalAssetCookInfo{
-    AStringView assetDirectory = "";
-    AStringView assetFilename = "";
-};
-
 struct MaterialBinaryTypedLayoutOffsets{
     usize layoutHashOffset = 0u;
     usize blockByteCountOffset = 0u;
@@ -103,6 +97,8 @@ struct MaterialBinaryTypedLayoutOffsets{
 inline constexpr Name s_MaterialScratchArena = Name("tests/integration/assets_graphics/material");
 inline constexpr Name s_ShaderScratchArena = Name("tests/integration/assets_graphics/shader");
 inline constexpr Name s_CodecScratchArena = Name("tests/integration/assets_graphics/codec");
+inline constexpr Name s_BuildScratchArena = Name("tests/integration/assets_graphics/build");
+inline constexpr Name s_GatherScratchArena = Name("tests/integration/assets_graphics/gather");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -139,17 +135,11 @@ Expected<CookCase> PrepareAssetsGraphicsCookCase(TestArena& testArena, const ASt
 b8 BuildPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
 b8 CookPreparedGraphicsAssetRoots(TestArena& testArena, const Path& root, const Path& outputDirectory, const InitializerList<Path> assetRoots, const u32 workerThreadCount = 0u);
 b8 CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, const CookCase& cookCase, TestArena& testArena);
-inline b8 CookSingleMinimalAssetMeta(const AStringView metaText, const MinimalAssetCookInfo& cookInfo, const CookCase& cookCase, TestArena& testArena){
-    return CookSingleGraphicsMeta(metaText, cookInfo.assetDirectory, cookInfo.assetFilename, cookCase, testArena);
-}
 inline b8 CookSingleMeshMeta(const AStringView metaText, const CookCase& cookCase, TestArena& testArena){
     return CookSingleGraphicsMeta(metaText, "meshes", "minimal_mesh.nwb", cookCase, testArena);
 }
 Expected<TestAString> ReadSmokeAssetMeta(TestArena& testArena, AStringView assetDirectory, AStringView assetFilename);
 b8 CookSmokeAssetMeta(AStringView assetDirectory, AStringView assetFilename, const CookCase& cookCase, TestArena& testArena);
-inline b8 CookSmokeMeshMeta(const AStringView assetFilename, const CookCase& cookCase, TestArena& testArena){
-    return CookSmokeAssetMeta("meshes", assetFilename, cookCase, testArena);
-}
 b8 CookMinimalMeshWithMaterialBind(const AStringView bindText, const CookCase& cookCase, TestArena& testArena);
 Expected<NWB::Impl::MaterialBindEntry> ParseMaterialBindFromText(const AStringView bindText, const Path& root, TestArena& testArena, NWB::Core::Alloc::ScratchArena& scratchArena);
 #if defined(NWB_FINAL)
@@ -173,9 +163,6 @@ Expected<EntryT> ParseShaderMetadataFile(const Path& metadataPath, TestArena& te
 b8 WriteMaterialBindShaderProbeSource(TestArena& testArena, const Path& assetRoot, AStringView shaderAssetType, AStringView metaFilename, AStringView sourceFilename, const AStringView sourceText);
 
 b8 WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText);
-inline b8 WriteMaterialBindMaterialIntegrationAssets(TestArena& testArena, const Path& assetRoot, const AStringView bindText, const AStringView materialText){
-    return WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(testArena, assetRoot, bindText, materialText, s_MaterialBindShaderProbeSource);
-}
 
 b8 CookMaterialBindMaterialIntegrationWithPixelSource(const AStringView bindText, const AStringView materialText, const AStringView pixelSourceText, const CookCase& cookCase, TestArena& testArena);
 
@@ -209,12 +196,6 @@ Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedAsset(const Path& outpu
     auto deserialized = codec.deserialize(assetName, binary, testArena.arena);
     EXPECT_TRUE(deserialized);
     return deserialized;
-}
-inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMinimalMesh(TestArena& testArena, const Path& outputDirectory){
-    return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(outputDirectory, Name("project/meshes/minimal_mesh"), 1u, testArena);
-}
-inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMesh(TestArena& testArena, const Path& outputDirectory, const Name assetName){
-    return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(outputDirectory, assetName, 1u, testArena);
 }
 inline Expected<UniquePtr<NWB::Core::Assets::IAsset>> LoadCookedMaterial(TestArena& testArena, const Path& outputDirectory, const Name assetName){
     return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(outputDirectory, assetName, 0u, testArena);

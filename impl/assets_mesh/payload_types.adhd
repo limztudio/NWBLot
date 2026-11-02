@@ -63,15 +63,11 @@ enum<u32> MeshletRefDeltaWidth{
 [serialize]
 class MeshBinaryHeader{
     public u32 magic = s_MeshBinaryMagic;
-    public u32 meshClass = 0u;
     public u64 positionCount = 0u;
     public u64 normalCount = 0u;
     public u64 tangentCount = 0u;
     public u64 uv0Count = 0u;
     public u64 colorCount = 0u;
-    public u64 skinCount = 0u;
-    public u64 skeletonJointCount = 0u;
-    public u64 inverseBindMatrixCount = 0u;
     public u64 meshletCount = 0u;
     public u64 meshletBoundCount = 0u;
     public u64 meshletPositionRefDeltaByteCount = 0u;

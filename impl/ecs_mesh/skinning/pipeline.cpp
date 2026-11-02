@@ -194,7 +194,7 @@ b8 MeshSkinningSystem::ensureLocalBoundsPipeline(){
 }
 
 b8 MeshSkinningSystem::ensureRepackPipeline(){
-    return __hidden_pipeline::EnsurePushConstantComputePipeline<MeshletRepackPushConstants>(
+    return __hidden_pipeline::EnsurePushConstantComputePipeline<MeshletBoundsPushConstants>(
         m_arena,
         m_graphics,
         m_assetManager,

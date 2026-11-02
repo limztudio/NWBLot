@@ -11,7 +11,6 @@
 #include <impl/assets_mesh/skin_types.adhd.h>
 
 #include <core/graphics/api.h>
-#include <core/mesh/classification.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +39,6 @@ struct MeshSkinningRuntimeInstance{
 public:
     RuntimeMeshHandle handle;
     Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
-    u32 meshClass = Core::Mesh::MeshClass::Skinned;
     Name sourceName = s_NameNone;
     RuntimeMeshLocalBounds localBounds;
     PositionVector restPositions;
@@ -168,7 +166,6 @@ public:
             entity.valid()
             && handle.valid()
             && sourceName
-            && Core::Mesh::MeshClassUsesSkinning(meshClass)
             && hasCompleteSplitMeshPayload()
             && solidTriangleWords.size() == ExpectedMeshletSolidTriangleWordCount(static_cast<u32>(meshletPrimitiveIndices.size()))
             && localBounds.valid()

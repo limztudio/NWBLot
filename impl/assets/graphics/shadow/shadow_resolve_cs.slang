@@ -56,32 +56,6 @@ struct NwbShadowResolveSceneShading{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbHeapShadowResolveSceneShadings[];
 #pragma warning(pop)
 
-struct NwbShadowResolvePushConstants{
-    // Must match ShadowResolvePushConstants in C++; resource slots select global heap views.
-    uint width;
-    uint height;
-    uint halfWidth;
-    uint halfHeight;
-    uint stepWidth;
-    uint stage;
-    uint lightSlotStart;
-    uint lightSlotCount;
-    uint momentsValid; // May sample temporal moments only when nonzero.
-    uint upsampleFold; // 0 overwrites opaque visibility; 1 multiplies transparent visibility and leaves background unchanged.
-    uint geometrySlot;
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint normalSlot;
-    uint softHalfSlot;
-    uint inputColorSlot;
-    uint momentsSlot;
-    uint outputStorageSlot;
-    uint visibilityStorageSlot;
-    uint sceneShadingSlot;
-    uint opaqueInputColorSlot; // Combined upsample reads the opaque half-resolution input from this slot.
-    uint receiverFactor;
-};
-
 [[vk::push_constant]] ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
 
 #define g_NwbShadowResolveOutput nwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.outputStorageSlot)

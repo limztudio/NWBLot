@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/task/gpu/task_graph.h>
+#include "task_graph_test_utils.h"
 
-#include <global/text_utils.h>
+#include <core/task/gpu/task_graph.h>
 
 #include <tests/common/test_context.h>
 
@@ -51,8 +51,7 @@ public:
         members.clear();
         members.reserve(count);
         for(usize index = 0u; index < count; ++index){
-            Array<char, 32u> text = {};
-            const auto identityNameResult = DeriveName(Name("tests/resource_set_validation/resource/"), FormatDecimal(index, text));
+            const auto identityNameResult = TaskGraphTestUtils::IndexedName(Name("tests/resource_set_validation/resource/"), index);
             if(!identityNameResult)
                 return false;
             const Name identity = *identityNameResult;

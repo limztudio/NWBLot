@@ -6,10 +6,10 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
+#include <impl/ecs_render/material/generated_geometry_validation.h>
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
@@ -54,7 +54,7 @@ struct AvboitComputeEmulationTaskPayload{
     DeferredFrameTargets& targets;
     Core::GpuTimingSubmissionTicket& timingTicket;
     Optional<Core::GpuTimingMeasure>& timing;
-    ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
+    ECSRenderDetail::AliasFreeComputeEmulationGraphPlan plan;
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
@@ -186,11 +186,11 @@ public:
 [[nodiscard]] b8 RecordAvboitComputeEmulation(const AvboitComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 [[nodiscard]] b8 RecordAvboitSharedComputeEmulation(const AvboitSharedComputeEmulationTaskPayload& inputs, Core::CommandList& commandList, const AvboitComputeEmulationRecordTrait& trait);
 
-template<typename DispatchFn>
+template<typename RenderPassMethod>
 [[nodiscard]] inline b8 RecordAvboitRasterPassFromPayload(
     const AvboitRasterPassTaskPayload& payload,
     Core::CommandList& commandList,
-    DispatchFn&& dispatch
+    const RenderPassMethod renderPass
 ){
     if((payload.computeEmulationOutputStatesGraphOwned || payload.csgComputeEmulationOutputStatesGraphOwned) && !payload.generatedGeometryReused && !payload.computeEmulationTiming)
         return false;
@@ -208,8 +208,24 @@ template<typename DispatchFn>
         preparedInstanceCount = payload.snapshot.instanceCount;
         preparedMaterialTypedByteCount = payload.snapshot.materialTypedByteCount;
     }
-    if(payload.hasTransparentRenderers)
-        dispatch(commandList, drawItems, csgFrameData, preparedInstanceCount, preparedMaterialTypedByteCount);
+    if(payload.hasTransparentRenderers){
+        (payload.avboitSystem.*renderPass)(
+            commandList,
+            payload.targets,
+            drawItems,
+            csgFrameData,
+            payload.csgResources,
+            payload.frameBindings,
+            preparedInstanceCount,
+            preparedMaterialTypedByteCount,
+            payload.materialFrameStatesGraphOwned,
+            payload.materialGeometryStatesGraphOwned,
+            payload.computeEmulationOutputStatesGraphOwned,
+            payload.csgComputeEmulationOutputStatesGraphOwned,
+            payload.generatedGeometryReused,
+            payload.computeEmulationTiming
+        );
+    }
     return true;
 }
 

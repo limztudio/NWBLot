@@ -54,8 +54,6 @@ public:
         m_storage.wait(static_cast<decltype(m_storage)::value_type>(expected), order);
     }
 
-    void notifyOne()noexcept{ m_storage.notify_one(); }
-
     void notifyAll()noexcept{ m_storage.notify_all(); }
 };
 

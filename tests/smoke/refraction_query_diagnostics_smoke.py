@@ -13,7 +13,8 @@ import sys
 from refraction_density_benchmark import Cell, DEFAULT_EXTENTS, EXTENTS, validate_fixture
 from refraction_density_capture_smoke import (SANITIZED_ENVIRONMENT, analyze_density_frame, launch_density_capture,
     projected_bounds, selection, validate_backdrop)
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
 
 
 COUNTER_FIELDS = (

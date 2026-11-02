@@ -45,25 +45,6 @@ SIMDVectorSingle NWB_SIMD_CALL InsetRectValue(const SIMDVectorSingle rectangle, 
     return VectorPermute<0, 1, 4, 5>(origin, size);
 }
 
-b8 AreUiMatrixRowsFinite(const SIMDMatrixDouble& values, const u32 rowCount)noexcept{
-    for(u32 index = 0u; index < rowCount; ++index){
-        if(VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u)
-            return false;
-    }
-    return true;
-}
-
-b8 AreUiMatrixRowsNonNegativeFinite(const SIMDMatrixDouble& values, const u32 rowCount)noexcept{
-    for(u32 index = 0u; index < rowCount; ++index){
-        if(
-            VectorDoubleMoveMask(VectorDoubleOrInt(VectorDoubleIsNaN(values.v[index]), VectorDoubleIsInfinite(values.v[index]))) != 0u
-            || VectorDoubleMoveMask(VectorDoubleGreaterOrEqual(values.v[index], VectorDoubleZero())) != VectorDoubleComponentMask::s_DoubleXYZW
-        )
-            return false;
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

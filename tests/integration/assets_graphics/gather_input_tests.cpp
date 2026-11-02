@@ -99,6 +99,7 @@ protected:
 
 
 protected:
+    NWB::Core::Alloc::ScratchArena m_scratchArena{ Name("tests/assets_graphics/gather_inputs") };
     NWB::Tests::TestArena<> m_testArena;
     NWB::Tests::CapturingLogger m_logger;
     NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
@@ -137,16 +138,16 @@ TEST_F(GatherInputs, IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls){
     ASSERT_NO_FATAL_FAILURE(writeInputs("b", 64u, 257u, 7u));
     m_options.inputs.push_back(m_options.inputs.front());
     m_options.mergePayloads = &MergeBytes;
-    ASSERT_TRUE(Gatherer::GatherAssets(m_options));
+    ASSERT_TRUE(Gatherer::GatherAssets(m_options, m_scratchArena));
     EXPECT_EQ(s_MergeCalls, 0u);
     ASSERT_NO_FATAL_FAILURE(verifyPayloads(64u, 257u, 7u));
 }
 
 TEST_F(GatherInputs, ConflictingDuplicatesPreservePublishedVolume){
     ASSERT_NO_FATAL_FAILURE(writeInputs("a", 4u, 8u, 3u));
-    ASSERT_TRUE(Gatherer::GatherAssets(m_options));
+    ASSERT_TRUE(Gatherer::GatherAssets(m_options, m_scratchArena));
     ASSERT_NO_FATAL_FAILURE(writeInputs("b", 4u, 8u, 9u));
-    EXPECT_FALSE(Gatherer::GatherAssets(m_options));
+    EXPECT_FALSE(Gatherer::GatherAssets(m_options, m_scratchArena));
     EXPECT_GT(m_logger.errorCount(), 0u);
     ASSERT_NO_FATAL_FAILURE(verifyPayloads(4u, 8u, 3u));
 }
@@ -157,12 +158,12 @@ TEST_F(GatherInputs, MergedPayloadIdentitySurvivesLaterIdenticalDuplicate){
     ASSERT_NO_FATAL_FAILURE(writeInputs("c", 1u, 4u, 5u));
     // Equal payloads collapse while the distinct third payload is appended once.
     m_options.mergePayloads = &MergeBytes;
-    ASSERT_TRUE(Gatherer::GatherAssets(m_options));
+    ASSERT_TRUE(Gatherer::GatherAssets(m_options, m_scratchArena));
     EXPECT_EQ(s_MergeCalls, 1u);
     ASSERT_NO_FATAL_FAILURE(verifyPayloads(1u, 6u, 5u));
     ASSERT_NO_FATAL_FAILURE(writeInputs("d", 1u, 6u, 5u));
     s_MergeCalls = 0u;
-    ASSERT_TRUE(Gatherer::GatherAssets(m_options));
+    ASSERT_TRUE(Gatherer::GatherAssets(m_options, m_scratchArena));
     EXPECT_EQ(s_MergeCalls, 1u);
     ASSERT_NO_FATAL_FAILURE(verifyPayloads(1u, 6u, 5u));
 }

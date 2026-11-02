@@ -51,8 +51,6 @@ using CookMap = HashMap<
     Conditional_T<IsSame_V<T, CookString>, Hasher<AStringView>, Hasher<T>>,
     Conditional_T<IsSame_V<T, CookString>, EqualTo<>, EqualTo<T>>
 >;
-template<typename T>
-using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 #endif
 
 

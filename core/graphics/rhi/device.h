@@ -117,7 +117,6 @@ struct QueueSubmissionReceipt{
 };
 
 struct WaveLaneCountRange{
-    u32 minWaveLaneCount;
     u32 maxWaveLaneCount;
 };
 
@@ -144,12 +143,6 @@ public:
 
     constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value)noexcept{
         physicalQueue = value;
-        return *this;
-    }
-
-    constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value)noexcept{
-        recordingWorkerDomain = 0u;
-        recordingWorkerIndex = value;
         return *this;
     }
 

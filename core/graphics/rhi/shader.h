@@ -119,53 +119,13 @@ namespace ShaderType{
     }
 };
 
-namespace FastGeometryShaderFlags{
-    static constexpr u8 s_FastGeometryShaderFlagsNoneBase = 0;
-    enum Mask : u8{
-        None = s_FastGeometryShaderFlagsNoneBase,
-
-        ForceFastGS                      = 1 << 0,
-        UseViewportMask                  = 1 << 1,
-        OffsetTargetIndexByViewportIndex = 1 << 2,
-        StrictApiOrder                   = 1 << 3,
-    };
-
-    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
-};
-
-struct CustomSemantic{
-    static constexpr u8 s_UndefinedBase = 0;
-    enum Enum : u8{
-        Undefined = s_UndefinedBase,
-        XRight,
-        ViewportMask,
-    };
-
-    Enum type;
-    Name name;
-
-
-public:
-    constexpr CustomSemantic& setType(Enum value)noexcept{ type = value; return *this; }
-
-    constexpr CustomSemantic& setName(const Name& value)noexcept{ name = value; return *this; }
-};
-
 struct ShaderDesc{
     static constexpr AStringView s_DefaultEntryName = "main";
 
     Name debugName;
     // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.
     AStringView entryName = s_DefaultEntryName;
-    CustomSemantic* customSemantics = nullptr;
-    u32* coordinateSwizzling = nullptr;
-
-    i32 hlslExtensionsUAV = -1;
-    u32 numCustomSemantics = 0;
-
     ShaderType::Mask shaderType = ShaderType::None;
-    FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
-    b8 useSpecificShaderExt = false;
 
 
 public:
@@ -174,16 +134,6 @@ public:
     constexpr ShaderDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
 
     constexpr ShaderDesc& setEntryName(const AStringView value)noexcept{ entryName = value; return *this; }
-
-    constexpr ShaderDesc& setHlslExtensionsUAV(i32 value)noexcept{ hlslExtensionsUAV = value; return *this; }
-
-    constexpr ShaderDesc& setUseSpecificShaderExt(b8 value)noexcept{ useSpecificShaderExt = value; return *this; }
-
-    constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data)noexcept{ numCustomSemantics = count; customSemantics = data; return *this; }
-
-    constexpr ShaderDesc& setFastGSFlags(FastGeometryShaderFlags::Mask value)noexcept{ fastGSFlags = value; return *this; }
-
-    constexpr ShaderDesc& setCoordinateSwizzling(u32* value)noexcept{ coordinateSwizzling = value; return *this; }
 };
 
 struct ShaderSpecialization{

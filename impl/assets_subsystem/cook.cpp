@@ -12,7 +12,6 @@
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>
@@ -28,13 +27,7 @@ NWB_IMPL_BEGIN
 
 
 b8 SubsystemAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    const ISubsystem* const subsystem = SubsystemTypeAutoRegistrar::Cast(&asset);
-    if(!subsystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}'"), s_SubsystemSerializeContext, ConvertString(asset.assetType().resolvedText()));
-        return false;
-    }
-
-    return SubsystemAssetSerialization::Serialize(*subsystem, outBinary);
+    return PolymorphicAssetCodecDetail::SerializePolymorphicAsset<ISubsystem, &SubsystemAssetSerialization::Serialize>(asset, s_SubsystemSerializeContext, outBinary);
 }
 
 b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Assets::AssetBytes& outBinary){
@@ -49,18 +42,8 @@ b8 SubsystemAssetSerialization::Serialize(const ISubsystem& subsystem, Core::Ass
     subsystemHashes.reserve(subsystem.subsystems.size());
     fieldCounts.reserve(fieldCount);
 
-    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems){
-        const NameHash hash = ref.name().hash();
-        b8 duplicate = false;
-        for(const NameHash& existingHash : subsystemHashes){
-            if(existingHash == hash){
-                duplicate = true;
-                break;
-            }
-        }
-        if(!duplicate)
-            subsystemHashes.push_back(hash);
-    }
+    for(const ISubsystem::SubsystemRef& ref : subsystem.subsystems)
+        subsystemHashes.push_back(ref.name().hash());
 
     usize totalAssetCount = 0u;
     for(usize i = 0u; i < fieldCount; ++i){

@@ -8,7 +8,6 @@
 
 #include <global/terminal_entry.h>
 #include <global/platform.h>
-#include <global/termination.h>
 #include <global/timer.h>
 
 #include <gtest/gtest.h>

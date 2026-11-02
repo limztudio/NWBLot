@@ -23,22 +23,6 @@ using namespace NWB::UiSliderTests;
 
 class UiSliderPopupTests : public SliderFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
-        PopupOptions popup;
-        popup.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        popup.size = { 340.0f, 360.0f };
-        return popup;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
-        PopupOptions popup;
-        popup.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
-        popup.size = { 340.0f, 300.0f };
-        return popup;
-    }
-
-
-protected:
     virtual void SetUp()override{
         SliderFixture::SetUp();
         ASSERT_TRUE(m_childState.setValue(0.5));
@@ -47,11 +31,11 @@ protected:
     }
 
     [[nodiscard]] b8 beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()) && m_builder.slider(s_SliderKey, m_state, Options());
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()) && m_builder.slider(s_SliderKey, m_state, Options());
     }
 
     [[nodiscard]] b8 beginChild(){
-        return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.slider(s_SliderKey, m_childState, Options());
+        return m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) && m_builder.slider(s_SliderKey, m_childState, Options());
     }
 
     [[nodiscard]] b8 declareFamily(const u64 generation){
@@ -138,7 +122,7 @@ TEST_F(UiSliderPopupTests, ChildCallbackRejectsTheEarlierParentLoanInTheFinalCal
 TEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime){
     ASSERT_TRUE(acceptFamily(1u));
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
     EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_state.result().valid);
@@ -166,7 +150,7 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
     EXPECT_FALSE(m_context.input().capture().valid());
     m_parent.open();
     ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(finishParent());
     ASSERT_TRUE(m_context.commitFrame(3u));

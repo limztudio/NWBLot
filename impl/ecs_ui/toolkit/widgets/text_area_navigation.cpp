@@ -77,28 +77,12 @@ Expected<EditNavigationResult> TextAreaNavigationResolver::resolve(const EditMod
         || !IsFinite(preferred.preferredX) || !m_state.navigation().matches(preferred)
     )
         return MakeUnexpected(Failure{});
-    const TextAreaModelStamp expected(
-        model.instanceGeneration(),
-        model.revision(),
-        model.externalRevision(),
-        model.selectionGeneration(),
-        model.compositionGeneration(),
-        model.anchor(),
-        model.caret(),
-        model.textMode()
-    );
+    const TextAreaModelStamp expected = model.stamp();
     EditBoxView view(m_arena);
     const ShapeRequest request{ {}, StringView(m_language.data(), m_language.size()), m_fontSize, m_scriptTag, TextDirection::LeftToRight };
     if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
         return MakeUnexpected(Failure{});
-    if(
-        !current()
-        || expected.instanceGeneration != model.instanceGeneration() || expected.revision != model.revision()
-        || expected.externalRevision != model.externalRevision() || expected.selectionGeneration != model.selectionGeneration()
-        || expected.compositionGeneration != model.compositionGeneration() || expected.anchor != model.anchor() || expected.caret != model.caret()
-        || expected.textMode != model.textMode() || model.composition().active
-        || !m_state.navigation().matches(preferred)
-    )
+    if(!current() || !model.matchesStamp(expected) || model.composition().active || !m_state.navigation().matches(preferred))
         return MakeUnexpected(Failure{});
     const EditCaretGeometry& geometry = view.caretGeometry();
     const auto caret = geometry.caretRect(view.displayCaret());

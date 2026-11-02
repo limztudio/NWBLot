@@ -149,7 +149,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         opaquePush.width = targets.width;
         opaquePush.height = targets.height;
         commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowOpaquePrepassPipeline));
-        RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowOpaquePrepassPipeline, heap, commandList);
+        heap.bindCompute(commandList, *m_rayTracingState.m_swShadowOpaquePrepassPipeline.get());
         commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
         commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
     }
@@ -197,7 +197,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             }
             else{
                 commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
-                RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline, heap, commandList);
+                heap.bindCompute(commandList, *m_rayTracingState.m_swShadowSoftOpaquePipeline.get());
                 commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
@@ -231,7 +231,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         coarsePush.coarseWidth = coarseWidth;
         coarsePush.coarseHeight = coarseHeight;
         commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowTransparentCoarsePipeline));
-        RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowTransparentCoarsePipeline, heap, commandList);
+        heap.bindCompute(commandList, *m_rayTracingState.m_swShadowTransparentCoarsePipeline.get());
         commandList.setPushConstants(&coarsePush, sizeof(coarsePush));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
@@ -259,7 +259,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             classifyPush.coarseHeight = coarseHeight;
             classifyPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
             commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowTransparentClassifyPipeline));
-            RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowTransparentClassifyPipeline, heap, commandList);
+            heap.bindCompute(commandList, *m_rayTracingState.m_swShadowTransparentClassifyPipeline.get());
             commandList.setPushConstants(&classifyPush, sizeof(classifyPush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
@@ -276,7 +276,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             argsPush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
             argsPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
             commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowTransparentBuildArgsPipeline));
-            RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, heap, commandList);
+            heap.bindCompute(commandList, *m_rayTracingState.m_swShadowTransparentBuildArgsPipeline.get());
             commandList.setPushConstants(&argsPush, sizeof(argsPush));
             commandList.dispatch(1u, 1u, 1u);
 
@@ -295,7 +295,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             Core::ComputeState computeStateIndirect = RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowTransparentIndirectPipeline);
             computeStateIndirect.setIndirectParams(m_rayTracingState.m_swShadowIndirectArgsBuffer.get());
             commandList.setComputeState(computeStateIndirect);
-            RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowTransparentIndirectPipeline, heap, commandList);
+            heap.bindCompute(commandList, *m_rayTracingState.m_swShadowTransparentIndirectPipeline.get());
             commandList.setPushConstants(&tracePush, sizeof(tracePush));
             commandList.dispatchIndirect(0u);
         }
@@ -310,7 +310,7 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             resolvePush.coarseWidth = coarseWidth;
             resolvePush.coarseHeight = coarseHeight;
             commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_swShadowTransparentResolvePipeline));
-            RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_swShadowTransparentResolvePipeline, heap, commandList);
+            heap.bindCompute(commandList, *m_rayTracingState.m_swShadowTransparentResolvePipeline.get());
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }

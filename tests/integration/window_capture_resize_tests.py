@@ -70,16 +70,15 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
         for name in (LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
             for value in ("1", "120", LIT_NAN, "bad"):
                 with self.subTest(name=name, value=value), self.assertRaises(window_capture_smoke.SmokeFailure):
-                    window_capture_smoke.validate_resize_environment({name: value})
-            window_capture_smoke.validate_resize_environment({name: "0"})
+                    window_capture_environment.validate_resize_environment({name: value})
+            window_capture_environment.validate_resize_environment({name: "0"})
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "framebuffer capture request"):
-            window_capture_smoke.validate_resize_environment({window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV: "frame.bmp"})
+            window_capture_environment.validate_resize_environment({window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV: "frame.bmp"})
 
     def test_launch_environment_checks_freeze_only_when_resize_is_requested(self):
         args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
         with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "6"}, clear=True), \
              mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
-             mock.patch.object(window_capture_smoke, "require_windows_interactive_desktop"), \
              mock.patch.object(window_capture_environment, "require_windows_interactive_desktop"):
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "active or invalid"):
                 window_capture_smoke.build_launch_environment(args)

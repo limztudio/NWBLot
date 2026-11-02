@@ -17,7 +17,9 @@ import sys
 from types import SimpleNamespace
 
 from smoke_volume_identity import file_identity
-from window_capture_smoke import STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import STRICT_LOG_FAILURE_MESSAGES, SmokeFailure
+from window_capture_validation import validate_expected_log_text
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 

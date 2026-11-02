@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke  # noqa: E402
-from stress_timing_smoke_tests import shadow_record, valid_log  # noqa: E402
+from stress_timing_test_support import shadow_record, valid_log  # noqa: E402
 
 LIT_N = "\n"
 LIT_NONE = "none"

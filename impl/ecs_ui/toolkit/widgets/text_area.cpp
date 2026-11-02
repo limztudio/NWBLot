@@ -27,13 +27,7 @@ ControlToken TextAreaScrollState::prepare(
         popup,
         widget.declarationGeneration,
         stateRevision,
-        model.instanceGeneration(),
-        model.revision(),
-        model.externalRevision(),
-        model.selectionGeneration(),
-        model.compositionGeneration(),
-        model.anchor(),
-        model.caret(),
+        model.stamp(),
         enabled,
         readOnly
     );
@@ -51,7 +45,7 @@ ControlToken TextAreaScrollState::prepare(
     m_placement = placement;
     m_step = step;
     m_prepared = true;
-    return { stateGeneration, next.modelGeneration, m_revision };
+    return { stateGeneration, next.model.instanceGeneration, m_revision };
 }
 
 void TextAreaScrollState::retire()noexcept{

@@ -74,10 +74,6 @@ class ScrollPlacement{
     public b8 scrollbarVisible = false;
 }
 
-b8 IsValidScrollRange(in f64 contentHeight, in f64 viewportHeight){
-    return isFinite(contentHeight) && contentHeight >= 0.0 && isFinite(viewportHeight) && viewportHeight >= 0.0;
-}
-
 b8 SameScrollbarPlacementGeometry(in ScrollbarPlacement first, in ScrollbarPlacement second){
     // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
     return EqualUiRect(first.track, second.track)
@@ -110,7 +106,7 @@ b8 TryEnsureScrollVisible(in f64 currentOffset, in f64 start, in f64 end, in f64
 
 b8 TryScrollByOffset(in f64 currentOffset, in f64 delta, in f64 contentHeight, in f64 viewportHeight, mut f64 outOffset){
     outOffset = currentOffset;
-    if(!isFinite(delta) || !IsValidScrollRange(contentHeight, viewportHeight))
+    if(!isFinite(delta) || !isFinite(contentHeight) || contentHeight < 0.0 || !isFinite(viewportHeight) || viewportHeight < 0.0)
         return false;
     const f64 maxOffset = max(0.0, contentHeight - viewportHeight);
     const f64 base = min(currentOffset, maxOffset);
@@ -123,7 +119,7 @@ b8 TryScrollByOffset(in f64 currentOffset, in f64 delta, in f64 contentHeight, i
 
 b8 TryClampScrollOffset(in f64 currentOffset, in f64 contentHeight, in f64 viewportHeight, mut f64 outOffset){
     outOffset = currentOffset;
-    if(!IsValidScrollRange(contentHeight, viewportHeight))
+    if(!isFinite(contentHeight) || contentHeight < 0.0 || !isFinite(viewportHeight) || viewportHeight < 0.0)
         return false;
     outOffset = min(currentOffset, max(0.0, contentHeight - viewportHeight));
     return true;

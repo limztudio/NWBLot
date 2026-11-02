@@ -355,20 +355,8 @@ public:
 #endif
 };
 
-using VertexShaderAssetCodec = ShaderAssetCodec<VertexShader>;
-using HullShaderAssetCodec = ShaderAssetCodec<HullShader>;
-using DomainShaderAssetCodec = ShaderAssetCodec<DomainShader>;
-using GeometryShaderAssetCodec = ShaderAssetCodec<GeometryShader>;
 using PixelShaderAssetCodec = ShaderAssetCodec<PixelShader>;
 using ComputeShaderAssetCodec = ShaderAssetCodec<ComputeShader>;
-using AmplificationShaderAssetCodec = ShaderAssetCodec<AmplificationShader>;
-using MeshShaderAssetCodec = ShaderAssetCodec<MeshShader>;
-using RayGenerationShaderAssetCodec = ShaderAssetCodec<RayGenerationShader>;
-using AnyHitShaderAssetCodec = ShaderAssetCodec<AnyHitShader>;
-using ClosestHitShaderAssetCodec = ShaderAssetCodec<ClosestHitShader>;
-using MissShaderAssetCodec = ShaderAssetCodec<MissShader>;
-using IntersectionShaderAssetCodec = ShaderAssetCodec<IntersectionShader>;
-using CallableShaderAssetCodec = ShaderAssetCodec<CallableShader>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

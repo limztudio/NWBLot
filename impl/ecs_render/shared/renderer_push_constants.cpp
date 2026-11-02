@@ -76,8 +76,6 @@ void SetTransparentDrawPushConstants(
     const u32 csgContextHeapSlot,
     const b8 refractionCapture
 ){
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
     const TransparentDrawPushConstants pushConstants = ResolveTransparentDrawPushConstants(
         BuildShaderDrivenPushConstants(
             meshletCount,
@@ -87,17 +85,7 @@ void SetTransparentDrawPushConstants(
             frameHeapSlots,
             dispatchFlags
         ),
-        ResolveRendererAvboitPushConstants(
-            targets.fullWidth,
-            targets.fullHeight,
-            targets.lowWidth,
-            targets.lowHeight,
-            targets.virtualSliceCount,
-            targets.physicalSliceCount,
-            hdr10OutputActive,
-            targets.refractionFramebuffer != nullptr,
-            targets.deferredSlotsBufferDescriptor.slot()
-        ),
+        BuildRendererAvboitPushConstants(targets, hdr10OutputActive),
         csgContextHeapSlot,
         refractionCapture
     );

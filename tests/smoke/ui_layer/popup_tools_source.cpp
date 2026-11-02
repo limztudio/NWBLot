@@ -5,6 +5,8 @@
 #include "popup_tools_source.h"
 #include "smoke_geometry.h"
 
+#include <tests/unit/ui/arithmetic_fixture_rows.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,15 +42,11 @@ static constexpr Array<StringView, 5u> s_Labels{ "Inspect", "Duplicate", "Delete
 
 
 u64 UiPopupToolsSmokeSource::key(const u64 index)const noexcept{
-    return index < rowCount() ? (m_reversed ? rowCount() - index : index + 1u) : 0u;
+    return index < rowCount() ? UiWidgetTests::ArithmeticFixtureRowKey(rowCount(), 0u, m_reversed, index) : 0u;
 }
 
 Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const noexcept{
-    u64 index = 0u;
-    if(keyValue == 0u || keyValue > rowCount())
-        return MakeUnexpected(Failure{});
-    index = m_reversed ? rowCount() - keyValue : keyValue - 1u;
-    return index;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(rowCount(), 0u, m_reversed, keyValue);
 }
 
 Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{

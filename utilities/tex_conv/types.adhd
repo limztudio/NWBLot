@@ -19,7 +19,6 @@ b8 IsValidAlphaSourceMode(in AlphaSourceMode mode){
 
 const Name s_UtilityArena = "utilities/tex_conv/utility";
 const Name s_ConversionScratchArena = "utilities/tex_conv/conversion";
-const i32 s_TexConvEntryFailure = -1;
 
 const StringView s_AlphaWhiteKeyword = "white";
 const StringView s_AlphaBlackKeyword = "black";

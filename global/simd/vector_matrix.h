@@ -103,65 +103,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4TransformTransposed(SIMDVectorSingle value, const SIMDMatrix& transposedMatrix)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    const f32 x = value.f[0];
-    const f32 y = value.f[1];
-    const f32 z = value.f[2];
-    const f32 w = value.f[3];
-    const SIMDVectorSingle& m0 = transposedMatrix.v[0];
-    const SIMDVectorSingle& m1 = transposedMatrix.v[1];
-    const SIMDVectorSingle& m2 = transposedMatrix.v[2];
-    const SIMDVectorSingle& m3 = transposedMatrix.v[3];
-    return SIMDConvertDetail::MakeF32(
-        (m0.f[0] * x) + (m1.f[0] * y) + (m2.f[0] * z) + (m3.f[0] * w),
-        (m0.f[1] * x) + (m1.f[1] * y) + (m2.f[1] * z) + (m3.f[1] * w),
-        (m0.f[2] * x) + (m1.f[2] * y) + (m2.f[2] * z) + (m3.f[2] * w),
-        (m0.f[3] * x) + (m1.f[3] * y) + (m2.f[3] * z) + (m3.f[3] * w)
-    );
-#elif defined(NWB_HAS_NEON)
-    const float32x2_t low = vget_low_f32(value);
-    const float32x2_t high = vget_high_f32(value);
-    SIMDVectorSingle result = vmulq_lane_f32(transposedMatrix.v[0], low, 0);
-    result = vmlaq_lane_f32(result, transposedMatrix.v[1], low, 1);
-    result = vmlaq_lane_f32(result, transposedMatrix.v[2], high, 0);
-    return vmlaq_lane_f32(result, transposedMatrix.v[3], high, 1);
-#else
-    SIMDVectorSingle x{};
-    SIMDVectorSingle y{};
-    SIMDVectorSingle z{};
-    SIMDVectorSingle w{};
-#if defined(NWB_HAS_AVX)
-#if defined(NWB_HAS_AVX2)
-    x = _mm_broadcastss_ps(value);
-#else
-    x = _mm_permute_ps(value, _MM_SHUFFLE(0, 0, 0, 0));
-#endif
-    y = _mm_permute_ps(value, _MM_SHUFFLE(1, 1, 1, 1));
-    z = _mm_permute_ps(value, _MM_SHUFFLE(2, 2, 2, 2));
-    w = _mm_permute_ps(value, _MM_SHUFFLE(3, 3, 3, 3));
-#else
-    x = _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 0, 0, 0));
-    y = _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 1, 1, 1));
-    z = _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 2, 2, 2));
-    w = _mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 3, 3, 3));
-#endif
-#if defined(NWB_HAS_FMA3)
-    SIMDVectorSingle result = _mm_fmadd_ps(w, transposedMatrix.v[3], _mm_mul_ps(z, transposedMatrix.v[2]));
-    result = _mm_fmadd_ps(y, transposedMatrix.v[1], result);
-    return _mm_fmadd_ps(x, transposedMatrix.v[0], result);
-#else
-    x = _mm_mul_ps(x, transposedMatrix.v[0]);
-    y = _mm_mul_ps(y, transposedMatrix.v[1]);
-    z = _mm_mul_ps(z, transposedMatrix.v[2]);
-    w = _mm_mul_ps(w, transposedMatrix.v[3]);
-    x = _mm_add_ps(x, z);
-    y = _mm_add_ps(y, w);
-    return _mm_add_ps(x, y);
-#endif
-#endif
-}
-
 template<typename OutputT, typename InputT, typename TransformT>
 NWB_INLINE NotNull<OutputT*> NWB_SIMD_CALL VectorTransformStreamImpl(NotNull<OutputT*> outputStream, usize outputStride, NotNull<const InputT*> inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix, TransformT transform)noexcept(
     IsNothrowDestructible_V<TransformT>

@@ -73,6 +73,14 @@ public:
     [[nodiscard]] const EditLimits& limits()const noexcept{ return m_limits; }
 
     [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_textMode; }
+
+    [[nodiscard]] TextAreaModelStamp stamp()const noexcept{
+        return { m_instanceGeneration, m_revision, m_externalRevision, m_selectionGeneration, m_compositionGeneration, m_anchor, m_caret, m_textMode };
+    }
+
+    [[nodiscard]] b8 matchesStamp(const TextAreaModelStamp& expected)const noexcept{
+        return stamp() == expected;
+    }
     [[nodiscard]] b8 setText(AStringView value);
     [[nodiscard]] b8 setSelection(usize anchor, usize caret)noexcept;
     [[nodiscard]] b8 selectAll()noexcept{ return setSelection(0u, m_text.size()); }

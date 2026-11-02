@@ -13,7 +13,8 @@ from reflection_smoke import (capture_environment, parse_statistics, validate_fr
 from reflection_roughness_smoke import parse_history
 from reflection_roughness_reference import mirror_cells
 from smoke_volume_identity import file_identity
-from window_capture_smoke import SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 180

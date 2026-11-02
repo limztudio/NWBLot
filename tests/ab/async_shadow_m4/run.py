@@ -44,9 +44,11 @@ sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
     INTERVAL_RE, MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_non_negative, require_positive, require_scope_samples, summarize_scopes,)
+from window_capture_environment import make_runtime_launch_args  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_capture_result,)
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_capture_result  # noqa: E402
 import async_shadow_m4_self_test  # noqa: E402
 
 LIT_B_BM = b"BM"

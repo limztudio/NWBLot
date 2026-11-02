@@ -12,7 +12,6 @@
 
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 #include <global/binary.h>

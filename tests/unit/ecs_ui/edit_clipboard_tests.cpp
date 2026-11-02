@@ -26,6 +26,10 @@ using namespace NWB::Impl;
 
 class DelayedClipboard final : public QueuedClipboardService{
 public:
+    using QueuedClipboardService::completeNativeRequest;
+
+
+public:
     explicit DelayedClipboard(Alloc::GlobalArena& arena)
         : QueuedClipboardService(arena)
     {}
@@ -34,10 +38,6 @@ public:
 public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
         return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
-    }
-
-    [[nodiscard]] b8 deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
-        return completeNativeRequest(token, status, text);
     }
 
 
@@ -61,13 +61,13 @@ TEST(UiEditClipboard, CutWaitsForSuccessfulNativePublicationBeforeDeleting){
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
     EXPECT_EQ(model.text(), "abcd");
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::NativeFailure));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::NativeFailure));
     EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::NativeFailure);
     EXPECT_EQ(model.selectedText(), "bc");
     EXPECT_FALSE(model.canUndo());
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
     EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
     EXPECT_EQ(model.text(), "ad");
     ASSERT_TRUE(model.undo());
@@ -86,11 +86,11 @@ TEST(UiEditClipboard, CopiedOwnerGenerationsRejectReplacedWidgetDeclarationAndMo
         ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
         ASSERT_TRUE(service.pump());
         const auto old = controller.token();
-        ASSERT_TRUE(service.deliver(old, ClipboardStatus::Success, "old"));
+        ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
         EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::StaleOwner);
         EXPECT_EQ(model.text(), "base");
         EXPECT_FALSE(controller.pending());
-        EXPECT_FALSE(service.deliver(old, ClipboardStatus::Success, "late"));
+        EXPECT_FALSE(service.completeNativeRequest(old, ClipboardStatus::Success, "late"));
     }
 }
 
@@ -126,15 +126,15 @@ TEST(UiEditClipboard, ExplicitCancellationInvalidatesDeliveryAndNewRequestSupers
     ASSERT_TRUE(service.pump());
     const auto first = controller.token();
     ASSERT_TRUE(controller.cancel());
-    EXPECT_FALSE(service.deliver(first, ClipboardStatus::Success, "old"));
+    EXPECT_FALSE(service.completeNativeRequest(first, ClipboardStatus::Success, "old"));
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
     const auto second = controller.token();
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     EXPECT_NE(controller.token(), second);
-    EXPECT_FALSE(service.deliver(second, ClipboardStatus::Success, "old"));
+    EXPECT_FALSE(service.completeNativeRequest(second, ClipboardStatus::Success, "old"));
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "new"));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
     EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
     EXPECT_EQ(model.text(), "new");
 }
@@ -153,7 +153,7 @@ TEST(UiEditClipboard, IdenticalExternalResetInvalidatesCopiedPasteDespiteUnchang
     ASSERT_TRUE(model.setText("base"));
     EXPECT_EQ(model.revision(), revision);
     EXPECT_GT(model.externalRevision(), externalRevision);
-    ASSERT_TRUE(service.deliver(old, ClipboardStatus::Success, "old"));
+    ASSERT_TRUE(service.completeNativeRequest(old, ClipboardStatus::Success, "old"));
     EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::StaleModel);
     EXPECT_EQ(model.text(), "base");
     EXPECT_FALSE(controller.pending());
@@ -168,19 +168,19 @@ TEST(UiEditClipboard, TextLimitAndMalformedClipboardPreserveSelectionHistoryAndC
     ASSERT_TRUE(model.setSelection(1u, 3u));
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "xyz"));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "xyz"));
     EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::TooLarge);
     EXPECT_EQ(model.selectedText(), "bc");
     EXPECT_FALSE(model.canUndo());
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "\xC0\xAF"));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "\xC0\xAF"));
     EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::InvalidText);
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_EQ(model.selectedText(), "bc");
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, ""));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, ""));
     EXPECT_FALSE(controller.drain(s_Owner, model).textChanged);
     EXPECT_EQ(model.selectedText(), "bc");
 }
@@ -196,11 +196,11 @@ TEST(UiEditClipboard, ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesD
     EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::ReadOnly);
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Copy, ClipboardChannel::Clipboard, true).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success));
     EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::Published);
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(service.pump());
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "new"));
+    ASSERT_TRUE(service.completeNativeRequest(controller.token(), ClipboardStatus::Success, "new"));
     EXPECT_EQ(controller.drain(s_Owner, model, true).status, UiEditClipboardStatus::ReadOnly);
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_EQ(model.selectedText(), "abcd");

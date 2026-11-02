@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_graph_test_utils.h"
+
 #include <tests/common/test_context.h>
 
 #include <core/task/gpu/compiler_internal.h>
-
-#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -33,6 +33,7 @@ namespace __hidden_task_graph_queue_scoring_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphQueueScoringTestsTag>;
+using TaskGraphTestUtils::IndexedName;
 using namespace Core::GpuTaskGraphCompilerDetail;
 
 constexpr usize s_TaskCount = 8u;
@@ -70,9 +71,8 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
             const usize dependencyCount = hasDependencies ? parentCounts[taskIndex] : 0u;
             for(usize dependencyIndex = 0u; dependencyIndex < dependencyCount; ++dependencyIndex)
                 dependencies[dependencyIndex] = tasks[parents[taskIndex][dependencyIndex]];
-            Array<char, 32u> indexBuffer = {};
             Core::GpuTaskDesc desc;
-            const auto derivedNameResult = DeriveName(Name("tests/queue_scoring/task_"), FormatDecimal(taskIndex, indexBuffer));
+            const auto derivedNameResult = IndexedName(Name("tests/queue_scoring/task_"), taskIndex);
             ASSERT_TRUE(derivedNameResult);
             desc
                 .setIdentity(*derivedNameResult)

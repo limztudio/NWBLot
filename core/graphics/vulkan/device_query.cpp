@@ -119,7 +119,7 @@ b8 Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
 
 WaveLaneCountRange Device::getWaveLaneCounts()const noexcept{
     const u32 count = m_context.subgroupProperties.subgroupSize;
-    return { count, count };
+    return { count };
 }
 
 u64 Device::getMaxStorageBufferRange()const noexcept{

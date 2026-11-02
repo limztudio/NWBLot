@@ -52,7 +52,6 @@ class PopupScope{
     public Rect bounds;
     public Rect viewport;
     public u32 layer = 0u;
-    public b8 modal = false;
     public b8 dismissOutside = true;
     public b8 dismissCancel = true;
     public b8 dismissFocusTraversal = false;

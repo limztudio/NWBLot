@@ -6,7 +6,8 @@ import time
 
 from combo_native import ComboNativeInput
 from interaction_smoke import INPUT_SETTLE_SECONDS, PRESS_HOLD_SECONDS, WIN32_WORD_MASK
-from window_capture_smoke import LinuxXEvent, SmokeFailure
+from window_capture_smoke import SmokeFailure
+from window_capture_x11 import LinuxXEvent
 
 
 class PopupToolsNativeInput(ComboNativeInput):

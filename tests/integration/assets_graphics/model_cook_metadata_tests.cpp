@@ -6,7 +6,6 @@
 
 #include <tests/common/capturing_logger.h>
 
-#include <global/arena_memory.h>
 #include <global/text_utils.h>
 
 #include <tests/common/test_context.h>

@@ -30,7 +30,7 @@
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
 
 // Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases without a local selector CBV.
-#define g_NwbGiSwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
+#define g_NwbGiSwMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot)
 
 // The evaluator reaches typed words and instance records via the mesh bindless route before the bindings include.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
@@ -73,21 +73,6 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers.
-// This pass-local alias supplies the 64-byte record stride without a second heap class.
-#pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapGiSwInstanceBuffers[];
-#pragma warning(pop)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapGiSwInstances(const uint slot){
-    return g_NwbHeapGiSwInstanceBuffers[slot];
-}
-
 // Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
 // The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
 
@@ -113,7 +98,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
         return;
     }
 #endif
-    const NwbSwBvhInstance instance = nwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), minimum, closest.distance, iterator);
     uint primitive;
@@ -161,7 +146,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 #endif
     float3x4 worldToObject = float3x4(0.0);
     if(closest.hit && closest.failure == 0u){
-        const NwbSwBvhInstance instance = nwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[closest.instance];
+        const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[closest.instance];
         worldToObject = float3x4(instance.worldToObjectRow0, instance.worldToObjectRow1, instance.worldToObjectRow2);
     }
     return nwbGiReconstructHit(closest, g_NwbGiSwMaterialContextSlots.sceneSlots.z, worldToObject, origin, direction);
@@ -175,7 +160,7 @@ bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin,
         return geometry.hit;
     }
 #endif
-    const NwbSwBvhInstance instance = nwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), minimum, maximum, iterator);
     uint primitive;

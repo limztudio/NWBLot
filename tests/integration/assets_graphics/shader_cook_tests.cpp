@@ -233,13 +233,14 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(RemoveAllIfExists(firstAssetRoot));
     ASSERT_TRUE(RemoveAllIfExists(secondAssetRoot));
 
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_GatherScratchArena);
     NWB::Pipeline::AssetGatherer::AssetGatherOptions options(testArena.arena);
     options.inputs.emplace_back(PathToString(testArena.arena, firstBuilt));
     options.inputs.emplace_back(PathToString(testArena.arena, secondBuilt));
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
     options.configuration = "tests";
     options.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
 
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     auto recordsLoadResult = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
@@ -265,7 +266,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(originalChecksumLoadResult);
     originalChecksum = *originalChecksumLoadResult;
     options.inputs.emplace_back(PathToString(testArena.arena, conflictingBuilt));
-    EXPECT_FALSE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    EXPECT_FALSE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
     EXPECT_GT(logger.errorCount(), 0u);
     records.clear();
     auto recordsLoadResult2 = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);

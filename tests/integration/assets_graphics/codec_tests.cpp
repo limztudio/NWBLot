@@ -140,7 +140,8 @@ TEST(AssetsGraphics, SharedCodecPayloadsKeepDistinctVirtualPathsUnderLongBuildDi
     options.inputs.emplace_back(PathToString(testArena.arena, builtDirectory));
     options.outputDirectory = PathToString(testArena.arena, outputDirectory);
     options.configuration = s_TestsConfiguration.data();
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_GatherScratchArena);
+    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
     for(const Name& virtualPath : { Name(s_FirstSamplerPath), Name(s_SecondSamplerPath) }){
         const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(outputDirectory, virtualPath, 2u, testArena);
         ASSERT_TRUE(asset);
@@ -211,7 +212,7 @@ TEST(AssetsGraphics, FailedReorderedSharedPayloadBuildPreservesPublishedVirtualP
     options.inputs.emplace_back(PathToString(testArena.arena, publishedDirectory));
     options.outputDirectory = PathToString(testArena.arena, cookCase->outputDirectory);
     options.configuration = s_TestsConfiguration.data();
-    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
+    ASSERT_TRUE(NWB::Pipeline::AssetGatherer::GatherAssets(options, scratchArena));
     for(const Name& virtualPath : { firstPath, secondPath }){
         const auto asset = AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(cookCase->outputDirectory, virtualPath, 2u, testArena);
         ASSERT_TRUE(asset);
@@ -294,21 +295,21 @@ TEST(AssetsGraphics, AssetCacheWritesLowercaseRelativePathSha1AndInvalidatesOnPa
     NWB::Core::CpuTaskScheduler cookCpuTaskScheduler(0u);
 
     const auto buildAndGatherWithRepoRoot = [&](const Path& builtDir, const Path& outDir) -> b8{
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(testArena.arena, cookCpuTaskScheduler);
-        buildOptions.repoRoot = PathToString(testArena.arena, root);
-        buildOptions.outputDirectory = PathToString(testArena.arena, builtDir);
+        buildOptions.repoRoot = root;
+        buildOptions.outputDirectory = builtDir;
         if(!buildOptions.configuration.assign(s_TestsConfiguration) || !buildOptions.assetType.assign("graphics"))
             return false;
-        const auto assetRootText = PathToString(testArena.arena, assetRoot);
-        buildOptions.assetRoots.emplace_back(testArena.arena, assetRootText, NWB::Core::Assets::s_ProjectVirtualRoot);
-        if(!NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions))
+        buildOptions.assetRoots.emplace_back(assetRoot, NWB::Core::Assets::s_ProjectVirtualRoot);
+        if(!NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions, scratchArena))
             return false;
 
         NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(testArena.arena);
         gatherOptions.inputs.emplace_back(PathToString(testArena.arena, builtDir));
         gatherOptions.outputDirectory = PathToString(testArena.arena, outDir);
         gatherOptions.configuration = s_TestsConfiguration.data();
-        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
+        return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
     };
 
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(mixedCaseNwbPath, s_SamplerMetadata));

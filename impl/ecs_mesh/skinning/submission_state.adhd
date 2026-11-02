@@ -123,10 +123,6 @@ class SkinnedRuntimeMeshIdentity{
 // Captures CPU state true only when the producing command list was accepted.
 [serialize, reflect]
 class MeshSkinningSubmissionCommit{
-    public b8 empty()const{
-        return this.handledDirtyFlags == RuntimeMeshDirtyFlag::None && !this.bindlessResourceSlotsUploadRecorded;
-    }
-
     public u32 editRevision = 0u;
     public b8 bindlessResourceSlotsUploadRecorded = false;
     public RuntimeMeshDirtyFlag handledDirtyFlags = RuntimeMeshDirtyFlag::None;
@@ -207,12 +203,6 @@ class MeshletBoundsPushConstants{
     public u32 bindlessResourceSlots = 0u;
 }
 
-[serialize, reflect]
-class MeshletRepackPushConstants{
-    public u32 meshletCount = 0u;
-    public u32 bindlessResourceSlots = 0u;
-}
-
 MeshSkinningPushConstants MakeMeshSkinningPushConstants(in u32 meshletCount, in u32 skinCount, in u32 jointCount, in u32 skinningMode, in u32 bindlessResourceSlots){
     MeshSkinningPushConstants out;
     out.meshletCount = meshletCount;
@@ -225,13 +215,6 @@ MeshSkinningPushConstants MakeMeshSkinningPushConstants(in u32 meshletCount, in 
 
 MeshletBoundsPushConstants MakeMeshletBoundsPushConstants(in u32 meshletCount, in u32 bindlessResourceSlots){
     MeshletBoundsPushConstants out;
-    out.meshletCount = meshletCount;
-    out.bindlessResourceSlots = bindlessResourceSlots;
-    return out;
-}
-
-MeshletRepackPushConstants MakeMeshletRepackPushConstants(in u32 meshletCount, in u32 bindlessResourceSlots){
-    MeshletRepackPushConstants out;
     out.meshletCount = meshletCount;
     out.bindlessResourceSlots = bindlessResourceSlots;
     return out;

@@ -107,48 +107,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorASin(SIMDVectorSingle value)noex
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleASin(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(ASin(value[0]), ASin(value[1]), ASin(value[2]), ASin(value[3]));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorASinEst(SIMDVectorSingle value)noexcept{
-    SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
-    SIMDVectorSingle x = VectorAbs(value);
-    SIMDVectorSingle root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
-
-    SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcEstPolynomial(x, root);
-    SIMDVectorSingle t1 = VectorSubtract(s_SIMDPi, t0);
-    t0 = VectorSelect(t1, t0, nonnegative);
-    return VectorSubtract(s_SIMDHalfPi, t0);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleASinEst(SIMDVectorDouble value)noexcept{
-    return VectorDoubleASin(value);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorACos(SIMDVectorSingle value)noexcept{
-    const SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
-    const SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
-    SIMDVectorSingle t1 = VectorSubtract(s_SIMDPi, t0);
-    return VectorSelect(t1, t0, nonnegative);
-}
-
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleACos(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(ACos(value[0]), ACos(value[1]), ACos(value[2]), ACos(value[3]));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorACosEst(SIMDVectorSingle value)noexcept{
-    SIMDVectorSingle nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
-    SIMDVectorSingle x = VectorAbs(value);
-    SIMDVectorSingle root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
-
-    SIMDVectorSingle t0 = SIMDVectorDetail::VectorArcEstPolynomial(x, root);
-    SIMDVectorSingle t1 = VectorSubtract(s_SIMDPi, t0);
-    return VectorSelect(t1, t0, nonnegative);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleACosEst(SIMDVectorDouble value)noexcept{
-    return VectorDoubleACos(value);
 }
 
 
@@ -180,35 +140,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan(SIMDVectorSingle value)noex
     return VectorSelect(result1, result, comp);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATan(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(ATan(value[0]), ATan(value[1]), ATan(value[2]), ATan(value[3]));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATanEst(SIMDVectorSingle value)noexcept{
-    SIMDVectorSingle absV = VectorAbs(value);
-    SIMDVectorSingle invV = VectorReciprocalEst(value);
-    SIMDVectorSingle comp = VectorGreater(value, s_SIMDOne);
-    SIMDVectorSingle sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, comp);
-    comp = VectorLessOrEqual(absV, s_SIMDOne);
-    sign = VectorSelect(sign, s_SIMDZero, comp);
-    SIMDVectorSingle x = VectorSelect(invV, value, comp);
-
-    SIMDVectorSingle x2 = VectorMultiply(x, x);
-    SIMDVectorSingle result = VectorMultiplyAdd(VectorSplatW(s_SIMDATanEstCoefficients1), x2, VectorSplatZ(s_SIMDATanEstCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDATanEstCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDATanEstCoefficients1));
-    result = VectorMultiplyAdd(result, x2, s_SIMDATanEstCoefficients0);
-    result = VectorMultiply(result, x);
-
-    SIMDVectorSingle result1 = VectorSubtract(VectorMultiply(sign, s_SIMDHalfPi), result);
-    comp = VectorEqual(sign, s_SIMDZero);
-    return VectorSelect(result1, result, comp);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATanEst(SIMDVectorDouble value)noexcept{
-    return VectorDoubleATan(value);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -220,16 +151,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2(SIMDVectorSingle y, SIMDVe
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATan2(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
-    return VectorDoubleSet(ATan2(y[0], x[0]), ATan2(y[1], x[1]), ATan2(y[2], x[2]), ATan2(y[3], x[3]));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorATan2Est(SIMDVectorSingle y, SIMDVectorSingle x)noexcept{
-    const SIMDVectorSingle constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_3PIDIV4);
-    SIMDVectorSingle v = VectorMultiply(y, VectorReciprocalEst(x));
-    return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATanEst(v), constants);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleATan2Est(SIMDVectorDouble y, SIMDVectorDouble x)noexcept{
     return VectorDoubleSet(ATan2(y[0], x[0]), ATan2(y[1], x[1]), ATan2(y[2], x[2]), ATan2(y[3], x[3]));
 }
 

@@ -73,7 +73,10 @@ Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point posit
     const auto local = __hidden_ui_edit_box_hit::ResolveLocalEditTextPosition(entry.displayed, entry.owner, entry.popup, position);
     if(!local)
         return MakeUnexpected(Failure{});
-    return Ui::HitEditWordCaretGeometry(entry.displayed.lines, entry.displayed.stops, *local);
+    usize committedByte = 0u;
+    if(!Ui::TryHitEditWordCaretGeometry(entry.displayed.lines, entry.displayed.stops, *local, committedByte))
+        return MakeUnexpected(Failure{});
+    return committedByte;
 }
 
 

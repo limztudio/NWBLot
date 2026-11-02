@@ -101,7 +101,7 @@ public:
 
 public:
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return RendererTaskGraphDetail::SharedComputeEmulationCommandRequirements(payload.phase);
+        return RendererTaskGraphDetail::SharedComputeEmulationCommandRequirements(payload.phase == SharedComputeEmulationPhase::Generate);
     }
 
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);

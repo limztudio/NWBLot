@@ -354,17 +354,6 @@ b8 IsAllowedSkinMetadataField(in StringView fieldName){
     ;
 }
 
-b8 TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount, mut usize outComponentIndex){
-    for(usize componentIndex = 0u; componentIndex < cast<usize>(s_SkinInfluenceJointCount); ++componentIndex){
-        if(cast<u32>(skin.joint[componentIndex]) < skeletonJointCount)
-            continue;
-
-        outComponentIndex = componentIndex;
-        return true;
-    }
-    return false;
-}
-
 b8 IsAllowedMeshAssetField(in StringView fieldName){
     return
         fieldName == s_MeshPositionsFieldNameView

@@ -292,28 +292,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNegativeMultiplySubtractExpressi
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNegativeMultiplySubtractExpression(SIMDVectorDouble v0, SIMDVectorDouble v1, SIMDVectorDouble v2)noexcept{
-#if defined(NWB_HAS_NEON64)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::GetLow(v2)
-            - SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1),
-        SIMDVectorDoubleDetail::GetHigh(v2)
-            - SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
-    );
-#elif defined(NWB_HAS_AVX)
-    return BitCast<SIMDVectorDouble>(BitCast<__m256d>(v2) - BitCast<__m256d>(v0) * BitCast<__m256d>(v1));
-#elif defined(NWB_HAS_SSE2)
-    return SIMDVectorDoubleDetail::FromPairs(
-        SIMDVectorDoubleDetail::GetLow(v2)
-            - SIMDVectorDoubleDetail::GetLow(v0) * SIMDVectorDoubleDetail::GetLow(v1),
-        SIMDVectorDoubleDetail::GetHigh(v2)
-            - SIMDVectorDoubleDetail::GetHigh(v0) * SIMDVectorDoubleDetail::GetHigh(v1)
-    );
-#else
-    return v2 - v0 * v1;
-#endif
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -464,26 +442,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMergeX(SIMDVectorDouble x,
     const SIMDVectorDouble xy = VectorDoublePermute<0, 4, 1, 5>(x, y);
     const SIMDVectorDouble zw = VectorDoublePermute<0, 4, 1, 5>(z, w);
     return VectorDoublePermute<0, 1, 4, 5>(xy, zw);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4MinComponent(SIMDVectorSingle value)noexcept{
-    SIMDVectorSingle result = VectorMin(value, VectorSwizzle<2, 3, 0, 1>(value));
-    result = VectorMin(result, VectorSwizzle<1, 0, 3, 2>(result));
-    return result;
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble4MinComponent(SIMDVectorDouble value)noexcept{
-    SIMDVectorDouble result = VectorDoubleMin(value, VectorDoubleSwizzle<2, 3, 0, 1>(value));
-    result = VectorDoubleMin(result, VectorDoubleSwizzle<1, 0, 3, 2>(result));
-    return result;
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector3MinComponent(SIMDVectorSingle value)noexcept{
-    return Vector4MinComponent(VectorSwizzle<0, 1, 2, 0>(value));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDouble3MinComponent(SIMDVectorDouble value)noexcept{
-    return VectorDouble4MinComponent(VectorDoubleSwizzle<0, 1, 2, 0>(value));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL Vector4MaxComponent(SIMDVectorSingle value)noexcept{

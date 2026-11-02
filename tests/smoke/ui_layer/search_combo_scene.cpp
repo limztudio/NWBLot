@@ -10,6 +10,8 @@
 
 #include <core/common/log.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -136,7 +138,7 @@ Array<u64, 22u> UiSearchComboSmokeScene::values()const noexcept{
     const auto& query = m_state.query();
     return { combo.selectedKey(), list.cursorKey(), m_source.rowCount(), m_source.filtered().rowCount(),
         placement.firstRow, placement.endRow, m_source.labelReads(), static_cast<u64>(combo.isOpen()),
-        static_cast<u64>(query.text().size()), HashSmokeText(query.text()) & s_SmokeMarker24BitMask, static_cast<u64>(query.anchor()),
+        static_cast<u64>(query.text().size()), ComputeFnv32TextHash(query.text()) & s_SmokeMarker24BitMask, static_cast<u64>(query.anchor()),
         static_cast<u64>(query.caret()), static_cast<u64>(m_state.editorState().focused), static_cast<u64>(m_focused),
         m_commits, m_source.filtered().revision(), static_cast<u64>(m_source.reversed()), m_source.removedKey(),
         static_cast<u64>(m_enabled), m_source.revision(), m_underlying, static_cast<u64>(query.composition().active) };

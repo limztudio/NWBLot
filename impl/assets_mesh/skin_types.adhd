@@ -34,15 +34,22 @@ b8 ValidSkinInfluenceWeights(in f32x4u weights){
     return isFinite(sum) && abs(sum - 1.0f) <= s_SkinWeightSumEpsilon;
 }
 
+b8 TryFindOutOfRangeSkinInfluenceJoint(in SkinInfluence4 skin, in u32 skeletonJointCount, mut usize outComponentIndex){
+    for(usize componentIndex = 0u; componentIndex < cast<usize>(s_SkinInfluenceJointCount); ++componentIndex){
+        if(cast<u32>(skin.joint[componentIndex]) < skeletonJointCount)
+            continue;
+
+        outComponentIndex = componentIndex;
+        return true;
+    }
+    return false;
+}
+
 b8 SkinInfluenceFitsSkeleton(in SkinInfluence4 skin, in u32 skeletonJointCount){
     if(skeletonJointCount == 0u)
         return true;
-    for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
-        const u32 joint = cast<u32>(skin.joint[influenceIndex]);
-        if(joint >= skeletonJointCount)
-            return false;
-    }
-    return true;
+    usize componentIndex = 0u;
+    return !TryFindOutOfRangeSkinInfluenceJoint(skin, skeletonJointCount, componentIndex);
 }
 
 b8 ValidInverseBindMatrixCount(in usize inverseBindMatrixCount, in u32 skeletonJointCount){

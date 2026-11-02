@@ -130,7 +130,7 @@ b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
             break;
         }
     }
-    options.repoRoot = PathToString(testArena.arena, useCaseRootAsRepoRoot ? root : AssetsGraphicsTestRepoRoot(testArena));
+    options.repoRoot = useCaseRootAsRepoRoot ? root : AssetsGraphicsTestRepoRoot(testArena);
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots){
         auto parentDirectoryName = PathToString(testArena.arena, assetRoot.lexicallyNormal().parentPath().filenameView());
@@ -138,14 +138,14 @@ b8 AssetsGraphicsFixture::BuildPreparedGraphicsAssetRoots(
 
         const AStringView virtualRoot = parentDirectoryName == __hidden_assets_graphics_fixture::s_EngineDirectory ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot;
 
-        auto assetRootText = PathToString(testArena.arena, assetRoot);
-        options.assetRoots.emplace_back(testArena.arena, assetRootText, virtualRoot);
+        options.assetRoots.emplace_back(assetRoot, virtualRoot);
     }
-    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    options.outputDirectory = outputDirectory;
     if(!options.configuration.assign(__hidden_assets_graphics_fixture::s_TestsConfiguration) || !options.assetType.assign(__hidden_assets_graphics_fixture::s_GraphicsDirectory))
         return false;
 
-    return NWB::Pipeline::AssetBuilder::BuildAssets(options);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_BuildScratchArena);
+    return NWB::Pipeline::AssetBuilder::BuildAssets(options, scratchArena);
 }
 
 b8 AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
@@ -164,7 +164,8 @@ b8 AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
     gatherOptions.outputDirectory = PathToString(testArena.arena, outputDirectory);
     gatherOptions.configuration = __hidden_assets_graphics_fixture::s_TestsConfiguration.data();
     gatherOptions.mergePayloads = &NWB::Impl::MergeGatheredGraphicsAsset;
-    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_GatherScratchArena);
+    return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions, scratchArena);
 }
 
 b8 AssetsGraphicsFixture::CookSingleGraphicsMeta(const AStringView metaText, AStringView assetDirectory, AStringView assetFilename, const AssetsGraphicsFixture::CookCase& cookCase, AssetsGraphicsFixture::TestArena& testArena){

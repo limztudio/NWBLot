@@ -96,10 +96,6 @@ using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
     return Vector4LessOrEqual(VectorAbs(VectorSubtract(value, VectorSet(x, y, z, w))), VectorReplicate(epsilon));
 }
 
-[[nodiscard]] inline b8 NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = s_DefaultNearlyEqualEpsilon)noexcept{
-    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon) && NearlyEqual(value.w, w, epsilon);
-}
-
 void RecordUnsignedTestProperty(AStringView key, u64 value);
 
 template<typename ArenaT>

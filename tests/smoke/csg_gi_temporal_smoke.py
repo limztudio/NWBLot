@@ -13,7 +13,9 @@ import statistics
 import subprocess
 import sys
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text)
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure)
+from window_capture_validation import validate_expected_log_text
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
 LIT_MINIMUM_FRAME_INTERVAL = 1

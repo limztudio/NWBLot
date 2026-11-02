@@ -68,49 +68,33 @@ b8 Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, ComboRe
 }
 
 b8 Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
-    InputRouter& input = m_context.input();
     ComboState& state = *frame.state;
-    WidgetId thumb;
-    if(!TryMakeWidgetId(frame.rows.id, s_WidgetPartScrollbar, thumb))
-        return false;
-    auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-    b8 haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
-    auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-    b8 haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
-    while(haveGesture || haveAction){
-        if(!comboMatches(frame))
-            return false;
-        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
-            if(!applyListGesture(state.m_list, *gesture))
-                return false;
-            gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-            haveGesture = gesture && gesture->control == frame.listToken && gesture->popup == frame.popupToken;
-        }
-        else{
-            const b8 fromEditor = frame.editor != s_LayoutNoParent && action->source == m_scope->m_comboEditors[frame.editor].state.id;
-            if(fromEditor && (frame.search->query().composition().active || (action->kind == ControlActionKind::Submit && !frame.editorSubmitted))){
-                action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-                haveAction = action && action->popup == frame.popupToken;
-                continue;
-            }
+    return consumeListInput(
+        frame.rows,
+        frame.listToken,
+        true,
+        &frame.popupToken,
+        state.m_list,
+        [&](){ return comboMatches(frame); },
+        [&](const ControlAction& action){
+            const b8 fromEditor = frame.editor != s_LayoutNoParent && action.source == m_scope->m_comboEditors[frame.editor].state.id;
+            if(fromEditor && (frame.search->query().composition().active || (action.kind == ControlActionKind::Submit && !frame.editorSubmitted)))
+                return ListActionOutcome::Continue;
             ListResult preview;
-            if(!ListBehavior::Apply(*frame.results, options, *action, state.m_list, preview) || !comboMatches(frame))
-                return false;
-            if(preview.activated){
-                if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))
-                    return false;
-                result.committed = true;
-                input.closePopup(frame.popupToken);
-                return true;
-            }
-            action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-            haveAction = action && action->popup == frame.popupToken;
+            if(!ListBehavior::Apply(*frame.results, options, action, state.m_list, preview) || !comboMatches(frame))
+                return ListActionOutcome::Failed;
+            if(!preview.activated)
+                return ListActionOutcome::Continue;
+            if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))
+                return ListActionOutcome::Failed;
+            result.committed = true;
+            m_context.input().closePopup(frame.popupToken);
+            return ListActionOutcome::Stop;
         }
-    }
-    return comboMatches(frame);
+    );
 }
 
 

@@ -17,59 +17,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_builder_combo{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ComboQueryCache{
-    u64 revision = 0u;
-    u64 externalRevision = 0u;
-    u64 compositionGeneration = 0u;
-    u64 selectionGeneration = 0u;
-    usize anchor = 0u;
-    usize caret = 0u;
-
-    [[nodiscard]] static ComboQueryCache Capture(const SearchComboState* const search)noexcept{
-        if(!search)
-            return {};
-        const EditModel& query = search->query();
-        return {
-            query.revision(),
-            query.externalRevision(),
-            query.compositionGeneration(),
-            query.selectionGeneration(),
-            query.anchor(),
-            query.caret(),
-        };
-    }
-
-    [[nodiscard]] b8 matches(const SearchComboState* const search)const noexcept{
-        if(!search)
-            return true;
-        const EditModel& query = search->query();
-        return
-            query.revision() == revision
-            && query.externalRevision() == externalRevision
-            && query.compositionGeneration() == compositionGeneration
-            && query.selectionGeneration() == selectionGeneration
-            && query.anchor() == anchor
-            && query.caret() == caret
-        ;
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source, const ComboOptions& options, const SearchComboOptions* searchOptions, ComboState& state, SearchComboState* search, ISearchableListDataSource* searchSource){
     ComboResult result;
     if(
@@ -99,17 +46,17 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     state.m_popup.bindParent(m_context.popupToken());
     if(previouslyOpen && !state.isOpen())
         ComboBehavior::Close(state);
-    const __hidden_builder_combo::ComboQueryCache queryCache = __hidden_builder_combo::ComboQueryCache::Capture(search);
-    if(!ComboBehavior::Reconcile(state, source) || !queryCache.matches(search)){
+    const TextAreaModelStamp queryStamp = search ? search->query().stamp() : TextAreaModelStamp{};
+    if(!ComboBehavior::Reconcile(state, source) || (search && !search->query().matchesStamp(queryStamp))){
         m_context.fail();
         return result;
     }
-    if(search && (!SearchComboBehavior::Filter(*search, *searchSource) || !queryCache.matches(search))){
+    if(search && (!SearchComboBehavior::Filter(*search, *searchSource) || !search->query().matchesStamp(queryStamp))){
         m_context.fail();
         return result;
     }
     const IListDataSource& results = search ? searchSource->filtered() : source;
-    if(!ListBehavior::Reconcile(state.m_list, results) || !queryCache.matches(search)){
+    if(!ListBehavior::Reconcile(state.m_list, results) || (search && !search->query().matchesStamp(queryStamp))){
         m_context.fail();
         return result;
     }
@@ -194,27 +141,13 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     frame.options.placeholder = {};
+    ListOptions listOptions;
+    listOptions.wheelRows = options.wheelRows;
+    listOptions.enabled = options.enabled;
+    listOptions.selectOnNavigate = false;
+    const WidgetId commandFocus = frame.editor != s_LayoutNoParent ? m_scope->m_comboEditors[frame.editor].state.id : WidgetId{};
     ListFrame list(m_arena);
-    list.source = frame.results;
-    list.state = &state.m_list;
-    list.widgetStyle = m_style;
-    list.style = m_listStyle;
-    list.options.wheelRows = options.wheelRows;
-    list.options.enabled = options.enabled;
-    list.options.selectOnNavigate = false;
-    list.token = frame.listToken;
-    list.focusOnCommit = frame.listFocusOnCommit;
-    list.rowCount = frame.resultCount;
-    if(frame.editor != s_LayoutNoParent)
-        list.commandFocus = m_scope->m_comboEditors[frame.editor].state.id;
-    list.padding = list.style.padding;
-    const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
-    if(!background){
-        m_context.fail();
-        return {};
-    }
-    list.padding = MaxUiPadding(list.padding, background->padding);
-    if(!prepareListMetrics(list) || !comboMatches(frame)){
+    if(!prepareListFrame(*frame.results, state.m_list, listOptions, frame.listToken, frame.resultCount, frame.listFocusOnCommit, commandFocus, list) || !comboMatches(frame)){
         m_context.fail();
         return {};
     }
@@ -253,9 +186,7 @@ b8 Builder::comboStateMatches(const ComboFrame& frame)const noexcept{
     return
         popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->isOpen() == frame.open
         && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken
-        && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration && frame.search->query().revision() == frame.queryRevision && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
-        && frame.search->query().selectionGeneration() == frame.querySelectionGeneration && frame.search->query().externalRevision() == frame.queryExternalRevision && frame.search->query().anchor() == frame.queryAnchor
-        && frame.search->query().caret() == frame.queryCaret))
+        && (!frame.search || frame.search->query().matchesStamp(frame.queryStamp))
     ;
 }
 

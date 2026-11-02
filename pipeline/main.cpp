@@ -12,17 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int RunTool(const int argc, char** argv){
-    NWB::Log::ClientStandalone logger;
-    if(!logger.init(NWB_TEXT(NWB_PIPELINE_TOOL_NAME))){
-        NWB_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
-        return NWB::Pipeline::s_PipelineExitFatal;
-    }
-    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    return NWB::Pipeline::RunPipelineTool(argc, argv);
-}
-
-NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(RunTool)
+NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(NWB::Log::ClientStandalone, NWB_TEXT(NWB_PIPELINE_TOOL_NAME), NWB::Pipeline::s_PipelineExitFatal, NWB::Pipeline::RunPipelineTool)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

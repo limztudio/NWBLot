@@ -75,7 +75,6 @@ b8 Client::GlobalInit()noexcept{
     return true;
 }
 
-
 Client::Client()
     : ClientBaseType("NWB::Log::Client")
     , m_curl(nullptr)
@@ -110,7 +109,6 @@ b8 Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
     this->m_semaphore.release();
     return true;
 }
-
 
 b8 Client::internalInit(const AStringView url){
     m_messageUrl = url;
@@ -233,12 +231,6 @@ void Client::enqueue(MessageType&& data){
     this->m_semaphore.release();
 }
 
-void Client::enqueue(const MessageType& data){
-    this->m_messageQueue.emplace(data);
-    m_messageCount.fetch_add(1, MemoryOrder::relaxed);
-    this->m_semaphore.release();
-}
-
 b8 Client::tryDequeueMessage(MessageType& msg){
     auto dequeued = this->tryDequeue(msg);
     if(dequeued)
@@ -259,7 +251,6 @@ ClientStandalone::~ClientStandalone()noexcept{
     stopWorker();
     m_processedMessageFile.close();
 }
-
 
 b8 ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
     if(logFileNameBase.empty())

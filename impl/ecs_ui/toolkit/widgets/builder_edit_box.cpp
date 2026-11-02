@@ -115,7 +115,7 @@ void Builder::resolveEditIntrinsicSize(const Item& item, Point& outSize)const no
 }
 
 b8 Builder::prepareEditBox(const EditBoxResult& result, EditModel& model, EditBoxState& state, Item& item){
-    if(state.modelGeneration != model.instanceGeneration() || state.revision != model.revision() || state.selectionGeneration != model.selectionGeneration() || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused)
+    if(!state.matchesStamp(model.stamp(), result.focused))
         state.caretElapsed = 0.0;
     else
         state.caretElapsed = AdvanceCaretPhase(state.caretElapsed, static_cast<f64>(m_deltaSeconds));

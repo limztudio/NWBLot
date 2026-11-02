@@ -56,11 +56,11 @@ static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32) * 6u, "ShadowRqPushCo
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 10u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == 36u);
 
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 22u, "ShadowResolvePushConstants must match the shader push-constant layout");
-static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 84u);
-static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 20u);
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 80u);
+static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 19u);
 
-static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 100u);
+static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 96u);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset);

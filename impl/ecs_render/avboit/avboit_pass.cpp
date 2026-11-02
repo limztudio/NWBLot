@@ -52,19 +52,7 @@ static void DispatchAvboitCompute(const AvboitFrameTargets& targets, const u32 g
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, pipeline);
 
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
-    const RendererAvboitPushConstants pushConstants = ResolveRendererAvboitPushConstants(
-        targets.fullWidth,
-        targets.fullHeight,
-        targets.lowWidth,
-        targets.lowHeight,
-        targets.virtualSliceCount,
-        targets.physicalSliceCount,
-        hdr10OutputActive,
-        targets.refractionFramebuffer != nullptr,
-        targets.deferredSlotsBufferDescriptor.slot()
-    );
+    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(groupCountX, 1, 1);
 }

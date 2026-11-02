@@ -42,7 +42,6 @@ namespace SIMDQuaternionDoubleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const SIMDVectorDoubleConstF s_DoubleSIMDQuaternionRollPitchYawSign = { { { 1.0, -1.0, -1.0, 1.0 } } };
 inline constexpr f64 s_DoubleQuaternionHalfAngleScale = 0.5;
 
 
@@ -56,8 +55,6 @@ inline constexpr f64 s_DoubleQuaternionHalfAngleScale = 0.5;
 
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionIdentity()noexcept{ return s_SIMDIdentityR3; }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleIdentity()noexcept{ return s_DoubleSIMDIdentityR3; }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationNormal(SIMDVectorSingle normalAxis, f32 angle)noexcept{
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
@@ -95,20 +92,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationNormal(SIMDVec
     return VectorDoubleMultiply(n, scale);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationAxis(SIMDVectorSingle axis, f32 angle)noexcept{
-    NWB_ASSERT(!Vector3Equal(axis, VectorZero()));
-    NWB_ASSERT(!Vector3IsInfinite(axis));
-
-    return QuaternionRotationNormal(Vector3Normalize(axis), angle);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationAxis(SIMDVectorDouble axis, f64 angle)noexcept{
-    NWB_ASSERT(!VectorDouble3Equal(axis, VectorDoubleZero()));
-    NWB_ASSERT(!VectorDouble3IsInfinite(axis));
-
-    return QuaternionDoubleRotationNormal(VectorDouble3Normalize(axis), angle);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationRollPitchYawFromVector(SIMDVectorSingle angles)noexcept{
     const SIMDVectorSingle halfAngles = VectorMultiply(angles, s_SIMDOneHalf);
     SIMDVectorSingle sinAngles{};
@@ -129,32 +112,8 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationRollPitchYawFromVect
     return VectorMultiplyAdd(q1, r1, q0);
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationRollPitchYawFromVector(SIMDVectorDouble angles)noexcept{
-    const SIMDVectorDouble halfAngles = VectorDoubleMultiply(angles, s_DoubleSIMDOneHalf);
-    SIMDVectorDouble sinAngles{};
-    SIMDVectorDouble cosAngles{};
-    VectorDoubleSinCos(sinAngles, cosAngles, halfAngles);
-
-    const SIMDVectorDouble p0 = VectorDoublePermute<0, 4, 4, 4>(sinAngles, cosAngles);
-    const SIMDVectorDouble y0 = VectorDoublePermute<5, 1, 5, 5>(sinAngles, cosAngles);
-    const SIMDVectorDouble r0 = VectorDoublePermute<6, 6, 2, 6>(sinAngles, cosAngles);
-    const SIMDVectorDouble p1 = VectorDoublePermute<0, 4, 4, 4>(cosAngles, sinAngles);
-    const SIMDVectorDouble y1 = VectorDoublePermute<5, 1, 5, 5>(cosAngles, sinAngles);
-    const SIMDVectorDouble r1 = VectorDoublePermute<6, 6, 2, 6>(cosAngles, sinAngles);
-
-    SIMDVectorDouble q1 = VectorDoubleMultiply(p1, SIMDQuaternionDoubleDetail::s_DoubleSIMDQuaternionRollPitchYawSign);
-    SIMDVectorDouble q0 = VectorDoubleMultiply(p0, y0);
-    q1 = VectorDoubleMultiply(q1, y1);
-    q0 = VectorDoubleMultiply(q0, r0);
-    return VectorDoubleMultiplyAdd(q1, r1, q0);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
     return QuaternionRotationRollPitchYawFromVector(VectorSet(pitch, yaw, roll, 0.0f));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationRollPitchYaw(f64 pitch, f64 yaw, f64 roll)noexcept{
-    return QuaternionDoubleRotationRollPitchYawFromVector(VectorDoubleSet(pitch, yaw, roll, 0.0));
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionRotationMatrix(const SIMDMatrix& matrix)noexcept{
@@ -362,22 +321,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleRotationMatrix(const S
     SIMDVectorDouble numerator = VectorDoubleSubtract(VectorDoubleSet(matrix.v[2][1], matrix.v[0][2], matrix.v[1][0], 0.0), VectorDoubleSet(matrix.v[1][2], matrix.v[2][0], matrix.v[0][1], 0.0));
     numerator = VectorDoubleSelect(numerator, fourWSqr, s_DoubleSIMDMaskW);
     return VectorDoubleMultiply(numerator, inv4w);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_INLINE void NWB_SIMD_CALL QuaternionToAxisAngle(SIMDVectorSingle& outAxis, f32& outAngle, SIMDVectorSingle q)noexcept{
-    outAxis = q;
-    const SIMDVectorSingle angle = VectorScale(VectorACos(VectorSplatW(q)), 2.0f);
-    outAngle = VectorGetX(angle);
-}
-
-NWB_INLINE void NWB_SIMD_CALL QuaternionDoubleToAxisAngle(SIMDVectorDouble& outAxis, f64& outAngle, SIMDVectorDouble q)noexcept{
-    outAxis = q;
-    const SIMDVectorDouble angle = VectorDoubleScale(SIMDVectorDoubleDetail::ACosReplicated(VectorDoubleSplatW(q)), 2.0);
-    outAngle = VectorDoubleGetX(angle);
 }
 
 

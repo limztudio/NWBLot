@@ -83,26 +83,9 @@ public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
 };
 
-struct AvboitDepthWarpGraphTask{
-    // The avboit system, the frame targets, and the timing ticket are required: depth warp always dispatches against this frame's targets.
-    // The timing feedback and scope stay optional: tasks without feedback skip sample attribution.
-    using Payload = AvboitComputeEffectRecordInputs;
-
-
-public:
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
-
-
+struct AvboitDepthWarpGraphTask : public AvboitComputeEffectGraphTaskBase{
 public:
     [[nodiscard]] static b8 Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context);
-
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
-        AcceptAvboitComputeEffect(payload, token);
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        DiscardAvboitComputeEffect(payload);
-    }
 };
 
 

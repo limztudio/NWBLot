@@ -12,7 +12,6 @@
 #include "toolkit_contract.h"
 
 #include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
 #include <core/common/log.h>
 
 

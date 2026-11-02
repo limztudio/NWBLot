@@ -44,8 +44,6 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroyCapturedSmokeRenderWorld;
 using NWB::Tests::Smoke::FramebufferCapture;
 using NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture;
-using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
-using NWB::Tests::Smoke::SmokeEnvironmentString;
 
 using TextureSmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using TextureSmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;

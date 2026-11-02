@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <tests/unit/ui/fixture_text_shaping.h>
 #include <tests/unit/ui/native_input.h>
 
 #include "edit_host_fixture_support.h"
@@ -69,7 +70,7 @@ protected:
     FakeClipboard m_clipboard;
     UiEditBoxHost m_host;
     Ui::EditModel m_model;
-    UiEditHostFixtureSupport::FixtureShaper m_shaper;
+    Tests::UiFixtureText::FixtureShaper m_shaper;
     Ui::TextLayoutBuilder m_layoutBuilder;
     Ui::WidgetState m_widget;
     Ui::EditBoxPlacement m_placement;

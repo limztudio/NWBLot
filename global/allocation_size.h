@@ -21,13 +21,9 @@ using AlignValT = std::align_val_t;
 using NewHandler = std::new_handler;
 using NoThrowT = std::nothrow_t;
 
-inline constexpr NoThrowT s_NoThrow = std::nothrow;
-
-
 [[nodiscard]] inline NewHandler GetNewHandler()noexcept{
     return std::get_new_handler();
 }
-
 
 template<usize Size>
 constexpr inline usize SizeOf(usize count)noexcept(Size <= 1u){

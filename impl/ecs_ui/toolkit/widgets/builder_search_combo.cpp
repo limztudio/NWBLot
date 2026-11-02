@@ -85,14 +85,7 @@ b8 Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
 void Builder::snapshotComboQuery(ComboFrame& frame)noexcept{
     if(!frame.search)
         return;
-    const EditModel& query = frame.search->query();
-    frame.queryGeneration = query.instanceGeneration();
-    frame.queryRevision = query.revision();
-    frame.queryCompositionGeneration = query.compositionGeneration();
-    frame.querySelectionGeneration = query.selectionGeneration();
-    frame.queryExternalRevision = query.externalRevision();
-    frame.queryAnchor = query.anchor();
-    frame.queryCaret = query.caret();
+    frame.queryStamp = frame.search->query().stamp();
 }
 
 b8 Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){

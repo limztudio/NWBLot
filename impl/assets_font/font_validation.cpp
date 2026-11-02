@@ -109,13 +109,9 @@ b8 FreeTypeMemoryFace::openAndValidate(const Span<const u8> bytes, const u32 fac
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 ValidateFontSource(const Span<const u8> bytes, const u32 faceIndex, Core::Assets::AssetArena& arena){
-    FreeTypeMemoryFace validator(arena);
-    return validator.openAndValidate(bytes, faceIndex);
-}
-
 b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
-    return ValidateFontSource(Span<const u8>(bytes), faceIndex, bytes.get_allocator().arena());
+    FreeTypeMemoryFace validator(bytes.get_allocator().arena());
+    return validator.openAndValidate(Span<const u8>(bytes), faceIndex);
 }
 
 

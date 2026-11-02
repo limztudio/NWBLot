@@ -215,20 +215,15 @@ b8 LoadBinary(const Span<const u8> binary, ISubsystem& outSubsystem){
 
 
 Expected<UniquePtr<Core::Assets::IAsset>> SubsystemAssetCodec::deserialize(const Name& virtualPath, const Span<const u8> binary, Core::Assets::AssetArena& arena)const{
-    usize cursor = 0u;
-    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SubsystemHeaderBinary>(binary, s_SubsystemMagic, s_SubsystemLoadBinaryContext, s_SubsystemAssetKindLabel, cursor);
-    if(!headerResult)
-        return MakeUnexpected(Failure{});
-
-    auto asset = SubsystemTypeAutoRegistrar::CreateByTypeHash(virtualPath, headerResult->subsystemTypeHash, arena);
-    if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("SubsystemAssetCodec::deserialize failed: unregistered subsystem type in '{}'"), ConvertString(virtualPath.resolvedText()));
-        return MakeUnexpected(Failure{});
-    }
-    if(!asset->loadBinary(binary))
-        return MakeUnexpected(Failure{});
-
-    return UniquePtr<Core::Assets::IAsset>(Move(asset));
+    return PolymorphicAssetCodecDetail::DeserializePolymorphicAsset<ISubsystem, SubsystemHeaderBinary, &SubsystemHeaderBinary::subsystemTypeHash>(
+        virtualPath,
+        binary,
+        s_SubsystemMagic,
+        s_SubsystemLoadBinaryContext,
+        s_SubsystemAssetKindLabel,
+        NWB_TEXT("SubsystemAssetCodec::deserialize"),
+        arena
+    );
 }
 
 

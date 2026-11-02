@@ -4,7 +4,6 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
-#include "meshlet_ref_test_data.h"
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_mesh/skinning/skin_payload.h>
@@ -18,7 +17,6 @@
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 
 #include <core/ecs/entity.h>
-#include <core/mesh/classification.h>
 
 #include <global/compile.h>
 #include <global/limit.h>
@@ -499,7 +497,6 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint)noexcept{
 }
 
 static void AssignSingleJointSkin(const u16 joint, NWB::Impl::MeshSkinningRuntimeInstance& instance){
-    instance.meshClass = NWB::Core::Mesh::MeshClass::Skinned;
     instance.skin.assign(instance.restPositions.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, static_cast<u32>(joint) + 1u);
 }
@@ -529,9 +526,12 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(NWB::Core::Al
     meshletPositionStreamRefs.reserve(instance.restPositions.size());
     ::Vector<NWB::Impl::MeshletAttributeStreamRef, NWB::Core::Alloc::ScratchArena> meshletAttributeStreamRefs(scratchArena);
     meshletAttributeStreamRefs.reserve(instance.restPositions.size());
-    NWB::Tests::AppendSequentialMeshletRefs(instance.restPositions.size(), meshletPositionStreamRefs, meshletAttributeStreamRefs, instance.meshletLocalVertexRefs);
-    for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex)
+    for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
+        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex) });
+        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex), static_cast<u32>(vertexIndex) });
+        instance.meshletLocalVertexRefs.push_back(NWB::Impl::MeshletLocalVertexRef{ static_cast<u16>(vertexIndex), static_cast<u16>(vertexIndex) });
         instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
+    }
     for(const u32 index : s_TriangleIndices)
         instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
     const b8 meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(

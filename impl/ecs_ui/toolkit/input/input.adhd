@@ -158,7 +158,6 @@ class ControlAction{
     public u64 value = 0u;
     public f64 step = 0.0;
     public u64 pageRows = 1u;
-    public f64 offset = 0.0;
     public f64 maximum = 0.0;
     public u64 sourceDeclarationGeneration = 0u;
     public ControlToken sourceControl;

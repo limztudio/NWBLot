@@ -120,14 +120,6 @@ Expected<CsgReceiverDrawState> CsgFrameReceiverLookup::resolveReceiverDrawState(
     return MakeCsgReceiverDrawState(resolvedReceiver->receiverKind, *range);
 }
 
-Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const Core::ECS::EntityID entity)const noexcept{
-    const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
-    if(!resolvedReceiver)
-        return MakeUnexpected(Failure{});
-
-    return resolveReceiverCutterRange(resolvedReceiver->receiver);
-}
-
 Expected<CsgFrameCutterRange> CsgFrameReceiverLookup::resolveReceiverCutterRange(const CsgReceiverComponent& receiver)const noexcept{
     if(m_cutterRanges.empty() || !receiver.enabled)
         return MakeUnexpected(Failure{});

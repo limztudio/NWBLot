@@ -25,7 +25,7 @@ namespace __hidden_assets_shader_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_REGISTER_SHADER_ASSET_CODEC(Type) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, Type##AssetCodec);
+#define NWB_REGISTER_SHADER_ASSET_CODEC(Type) NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_##Type##AssetCodecAutoRegistrar, ShaderAssetCodec<Type>);
 NWB_SHADER_ASSET_TYPE_ENTRIES(NWB_REGISTER_SHADER_ASSET_CODEC)
 #undef NWB_REGISTER_SHADER_ASSET_CODEC
 

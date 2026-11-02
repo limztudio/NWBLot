@@ -48,54 +48,24 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
     result.focused = options.enabled && m_context.input().focus() == (*widget)->id;
-    WidgetId thumb;
-    if(!TryMakeWidgetId((*widget)->id, s_WidgetPartScrollbar, thumb)){
+    if(!consumeListInput(
+        **widget,
+        token,
+        options.enabled,
+        nullptr,
+        state,
+        []()noexcept{ return true; },
+        [&](const ControlAction& action){
+            return ListBehavior::Apply(source, options, action, state, result) ? ListActionOutcome::Continue : ListActionOutcome::Failed;
+        }
+    )){
         m_context.fail();
         result.valid = false;
         return result;
-    }
-    auto gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
-    b8 haveGesture = gesture && gesture->control == token;
-    auto action = m_context.takeControlAction(**widget, options.enabled, token);
-    b8 haveAction = action.has_value();
-    while(haveGesture || haveAction){
-        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
-            if(!applyListGesture(state, *gesture)){
-                m_context.fail();
-                result.valid = false;
-                return result;
-            }
-            gesture = m_context.takePartPointerGesture(**widget, thumb, options.enabled);
-            haveGesture = gesture && gesture->control == token;
-        }
-        else{
-            if(!ListBehavior::Apply(source, options, *action, state, result)){
-                m_context.fail();
-                result.valid = false;
-                return result;
-            }
-            action = m_context.takeControlAction(**widget, options.enabled, token);
-            haveAction = action.has_value();
-        }
     }
     ListFrame frame(m_arena);
-    frame.source = &source;
-    frame.state = &state;
-    frame.widgetStyle = m_style;
-    frame.style = m_listStyle;
-    frame.options = options;
-    frame.token = token;
-    frame.rowCount = source.rowCount();
-    frame.focusOnCommit = options.enabled && previouslyFocused && !result.focused;
-    frame.padding = frame.style.padding;
-    const UiSkinRegion* background = region(frame.style.background, frame.style.backgroundFallback);
+    const UiSkinRegion* background = prepareListFrame(source, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, {}, frame);
     if(!background){
-        m_context.fail();
-        result.valid = false;
-        return result;
-    }
-    frame.padding = MaxUiPadding(frame.padding, background->padding);
-    if(!prepareListMetrics(frame)){
         m_context.fail();
         result.valid = false;
         return result;
@@ -138,6 +108,27 @@ ListResult Builder::virtualList(const AStringView stableKey, const IListDataSour
     m_scope->m_lists.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return result;
+}
+
+const UiSkinRegion* Builder::prepareListFrame(
+    const IListDataSource& source, ListState& state, const ListOptions& options, const ControlToken& token,
+    const u64 rowCount, const b8 focusOnCommit, const WidgetId commandFocus, ListFrame& outFrame
+){
+    outFrame.source = &source;
+    outFrame.state = &state;
+    outFrame.widgetStyle = m_style;
+    outFrame.style = m_listStyle;
+    outFrame.options = options;
+    outFrame.token = token;
+    outFrame.rowCount = rowCount;
+    outFrame.focusOnCommit = focusOnCommit;
+    outFrame.commandFocus = commandFocus;
+    outFrame.padding = outFrame.style.padding;
+    const UiSkinRegion* background = region(outFrame.style.background, outFrame.style.backgroundFallback);
+    if(!background)
+        return nullptr;
+    outFrame.padding = MaxUiPadding(outFrame.padding, background->padding);
+    return prepareListMetrics(outFrame) ? background : nullptr;
 }
 
 b8 Builder::prepareListMetrics(ListFrame& frame){

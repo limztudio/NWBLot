@@ -22,7 +22,8 @@ import reflection_benchmark as timing
 from gpu_timing_parse import load_name_symbols
 from smoke_volume_identity import file_identity
 from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, create_capture_backend, ensure_process_running,
-    collect_log_delta, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text)
+    collect_log_delta, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process)
+from window_capture_validation import validate_expected_log_text
 
 FRAME = "render.frame"
 RESOLVE = "render.avboit.refraction_resolve"

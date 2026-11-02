@@ -64,12 +64,12 @@ TEST_F(LoggerProducerContracts, MissingArchiveRetainsNativeReadFailureInOwningRe
     ASSERT_FALSE(missing);
     const auto result = NWB::Log::ProcessCrashUpload(arena, path, config);
     EXPECT_FALSE(result.accepted);
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("failed to read crash archive")));
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("failed to read crash archive")));
     const auto native = MakeDiagnosticEventText("native_category='{}'; native_code={}", missing.error().category().name(), missing.error().value());
     constexpr Name s_FailureTextScratchName("tests/integration/logger_server/producer_contracts/scratch");
     NWB::Core::Alloc::ScratchArena scratchArena(s_FailureTextScratchName);
     const auto nativeText = ConvertString(scratchArena, native.view());
-    EXPECT_TRUE(ContainsMessage(result.message, nativeText));
+    EXPECT_TRUE(Contains(result.message, nativeText));
     RemoveTestArtifacts(arena, s_Group);
 }
 

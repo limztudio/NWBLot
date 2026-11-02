@@ -155,12 +155,8 @@ ECSRenderDetail::MeshFrameBindingSnapshot RendererMeshSystem::meshFrameBindingSn
     };
 }
 
-b8 RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept{
-    return GeometryHeapHandlesReady(mesh.geometryHeapHandles);
-}
-
 void RendererMeshSystem::populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept{
-    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
+    NWB_ASSERT(GeometryHeapHandlesReady(mesh.geometryHeapHandles));
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         outInstance.geometryHeapSlots[slotIndex] = 0u;
     ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const b8)noexcept{
@@ -267,7 +263,7 @@ b8 RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
 }
 
 b8 RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const noexcept{
-    if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
+    if(!mesh.valid() || !GeometryHeapHandlesReady(mesh.geometryHeapHandles))
         return false;
 
     if(mesh.runtimeLocalBoundsBuffer && (!mesh.runtimeLocalBoundsHeapHandle.valid() || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer))
@@ -277,7 +273,7 @@ b8 RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const n
 }
 
 b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
-    if(meshGeometryHeapHandlesReady(mesh))
+    if(GeometryHeapHandlesReady(mesh.geometryHeapHandles))
         return true;
 
     auto& device = m_graphics.getDevice();
@@ -316,7 +312,7 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
     });
     retireAcquired.release();
-    NWB_ASSERT(meshGeometryHeapHandlesReady(mesh));
+    NWB_ASSERT(GeometryHeapHandlesReady(mesh.geometryHeapHandles));
     return true;
 }
 

@@ -282,7 +282,6 @@ TEST_F(UiPopupRouterTests, EscapeDismissalPreservesHeldKeyOwnershipAcrossAccepte
 
 TEST_F(UiPopupRouterTests, NonDismissibleModalBlocksOutsideAndEscapeWithoutPublishingDismissals){
     PopupScope scope = Scope();
-    scope.modal = true;
     scope.dismissOutside = false;
     scope.dismissCancel = false;
     ASSERT_TRUE(install(scope, 1u));

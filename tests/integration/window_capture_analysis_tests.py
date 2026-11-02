@@ -15,7 +15,9 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
+import window_capture_image  # noqa: E402
 import window_capture_smoke  # noqa: E402
+import window_capture_validation  # noqa: E402
 import window_capture_x11  # noqa: E402
 import edit_probe  # noqa: E402
 import numeric_edit_smoke  # noqa: E402
@@ -66,20 +68,20 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
             for x in range(76, 79):
                 rows[y][x] = (104, 70, 68)
 
-        analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
+        analysis = window_capture_image.analyze_texture_smoke_rows(rows)
 
         self.assertEqual(analysis.red_pixels, 2 * 3 * 5)
         self.assertEqual(analysis.receiver_pixel_count, 12 * 7)
         self.assertEqual(analysis.receiver_red_pixels, 3 * 5)
 
     def test_texture_smoke_validation_requires_dense_receiver_only_red_coverage(self):
-        result = SimpleNamespace(width=1280, height=900, texture_smoke=window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 256, 1024),)
+        result = SimpleNamespace(width=1280, height=900, texture_smoke=window_capture_image.TextureSmokeAnalysis(300, 300, 300, 256, 1024),)
 
-        window_capture_smoke.validate_texture_smoke_result(result)
+        window_capture_validation.validate_texture_smoke_result(result)
 
-        result.texture_smoke = window_capture_smoke.TextureSmokeAnalysis(300, 300, 300, 255, 1024)
+        result.texture_smoke = window_capture_image.TextureSmokeAnalysis(300, 300, 300, 255, 1024)
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "receiver_red=255"):
-            window_capture_smoke.validate_texture_smoke_result(result)
+            window_capture_validation.validate_texture_smoke_result(result)
 
 
 class TransparentCsgAnalysisTests(unittest.TestCase):
@@ -149,45 +151,45 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
         for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
             with self.subTest(pose=pose):
                 rows = self.synthetic_scene(pose, clipped=False)
-                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
+                analysis = window_capture_image.analyze_transparent_csg_rows(rows, pose)
                 self.assertEqual(analysis.cut_void_pixels, 0)
                 self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_CUT_VOID_0):
-                    window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
+                    window_capture_validation.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
 
     def test_all_three_missing_receiver_poses_reject_dense_non_green_neighbors(self):
         for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
             with self.subTest(pose=pose):
                 rows = self.synthetic_scene(pose, receiver=False)
-                _, retained = window_capture_smoke.transparent_csg_regions(self.WIDTH, self.HEIGHT, pose)
-                generic_foreground = window_capture_smoke.count_foreground_pixels_in_region(rows, self.BACKGROUND, retained)
-                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
+                _, retained = window_capture_image.transparent_csg_regions(self.WIDTH, self.HEIGHT, pose)
+                generic_foreground = window_capture_image.count_foreground_pixels_in_region(rows, self.BACKGROUND, retained)
+                analysis = window_capture_image.analyze_transparent_csg_rows(rows, pose)
                 self.assertEqual(generic_foreground, analysis.remaining_region_pixels)
                 self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
                 self.assertEqual(analysis.remaining_center_pixels, 0)
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_REMAINING_CENTER_0):
-                    window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
+                    window_capture_validation.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
 
     def test_green_dominance_does_not_relax_foreground_contrast(self):
         rows = self.synthetic_scene(LIT_EARLY, receiver_color=(82, 102, 101))
-        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, LIT_EARLY)
+        analysis = window_capture_image.analyze_transparent_csg_rows(rows, LIT_EARLY)
         self.assertEqual(analysis.remaining_center_pixels, 0)
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_REMAINING_CENTER_0):
-            window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, analysis), LIT_EARLY)
+            window_capture_validation.validate_transparent_csg_result(self.capture_result(LIT_EARLY, analysis), LIT_EARLY)
 
     def test_original_density_thresholds_remain_required(self):
-        accepted = window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000)
-        window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, accepted), LIT_EARLY)
-        for rejected in (window_capture_smoke.TransparentCsgAnalysis(199, 600, 200, 1000), window_capture_smoke.TransparentCsgAnalysis(200, 600, 199, 1000), window_capture_smoke.TransparentCsgAnalysis(159, 300, 160, 500),
-            window_capture_smoke.TransparentCsgAnalysis(160, 300, 159, 500),):
+        accepted = window_capture_image.TransparentCsgAnalysis(200, 600, 200, 1000)
+        window_capture_validation.validate_transparent_csg_result(self.capture_result(LIT_EARLY, accepted), LIT_EARLY)
+        for rejected in (window_capture_image.TransparentCsgAnalysis(199, 600, 200, 1000), window_capture_image.TransparentCsgAnalysis(200, 600, 199, 1000), window_capture_image.TransparentCsgAnalysis(159, 300, 160, 500),
+            window_capture_image.TransparentCsgAnalysis(160, 300, 159, 500),):
             with self.subTest(analysis=rejected), self.assertRaises(window_capture_smoke.SmokeFailure):
-                window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, rejected), LIT_EARLY)
+                window_capture_validation.validate_transparent_csg_result(self.capture_result(LIT_EARLY, rejected), LIT_EARLY)
 
     def test_validation_never_substitutes_a_different_pose(self):
-        result = SimpleNamespace(transparent_csg={ LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000), LIT_MID: window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000), })
-        window_capture_smoke.validate_transparent_csg_result(result, LIT_MID)
+        result = SimpleNamespace(transparent_csg={ LIT_EARLY: window_capture_image.TransparentCsgAnalysis(0, 600, 200, 1000), LIT_MID: window_capture_image.TransparentCsgAnalysis(200, 600, 200, 1000), })
+        window_capture_validation.validate_transparent_csg_result(result, LIT_MID)
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "early pose"):
-            window_capture_smoke.validate_transparent_csg_result(result, LIT_EARLY)
+            window_capture_validation.validate_transparent_csg_result(result, LIT_EARLY)
 
     def test_csg_cli_requires_one_explicit_pose(self):
         base = [LIT_WINDOW_HANDLE, "1", LIT_OUTPUT, LIT_CAPTURE_BMP, "--expect-transparent-csg"]

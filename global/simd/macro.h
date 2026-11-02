@@ -97,12 +97,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_ARM64EC) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1))
+#if defined(_MSC_VER) && !defined(_M_ARM64) && !defined(_M_ARM64EC)
 #define NWB_SIMD_CALL __vectorcall
-#elif defined(__GNUC__)
-#define NWB_SIMD_CALL
 #else
-#define NWB_SIMD_CALL __fastcall
+#define NWB_SIMD_CALL
 #endif
 
 
@@ -137,7 +135,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__GNUC__) && !defined(__MINGW32__)
+#if defined(__GNUC__)
 #define NWB_GLOBAL_CONST extern const __attribute__((weak))
 #else
 #define NWB_GLOBAL_CONST extern const __declspec(selectany)

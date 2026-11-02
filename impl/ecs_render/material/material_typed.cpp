@@ -163,8 +163,8 @@ void RendererMaterialState::invalidateResources()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 MaterialPassMeshResourceSnapshot::geometryHeapHandlesReady()const noexcept{
-    return RendererMeshSystem::GeometryHeapHandlesReady(geometryHeapHandles);
+b8 MaterialPassMeshResourceSnapshot::valid()const noexcept{
+    return sourceBuffers.buffersValid() && RendererMeshSystem::GeometryHeapHandlesReady(geometryHeapHandles) && meshletCount > 0u && meshletPrimitiveIndexCount > 0u;
 }
 
 

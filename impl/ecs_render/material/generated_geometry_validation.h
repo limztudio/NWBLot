@@ -60,14 +60,11 @@ template<typename Plan, typename AcceptMode>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
+using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
+
 struct AliasFreeComputeEmulationGraphPlan{
-    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
-    using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
-
-
-public:
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     OutputLayoutVector outputLayouts;

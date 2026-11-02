@@ -6,8 +6,6 @@
 
 #include <impl/ecs_ui/toolkit/context.h>
 
-#include <global/text_trim_parse.h>
-
 #include <gtest/gtest.h>
 
 

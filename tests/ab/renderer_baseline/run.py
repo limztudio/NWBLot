@@ -30,10 +30,13 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
+from window_capture_environment import make_runtime_launch_args  # noqa: E402
+from window_capture_logs import wait_for_log_message  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     FRAMEBUFFER_CAPTURE_SKIP_MESSAGE, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, read_bmp_24, wait_for_application_capture_exit,
-    build_launch_environment, make_runtime_launch_args, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_capture_result, wait_for_log_message,)
+    build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_capture_result  # noqa: E402
 import renderer_baseline_self_test  # noqa: E402
 from renderer_baseline_corpus import CorpusReference, sha256_file, effective_frozen_environment, load_reference, load_corpus_reference, apply_corpus_limits, verify_corpus  # noqa: E402
 

@@ -78,9 +78,6 @@ constexpr auto& Get(Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
 template<size_t I, typename... Args>
 constexpr const auto& Get(const Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
 
-template<typename... Args>
-constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,13 +103,6 @@ using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::Are
 template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 
 template<typename T, typename V, typename ArenaT = ::NWB::Core::Alloc::GlobalArena, typename Hash = Hasher<T>, typename Equal = EqualTo<T>> using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocator<Pair<T, V>, ArenaT>>;
-
-template<
-    typename K,
-    typename V,
-    typename ArenaT,
-    ArenaT& (*DefaultArena)(),
-    typename Hash = Hasher<K>, typename Equal = EqualTo<K> > using DefaultHashMap = tsl::robin_map< K, V, Hash, Equal, ContainerDetail::DefaultArenaAllocator<Pair<K, V>, ArenaT, DefaultArena> >;
 
 template<typename T, typename ArenaT = ::NWB::Core::Alloc::GlobalArena>
 using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocator<T, ArenaT>>;

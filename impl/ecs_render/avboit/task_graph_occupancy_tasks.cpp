@@ -71,28 +71,7 @@ b8 AvboitOccupancySharedComputeEmulationGraphTask::Record(const Payload& payload
 
 
 b8 AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    return RecordAvboitRasterPassFromPayload(
-        payload,
-        commandList,
-        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
-            payload.avboitSystem.renderAvboitOccupancyPass(
-                dispatchCommandList,
-                payload.targets,
-                dispatchDrawItems,
-                dispatchCsgFrameData,
-                payload.csgResources,
-                payload.frameBindings,
-                dispatchInstanceCount,
-                dispatchMaterialTypedByteCount,
-                payload.materialFrameStatesGraphOwned,
-                payload.materialGeometryStatesGraphOwned,
-                payload.computeEmulationOutputStatesGraphOwned,
-                payload.csgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused,
-                payload.computeEmulationTiming
-            );
-        }
-    );
+    return RecordAvboitRasterPassFromPayload(payload, commandList, &RendererAvboitSystem::renderAvboitOccupancyPass);
 }
 
 
@@ -100,14 +79,7 @@ b8 AvboitOccupancyGraphTask::Record(const Payload& payload, Core::CommandList& c
 
 
 b8 AvboitDepthWarpGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    return RecordAvboitComputeEffect(
-        payload,
-        commandList,
-        context,
-        [&](Core::CommandList& dispatchCommandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution attribution, b8* const timingRecorded){
-            payload.avboitSystem.dispatchAvboitDepthWarp(dispatchCommandList, targets, attribution, timingRecorded);
-        }
-    );
+    return RecordAvboitComputeEffect(payload, commandList, context, &RendererAvboitSystem::dispatchAvboitDepthWarp);
 }
 
 

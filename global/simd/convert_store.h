@@ -397,48 +397,12 @@ NWB_INLINE void NWB_SIMD_CALL StoreDoubleInt(SIMDVectorDouble src, UInt64x4U& ds
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE void StreamFloatFence()noexcept{
-#if defined(NWB_HAS_SSE2)
-    _mm_sfence();
-#endif
-}
-
 NWB_INLINE void StreamDoubleFence()noexcept{
 #if defined(NWB_HAS_SSE2)
     _mm_sfence();
 #elif defined(NWB_HAS_NEON)
     constexpr unsigned int s_ArmDmbInnerShareableFullBarrier = 0xBu;
     __builtin_arm_dmb(s_ArmDmbInnerShareableFullBarrier);
-#endif
-}
-
-
-NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDVectorSingle src, Float4& dst)noexcept{
-#if defined(NWB_HAS_SSE2)
-    _mm_stream_ps(dst.raw, src);
-#else
-    StoreFloat(src, dst);
-#endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
-#if defined(NWB_HAS_SSE2)
-    _mm_stream_ps(&dst._11, src.v[0]);
-    _mm_stream_ps(&dst._21, src.v[1]);
-    _mm_stream_ps(&dst._31, src.v[2]);
-#else
-    StoreFloat(src, dst);
-#endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
-#if defined(NWB_HAS_SSE2)
-    _mm_stream_ps(&dst._11, src.v[0]);
-    _mm_stream_ps(&dst._21, src.v[1]);
-    _mm_stream_ps(&dst._31, src.v[2]);
-    _mm_stream_ps(&dst._41, src.v[3]);
-#else
-    StoreFloat(src, dst);
 #endif
 }
 

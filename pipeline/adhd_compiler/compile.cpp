@@ -135,7 +135,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
 
     MetaArena& arena = options.inputs.get_allocator().arena();
     const Path<MetaArena> outDir(arena, options.outputDirectory);
-    if(!options.validateOnly && !EnsureDirectories(outDir)){
+    if(!EnsureDirectories(outDir)){
         NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to create output directory '{}'"), ConvertString(options.outputDirectory));
         return false;
     }
@@ -158,14 +158,11 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         const MString virtualPath = __hidden_compile::DeriveVirtualCompilePath(inputPath, inputView, options.includeDirectories, arena);
 
         Adhd::CompileResult result(arena);
-        if(!Adhd::Compiler::Compile(sourceContent, virtualPath, &resolver, customNs, options.macroDefinitions, arena, result)){
+        if(!Adhd::Compiler::Compile(sourceContent, virtualPath, &resolver, customNs, {}, arena, result)){
             for(const ParseError& err : result.errors)
                 NWB_LOGGER_ERROR(NWB_TEXT("{}:{}:{}: error: {}"), ConvertString(inputView), err.line, err.column, ConvertString(err.message));
             return false;
         }
-
-        if(options.validateOnly)
-            continue;
 
         const MString headerRel = Adhd::Compiler::DeriveHeaderFilename(inputView, arena);
         const MString sourceRel = Adhd::Compiler::DeriveSourceFilename(inputView, arena);
@@ -196,7 +193,7 @@ b8 CompileAdhd(const AdhdCompileOptions& options){
         }
     }
 
-    if(!options.validateOnly && !options.depfilePath.empty()){
+    if(!options.depfilePath.empty()){
         const Path<MetaArena> depfileOutPath(arena, options.depfilePath);
         if(!EnsureDirectories(depfileOutPath.parentPath()) || !WriteTextFile(depfileOutPath, combinedDepContent)){
             NWB_LOGGER_ERROR(NWB_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(options.depfilePath));

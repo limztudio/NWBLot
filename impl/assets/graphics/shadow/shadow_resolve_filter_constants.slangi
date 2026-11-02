@@ -28,7 +28,38 @@
 #define NWB_SHADOW_RESOLVE_BSPLINE_CENTER_BASE 0.75h
 
 // 5x5 B-spline a-trous kernel shared by independent and fused visibility filters.
-static const half NWB_SHADOW_RESOLVE_KERNEL[NWB_SHADOW_RESOLVE_KERNEL_SIDE] = { half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_OUTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR), half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_INNER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR), half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_CENTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR), half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_INNER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR), half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_OUTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR) };
+static const half NWB_SHADOW_RESOLVE_KERNEL[NWB_SHADOW_RESOLVE_KERNEL_SIDE] = {
+    half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_OUTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
+    half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_INNER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
+    half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_CENTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
+    half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_INNER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR),
+    half(NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_OUTER / NWB_SHADOW_RESOLVE_KERNEL_WEIGHT_DENOMINATOR)
+};
+
+struct NwbShadowResolvePushConstants{
+    // Must match ShadowResolvePushConstants in C++; resource slots select global heap views.
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
+    uint stepWidth;
+    uint stage;
+    uint lightSlotStart;
+    uint lightSlotCount;
+    uint momentsValid; // May sample temporal moments only when nonzero.
+    uint upsampleFold; // 0 overwrites opaque visibility; 1 multiplies transparent visibility and leaves background unchanged.
+    uint geometrySlot;
+    uint depthSlot;
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint inputColorSlot;
+    uint momentsSlot;
+    uint outputStorageSlot;
+    uint visibilityStorageSlot;
+    uint sceneShadingSlot;
+    uint opaqueInputColorSlot; // Combined upsample reads the opaque half-resolution input from this slot.
+    uint receiverFactor;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

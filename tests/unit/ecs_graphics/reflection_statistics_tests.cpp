@@ -7,7 +7,6 @@
 #include <impl/ecs_render/reflection/statistics_readback.h>
 #include <impl/assets/graphics/reflection/frame_constants.h>
 
-#include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>
 
 #include <gtest/gtest.h>
@@ -24,15 +23,12 @@ namespace __hidden_reflection_statistics_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
+using ReflectionStatisticsTestHelpers::Token;
+using StatisticsContext = ReflectionStatisticsTestHelpers::StatisticsContext<ReflectionStatisticsControl>;
 using LeaseTask = ReflectionStatisticsTestHelpers::ReservationLeaseTask<ReflectionStatisticsReservation>;
 using DestructorLeaseTask = ReflectionStatisticsTestHelpers::DestructorReservationLeaseTask<ReflectionStatisticsReservation>;
 
 inline constexpr usize s_ReflectionCounterWordCount = NWB_REFLECTION_COUNTER_SIZE / sizeof(u32);
-
-struct StatisticsContext{
-    Core::Alloc::GlobalArena arena{Name("tests/reflection/statistics")};
-    ReflectionStatisticsControlHandle control = CreateStatisticsControl<ReflectionStatisticsControl>(arena, 7u).value_or(ReflectionStatisticsControlHandle{});
-};
 
 [[nodiscard]] ReflectionStatistics Metadata(const u32 frameIndex = 9u)noexcept{
     ReflectionStatistics value;
@@ -47,10 +43,6 @@ struct StatisticsContext{
     value.hardwareRequested = true;
     value.hardwareAvailable = true;
     return value;
-}
-
-[[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u)noexcept{
-    return ReflectionStatisticsTestHelpers::Token<7u, 20u>(value);
 }
 
 [[nodiscard]] Core::GpuTaskDesc TaskDesc()noexcept{

@@ -12,8 +12,12 @@ import sys
 import time
 from types import SimpleNamespace
 
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, WinRect, collect_log_delta, ensure_process_running, launch_logserver, read_bmp_24_rows, request_windows_graceful_exit, require_normal_process_exit,
-    snapshot_log_files, terminate_process, validate_expected_log_text, wait_for_log_message, write_status,)
+from window_capture_image import read_bmp_24_rows
+from window_capture_logs import wait_for_log_message
+from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, collect_log_delta, ensure_process_running, launch_logserver, request_windows_graceful_exit, require_normal_process_exit,
+    snapshot_log_files, terminate_process, write_status,)
+from window_capture_validation import validate_expected_log_text
+from window_capture_win32 import WinRect
 
 LIT_IDLE_SAMPLE_POLL_SECONDS = 0.1
 LIT_MINIMUM_WAIT_SECONDS = 0.001

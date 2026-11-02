@@ -166,7 +166,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     const auto runPass = [&](
         const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const b8 graphOwnsInputColorState = false, const b8 graphOwnsOutputState = false
     ){
-        NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
+        NWB_ASSERT(resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
             case ShadowResolveStage::Wavelet:
                 if(!dispatch.graphOwnsWaveletGeometryEntryState)
@@ -211,7 +211,6 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         push.depthSlot = bindless.gbufferDepth.slot();
         push.worldPositionSlot = bindless.gbufferWorldPosition.slot();
         push.normalSlot = bindless.gbufferNormal.slot();
-        push.softHalfSlot = resources.softHalf;
         push.inputColorSlot = resources.inputColor;
         push.momentsSlot = resources.moments;
         push.outputStorageSlot = resources.outputStorage;

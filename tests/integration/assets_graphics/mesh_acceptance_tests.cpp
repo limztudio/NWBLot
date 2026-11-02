@@ -39,10 +39,10 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 template<typename MeshT>
 static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(const MeshT& mesh, const NWB::Impl::MeshletDesc& meshlet, const u32 localPositionIndex)noexcept(noexcept(
-    NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()), DeclVal<NWB::Impl::MeshletPositionStreamRef&>())
+    NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, false, DeclVal<NWB::Impl::MeshletPositionStreamRef&>())
 )){
     NWB::Impl::MeshletPositionStreamRef ref;
-    if(!NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()), ref))
+    if(!NWB::Impl::TryDecodeMeshletPositionRef(mesh.meshletPositionRefDeltas(), meshlet, localPositionIndex, false, ref))
         return MakeUnexpected(Failure{});
     return ref;
 }
@@ -148,11 +148,11 @@ template<typename MeshT>
 }
 
 static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(AStringView assetFilename, const Name assetName, const AssetsGraphicsFixture::CookCase& cookCase, TestArena& testArena){
-    const b8 cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, cookCase, testArena);
+    const b8 cooked = AssetsGraphicsFixture::CookSmokeAssetMeta("meshes", assetFilename, cookCase, testArena);
     EXPECT_TRUE(cooked);
     if(!cooked)
         return MakeUnexpected(Failure{});
-    return AssetsGraphicsFixture::LoadCookedMesh(testArena, cookCase.outputDirectory, assetName);
+    return AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::MeshAssetCodec>(cookCase.outputDirectory, assetName, 1u, testArena);
 }
 
 template<typename CallbackT>

@@ -119,12 +119,6 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T CopySign(const T magnitude, const T sign)noexcept(IsArithmetic_V<T>){
-    using std::copysign;
-    return static_cast<T>(copysign(magnitude, sign));
-}
-
-template<typename T>
 [[nodiscard]] NWB_INLINE T Sqrt(const T value)noexcept(IsArithmetic_V<T>){
     using std::sqrt;
     return static_cast<T>(sqrt(value));
@@ -149,21 +143,9 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T ASin(const T value)noexcept(IsArithmetic_V<T>){
-    using std::asin;
-    return static_cast<T>(asin(value));
-}
-
-template<typename T>
 [[nodiscard]] NWB_INLINE T ACos(const T value)noexcept(IsArithmetic_V<T>){
     using std::acos;
     return static_cast<T>(acos(value));
-}
-
-template<typename T>
-[[nodiscard]] NWB_INLINE T ATan(const T value)noexcept(IsArithmetic_V<T>){
-    using std::atan;
-    return static_cast<T>(atan(value));
 }
 
 template<typename T>
@@ -197,27 +179,9 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] NWB_INLINE T Log10(const T value)noexcept(IsArithmetic_V<T>){
-    using std::log10;
-    return static_cast<T>(log10(value));
-}
-
-template<typename T>
 [[nodiscard]] NWB_INLINE T Pow(const T base, const T exponent)noexcept(IsArithmetic_V<T>){
     using std::pow;
     return static_cast<T>(pow(base, exponent));
-}
-
-template<typename T>
-[[nodiscard]] NWB_INLINE T SinH(const T value)noexcept(IsArithmetic_V<T>){
-    using std::sinh;
-    return static_cast<T>(sinh(value));
-}
-
-template<typename T>
-[[nodiscard]] NWB_INLINE T CosH(const T value)noexcept(IsArithmetic_V<T>){
-    using std::cosh;
-    return static_cast<T>(cosh(value));
 }
 
 template<typename T>

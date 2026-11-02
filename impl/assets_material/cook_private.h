@@ -51,9 +51,6 @@ using CookVector = MaterialCookVector<T>;
 template<typename T>
 using ScratchHashSet = HashSet<T, ScratchArena, Hasher<T>, EqualTo<T>>;
 
-template<typename T>
-using CookHashSet = MaterialCookHashSet<T>;
-
 using MaterialBindInterfaceLookup = HashMap<Name, NotNull<const MaterialBindEntry*>, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
 

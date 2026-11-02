@@ -33,7 +33,8 @@ import caustic_timing_qualification as caustic
 from reflection_benchmark import LIT_POSITIVE_FRAME_REPORTS, balanced_orders, paired_statistics, parse_intervals, positive_frame_reports, summarize_intervals
 from smoke_volume_identity import file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, write_status,)
+from window_capture_validation import validate_expected_log_text
 
 LIT_REFLECTION_OPTICAL_INSIDE = "reflection-optical-inside"
 LIT_AVBOIT_REFRACTION_ACCUMULATION = "avboit-refraction-accumulation"

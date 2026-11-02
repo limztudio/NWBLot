@@ -4,8 +4,6 @@
 
 #include "smoke_geometry.h"
 
-#include <global/hash_utils.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,10 +43,6 @@ Impl::Ui::Rect VisibleSmokeListRow(const Impl::Ui::ScrollPlacement& placement, c
 
 void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}: geometry sequence={} {}={},{},{},{}"), tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-}
-
-u64 HashSmokeText(const AStringView text)noexcept{
-    return ComputeFnv32TextHash(text);
 }
 
 void ObserveSmokeDisplay(const TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged){

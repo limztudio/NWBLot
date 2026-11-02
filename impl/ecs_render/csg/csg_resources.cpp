@@ -5,6 +5,7 @@
 #include "csg_system.h"
 
 #include <impl/ecs_render/deferred/deferred_frame_targets.h>
+#include <impl/ecs_render/kernel/descriptor_register_utils.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_csg/module.h>
@@ -64,10 +65,7 @@ namespace __hidden_csg_resources{
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !RayTracingDetail::ReplaceHeapBuffer(Core::GpuDescriptorClass::StorageBuffer, false, heap, buffer, inOutHandle)){
         // The buffer was replaced; drop the stale handle for a later retry.
-        if(heap.isInitialized())
-            RayTracingDetail::RetireHeapHandle(heap, inOutHandle);
-        else
-            inOutHandle = Core::GpuDescriptorHandle::Invalid();
+        RendererDescriptorRegisterDetail::RetireDescriptor(heap, inOutHandle);
         return false;
     }
     return true;
@@ -95,14 +93,10 @@ b8 CsgGraphResourceSnapshot::bindingValid()const noexcept{
         && cutters
         && clipContextSlots
         && intervalSampleState
-        && receiverRangeHeapHandle.valid()
-        && receiverRangeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && cutterHeapHandle.valid()
-        && cutterHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && clipContextSlotsHeapHandle.valid()
-        && clipContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && intervalSampleStateHeapHandle.valid()
-        && intervalSampleStateHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && RendererDescriptorRegisterDetail::IsDescriptorClass(receiverRangeHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RendererDescriptorRegisterDetail::IsDescriptorClass(cutterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RendererDescriptorRegisterDetail::IsDescriptorClass(clipContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        && RendererDescriptorRegisterDetail::IsDescriptorClass(intervalSampleStateHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
     ;
 }
 
@@ -301,18 +295,11 @@ Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
 }
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        heap.free(m_csgState.m_receiverRangeBufferHeapHandle);
-        heap.free(m_csgState.m_cutterBufferHeapHandle);
-        heap.free(m_csgState.m_clipContextSlotsHeapHandle);
-        heap.free(m_csgState.m_intervalSampleStateHeapHandle);
-    }
-    m_csgState.m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_csgState.m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_csgState.m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_csgState.m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, m_csgState.m_receiverRangeBufferHeapHandle);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, m_csgState.m_cutterBufferHeapHandle);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, m_csgState.m_clipContextSlotsHeapHandle);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, m_csgState.m_intervalSampleStateHeapHandle);
 }
 
 

@@ -33,12 +33,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace VariantSignatureSegmentError = ShaderBinaryPayload::VariantSignatureSegmentError;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ShaderCook : NoCopy{
 public:
     using CookArena = Core::Assets::CookArena;
@@ -160,7 +154,7 @@ public:
             AStringView segment;
             AStringView defineName;
             AStringView defineValue;
-            VariantSignatureSegmentError::Enum error = VariantSignatureSegmentError::None;
+            ShaderBinaryPayload::VariantSignatureSegmentError::Enum error = ShaderBinaryPayload::VariantSignatureSegmentError::None;
             if(!ShaderBinaryPayload::TryParseVariantSignatureSegment(variantSignature, begin, segment, defineName, defineValue, error)){
                 onError(error, segment);
                 return false;

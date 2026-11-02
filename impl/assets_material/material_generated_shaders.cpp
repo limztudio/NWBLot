@@ -77,10 +77,7 @@ static void AppendGeneratedMaterialShaderIncludes(const AStringView authoringHea
 
 static void AssignGeneratedMaterialShaderSource(const ScratchPath& sourcePath, ScratchArena& scratchArena, CookString& inOutSource){
     ScratchString sourceText = PathToString(scratchArena, sourcePath);
-    for(char& ch : sourceText){
-        if(ch == '\\')
-            ch = '/';
-    }
+    Replace(sourceText.begin(), sourceText.end(), '\\', '/');
     inOutSource += sourceText;
 }
 

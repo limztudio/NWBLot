@@ -10,7 +10,8 @@ import sys
 from caustic_quality_smoke import verify_settings
 from csg_caustic_reference import analyze_route, compare_routes
 from csg_shadow_smoke import capture_environment
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
 

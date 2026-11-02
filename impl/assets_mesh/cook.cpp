@@ -142,7 +142,6 @@ namespace MeshAssetBinaryPayload{
 
 
 void FillMeshBaseHeader(const Mesh& mesh, MeshBinaryHeader& outHeader)noexcept{
-    outHeader.meshClass = mesh.meshClass();
     outHeader.positionCount = static_cast<u64>(mesh.positionStream().size());
     outHeader.normalCount = static_cast<u64>(mesh.normalStream().size());
     outHeader.tangentCount = static_cast<u64>(mesh.tangentStream().size());

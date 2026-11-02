@@ -40,8 +40,7 @@ static void CheckOwnershipStatistics(const usize resourceCount){
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{ declarationScratch };
     uses.reserve(resourceCount * 2u);
     for(usize resourceIndex = 0u; resourceIndex < resourceCount; ++resourceIndex){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/ownership_statistics/resource/"), FormatDecimal(resourceIndex, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/ownership_statistics/resource/"), resourceIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto resourceResult = AddTextureMetadata(graph, identity, "Ownership Statistics Texture", Core::ResourceStates::Common, Core::ResourceQueueSharing::Exclusive);
@@ -53,9 +52,8 @@ static void CheckOwnershipStatistics(const usize resourceCount){
         }
     }
     for(usize taskIndex = 0u; taskIndex < 3u; ++taskIndex){
-        Array<char, 32u> identityText = {};
         Core::GpuTaskDesc desc;
-        const auto resourceNameResult = DeriveName(Name("tests/ownership_statistics/task/"), FormatDecimal(taskIndex, identityText));
+        const auto resourceNameResult = IndexedName(Name("tests/ownership_statistics/task/"), taskIndex);
         ASSERT_TRUE(resourceNameResult);
         desc.setIdentity(*resourceNameResult).setMarkerLabel("Ownership Statistics Task").setResourceUses(uses);
         const auto commands = taskIndex == 1u ? ComputeCommands() : GraphicsCommands();

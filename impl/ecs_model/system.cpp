@@ -234,8 +234,6 @@ b8 ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const Mod
     mesh.mesh = object.mesh;
 
     auto& attachment = entity.addComponent<ModelStaticMeshAttachmentComponent>();
-    attachment.parentObject = object.parentObject;
-    attachment.parentJoint = object.parentJoint;
     attachment.localTransform = object.transform;
 
     NWB_ASSERT(object.parentObject || !object.parentJoint);

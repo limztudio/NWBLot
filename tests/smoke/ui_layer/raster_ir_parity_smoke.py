@@ -16,7 +16,8 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from raster_ir_parity_probe import compare_frames, observe_scene  # noqa: E402
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
+from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure  # noqa: E402
 from fixture_environment import SWITCH_OFF, SWITCH_ON, build_fixture_environment
 
 LIT_EXECUTABLE = "--executable"

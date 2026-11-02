@@ -58,8 +58,7 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     const Core::GpuTaskResourceUse resourceUse{ .resource = resource, .range = {}, .requiredState = Core::ResourceStates::UnorderedAccess, .access = Core::GpuTaskResourceAccess::Write, };
     Core::GpuTaskId preceding;
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/telemetry_scaling/task/"), FormatDecimal(taskIndex, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/telemetry_scaling/task/"), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const b8 explicitDependency = preceding.valid() && (scenario == Scenario::Explicit || (scenario == Scenario::Mixed && taskIndex % 2u != 0u));

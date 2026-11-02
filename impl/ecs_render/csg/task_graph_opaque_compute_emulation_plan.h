@@ -28,14 +28,6 @@ namespace ECSRenderDetail{
 
 
 struct OpaqueCsgReceiverComputeEmulationGraphPlan{
-    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
-    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
-    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
-    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
-    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
-
-
-public:
     DrawItemVector meshDrawItems;
     DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
@@ -81,11 +73,6 @@ public:
 
 
 struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan : OpaqueRegularComputeEmulationGraphPlan{
-    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
-    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
-
-
-public:
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
     CsgFrameWorkRegion workRegion;

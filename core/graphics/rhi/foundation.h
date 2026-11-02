@@ -123,7 +123,6 @@ inline constexpr u32 s_MaxBindingLayouts = 8;
 inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_PushConstantSizeAlignment = 4;
-inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
 inline constexpr u32 s_BackBufferWidth = 1280;
 inline constexpr u32 s_BackBufferHeight = 720;
 inline constexpr u32 s_SwapChainBufferCount = 3;

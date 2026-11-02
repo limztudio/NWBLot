@@ -130,14 +130,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReplicate(f64 value)noexce
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicatePtr(const f32 value)noexcept{
-    return VectorReplicate(value);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReplicatePtr(const f64 value)noexcept{
-    return VectorDoubleReplicate(value);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicateInt(u32 value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(value, value, value, value);
@@ -160,14 +152,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReplicateInt(u64 value)noe
 #else
     return SIMDConvertDoubleDetail::MakeU64(value, value, value, value);
 #endif
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReplicateIntPtr(const u32 value)noexcept{
-    return VectorReplicateInt(value);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReplicateIntPtr(const u64 value)noexcept{
-    return VectorDoubleReplicateInt(value);
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorTrueInt()noexcept{
@@ -221,20 +205,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatW(SIMDVectorDouble va
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatOne()noexcept{ return s_SIMDOne; }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatOne()noexcept{ return s_DoubleSIMDOne; }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatInfinity()noexcept{ return s_SIMDInfinity; }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatInfinity()noexcept{ return s_DoubleSIMDInfinity; }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatQNaN()noexcept{ return s_SIMDQNaN; }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatQNaN()noexcept{ return s_DoubleSIMDQNaN; }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatEpsilon()noexcept{ return s_SIMDEpsilon; }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatEpsilon()noexcept{ return s_DoubleSIMDEpsilon; }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSplatSignMask()noexcept{ return s_SIMDNegativeZero; }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSplatSignMask()noexcept{ return s_DoubleSIMDNegativeZero; }
 

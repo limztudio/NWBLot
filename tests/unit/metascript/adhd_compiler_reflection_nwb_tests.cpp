@@ -19,7 +19,6 @@ namespace Compiler = NWB::Core::Metascript::Adhd::Compiler;
 using NWB::Core::Metascript::Adhd::CompileResult;
 using NWB::Core::Metascript::MString;
 using NWB::Core::Metascript::MStringView;
-using NWB::Core::Metascript::MetaArena;
 
 TEST(AdhdCompiler, PreservesNumericLiteralSuffixesUnderSingleLetterMacrosAndRejectsCyclesAndDuplicates){
     AdhdTestArena arena;

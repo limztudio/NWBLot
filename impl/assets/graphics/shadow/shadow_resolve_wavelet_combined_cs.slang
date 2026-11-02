@@ -14,28 +14,7 @@
 
 // The prefix matches the independent resolve. Each channel retains its own moments and output image.
 struct NwbCombinedShadowWaveletPushConstants{
-    uint width;
-    uint height;
-    uint halfWidth;
-    uint halfHeight;
-    uint stepWidth;
-    uint stage;
-    uint lightSlotStart;
-    uint lightSlotCount;
-    uint momentsValid;
-    uint upsampleFold;
-    uint geometrySlot;
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint normalSlot;
-    uint softHalfSlot;
-    uint inputColorSlot;
-    uint momentsSlot;
-    uint outputStorageSlot;
-    uint visibilityStorageSlot;
-    uint sceneShadingSlot;
-    uint opaqueInputColorSlot;
-    uint receiverFactor;
+    NwbShadowResolvePushConstants resolve;
     uint opaqueMomentsSlot;
     uint opaqueMomentsValid;
     uint opaqueOutputStorageSlot;
@@ -59,12 +38,12 @@ groupshared uint g_NwbCombinedShadowWaveletNonLit;
 
 
 half4 nwbCombinedShadowWaveletGeometry(const int2 texel){
-    return half4(nwbHeapSampledImage2D(g_NwbCombinedShadowWaveletPush.geometrySlot).Load(int3(texel, 0)));
+    return half4(nwbHeapSampledImage2D(g_NwbCombinedShadowWaveletPush.resolve.geometrySlot).Load(int3(texel, 0)));
 }
 
 half4 nwbCombinedShadowWaveletVisibility(const int2 texel, const uint slot){
-    const half opaque = half(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.opaqueInputColorSlot).Load(int4(texel, slot, 0)).r);
-    const half3 rgb = half3(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.inputColorSlot).Load(int4(texel, slot, 0)).rgb);
+    const half opaque = half(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.resolve.opaqueInputColorSlot).Load(int4(texel, slot, 0)).r);
+    const half3 rgb = half3(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.resolve.inputColorSlot).Load(int4(texel, slot, 0)).rgb);
     return half4(opaque, rgb);
 }
 
@@ -83,8 +62,8 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
             temporal.x = true;
         }
     }
-    if(g_NwbCombinedShadowWaveletPush.momentsValid != 0u){
-        const half3 sample = half3(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.momentsSlot).Load(int4(texel, slot, 0)).xyz);
+    if(g_NwbCombinedShadowWaveletPush.resolve.momentsValid != 0u){
+        const half3 sample = half3(nwbHeapSampledImage2DArray(g_NwbCombinedShadowWaveletPush.resolve.momentsSlot).Load(int4(texel, slot, 0)).xyz);
         const float3 moment = float3(sample);
         if(moment.z >= NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY){
             const float variance = max(moment.y - moment.x * moment.x, 0.0);
@@ -98,7 +77,7 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
     half2 mean = half2(0.0h);
     half2 mean2 = half2(0.0h);
     int count = 0;
-    const int2 maximum = int2(g_NwbCombinedShadowWaveletPush.halfWidth, g_NwbCombinedShadowWaveletPush.halfHeight) - int2(1, 1);
+    const int2 maximum = int2(g_NwbCombinedShadowWaveletPush.resolve.halfWidth, g_NwbCombinedShadowWaveletPush.resolve.halfHeight) - int2(1, 1);
     [unroll] for(int dy = -1; dy <= 1; ++dy){
         [unroll] for(int dx = -1; dx <= 1; ++dx){
             const int2 tap = clamp(texel + int2(dx, dy), int2(0, 0), maximum);
@@ -125,15 +104,15 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
 
 void nwbCombinedShadowWaveletStore(const uint2 pixel, const uint slot, const half opaque, const half3 rgb){
     nwbHeapStorageImage2DArrayFloat4(g_NwbCombinedShadowWaveletPush.opaqueOutputStorageSlot)[uint3(pixel, slot)] = float4(opaque, opaque, opaque, 1.0);
-    nwbHeapStorageImage2DArrayFloat4(g_NwbCombinedShadowWaveletPush.outputStorageSlot)[uint3(pixel, slot)] = float4(rgb, 1.0);
+    nwbHeapStorageImage2DArrayFloat4(g_NwbCombinedShadowWaveletPush.resolve.outputStorageSlot)[uint3(pixel, slot)] = float4(rgb, 1.0);
 }
 
 [numthreads(NWB_SHADOW_RESOLVE_GROUP_SIZE, NWB_SHADOW_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint2 pixel = dispatchThreadID.xy;
     const int2 texel = int2(pixel);
-    const int hw = (int)g_NwbCombinedShadowWaveletPush.halfWidth;
-    const int hh = (int)g_NwbCombinedShadowWaveletPush.halfHeight;
+    const int hw = (int)g_NwbCombinedShadowWaveletPush.resolve.halfWidth;
+    const int hh = (int)g_NwbCombinedShadowWaveletPush.resolve.halfHeight;
     const bool inBounds = pixel.x < (uint)hw && pixel.y < (uint)hh;
     const int step = NWB_COMBINED_SHADOW_WAVELET_STEP;
     // The host selects this pipeline only for the first wavelet with distinct retained temporal inputs.
@@ -142,13 +121,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const int2 tileOrigin = int2(groupID.xy) * NWB_SHADOW_RESOLVE_GROUP_SIZE - int2(NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step, NWB_SHADOW_RESOLVE_KERNEL_RADIUS * step);
     const uint lane = groupThreadID.y * NWB_SHADOW_RESOLVE_GROUP_SIZE + groupThreadID.x;
     const uint threadCount = NWB_SHADOW_RESOLVE_GROUP_SIZE * NWB_SHADOW_RESOLVE_GROUP_SIZE;
-    const uint slotEnd = min(g_NwbCombinedShadowWaveletPush.lightSlotStart + g_NwbCombinedShadowWaveletPush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
+    const uint slotEnd = min(g_NwbCombinedShadowWaveletPush.resolve.lightSlotStart + g_NwbCombinedShadowWaveletPush.resolve.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
     const half4 centerGeom = inBounds ? nwbCombinedShadowWaveletGeometry(texel) : half4(0.0h);
     const float centerDistance = float(centerGeom.z);
     const float sigmaDistance = max(centerDistance * NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC * (float)step, NWB_SHADOW_RESOLVE_SIGMA_DISTANCE_MIN);
     const float invTwoSigmaDistanceSq = 1.0 / (2.0 * sigmaDistance * sigmaDistance);
     const float3 centerNormal = nwbOctDecodeNormal(float2(centerGeom.xy));
-    for(uint slot = g_NwbCombinedShadowWaveletPush.lightSlotStart; slot < slotEnd; ++slot){
+    for(uint slot = g_NwbCombinedShadowWaveletPush.resolve.lightSlotStart; slot < slotEnd; ++slot){
         if(lane == 0u)
             g_NwbCombinedShadowWaveletNonLit = 0u;
         GroupMemoryBarrierWithGroupSync();

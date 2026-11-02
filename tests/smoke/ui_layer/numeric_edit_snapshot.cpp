@@ -11,6 +11,7 @@
 #include <core/common/log.h>
 
 #include <global/bit.h>
+#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,11 +63,11 @@ Array<u64, 30u> UiNumericEditSmokeScene::values()const noexcept{
     const auto& integer = m_integer.draft();
     const auto& floating = m_float.draft();
     return { BitCast<u64>(m_integer.value()), BitCast<u64>(m_float.value()), static_cast<u64>(integer.text().size()),
-        HashSmokeText(integer.text()), static_cast<u64>(integer.anchor()), static_cast<u64>(integer.caret()),
+        ComputeFnv32TextHash(integer.text()), static_cast<u64>(integer.anchor()), static_cast<u64>(integer.caret()),
         static_cast<u64>(m_integer.status()), static_cast<u64>(m_integer.dirty()), static_cast<u64>(m_states[0u].focused),
-        static_cast<u64>(floating.text().size()), HashSmokeText(floating.text()), static_cast<u64>(floating.anchor()),
+        static_cast<u64>(floating.text().size()), ComputeFnv32TextHash(floating.text()), static_cast<u64>(floating.anchor()),
         static_cast<u64>(floating.caret()), static_cast<u64>(m_float.status(floatBounds())), static_cast<u64>(m_float.dirty()),
-        static_cast<u64>(m_states[1u].focused), static_cast<u64>(m_clipboard.text().size()), HashSmokeText(m_clipboard.text()),
+        static_cast<u64>(m_states[1u].focused), static_cast<u64>(m_clipboard.text().size()), ComputeFnv32TextHash(m_clipboard.text()),
         static_cast<u64>(m_clipboard.anchor()), static_cast<u64>(m_clipboard.caret()), static_cast<u64>(m_states[2u].focused),
         static_cast<u64>(m_enabled), static_cast<u64>(m_readOnly), static_cast<u64>(m_clamp), m_commits, m_cancels,
         m_rejects, m_clamps, m_restored, static_cast<u64>(Coherent(integer, m_states[0u]) && Coherent(floating, m_states[1u]) && Coherent(m_clipboard, m_states[2u])) };

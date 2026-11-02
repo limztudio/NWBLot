@@ -5,9 +5,6 @@
 #pragma once
 
 
-#define NWB_STRING_UTF16_CODE_UNIT_MAX 0xFFFF
-
-
 #include <string_view>
 #include <string>
 #include <sstream>
@@ -43,109 +40,18 @@ template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultBasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena>>;
 template<typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultAString = DefaultBasicString<char, ArenaT, DefaultArena>;
-template<typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultWString = DefaultBasicString<wchar, ArenaT, DefaultArena>;
-template<typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultTString = DefaultBasicString<tchar, ArenaT, DefaultArena>;
 
 template<typename T>
 using BasicInteropString = std::basic_string<T>;
 using AInteropString = BasicInteropString<char>;
-using WInteropString = BasicInteropString<wchar>;
-using TInteropString = BasicInteropString<tchar>;
-
-template<typename T>
-using BasicStreamBuffer = std::basic_streambuf<T>;
-using AStreamBuffer = BasicStreamBuffer<char>;
-using WStreamBuffer = BasicStreamBuffer<wchar>;
-using TStreamBuffer = BasicStreamBuffer<tchar>;
 
 template<typename T, typename ArenaT>
 using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocator<T, ArenaT>>;
 template<typename ArenaT>
 using AStringStream = BasicStringStream<char, ArenaT>;
-template<typename ArenaT>
-using WStringStream = BasicStringStream<wchar, ArenaT>;
-template<typename ArenaT>
-using TStringStream = BasicStringStream<tchar, ArenaT>;
-
-template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultBasicStringStream = std::basic_stringstream< T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocator<T, ArenaT, DefaultArena> >;
-template<typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultAStringStream = DefaultBasicStringStream<char, ArenaT, DefaultArena>;
-template<typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultWStringStream = DefaultBasicStringStream<wchar, ArenaT, DefaultArena>;
-template<typename ArenaT, ArenaT& (*DefaultArena)()>
-using DefaultTStringStream = DefaultBasicStringStream<tchar, ArenaT, DefaultArena>;
 
 using AFormatContext = std::format_context;
 using WFormatContext = std::wformat_context;
-template<typename T>
-using BasicFormatContext = Conditional_T<SameAs<char, T>, AFormatContext, Conditional_T<SameAs<wchar, T>, WFormatContext, void>>;
-using TStringFormatContext = BasicFormatContext<tchar>;
-
-template<typename T>
-using BasicFormatArgs = std::basic_format_args<BasicFormatContext<T>>;
-using AFormatArgs = BasicFormatArgs<char>;
-using WFormatArgs = BasicFormatArgs<wchar>;
-using TStringFormatArgs = BasicFormatArgs<tchar>;
-
-template<usize N>
-struct ConstString{
-    char data[N];
-
-
-public:
-    constexpr ConstString(const char(&str)[N])noexcept{
-        for(usize i = 0u; i < N; ++i)
-            data[i] = str[i];
-    }
-
-
-public:
-    constexpr operator AStringView()const noexcept{ return AStringView(data, N - 1u); }
-
-
-public:
-    constexpr const char* c_str()const noexcept{ return data; }
-};
-template<usize N>
-struct ConstWString{
-    wchar data[N];
-
-
-public:
-    constexpr ConstWString(const wchar(&str)[N])noexcept{
-        for(usize i = 0u; i < N; ++i)
-            data[i] = str[i];
-    }
-
-
-public:
-    constexpr operator WStringView()const noexcept{ return WStringView(data, N - 1u); }
-
-
-public:
-    constexpr const wchar* c_str()const noexcept{ return data; }
-};
-#if defined(NWB_UNICODE)
-template<usize N>
-using ConstTString = ConstWString<N>;
-#else
-template<usize N>
-using ConstTString = ConstString<N>;
-#endif
-
-template<usize N>
-constexpr auto MakeConstString(const char(&str)[N])noexcept{ return ConstString<N>(str); }
-
-template<usize N>
-constexpr auto MakeConstWString(const wchar(&str)[N])noexcept{ return ConstWString<N>(str); }
-#if defined(NWB_UNICODE)
-#define NWB_MAKE_CONST_TSTRING MakeConstWString
-#else
-#define NWB_MAKE_CONST_TSTRING MakeConstString
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -291,14 +197,14 @@ inline void WriteWideCodePoint(Out& out, u32 codePoint)noexcept(noexcept(*out++ 
     if(codePoint > s_UnicodeMaxCodePoint)
         codePoint = s_InvalidCodePointReplacement;
 
-#if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
-    if(codePoint > s_Utf8ThreeByteMaxCodePoint){
-        codePoint -= s_Utf8FourByteMinCodePoint;
-        *out++ = static_cast<wchar>(s_UnicodeHighSurrogateMin + (codePoint >> s_Utf16SurrogatePayloadBits));
-        *out++ = static_cast<wchar>(s_UnicodeLowSurrogateMin + (codePoint & s_Utf16SurrogatePayloadMask));
-        return;
+    if constexpr(WCHAR_MAX <= s_Utf8ThreeByteMaxCodePoint){
+        if(codePoint > s_Utf8ThreeByteMaxCodePoint){
+            codePoint -= s_Utf8FourByteMinCodePoint;
+            *out++ = static_cast<wchar>(s_UnicodeHighSurrogateMin + (codePoint >> s_Utf16SurrogatePayloadBits));
+            *out++ = static_cast<wchar>(s_UnicodeLowSurrogateMin + (codePoint & s_Utf16SurrogatePayloadMask));
+            return;
+        }
     }
-#endif
 
     *out++ = static_cast<wchar>(codePoint);
 }
@@ -308,20 +214,20 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src)noexcept(noexcept
     for(usize i = 0u; i < src.size(); ++i){
         u32 codePoint = static_cast<u32>(src[i]);
 
-#if WCHAR_MAX <= NWB_STRING_UTF16_CODE_UNIT_MAX
-        if(IsUtf16HighSurrogate(codePoint) && (i + 1) < src.size()){
-            const u32 low = static_cast<u32>(src[i + 1]);
-            if(IsUtf16LowSurrogate(low)){
-                codePoint = DecodeUtf16SurrogatePair(codePoint, low);
-                ++i;
+        if constexpr(WCHAR_MAX <= s_Utf8ThreeByteMaxCodePoint){
+            if(IsUtf16HighSurrogate(codePoint) && (i + 1) < src.size()){
+                const u32 low = static_cast<u32>(src[i + 1]);
+                if(IsUtf16LowSurrogate(low)){
+                    codePoint = DecodeUtf16SurrogatePair(codePoint, low);
+                    ++i;
+                }
+                else
+                    codePoint = s_InvalidCodePointReplacement;
             }
-            else
+            else if(IsUnicodeSurrogate(codePoint)){
                 codePoint = s_InvalidCodePointReplacement;
+            }
         }
-        else if(IsUnicodeSurrogate(codePoint)){
-            codePoint = s_InvalidCodePointReplacement;
-        }
-#endif
 
         WriteUtf8CodePoint(out, codePoint);
     }

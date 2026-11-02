@@ -70,7 +70,6 @@ struct StagingTextureMapping{
     usize rowPitch = 0u;
 };
 
-
 // Sharing intent for multi-transport resources. Hides family indices; a set becomes concurrent sharing only for created families.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
@@ -200,8 +199,6 @@ public:
 
     constexpr TextureDesc& setMipLevels(u32 v)noexcept{ mipLevels = v; return *this; }
 
-    constexpr TextureDesc& setSampleCount(u32 v)noexcept{ sampleCount = v; return *this; }
-
     constexpr TextureDesc& setFormat(Format::Enum v)noexcept{ format = v; return *this; }
 
     constexpr TextureDesc& setDimension(TextureDimension::Enum v)noexcept{ dimension = v; return *this; }
@@ -212,11 +209,7 @@ public:
 
     constexpr TextureDesc& setIsUAV(b8 v)noexcept{ isUAV = v; return *this; }
 
-    constexpr TextureDesc& setIsTypeless(b8 v)noexcept{ isTypeless = v; return *this; }
-
     constexpr TextureDesc& setClearValue(const Color& v)noexcept{ clearValue = v; useClearValue = true; return *this; }
-
-    constexpr TextureDesc& setUseClearValue(b8 v)noexcept{ useClearValue = v; return *this; }
 
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
 
@@ -301,17 +294,7 @@ public:
     [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept;
     [[nodiscard]] b8 isEntireTexture(const TextureDesc& desc)const noexcept;
 
-    constexpr TextureSubresourceSet& setBaseMipLevel(MipLevel value)noexcept{ baseMipLevel = value; return *this; }
-
-    constexpr TextureSubresourceSet& setNumMipLevels(MipLevel value)noexcept{ numMipLevels = value; return *this; }
-
     constexpr TextureSubresourceSet& setMipLevels(MipLevel base, MipLevel num)noexcept{ baseMipLevel = base; numMipLevels = num; return *this; }
-
-    constexpr TextureSubresourceSet& setBaseArraySlice(ArraySlice value)noexcept{ baseArraySlice = value; return *this; }
-
-    constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value)noexcept{ numArraySlices = value; return *this; }
-
-    constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num)noexcept{ baseArraySlice = base; numArraySlices = num; return *this; }
 
     [[nodiscard]] constexpr b8 hasExtent()const noexcept{
         return numMipLevels != 0u && numArraySlices != 0u;
@@ -372,7 +355,6 @@ public:
 
     constexpr VertexAttributeDesc& setName(const Name& value)noexcept{ name = value; return *this; }
 
-    constexpr VertexAttributeDesc& setIsInstanced(b8 value)noexcept{ isInstanced = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
@@ -416,15 +398,11 @@ public:
 
     constexpr BufferDesc& setStructStride(u32 value)noexcept{ structStride = value; return *this; }
 
-    constexpr BufferDesc& setMaxVersions(u32 value)noexcept{ maxVersions = value; return *this; }
-
     constexpr BufferDesc& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
 
     constexpr BufferDesc& setDebugName(const Name& value)noexcept{ debugName = value; return *this; }
 
     constexpr BufferDesc& setCanHaveUAVs(b8 value)noexcept{ canHaveUAVs = value; return *this; }
-
-    constexpr BufferDesc& setCanHaveTypedViews(b8 value)noexcept{ canHaveTypedViews = value; return *this; }
 
     constexpr BufferDesc& setCanHaveRawViews(b8 value)noexcept{ canHaveRawViews = value; return *this; }
 
@@ -437,14 +415,6 @@ public:
     constexpr BufferDesc& setIsDrawIndirectArgs(b8 value)noexcept{ isDrawIndirectArgs = value; return *this; }
 
     constexpr BufferDesc& setIsAccelStructBuildInput(b8 value)noexcept{ isAccelStructBuildInput = value; return *this; }
-
-    constexpr BufferDesc& setIsAccelStructStorage(b8 value)noexcept{ isAccelStructStorage = value; return *this; }
-
-    constexpr BufferDesc& setIsShaderBindingTable(b8 value)noexcept{ isShaderBindingTable = value; return *this; }
-
-    constexpr BufferDesc& setIsVolatile(b8 value)noexcept{ isVolatile = value; return *this; }
-
-    constexpr BufferDesc& setIsVirtual(b8 value)noexcept{ isVirtual = value; return *this; }
 
     constexpr BufferDesc& setInitialState(ResourceStates::Mask value)noexcept{ initialState = value; return *this; }
 
@@ -500,9 +470,6 @@ public:
     }
     [[nodiscard]] BufferRange intersect(const BufferRange& other)const noexcept;
     [[nodiscard]] constexpr b8 isEntireBuffer(const BufferDesc& desc)const noexcept{ return (!byteOffset) && (byteSize == s_AllBytes || byteSize == desc.byteSize); }
-
-
-    constexpr BufferRange& setByteOffset(u64 value)noexcept{ byteOffset = value; return *this; }
 
     constexpr BufferRange& setByteSize(u64 value)noexcept{ byteSize = value; return *this; }
 };

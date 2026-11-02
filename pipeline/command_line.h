@@ -47,17 +47,14 @@ inline constexpr AStringView s_PipelineAssetRootOption = "--asset-root";
 inline constexpr AStringView s_PipelineAssetTypeOption = "--asset-type";
 inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
 inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
-inline constexpr AStringView s_PipelineDefineOption = "-D,--define";
 inline constexpr AStringView s_PipelineDepfileOption = "--depfile";
 inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
-inline constexpr AStringView s_PipelineValidateOnlyFlag = "--validate-only";
 inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     Core::Assets::AssetVector<Core::Assets::AssetString> assetRoots;
     Core::Assets::AssetVector<Core::Assets::AssetString> includeDirectories;
-    Core::Assets::AssetVector<Core::Assets::AssetString> macroDefinitions;
     Core::Assets::AssetString repoRoot;
     Core::Assets::AssetString outputPath;
     Core::Assets::AssetString depfilePath;
@@ -65,7 +62,6 @@ struct PipelineOptions{
     ACompactString configuration;
     // Unset when --asset-type is omitted; the asset builder owns the default domain.
     Optional<ACompactString> assetType;
-    b8 validateOnly = false;
 
 
 public:
@@ -73,7 +69,6 @@ public:
         : inputs(arena)
         , assetRoots(arena)
         , includeDirectories(arena)
-        , macroDefinitions(arena)
         , repoRoot(arena)
         , outputPath(arena)
         , depfilePath(arena)
@@ -108,7 +103,6 @@ private:
     InteropVector<AInteropString> m_inputs;
     InteropVector<AInteropString> m_assetRoots;
     InteropVector<AInteropString> m_includeDirectories;
-    InteropVector<AInteropString> m_macroDefinitions;
     AInteropString m_inputList;
     AInteropString m_repoRoot;
     AInteropString m_outputPath;
@@ -117,7 +111,6 @@ private:
     AInteropString m_configuration;
     AInteropString m_assetType;
     PipelineTool::Enum m_tool;
-    b8 m_validateOnly = false;
     CLI::App m_app;
 };
 

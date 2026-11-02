@@ -79,30 +79,16 @@ Expected<Optional<Core::GpuUploadBlobId>> RendererRayTracingSystem::retainPrepar
 }
 
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelConstantsHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelGuidePoolHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCounterHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelFreeListHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolSnapshotHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle);
-        return;
-    }
-
-    m_rayTracingState.m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelConstantsHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelGuidePoolHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCounterHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelFreeListHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolSnapshotHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle);
 }
 
 RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const noexcept{

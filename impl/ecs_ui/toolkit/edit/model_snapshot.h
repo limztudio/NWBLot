@@ -38,12 +38,9 @@ public:
     AString<Core::Alloc::GlobalArena> m_expectedText;
     AString<Core::Alloc::GlobalArena> m_expectedPreedit;
     EditCompositionView m_expectedComposition;
-    usize m_expectedAnchor = 0u;
-    usize m_expectedCaret = 0u;
+    TextAreaModelStamp m_expectedStamp;
     u64 m_expectedRevision = 0u;
     u64 m_expectedExternalRevision = 0u;
-    u64 m_expectedSelectionGeneration = 0u;
-    u64 m_expectedCompositionGeneration = 0u;
 };
 
 

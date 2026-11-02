@@ -117,7 +117,11 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(Core::CommandList&
     const f32 effectiveIntensity = EffectiveCausticIntensity(s_DefaultCausticTemporalDecay);
 
     const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB = RayTracingCausticsTaskDetail::MakeCausticHalfResolvePassResources(targets);
-    const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance = RayTracingCausticsTaskDetail::MakeCausticIrradianceResolvePassResources(targets);
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance{
+        targets.causticIrradiance.get(),
+        targets.bindless.causticIrradiance.slot(),
+        targets.bindless.causticIrradianceStorage.slot(),
+    };
     // Edge-aware upsample into deferred-lighting irradiance.
     RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,

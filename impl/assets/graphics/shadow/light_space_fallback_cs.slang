@@ -15,7 +15,7 @@
 #endif
 #define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
 #define g_NwbSwShadowPush g_NwbLightSpacePush
-#define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
+#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
 #define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
 #if NWB_LIGHT_SPACE_CSG_ENABLED
 #include "light_space_receiver.slangi"

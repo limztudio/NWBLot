@@ -51,10 +51,6 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount)noe
     return delta;
 }
 
-b8 ContainsText(const AStringView text, const AStringView needle)noexcept{
-    return text.find(needle) != AStringView::npos;
-}
-
 Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(const Telemetry::FrameGraphRuntimeStatistics& statistics, const u32 nodeIndex, const u16 reserved)noexcept{
     return Telemetry::EncodedFrameGraphRuntimeStatistics{
         .nodeIndex = nodeIndex,

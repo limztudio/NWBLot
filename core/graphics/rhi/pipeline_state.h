@@ -81,11 +81,8 @@ struct BlendState{
 
 
     public:
-        constexpr RenderTarget& setBlendEnable(b8 enable)noexcept{ blendEnable = enable; return *this; }
 
         constexpr RenderTarget& enableBlend()noexcept{ blendEnable = true; return *this; }
-
-        constexpr RenderTarget& disableBlend()noexcept{ blendEnable = false; return *this; }
 
         constexpr RenderTarget& setSrcBlend(BlendFactor::Enum value)noexcept{ srcBlend = value; return *this; }
 
@@ -110,12 +107,6 @@ struct BlendState{
 
 public:
     constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target)noexcept{ targets[index] = target; return *this; }
-
-    constexpr BlendState& setAlphaToCoverageEnable(b8 enable)noexcept{ alphaToCoverageEnable = enable; return *this; }
-
-    constexpr BlendState& enableAlphaToCoverage()noexcept{ alphaToCoverageEnable = true; return *this; }
-
-    constexpr BlendState& disableAlphaToCoverage()noexcept{ alphaToCoverageEnable = false; return *this; }
 
     [[nodiscard]] b8 usesConstantColor(u32 numTargets)const noexcept;
 };
@@ -178,33 +169,15 @@ struct RasterState{
 
 
 public:
-    constexpr RasterState& setFillMode(RasterFillMode::Enum value)noexcept{ fillMode = value; return *this; }
-
-    constexpr RasterState& setFillSolid()noexcept{ fillMode = RasterFillMode::Solid; return *this; }
-
-    constexpr RasterState& setFillWireframe()noexcept{ fillMode = RasterFillMode::Wireframe; return *this; }
 
     constexpr RasterState& setCullMode(RasterCullMode::Enum value)noexcept{ cullMode = value; return *this; }
 
     constexpr RasterState& setCullBack()noexcept{ cullMode = RasterCullMode::Back; return *this; }
 
-    constexpr RasterState& setCullFront()noexcept{ cullMode = RasterCullMode::Front; return *this; }
-
     constexpr RasterState& setCullNone()noexcept{ cullMode = RasterCullMode::None; return *this; }
-
-    constexpr RasterState& setFrontCounterClockwise(b8 value)noexcept{ frontCounterClockwise = value; return *this; }
-
-    constexpr RasterState& setDepthClipEnable(b8 value)noexcept{ depthClipEnable = value; return *this; }
 
     constexpr RasterState& enableDepthClip()noexcept{ depthClipEnable = true; return *this; }
 
-    constexpr RasterState& disableDepthClip()noexcept{ depthClipEnable = false; return *this; }
-
-    constexpr RasterState& setDepthBias(i32 value)noexcept{ depthBias = value; return *this; }
-
-    constexpr RasterState& setDepthBiasClamp(f32 value)noexcept{ depthBiasClamp = value; return *this; }
-
-    constexpr RasterState& setSlopeScaledDepthBias(f32 value)noexcept{ slopeScaledDepthBias = value; return *this; }
 };
 
 
@@ -247,16 +220,6 @@ struct DepthStencilState{
         StencilOp::Enum depthFailOp = StencilOp::Keep;
         StencilOp::Enum passOp = StencilOp::Keep;
         ComparisonFunc::Enum stencilFunc = ComparisonFunc::Always;
-
-
-    public:
-        constexpr StencilOpDesc& setFailOp(StencilOp::Enum value)noexcept{ failOp = value; return *this; }
-
-        constexpr StencilOpDesc& setDepthFailOp(StencilOp::Enum value)noexcept{ depthFailOp = value; return *this; }
-
-        constexpr StencilOpDesc& setPassOp(StencilOp::Enum value)noexcept{ passOp = value; return *this; }
-
-        constexpr StencilOpDesc& setStencilFunc(ComparisonFunc::Enum value)noexcept{ stencilFunc = value; return *this; }
     };
 
     b8 depthTestEnable = true;
@@ -286,23 +249,6 @@ public:
 
     constexpr DepthStencilState& setDepthFunc(ComparisonFunc::Enum value)noexcept{ depthFunc = value; return *this; }
 
-    constexpr DepthStencilState& setStencilEnable(b8 value)noexcept{ stencilEnable = value; return *this; }
-
-    constexpr DepthStencilState& enableStencil()noexcept{ stencilEnable = true; return *this; }
-
-    constexpr DepthStencilState& disableStencil()noexcept{ stencilEnable = false; return *this; }
-
-    constexpr DepthStencilState& setStencilReadMask(u8 value)noexcept{ stencilReadMask = value; return *this; }
-
-    constexpr DepthStencilState& setStencilWriteMask(u8 value)noexcept{ stencilWriteMask = value; return *this; }
-
-    constexpr DepthStencilState& setStencilRefValue(u8 value)noexcept{ stencilRefValue = value; return *this; }
-
-    constexpr DepthStencilState& setFrontFaceStencil(const StencilOpDesc& value)noexcept{ frontFaceStencil = value; return *this; }
-
-    constexpr DepthStencilState& setBackFaceStencil(const StencilOpDesc& value)noexcept{ backFaceStencil = value; return *this; }
-
-    constexpr DepthStencilState& setDynamicStencilRef(b8 value)noexcept{ dynamicStencilRef = value; return *this; }
 };
 
 
@@ -364,29 +310,11 @@ struct SamplerDesc{
 
 
 public:
-    constexpr SamplerDesc& setBorderColor(const Color& color)noexcept{ borderColor = color; return *this; }
-
-    constexpr SamplerDesc& setMaxAnisotropy(f32 value)noexcept{ maxAnisotropy = value; return *this; }
-
-    constexpr SamplerDesc& setMipBias(f32 value)noexcept{ mipBias = value; return *this; }
-
-    constexpr SamplerDesc& setMinFilter(b8 enable)noexcept{ minFilter = enable; return *this; }
-
-    constexpr SamplerDesc& setMagFilter(b8 enable)noexcept{ magFilter = enable; return *this; }
-
-    constexpr SamplerDesc& setMipFilter(b8 enable)noexcept{ mipFilter = enable; return *this; }
 
     constexpr SamplerDesc& setAllFilters(b8 enable)noexcept{ minFilter = magFilter = mipFilter = enable; return *this; }
 
-    constexpr SamplerDesc& setAddressU(SamplerAddressMode::Enum mode)noexcept{ addressU = mode; return *this; }
-
-    constexpr SamplerDesc& setAddressV(SamplerAddressMode::Enum mode)noexcept{ addressV = mode; return *this; }
-
-    constexpr SamplerDesc& setAddressW(SamplerAddressMode::Enum mode)noexcept{ addressW = mode; return *this; }
-
     constexpr SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode)noexcept{ addressU = addressV = addressW = mode; return *this; }
 
-    constexpr SamplerDesc& setReductionType(SamplerReductionType::Enum type)noexcept{ reductionType = type; return *this; }
 };
 
 typedef GraphicsBackend::Handle<Sampler> SamplerHandle;

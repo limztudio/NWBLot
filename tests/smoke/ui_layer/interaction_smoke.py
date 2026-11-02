@@ -19,9 +19,14 @@ import time
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
+from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_logs import wait_for_log_message  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    LinuxXEvent, run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
-    launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
+    launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_expected_log_text  # noqa: E402
+from window_capture_win32 import WinRect  # noqa: E402
+from window_capture_x11 import LinuxXEvent  # noqa: E402
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS

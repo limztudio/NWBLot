@@ -102,6 +102,23 @@ template<typename CharT, usize N>
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
+template<StringViewConvertible TextT, StringViewConvertible ExpectedT>
+    requires SameAs<typename TextT::value_type, typename ExpectedT::value_type>
+[[nodiscard]] inline constexpr b8 Contains(const TextT& text, const ExpectedT& expected)noexcept(
+    noexcept(AsBasicStringView(text)) && noexcept(AsBasicStringView(expected)) && IsArithmetic_V<typename TextT::value_type>
+){
+    using CharT = typename TextT::value_type;
+    return AsBasicStringView(text).find(AsBasicStringView(expected)) != BasicStringView<CharT>::npos;
+}
+
+template<StringViewConvertible TextT, usize N>
+[[nodiscard]] inline constexpr b8 Contains(const TextT& text, const typename TextT::value_type (&expected)[N])noexcept(
+    noexcept(AsBasicStringView(text)) && IsArithmetic_V<typename TextT::value_type>
+){
+    using CharT = typename TextT::value_type;
+    return AsBasicStringView(text).find(BasicStringView<CharT>(expected, N > 0u ? N - 1u : 0u)) != BasicStringView<CharT>::npos;
+}
+
 template<typename StringT>
     requires requires(StringT& text, usize index, usize count){
         typename StringT::value_type;

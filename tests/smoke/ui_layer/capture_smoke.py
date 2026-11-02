@@ -17,7 +17,8 @@ LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
+from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure  # noqa: E402
 from fixture_environment import build_fixture_environment
 
 LIT_EXECUTABLE = "--executable"

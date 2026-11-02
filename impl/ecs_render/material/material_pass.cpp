@@ -327,7 +327,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     auto appendDrawForMesh = [&](const Core::ECS::EntityID entity, const NotNull<MaterialSurfaceInfo*> materialInfo, MeshResources& mesh, const CsgReceiverDrawState& csgReceiverState) -> b8{
         NWB_ASSERT(mesh.valid());
         // Mesh creation establishes source-stream descriptors before draw gathering.
-        NWB_ASSERT(m_meshSystem.meshGeometryHeapHandlesReady(mesh));
+        NWB_ASSERT(RendererMeshSystem::GeometryHeapHandlesReady(mesh.geometryHeapHandles));
         NWB_ASSERT(materialInfo->transparent == transparent);
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);

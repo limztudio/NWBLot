@@ -59,11 +59,6 @@ def snapshot_from_logs(text):
         "logical_extent": display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles, "minimum": minimum}
 
 
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
-
-
 def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *, extent=None, skin="default"):
     width, height, rows = frame
     scale_x, scale_y = snapshot[LIT_SCALE]

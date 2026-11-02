@@ -41,18 +41,6 @@ NWB_IMPL_BEGIN
     CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
 );
 
-[[nodiscard]] inline Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
-    const Span<const CsgDeformVertex> inputVertices,
-    const Span<const CsgDeformTriangle> inputTriangles,
-    const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options,
-    CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
-){
-    return PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
-}
-
 // Rebuild in scratch, then copy into the commit arena; viability matches preview.
 [[nodiscard]] Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
@@ -65,19 +53,6 @@ NWB_IMPL_BEGIN
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
 );
-
-[[nodiscard]] inline Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
-    Core::Alloc::ScratchArena& scratchArena,
-    Core::Alloc::GlobalArena& commitArena,
-    const Span<const CsgDeformVertex> inputVertices,
-    const Span<const CsgDeformTriangle> inputTriangles,
-    const Span<const CsgDeformCutDesc> cuts,
-    const CsgDeformBuildOptions& options,
-    CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
-){
-    return CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, outVertices, outTriangles);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Shared software-BVH scene-instance ABI. The three affine rows plus four trailing words match the 64-byte C++ SceneSwBvhInstanceGpu record.
 struct NwbSwBvhInstance{
     float4 worldToObjectRow0;
@@ -19,6 +25,19 @@ struct NwbSwBvhInstance{
     uint pad0;
     uint pad1;
 };
+
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwBvhInstanceBuffers[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapSwBvhInstances(const uint slot){
+    return g_NwbHeapSwBvhInstanceBuffers[slot];
+}
 
 float3 nwbSwBvhTransformPoint(const NwbSwBvhInstance instance, const float3 point){
     return float3(dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w, dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w, dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w);

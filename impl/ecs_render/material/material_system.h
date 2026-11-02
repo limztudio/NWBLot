@@ -198,14 +198,7 @@ public:
         return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
     }
     [[nodiscard]] b8 computeMaterialPassDrawResourcesReady(Span<const MaterialPassDrawItem> drawItems, const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings)noexcept;
-    // Resolves persistent sampled textures selected by frozen draws.
-    // Missing cached resources reject collection; asset and descriptor creation belong to preparation.
-    [[nodiscard]] b8 appendPreparedMaterialSurfaceSampledTextures(const MaterialSurfaceInfo& materialInfo, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector)const{
-        return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
-    }
-    [[nodiscard]] Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> gatherPreparedMaterialPassSampledTextures(Span<const MaterialPassDrawItemsView> drawItemSets, Core::Alloc::ScratchArena& scratchArena)const{
-        return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, scratchArena);
-    }
+    [[nodiscard]] const RendererMaterialState& materialState()const noexcept{ return m_materialState; }
     [[nodiscard]] b8 prepareMaterialPassResourceBindings(const MaterialPassDrawItemsView& drawItems)noexcept{
         return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems) && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems) && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems);
     }

@@ -7,7 +7,6 @@
 #include <impl/ecs_ui/toolkit/widgets/scrollbar.h>
 
 #include <global/simdmath.h>
-#include <global/simplemath.h>
 
 #include <gtest/gtest.h>
 

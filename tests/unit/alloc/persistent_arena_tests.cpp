@@ -23,6 +23,7 @@ namespace __hidden_persistent_arena_tests{
 
 
 using NWB::Core::Alloc::PersistentArena;
+using NWB::Tests::ExpectMemoryStatsEqual;
 
 
 inline constexpr usize s_PersistentArenaHighAlignment = 4096u;
@@ -60,7 +61,7 @@ TEST(PersistentArenaTests, StructureAlignedSizeFitsExactPayloadAndReusesTheFixed
     EXPECT_EQ(allocated.allocationCount, initial.allocationCount + 1u);
 
     EXPECT_EQ(arena.allocate(1u, 1u), nullptr);
-    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(allocated, arena.memoryStats());
+    ExpectMemoryStatsEqual(allocated, arena.memoryStats());
 
     arena.deallocate(first, 1u, s_PersistentArenaHighAlignment);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
@@ -165,7 +166,7 @@ TEST(PersistentArenaTests, ReallocationGrowsAcrossMultipleDeferredAdjacentBlocks
     const ArenaMemoryStats beforeFailedGrowth = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(first, 1u, s_GrownBytes), nullptr);
     ExpectPattern(Span<const u8>(first, s_BlockBytes));
-    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(beforeFailedGrowth, arena.memoryStats());
+    ExpectMemoryStatsEqual(beforeFailedGrowth, arena.memoryStats());
 
     arena.deallocate(third, 1u, s_BlockBytes);
 
@@ -190,7 +191,7 @@ TEST(PersistentArenaTests, FailedAlignedReallocationRetainsPayloadAndStats){
 
     EXPECT_EQ(arena.reallocate(initial, 256u, 1536u), nullptr);
     ExpectPattern(Span<const u8>(initial, s_InitialBytes));
-    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(beforeFailure, arena.memoryStats());
+    ExpectMemoryStatsEqual(beforeFailure, arena.memoryStats());
 
     arena.deallocate(initial, 1u, s_InitialBytes);
     arena.deallocate(blocker, 1u, 800u);
@@ -241,7 +242,7 @@ TEST(PersistentArenaTests, NullAndZeroReallocationFollowAllocationAccounting){
 
     const ArenaMemoryStats before = arena.memoryStats();
     EXPECT_EQ(arena.reallocate(nullptr, 64u, 0u), nullptr);
-    ArenaOwnerTestSupport::ExpectMemoryStatsEqual(before, arena.memoryStats());
+    ExpectMemoryStatsEqual(before, arena.memoryStats());
 
     auto* const allocation = static_cast<u8*>(arena.reallocate(nullptr, 64u, 33u));
     ASSERT_NE(allocation, nullptr);

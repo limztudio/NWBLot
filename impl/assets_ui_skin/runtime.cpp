@@ -166,11 +166,6 @@ b8 UiSkin::validateTexture(const Texture& texture)const{
     return true;
 }
 
-UiSkin::RegionVector UiSkin::takeRegions()noexcept{
-    m_regionIndex.clear();
-    return Move(m_regions);
-}
-
 void UiSkin::setAtlas(Core::Assets::AssetRef<Texture> texture, const u32 width, const u32 height, const f32 referenceDensity, RegionVector&& regions){
     RegionVector candidate(m_regions.get_allocator().arena());
     candidate = Move(regions);

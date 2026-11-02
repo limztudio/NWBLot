@@ -6,7 +6,6 @@
 
 #include <core/task/cpu/scheduler.h>
 
-#include <global/termination.h>
 #include <global/timer.h>
 
 #include <gtest/gtest.h>

@@ -65,7 +65,6 @@ b8 RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList& 
     push.resolve.momentsValid = 1u;
     push.resolve.geometrySlot = bindless.shadowSoftGeometry.slot();
     push.resolve.inputColorSlot = frontIsA ? bindless.transparentHistB.slot() : bindless.transparentHistA.slot();
-    push.resolve.softHalfSlot = push.resolve.inputColorSlot;
     push.resolve.momentsSlot = frontIsA ? bindless.transparentMomentsB.slot() : bindless.transparentMomentsA.slot();
     push.resolve.outputStorageSlot = bindless.shadowSoftHalfAStorage.slot();
     push.resolve.opaqueInputColorSlot = frontIsA ? bindless.shadowHistB.slot() : bindless.shadowHistA.slot();

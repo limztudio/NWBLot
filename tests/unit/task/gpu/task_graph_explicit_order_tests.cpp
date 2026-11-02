@@ -201,9 +201,8 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
         graphGeneration = declarations.generation();
     }
     const Name taskBaseName("tests/task_graph/deep_cycle_task_");
-    Array<char, 32u> taskIndexBuffer = {};
     const Core::GpuTaskId futureLast{ .generation = graphGeneration, .index = static_cast<u32>(s_TaskCount - 1u), };
-    const auto derivedNameResult = DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer));
+    const auto derivedNameResult = IndexedName(taskBaseName, 0u);
     ASSERT_TRUE(derivedNameResult);
     const auto firstResult = AddTask(*derivedNameResult, s_DeepCycleTaskLabel, Span(&futureLast, 1u), {}, {}, {}, {}, graph);
     ASSERT_TRUE(firstResult);
@@ -212,7 +211,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
 
     Core::GpuTaskId previous = first;
     for(usize taskIndex = 1u; taskIndex < s_TaskCount; ++taskIndex){
-        const auto secondDerivedNameResult = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+        const auto secondDerivedNameResult = IndexedName(taskBaseName, taskIndex);
         ASSERT_TRUE(secondDerivedNameResult);
         const auto currentResult = AddTask(*secondDerivedNameResult, s_DeepCycleTaskLabel, Span(&previous, 1u), {}, {}, {}, {}, graph);
         ASSERT_TRUE(currentResult);

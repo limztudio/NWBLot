@@ -73,8 +73,7 @@ public:
 };
 
 namespace DispatchStage = ReflectionDispatchStage;
-using CsgDispatchParameters = ReflectionCsgDispatchPushConstants;
-static_assert(sizeof(CsgDispatchParameters) == NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES);
+static_assert(sizeof(ReflectionCsgDispatchPushConstants) == NWB_REFLECTION_CSG_PUSH_CONSTANT_BYTES);
 
 struct DispatchTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -114,7 +113,7 @@ public:
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid());
         const b8 sliced = resources.scene.csgTraceContextBuffer && (hardware || payload.stage == DispatchStage::BuildArgs);
-        CsgDispatchParameters csgParameters;
+        ReflectionCsgDispatchPushConstants csgParameters;
         csgParameters.frameParametersSlot = resources.frameParametersSlot;
         if(sliced)
             commandList.setPushConstants(&csgParameters, sizeof(csgParameters));
@@ -198,7 +197,7 @@ public:
         state.setPipeline(pipeline).setIndirectParams(resources.indirectArgs.get());
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *pipeline, resources.scene.tlasHeapHandle);
-        CsgDispatchParameters parameters;
+        ReflectionCsgDispatchPushConstants parameters;
         parameters.frameParametersSlot = resources.frameParametersSlot;
         parameters.rayOffset = payload.slice * s_ReflectionTraceSliceRays;
         commandList.setPushConstants(&parameters, sizeof(parameters));

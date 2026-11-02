@@ -40,15 +40,11 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     return { generatePhase ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
 }
 
-[[nodiscard]] constexpr Core::GpuTaskCommandRequirements SharedComputeEmulationCommandRequirements(const SharedComputeEmulationPhase::Enum phase)noexcept{
-    return SharedComputeEmulationCommandRequirements(phase == SharedComputeEmulationPhase::Generate);
-}
-
 template<typename Payload>
 struct SharedComputeEmulationPhaseTaskCommandRequirementsBase{
 public:
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
-        return SharedComputeEmulationCommandRequirements(payload.phase);
+        return SharedComputeEmulationCommandRequirements(payload.phase == SharedComputeEmulationPhase::Generate);
     }
 };
 

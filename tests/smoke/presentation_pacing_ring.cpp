@@ -56,7 +56,7 @@ void PresentationPacingRing::record(const u64 successfulPresentations, const Tim
     const f64 wallMs = wallIntervalMs / static_cast<f64>(advanced);
     if(!m_pendingStallCounted && wallMs >= s_StallThresholdMs)
         ++m_stalls;
-    m_samples[m_head] = PresentationPacingSample{ wallMs, advanced };
+    m_samples[m_head] = PresentationPacingSample{ wallMs };
     m_head = (m_head + 1u) % s_Capacity;
     if(m_count < s_Capacity)
         ++m_count;

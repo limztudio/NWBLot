@@ -202,10 +202,9 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         Core::GpuTaskGraph graph(testArena.arena);
         Array<Core::GpuTaskId, s_MaxTaskCount> tasks = {};
         const Name taskBaseName("tests/task_graph/packed_reachability_task_");
-        Array<char, 32u> taskIndexBuffer = {};
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
             const Core::GpuTaskId* const dependency = taskIndex >= 2u ? &tasks[taskIndex - 2u] : nullptr;
-            const auto derivedNameResult = DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+            const auto derivedNameResult = IndexedName(taskBaseName, taskIndex);
             ASSERT_TRUE(derivedNameResult);
             const auto taskAdmission = AddTask(*derivedNameResult, "Packed Reachability Task", dependency ? Span(dependency, 1u) : Span<const Core::GpuTaskId>{}, {}, {}, {}, {}, graph);
             ASSERT_TRUE(taskAdmission);

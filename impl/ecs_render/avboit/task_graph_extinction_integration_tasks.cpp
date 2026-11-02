@@ -44,28 +44,7 @@ b8 AvboitExtinctionSharedComputeEmulationGraphTask::Record(const Payload& payloa
 
 
 b8 AvboitExtinctionGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    return RecordAvboitRasterPassFromPayload(
-        payload,
-        commandList,
-        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
-            payload.avboitSystem.renderAvboitExtinctionPass(
-                dispatchCommandList,
-                payload.targets,
-                dispatchDrawItems,
-                dispatchCsgFrameData,
-                payload.csgResources,
-                payload.frameBindings,
-                dispatchInstanceCount,
-                dispatchMaterialTypedByteCount,
-                payload.materialFrameStatesGraphOwned,
-                payload.materialGeometryStatesGraphOwned,
-                payload.computeEmulationOutputStatesGraphOwned,
-                payload.csgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused,
-                payload.computeEmulationTiming
-            );
-        }
-    );
+    return RecordAvboitRasterPassFromPayload(payload, commandList, &RendererAvboitSystem::renderAvboitExtinctionPass);
 }
 
 
@@ -73,14 +52,7 @@ b8 AvboitExtinctionGraphTask::Record(const Payload& payload, Core::CommandList& 
 
 
 b8 AvboitIntegrationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-    return RecordAvboitComputeEffect(
-        payload,
-        commandList,
-        context,
-        [&](Core::CommandList& dispatchCommandList, AvboitFrameTargets& targets, const Core::GpuTimingSampleAttribution attribution, b8* const timingRecorded){
-            payload.avboitSystem.dispatchAvboitIntegration(dispatchCommandList, targets, attribution, timingRecorded);
-        }
-    );
+    return RecordAvboitComputeEffect(payload, commandList, context, &RendererAvboitSystem::dispatchAvboitIntegration);
 }
 
 

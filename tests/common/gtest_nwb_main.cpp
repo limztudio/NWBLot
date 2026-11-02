@@ -16,42 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ArenaOwnerTestSupport{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source)noexcept{
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.ownerName == name && snapshot.source == source)
-            return snapshot.stats;
-    }
-    return {};
-}
-
-void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual){
-    EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
-    EXPECT_EQ(actual.usedBytes, expected.usedBytes);
-    EXPECT_EQ(actual.peakUsedBytes, expected.peakUsedBytes);
-    EXPECT_EQ(actual.allocationCount, expected.allocationCount);
-    EXPECT_EQ(actual.reallocationCount, expected.reallocationCount);
-    EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_BEGIN
 
 
@@ -98,6 +62,30 @@ Core::Alloc::GlobalArena& Arena(){
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ArenaMemoryStats OwnerStats(const Name& name, const ArenaMemorySource::Enum source)noexcept{
+    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+    while(record){
+        ArenaMemoryOwnerSnapshot snapshot;
+        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
+        if(snapshot.ownerName == name && snapshot.source == source)
+            return snapshot.stats;
+    }
+    return {};
+}
+
+void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual){
+    EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
+    EXPECT_EQ(actual.usedBytes, expected.usedBytes);
+    EXPECT_EQ(actual.peakUsedBytes, expected.peakUsedBytes);
+    EXPECT_EQ(actual.allocationCount, expected.allocationCount);
+    EXPECT_EQ(actual.reallocationCount, expected.reallocationCount);
+    EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

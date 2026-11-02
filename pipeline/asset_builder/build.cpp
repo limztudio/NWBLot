@@ -10,7 +10,6 @@
 
 #include "build.h"
 
-#include <core/assets/volume/arena_names.h>
 #include <core/assets/volume/built_asset.h>
 #include <core/assets/volume/cooked_object_cache.h>
 #include <core/assets/volume/pack_manifest.h>
@@ -92,13 +91,8 @@ b8 BuildAssets(const AssetBuildOptions& options, Assets::ScratchArena& scratchAr
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest, scratchArena))
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), ConvertString(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), PathToString<tchar>(options.outputDirectory));
     return true;
-}
-
-b8 BuildAssets(const AssetBuildOptions& options){
-    Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
-    return BuildAssets(options, scratchArena);
 }
 
 

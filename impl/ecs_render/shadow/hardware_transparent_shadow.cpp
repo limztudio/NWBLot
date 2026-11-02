@@ -118,11 +118,9 @@ b8 RendererRayTracingSystem::prepareHardwareTransparentShadowResources(DeferredF
 void RendererRayTracingSystem::releaseHardwareTransparentShadowResources(){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_overflowArgsHeapHandle);
-    }
+    RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_overflowArgsHeapHandle);
     state = HardwareTransparentShadowState{};
 }
 

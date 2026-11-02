@@ -40,16 +40,8 @@ b8 Mesh::loadBinary(const Span<const u8> binary){
         return false;
     const MeshBinaryHeader& header = *headerResult;
 
-    if(header.meshClass != Core::Mesh::MeshClass::Static){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: invalid mesh class"));
-        return false;
-    }
     if(!MeshBaseHeaderComplete(header)){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: mesh payload is incomplete"));
-        return false;
-    }
-    if(header.skinCount != 0u || header.skeletonJointCount != 0u || header.inverseBindMatrixCount != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: static mesh contains skinned payload"));
         return false;
     }
 

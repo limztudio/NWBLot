@@ -31,20 +31,6 @@ constexpr AStringView s_AfterKey = "after";
 
 class UiNestedPopupBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 280.0f, 360.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 460.0f, 80.0f, 80.0f, 24.0f };
-        options.size = { 300.0f, 300.0f };
-        return options;
-    }
-
     [[nodiscard]] static WidgetOptions Control(const f32 width = 120.0f)noexcept{
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, width };
@@ -61,14 +47,14 @@ protected:
     }
 
     [[nodiscard]] b8 beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions());
+        return begin(generation) && m_builder.beginPopup(s_ParentPopupKey, m_parent, NestedParentOptions());
     }
 
     [[nodiscard]] b8 prepareButtons(const u64 generation){
         if(!beginParent(generation))
             return false;
         m_beforeActivated = m_builder.button(s_BeforeKey, "Before", Control());
-        if(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions())){
+        if(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions())){
             m_childActivated = m_builder.button(s_ApplyKey, "Child", Control());
             if(!m_builder.endPopup())
                 return false;
@@ -100,7 +86,7 @@ TEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestore
     ASSERT_TRUE(beginParent(1u));
     const PopupToken parent = m_context.popupToken();
     EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control()));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
     const PopupToken child = m_context.popupToken();
     EXPECT_NE(child, parent);
     EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
@@ -138,7 +124,7 @@ TEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentCont
     ASSERT_TRUE(m_builder.beginRow("row", rowOptions));
     const WidgetId row = UiTestSupport::RequireWidgetId(parentId(), "row");
     EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control(100.0f)));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
     EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_context.scopeId(), row);
@@ -165,7 +151,7 @@ TEST_F(UiNestedPopupBuilderTests, ClosedChildBeginLeavesParentScopeAndFollowingC
     ASSERT_TRUE(beginParent(1u));
     const PopupToken parent = m_context.popupToken();
     EXPECT_FALSE(m_builder.button(s_BeforeKey, "Before", Control()));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
     EXPECT_FALSE(m_context.failed());
     EXPECT_EQ(m_context.popupToken(), parent);
     EXPECT_EQ(m_context.scopeId(), parentId());
@@ -234,10 +220,10 @@ TEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutP
     ASSERT_TRUE(begin(1u));
     for(usize index = 0u; index < s_InputMaxPopups; ++index){
         states[index].open();
-        ASSERT_TRUE(m_builder.beginPopup("level", states[index], ParentOptions()));
+        ASSERT_TRUE(m_builder.beginPopup("level", states[index], NestedParentOptions()));
     }
     states[s_InputMaxPopups].open();
-    EXPECT_FALSE(m_builder.beginPopup("level", states[s_InputMaxPopups], ChildOptions()));
+    EXPECT_FALSE(m_builder.beginPopup("level", states[s_InputMaxPopups], NestedChildOptions()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(1u));
@@ -246,7 +232,7 @@ TEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutP
 
 TEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublishIt){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
     EXPECT_FALSE(m_builder.button(s_ApplyKey, "Child", Control()));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());
@@ -257,7 +243,7 @@ TEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublish
 
 TEST_F(UiNestedPopupBuilderTests, UnbalancedChildContainerPreventsTheOuterFrameFromPublishing){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, NestedChildOptions()));
     ASSERT_TRUE(m_builder.beginColumn("unbalanced"));
     EXPECT_FALSE(m_builder.endPopup());
     EXPECT_TRUE(m_context.failed());

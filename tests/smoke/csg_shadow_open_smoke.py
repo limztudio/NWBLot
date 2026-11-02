@@ -14,7 +14,8 @@ import tempfile
 from csg_shadow_reference import BYTE_TOLERANCE, TRANSMISSION, region_pixels
 from csg_shadow_smoke import capture_environment
 import window_capture_smoke as capture
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
 
 LIT_WARNING_TAG = "[WARNING]"
 

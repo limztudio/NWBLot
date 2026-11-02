@@ -33,33 +33,25 @@ public:
 };
 
 struct AssetBuildRoot{
-    Core::Assets::AssetString path;
-    Path resolvedPath;
+    Path path;
     ACompactString virtualRoot;
 
 
 public:
-    explicit AssetBuildRoot(Core::Assets::AssetArena& arena)noexcept
-        : path(arena)
-        , resolvedPath(arena)
-    {}
-    AssetBuildRoot(Core::Assets::AssetArena& arena, AStringView inPath, AStringView inVirtualRoot)
-        : path(inPath, arena)
-        , resolvedPath(arena)
+    AssetBuildRoot(Path inPath, const AStringView inVirtualRoot)noexcept
+        : path(Move(inPath))
         , virtualRoot(inVirtualRoot)
     {}
-    AssetBuildRoot(Path&& inResolvedPath, const ACompactString& inVirtualRoot)noexcept
-        : path(inResolvedPath.arena())
-        , resolvedPath(Move(inResolvedPath))
+    AssetBuildRoot(Path inPath, const ACompactString& inVirtualRoot)noexcept
+        : path(Move(inPath))
         , virtualRoot(inVirtualRoot)
     {}
 };
 
 struct AssetBuildOptions{
-    Core::Assets::AssetString repoRoot;
-    Path resolvedRepoRoot;
+    Path repoRoot;
     Core::Assets::AssetVector<AssetBuildRoot> assetRoots;
-    Core::Assets::AssetString outputDirectory;
+    Path outputDirectory;
     ACompactString configuration;
     ACompactString assetType{ Core::Assets::AssetsVolumeCookDetail::s_AssetVolumeName };
     AssetBuildServices services;
@@ -70,7 +62,6 @@ struct AssetBuildOptions{
 public:
     explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler)noexcept
         : repoRoot(arena)
-        , resolvedRepoRoot(arena)
         , assetRoots(arena)
         , outputDirectory(arena)
         , services(cpuScheduler)
@@ -85,7 +76,6 @@ public:
 [[nodiscard]] Expected<Core::Assets::ResolvedCookPaths> ResolveCookPaths(const AssetBuildOptions& options, Core::Assets::AssetArena& arena);
 [[nodiscard]] b8 SelectBuildInputs(const AssetBuildOptions& options, const Core::Assets::ResolvedCookPaths& paths, Core::Assets::ScratchArena& scratchArena, Core::Assets::DiscoveredNwbFileVector& files);
 [[nodiscard]] b8 BuildAssets(const AssetBuildOptions& options, Core::Assets::ScratchArena& scratchArena);
-[[nodiscard]] b8 BuildAssets(const AssetBuildOptions& options);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

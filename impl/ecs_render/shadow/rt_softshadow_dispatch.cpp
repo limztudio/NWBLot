@@ -104,7 +104,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
             geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
             commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_shadowGeometryDownsamplePipeline));
-            RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_shadowGeometryDownsamplePipeline, heap, commandList);
+            heap.bindCompute(commandList, *m_rayTracingState.m_shadowGeometryDownsamplePipeline.get());
             commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
@@ -168,7 +168,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         push.momentsOutputStorageSlot = resources.momentsOutStorageSlot;
 
         commandList.setComputeState(RayTracingDetail::MakeComputePassState(m_rayTracingState.m_shadowReprojectMergePipeline));
-        RayTracingDetail::BindComputePassHeap(m_rayTracingState.m_shadowReprojectMergePipeline, heap, commandList);
+        heap.bindCompute(commandList, *m_rayTracingState.m_shadowReprojectMergePipeline.get());
         commandList.setPushConstants(&push, sizeof(push));
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
     };
@@ -205,20 +205,20 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             opaqueDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_wavelet.m_pipeline.get();
             opaqueDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_upsample.m_pipeline.get();
             opaqueDispatch.firstWaveletResources = {
-                opaqueWaveletInput, opaqueWaveletInput, opaqueResolveMoments, targets.shadowSoftHalfB.get(),
-                opaqueWaveletInputSlot, opaqueWaveletInputSlot, opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+                opaqueWaveletInput, opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+                opaqueWaveletInputSlot, opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
             };
             opaqueDispatch.outputHalfAResources = {
-                targets.shadowSoftHalfB.get(), targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfA.get(),
-                targets.bindless.shadowSoftHalfB.slot(), targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+                targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfA.get(),
+                targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
             };
             opaqueDispatch.outputHalfBResources = {
-                targets.shadowSoftHalfA.get(), targets.shadowSoftHalfA.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
-                targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowSoftHalfA.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+                targets.shadowSoftHalfA.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+                targets.bindless.shadowSoftHalfA.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
             };
             opaqueDispatch.upsampleResources = {
-                targets.shadowSoftHalfB.get(), targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
-                targets.bindless.shadowSoftHalfB.slot(), targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+                targets.shadowSoftHalfB.get(), opaqueResolveMoments, targets.shadowSoftHalfB.get(),
+                targets.bindless.shadowSoftHalfB.slot(), opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
             };
             opaqueDispatch.visibilityTexture = targets.shadowVisibility.get();
             opaqueDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
@@ -289,7 +289,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 NWB_MEMCPY(&tracePush.prevWorldToClip, sizeof(tracePush.prevWorldToClip), &m_rayTracingState.m_prevWorldToClip, sizeof(tracePush.prevWorldToClip));
                 const auto& pipeline = m_rayTracingState.m_softwareTransparentSampling.m_pipelines[samplingHistoryUsable ? 1u : 0u];
                 commandList.setComputeState(RayTracingDetail::MakeComputePassState(pipeline));
-                RayTracingDetail::BindComputePassHeap(pipeline, heap, commandList);
+                heap.bindCompute(commandList, *pipeline.get());
                 commandList.setPushConstants(&tracePush, sizeof(tracePush));
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
                 reportTransparentShadowSampling(tracePush.softSampleCount);
@@ -330,20 +330,20 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             transparentDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_wavelet.m_pipeline.get();
             transparentDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_upsample.m_pipeline.get();
             transparentDispatch.firstWaveletResources = {
-                transparentWaveletInput, transparentWaveletInput, transparentResolveMoments, targets.shadowSoftHalfA.get(),
-                transparentWaveletInputSlot, transparentWaveletInputSlot, transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+                transparentWaveletInput, transparentResolveMoments, targets.shadowSoftHalfA.get(),
+                transparentWaveletInputSlot, transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
             };
             transparentDispatch.outputHalfAResources = {
-                targets.shadowSoftHalfB.get(), targets.shadowSoftHalfB.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
-                targets.bindless.shadowSoftHalfB.slot(), targets.bindless.shadowSoftHalfB.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+                targets.shadowSoftHalfB.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
+                targets.bindless.shadowSoftHalfB.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
             };
             transparentDispatch.outputHalfBResources = {
-                targets.shadowSoftHalfA.get(), targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfB.get(),
-                targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
+                targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfB.get(),
+                targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
             };
             transparentDispatch.upsampleResources = {
-                targets.shadowSoftHalfA.get(), targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
-                targets.bindless.shadowSoftHalfA.slot(), targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
+                targets.shadowSoftHalfA.get(), transparentResolveMoments, targets.shadowSoftHalfA.get(),
+                targets.bindless.shadowSoftHalfA.slot(), transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()
             };
             transparentDispatch.visibilityTexture = targets.shadowVisibility.get();
             transparentDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();

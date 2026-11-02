@@ -12,7 +12,8 @@ import struct
 import sys
 import zlib
 
-from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,)
+from window_capture_image import analyze_rgb_rows, read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 30
 

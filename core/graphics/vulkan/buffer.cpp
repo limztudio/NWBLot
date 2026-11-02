@@ -215,7 +215,7 @@ Expected<BufferHandle> Device::createBuffer(const BufferDesc& d){
 
     if(d.isVolatile){
         const u64 alignment = Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
-        const auto alignedSize = AlignUpU64Checked(size, alignment);
+        const auto alignedSize = AlignUpChecked<u64>(size, alignment);
         if(!alignedSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
             return MakeUnexpected(Failure{});

@@ -52,8 +52,7 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     const Array<usize, 4u> assignedQueues = { 2u, 3u, 4u, 0u };
     Core::GpuTaskId target;
     for(usize taskIndex = 0u; taskIndex < LengthOf(costs); ++taskIndex){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/timing_scaling/tied/"), FormatDecimal(taskIndex, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/timing_scaling/tied/"), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         Core::GpuTaskSchedulingHint scheduling;

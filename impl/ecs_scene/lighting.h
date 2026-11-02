@@ -20,20 +20,6 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SceneLight MakeSceneLight(const Float4& position, const Float4& direction, const LightComponent& light)noexcept{
-    SceneLight out{};
-    out.position = position;
-    out.direction = direction;
-    out.colorIntensity = light.colorIntensity;
-    if(light.type != LightType::Directional)
-        out.range = light.range;
-    out.angularRadius = light.angularRadius;
-    out.sourceRadius = light.sourceRadius;
-    out.type = light.type;
-    out.enableCaustics = light.enableCaustics;
-    return out;
-}
-
 [[nodiscard]] Core::ECS::EntityID CreateDirectionalLightEntity(Core::ECS::World& world, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity);
 [[nodiscard]] Core::ECS::EntityID CreatePointLightEntity(Core::ECS::World& world, const Float4& position, const Float4& color, f32 intensity, f32 range);
 [[nodiscard]] Core::ECS::EntityID CreateSpotLightEntity(Core::ECS::World& world, const Float4& position, f32 pitchRadians, f32 yawRadians, f32 rollRadians, const Float4& color, f32 intensity, f32 range, f32 innerConeCos, f32 outerConeCos);

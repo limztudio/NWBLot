@@ -6,8 +6,6 @@
 #include "skin_payload.h"
 #include "timing_names.h"
 
-#include <impl/ecs_mesh/runtime/buffer_upload.h>
-
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
@@ -153,12 +151,11 @@ b8 MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(const MeshSkinningGr
         commandList.setComputeState(computeState);
         heap.bindCompute(commandList, *repackPipeline);
 
-        const MeshletRepackPushConstants repackPushConstants = MakeMeshletRepackPushConstants(plan.meshletCount, plan.bindlessResourceSlots);
-        commandList.setPushConstants(&repackPushConstants, sizeof(repackPushConstants));
+        commandList.setPushConstants(&boundsPushConstants, sizeof(boundsPushConstants));
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);
 
-            commandList.dispatch(repackPushConstants.meshletCount, 1u, 1u);
+            commandList.dispatch(boundsPushConstants.meshletCount, 1u, 1u);
         }
     }
     return true;

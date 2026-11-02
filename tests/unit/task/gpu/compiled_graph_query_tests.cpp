@@ -48,8 +48,7 @@ static void CheckPacketQueries(const usize taskCount){
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = orderIndex != 0u;
         const Core::GpuTaskId dependency{ .generation = graphGeneration, .index = static_cast<u32>(declarationIndex + 1u), };
-        Array<char, 32u> identityText = {};
-        const auto derivedNameResult = DeriveName(Name("tests/compiled_query/task/"), FormatDecimal(declarationIndex, identityText));
+        const auto derivedNameResult = IndexedName(Name("tests/compiled_query/task/"), declarationIndex);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTaskWithCommands(*derivedNameResult, "Compiled Query Task", GraphicsCommands(), scheduling, {}, orderIndex != 0u ? Span(&dependency, 1u) : Span<const Core::GpuTaskId>{}, graph);
         ASSERT_TRUE(taskAdmission);

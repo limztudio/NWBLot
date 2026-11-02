@@ -133,10 +133,6 @@ Expected<OutputPaths> ResolveOutputPaths(const ScratchPath& inputPath, const ASt
 
     paths.data = paths.metadata;
     paths.data.replaceExtension(TextureFormat::s_TextureDataExtension);
-    paths.metadataTemporary = paths.metadata;
-    paths.metadataTemporary += s_StagedFileTemporarySuffix;
-    paths.dataTemporary = paths.data;
-    paths.dataTemporary += s_StagedFileTemporarySuffix;
     return paths;
 }
 
@@ -180,10 +176,10 @@ b8 WriteOutputs(const OutputPaths& outputPaths, const PreparedTexture& payload, 
     if(!published){
         switch(published.failureStage){
         case StagedFilePairFailureStage::StagePrimary:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(outputPaths.dataTemporary), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}': {}"), PathToString<tchar>(paths.primaryTemporary), ConvertString(published.error.message()));
             break;
         case StagedFilePairFailureStage::StageSecondary:
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(outputPaths.metadataTemporary), ConvertString(published.error.message()));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}': {}"), PathToString<tchar>(paths.secondaryTemporary), ConvertString(published.error.message()));
             break;
         case StagedFilePairFailureStage::PreserveExistingOutput:
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}"), PathToString<tchar>(*outputs[published.failedIndex]), ConvertString(published.error.message()));

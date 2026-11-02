@@ -46,7 +46,6 @@ namespace NameDetail{
 
 inline constexpr usize s_DebugNameCapacity = 256u;
 inline constexpr usize s_NameHashBytes = sizeof(u64) * s_NameHashLaneCount;
-inline constexpr usize s_EncodedNameHashLength = s_HexDigitsPerHashLane * s_NameHashLaneCount;
 inline constexpr i32 s_HashHexInitialBitShift = static_cast<i32>((s_HexU64DigitCount - 1u) * s_HexNibbleBits);
 inline constexpr i32 s_HashHexBitShiftStep = static_cast<i32>(s_HexNibbleBits);
 
@@ -75,7 +74,6 @@ inline constexpr Array<u64, s_NameHashLaneCount> s_LaneSeeds = {
 
 
 static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_NameHashLaneCount, "s_LaneSeeds count must match s_NameHashLaneCount");
-
 
 inline constexpr void InitializeNameHash(NameHash& hash)noexcept{
     for(u32 i = 0u; i < s_NameHashLaneCount; ++i)
@@ -243,7 +241,6 @@ template<typename CharT>
     return hash;
 }
 
-
 template<typename CharT>
 class NameText{
     friend class Name;
@@ -278,7 +275,6 @@ private:
     BasicStringView<CharT> m_text;
 };
 
-
 template<typename CharT>
 [[nodiscard]] inline constexpr NameHash ComputeNameHash(const NameText<CharT> text)noexcept(IsArithmetic_V<CharT>){
     NameHash hash;
@@ -287,7 +283,6 @@ template<typename CharT>
         NameDetail::UpdateCanonicalNameHashLanes(hash, character);
     return hash;
 }
-
 
 [[nodiscard]] inline constexpr b8 LessNameHash(const NameHash& lhs, const NameHash& rhs)noexcept{
     for(u32 i = 0u; i < s_NameHashLaneCount; ++i){

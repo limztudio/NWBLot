@@ -173,21 +173,6 @@ struct AcceptedFrame{
 
 class UiNestedPopupReentryTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
-        options.size = { 300.0f, 300.0f };
-        return options;
-    }
-
-    [[nodiscard]] static ListOptions ListOptions()noexcept{
-        NWB::Impl::Ui::ListOptions options;
-        options.height = { LayoutSizePolicy::Fixed, 150.0f };
-        return options;
-    }
-
-
-protected:
     virtual void SetUp()override{
         WidgetFixture::SetUp();
         m_parent.open();
@@ -209,11 +194,11 @@ protected:
     [[nodiscard]] b8 beginParent(){ return begin(2u) && m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()); }
 
     [[nodiscard]] b8 declareChild(){
-        return m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()) && m_builder.virtualList(s_ListKey, m_childSource, m_childList, ListOptions()).valid && m_builder.endPopup();
+        return m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()) && m_builder.virtualList(s_ListKey, m_childSource, m_childList, UiWidgetTests::LargeLoanListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] b8 declareSibling(){
-        return m_builder.beginPopup("sibling", m_sibling, ChildOptions()) && m_builder.virtualList(s_ListKey, m_siblingSource, m_siblingList, ListOptions()).valid && m_builder.endPopup();
+        return m_builder.beginPopup("sibling", m_sibling, UiWidgetTests::NestedChildOptions()) && m_builder.virtualList(s_ListKey, m_siblingSource, m_siblingList, UiWidgetTests::LargeLoanListOptions()).valid && m_builder.endPopup();
     }
 
     [[nodiscard]] AcceptedFrame accepted()const noexcept{
@@ -386,7 +371,7 @@ TEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllR
     ASSERT_TRUE(acceptBase());
     const AcceptedFrame frame = accepted();
     ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList(s_ListKey, m_parentSource, m_parentList, UiWidgetTests::LargeLoanListOptions()).valid);
     ASSERT_TRUE(declareChild());
     ASSERT_TRUE(declareSibling());
     const u64 parentGeneration = m_parentList.inputGeneration();

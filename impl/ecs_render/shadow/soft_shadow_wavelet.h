@@ -37,11 +37,9 @@ public:
 
 // Resolve resources pair backing targets with their pushed heap slots.
 struct SoftShadowResolvePassResources{
-    Core::Texture* softHalfTexture = nullptr;
     Core::Texture* inputColorTexture = nullptr;
     Core::Texture* momentsTexture = nullptr;
     Core::Texture* outputTexture = nullptr;
-    u32 softHalf = 0u;
     u32 inputColor = 0u;
     u32 moments = 0u;
     u32 outputStorage = 0u;

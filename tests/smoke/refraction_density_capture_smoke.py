@@ -13,9 +13,10 @@ import time
 from types import SimpleNamespace
 
 from refraction_density_benchmark import Cell, DEFAULT_EXTENTS, DENSITIES, EXTENTS, ROUTES, validate_fixture
+from window_capture_image import read_bmp_24_rows
 from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, application_capture_partial_path,
     build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    prepare_application_capture_environment, read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
+    prepare_application_capture_environment, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
     validate_application_capture_log_text)
 
 

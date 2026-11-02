@@ -159,6 +159,23 @@ struct AvboitRasterRecordStageOutputs{
     Core::GpuTaskId& rasterTask;
 };
 
+class AvboitRecordBuilderBase : NoCopy{
+public:
+    AvboitRecordBuilderBase(Core::GpuTaskGraph& graph, Core::GraphicsRuntime& graphics, RendererMaterialSystem& materialSystem, RendererAvboitSystem& avboitSystem)noexcept
+        : m_graph(graph)
+        , m_graphics(graphics)
+        , m_materialSystem(materialSystem)
+        , m_avboitSystem(avboitSystem)
+    {}
+
+
+protected:
+    Core::GpuTaskGraph& m_graph;
+    Core::GraphicsRuntime& m_graphics;
+    RendererMaterialSystem& m_materialSystem;
+    RendererAvboitSystem& m_avboitSystem;
+};
+
 template<typename ComputeEmulationTaskT, typename SharedComputeEmulationTaskT, typename RasterTaskT>
 [[nodiscard]] inline b8 DeclareAvboitRasterRecordPhase(
     Core::GpuTaskGraph& graph,

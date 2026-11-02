@@ -22,7 +22,6 @@ NWB_LOG_BEGIN
 
 using CrashScratchPath = ::Path<Core::Alloc::ScratchArena>;
 
-
 inline constexpr StringView s_CrashRawDirectoryName = "raw";
 inline constexpr StringView s_CrashInvalidDirectoryName = "invalid";
 inline constexpr StringView s_CrashExtractedDirectoryName = "packages";
@@ -33,18 +32,11 @@ inline constexpr StringView s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
 inline constexpr StringView s_ServerSymbolicationFileName = "server_symbolication.txt";
 
 [[nodiscard]] inline CrashScratchPath CrashDefaultRootDirectory(Core::Alloc::ScratchArena& arena){
-    const auto executableDirectory = GetExecutableDirectory(arena);
-    if(executableDirectory)
-        return *executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
-
-    return CrashScratchPath(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
+    return ResolveDefaultStorageDirectory(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] inline CrashScratchPath CrashStorageDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){
-    if(!configuredStorageDirectory.empty())
-        return CrashScratchPath(arena, configuredStorageDirectory);
-
-    return CrashDefaultRootDirectory(arena);
+    return ResolveStorageDirectory(arena, configuredStorageDirectory, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }
 
 [[nodiscard]] inline CrashScratchPath CrashRawDirectory(Core::Alloc::ScratchArena& arena, const Path& configuredStorageDirectory){

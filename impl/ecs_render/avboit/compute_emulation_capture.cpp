@@ -21,7 +21,7 @@ Expected<AvboitComputeEmulationCaptureResult> AvboitComputeEmulationCapture::cap
     const usize instanceCount,
     const usize materialTypedByteCount,
     Core::Alloc::ScratchArena& scratchArena,
-    ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
+    ECSRenderDetail::AliasFreeComputeEmulationGraphPlan& plan,
     ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
 ){
     AvboitComputeEmulationCaptureResult result{};

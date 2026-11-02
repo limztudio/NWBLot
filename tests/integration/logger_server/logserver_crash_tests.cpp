@@ -513,8 +513,8 @@ TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("Crash upload rejected")));
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("invalid crash archive header")));
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("Crash upload rejected")));
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("invalid crash archive header")));
 
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
@@ -538,7 +538,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
 
     EXPECT_FALSE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields")));
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("manifest.json is missing required fields")));
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem));
         ASSERT_TRUE(pathQuery);
@@ -572,7 +572,7 @@ TEST_F(LoggerServerCrash, InvalidManifestBooleanIsRejectedWhileFalseAndZeroRemai
     AppendArchiveFile(s_ManifestFileName, AStringView(manifest.data(), manifest.size()), invalidArchive);
     const auto invalidResult = ProcessCrashArchive(arena, s_Group, s_InvalidStem, invalidArchive);
     EXPECT_FALSE(invalidResult.accepted);
-    EXPECT_TRUE(ContainsMessage(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
+    EXPECT_TRUE(Contains(invalidResult.message, NWB_TEXT("manifest.json is missing required fields")));
     {
         const auto pathQuery = IsRegularFile(InvalidArchivePath(arena, s_Group, s_InvalidStem));
         ASSERT_TRUE(pathQuery);
@@ -672,7 +672,7 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
+    EXPECT_TRUE(Contains(result.message, NWB_TEXT("raw upload archive could not be retained")));
     {
         const auto pathQuery = IsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem));
         ASSERT_TRUE(pathQuery);

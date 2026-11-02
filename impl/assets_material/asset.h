@@ -9,11 +9,8 @@
 #include <impl/assets_material/types.adhd.h>
 
 #include <core/assets/module.h>
-#include <core/assets/paths.h>
 #include <core/assets/ref.h>
 #include <core/graphics/api.h>
-
-#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,8 +66,6 @@ public:
 
 
 public:
-    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
-
     NWB_DEFINE_ASSET_TYPE("material")
 
 

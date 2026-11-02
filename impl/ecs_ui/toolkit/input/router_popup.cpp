@@ -227,14 +227,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
 
 void InputRouter::retirePopup(const WidgetId id){
     Array<b8, s_InputMaxPopups> removed{};
-    b8 found = false;
-    for(usize index = 0u; index < m_popups.size(); ++index){
-        removed[index] = m_popups[index].scope.token.widget == id;
-        for(usize ancestor = 0u; ancestor < index && !removed[index]; ++ancestor)
-            removed[index] = removed[ancestor] && m_popups[index].scope.parent == m_popups[ancestor].scope.token;
-        found |= removed[index];
-    }
-    if(!found)
+    if(!MarkRemovedPopupSubtree(m_popups, [&](const PopupToken& candidate)noexcept{ return candidate.widget == id; }, removed))
         return;
     const b8 top = removed[m_popups.size() - 1u];
     PopupRecord restore = m_popups.back();
@@ -261,24 +254,9 @@ void InputRouter::retirePopup(const WidgetId id){
         if(!removed[index])
             splice(m_popups[index]);
     }
-    for(usize index = m_targets.size(); index > 0u; --index){
-        b8 remove = false;
-        for(usize popup = 0u; popup < m_popups.size(); ++popup)
-            remove |= removed[popup] && m_targets[index - 1u].popup == m_popups[popup].scope.token;
-        if(remove)
-            m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
-    }
-    for(usize index = m_popupDismissals.size(); index > 0u; --index){
-        b8 remove = false;
-        for(usize popup = 0u; popup < m_popups.size(); ++popup)
-            remove |= removed[popup] && m_popupDismissals[index - 1u].token == m_popups[popup].scope.token;
-        if(remove)
-            m_popupDismissals.erase(m_popupDismissals.begin() + static_cast<isize>(index - 1u));
-    }
-    for(usize index = m_popups.size(); index > 0u; --index){
-        if(removed[index - 1u])
-            m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
-    }
+    EraseIfRemovedPopupToken(m_targets, m_popups, removed, [](const HitTarget& target)noexcept -> const PopupToken&{ return target.popup; });
+    EraseIfRemovedPopupToken(m_popupDismissals, m_popups, removed, [](const PopupDismissal& dismissal)noexcept -> const PopupToken&{ return dismissal.token; });
+    EraseRemovedPopups(m_popups, removed);
     rebuildLookup();
     if(top){
         retireCommandFocus();

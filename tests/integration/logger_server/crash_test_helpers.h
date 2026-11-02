@@ -105,12 +105,6 @@ void BeginArchiveWithManifest(
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
 [[nodiscard]] Expected<CrashTestPath, ErrorCode> WaitForTriggerPackage(Core::Alloc::GlobalArena& arena, const CrashTestPath& pendingDirectory, AStringView category, AStringView expression, AStringView message, AStringView file);
 void BuildLinuxCrashArchive(AStringView crashId, Core::Alloc::GlobalArena& arena, CrashTestText& archive);
-[[nodiscard]] inline b8 Contains(const AStringView text, const AStringView needle)noexcept{
-    return text.find(needle) != AStringView::npos;
-}
-[[nodiscard]] inline b8 ContainsMessage(const TStringView text, const TStringView needle)noexcept{
-    return text.find(needle) != TStringView::npos;
-}
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, AStringView report, AStringView suffix);
 
 

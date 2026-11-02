@@ -129,8 +129,6 @@ static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
 static u64 ContextInstructionPointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rip);
-#elif defined(_M_IX86) || defined(__i386__)
-    return static_cast<u64>(context.Eip);
 #elif defined(_M_ARM64) || defined(__aarch64__)
     return static_cast<u64>(context.Pc);
 #else
@@ -141,8 +139,6 @@ static u64 ContextInstructionPointer(const CONTEXT& context)noexcept{
 static u64 ContextStackPointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rsp);
-#elif defined(_M_IX86) || defined(__i386__)
-    return static_cast<u64>(context.Esp);
 #elif defined(_M_ARM64) || defined(__aarch64__)
     return static_cast<u64>(context.Sp);
 #else
@@ -153,8 +149,6 @@ static u64 ContextStackPointer(const CONTEXT& context)noexcept{
 static u64 ContextFramePointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rbp);
-#elif defined(_M_IX86) || defined(__i386__)
-    return static_cast<u64>(context.Ebp);
 #elif defined(_M_ARM64) || defined(__aarch64__)
     return static_cast<u64>(context.Fp);
 #else

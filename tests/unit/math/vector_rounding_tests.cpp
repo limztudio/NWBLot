@@ -26,11 +26,6 @@ namespace __hidden_vector_rounding_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using NWB::Tests::NearlyEqual;
-using NWB::Tests::NearlyEqual3;
-using NWB::Tests::NearlyEqual4;
-
-
 NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
     return first * second + addend;
 }

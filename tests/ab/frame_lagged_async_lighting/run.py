@@ -29,8 +29,9 @@ sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from gpu_timing_parse import require_positive  # noqa: E402
 from harness_test_support import make_abnormal_exit_terminator  # noqa: E402
+from window_capture_environment import make_runtime_launch_args  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
-    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, make_runtime_launch_args, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process,)
 
 LIT_NON_FINITE_LIFECYCLE_DEADLINE = "non-finite lifecycle deadline"

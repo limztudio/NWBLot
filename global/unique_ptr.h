@@ -80,8 +80,6 @@ public:
         return temp;
     }
 
-    pointer detach()noexcept{ return release(); }
-
     pointer get()const noexcept(noexcept(DeclVal<void(*)(pointer)noexcept>()(m_pair.first()))){ return m_pair.first(); }
 
     deleter_type& getDeleter()noexcept{ return m_pair.second(); }
@@ -233,7 +231,6 @@ public:
 public:
     using base_type::reset;
     using base_type::release;
-    using base_type::detach;
     using base_type::get;
     using base_type::getDeleter;
 
@@ -315,7 +312,6 @@ public:
 public:
     using base_type::reset;
     using base_type::release;
-    using base_type::detach;
     using base_type::get;
     using base_type::getDeleter;
 

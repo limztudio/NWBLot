@@ -26,11 +26,6 @@ NUMBER = r"[0-9.eE+-]+"
 MARKER_TOLERANCE = 5
 
 
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
-
-
 class ComboProbe:
     def __init__(self, prefix, fields, rectangles, *, searchable=False):
         self.fields = fields

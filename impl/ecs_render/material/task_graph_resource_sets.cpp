@@ -197,7 +197,8 @@ Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResour
     Core::Alloc::ScratchArena& scratchArena
 ){
     Core::GpuGraphResourceSetId resource{};
-    const auto sampledTextures = materialSystem.gatherPreparedMaterialPassSampledTextures(drawItemSets, scratchArena);
+    const RendererMaterialState& materialState = materialSystem.materialState();
+    const auto sampledTextures = GatherPreparedMaterialPassSampledTextures(materialState.m_surfaceInfos, materialState.m_resourceState, drawItemSets, scratchArena);
     if(!sampledTextures)
         return MakeUnexpected(Failure{});
 

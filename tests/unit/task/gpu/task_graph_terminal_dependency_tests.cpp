@@ -59,8 +59,7 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     readers.reserve(readerCount);
     finalizers.reserve(pairCount);
     for(usize resourceIndex = 0u; resourceIndex < pairCount * 2u; ++resourceIndex){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/terminal_dependency/resource/"), FormatDecimal(resourceIndex, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/terminal_dependency/resource/"), resourceIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         const auto resourceResult = graph.importResource(
@@ -99,9 +98,8 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
             uses[3u] = resourceUse((pairCount - 1u) * 2u + 1u);
             useCount = uses.size();
         }
-        Array<char, 32u> identityText = {};
         Core::GpuTaskDesc desc;
-        const auto readerNameResult = DeriveName(Name("tests/terminal_dependency/reader/"), FormatDecimal(readerIndex, identityText));
+        const auto readerNameResult = IndexedName(Name("tests/terminal_dependency/reader/"), readerIndex);
         ASSERT_TRUE(readerNameResult);
         desc.setIdentity(*readerNameResult).setMarkerLabel("Independent Terminal Reader").setScheduling(scheduling).setResourceUses(Span(uses.data(), useCount));
         if(scenario == TerminalDependencyScenario::Chain && !readers.empty())
@@ -115,9 +113,8 @@ static void CheckTerminalDependencies(const usize readerCount, const TerminalDep
     }
     for(usize pairIndex = 0u; pairIndex < pairCount; ++pairIndex){
         const Array<Core::GpuTaskResourceUse, 2u> uses = { resourceUse(pairIndex * 2u), resourceUse(pairIndex * 2u + 1u) };
-        Array<char, 32u> identityText = {};
         Core::GpuTaskDesc desc;
-        const auto secondReaderNameResult = DeriveName(Name("tests/terminal_dependency/finalizer/"), FormatDecimal(pairIndex, identityText));
+        const auto secondReaderNameResult = IndexedName(Name("tests/terminal_dependency/finalizer/"), pairIndex);
         ASSERT_TRUE(secondReaderNameResult);
         desc.setIdentity(*secondReaderNameResult).setMarkerLabel("Terminal Finalizing Reader").setScheduling(scheduling).setResourceUses(uses);
         if(scenario == TerminalDependencyScenario::Chain)

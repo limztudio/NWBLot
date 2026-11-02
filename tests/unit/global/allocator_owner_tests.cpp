@@ -26,7 +26,7 @@ namespace __hidden_allocator_owner_tests{
 
 
 using namespace NWB::Core::Alloc;
-using ArenaOwnerTestSupport::OwnerStats;
+using NWB::Tests::OwnerStats;
 
 TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
     constexpr Name s_Owner("tests/allocation_owners/identity_retirement");

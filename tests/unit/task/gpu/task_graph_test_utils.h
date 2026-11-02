@@ -21,8 +21,6 @@
 #include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
 #include <global/text_utils.h>
 
 
@@ -49,8 +47,7 @@ namespace TaskGraphTestUtils{
 
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTestsTag>;
 namespace Telemetry = Core::Telemetry;
-using TestPath = ::Path<Core::Alloc::GlobalArena>;
-using ArenaOwnerTestSupport::ExpectMemoryStatsEqual;
+using NWB::Tests::ExpectMemoryStatsEqual;
 
 inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 

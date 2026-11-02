@@ -59,20 +59,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocal(SIMDVectorDoubl
     return VectorDoubleDivide(VectorDoubleSplatOne(), value);
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalEst(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReciprocal(value);
-#elif defined(NWB_HAS_NEON)
-    return vrecpeq_f32(value);
-#else
-    return _mm_rcp_ps(value);
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocalEst(SIMDVectorDouble value)noexcept{
-    return VectorDoubleReciprocal(value);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSqrt(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(Sqrt(VectorGetX(value)), Sqrt(VectorGetY(value)), Sqrt(VectorGetZ(value)), Sqrt(VectorGetW(value)));
@@ -108,23 +94,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSqrt(SIMDVectorDouble valu
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSqrtEst(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_NEON)
-    float32x4_t s0 = vrsqrteq_f32(value);
-    float32x4_t p0 = vmulq_f32(value, s0);
-    float32x4_t r0 = vrsqrtsq_f32(p0, s0);
-    SIMDVectorSingle result = vmulq_f32(value, vmulq_f32(s0, r0));
-    const SIMDVectorSingle select = VectorEqualInt(VectorEqualInt(value, s_SIMDInfinity), VectorEqual(value, VectorZero()));
-    return VectorSelect(value, result, select);
-#else
-    return VectorSqrt(value);
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleSqrtEst(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSqrt(value);
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalSqrt(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_NEON64)
     return vdivq_f32(vdupq_n_f32(1.0f), vsqrtq_f32(value));
@@ -145,16 +114,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalSqrt(SIMDVectorSingle 
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocalSqrt(SIMDVectorDouble value)noexcept{
     return VectorDoubleReciprocal(VectorDoubleSqrt(value));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorReciprocalSqrtEst(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReciprocalSqrt(value);
-#elif defined(NWB_HAS_NEON)
-    return vrsqrteq_f32(value);
-#else
-    return _mm_rsqrt_ps(value);
-#endif
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleReciprocalSqrtEst(SIMDVectorDouble value)noexcept{

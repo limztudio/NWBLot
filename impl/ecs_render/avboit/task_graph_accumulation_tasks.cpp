@@ -44,28 +44,7 @@ b8 AvboitAccumulationSharedComputeEmulationGraphTask::Record(const Payload& payl
 
 
 b8 AvboitAccumulationGraphTask::Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-    return RecordAvboitRasterPassFromPayload(
-        payload,
-        commandList,
-        [&](Core::CommandList& dispatchCommandList, const MaterialPassDrawItemPartitionsView& dispatchDrawItems, const CsgFrameGpuDataView& dispatchCsgFrameData, const usize dispatchInstanceCount, const usize dispatchMaterialTypedByteCount){
-            payload.avboitSystem.renderAvboitAccumulatePass(
-                dispatchCommandList,
-                payload.targets,
-                dispatchDrawItems,
-                dispatchCsgFrameData,
-                payload.csgResources,
-                payload.frameBindings,
-                dispatchInstanceCount,
-                dispatchMaterialTypedByteCount,
-                payload.materialFrameStatesGraphOwned,
-                payload.materialGeometryStatesGraphOwned,
-                payload.computeEmulationOutputStatesGraphOwned,
-                payload.csgComputeEmulationOutputStatesGraphOwned,
-                payload.generatedGeometryReused,
-                payload.computeEmulationTiming
-            );
-        }
-    );
+    return RecordAvboitRasterPassFromPayload(payload, commandList, &RendererAvboitSystem::renderAvboitAccumulatePass);
 }
 
 

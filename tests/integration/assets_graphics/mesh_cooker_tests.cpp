@@ -83,7 +83,7 @@ TEST(AssetsGraphics, MeshCookerPreservesFlatAndNestedIndexCornerOrder){
         ASSERT_TRUE(cookCase);
         const AString meta = BuildMeshIndexMeta(indexList);
         ASSERT_TRUE(AssetsGraphicsFixture::CookSingleMeshMeta(AStringView(meta.data(), meta.size()), *cookCase, testArena));
-        auto loadedAsset = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, cookCase->outputDirectory);
+        auto loadedAsset = AssetsGraphicsFixture::LoadCookedAsset<Impl::MeshAssetCodec>(cookCase->outputDirectory, Name("project/meshes/minimal_mesh"), 1u, testArena);
         ASSERT_TRUE(loadedAsset);
         const auto& mesh = static_cast<const Impl::Mesh&>(**loadedAsset);
         Core::Alloc::ScratchArena scratchArena(Name("tests/integration/assets_graphics/mesh_index_corner_order"));

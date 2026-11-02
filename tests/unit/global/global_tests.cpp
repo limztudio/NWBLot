@@ -8,33 +8,22 @@
 
 #include <gtest/gtest.h>
 
-#include <global/algorithm.h>
 #include <global/auto_registration.h>
-#include <global/arena_memory.h>
 #include <global/basic_string.h>
 #include <global/binary.h>
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/diagnostics.h>
-#include <global/environment.h>
-#include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
 #include <global/fixed_buffer.h>
-#include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/not_null.h>
 #include <global/overflow.h>
-#include <global/process_execution.h>
 #include <global/process_memory_map.h>
 #include <global/termination.h>
-#include <global/shared_library.h>
 #include <global/text_utils.h>
-
-#if defined(NWB_PLATFORM_LINUX)
-#include <unistd.h>
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

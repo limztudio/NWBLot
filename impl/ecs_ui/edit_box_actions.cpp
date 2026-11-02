@@ -194,18 +194,16 @@ b8 UiEditBoxHost::applyNavigation(const Event& event, const Ui::EditNavigationDi
         return true;
     if(!IsFinite(event.navigationViewportHeight) || event.navigationViewportHeight < 0.0f || ((direction == Ui::EditNavigationDirection::PageUp || direction == Ui::EditNavigationDirection::PageDown) && event.navigationViewportHeight == 0.0f))
         return false;
-    Ui::EditModelSnapshot expected(m_arena);
-    expected.capture(model);
-    const u64 modelGeneration = model.instanceGeneration();
+    const Ui::TextAreaModelStamp expected = model.stamp();
     const Ui::EditNavigationSnapshot preferred = navigation.state.snapshot();
     const auto target = navigation.resolver.resolve(model, direction, preferred, event.navigationViewportHeight);
-    if(m_borrowRejected || m_context.failed() || !expected.matches(model) || model.instanceGeneration() != modelGeneration || !navigation.state.matches(preferred) || !target || !IsFinite(target->preferredX))
+    if(m_borrowRejected || m_context.failed() || !model.matchesStamp(expected) || model.composition().active || !navigation.state.matches(preferred) || !target || !IsFinite(target->preferredX))
         return false;
     const auto& boundaries = model.graphemeBoundaries();
     const auto boundary = LowerBound(boundaries.begin(), boundaries.end(), target->committedByte);
     if(boundary == boundaries.end() || *boundary != target->committedByte)
         return false;
-    if(!model.setSelection(event.command.extend ? expected.m_expectedAnchor : target->committedByte, target->committedByte))
+    if(!model.setSelection(event.command.extend ? expected.anchor : target->committedByte, target->committedByte))
         return false;
     if(!navigation.state.setPreferredX(target->preferredX))
         TerminateInvariant();

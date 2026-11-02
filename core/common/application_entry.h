@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "log.h"
 #include "module.h"
 #include "name_symbols.h"
 
@@ -128,6 +129,21 @@ template<typename Run>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename LoggerT, typename Run>
+[[nodiscard]] inline int RunConsoleCommandLineTool(const TStringView appName, const int initFailureExitCode, const int argc, char** argv, Run&& run){
+    LoggerT logger;
+    if(!logger.init(appName)){
+        NWB_TCERR << NWB_TEXT("[") << appName << NWB_TEXT("] logger.init() failed\n");
+        return initFailureExitCode;
+    }
+    const LoggerRegistrationGuard loggerRegistrationGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    return Forward<Run>(run)(argc, argv);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_COMMON_END
 
 
@@ -246,6 +262,12 @@ NWB_COMMON_END
     } \
     NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 #endif
+
+#define NWB_DEFINE_CONSOLE_TOOL_ENTRY_POINT(loggerType, appName, initFailureExitCode, runFunction) \
+    static int RunConsoleToolEntryPoint(const int argc, char** argv){ \
+        return ::NWB::Core::Common::RunConsoleCommandLineTool<loggerType>(appName, initFailureExitCode, argc, argv, runFunction); \
+    } \
+    NWB_DEFINE_UTF8_APPLICATION_ENTRY_POINT(RunConsoleToolEntryPoint)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

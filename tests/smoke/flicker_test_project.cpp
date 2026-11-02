@@ -49,7 +49,6 @@ using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawCached;
 using NWB::Tests::Smoke::TickSmokeWorld;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
-using NWB::Tests::Smoke::SmokeEnvironmentString;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 using FlickerModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;

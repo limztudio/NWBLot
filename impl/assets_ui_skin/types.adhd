@@ -12,38 +12,8 @@ const u32 s_UiSkinBinaryMagic = 0x55495331u; // UIS1
 const u32 s_UiSkinBinaryVersion = 3u;
 const u32 s_UiSkinPaletteColorCount = 17u;
 
-const Name s_PanelNormalRegionName = "panel.normal";
-const Name s_WindowNormalRegionName = "window.normal";
-const Name s_WindowTitleRegionName = "window.title";
-const Name s_WindowCollapseRegionName = "window.collapse";
 const Name s_WindowResizeRegionName = "window.resize";
-const Name s_SeparatorRegionName = "separator";
 const Name s_WhiteRegionName = "white";
-const Name s_ButtonNormalRegionName = "button.normal";
-const Name s_CheckboxNormalRegionName = "checkbox.normal";
-const Name s_CheckboxMarkRegionName = "checkbox.mark";
-const Name s_EditNormalRegionName = "edit.normal";
-const Name s_ListBackgroundRegionName = "list.background";
-const Name s_ListRowNormalRegionName = "list.row.normal";
-const Name s_ListRowHoverRegionName = "list.row.hover";
-const Name s_ListRowSelectedRegionName = "list.row.selected";
-const Name s_ListRowDisabledRegionName = "list.row.disabled";
-const Name s_ScrollTrackRegionName = "scroll.track";
-const Name s_ScrollThumbRegionName = "scroll.thumb";
-const Name s_ScrollbarTrackRegionName = "scrollbar.track";
-const Name s_ScrollbarThumbNormalRegionName = "scrollbar.thumb.normal";
-const Name s_PopupNormalRegionName = "popup.normal";
-const Name s_TooltipNormalRegionName = "tooltip.normal";
-const Name s_ComboNormalRegionName = "combo.normal";
-const Name s_ComboArrowRegionName = "combo.arrow";
-const Name s_RadioNormalRegionName = "radio.normal";
-const Name s_RadioCheckedRegionName = "radio.checked";
-const Name s_RadioMarkRegionName = "radio.mark";
-const Name s_SliderTrackRegionName = "slider.track";
-const Name s_SliderThumbNormalRegionName = "slider.thumb.normal";
-const Name s_ProgressTrackRegionName = "progress.track";
-const Name s_ProgressFillRegionName = "progress.fill";
-const Name s_FocusOverlayRegionName = "focus.overlay";
 const StringView s_UiSkinDrawModeSprite = "sprite";
 const StringView s_UiSkinDrawModeNineSlice = "nine_slice";
 
@@ -328,15 +298,33 @@ b8 IsValidUiSkinDefaultFontSize(in f32 defaultFontSize){
     return defaultFontSize >= s_UiSkinMinDefaultFontSize && defaultFontSize <= s_UiSkinMaxDefaultFontSize;
 }
 
-b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRect rectangle, in UiSkinSliceInsets slice, in UiSkinDrawMode drawMode, in u32 atlasWidth, in u32 atlasHeight){
-    if(rectangle.width == 0u || rectangle.height == 0u || rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
+b8 TryLoadUiSkinSliceExtents(in UiSkinRegion region, mut f64x4 outSliceExtents){
+    outSliceExtents = f64x4(0.0, 0.0, 0.0, 0.0);
+    if(region.rectangle.width == 0u || region.rectangle.height == 0u)
+        return false;
+    const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
+    const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
+    if(region.drawMode == UiSkinDrawMode::Sprite){
+        if(horizontal != 0u || vertical != 0u)
+            return false;
+    }
+    else if(region.drawMode == UiSkinDrawMode::NineSlice){
+        if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
+            return false;
+    }
+    else
+        return false;
+    outSliceExtents = f64x4(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
+    return true;
+}
+
+b8 IsValidUiSkinRegionRectAndSlices(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
+    const UiSkinRect rectangle = region.rectangle;
+    if(rectangle.x > atlasWidth || rectangle.y > atlasHeight || rectangle.width > atlasWidth - rectangle.x || rectangle.height > atlasHeight - rectangle.y)
         return false;
 
-    if(drawMode == UiSkinDrawMode::Sprite)
-        return slice.left == 0u && slice.top == 0u && slice.right == 0u && slice.bottom == 0u;
-    if(drawMode == UiSkinDrawMode::NineSlice)
-        return cast<u64>(slice.left) + cast<u64>(slice.right) <= cast<u64>(rectangle.width) && cast<u64>(slice.top) + cast<u64>(slice.bottom) <= cast<u64>(rectangle.height);
-    return false;
+    f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
+    return TryLoadUiSkinSliceExtents(region, sliceExtents);
 }
 
 b8 IsValidUiSkinPaletteColor(in UiSkinColor color){
@@ -358,7 +346,7 @@ b8 IsValidUiSkinRegionBinaryFlags(in UiSkinRegionBinary packed){
 b8 IsValidUiSkinRegion(in UiSkinRegion region, in u32 atlasWidth, in u32 atlasHeight){
     if(region.name == s_NameNone || region.name == Name(""))
         return false;
-    if(!IsValidUiSkinRegionRectAndSlices(region.rectangle, region.sliceInsets, region.drawMode, atlasWidth, atlasHeight))
+    if(!IsValidUiSkinRegionRectAndSlices(region, atlasWidth, atlasHeight))
         return false;
 
     const UiSkinInsets padding = region.padding;
@@ -470,26 +458,6 @@ f32 ResolveUiSkinSquareExtent(in f32 minimumExtent, in UiSkinRegion region, in f
     return max(ResolveUiSkinSquareExtent(minimumExtent, region), sourceExtent);
 }
 
-b8 TryLoadUiSkinSliceExtents(in UiSkinRegion region, mut f64x4 outSliceExtents){
-    outSliceExtents = f64x4(0.0, 0.0, 0.0, 0.0);
-    if(region.rectangle.width == 0u || region.rectangle.height == 0u)
-        return false;
-    const u64 horizontal = cast<u64>(region.sliceInsets.left) + cast<u64>(region.sliceInsets.right);
-    const u64 vertical = cast<u64>(region.sliceInsets.top) + cast<u64>(region.sliceInsets.bottom);
-    if(region.drawMode == UiSkinDrawMode::Sprite){
-        if(horizontal != 0u || vertical != 0u)
-            return false;
-    }
-    else if(region.drawMode == UiSkinDrawMode::NineSlice){
-        if(horizontal > cast<u64>(region.rectangle.width) || vertical > cast<u64>(region.rectangle.height))
-            return false;
-    }
-    else
-        return false;
-    outSliceExtents = f64x4(cast<f64>(horizontal), cast<f64>(vertical), 0.0, 0.0);
-    return true;
-}
-
 b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 sliceExtents, in f64x4 density, mut f32x4 outMinimumSize){
     outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     if(!isFinite(region.minimumWidth) || region.minimumWidth < 0.0f || !isFinite(region.minimumHeight) || region.minimumHeight < 0.0f)
@@ -504,17 +472,13 @@ b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 sliceExtents, in f6
     return true;
 }
 
-b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64x4 density, mut f32x4 outMinimumSize){
+b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density, mut f32x4 outMinimumSize){
     f64x4 sliceExtents(0.0, 0.0, 0.0, 0.0);
     if(!TryLoadUiSkinSliceExtents(region, sliceExtents)){
         outMinimumSize = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         return false;
     }
-    return TryLoadUiSkinMinimumSize(region, sliceExtents, density, outMinimumSize);
-}
-
-b8 TryLoadUiSkinMinimumSize(in UiSkinRegion region, in f64 density, mut f32x4 outMinimumSize){
-    return TryLoadUiSkinMinimumSize(region, f64x4(density, density, 0.0, 0.0), outMinimumSize);
+    return TryLoadUiSkinMinimumSize(region, sliceExtents, f64x4(density, density, 0.0, 0.0), outMinimumSize);
 }
 
 [subsystem("ui_subsystem")]

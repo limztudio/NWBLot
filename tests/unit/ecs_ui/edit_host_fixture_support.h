@@ -44,8 +44,6 @@ public:
 
     [[nodiscard]] TextInputAdmission::Enum commit(const AStringView text){ return emitCommit(activeSession(), text); }
 
-    [[nodiscard]] TextInputAdmission::Enum commit(const TextInputSessionToken token, const AStringView text){ return emitCommit(token, text); }
-
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text){ return emitPreedit(activeSession(), text, 0u, text.size()); }
 
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text, const usize anchor, const usize caret, const b8 visible = true){
@@ -101,22 +99,6 @@ public:
     ClipboardRequestToken startedToken;
     ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
     b8 delayed = false;
-};
-
-class FixtureShaper final : public Ui::ITextShaper{
-public:
-    explicit FixtureShaper(Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> shape(const Ui::ShapeRequest& request)override;
-
-
-private:
-    Alloc::GlobalArena& m_arena;
 };
 
 

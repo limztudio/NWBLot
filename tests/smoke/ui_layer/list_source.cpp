@@ -5,6 +5,10 @@
 #include "list_source.h"
 #include "smoke_geometry.h"
 
+#include <tests/unit/ui/arithmetic_fixture_rows.h>
+
+#include <global/text_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,21 +27,11 @@ namespace Tests::Smoke{
 
 u64 UiListSmokeSource::key(const u64 index)const noexcept{
     const u64 count = rowCount();
-    if(index >= count)
-        return 0u;
-    u64 value = (m_reversed ? count - 1u - index : index) + 1u;
-    if(m_removed != 0u && value >= m_removed)
-        ++value;
-    return value;
+    return index < count ? UiWidgetTests::ArithmeticFixtureRowKey(count, m_removed, m_reversed, index) : 0u;
 }
 
 Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const noexcept{
-    u64 index = 0u;
-    if(keyValue == 0u || keyValue > 100000u || keyValue == m_removed)
-        return MakeUnexpected(Failure{});
-    const u64 natural = keyValue - 1u - static_cast<u64>(m_removed != 0u && m_removed < keyValue);
-    index = m_reversed ? rowCount() - 1u - natural : natural;
-    return index;
+    return UiWidgetTests::FindArithmeticFixtureRowIndex(rowCount(), m_removed, m_reversed, keyValue);
 }
 
 Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const b8 reverse)const noexcept{
@@ -53,17 +47,10 @@ StringView UiListSmokeSource::text(const u64 index)const noexcept{
     m_label[1] = 'o';
     m_label[2] = 'w';
     m_label[3] = ' ';
-    Array<char, 20u> digits{};
-    u64 remaining = rowKey;
-    usize count = 0u;
-    do{
-        digits[count] = static_cast<char>('0' + remaining % 10u);
-        ++count;
-        remaining /= 10u;
-    }while(remaining != 0u);
-    for(usize offset = 0u; offset < count; ++offset)
-        m_label[4u + offset] = digits[count - 1u - offset];
-    return { m_label.data(), 4u + count };
+    Array<char, s_UsizeDecimalDigitCount> digits{};
+    const AStringView formatted = FormatDecimal(rowKey, digits);
+    NWB_MEMCPY(m_label.data() + 4u, m_label.size() - 4u, formatted.data(), formatted.size());
+    return { m_label.data(), 4u + formatted.size() };
 }
 
 b8 UiListSmokeSource::enabled(const u64 index)const noexcept{

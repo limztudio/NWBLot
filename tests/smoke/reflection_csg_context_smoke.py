@@ -13,7 +13,8 @@ import sys
 from reflection_optical_smoke import OpticalCapture, analyze_image, compare_invariant, parse_optics, validate_optics
 from reflection_roughness_smoke import CaptureSpec, parse_history, validate_history
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 

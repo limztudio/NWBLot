@@ -23,6 +23,7 @@
 #include <global/text_utils.h>
 #include <global/type.h>
 
+#include <utilities/global.h>
 #include <utilities/fbx_to_nwb/types.adhd.h>
 
 #include <ufbx.h>
@@ -44,31 +45,13 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace UtilityDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-Core::Alloc::GlobalArena& Arena();
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using AString = DefaultAString<Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
 using ScratchPath = ::Path<Core::Alloc::ScratchArena>;
 using ScratchString = ::AString<Core::Alloc::ScratchArena>;
 using ScratchStringStream = ::AStringStream<Core::Alloc::ScratchArena>;
 
 template<typename T>
-using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, QueryUtilityGlobalArena<s_UtilityArena>>;
 
 template<typename T>
 using UtilityScratchVector = ::Vector<T, Core::Alloc::ScratchArena>;

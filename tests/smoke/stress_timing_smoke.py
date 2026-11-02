@@ -30,7 +30,8 @@ import caustic_quality_smoke
 import surfel_gi_quality_smoke
 import smoke_cpu_gpu_timing
 from window_capture_smoke import (finish_logserver_cleanup, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
+    shutdown_logserver_and_collect, terminate_process, write_status,)
+from window_capture_validation import validate_expected_log_text
 
 LIT_UNSUPPORTED_RATIO = "unsupported_ratio"
 LIT_EXTERIOR_ELIGIBLE_RATIO = "exterior_eligible_ratio"

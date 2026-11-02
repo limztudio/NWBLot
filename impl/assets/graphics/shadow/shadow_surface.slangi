@@ -68,7 +68,7 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Typed-word loads for generated .bind accessors; NWB_MESH_MATERIAL_CONTEXT_PROVIDED suppresses the single-material nwbMaterialSurfaceAt.
+// Typed-word loads for generated .bind accessors.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 

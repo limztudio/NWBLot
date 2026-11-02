@@ -178,7 +178,6 @@ public:
     void invalidateMeshViewBufferUploadMirror()noexcept{ m_meshState.m_meshViewGpuDataValid = false; }
     [[nodiscard]] b8 prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
     [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const noexcept;
-    [[nodiscard]] b8 meshGeometryHeapHandlesReady(const MeshResources& mesh)const noexcept;
     void populateMeshGeometryHeapSlots(const MeshResources& mesh, InstanceGpuData& outInstance)const noexcept;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 

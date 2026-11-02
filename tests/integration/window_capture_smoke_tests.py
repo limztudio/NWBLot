@@ -23,6 +23,8 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
+import window_capture_image  # noqa: E402
+import window_capture_outcome  # noqa: E402
 import window_capture_smoke  # noqa: E402
 import window_capture_win32  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
@@ -146,7 +148,7 @@ class BmpReadbackTests(unittest.TestCase):
         rows = [[(1, 2, 3), (4, 5, 6)]]
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "invalid.bmp"
-            window_capture_smoke.write_bmp_24(path, 2, 1, rows)
+            window_capture_image.write_bmp_24(path, 2, 1, rows)
             data = bytearray(path.read_bytes())
 
             struct.pack_into(LIT_I, data, 2, len(data) + 1)
@@ -193,8 +195,8 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
         user32.GetProcessWindowStation.return_value = station
 
         def get_flags(_station, _index, output, _size, needed):
-            ctypes.cast(output, ctypes.POINTER(window_capture_smoke.WindowsUserObjectFlags)).contents.dwFlags = flags
-            ctypes.cast(needed, ctypes.POINTER(ctypes.c_uint32)).contents.value = ctypes.sizeof(window_capture_smoke.WindowsUserObjectFlags)
+            ctypes.cast(output, ctypes.POINTER(window_capture_win32.WindowsUserObjectFlags)).contents.dwFlags = flags
+            ctypes.cast(needed, ctypes.POINTER(ctypes.c_uint32)).contents.value = ctypes.sizeof(window_capture_win32.WindowsUserObjectFlags)
             return 1
 
         user32.GetUserObjectInformationW.side_effect = get_flags
@@ -205,10 +207,10 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
             with self.subTest(flags=flags):
                 user32 = self.user32(flags)
                 if flags & 1:
-                    window_capture_smoke.require_windows_interactive_desktop(user32)
+                    window_capture_win32.require_windows_interactive_desktop(user32)
                 else:
-                    with self.assertRaisesRegex(window_capture_smoke.WindowsDesktopUnavailable, "no visible display surfaces"):
-                        window_capture_smoke.require_windows_interactive_desktop(user32)
+                    with self.assertRaisesRegex(window_capture_outcome.WindowsDesktopUnavailable, "no visible display surfaces"):
+                        window_capture_win32.require_windows_interactive_desktop(user32)
                 self.assertEqual(user32.GetUserObjectInformationW.call_args.args[0].value, 0xF234567887654321)
                 user32.CloseWindowStation.assert_not_called()
 
@@ -221,14 +223,14 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
                 api = "GetProcessWindowStation" if missing_station else "GetUserObjectInformationW"
                 with mock.patch.object(window_capture_smoke.ctypes, "get_last_error", return_value=5, create=True), \
                      self.assertRaisesRegex(window_capture_smoke.SmokeFailure, api + ".*failed: 5"):
-                    window_capture_smoke.require_windows_interactive_desktop(user32)
+                    window_capture_win32.require_windows_interactive_desktop(user32)
                 if missing_station:
                     user32.GetUserObjectInformationW.assert_not_called()
 
     def test_capture_constructor_checks_the_station_before_loading_gdi(self):
         with mock.patch.object(window_capture_win32, LIT_CREATE_WINDOWS_USER32, return_value=self.user32(0)), \
              mock.patch.object(window_capture_smoke.ctypes, "WinDLL", create=True) as load_dll, \
-             self.assertRaises(window_capture_smoke.WindowsDesktopUnavailable):
+             self.assertRaises(window_capture_outcome.WindowsDesktopUnavailable):
             window_capture_smoke.WindowsCapture()
         load_dll.assert_not_called()
 
@@ -250,7 +252,7 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
             with mock.patch.object(logger_busy_spin_smoke, "os", SimpleNamespace(name="nt")), \
-                 mock.patch.object(logger_busy_spin_smoke, "WindowsCapture", side_effect=window_capture_smoke.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION)), \
+                 mock.patch.object(logger_busy_spin_smoke, "WindowsCapture", side_effect=window_capture_outcome.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION)), \
                  mock.patch.object(logger_busy_spin_smoke, LIT_LAUNCH_LOGSERVER) as launch_logger, \
                  mock.patch.object(logger_busy_spin_smoke, LIT_WRITE_STATUS):
                 code = logger_busy_spin_smoke.main([LIT_EXECUTABLE, sys.executable, "--working-directory", temp_dir, "--output-directory", temp_dir])
@@ -264,7 +266,7 @@ class WindowsDesktopPreflightTests(unittest.TestCase):
 
     def test_native_probe_skips_only_the_unavailable_windows_desktop(self):
         import avboit_depth_warp_probe_smoke
-        for error, expected in ((window_capture_smoke.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION), 77), (window_capture_smoke.SmokeSkip("missing device support"), 1), (window_capture_smoke.SmokeFailure("query failed"), 1)):
+        for error, expected in ((window_capture_outcome.WindowsDesktopUnavailable(LIT_INVISIBLE_STATION), 77), (window_capture_smoke.SmokeSkip("missing device support"), 1), (window_capture_smoke.SmokeFailure("query failed"), 1)):
             with tempfile.TemporaryDirectory() as temp_dir, self.subTest(error=error):
                 args = SimpleNamespace(output_directory=Path(temp_dir))
                 with mock.patch.object(avboit_depth_warp_probe_smoke, "parse_args", return_value=args), \
@@ -326,7 +328,7 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
 
                 def wait_for_capture(*_args):
                     rows = [[(255, 255, 255) if (x + y) % 2 else (0, 0, 0) for x in range(8)] for y in range(8)]
-                    window_capture_smoke.write_bmp_24(capture_args.output, 8, 8, rows)
+                    window_capture_image.write_bmp_24(capture_args.output, 8, 8, rows)
                     return application_exit, True
 
                 with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
@@ -536,7 +538,7 @@ class GracefulTerminationTests(unittest.TestCase):
                 observed_posts.append((hwnd, message, wparam, lparam))
                 return 1
 
-        user32 = window_capture_smoke.bind_windows_user32(FakeUser32())
+        user32 = window_capture_win32.bind_windows_user32(FakeUser32())
         with mock.patch.object(window_capture_smoke, LIT_CREATE_WINDOWS_USER32, return_value=user32):
             self.assertTrue(window_capture_smoke.request_windows_graceful_exit(process_id))
 

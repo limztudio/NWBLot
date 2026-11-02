@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import re
 
+from probe_common import text_hash
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
@@ -33,13 +34,6 @@ RECTANGLE = re.compile(rf"(bounds|content|caret|selection)=({NUMBER}),({NUMBER})
 SCROLL = re.compile(rf"scroll=({NUMBER})")
 TOLERANCE = 5
 CARET_RGB = linear_rgb_bytes((0.95, 0.97, 1.0))
-
-
-def text_hash(value):
-    result = 2166136261
-    for byte in value.encode(LIT_UTF_8):
-        result = ((result ^ byte) * 16777619) & 0xFFFFFFFF
-    return result
 
 
 def model(value, anchor=None, caret=None, focused=False):
@@ -74,11 +68,6 @@ def snapshot_from_logs(text):
         raise SmokeFailure("edit fixture reported invalid geometry or display metrics")
     return {LIT_SEQUENCE: sequence, LIT_PRIMARY: tuple(map(int, state.groups()[1:6])), LIT_SECONDARY: tuple(map(int, state.groups()[6:11])), LIT_READONLY: bool(int(state[12])),
         LIT_VISIBLE: bool(int(state[13])), "logical_extent": display[:2], LIT_SCALE: display[2:], LIT_FIELDS: fields}
-
-
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
 
 
 def caret_required(field, state, readonly, visible, selection):

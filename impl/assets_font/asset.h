@@ -41,8 +41,7 @@ static_assert(sizeof(FontBinaryHeader) == 24u && alignof(FontBinaryHeader) == 1u
 
 
 // Uses the source buffer's caller-owned arena for native validation allocations.
-[[nodiscard]] b8 ValidateFontSource(Span<const u8> bytes, u32 faceIndex, Core::Assets::AssetArena& arena);
-[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex);
+[[nodiscard]] b8 ValidateFontSource(const Core::Assets::AssetBytes& bytes, u32 faceIndex = 0u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,8 @@ import platform
 import sys
 
 from window_smoke import parse_args
-from texture_image_probe import center, observe_texture_image, snapshot_from_logs
+from probe_common import center
+from texture_image_probe import observe_texture_image, snapshot_from_logs
 from window_capture_smoke import run_smoke_main
 from passive_run import PassiveImageRun, run_passive_image
 from checkpoint_report import CHECKPOINT_STAGE_TIMEOUT_SECONDS

@@ -7,7 +7,7 @@ import platform
 import sys
 
 from search_combo_native import SearchComboNativeInput
-from edit_probe import text_hash
+from probe_common import text_hash
 from search_combo_probe import SEARCH_COMBO_PROBE
 from window_smoke import parse_args
 from window_capture_smoke import run_smoke_main

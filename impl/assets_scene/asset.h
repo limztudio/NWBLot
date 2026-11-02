@@ -209,7 +209,6 @@ public:
     using SubsystemRef = SceneAsset::SubsystemRef;
     using EntityRef = SceneAsset::EntityRef;
     using ComponentRef = EntityAsset::ComponentRef;
-    using AssetRef = SceneAsset::AssetRef;
     using AssetMap = SceneAsset::AssetMap;
     using LoadedSubsystemVector = Vector<UniquePtr<ISubsystem>, Core::Alloc::GlobalArena>;
     using LoadedComponentVector = Vector<UniquePtr<IComponent>, Core::Alloc::GlobalArena>;
@@ -247,9 +246,7 @@ public:
 
     [[nodiscard]] b8 valid()const noexcept{ return m_scene.valid() && !m_loadedSubsystems.empty(); }
     [[nodiscard]] const SceneRef& scene()const noexcept{ return m_scene; }
-    [[nodiscard]] const LoadedSubsystemVector& subsystems()const noexcept{ return m_loadedSubsystems; }
     [[nodiscard]] usize subsystemCount()const noexcept{ return m_loadedSubsystems.size(); }
-    [[nodiscard]] const LoadedEntityVector& entities()const noexcept{ return m_loadedEntities; }
 
     template<typename SubsystemT>
     [[nodiscard]] const SubsystemT* findSubsystem()const noexcept{

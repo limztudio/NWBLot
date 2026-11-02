@@ -166,14 +166,14 @@ public:
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
     constexpr RefCountPtr(this_type&& x)noexcept
-        : m_pair(x.detach(), Forward<deleter_type>(x.getDeleter()))
+        : m_pair(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
     constexpr RefCountPtr(
         RefCountPtr<U, E>&& u,
         typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0
     )noexcept
-        : m_pair(u.detach(), Forward<E>(u.getDeleter()))
+        : m_pair(u.release(), Forward<E>(u.getDeleter()))
     {}
     RefCountPtr(const RefCountPtr& rhs)noexcept
         : m_pair(rhs.m_pair.first(), rhs.m_pair.second())
@@ -196,7 +196,7 @@ public:
     this_type& operator=(this_type&& x)noexcept{
         if(this != &x){
             reset();
-            m_pair.first() = x.detach();
+            m_pair.first() = x.release();
             m_pair.second() = Move(Forward<deleter_type>(x.getDeleter()));
         }
         return *this;
@@ -205,7 +205,7 @@ public:
     template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(RefCountPtr<U, E>&& u)noexcept{
         reset();
-        m_pair.first() = u.detach();
+        m_pair.first() = u.release();
         m_pair.second() = Move(Forward<E>(u.getDeleter()));
         return *this;
     }
@@ -270,25 +270,9 @@ public:
         return ref;
     }
 
-    u32 resetAdopt(pointer value)noexcept{
-        u32 ref = 0;
-        if(value != m_pair.first()){
-            pointer oldp = Exchange(m_pair.first(), value);
-            ref = internalRelease(oldp);
-        }
-        return ref;
-    }
-
     pointer release()noexcept{
         return Exchange(m_pair.first(), pointer());
     }
-
-    u32 drop()noexcept{
-        pointer oldp = Exchange(m_pair.first(), pointer());
-        return internalRelease(oldp);
-    }
-
-    pointer detach()noexcept{ return release(); }
 
     void swap(this_type& x)noexcept{ m_pair.swap(x.m_pair); }
 

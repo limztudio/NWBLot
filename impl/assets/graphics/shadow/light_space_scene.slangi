@@ -12,7 +12,7 @@
 #include "light_space_resources.slangi"
 #include "csg_shadow_resources.slangi"
 #include "shadow_heap_resources.slangi"
-#define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
+#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
 #include "sw_shadow_geometry.slangi"
 
 uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.sceneSlots.w; }
@@ -31,7 +31,7 @@ NwbRtInstanceMaterial nwbLightSpaceMaterial(const uint instance){
 NwbSwBvhInstance nwbLightSpaceInstance(const uint instance){
     if(nwbCsgShadowEnabled())
         return nwbCsgShadowInstance(instance);
-    return nwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instance];
+    return nwbHeapSwBvhInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instance];
 }
 
 NwbBvhNode nwbLightSpaceMeshRoot(const uint instance){

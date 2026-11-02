@@ -8,7 +8,6 @@
 #include "global.h"
 
 #include <global/binary.h>
-#include <global/simd/vector.h>
 #include <global/thread.h>
 
 
@@ -42,8 +41,7 @@ namespace ArgCommand{
     };
 };
 inline constexpr Array<StringView, 2u> s_ArgCmd = { "-a,--logaddress", "-p,--logport", };
-inline constexpr u16 s_DefaultLogServerPort = 7117u;
-inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", s_DefaultLogServerPort, };
+inline const Tuple< AStringView, u16 > s_ArgDefault = { "http://localhost", 7117u, };
 inline constexpr Array<StringView, 2u> s_ArgDesc = { "Log server address", "Log server port", };
 
 
@@ -61,6 +59,23 @@ inline auto ArgAddOption(CLI& cli, T& arg){
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena)noexcept{
     return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> ResolveDefaultStorageDirectory(ArenaT& arena, const StringView defaultDirectoryName){
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / defaultDirectoryName;
+
+    return ::Path<ArenaT>(arena, defaultDirectoryName);
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> ResolveStorageDirectory(ArenaT& arena, const Path& configuredStorageDirectory, const StringView defaultDirectoryName){
+    if(!configuredStorageDirectory.empty())
+        return ::Path<ArenaT>(arena, configuredStorageDirectory);
+
+    return ResolveDefaultStorageDirectory(arena, defaultDirectoryName);
 }
 
 
@@ -199,7 +214,6 @@ template<typename PayloadContainer>
         NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
     return MakeTuple(*time, *type, Move(message));
 }
-
 
 class ProcessedMessageFile{
 public:
@@ -399,8 +413,6 @@ public:
 protected:
     void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); }
 
-    void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); }
-
 
 private:
     Timer m_lastUpdateTime;
@@ -448,8 +460,6 @@ protected:
 
 protected:
     void enqueue(MessageType&& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
-
-    void enqueue(const MessageType& data){ LoggerWorkerBase<T>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:

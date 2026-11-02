@@ -6,8 +6,8 @@
 
 
 #include <impl/global.h>
-#include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/material/generated_geometry_validation.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 
 #include <core/task/gpu/task_graph.h>
@@ -56,7 +56,7 @@ public:
         usize instanceCount,
         usize materialTypedByteCount,
         Core::Alloc::ScratchArena& scratchArena,
-        ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
+        ECSRenderDetail::AliasFreeComputeEmulationGraphPlan& plan,
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan
     );
 };

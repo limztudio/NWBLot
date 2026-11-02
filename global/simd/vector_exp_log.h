@@ -12,12 +12,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f64 s_DoubleExp10Base = 10.0;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp2(SIMDVectorSingle value)noexcept{
 #if defined(NWB_HAS_SSE2)
     __m128i iTrunc = _mm_cvttps_epi32(value);
@@ -122,25 +116,11 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp2(SIMDVectorDouble valu
     return VectorDoubleSet(Exp2(VectorDoubleGetX(value)), Exp2(VectorDoubleGetY(value)), Exp2(VectorDoubleGetZ(value)), Exp2(VectorDoubleGetW(value)));
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp10(SIMDVectorSingle value)noexcept{
-    return VectorExp2(VectorMultiply(s_SIMDLg10, value));
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp10(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Pow(s_DoubleExp10Base, value[0]), Pow(s_DoubleExp10Base, value[1]), Pow(s_DoubleExp10Base, value[2]), Pow(s_DoubleExp10Base, value[3]));
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExpE(SIMDVectorSingle value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExpE(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Exp(value[0]), Exp(value[1]), Exp(value[2]), Exp(value[3]));
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorExp(SIMDVectorSingle value)noexcept{ return VectorExpE(value); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleExp(SIMDVectorDouble value)noexcept{ return VectorDoubleExpE(value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -271,34 +251,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog2(SIMDVectorSingle value)noex
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog2(SIMDVectorDouble value)noexcept{
     return VectorDoubleSet(Log2(VectorDoubleGetX(value)), Log2(VectorDoubleGetY(value)), Log2(VectorDoubleGetZ(value)), Log2(VectorDoubleGetW(value)));
 }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog10(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON)
-    return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
-#else
-    return VectorSet(Log10(VectorGetX(value)), Log10(VectorGetY(value)), Log10(VectorGetZ(value)), Log10(VectorGetW(value)));
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog10(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Log10(VectorDoubleGetX(value)), Log10(VectorDoubleGetY(value)), Log10(VectorDoubleGetZ(value)), Log10(VectorDoubleGetW(value)));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLogE(SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SSE2) || defined(NWB_HAS_NEON)
-    return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
-#else
-    return VectorSet(Log(VectorGetX(value)), Log(VectorGetY(value)), Log(VectorGetZ(value)), Log(VectorGetW(value)));
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLogE(SIMDVectorDouble value)noexcept{
-    return VectorDoubleSet(Log(VectorDoubleGetX(value)), Log(VectorDoubleGetY(value)), Log(VectorDoubleGetZ(value)), Log(VectorDoubleGetW(value)));
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorLog(SIMDVectorSingle value)noexcept{ return VectorLogE(value); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleLog(SIMDVectorDouble value)noexcept{ return VectorDoubleLogE(value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

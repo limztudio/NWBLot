@@ -55,32 +55,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MakeU32(u32 x, u32 y, u32 z, u32 w)noe
 #endif
 }
 
-NWB_INLINE void NWB_SIMD_CALL StoreF32(f32 (&out)[4], SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    out[0] = value.f[0];
-    out[1] = value.f[1];
-    out[2] = value.f[2];
-    out[3] = value.f[3];
-#elif defined(NWB_HAS_NEON)
-    vst1q_f32(out, value);
-#elif defined(NWB_HAS_SSE2)
-    _mm_storeu_ps(out, value);
-#endif
-}
-
-NWB_INLINE void NWB_SIMD_CALL StoreU32(u32 (&out)[4], SIMDVectorSingle value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    out[0] = value.u[0];
-    out[1] = value.u[1];
-    out[2] = value.u[2];
-    out[3] = value.u[3];
-#elif defined(NWB_HAS_NEON)
-    vst1q_u32(out, vreinterpretq_u32_f32(value));
-#elif defined(NWB_HAS_SSE2)
-    _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm_castps_si128(value));
-#endif
-}
-
 #if defined(NWB_HAS_SSE2)
 NWB_INLINE void NWB_SIMD_CALL StoreInt3Bits(SIMDVectorSingle value, i32 (&out)[3])noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(out), _mm_castps_pd(value));

@@ -39,14 +39,13 @@ namespace __hidden_assets_graphics_volume_prepare{
 
 
 using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
-using CsgShapeEntryVector = ShaderCook::CookVector<AssetsCsgCook::CsgShapeCookEntry>;
 
 struct GraphicsVolumeMetadata{
     ShaderCook shaderCook;
     AssetsGraphicsCookDetail::IncludeMetadataMap includeMetadata;
     AssetsGraphicsCookDetail::ShaderEntryVector shaderEntries;
     MaterialBindEntryVector materialBindEntries;
-    CsgShapeEntryVector csgShapeEntries;
+    AssetsCsgCook::CsgShapeCookEntryVector csgShapeEntries;
     AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
     HashSet<ShaderStageKey, ShaderCook::CookArena, Hasher<ShaderStageKey>, EqualTo<ShaderStageKey>> seenShaderIdentityKeys;
 
@@ -223,10 +222,7 @@ static b8 PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::Asse
         }
 
         auto resolvedText = PathToString(context.scratchArena, *resolvedSource);
-        for(auto& ch : resolvedText){
-            if(ch == '\\')
-                ch = '/';
-        }
+        Replace(resolvedText.begin(), resolvedText.end(), '\\', '/');
         inOutVirtualSource.assign(AStringView(resolvedText));
         return true;
     };

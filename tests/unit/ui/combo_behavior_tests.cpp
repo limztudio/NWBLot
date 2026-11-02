@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "arithmetic_fixture_rows.h"
+
 #include <impl/ecs_ui/toolkit/widgets/combo.h>
 
 #include <gtest/gtest.h>
@@ -56,38 +58,19 @@ public:
 
     [[nodiscard]] virtual u64 key(const u64 index)const noexcept override{
         mutate(CallbackStage::Key);
-        if(index >= count)
-            return 0u;
-        return reversed ? count - index : index + 1u;
+        return index < count ? UiWidgetTests::ArithmeticFixtureRowKey(count, 0u, reversed, index) : 0u;
     }
 
     [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
-        u64 index = 0u;
         mutate(CallbackStage::Lookup);
-        if(keyValue == 0u || keyValue > count)
-            return MakeUnexpected(Failure{});
-        index = badLookup ? count : wrongLookup ? 0u : reversed ? count - keyValue : keyValue - 1u;
-        return index;
+        const auto index = UiWidgetTests::FindArithmeticFixtureRowIndex(count, 0u, reversed, keyValue);
+        if(!index)
+            return index;
+        return badLookup ? count : wrongLookup ? 0u : *index;
     }
 
     [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const b8 reverse)const noexcept override{
-        u64 index = 0u;
-        if(start >= count)
-            return MakeUnexpected(Failure{});
-        index = start;
-        if(index + 1u == disabledKey){
-            if(reverse){
-                if(index == 0u)
-                    return MakeUnexpected(Failure{});
-                --index;
-            }
-            else{
-                ++index;
-                if(index >= count)
-                    return MakeUnexpected(Failure{});
-            }
-        }
-        return index;
+        return UiWidgetTests::FindSingleDisabledFixtureRow(count, start, reverse, disabledKey, [](const u64 index)noexcept{ return index + 1u; });
     }
 
     [[nodiscard]] virtual StringView text(u64)const noexcept override{ return "row"; }

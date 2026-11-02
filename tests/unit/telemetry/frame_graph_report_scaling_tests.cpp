@@ -144,30 +144,30 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     ASSERT_FALSE(empty.empty());
     ASSERT_FALSE(last.empty());
     EXPECT_EQ(CountText(first, s_PacketIndex), 3u);
-    EXPECT_TRUE(ContainsText(first, "\"physicalQueues\": [{"));
-    EXPECT_TRUE(ContainsText(first, "\"queue\": {\"index\": 1,"));
-    EXPECT_TRUE(ContainsText(first, "\"queue\": {\"index\": 2,"));
-    EXPECT_FALSE(ContainsText(first, "\"queue\": {\"index\": 7,"));
+    EXPECT_TRUE(Contains(first, "\"physicalQueues\": [{"));
+    EXPECT_TRUE(Contains(first, "\"queue\": {\"index\": 1,"));
+    EXPECT_TRUE(Contains(first, "\"queue\": {\"index\": 2,"));
+    EXPECT_FALSE(Contains(first, "\"queue\": {\"index\": 7,"));
     EXPECT_LT(first.find("\"packet\": {\"index\": 0,"), first.find("\"packet\": {\"index\": 1,"));
     EXPECT_LT(first.find("\"packet\": {\"index\": 1,"), first.find("\"packet\": {\"index\": 2,"));
-    EXPECT_TRUE(ContainsText(empty, "\"physicalQueues\": null, \"packetSubmissions\": []"));
+    EXPECT_TRUE(Contains(empty, "\"physicalQueues\": null, \"packetSubmissions\": []"));
     EXPECT_EQ(CountText(last, s_PacketIndex), 2u);
-    EXPECT_TRUE(ContainsText(last, "\"physicalQueues\": null"));
-    EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 7,"));
-    EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 8,"));
-    EXPECT_FALSE(ContainsText(last, "\"queue\": {\"index\": 1,"));
+    EXPECT_TRUE(Contains(last, "\"physicalQueues\": null"));
+    EXPECT_TRUE(Contains(last, "\"queue\": {\"index\": 7,"));
+    EXPECT_TRUE(Contains(last, "\"queue\": {\"index\": 8,"));
+    EXPECT_FALSE(Contains(last, "\"queue\": {\"index\": 1,"));
     EXPECT_EQ(CountText(json, "\"runtimeStatistics\": null"), 4u);
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const AStringView firstDot = FindLine(dot, "  n1 [");
     const AStringView emptyDot = FindLine(dot, "  n3 [");
     const AStringView lastDot = FindLine(dot, "  n5 [");
-    EXPECT_TRUE(ContainsText(firstDot, "runtime_physical_queue_count=2"));
-    EXPECT_TRUE(ContainsText(firstDot, s_RuntimePacketSubmissionCount3));
-    EXPECT_TRUE(ContainsText(emptyDot, "runtime_physical_queue_count=\"unknown\""));
-    EXPECT_TRUE(ContainsText(emptyDot, "runtime_packet_submission_count=0"));
-    EXPECT_TRUE(ContainsText(lastDot, "runtime_physical_queue_count=\"unknown\""));
-    EXPECT_TRUE(ContainsText(lastDot, s_RuntimePacketSubmissionCount2));
+    EXPECT_TRUE(Contains(firstDot, "runtime_physical_queue_count=2"));
+    EXPECT_TRUE(Contains(firstDot, s_RuntimePacketSubmissionCount3));
+    EXPECT_TRUE(Contains(emptyDot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_TRUE(Contains(emptyDot, "runtime_packet_submission_count=0"));
+    EXPECT_TRUE(Contains(lastDot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_TRUE(Contains(lastDot, s_RuntimePacketSubmissionCount2));
     EXPECT_EQ(CountText(dot, "runtime_packet_submission_count="), 3u);
 }
 
@@ -202,7 +202,7 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), 2u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount2), 1u);
-    EXPECT_FALSE(ContainsText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3));
+    EXPECT_FALSE(Contains(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3));
 }
 
 TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNextValidCapture){
@@ -262,7 +262,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     EXPECT_EQ(report.summary.frameGraphNodeCount, 2u);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PacketIndex), 3u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RuntimePacketSubmissionCount3), 1u);
-    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));
+    EXPECT_TRUE(Contains(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));
 }
 
 

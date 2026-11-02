@@ -291,8 +291,8 @@ b8 GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 
     // Reserve exact driver layout footprints, including every immutable in-flight TLAS generation, before publishing descriptor addresses.
     const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
-    const auto resourceLayoutBytes = AlignUpU32Checked(m_resourceLayout->getDescriptorBufferSetSizeBytes(), offsetAlignmentBytes);
-    const auto accelStructLayoutBytes = AlignUpU32Checked(m_accelStructLayout ? m_accelStructLayout->getDescriptorBufferSetSizeBytes() : 0u, offsetAlignmentBytes);
+    const auto resourceLayoutBytes = AlignUpChecked<u32>(m_resourceLayout->getDescriptorBufferSetSizeBytes(), offsetAlignmentBytes);
+    const auto accelStructLayoutBytes = AlignUpChecked<u32>(m_accelStructLayout ? m_accelStructLayout->getDescriptorBufferSetSizeBytes() : 0u, offsetAlignmentBytes);
     if(!resourceLayoutBytes || !accelStructLayoutBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap initial descriptor layouts overflow aligned 32-bit storage."));
         return failInitialization();

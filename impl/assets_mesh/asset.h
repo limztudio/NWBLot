@@ -10,7 +10,6 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/module.h>
-#include <core/mesh/classification.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,8 +79,6 @@ public:
 
 
 public:
-    [[nodiscard]] u32 meshClass()const noexcept{ return Core::Mesh::MeshClass::Static; }
-
     [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const noexcept{ return m_positionStream; }
 
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept{ return m_normalStream; }

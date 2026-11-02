@@ -17,7 +17,8 @@ import renderer_ab_benchmark as ab
 from reflection_benchmark import balanced_orders, paired_statistics
 from smoke_volume_identity import file_identity
 from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
+    shutdown_logserver_and_collect, terminate_process, write_status,)
+from window_capture_validation import validate_expected_log_text
 
 LIT_WINDOW_TIMEOUT_SECONDS = 30.
 

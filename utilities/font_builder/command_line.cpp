@@ -24,7 +24,8 @@ int Run(const int argc, char** argv){
     AInteropString sourceArgument;
     AInteropString outputArgument;
     AInteropString rendererArgument(Impl::s_FontAtlasRasterModeBitmap.data(), Impl::s_FontAtlasRasterModeBitmap.size());
-    BakeOptions options(UtilityDetail::Arena());
+    Core::Assets::AssetArena& arena = QueryUtilityGlobalArena<s_FontBuilderArena>();
+    BakeOptions options(arena);
     CLI::App app{ AInteropString(s_FontBuilderAppDescription.data(), s_FontBuilderAppDescription.size()) };
     app.add_option(AInteropString(s_FontOptionFlag.data(), s_FontOptionFlag.size()), sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
     app.add_option(AInteropString(s_OutputOptionFlag.data(), s_OutputOptionFlag.size()), outputArgument, "Output .nwb asset bunch; paired binary .font shares its stem")->required();
@@ -46,17 +47,8 @@ int Run(const int argc, char** argv){
                 Core::Alloc::ScratchArena scratch(s_FontBuilderBakeArena);
                 if(!ValidateOptions(options))
                     return 1;
-                const auto exists = FileExists(options.output);
-                if(!exists){
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: failed to inspect output metadata: {}"), ConvertString(exists.error().message()));
-                    return 1;
-                }
-                if(*exists && !options.overwrite){
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
-                    return 1;
-                }
-                Core::Assets::AssetBytes sourceFontBytes(UtilityDetail::Arena());
-                auto payload = Bake(options, UtilityDetail::Arena(), scratch, sourceFontBytes);
+                Core::Assets::AssetBytes sourceFontBytes(arena);
+                auto payload = Bake(options, arena, scratch, sourceFontBytes);
                 if(!payload || !WriteOutputs(options, sourceFontBytes, *payload, scratch))
                     return 1;
                 NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups"), PathToString<tchar>(options.output), payload->glyphs.size(), payload->groups.size());

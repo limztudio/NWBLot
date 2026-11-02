@@ -29,8 +29,7 @@ void UiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::
         const SearchComboResult result = ui.searchComboBox(s_ChoiceKey, m_source, m_state, options);
         if(result.combo.committed)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom searchable combo selected key={}"), m_state.combo().selectedKey());
-        const auto text = StringFormat(scratchArena, s_SelectedTextFormat, m_state.combo().selectedKey());
-        declared = ui.label(s_SelectedKey, { text.data(), text.size() }) && result.combo.valid && declared;
+        declared = DeclareSelectedKeyLabel(ui, scratchArena, m_state.combo().selectedKey()) && result.combo.valid && declared;
         return ui.endPanel() && declared;
     });
     if(!valid)

@@ -187,7 +187,7 @@ void UiEditBoxHost::synchronizeSession(const Ui::EditBoxOptions& options, const 
             return;
         }
     }
-    m_nativePublished.capture(model);
+    m_nativePublished = model.stamp();
 }
 
 

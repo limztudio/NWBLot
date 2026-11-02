@@ -255,7 +255,6 @@ public:
     }
 };
 
-
 // Final tracked state of one primary list for the next to begin from. Refs stay alive until the consumer opens.
 
 // Carries transient and permanent state. UAV-barrier policy stays per-list; keepInitialState captures after close-time restore.
@@ -446,8 +445,6 @@ public:
 
     constexpr GraphicsState& setViewport(const ViewportState& value)noexcept{ viewport = value; return *this; }
 
-    constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
-
     constexpr GraphicsState& setBlendConstantColor(const Color& value)noexcept{ blendConstantColor = value; return *this; }
 
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value)noexcept{ dynamicStencilRefValue = value; return *this; }
@@ -511,8 +508,6 @@ public:
 
     constexpr DrawIndexedIndirectArguments& setStartIndexLocation(u32 value)noexcept{ startIndexLocation = value; return *this; }
 
-    constexpr DrawIndexedIndirectArguments& setBaseVertexLocation(i32 value)noexcept{ baseVertexLocation = value; return *this; }
-
     constexpr DrawIndexedIndirectArguments& setStartInstanceLocation(u32 value)noexcept{ startInstanceLocation = value; return *this; }
 };
 
@@ -532,18 +527,6 @@ struct DispatchIndirectArguments{
     u32 groupsX = 1;
     u32 groupsY = 1;
     u32 groupsZ = 1;
-
-
-public:
-    constexpr DispatchIndirectArguments& setGroupsX(u32 value)noexcept{ groupsX = value; return *this; }
-
-    constexpr DispatchIndirectArguments& setGroupsY(u32 value)noexcept{ groupsY = value; return *this; }
-
-    constexpr DispatchIndirectArguments& setGroupsZ(u32 value)noexcept{ groupsZ = value; return *this; }
-
-    constexpr DispatchIndirectArguments& setGroups2D(u32 x, u32 y)noexcept{ groupsX = x; groupsY = y; return *this; }
-
-    constexpr DispatchIndirectArguments& setGroups3D(u32 x, u32 y, u32 z)noexcept{ groupsX = x; groupsY = y; groupsZ = z; return *this; }
 };
 
 struct MeshletState{

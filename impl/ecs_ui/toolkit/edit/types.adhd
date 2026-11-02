@@ -65,6 +65,70 @@ enum<u8> EditTextMode{
     Multiline,
 }
 
+class TextAreaModelStamp{
+    public TextAreaModelStamp(){
+        this.instanceGeneration = 0u;
+        this.revision = 0u;
+        this.externalRevision = 0u;
+        this.selectionGeneration = 0u;
+        this.compositionGeneration = 0u;
+        this.anchor = 0u;
+        this.caret = 0u;
+        this.textMode = EditTextMode::SingleLine;
+    }
+
+    public TextAreaModelStamp(
+        in u64 inInstanceGeneration,
+        in u64 inRevision,
+        in u64 inExternalRevision,
+        in u64 inSelectionGeneration,
+        in u64 inCompositionGeneration,
+        in usize inAnchor,
+        in usize inCaret,
+        in EditTextMode inTextMode
+    ){
+        this.instanceGeneration = inInstanceGeneration;
+        this.revision = inRevision;
+        this.externalRevision = inExternalRevision;
+        this.selectionGeneration = inSelectionGeneration;
+        this.compositionGeneration = inCompositionGeneration;
+        this.anchor = inAnchor;
+        this.caret = inCaret;
+        this.textMode = inTextMode;
+    }
+
+    public b8 operator==(in TextAreaModelStamp rhs)const{
+        return this.instanceGeneration == rhs.instanceGeneration
+            && this.revision == rhs.revision
+            && this.externalRevision == rhs.externalRevision
+            && this.selectionGeneration == rhs.selectionGeneration
+            && this.compositionGeneration == rhs.compositionGeneration
+            && this.anchor == rhs.anchor
+            && this.caret == rhs.caret
+            && this.textMode == rhs.textMode;
+    }
+
+    public b8 operator!=(in TextAreaModelStamp rhs)const{
+        return this.instanceGeneration != rhs.instanceGeneration
+            || this.revision != rhs.revision
+            || this.externalRevision != rhs.externalRevision
+            || this.selectionGeneration != rhs.selectionGeneration
+            || this.compositionGeneration != rhs.compositionGeneration
+            || this.anchor != rhs.anchor
+            || this.caret != rhs.caret
+            || this.textMode != rhs.textMode;
+    }
+
+    public u64 instanceGeneration;
+    public u64 revision;
+    public u64 externalRevision;
+    public u64 selectionGeneration;
+    public u64 compositionGeneration;
+    public usize anchor;
+    public usize caret;
+    public EditTextMode textMode;
+}
+
 enum<u8> EditMove{
     Left,
     Right,

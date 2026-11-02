@@ -37,23 +37,7 @@ Expected<u64> FilterView::indexOf(const u64 value)const noexcept{
 }
 
 Expected<u64> FilterView::findEnabled(const u64 start, const b8 reverse)const{
-    u64 index = 0u;
-    if(start >= rowCount())
-        return MakeUnexpected(Failure{});
-    index = start;
-    if(enabled(index))
-        return index;
-    if(reverse){
-        if(index == 0u)
-            return MakeUnexpected(Failure{});
-        --index;
-    }
-    else{
-        if(index + 1u == rowCount())
-            return MakeUnexpected(Failure{});
-        ++index;
-    }
-    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
+    return UiWidgetTests::FindSingleDisabledFixtureRow(rowCount(), start, reverse, full->disabled, [this](const u64 index)noexcept{ return key(index); });
 }
 
 StringView FilterView::text(const u64 index)const{

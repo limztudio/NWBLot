@@ -25,6 +25,44 @@ NWB_IMPL_UI_BEGIN
 template<typename T>
 using InputVector = Vector<T, Core::Alloc::GlobalArena>;
 
+template<typename PopupsT, typename IsRootF>
+[[nodiscard]] inline b8 MarkRemovedPopupSubtree(const PopupsT& popups, IsRootF&& isRoot, Array<b8, s_InputMaxPopups>& outRemoved)noexcept{
+    outRemoved = {};
+    b8 found = false;
+    for(usize index = 0u; index < popups.size(); ++index){
+        outRemoved[index] = isRoot(popups[index].scope.token);
+        for(usize ancestor = 0u; ancestor < index && !outRemoved[index]; ++ancestor)
+            outRemoved[index] = outRemoved[ancestor] && popups[index].scope.parent == popups[ancestor].scope.token;
+        found |= outRemoved[index];
+    }
+    return found;
+}
+
+template<typename PopupsT>
+[[nodiscard]] inline b8 IsRemovedPopupToken(const PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed, const PopupToken& token)noexcept{
+    for(usize popup = 0u; popup < popups.size(); ++popup){
+        if(removed[popup] && token == popups[popup].scope.token)
+            return true;
+    }
+    return false;
+}
+
+template<typename ItemsT, typename PopupsT, typename TokenOfF>
+inline void EraseIfRemovedPopupToken(ItemsT& items, const PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed, TokenOfF&& tokenOf)noexcept{
+    for(usize index = items.size(); index > 0u; --index){
+        if(IsRemovedPopupToken(popups, removed, tokenOf(items[index - 1u])))
+            items.erase(items.begin() + static_cast<isize>(index - 1u));
+    }
+}
+
+template<typename PopupsT>
+inline void EraseRemovedPopups(PopupsT& popups, const Array<b8, s_InputMaxPopups>& removed)noexcept{
+    for(usize index = popups.size(); index > 0u; --index){
+        if(removed[index - 1u])
+            popups.erase(popups.begin() + static_cast<isize>(index - 1u));
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

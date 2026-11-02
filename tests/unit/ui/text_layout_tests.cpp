@@ -20,43 +20,11 @@ namespace __hidden_ui_text_layout_tests{
 
 using namespace NWB;
 using namespace NWB::Impl::Ui;
+using NWB::Tests::UiFixtureText::FixtureShaper;
 
 constexpr AStringView s_LigatureText = "ffi";
 constexpr AStringView s_CombiningMarkText = "A\xcc\x81";
 constexpr AStringView s_TwoGlyphText = "AB";
-
-class FixtureShaper final : public ITextShaper{
-public:
-    explicit FixtureShaper(Core::Alloc::GlobalArena& arena)noexcept
-        : m_arena(arena)
-    {}
-    virtual ~FixtureShaper()noexcept override = default;
-
-
-public:
-    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
-        if(request.text == "FAIL")
-            return MakeUnexpected(TextLayoutStatus::MissingGlyph);
-        ShapedRun run(m_arena);
-        run.metrics = { 8.0f, 2.0f, 2.0f };
-        if(request.text == s_LigatureText)
-            run.glyphs.push_back({ {}, 100u, 0u, 3u, {}, { 22.0f, 0.0f }, { -1.0f, -8.0f, 24.0f, 10.0f } });
-        else if(request.text == s_CombiningMarkText){
-            run.glyphs.push_back({ {}, 1u, 0u, 3u, {}, { 10.0f, 0.0f }, { -1.0f, -8.0f, 12.0f, 10.0f } });
-            run.glyphs.push_back({ {}, 2u, 0u, 3u, { -4.0f, -2.0f }, {}, { 0.0f, -8.0f, 3.0f, 2.0f } });
-        }
-        else{
-            NWB::Tests::UiFixtureText::AppendCodePointGlyphs(request.text, { -1.0f, -8.0f, 12.0f, 10.0f }, run);
-            if(request.direction == TextDirection::RightToLeft)
-                NWB::Tests::UiFixtureText::ReverseGlyphs(run);
-        }
-        return run;
-    }
-
-
-private:
-    Core::Alloc::GlobalArena& m_arena;
-};
 
 class TextLayoutTests : public testing::Test{
 public:
@@ -109,8 +77,8 @@ TEST_F(TextLayoutTests, LigatureAndCombiningClustersHaveOnlyRealSourceEdges){
     ASSERT_EQ(m_layout.clusters().size(), 1u);
     EXPECT_EQ(m_layout.clusters()[0].byteBegin, 0u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 3u);
-    EXPECT_EQ(m_layout.hitTest({ 11.0f, 4.0f }).byteOffset, 0u);
-    EXPECT_EQ(m_layout.hitTest({ 11.01f, 4.0f }).byteOffset, 3u);
+    EXPECT_EQ(m_layout.hitTest({ 15.0f, 4.0f }).byteOffset, 0u);
+    EXPECT_EQ(m_layout.hitTest({ 15.01f, 4.0f }).byteOffset, 3u);
     EXPECT_FALSE(m_layout.caretRect(1u, TextCaretEdge::Leading));
     {
         auto layoutResult = m_builder.layout({ s_CombiningMarkText });

@@ -130,31 +130,15 @@ static Expected<Core::BufferHandle> CreateU32Buffer(Core::GraphicsRuntime& graph
     return graphics.createBuffer(desc);
 }
 
-static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer){
-    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageBuffer, Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer));
-}
-
-static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(Core::GpuDescriptorHeap& heap, Core::Texture& texture, const Core::Format::Enum format){
-    return RendererDescriptorRegisterDetail::RegisterDescriptor(heap, Core::GpuDescriptorClass::StorageImage, Core::DescriptorWriteItem::TextureUav(0u, &texture, format, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D));
-}
-
 static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTargets& targets){
-    heap.free(targets.coverageBufferDescriptor);
-    heap.free(targets.depthWarpBufferDescriptor);
-    heap.free(targets.controlBufferDescriptor);
-    heap.free(targets.extinctionBufferDescriptor);
-    heap.free(targets.extinctionOverflowBufferDescriptor);
-    heap.free(targets.transmittanceTextureStorageDescriptor);
-    heap.free(targets.refractionTileListDescriptor);
-    heap.free(targets.refractionTileArgumentsDescriptor);
-    targets.coverageBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.depthWarpBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.controlBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.refractionTileListDescriptor = Core::GpuDescriptorHandle::Invalid();
-    targets.refractionTileArgumentsDescriptor = Core::GpuDescriptorHandle::Invalid();
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.coverageBufferDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.depthWarpBufferDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.controlBufferDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.extinctionBufferDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.extinctionOverflowBufferDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.transmittanceTextureStorageDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.refractionTileListDescriptor);
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, targets.refractionTileArgumentsDescriptor);
 }
 
 
@@ -169,9 +153,7 @@ static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTa
 
 void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     // Release owned descriptors only; the slot payload is borrowed.
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized())
-        __hidden_avboit_targets::RetireTargetDescriptors(heap, targets);
+    __hidden_avboit_targets::RetireTargetDescriptors(m_graphics.getDevice().getDescriptorHeap(), targets);
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();
@@ -422,42 +404,22 @@ b8 RendererAvboitSystem::registerAvboitFrameTargetDescriptors(DeferredFrameTarge
     NWB_ASSERT(!avboitTargets.refractionTileListDescriptor.valid());
     NWB_ASSERT(!avboitTargets.refractionTileArgumentsDescriptor.valid());
 
-    const auto targetResourcesRegistered = [&]() -> Expected<void>{
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.coverageBuffer); descriptor)
-            avboitTargets.coverageBufferDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.depthWarpBuffer); descriptor)
-            avboitTargets.depthWarpBufferDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.controlBuffer); descriptor)
-            avboitTargets.controlBufferDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.extinctionBuffer); descriptor)
-            avboitTargets.extinctionBufferDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.extinctionOverflowBuffer); descriptor)
-            avboitTargets.extinctionOverflowBufferDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterTransmittanceStorageTexture(heap, *avboitTargets.transmittanceTexture, avboitTargets.transmittanceFormat); descriptor)
-            avboitTargets.transmittanceTextureStorageDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.refractionTileList); descriptor)
-            avboitTargets.refractionTileListDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        if(const auto descriptor = __hidden_avboit_targets::RegisterWorkBuffer(heap, *avboitTargets.refractionTileArguments); descriptor)
-            avboitTargets.refractionTileArgumentsDescriptor = *descriptor;
-        else
-            return MakeUnexpected(Failure{});
-        return {};
-    };
-    if(!targetResourcesRegistered()){
+    const b8 targetResourcesRegistered =
+        RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.coverageBuffer, avboitTargets.coverageBufferDescriptor)
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.depthWarpBuffer, avboitTargets.depthWarpBufferDescriptor)
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.controlBuffer, avboitTargets.controlBufferDescriptor)
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.extinctionBuffer, avboitTargets.extinctionBufferDescriptor)
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.extinctionOverflowBuffer, avboitTargets.extinctionOverflowBufferDescriptor)
+        && RendererDescriptorRegisterDetail::AssignDescriptor(
+            heap,
+            Core::GpuDescriptorClass::StorageImage,
+            Core::DescriptorWriteItem::TextureUav(0u, avboitTargets.transmittanceTexture.get(), avboitTargets.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D),
+            avboitTargets.transmittanceTextureStorageDescriptor
+        )
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.refractionTileList, avboitTargets.refractionTileListDescriptor)
+        && RendererDescriptorRegisterDetail::AssignStructuredBufferUav(heap, *avboitTargets.refractionTileArguments, avboitTargets.refractionTileArgumentsDescriptor)
+    ;
+    if(!targetResourcesRegistered){
         __hidden_avboit_targets::RetireTargetDescriptors(heap, avboitTargets);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
         return false;

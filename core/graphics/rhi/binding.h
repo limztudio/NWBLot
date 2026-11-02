@@ -172,7 +172,6 @@ struct DescriptorWriteItem{
     Format::Enum format              : 8;
     // Valid for Texture_SRV, Texture_UAV, Buffer_SRV, and Buffer_UAV.
     u8 reserved                      : 8;
-    u32 reserved2;
 
 
 public:
@@ -223,7 +222,6 @@ public:
 
 
 public:
-    constexpr DescriptorWriteItem& setArrayElement(u32 value)noexcept{ arrayElement = value; return *this; }
 
     constexpr DescriptorWriteItem& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
 

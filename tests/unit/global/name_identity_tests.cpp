@@ -9,8 +9,6 @@
 #include <core/common/name_symbols.h>
 
 #include <global/diagnostics.h>
-#include <global/limit.h>
-#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,8 +22,6 @@ namespace __hidden_name_identity_tests{
 
 constexpr AStringView s_RecursiveInnerName = "identity/recursive_inner";
 
-#if defined(NWB_BUILD_SYMBOLS)
-#endif
 #if !defined(NWB_DEBUG)
 static constexpr AStringView s_RuntimeGenerated = "runtime/generated";
 
@@ -34,7 +30,6 @@ static constexpr AStringView s_RuntimeGenerated = "runtime/generated";
 
 
 #endif
-using AString = NWB::Tests::TestAString;
 
 
 struct NameSymbolCallbackProbe{

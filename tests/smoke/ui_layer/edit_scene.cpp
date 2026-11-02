@@ -11,6 +11,8 @@
 
 #include <core/common/log.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -125,9 +127,9 @@ void UiEditSmokeScene::resetModels(){
 }
 
 Array<u32, 12u> UiEditSmokeScene::values()const noexcept{
-    return { static_cast<u32>(m_primary.text().size()), HashSmokeText32(m_primary.text()),
+    return { static_cast<u32>(m_primary.text().size()), ComputeFnv32TextHash(m_primary.text()),
         static_cast<u32>(m_primary.anchor()), static_cast<u32>(m_primary.caret()), static_cast<u32>(m_primaryFocused),
-        static_cast<u32>(m_secondary.text().size()), HashSmokeText32(m_secondary.text()),
+        static_cast<u32>(m_secondary.text().size()), ComputeFnv32TextHash(m_secondary.text()),
         static_cast<u32>(m_secondary.anchor()), static_cast<u32>(m_secondary.caret()), static_cast<u32>(m_secondaryFocused),
         static_cast<u32>(m_readOnly), static_cast<u32>(m_visible) };
 }

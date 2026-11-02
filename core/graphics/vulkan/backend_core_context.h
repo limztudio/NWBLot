@@ -90,7 +90,7 @@ struct VulkanContext{
     i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryTransferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
 
-    struct Extensions{
+    struct{
         b8 khrSynchronization2 = false;
         b8 khrCalibratedTimestamps = false;
         b8 khrRayTracingPipeline = false;

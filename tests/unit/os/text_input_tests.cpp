@@ -28,7 +28,6 @@ public:
     using QueuedTextInputService::emitDeleteSurrounding;
     using QueuedTextInputService::surroundingText;
     using QueuedTextInputService::surroundingCaretByte;
-    using QueuedTextInputService::surroundingAnchorByte;
     using QueuedTextInputService::caretRect;
 
 

@@ -8,8 +8,6 @@
 
 #include <gtest/gtest.h>
 
-#include <global/process.h>
-
 #include <fcntl.h>
 #include <poll.h>
 #include <pthread.h>

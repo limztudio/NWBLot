@@ -36,6 +36,22 @@ static_assert(offsetof(RendererAvboitPushConstants, heapSlots) == sizeof(u32) * 
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState()noexcept;
 [[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState()noexcept;
 
+[[nodiscard]] NWB_INLINE RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const b8 hdr10OutputActive)noexcept{
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    return ResolveRendererAvboitPushConstants(
+        targets.fullWidth,
+        targets.fullHeight,
+        targets.lowWidth,
+        targets.lowHeight,
+        targets.virtualSliceCount,
+        targets.physicalSliceCount,
+        hdr10OutputActive,
+        targets.refractionFramebuffer != nullptr,
+        targets.deferredSlotsBufferDescriptor.slot()
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

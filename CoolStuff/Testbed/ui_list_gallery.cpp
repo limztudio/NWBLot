@@ -19,18 +19,6 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<u64> UiListSource::indexOf(const u64 keyValue)const noexcept{
-    if(keyValue == 0u || keyValue > rowCount())
-        return MakeUnexpected(Failure{});
-    return keyValue - 1u;
-}
-
-Expected<u64> UiListSource::findEnabled(const u64 start, [[maybe_unused]] const b8 reverse)const noexcept{
-    if(start >= rowCount())
-        return MakeUnexpected(Failure{});
-    return start;
-}
-
 StringView UiListSource::text(const u64 index)const noexcept{
     const u64 rowKey = key(index);
     if(rowKey == 0u)
@@ -62,8 +50,7 @@ void UiListGallery::paint(NWB::Impl::UiPaintContext& context, NWB::Core::Alloc::
         const ListResult result = ui.virtualList("rows", m_source, m_state, options);
         if(result.activated)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom list selected key={}"), m_state.selectedKey());
-        const auto text = StringFormat(scratchArena, s_SelectedTextFormat, m_state.selectedKey());
-        declared = ui.label(s_SelectedKey, { text.data(), text.size() }) && result.valid && declared;
+        declared = DeclareSelectedKeyLabel(ui, scratchArena, m_state.selectedKey()) && result.valid && declared;
         return ui.endPanel() && declared;
     });
     if(!valid)

@@ -40,7 +40,6 @@ namespace LogType{
     };
 };
 
-
 namespace LoggerBreakPolicy{
     enum Enum : u8{
         ReportOnly,
@@ -48,7 +47,6 @@ namespace LoggerBreakPolicy{
         BreakOnErrorAndFatal,
     };
 };
-
 
 class ILogger{
 public:
@@ -78,7 +76,6 @@ struct LoggerRegistration{
 
 extern LoggerRegistration* g_loggerRegistration;
 
-inline constexpr StringView s_DiagnosticEventCategoryAssert = "logger_Assert";
 inline constexpr StringView s_DiagnosticEventCategoryError = "logger_Error";
 inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 
@@ -284,8 +281,7 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_IGNORE_MESSAGE(...)                                                                                         \
     do{                                                                                                                        \
-        [[maybe_unused]] constexpr auto s_NwbIgnoredLoggerMessageSize =                                                          \
-            sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
+        (void)sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                      \
     }while(false)
 #define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
 
@@ -317,7 +313,6 @@ NWB_COMMON_END
             BreakMacro;                                                                                                        \
         }                                                                                                                      \
     }while(false)
-
 
 #if NWB_OCCUR_INFO
 #define NWB_LOGGER_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(Info, __VA_ARGS__)

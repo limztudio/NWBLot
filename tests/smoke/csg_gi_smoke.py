@@ -11,7 +11,8 @@ import statistics
 import subprocess
 import sys
 
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
 

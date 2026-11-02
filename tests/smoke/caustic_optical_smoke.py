@@ -15,7 +15,8 @@ import caustic_quality_smoke
 from reflection_smoke import validate_frame
 from caustic_optical_reference import exterior_samples, expected_environment_color, predictor_metadata
 from refraction_gallery_smoke import png_rgb_bytes
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 

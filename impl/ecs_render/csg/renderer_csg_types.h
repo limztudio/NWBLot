@@ -50,6 +50,11 @@ static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must st
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
+namespace ECSRenderDetail{
+    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
+    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
+};
+
 [[nodiscard]] inline Core::Rect ToCoreRect(const CsgWorkRect& rect)noexcept{
     return Core::Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
 }

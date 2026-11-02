@@ -213,7 +213,6 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Core:
     }
     instance.handle = *handleResult;
     instance.sourceName = sourceName;
-    instance.meshClass = Core::Mesh::MeshClass::Skinned;
     instance.uv0 = mesh.uv0Stream();
     instance.colors = mesh.colorStream();
     instance.skin = skin.influences();

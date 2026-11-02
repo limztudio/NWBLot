@@ -30,13 +30,6 @@ NWB_IMPL_UI_BEGIN
     return committedByte;
 }
 
-[[nodiscard]] inline Expected<usize> HitEditWordCaretGeometry(const Span<const EditCaretLine> lines, const Span<const EditBoxCaretStop> stops, const Point localPoint)noexcept{
-    usize committedByte = 0u;
-    if(!TryHitEditWordCaretGeometry(lines, stops, localPoint, committedByte))
-        return MakeUnexpected(Failure{});
-    return committedByte;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

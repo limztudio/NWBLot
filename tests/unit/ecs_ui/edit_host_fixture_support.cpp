@@ -4,8 +4,6 @@
 
 #include "edit_host_fixture_support.h"
 
-#include <tests/unit/ui/fixture_text_shaping.h>
-
 #include <gtest/gtest.h>
 
 
@@ -37,13 +35,6 @@ void FakeClipboard::startNativeRequest(const ClipboardRequestToken token, const 
     startedText.assign(text.data(), text.size());
     if(!delayed && !deliver(token, ClipboardStatus::Success, operation == ClipboardOperation::ReadText ? AStringView(document) : AStringView{}))
         ADD_FAILURE() << "Clipboard completion failed";
-}
-
-Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> FixtureShaper::shape(const Ui::ShapeRequest& request){
-    Ui::ShapedRun run(m_arena);
-    run.metrics = { 8.0f, 2.0f, 2.0f };
-    Tests::UiFixtureText::AppendCodePointGlyphs(request.text, {}, run);
-    return run;
 }
 
 b8 PrepareEditView(const Ui::EditModel& model, Ui::TextLayoutBuilder& layoutBuilder, Ui::EditBoxView& view){

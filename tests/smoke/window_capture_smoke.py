@@ -11,13 +11,13 @@ import subprocess
 import sys
 import tempfile
 import time
-from window_capture_outcome import SmokeSkip, WindowsDesktopUnavailable, SmokeFailure, write_status  # noqa: E402
-from window_capture_image import TRANSPARENT_CSG_REGIONS, TransparentCsgAnalysis, TextureSmokeAnalysis, write_bmp_24, capture_result_from_rgb_rows, read_bmp_24, read_bmp_24_rows, validate_surfel_coverage_probe, analyze_rgb_rows, transparent_csg_regions, analyze_transparent_csg_rows, analyze_texture_smoke_rows, estimate_background_rgb, count_foreground_pixels_in_region, ximage_rgb_rows  # noqa: E402
-from window_capture_x11 import LinuxXImageFuncs, LinuxXImage, LinuxXEvent, LinuxX11Capture  # noqa: E402
-from window_capture_win32 import bind_windows_user32, create_windows_user32, WinRect, WinPoint, WindowsUserObjectFlags, require_windows_interactive_desktop, WindowsCapture  # noqa: E402
-from window_capture_logs import choose_free_port, wait_for_tcp_port, snapshot_log_files, collect_log_delta, standalone_log_pattern, wait_for_log_message, wait_for_log_drain  # noqa: E402
-from window_capture_environment import executable_sibling, make_runtime_launch_args, build_launch_environment, validate_resize_environment, application_capture_partial_path, prepare_application_capture_environment  # noqa: E402
-from window_capture_validation import validate_capture_result, validate_transparent_csg_result, validate_texture_smoke_result, validate_expected_log_text, validate_expected_log_messages, validate_application_capture_log_text, validate_capture_for_args  # noqa: E402
+from window_capture_outcome import SmokeFailure, SmokeSkip, write_status  # noqa: E402
+from window_capture_image import TRANSPARENT_CSG_REGIONS, read_bmp_24, validate_surfel_coverage_probe  # noqa: E402
+from window_capture_x11 import LinuxX11Capture, LinuxXImage, LinuxXImageFuncs  # noqa: E402
+from window_capture_win32 import WindowsCapture, create_windows_user32  # noqa: E402
+from window_capture_logs import choose_free_port, collect_log_delta, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_tcp_port  # noqa: E402
+from window_capture_environment import application_capture_partial_path, build_launch_environment, executable_sibling, prepare_application_capture_environment  # noqa: E402
+from window_capture_validation import validate_application_capture_log_text, validate_capture_for_args, validate_expected_log_messages  # noqa: E402
 
 LIT_MINIMUM_CAPTURE_SETTLE_SECONDS = 1.0
 

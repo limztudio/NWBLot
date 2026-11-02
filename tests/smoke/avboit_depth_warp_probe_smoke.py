@@ -11,7 +11,9 @@ import sys
 from types import SimpleNamespace
 from uuid import uuid4
 
-from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsDesktopUnavailable, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,)
+from window_capture_outcome import WindowsDesktopUnavailable
+from window_capture_smoke import (finish_logserver_cleanup, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_expected_log_text
 
 LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 600.0
 

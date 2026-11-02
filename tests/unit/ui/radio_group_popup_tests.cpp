@@ -22,23 +22,6 @@ using namespace NWB::UiRadioGroupTests;
 
 class UiRadioGroupPopupTests : public RadioGroupFixture{
 protected:
-    [[nodiscard]] static PopupOptions ParentOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
-        options.size = { 300.0f, 280.0f };
-        return options;
-    }
-
-    [[nodiscard]] static PopupOptions ChildOptions()noexcept{
-        PopupOptions options;
-        options.anchor = { 320.0f, 64.0f, 8.0f, 24.0f };
-        options.side = PopupPlacementSide::Right;
-        options.size = { 260.0f, 260.0f };
-        return options;
-    }
-
-
-protected:
     virtual void SetUp()override{
         RadioGroupFixture::SetUp();
         m_childSource.m_generation = 2001u;
@@ -53,14 +36,14 @@ protected:
     }
 
     [[nodiscard]] b8 beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, ParentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup(s_ParentPopupKey, m_parent, UiWidgetTests::NestedParentOptions()))
             return false;
         m_result = m_builder.radioGroup(s_RadioGroupKey, m_source, m_state);
         return m_result.valid;
     }
 
     [[nodiscard]] b8 declareFamily(const u64 generation){
-        if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()))
+        if(!beginParent(generation) || !m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()))
             return false;
         m_childResult = m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_childState);
         return m_childResult.valid && m_builder.endPopup();
@@ -176,7 +159,7 @@ TEST_F(UiRadioGroupPopupTests, AParentStateCannotBeAliasedByItsLiveChildRadioGro
     ASSERT_TRUE(acceptFamily(1u));
     const AcceptedInputState<128u> displayed = accepted();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
     m_childSource.resetCounters();
     EXPECT_FALSE(m_builder.radioGroup(s_RadioGroupKey, m_childSource, m_state).valid);
     EXPECT_TRUE(m_context.failed());
@@ -205,7 +188,7 @@ TEST_F(UiRadioGroupPopupTests, AncestorClosureSuppressesMetadataAndRetiresCaptur
     EXPECT_EQ(m_childState.selectedKey(), 20u);
     m_parent.open();
     ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.beginPopup(s_ChildPopupKey, m_child, UiWidgetTests::NestedChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(finishParent());
     ASSERT_TRUE(m_context.commitFrame(3u));

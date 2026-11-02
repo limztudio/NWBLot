@@ -82,7 +82,6 @@ const usize s_ReflectionTemporalExtraResourceUseCount = 2u;
 const usize s_ReflectionSliceIndexTextBufferSize = 11u;
 const usize s_ReflectionUseCapacity = 12u;
 const usize s_ReflectionExtraHardwareReadCapacity = 2u;
-const usize s_ReflectionResourceSetUseCapacity = 2u;
 const u32 s_ReflectionCounterHighWordShiftBits = 32u;
 
 

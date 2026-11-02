@@ -28,7 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
-    shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,)
+    shutdown_logserver_and_collect, terminate_process, write_status,)
+from window_capture_validation import validate_expected_log_text
 
 LIT_SCOPE = "scope"
 LIT_REPORT_JSON = "report.json"

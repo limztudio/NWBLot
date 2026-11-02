@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 import re
 
+from probe_common import center
 from window_capture_smoke import SmokeFailure
 from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
 
@@ -86,10 +87,6 @@ def snapshot_from_logs(text):
     if not all(generations) or generations[0] == generations[1]:
         raise SmokeFailure("independent concrete sources must have distinct nonzero generations")
     return { LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(FIELDS, values)), LIT_GENERATIONS: generations, LIT_SAME_IDENTITY: int(sources[-1][5]), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles, }
-
-
-def center(rectangle):
-    return rectangle[0] + rectangle[2] / 2.0, rectangle[1] + rectangle[3] / 2.0
 
 
 def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):

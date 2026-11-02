@@ -46,7 +46,7 @@ Expected<u64> ComputeShaderTableAlignedOffset(const u64 deviceAddress, const u64
     if(deviceAddress == 0u || allocationByteSize == 0u || recordByteSize == 0u || baseAlignment == 0u || (baseAlignment & (baseAlignment - 1u)) != 0u)
         return MakeUnexpected(Failure{});
 
-    const auto alignedAddress = AlignUpU64Checked(deviceAddress, static_cast<u64>(baseAlignment));
+    const auto alignedAddress = AlignUpChecked<u64>(deviceAddress, static_cast<u64>(baseAlignment));
     if(!alignedAddress)
         return MakeUnexpected(Failure{});
     NWB_ASSERT(*alignedAddress >= deviceAddress);

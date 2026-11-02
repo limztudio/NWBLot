@@ -181,7 +181,7 @@ private:
     UiEditClickTracker m_clickTracker;
     Ui::PaintVector<Entry> m_entries;
     Ui::PaintVector<Event> m_events;
-    Ui::EditModelSnapshot m_nativePublished;
+    Ui::TextAreaModelStamp m_nativePublished;
     UiTextEditOwner m_clipboardOwner;
     UiTextEditOwner m_primaryOwner;
     Ui::DisplayMetrics m_display;

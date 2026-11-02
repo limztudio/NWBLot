@@ -78,8 +78,6 @@ template<typename Source>
 
 void LogSmokeRect(TStringView tag, u32 sequence, TStringView name, const Impl::Ui::Rect& rectangle);
 
-[[nodiscard]] u64 HashSmokeText(AStringView text)noexcept;
-
 void ObserveSmokeDisplay(TStringView tag, const Impl::Ui::DisplayMetrics& display, Impl::Ui::DisplayMetrics& inOutLastDisplay, b8& inOutDisplayChanged);
 
 template<typename ValuesT>
@@ -125,8 +123,6 @@ inline void PaintSmokeValueMarkers(const ValuesT& values, const BitsT& bits, con
         context.paint.fillRect({ positions[marker++], y, 8.0f, 8.0f }, EncodeSmokeColor(sequence >> (part * 12u)));
     }
 }
-
-[[nodiscard]] inline u32 HashSmokeText32(const AStringView text)noexcept{ return static_cast<u32>(HashSmokeText(text)); }
 
 [[nodiscard]] inline b8 SameSmokePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right)noexcept{
     return SameSmokeRect(left.bounds, right.bounds) && SameSmokeRect(left.content, right.content) && SameSmokeRect(left.caret, right.caret) && left.scroll == right.scroll;

@@ -33,7 +33,7 @@
 
 // The shared InstanceID material table and material-surface buffers are global StorageBuffer heap entries.
 // The pushed UniformBuffer slot keeps their selection uniform without retaining a local selector CBV.
-#define g_NwbGiHwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
+#define g_NwbGiHwMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot)
 
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiHwMaterialContextSlots.sceneSlots.w;

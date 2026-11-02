@@ -197,26 +197,6 @@ NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsInfinite(const SIMDMatrixDouble& matri
     return VectorDoubleMoveMask(mask) != 0;
 }
 
-NWB_INLINE b8 NWB_SIMD_CALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
-    SIMDVectorSingle mask0 = VectorEqual(matrix.v[0], s_SIMDIdentityR0);
-    SIMDVectorSingle mask1 = VectorEqual(matrix.v[1], s_SIMDIdentityR1);
-    SIMDVectorSingle mask2 = VectorEqual(matrix.v[2], s_SIMDIdentityR2);
-    SIMDVectorSingle mask3 = VectorEqual(matrix.v[3], s_SIMDIdentityR3);
-    mask0 = VectorAndInt(mask0, mask1);
-    mask2 = VectorAndInt(mask2, mask3);
-    return VectorMoveMask(VectorAndInt(mask0, mask2)) == VectorComponentMask::s_XYZW;
-}
-
-NWB_INLINE b8 NWB_SIMD_CALL MatrixDoubleIsIdentity(const SIMDMatrixDouble& matrix)noexcept{
-    SIMDVectorDouble mask0 = VectorDoubleEqual(matrix.v[0], s_DoubleSIMDIdentityR0);
-    SIMDVectorDouble mask1 = VectorDoubleEqual(matrix.v[1], s_DoubleSIMDIdentityR1);
-    SIMDVectorDouble mask2 = VectorDoubleEqual(matrix.v[2], s_DoubleSIMDIdentityR2);
-    SIMDVectorDouble mask3 = VectorDoubleEqual(matrix.v[3], s_DoubleSIMDIdentityR3);
-    mask0 = VectorDoubleAndInt(mask0, mask1);
-    mask2 = VectorDoubleAndInt(mask2, mask3);
-    return VectorDoubleMoveMask(VectorDoubleAndInt(mask0, mask2)) == VectorDoubleComponentMask::s_DoubleXYZW;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -269,24 +249,6 @@ NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleMultiplyTranspose(const SI
     const SIMDVectorDouble r2 = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[2], m1);
     const SIMDVectorDouble r3 = SIMDMatrixDoubleDetail::MatrixDoubleRowMultiply(m0.v[3], m1);
     return SIMDVectorDoubleDetail::MatrixDoubleTranspose4(r0, r1, r2, r3);
-}
-
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixVectorTensorProduct(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-    SIMDMatrix result{};
-    result.v[0] = VectorMultiply(VectorSplatX(v0), v1);
-    result.v[1] = VectorMultiply(VectorSplatY(v0), v1);
-    result.v[2] = VectorMultiply(VectorSplatZ(v0), v1);
-    result.v[3] = VectorMultiply(VectorSplatW(v0), v1);
-    return result;
-}
-
-NWB_INLINE SIMDMatrixDouble NWB_SIMD_CALL MatrixDoubleVectorTensorProduct(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    SIMDMatrixDouble result{};
-    result.v[0] = VectorDoubleMultiply(VectorDoubleSplatX(v0), v1);
-    result.v[1] = VectorDoubleMultiply(VectorDoubleSplatY(v0), v1);
-    result.v[2] = VectorDoubleMultiply(VectorDoubleSplatZ(v0), v1);
-    result.v[3] = VectorDoubleMultiply(VectorDoubleSplatW(v0), v1);
-    return result;
 }
 
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL MatrixDeterminant(const SIMDMatrix& matrix)noexcept{

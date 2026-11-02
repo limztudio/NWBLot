@@ -107,25 +107,13 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return result;
     }
+    ListOptions listOptions;
+    listOptions.wheelRows = options.wheelRows;
+    listOptions.enabled = frame.options.enabled;
+    listOptions.selectOnNavigate = false;
+    const b8 focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused && m_context.input().focus() != frame.rows.id;
     ListFrame list(m_arena);
-    list.source = &source;
-    list.state = &state.m_list;
-    list.widgetStyle = m_style;
-    list.style = m_listStyle;
-    list.token = frame.listToken;
-    list.rowCount = frame.rowCount;
-    list.options.wheelRows = options.wheelRows;
-    list.options.selectOnNavigate = false;
-    list.options.enabled = frame.options.enabled;
-    list.focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused && m_context.input().focus() != frame.rows.id;
-    list.padding = list.style.padding;
-    const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
-    if(!background || !contextMenuMatches(frame)){
-        m_context.fail();
-        return result;
-    }
-    list.padding = MaxUiPadding(list.padding, background->padding);
-    if(!prepareListMetrics(list) || !contextMenuMatches(frame)){
+    if(!prepareListFrame(source, state.m_list, listOptions, frame.listToken, frame.rowCount, focusOnCommit, {}, list) || !contextMenuMatches(frame)){
         m_context.fail();
         return result;
     }
@@ -198,43 +186,30 @@ b8 Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& resul
 }
 
 b8 Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
-    InputRouter& input = m_context.input();
-    WidgetId thumb;
-    if(!TryMakeWidgetId(frame.rows.id, s_WidgetPartScrollbar, thumb))
-        return false;
-    auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-    b8 haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
-    auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-    b8 haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
     options.wheelRows = frame.options.wheelRows;
     options.selectOnNavigate = false;
-    while(haveGesture || haveAction){
-        if(!contextMenuMatches(frame))
-            return false;
-        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
-            if(!applyListGesture(frame.state->m_list, *gesture))
-                return false;
-            gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
-            haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
-        }
-        else{
+    return consumeListInput(
+        frame.rows,
+        frame.listToken,
+        true,
+        &frame.popupToken,
+        frame.state->m_list,
+        [&](){ return contextMenuMatches(frame); },
+        [&](const ControlAction& action){
             ListResult preview;
-            if(!ListBehavior::Apply(*frame.source, options, *action, frame.state->m_list, preview) || !contextMenuMatches(frame))
-                return false;
-            if(preview.activated){
-                result.activated = true;
-                result.key = frame.state->m_list.selectedKey();
-                frame.state->close();
-                input.closePopup(frame.popupToken);
-                snapshotContextMenu(frame);
-                return true;
-            }
-            action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
-            haveAction = action && action->popup == frame.popupToken;
+            if(!ListBehavior::Apply(*frame.source, options, action, frame.state->m_list, preview) || !contextMenuMatches(frame))
+                return ListActionOutcome::Failed;
+            if(!preview.activated)
+                return ListActionOutcome::Continue;
+            result.activated = true;
+            result.key = frame.state->m_list.selectedKey();
+            frame.state->close();
+            m_context.input().closePopup(frame.popupToken);
+            snapshotContextMenu(frame);
+            return ListActionOutcome::Stop;
         }
-    }
-    return contextMenuMatches(frame);
+    );
 }
 
 void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{

@@ -20,7 +20,6 @@ namespace SIMDQuaternionDetail{
 static const SIMDVectorConstF s_SIMDQuaternionControlWZYX = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionControlZWXY = { { { 1.0f, 1.0f, -1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionControlYXWZ = { { { -1.0f, 1.0f, 1.0f, -1.0f } } };
-inline constexpr f32 s_QuaternionInterpolationEpsilon = 0.00001f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,14 +52,6 @@ inline constexpr f64 s_DoubleQuaternionInterpolationEpsilon = 1.0e-12;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4Equal(q0, q1); }
-
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Equal(q0, q1); }
-
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionNotEqual(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4NotEqual(q0, q1); }
-
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleNotEqual(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4NotEqual(q0, q1); }
-
 NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsNaN(SIMDVectorSingle q)noexcept{ return Vector4IsNaN(q); }
 
 NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsNaN(SIMDVectorDouble q)noexcept{ return VectorDouble4IsNaN(q); }
@@ -69,15 +60,9 @@ NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsInfinite(SIMDVectorSingle q)noexcept{ re
 
 NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsInfinite(SIMDVectorDouble q)noexcept{ return VectorDouble4IsInfinite(q); }
 
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionIsIdentity(SIMDVectorSingle q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
-
-NWB_INLINE b8 NWB_SIMD_CALL QuaternionDoubleIsIdentity(SIMDVectorDouble q)noexcept{ return VectorDouble4Equal(q, s_DoubleSIMDIdentityR3); }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionDot(SIMDVectorSingle q0, SIMDVectorSingle q1)noexcept{ return Vector4Dot(q0, q1); }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleDot(SIMDVectorDouble q0, SIMDVectorDouble q1)noexcept{ return VectorDouble4Dot(q0, q1); }
 
@@ -176,18 +161,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionLengthSq(SIMDVectorSingle q)
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLengthSq(SIMDVectorDouble q)noexcept{ return VectorDouble4LengthSq(q); }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionReciprocalLength(SIMDVectorSingle q)noexcept{ return Vector4ReciprocalLength(q); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleReciprocalLength(SIMDVectorDouble q)noexcept{ return VectorDouble4ReciprocalLength(q); }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionLength(SIMDVectorSingle q)noexcept{ return Vector4Length(q); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLength(SIMDVectorDouble q)noexcept{ return VectorDouble4Length(q); }
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionNormalizeEst(SIMDVectorSingle q)noexcept{ return Vector4NormalizeEst(q); }
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleNormalizeEst(SIMDVectorDouble q)noexcept{ return VectorDouble4NormalizeEst(q); }
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionNormalize(SIMDVectorSingle q)noexcept{ return Vector4Normalize(q); }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleNormalize(SIMDVectorDouble q)noexcept{ return VectorDouble4Normalize(q); }
@@ -196,32 +169,12 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionConjugate(SIMDVectorSingle q
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleConjugate(SIMDVectorDouble q)noexcept{ return VectorDoubleXorInt(q, s_DoubleSIMDNegate3); }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionInverse(SIMDVectorSingle q)noexcept{
-    const SIMDVectorSingle lengthSq = QuaternionLengthSq(q);
-    const SIMDVectorSingle conjugate = QuaternionConjugate(q);
-    const SIMDVectorSingle control = VectorLessOrEqual(lengthSq, s_SIMDEpsilon);
-    const SIMDVectorSingle result = VectorDivide(conjugate, lengthSq);
-    return VectorSelect(result, VectorZero(), control);
-}
-
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleInverse(SIMDVectorDouble q)noexcept{
     const SIMDVectorDouble lengthSq = QuaternionDoubleLengthSq(q);
     const SIMDVectorDouble conjugate = QuaternionDoubleConjugate(q);
     const SIMDVectorDouble control = VectorDoubleLessOrEqual(lengthSq, s_DoubleSIMDEpsilon);
     const SIMDVectorDouble result = VectorDoubleDivide(conjugate, lengthSq);
     return VectorDoubleSelect(result, VectorDoubleZero(), control);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionLn(SIMDVectorSingle q)noexcept{
-    const SIMDVectorSingle oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
-    const SIMDVectorSingle qw = VectorSplatW(q);
-    const SIMDVectorSingle q0 = VectorAndInt(q, s_SIMDMask3);
-    const SIMDVectorSingle controlW = VectorInBounds(qw, oneMinusEpsilon);
-    const SIMDVectorSingle theta = VectorACos(qw);
-    const SIMDVectorSingle sinTheta = VectorSin(theta);
-    const SIMDVectorSingle scale = VectorDivide(theta, sinTheta);
-    const SIMDVectorSingle result = VectorMultiply(q0, scale);
-    return VectorSelect(q0, result, controlW);
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)noexcept{
@@ -234,18 +187,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleLn(SIMDVectorDouble q)
     const SIMDVectorDouble scale = VectorDoubleDivide(theta, sinTheta);
     const SIMDVectorDouble result = VectorDoubleMultiply(q0, scale);
     return VectorDoubleSelect(q0, result, controlW);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL QuaternionExp(SIMDVectorSingle q)noexcept{
-    const SIMDVectorSingle theta = Vector3Length(q);
-    SIMDVectorSingle sinTheta{};
-    SIMDVectorSingle cosTheta{};
-    VectorSinCos(sinTheta, cosTheta, theta);
-
-    const SIMDVectorSingle scale = VectorDivide(sinTheta, theta);
-    SIMDVectorSingle result = VectorMultiply(q, scale);
-    result = VectorSelect(result, q, VectorNearEqual(theta, VectorZero(), s_SIMDEpsilon));
-    return VectorSelect(cosTheta, result, s_SIMDSelect1110);
 }
 
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL QuaternionDoubleExp(SIMDVectorDouble q)noexcept{

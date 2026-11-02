@@ -113,16 +113,8 @@ class SoftwareTransparentSamplingHistory{
     }
 
     public void prepareLighting(in Span<SceneLightGpuData> lights){
-        const u32 lightCount = cast<u32>(lights.size());
-        usize seed = hashValue(lightCount);
-        for(usize i = 0u; i < lights.size(); ++i){
-            HashCombineF32x4(lights[i].position, seed);
-            HashCombineF32x4(lights[i].direction, seed);
-            HashCombineF32x4(lights[i].colorIntensity, seed);
-            HashCombineF32x4(lights[i].params, seed);
-            HashCombineF32x4(lights[i].params2, seed);
-        }
-        this.m_lightHash = cast<u64>(seed);
+        SceneShadingGpuData shading;
+        this.m_lightHash = ComputeSceneLightingContentHash(shading, lights);
         this.m_lightingPrepared = true;
     }
 
@@ -242,9 +234,9 @@ class SoftwareTransparentSamplingPush{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 88u;
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 92u;
-const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 96u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 84u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 88u;
+const usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 92u;
 const usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
 // CPU mirror of the heap-only software-shadow selector block.
@@ -321,7 +313,6 @@ class ShadowResolvePushConstants{
     public u32 depthSlot = 0u;
     public u32 worldPositionSlot = 0u;
     public u32 normalSlot = 0u;
-    public u32 softHalfSlot = 0u;
     public u32 inputColorSlot = 0u;
     public u32 momentsSlot = 0u;
     public u32 outputStorageSlot = 0u;

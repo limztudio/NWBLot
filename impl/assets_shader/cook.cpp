@@ -14,7 +14,6 @@
 #include "shader_types.h"
 
 #include <core/assets/cook_metadata.h>
-#include <core/assets/paths.h>
 #include <core/graphics/shader_stage_names.h>
 #include <core/common/log.h>
 

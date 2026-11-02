@@ -38,8 +38,7 @@ TEST(GpuTaskGraph, SerialSchedulingReachabilityPreservesStrictQueriesAcrossReuse
     Core::GpuTaskGraph graph(testArena.arena);
     Array<Core::GpuTaskId, s_TaskCount> tasks = {};
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        Array<char, 32u> identityText = {};
-        const auto derivedNameResult = DeriveName(Name("tests/queue_scaling/serial/"), FormatDecimal(taskIndex, identityText));
+        const auto derivedNameResult = IndexedName(Name("tests/queue_scaling/serial/"), taskIndex);
         ASSERT_TRUE(derivedNameResult);
         const auto taskAdmission = AddTaskWithCommands(*derivedNameResult, "Serial Reachability Task", ComputeCommands(), {}, {}, taskIndex != 0u ? Span(&tasks[taskIndex - 1u], 1u) : Span<const Core::GpuTaskId>{}, graph);
         ASSERT_TRUE(taskAdmission);
@@ -116,8 +115,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     };
     Array<Core::GpuTaskId, LengthOf(costs)> tasks = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        Array<char, 32u> identityText = {};
-        const auto identityNameResult = DeriveName(Name("tests/queue_scaling/prefix/"), FormatDecimal(taskIndex, identityText));
+        const auto identityNameResult = IndexedName(Name("tests/queue_scaling/prefix/"), taskIndex);
         ASSERT_TRUE(identityNameResult);
         const Name identity = *identityNameResult;
         Core::GpuTaskSchedulingHint scheduling;

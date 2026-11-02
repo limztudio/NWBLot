@@ -81,12 +81,9 @@ b8 PreparedShadowMaterialContext::StorageReady(const RendererRayTracingState& st
         && state.m_shadowInstanceMaterialCapacity >= instanceMaterialCount
         && state.m_shadowInstanceCapacity >= instanceCount
         && state.m_shadowMaterialTypedCapacity >= materialTypedByteCount
-        && state.m_shadowInstanceMaterialHeapHandle.valid()
-        && state.m_shadowInstanceMaterialHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowInstanceHeapHandle.valid()
-        && state.m_shadowInstanceHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && state.m_shadowMaterialTypedHeapHandle.valid()
-        && state.m_shadowMaterialTypedHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceMaterialHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowInstanceHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        && RayTracingDetail::IsHeapHandle(state.m_shadowMaterialTypedHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ;
 }
 

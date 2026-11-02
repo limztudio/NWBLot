@@ -7,6 +7,7 @@
 
 #include "edit_host_fixture_support.h"
 
+#include <tests/unit/ui/fixture_text_shaping.h>
 #include <tests/unit/ui/native_input.h>
 
 #include <impl/ecs_ui/toolkit/widgets/popup.h>
@@ -79,7 +80,7 @@ protected:
     Ui::EditModel m_baseModel;
     Ui::EditModel m_popupModel;
     Ui::EditModel m_childModel;
-    UiEditHostFixtureSupport::FixtureShaper m_shaper;
+    Tests::UiFixtureText::FixtureShaper m_shaper;
     Ui::TextLayoutBuilder m_layoutBuilder;
     Ui::PopupState m_popupState;
     Ui::PopupState m_childState;

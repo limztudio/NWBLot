@@ -431,34 +431,6 @@ NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMergeXY(SIMDVectorSingle v0, SIM
 #endif
 }
 
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMergeXY(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorDoublePermute<0, 4, 1, 5>(v0, v1);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorMergeZW(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorSetInt(v0.u[2], v1.u[2], v0.u[3], v1.u[3]);
-#elif defined(NWB_HAS_NEON)
-    return vzipq_f32(v0, v1).val[1];
-#else
-    return _mm_unpackhi_ps(v0, v1);
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleMergeZW(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorDoublePermute<2, 6, 3, 7>(v0, v1);
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorShiftLeft(SIMDVectorSingle v0, SIMDVectorSingle v1, u32 elements)noexcept{
-    NWB_ASSERT(elements < 4);
-    switch(elements){
-    case 0: return VectorPermute<0, 1, 2, 3>(v0, v1);
-    case 1: return VectorPermute<1, 2, 3, 4>(v0, v1);
-    case 2: return VectorPermute<2, 3, 4, 5>(v0, v1);
-    default: return VectorPermute<3, 4, 5, 6>(v0, v1);
-    }
-}
-
 NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleShiftLeft(SIMDVectorDouble v0, SIMDVectorDouble v1, u32 elements)noexcept{
     NWB_ASSERT(elements < 4);
     switch(elements){
@@ -467,56 +439,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleShiftLeft(SIMDVectorDouble
     case 2: return VectorDoublePermute<2, 3, 4, 5>(v0, v1);
     default: return VectorDoublePermute<3, 4, 5, 6>(v0, v1);
     }
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRotateLeft(SIMDVectorSingle value, u32 elements)noexcept{
-    NWB_ASSERT(elements < 4);
-    switch(elements){
-    case 0: return value;
-    case 1: return VectorSwizzle<1, 2, 3, 0>(value);
-    case 2: return VectorSwizzle<2, 3, 0, 1>(value);
-    default: return VectorSwizzle<3, 0, 1, 2>(value);
-    }
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleRotateLeft(SIMDVectorDouble value, u32 elements)noexcept{
-    NWB_ASSERT(elements < 4);
-    switch(elements){
-    case 0: return value;
-    case 1: return VectorDoubleSwizzle<1, 2, 3, 0>(value);
-    case 2: return VectorDoubleSwizzle<2, 3, 0, 1>(value);
-    default: return VectorDoubleSwizzle<3, 0, 1, 2>(value);
-    }
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorRotateRight(SIMDVectorSingle value, u32 elements)noexcept{
-    NWB_ASSERT(elements < 4);
-    switch(elements){
-    case 0: return value;
-    case 1: return VectorSwizzle<3, 0, 1, 2>(value);
-    case 2: return VectorSwizzle<2, 3, 0, 1>(value);
-    default: return VectorSwizzle<1, 2, 3, 0>(value);
-    }
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleRotateRight(SIMDVectorDouble value, u32 elements)noexcept{
-    NWB_ASSERT(elements < 4);
-    switch(elements){
-    case 0: return value;
-    case 1: return VectorDoubleSwizzle<3, 0, 1, 2>(value);
-    case 2: return VectorDoubleSwizzle<2, 3, 0, 1>(value);
-    default: return VectorDoubleSwizzle<1, 2, 3, 0>(value);
-    }
-}
-
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorInsert(SIMDVectorSingle vd, SIMDVectorSingle vs, u32 vsLeftRotateElements, u32 select0, u32 select1, u32 select2, u32 select3)noexcept{
-    const SIMDVectorSingle control = VectorSelectControl(select0 & 1u, select1 & 1u, select2 & 1u, select3 & 1u);
-    return VectorSelect(vd, VectorRotateLeft(vs, vsLeftRotateElements), control);
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleInsert(SIMDVectorDouble vd, SIMDVectorDouble vs, u32 vsLeftRotateElements, u32 select0, u32 select1, u32 select2, u32 select3)noexcept{
-    const SIMDVectorDouble control = VectorDoubleSelectControl(select0 & 1u, select1 & 1u, select2 & 1u, select3 & 1u);
-    return VectorDoubleSelect(vd, VectorDoubleRotateLeft(vs, vsLeftRotateElements), control);
 }
 
 

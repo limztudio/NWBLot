@@ -22,12 +22,8 @@
 
 [[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
-#pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticSwMaterialContextSlots[];
-#pragma warning(pop)
 #define g_NwbCausticSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticSwPushConstants.deferredResourcesHeapSlot]
-#define g_NwbCausticSwMaterialContextSlots g_NwbHeapCausticSwMaterialContextSlots[g_NwbCausticSwPushConstants.materialContextSlotsHeapSlot]
+#define g_NwbCausticSwMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbCausticSwPushConstants.materialContextSlotsHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
@@ -69,20 +65,6 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#pragma warning(push)
-#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
-#pragma warning(pop)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapCausticSwInstances(const uint slot){
-    return g_NwbHeapCausticSwInstanceBuffers[slot];
-}
 
 
 #pragma warning(push)
@@ -130,7 +112,7 @@ bool nwbCausticSwInstanceEvents(
     const NwbOpticalTraceConfig config, const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float maximum, const bool reverse,
     __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], inout uint eventCount, inout NwbCausticBoundary boundary, inout float tolerance, inout NwbOpticalTraceResult result
 ){
-    const NwbSwBvhInstance instance = nwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_RT_CSG_ENABLED
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
@@ -276,7 +258,7 @@ bool nwbCausticCollectRefractiveEvents(
 
 // Per-instance traversal refines the nearest triangle hit.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
-    const NwbSwBvhInstance instance = nwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_RT_CSG_ENABLED
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)

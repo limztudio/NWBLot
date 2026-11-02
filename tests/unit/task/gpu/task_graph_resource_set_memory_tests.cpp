@@ -2,10 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "task_graph_test_utils.h"
+
 #include <core/task/gpu/task_graph.h>
 
 #include <global/arena_memory.h>
-#include <global/text_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -32,6 +33,7 @@ namespace __hidden_resource_set_memory_tests{
 
 
 using ResourceIds = Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena>;
+using TaskGraphTestUtils::IndexedName;
 
 static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
 
@@ -39,23 +41,11 @@ static constexpr Name s_ScratchOwner("core/task/gpu/declaration_scratch");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static ArenaMemoryStats ScratchOwnerStats()noexcept{
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    while(record){
-        ArenaMemoryOwnerSnapshot snapshot;
-        record = ReadArenaMemoryOwnerRecord(*record, snapshot);
-        if(snapshot.source == ArenaMemorySource::Arena && snapshot.ownerName == s_ScratchOwner)
-            return snapshot.stats;
-    }
-    return {};
-}
-
 [[nodiscard]] static b8 FillResources(Core::GpuTaskGraph& graph, const usize count, ResourceIds& members){
     members.clear();
     members.reserve(count);
     for(usize index = 0u; index < count; ++index){
-        Array<char, 32u> text = {};
-        const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/resource/"), FormatDecimal(index, text));
+        const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/resource/"), index);
         if(!identityNameResult)
             return false;
         const Name identity = *identityNameResult;
@@ -86,7 +76,7 @@ static void ExpectDeclarationState(const Core::GpuTaskGraph& graph, const u64 re
 
 
 TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocated){
-    const ArenaMemoryStats before = ScratchOwnerStats();
+    const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     {
         Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/small"));
         Core::GpuTaskGraph graph(arena);
@@ -94,8 +84,7 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
         ASSERT_TRUE(FillResources(graph, 64u, members));
         Core::GpuGraphResourceSetId lastSet;
         for(const usize count : { 0u, 1u, 8u, 32u }){
-            Array<char, 32u> text = {};
-            const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/small_set/"), FormatDecimal(count, text));
+            const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/small_set/"), count);
             ASSERT_TRUE(identityNameResult);
             const Name identity = *identityNameResult;
             const auto lastSetTaskAdmission = graph.importResourceSet(SetDescription(identity, members, count));
@@ -112,19 +101,19 @@ TEST(ResourceSetMemory, SmallSetsAndBlockedMutationLeaveTheScratchOwnerUnallocat
             EXPECT_FALSE(graph.importResourceSet(SetDescription(last.identity, members, last.memberCount)).has_value());
             EXPECT_EQ(declarations.declarationRevision(), revision);
         }
-        const ArenaMemoryStats after = ScratchOwnerStats();
+        const ArenaMemoryStats after = OwnerStats(s_ScratchOwner);
         EXPECT_EQ(after.usedBytes, before.usedBytes);
         EXPECT_EQ(after.reservedBytes, before.reservedBytes);
         EXPECT_EQ(after.allocationCount, before.allocationCount);
         EXPECT_EQ(after.reallocationCount, before.reallocationCount);
         EXPECT_EQ(after.deallocationCount, before.deallocationCount);
     }
-    EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
-    EXPECT_EQ(ScratchOwnerStats().reservedBytes, before.reservedBytes);
+    EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
+    EXPECT_EQ(OwnerStats(s_ScratchOwner).reservedBytes, before.reservedBytes);
 }
 
 TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGraphReset){
-    const ArenaMemoryStats before = ScratchOwnerStats();
+    const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     ArenaMemoryStats warm;
     {
         Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/repeated"));
@@ -137,15 +126,14 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             const ArenaMemoryStats heapBefore = HeapBackingMemoryStats();
             usize phase = 0u;
             for(const usize count : { 4096u, 33u, 4096u }){
-                Array<char, 32u> text = {};
-                const auto identityNameResult = DeriveName(Name("tests/resource_set_memory/phase/"), FormatDecimal(phase, text));
+                const auto identityNameResult = IndexedName(Name("tests/resource_set_memory/phase/"), phase);
                 ASSERT_TRUE(identityNameResult);
                 const Name identity = *identityNameResult;
                 const auto setResult = graph.importResourceSet(SetDescription(identity, members, count));
                 ASSERT_TRUE(setResult);
                 const Core::GpuGraphResourceSetId set = *setResult;
                 ASSERT_TRUE(set.valid());
-                EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
+                EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
                 const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
                 ASSERT_TRUE(declarations.valid());
                 const Core::GpuTaskGraphResourceSetView stored = declarations.resourceSetAt(set.index);
@@ -155,7 +143,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
                 ++phase;
             }
             const ArenaMemoryStats heapAfter = HeapBackingMemoryStats();
-            const ArenaMemoryStats after = ScratchOwnerStats();
+            const ArenaMemoryStats after = OwnerStats(s_ScratchOwner);
             if(cycle == 0u){
                 warm = after;
                 EXPECT_GT(warm.reservedBytes, before.reservedBytes);
@@ -170,11 +158,11 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
             EXPECT_EQ(after.usedBytes, before.usedBytes);
         }
         graph.reset();
-        const ArenaMemoryStats afterReset = ScratchOwnerStats();
+        const ArenaMemoryStats afterReset = OwnerStats(s_ScratchOwner);
         EXPECT_EQ(afterReset.usedBytes, before.usedBytes);
         EXPECT_EQ(afterReset.reservedBytes, warm.reservedBytes);
     }
-    const ArenaMemoryStats afterDestruction = ScratchOwnerStats();
+    const ArenaMemoryStats afterDestruction = OwnerStats(s_ScratchOwner);
     EXPECT_EQ(afterDestruction.usedBytes, before.usedBytes);
     EXPECT_EQ(afterDestruction.reservedBytes, before.reservedBytes);
     EXPECT_GT(afterDestruction.allocationCount, before.allocationCount);
@@ -182,7 +170,7 @@ TEST(ResourceSetMemory, LargeSmallLargeScopesReclaimUsageAndReuseBackingAcrossGr
 }
 
 TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDeclaration){
-    const ArenaMemoryStats before = ScratchOwnerStats();
+    const ArenaMemoryStats before = OwnerStats(s_ScratchOwner);
     {
         Core::Alloc::GlobalArena arena(Name("tests/resource_set_memory/rejection"));
         Core::GpuTaskGraph graph(arena);
@@ -201,20 +189,19 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
             members.back() = members.front();
             EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
-            EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
+            EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
             members.back() = saved;
             ++members.back().generation;
             EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
-            EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
+            EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
             members.back() = saved;
             members.back().index = static_cast<u32>(members.size());
             EXPECT_FALSE(graph.importResourceSet(rejected).has_value());
             ASSERT_NO_FATAL_FAILURE(ExpectDeclarationState(graph, revision, cycle));
-            EXPECT_EQ(ScratchOwnerStats().usedBytes, before.usedBytes);
+            EXPECT_EQ(OwnerStats(s_ScratchOwner).usedBytes, before.usedBytes);
             members.back() = saved;
-            Array<char, 32u> text = {};
-            const auto acceptedIdentityNameResult = DeriveName(Name("tests/resource_set_memory/accepted/"), FormatDecimal(cycle, text));
+            const auto acceptedIdentityNameResult = IndexedName(Name("tests/resource_set_memory/accepted/"), cycle);
             ASSERT_TRUE(acceptedIdentityNameResult);
             const Name acceptedIdentity = *acceptedIdentityNameResult;
             {
@@ -223,7 +210,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
                 if(gpuTaskAdmission)
                     EXPECT_TRUE(gpuTaskAdmission->valid());
             }
-            const ArenaMemoryStats after = ScratchOwnerStats();
+            const ArenaMemoryStats after = OwnerStats(s_ScratchOwner);
             EXPECT_EQ(after.usedBytes, before.usedBytes);
             if(cycle == 0u){
                 warmReserved = after.reservedBytes;
@@ -233,7 +220,7 @@ TEST(ResourceSetMemory, LateRejectedMembersRetireTemporaryStorageBeforeTheNextDe
                 EXPECT_EQ(after.reservedBytes, warmReserved);
         }
     }
-    const ArenaMemoryStats after = ScratchOwnerStats();
+    const ArenaMemoryStats after = OwnerStats(s_ScratchOwner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
     EXPECT_GT(after.allocationCount, before.allocationCount);

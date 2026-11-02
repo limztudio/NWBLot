@@ -11,7 +11,8 @@ import subprocess
 import sys
 
 from refraction_capture_smoke import compare_refraction_frames, red_foreground, region_pixels, FOREGROUND_REGION
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 
 PHASES = ("baseline", "active", "moved", "edge", "empty", "disabled", "reenabled")

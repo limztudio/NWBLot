@@ -126,24 +126,14 @@ NumericEditBoxResult Builder::floatEdit(const AStringView stableKey, FloatEditMo
 }
 
 void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept{
-    frame.draftGeneration = draft.instanceGeneration();
-    frame.draftRevision = draft.revision();
-    frame.draftExternalRevision = draft.externalRevision();
-    frame.draftCompositionGeneration = draft.compositionGeneration();
-    frame.draftSelectionGeneration = draft.selectionGeneration();
-    frame.anchor = draft.anchor();
-    frame.caret = draft.caret();
+    frame.draftStamp = draft.stamp();
 }
 
 b8 Builder::numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const noexcept{
     return
-        popupAncestorsVisible() && frame.state && draft.instanceGeneration() == frame.draftGeneration
-        && draft.revision() == frame.draftRevision && draft.externalRevision() == frame.draftExternalRevision
-        && draft.compositionGeneration() == frame.draftCompositionGeneration && draft.selectionGeneration() == frame.draftSelectionGeneration
-        && draft.anchor() == frame.anchor && draft.caret() == frame.caret
-        && frame.state->modelGeneration == frame.draftGeneration && frame.state->revision == frame.draftRevision
-        && frame.state->selectionGeneration == frame.draftSelectionGeneration
-        && frame.state->anchor == frame.anchor && frame.state->caret == frame.caret && frame.state->focused == frame.focused
+        popupAncestorsVisible() && frame.state
+        && draft.matchesStamp(frame.draftStamp)
+        && frame.state->matchesStamp(frame.draftStamp, frame.focused)
     ;
 }
 

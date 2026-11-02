@@ -31,8 +31,6 @@ public:
 
     constexpr FramebufferAttachment& setArraySlice(ArraySlice index)noexcept{ subresources.baseArraySlice = index; subresources.numArraySlices = 1; return *this; }
 
-    constexpr FramebufferAttachment& setArraySliceRange(ArraySlice index, ArraySlice count)noexcept{ subresources.baseArraySlice = index; subresources.numArraySlices = count; return *this; }
-
     constexpr FramebufferAttachment& setMipLevel(MipLevel level)noexcept{ subresources.baseMipLevel = level; subresources.numMipLevels = 1; return *this; }
 
     constexpr FramebufferAttachment& setFormat(Format::Enum f)noexcept{ format = f; return *this; }
@@ -61,11 +59,6 @@ public:
 
     constexpr FramebufferDesc& setDepthAttachment(Texture* texture, TextureSubresourceSet subresources)noexcept{ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 
-    constexpr FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d)noexcept{ shadingRateAttachment = d; return *this; }
-
-    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture)noexcept{ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
-
-    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture, TextureSubresourceSet subresources)noexcept{ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 };
 
 struct FramebufferInfo{
@@ -85,9 +78,6 @@ public:
 
     constexpr FramebufferInfo& setDepthFormat(Format::Enum format)noexcept{ depthFormat = format; return *this; }
 
-    constexpr FramebufferInfo& setSampleCount(u32 count)noexcept{ sampleCount = count; return *this; }
-
-    constexpr FramebufferInfo& setSampleQuality(u32 quality)noexcept{ sampleQuality = quality; return *this; }
 };
 [[nodiscard]] b8 operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs)noexcept;
 

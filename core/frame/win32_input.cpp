@@ -429,7 +429,7 @@ void Win32FrameInput::dispatchCharInput(const WPARAM wParam, const LPARAM lParam
     }
 #else
     for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
-        dispatchUnicodeInput(static_cast<u32>(wParam & s_AnsiCharMask));
+        dispatchUnicodeInput(static_cast<u32>(static_cast<u8>(wParam)));
 #endif
 }
 

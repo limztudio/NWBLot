@@ -81,9 +81,9 @@ private:
     static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
     static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bounds bindless-resource slot push offset drifted");
 
-    static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
-    static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
-    static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
+    static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
+    static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
+    static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
 
 
 private:

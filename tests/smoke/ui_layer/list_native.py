@@ -7,7 +7,8 @@ import time
 
 from edit_native import POINTER_SETTLE_SECONDS, EditNativeInput
 from interaction_smoke import WIN32_WORD_MASK
-from window_capture_smoke import LinuxXEvent, SmokeFailure
+from window_capture_smoke import SmokeFailure
+from window_capture_x11 import LinuxXEvent
 
 
 WIN32_WHEEL_DELTA = 120

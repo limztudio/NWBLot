@@ -137,7 +137,7 @@ b8 ResolveShadowOccluderMaterial(
         const b8 sampledTexturesReady = materialInfo->surfaceDispatchId == Limit<u32>::s_Max || sampledTextureCollector.collect(
             *materialInfo,
             [&materialSystem](const MaterialSurfaceInfo& surface, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
-                return materialSystem.appendPreparedMaterialSurfaceSampledTextures(surface, pending);
+                return AppendPreparedMaterialSurfaceSampledTextures(surface, materialSystem.materialState().m_resourceState, pending);
             }
         );
         if(!sampledTexturesReady)

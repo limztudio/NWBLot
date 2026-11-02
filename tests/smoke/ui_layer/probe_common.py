@@ -6,9 +6,21 @@ import math
 from window_capture_smoke import SmokeFailure
 
 
+FNV32_OFFSET_BASIS = 2166136261
+FNV32_PRIME = 16777619
+UINT32_MASK = 0xFFFFFFFF
+
+
 def center(rectangle):
     x, y, width, height = rectangle
     return x + width / 2.0, y + height / 2.0
+
+
+def text_hash(text):
+    value = FNV32_OFFSET_BASIS
+    for byte in text.encode("utf-8"):
+        value = ((value ^ byte) * FNV32_PRIME) & UINT32_MASK
+    return value
 
 
 def snapshot_from_patterns(text, state_pattern, display_pattern, skin_pattern, geometry_pattern, fields, required_rectangles, *, fixture, bit_fields=()):

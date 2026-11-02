@@ -13,7 +13,6 @@
 #include "csg_shadow_constants.h"
 #include "../bindless/bindless_heap.slangi"
 #include "../deferred/bindless_resources.slangi"
-#include "../raytrace/material_context_slots.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,7 +13,6 @@
 
 #include <impl/assets_skeleton/joint_types.adhd.h>
 
-#include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 
 

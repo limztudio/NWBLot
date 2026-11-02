@@ -29,16 +29,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Uniform-buffer heap alias: uint at byte 0, uint3 pad at byte 16, 32-byte std140 extent.
-struct NwbBindlessHeapUint{
-    uint value;
-    uint3 padding;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture2D<float4> g_NwbHeapSampledImages[];
 
 // Texture2DArray needs its own declaration from Texture2D; it shares the resource-slot namespace under a separate binding/class.
@@ -46,9 +36,6 @@ struct NwbBindlessHeapUint{
 
 // Texture3D needs another sampled-image binding because the Slang resource type sets the SPIR-V view dimension. It shares the global slot namespace.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Texture3D<float4> g_NwbHeapSampledImage3Ds[];
-
-// TextureCube likewise needs its own declaration and binding: a cube view cannot be addressed through the Texture2D table.
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] TextureCube<float4> g_NwbHeapSampledImageCubes[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2D<float4> g_NwbHeapStorageImages[];
 
@@ -68,8 +55,6 @@ struct NwbBindlessHeapUint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWTexture2DArray<uint4> g_NwbHeapStorageImage2DArrayUint4s[];
 #pragma warning(pop)
 
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] Buffer<uint> g_NwbHeapSampledBuffers[];
-
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWByteAddressBuffer g_NwbHeapStorageBuffers[];
 
 // Read-only raw alias over the same StorageBuffer binding (SRV/UAV is SPIR-V access decoration, not a new descriptor).
@@ -78,8 +63,6 @@ struct NwbBindlessHeapUint{
 #pragma warning(disable: 39001) // Deliberate read-only view of the storage-buffer descriptor table above.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ByteAddressBuffer g_NwbHeapRawBuffers[];
 #pragma warning(pop)
-
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbBindlessHeapUint> g_NwbHeapUniformBuffers[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLER, NWB_BINDLESS_HEAP_SAMPLER_SET)]] SamplerState g_NwbHeapSamplers[];
 
@@ -112,10 +95,6 @@ Texture2DArray<float4> nwbHeapSampledImage2DArray(const uint slot){
 
 Texture3D<float4> nwbHeapSampledImage3D(const uint slot){
     return g_NwbHeapSampledImage3Ds[slot];
-}
-
-TextureCube<float4> nwbHeapSampledImageCube(const uint slot){
-    return g_NwbHeapSampledImageCubes[slot];
 }
 
 // CSG's slot cbuffer is uniform per draw/dispatch, so these stay uniform. Per-invocation storage images need NonUniformResourceIndex.

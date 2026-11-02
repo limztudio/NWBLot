@@ -96,11 +96,8 @@ void RendererReflectionPostprocess::releaseTargets(){
     if(m_control)
         m_control->reset(0u);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    for(Core::GpuDescriptorHandle& descriptor : m_descriptors){
-        if(descriptor.valid() && heap.isInitialized())
-            heap.free(descriptor);
-        descriptor = Core::GpuDescriptorHandle::Invalid();
-    }
+    for(Core::GpuDescriptorHandle& descriptor : m_descriptors)
+        RendererDescriptorRegisterDetail::RetireDescriptor(heap, descriptor);
     m_history = {};
     m_spatial = {};
     m_width = 0u;

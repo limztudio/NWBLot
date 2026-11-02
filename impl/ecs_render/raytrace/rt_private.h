@@ -113,7 +113,6 @@ struct RenderableRayTracingMeshResources{
 [[nodiscard]] b8 ReplaceHeapBuffer(Core::GpuDescriptorClass::Enum descriptorClass, b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle);
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
 [[nodiscard]] Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept;
-inline void BindComputePassHeap(const Core::ComputePipelineHandle& pipeline, Core::GpuDescriptorHeap& heap, Core::CommandList& commandList){ heap.bindCompute(commandList, *pipeline.get()); }
 u32 BuildSceneBvhNode(const u32 lo, const u32 hi, const Span<const SceneBvhPrimitiveCalculation> primitiveBounds, const Span<const u32> instanceLeafCost, const Span<u32> indices, Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes);
 
 

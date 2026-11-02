@@ -21,10 +21,6 @@
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
 #endif
-#elif defined(NWB_PLATFORM_ANDROID)
-#define VK_USE_PLATFORM_ANDROID_KHR
-#elif defined(NWB_PLATFORM_APPLE)
-#define VK_USE_PLATFORM_METAL_EXT
 #endif
 
 #include <volk/volk.h>

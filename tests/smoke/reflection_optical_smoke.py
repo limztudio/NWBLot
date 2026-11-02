@@ -17,7 +17,8 @@ import tempfile
 from reflection_optical_reference import DENSE_CASES, decode_radiance, pixel_reference
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics, validate_frame, validate_statistics
 from refraction_gallery_smoke import png_rgb_bytes
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 

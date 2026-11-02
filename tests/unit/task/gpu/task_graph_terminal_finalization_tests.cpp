@@ -63,10 +63,9 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
 
     Array<Core::GpuTaskId, 4u> readers = {};
     const Name readerBaseName("tests/task_graph/ordered_terminal_finalization_reader_");
-    Array<char, 32u> readerIndexBuffer = {};
     for(usize readerIndex = 0u; readerIndex < LengthOf(readers); ++readerIndex){
         Core::GpuTaskDesc readerDesc;
-        const auto readerNameResult = DeriveName(readerBaseName, FormatDecimal(readerIndex, readerIndexBuffer));
+        const auto readerNameResult = IndexedName(readerBaseName, readerIndex);
         ASSERT_TRUE(readerNameResult);
         readerDesc
             .setIdentity(*readerNameResult)
@@ -145,9 +144,8 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         prefixScheduling.forceSubmissionBoundary = true;
         prefixScheduling.allowPacketMerge = false;
         const Name prefixBaseName("tests/task_graph/terminal_packed_reachability_prefix_");
-        Array<char, 32u> taskIndexBuffer = {};
         for(usize taskIndex = 0u; taskIndex < prefixPacketCount; ++taskIndex){
-            const auto prefixNameResult = DeriveName(prefixBaseName, FormatDecimal(taskIndex, taskIndexBuffer));
+            const auto prefixNameResult = IndexedName(prefixBaseName, taskIndex);
             ASSERT_TRUE(prefixNameResult);
             const auto prefixTaskResult = AddTaskWithCommands(*prefixNameResult, "Terminal Packed Reachability Prefix", prefixCommands, prefixScheduling, {}, {}, graph);
             ASSERT_TRUE(prefixTaskResult);

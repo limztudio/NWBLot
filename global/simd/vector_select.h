@@ -125,22 +125,6 @@ NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleAndCInt(SIMDVectorDouble v
 #endif
 }
 
-NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorNorInt(SIMDVectorSingle v0, SIMDVectorSingle v1)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeU32(~(v0.u[0] | v1.u[0]), ~(v0.u[1] | v1.u[1]), ~(v0.u[2] | v1.u[2]), ~(v0.u[3] | v1.u[3]));
-#elif defined(NWB_HAS_NEON)
-    const uint32x4_t value = vorrq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1));
-    return vreinterpretq_f32_u32(vbicq_u32(vreinterpretq_u32_f32(s_SIMDNegOneMask), value));
-#else
-    const __m128i value = _mm_or_si128(_mm_castps_si128(v0), _mm_castps_si128(v1));
-    return _mm_castsi128_ps(_mm_andnot_si128(value, s_SIMDNegOneMask));
-#endif
-}
-
-NWB_INLINE SIMDVectorDouble NWB_SIMD_CALL VectorDoubleNorInt(SIMDVectorDouble v0, SIMDVectorDouble v1)noexcept{
-    return VectorDoubleXorInt(VectorDoubleOrInt(v0, v1), VectorDoubleTrueInt());
-}
-
 NWB_INLINE SIMDVectorSingle NWB_SIMD_CALL VectorSelect(SIMDVectorSingle v0, SIMDVectorSingle v1, SIMDVectorSingle control)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorOrInt(VectorAndCInt(v0, control), VectorAndInt(v1, control));

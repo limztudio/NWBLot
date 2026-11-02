@@ -30,11 +30,10 @@ A separator does not receive focus or activation. Its direction selects a horizo
 
 `BuilderScopeFrame` owns transient layout, declarations, borrowed control loans and the active window/popup state. `Builder` retains shared text, paint, skin, styles and edit services. Ended popup child frames retain their layout and control loans at stable arena-owned addresses until the outermost popup ends.
 
-- `window_behavior.cpp` owns initialization, dragging, resizing, viewport constraints, and candidate validation.
-- `window_layout.cpp` owns skin-derived metrics and chrome/content geometry.
+- `window.cpp` owns initialization, dragging, resizing, viewport constraints, candidate validation, skin-derived metrics, and chrome/content geometry.
 - `builder_window.cpp` owns window declaration and balanced content arrangement.
 - `window_paint.cpp` owns chrome painting and matching hit targets.
-- `builder_separator.cpp` owns divider declaration; `controls_paint.cpp` paints arranged content.
+- `widget_builder_controls.cpp` owns divider declaration; `controls_paint.cpp` paints arranged content.
 
 ## Keyed lists and scrolling
 
@@ -62,7 +61,7 @@ Wheel scrolling preserves selection and uses the accepted step/range. Scrollbar 
 
 Explicit `state.select()`, `open()` and `close()` renew the field input lifetime even for unchanged values. Each opening/cancellation renews preview input lifetime. Reordering preserves valid committed and preview keys; removing/disabling a key clears it. A new source instance clears selection/scroll and closes. Recreated or reparented declarations close the old popup while preserving the committed key. Accepted field/popup/list tokens fence old queued clicks, wheel, navigation, thumb drags and held keys. Focus returns only when an eligible field and its matching closed frame are accepted; native focus loss prevents restoration.
 
-`comboStyle()` resolves `combo.normal`, `combo.hover`, `combo.open`, `combo.focused`, `combo.disabled` and `combo.arrow`. The default and replacement skins define the field states as semantic aliases of existing artwork, and popup/rows/scrollbar use their existing skin contracts. Field padding/minimum sizes use the maximum of all states. `combo_state.cpp`, `combo_behavior.cpp`, `builder_combo.cpp`, `combo_input.cpp` and `combo_paint.cpp` separate lifetime, keyed behavior, declaration, input and painting. Popup rows share the existing list painter and scrollbar geometry; dataset size does not determine allocations. Combos and searchable combos also declare inside nested user popups; each automatic popup binds to its exact parent opening. Variable-height rows remain separate work.
+`comboStyle()` resolves `combo.normal`, `combo.hover`, `combo.open`, `combo.focused`, `combo.disabled` and `combo.arrow`. The default and replacement skins define the field states as semantic aliases of existing artwork, and popup/rows/scrollbar use their existing skin contracts. Field padding/minimum sizes use the maximum of all states. `combo.cpp`, `builder_combo.cpp`, `combo_input.cpp` and `combo_paint.cpp` separate lifetime, keyed behavior, declaration, input and painting. Popup rows share the existing list painter and scrollbar geometry; dataset size does not determine allocations. Combos and searchable combos also declare inside nested user popups; each automatic popup binds to its exact parent opening. Variable-height rows remain separate work.
 
 ## Searchable combos
 

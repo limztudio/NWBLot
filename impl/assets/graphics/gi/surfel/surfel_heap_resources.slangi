@@ -50,7 +50,6 @@ struct NwbSurfelHeapPushConstants{
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases over the global UniformBuffer/StorageBuffer heap tables.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbSurfelConstants, Std140DataLayout> g_NwbHeapSurfelConstantBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapSurfelMaterialContextSlotBuffers[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 #if defined(NWB_SURFEL_SPAWN_COHERENT_ACCESS)

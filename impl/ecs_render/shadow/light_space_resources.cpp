@@ -303,15 +303,13 @@ b8 RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePlan&
 void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
     auto& state = m_lightSpaceShadow;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized()){
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.countsDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.eventsDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.viewsDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.drawArgumentsDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.depthDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgContextDescriptor);
-        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgOpaqueDepthDescriptor);
-    }
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.countsDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.eventsDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.viewsDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.drawArgumentsDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.depthDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgContextDescriptor);
+    RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgOpaqueDepthDescriptor);
     state.m_captureHistory.invalidate();
     state.m_diagnostics = {};
     state.m_captureSceneTrusted = false;

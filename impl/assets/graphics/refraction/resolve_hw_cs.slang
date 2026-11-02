@@ -18,11 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma warning(push)
-#pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapRefractionMaterialContexts[];
-#pragma warning(pop)
-#define g_NwbRefractionMaterialContext g_NwbHeapRefractionMaterialContexts[g_NwbRefractionPush.materialContextSlotsHeapSlot]
+#define g_NwbRefractionMaterialContext nwbHeapMaterialContextSlots(g_NwbRefractionPush.materialContextSlotsHeapSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -273,7 +269,14 @@ bool nwbRefractionTryResolveHardware(const NwbRefractionEntry entry, out half4 o
             nwbRefractionCount(NWB_REFRACTION_COUNTER_shadedOpaqueReturns);
         }
         const NwbRtInstanceMaterial backgroundMaterial = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[backgroundInstance];
-        const NwbMeshSurface backgroundSurface = nwbRefractionEvaluateTriangleSurface(backgroundMaterial, backgroundPosition, outgoingDirection, backgroundQuery.CommittedPrimitiveIndex(), backgroundQuery.CommittedTriangleBarycentrics(), backgroundQuery.CommittedWorldToObject3x4());
+        const NwbMeshSurface backgroundSurface = nwbRefractionEvaluateTriangleSurface(
+            backgroundMaterial,
+            backgroundPosition,
+            outgoingDirection,
+            backgroundQuery.CommittedPrimitiveIndex(),
+            backgroundQuery.CommittedTriangleBarycentrics(),
+            backgroundQuery.CommittedWorldToObject3x4()
+        );
 #endif
         half coverage = half(1.0h);
         bool opaqueHit = true;

@@ -22,53 +22,16 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_task_graph_draw_snapshots{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename Snapshot>
-void CaptureMaterialPassSnapshot(
-    const MaterialPassDrawItemPartitionsView& drawItems,
-    const CsgFrameGpuDataView& csgFrameData,
-    const usize inInstanceCount,
-    const usize inMaterialTypedByteCount,
-    Snapshot& snapshot
-){
-    AssignVector(snapshot.regularMeshDrawItems, drawItems.regular.meshDrawItems);
-    AssignVector(snapshot.regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
-    AssignVector(snapshot.regularComputeDrawItems, drawItems.regular.computeDrawItems);
-    AssignVector(snapshot.csgMeshDrawItems, drawItems.csg.meshDrawItems);
-    AssignVector(snapshot.csgIndexedDrawItems, drawItems.csg.indexedDrawItems);
-    AssignVector(snapshot.csgComputeDrawItems, drawItems.csg.computeDrawItems);
-    AssignVector(snapshot.csgReceiverRanges, csgFrameData.receiverRanges);
-    AssignVector(snapshot.csgCutters, csgFrameData.cutters);
-    snapshot.csgWorkRegion = csgFrameData.workRegion;
-    snapshot.instanceCount = inInstanceCount;
-    snapshot.materialTypedByteCount = inMaterialTypedByteCount;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void OpaqueMaterialPassGraphSnapshot::capture(
-    const MaterialPassDrawItemPartitionsView& drawItems,
+void MaterialPassCsgGraphSnapshotBase::captureCsgFrameData(
     const CsgFrameGpuDataView& csgFrameData,
     const usize inInstanceCount,
     const usize inMaterialTypedByteCount
 ){
-    __hidden_task_graph_draw_snapshots::CaptureMaterialPassSnapshot(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount, *this);
-    AssignVector(csgReceiverSurfaceMeshDrawItems, drawItems.csgReceiverSurface.meshDrawItems);
-    AssignVector(csgReceiverSurfaceIndexedDrawItems, drawItems.csgReceiverSurface.indexedDrawItems);
-    AssignVector(csgReceiverSurfaceComputeDrawItems, drawItems.csgReceiverSurface.computeDrawItems);
+    AssignVector(csgReceiverRanges, csgFrameData.receiverRanges);
+    AssignVector(csgCutters, csgFrameData.cutters);
+    csgWorkRegion = csgFrameData.workRegion;
+    instanceCount = inInstanceCount;
+    materialTypedByteCount = inMaterialTypedByteCount;
     captured = true;
 }
 
@@ -81,12 +44,7 @@ void TransparentCsgIntervalGraphSnapshot::capture(
     AssignVector(receiverSurfaceMeshDrawItems, receiverSurfaceDrawItems.meshDrawItems);
     AssignVector(receiverSurfaceIndexedDrawItems, receiverSurfaceDrawItems.indexedDrawItems);
     AssignVector(receiverSurfaceComputeDrawItems, receiverSurfaceDrawItems.computeDrawItems);
-    AssignVector(csgReceiverRanges, csgFrameData.receiverRanges);
-    AssignVector(csgCutters, csgFrameData.cutters);
-    csgWorkRegion = csgFrameData.workRegion;
-    instanceCount = inInstanceCount;
-    materialTypedByteCount = inMaterialTypedByteCount;
-    captured = true;
+    captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
 }
 
 void TransparentMaterialPassGraphSnapshot::capture(
@@ -95,8 +53,25 @@ void TransparentMaterialPassGraphSnapshot::capture(
     const usize inInstanceCount,
     const usize inMaterialTypedByteCount
 ){
-    __hidden_task_graph_draw_snapshots::CaptureMaterialPassSnapshot(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount, *this);
-    captured = true;
+    AssignVector(regularMeshDrawItems, drawItems.regular.meshDrawItems);
+    AssignVector(regularIndexedDrawItems, drawItems.regular.indexedDrawItems);
+    AssignVector(regularComputeDrawItems, drawItems.regular.computeDrawItems);
+    AssignVector(csgMeshDrawItems, drawItems.csg.meshDrawItems);
+    AssignVector(csgIndexedDrawItems, drawItems.csg.indexedDrawItems);
+    AssignVector(csgComputeDrawItems, drawItems.csg.computeDrawItems);
+    captureCsgFrameData(csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+}
+
+void OpaqueMaterialPassGraphSnapshot::capture(
+    const MaterialPassDrawItemPartitionsView& drawItems,
+    const CsgFrameGpuDataView& csgFrameData,
+    const usize inInstanceCount,
+    const usize inMaterialTypedByteCount
+){
+    TransparentMaterialPassGraphSnapshot::capture(drawItems, csgFrameData, inInstanceCount, inMaterialTypedByteCount);
+    AssignVector(csgReceiverSurfaceMeshDrawItems, drawItems.csgReceiverSurface.meshDrawItems);
+    AssignVector(csgReceiverSurfaceIndexedDrawItems, drawItems.csgReceiverSurface.indexedDrawItems);
+    AssignVector(csgReceiverSurfaceComputeDrawItems, drawItems.csgReceiverSurface.computeDrawItems);
 }
 
 

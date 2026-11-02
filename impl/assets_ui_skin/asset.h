@@ -57,7 +57,6 @@ public:
     [[nodiscard]] b8 validateTexture(const Texture& texture)const;
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
-    [[nodiscard]] RegionVector takeRegions()noexcept;
     void setPalette(const UiSkinPalette& palette)noexcept{ m_palette = palette; }
     void setTypography(const UiSkinTypography& typography)noexcept{ m_typography = typography; }
 

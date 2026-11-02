@@ -72,7 +72,7 @@ inline Expected<u64> AddAlignedStagingMipSize(const u64 size, const u64 mipSize,
     const auto total = AddNoOverflow(size, mipSize);
     if(!total)
         return MakeUnexpected(total.error());
-    return AlignUpU64Checked(*total, static_cast<u64>(alignment));
+    return AlignUpChecked<u64>(*total, static_cast<u64>(alignment));
 }
 
 inline Expected<StagingTextureLayout> BuildStagingTextureLayout(Alloc::GlobalArena& arena, const TextureDesc& desc, const VulkanDetail::TextureFormatBlockLayout& formatLayout, const u32 bufferOffsetAlignment){

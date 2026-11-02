@@ -16,7 +16,8 @@ from types import SimpleNamespace
 LIT_UPLOAD_POLL_SECONDS = 0.02
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "smoke"))
-from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit, terminate_process, validate_expected_log_text)
+from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, collect_log_delta, ensure_process_running, launch_logserver, require_normal_process_exit, terminate_process)
+from window_capture_validation import validate_expected_log_text
 
 LIT_LOOPBACK_HOST = "127.0.0.1"
 

@@ -35,14 +35,6 @@ struct SinglePassStereoState{
     u8 renderTargetIndexOffset = 0;
     b8 enabled = false;
     b8 independentViewportMask = false;
-
-
-public:
-    constexpr SinglePassStereoState& setEnabled(b8 value)noexcept{ enabled = value; return *this; }
-
-    constexpr SinglePassStereoState& setIndependentViewportMask(b8 value)noexcept{ independentViewportMask = value; return *this; }
-
-    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value)noexcept{ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
 };
 inline b8 operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{
     return lhs.enabled == rhs.enabled && lhs.independentViewportMask == rhs.independentViewportMask && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset;
@@ -58,13 +50,11 @@ struct RenderState{
 
 
 public:
-    constexpr RenderState& setBlendState(const BlendState& value)noexcept{ blendState = value; return *this; }
 
     constexpr RenderState& setDepthStencilState(const DepthStencilState& value)noexcept{ depthStencilState = value; return *this; }
 
     constexpr RenderState& setRasterState(const RasterState& value)noexcept{ rasterState = value; return *this; }
 
-    constexpr RenderState& setSinglePassStereo(const SinglePassStereoState& value)noexcept{ singlePassStereo = value; return *this; }
 };
 
 namespace VariableShadingRate{
@@ -94,16 +84,6 @@ struct VariableRateShadingState{
     ShadingRateCombiner::Enum pipelinePrimitiveCombiner = ShadingRateCombiner::Passthrough;
     ShadingRateCombiner::Enum imageCombiner = ShadingRateCombiner::Passthrough;
     b8 enabled = false;
-
-
-public:
-    constexpr VariableRateShadingState& setEnabled(b8 value)noexcept{ enabled = value; return *this; }
-
-    constexpr VariableRateShadingState& setShadingRate(VariableShadingRate::Enum value)noexcept{ shadingRate = value; return *this; }
-
-    constexpr VariableRateShadingState& setPipelinePrimitiveCombiner(ShadingRateCombiner::Enum value)noexcept{ pipelinePrimitiveCombiner = value; return *this; }
-
-    constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value)noexcept{ imageCombiner = value; return *this; }
 };
 inline b8 operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs)noexcept{
     return lhs.enabled == rhs.enabled && lhs.shadingRate == rhs.shadingRate && lhs.pipelinePrimitiveCombiner == rhs.pipelinePrimitiveCombiner && lhs.imageCombiner == rhs.imageCombiner;
@@ -135,15 +115,12 @@ public:
 
 
 public:
-    constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
 
-    constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value)noexcept{ patchControlPoints = value; return *this; }
     GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value)noexcept;
     GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value)noexcept;
     GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
     constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
 
-    constexpr GraphicsPipelineDesc& setShadingRateState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
     GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
@@ -183,7 +160,6 @@ public:
 
 
 public:
-    constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
     MeshletPipelineDesc& setMeshShader(const ShaderHandle& value)noexcept;
     MeshletPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
     constexpr MeshletPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
@@ -228,7 +204,6 @@ public:
     RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value)noexcept;
     RayTracingPipelineHitGroupDesc& setExportName(AStringView value)noexcept{ exportName = value; return *this; }
 
-    constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(b8 value)noexcept{ isProceduralPrimitive = value; return *this; }
 };
 
 struct RayTracingPipelineDesc{
@@ -238,7 +213,6 @@ struct RayTracingPipelineDesc{
     u32 maxPayloadSize = 0;
     u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
     u32 maxRecursionDepth = 1;
-    i32 hlslExtensionsUAV = -1;
     b8 allowOpacityMicromaps = false;
     b8 allowClusterAccelerationStructures = false;
     b8 allowSpheres = false;
@@ -259,19 +233,8 @@ public:
     RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value);
     constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value)noexcept{ maxPayloadSize = value; return *this; }
 
-    constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value)noexcept{ maxAttributeSize = value; return *this; }
-
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value)noexcept{ maxRecursionDepth = value; return *this; }
 
-    constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value)noexcept{ hlslExtensionsUAV = value; return *this; }
-
-    constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(b8 value)noexcept{ allowOpacityMicromaps = value; return *this; }
-
-    constexpr RayTracingPipelineDesc& setAllowClusterAccelerationStructures(b8 value)noexcept{ allowClusterAccelerationStructures = value; return *this; }
-
-    constexpr RayTracingPipelineDesc& setAllowSpheres(b8 value)noexcept{ allowSpheres = value; return *this; }
-
-    constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(b8 value)noexcept{ allowLinearSweptSpheres = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;

@@ -19,6 +19,7 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / LIT_UI_LAYER_DIRECTORY))
 
+import window_capture_image  # noqa: E402
 import window_capture_smoke  # noqa: E402
 
 
@@ -79,13 +80,13 @@ class RenderReadyCaptureTests(unittest.TestCase):
             for height in range(1, 8):
                 with self.subTest(width=width, height=height):
                     rows = [[(32, 64, 96)] * width for _ in range(height)]
-                    self.assertEqual(window_capture_smoke.estimate_background_rgb(rows, width, height), (32, 64, 96))
-                    result = window_capture_smoke.capture_result_from_rgb_rows(0, width, height, rows)
+                    self.assertEqual(window_capture_image.estimate_background_rgb(rows, width, height), (32, 64, 96))
+                    result = window_capture_image.capture_result_from_rgb_rows(0, width, height, rows)
                     self.assertFalse(result.appears_empty_or_white)
                     self.assertFalse(result.has_pixel_variation)
 
     def test_uniform_gray_is_flat_but_not_a_readiness_placeholder(self):
-        analysis = window_capture_smoke.analyze_rgb_rows([[(128, 128, 128), (128, 128, 128)], [(128, 128, 128), (128, 128, 128)],])
+        analysis = window_capture_image.analyze_rgb_rows([[(128, 128, 128), (128, 128, 128)], [(128, 128, 128), (128, 128, 128)],])
 
         self.assertFalse(analysis.appears_empty_or_white)
         self.assertFalse(analysis.has_pixel_variation)
@@ -94,7 +95,7 @@ class RenderReadyCaptureTests(unittest.TestCase):
         rows = [[(250, 250, 250) for _ in range(20)] for _ in range(20)]
         rows[0][0] = (240, 240, 240)
 
-        analysis = window_capture_smoke.analyze_rgb_rows(rows)
+        analysis = window_capture_image.analyze_rgb_rows(rows)
 
         self.assertTrue(analysis.appears_empty_or_white)
         self.assertTrue(analysis.has_pixel_variation)
@@ -157,7 +158,7 @@ class RenderReadyCaptureTests(unittest.TestCase):
             args.expect_transparent_csg = True
             args.transparent_csg_pose = LIT_EARLY
             uncut = self.make_capture(False, True)
-            uncut.transparent_csg = {LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000)}
+            uncut.transparent_csg = {LIT_EARLY: window_capture_image.TransparentCsgAnalysis(0, 600, 200, 1000)}
             backend = mock.Mock()
             backend.capture_window.return_value = uncut
             process = SimpleNamespace(poll=lambda: None)

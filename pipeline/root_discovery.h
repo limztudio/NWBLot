@@ -44,17 +44,24 @@ NWB_PIPELINE_BEGIN
 inline constexpr AStringView s_DefaultRepoRoot = ".";
 
 [[nodiscard]] inline Expected<Path> ResolvePipelineRepoRoot(
-    const AStringView repoRootText,
+    const Path& requestedRepoRoot,
     const TStringView toolLabel,
     Core::Assets::AssetArena& arena
 ){
-    const Path requestedRepoRoot(arena, repoRootText.empty() ? s_DefaultRepoRoot : repoRootText);
-    const auto repoRoot = AbsolutePath(requestedRepoRoot);
+    const auto repoRoot = AbsolutePath(requestedRepoRoot.empty() ? Path(arena, s_DefaultRepoRoot) : requestedRepoRoot);
     if(!repoRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve repository root: {}"), toolLabel, ConvertString(repoRoot.error().message()));
         return MakeUnexpected(Failure{});
     }
     return repoRoot->lexicallyNormal();
+}
+
+[[nodiscard]] inline Expected<Path> ResolvePipelineRepoRoot(
+    const AStringView repoRootText,
+    const TStringView toolLabel,
+    Core::Assets::AssetArena& arena
+){
+    return ResolvePipelineRepoRoot(Path(arena, repoRootText.empty() ? s_DefaultRepoRoot : repoRootText), toolLabel, arena);
 }
 
 [[nodiscard]] inline Expected<Core::Assets::CookVector<Core::Assets::ResolvedAssetRoot>> ResolvePipelineAssetRoots(

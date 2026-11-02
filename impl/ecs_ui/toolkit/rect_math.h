@@ -37,13 +37,6 @@ NWB_IMPL_UI_BEGIN
     return { VectorGetX(rectangle), VectorGetY(rectangle), VectorGetZ(rectangle), VectorGetW(rectangle) };
 }
 
-[[nodiscard]] NWB_INLINE SIMDMatrixDouble MakeInvalidUiMatrixDouble()noexcept{
-    return SIMDMatrixDouble{ .v = { VectorDoubleReplicate(Limit<f64>::s_Infinity), VectorDoubleZero(), VectorDoubleZero(), VectorDoubleZero() } };
-}
-
-[[nodiscard]] b8 AreUiMatrixRowsFinite(const SIMDMatrixDouble& values, u32 rowCount)noexcept;
-[[nodiscard]] b8 AreUiMatrixRowsNonNegativeFinite(const SIMDMatrixDouble& values, u32 rowCount)noexcept;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

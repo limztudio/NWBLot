@@ -269,10 +269,8 @@ const StringView s_CausticResolveUpsampleVariant = "NWB_CAUSTIC_RESOLVE_COMPILED
 const f32 s_CausticBoundsMidpointWeight = 0.5f;
 const usize s_CausticActivityUsesPerStage = 2u;
 const usize s_CausticMaxStageResourceUses = 8u;
-const usize s_HardwarePhotonResourceSetUseCapacity = 2u;
 const usize s_HardwarePhotonResourceUseCapacity = 15u;
 const usize s_SoftwarePhotonResourceUseCapacity = 20u;
-const usize s_SoftwarePhotonResourceSetUseCapacity = 2u;
 
 CausticResolvePushConstants ResolveCausticResolvePushConstants(
     in u32 width,

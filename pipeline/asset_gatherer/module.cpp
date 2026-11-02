@@ -7,7 +7,6 @@
 #include <pipeline/command_line.h>
 
 #include <core/alloc/scratch.h>
-#include <core/assets/arena_names.h>
 #include <core/assets/gather_merge_registry.h>
 
 
@@ -22,7 +21,7 @@ NWB_PIPELINE_BEGIN
 
 int RunPipelineTool(const int argc, char** argv){
     Core::Assets::AssetArena arena(AssetGatherer::s_AssetGathererArena);
-    Core::Alloc::ScratchArena scratchArena(Core::Assets::AssetsArenaScope::s_GatherMergeQueryScratch);
+    Core::Alloc::ScratchArena scratchArena(AssetGatherer::s_AssetGathererArena);
     PipelineCommandLine commandLine(PipelineTool::AssetGatherer);
     return commandLine.run(argc, argv, [&](PipelineOptions& options){
         AssetGatherer::AssetGatherOptions gatherOptions(arena);

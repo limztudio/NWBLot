@@ -73,7 +73,6 @@ class ArenaAllocator : public AdaptorDetail::ArenaAllocatorTraits<T>{
 
 
 public:
-    using _From_primary = ArenaAllocator<T, ArenaT>;
     using Base = AdaptorDetail::ArenaAllocatorTraits<T>;
     using value_type = typename Base::value_type;
     using size_type = typename Base::size_type;
@@ -136,8 +135,6 @@ public:
         return output;
     }
 
-    [[nodiscard]] constexpr AllocationResult<pointer> allocate_at_least(const size_type count){ return { allocate(count), count }; }
-
     [[nodiscard]] ArenaT& arena()const noexcept{
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator has no arena"));
         return *m_arena;
@@ -149,7 +146,6 @@ public:
 private:
     ArenaT* m_arena;
 };
-
 
 template<typename T, typename U, typename ArenaT>
 inline b8 operator==(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{
@@ -170,7 +166,6 @@ class DefaultArenaAllocator : public ArenaAllocator<T, ArenaT>{
 
 
 public:
-    using _From_primary = DefaultArenaAllocator<T, ArenaT, DefaultArena>;
     using Base = ArenaAllocator<T, ArenaT>;
     using value_type = typename Base::value_type;
     using size_type = typename Base::size_type;
@@ -203,7 +198,6 @@ public:
     constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept = default;
 };
 
-
 template<typename T, typename U, typename ArenaT, ArenaT& (*DefaultArena)()>
 inline b8 operator==(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{
     return lhs.arenaPtr() == rhs.arenaPtr();
@@ -223,7 +217,6 @@ class ArenaCacheAlignedAllocator : public AdaptorDetail::ArenaAllocatorTraits<T>
 
 
 public:
-    using _From_primary = ArenaCacheAlignedAllocator<T, ArenaT>;
     using Base = AdaptorDetail::ArenaAllocatorTraits<T>;
     using value_type = typename Base::value_type;
     using size_type = typename Base::size_type;
@@ -296,8 +289,6 @@ public:
         return output;
     }
 
-    [[nodiscard]] constexpr AllocationResult<pointer> allocate_at_least(const size_type count){ return { allocate(count), count }; }
-
     [[nodiscard]] ArenaT& arena()const noexcept{
         NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator has no arena"));
         return *m_arena;
@@ -309,7 +300,6 @@ public:
 private:
     ArenaT* m_arena;
 };
-
 
 template<typename T, typename U, typename ArenaT>
 inline b8 operator==(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{

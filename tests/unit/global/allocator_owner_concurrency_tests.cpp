@@ -23,7 +23,7 @@ namespace __hidden_allocator_owner_concurrency_tests{
 
 
 using namespace NWB::Core::Alloc;
-using ArenaOwnerTestSupport::OwnerStats;
+using NWB::Tests::OwnerStats;
 
 void WaitForFlag(const Atomic<b8>& flag)noexcept{
     AtomicBackOff backoff;

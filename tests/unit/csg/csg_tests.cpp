@@ -398,7 +398,7 @@ TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
 
     NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
-    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, commitVertices, commitTriangles);
     ASSERT_TRUE(commit);
     EXPECT_EQ(commit->appliedCutCount, 2u);
     ASSERT_FALSE(commitTriangles.empty());
@@ -453,7 +453,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
 
     NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::ScratchArena> previewVertices(scratchArena);
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    const auto preview = NWB::Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, previewVertices, previewTriangles);
+    const auto preview = NWB::Impl::PreviewCsgDeformCuts(scratchArena, inputVertices, inputTriangles, cuts, options, nullptr, previewVertices, previewTriangles);
     ASSERT_FALSE(preview);
     EXPECT_EQ(preview.error().reason, NWB::Impl::CsgDeformViabilityReason::NoKeptGeometry);
     EXPECT_EQ(preview.error().stats.inputVertexCount, 3u);
@@ -463,7 +463,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
 
     NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
-    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, commitVertices, commitTriangles);
+    const auto commit = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, commitVertices, commitTriangles);
     ASSERT_FALSE(commit);
     EXPECT_EQ(commit.error().reason, NWB::Impl::CsgDeformViabilityReason::NoKeptGeometry);
     EXPECT_EQ(commit.error().stats.inputVertexCount, 3u);
@@ -478,7 +478,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> wrongTriangles(otherArena);
     wrongVertices.push_back(vertex);
     wrongTriangles.push_back(inputTriangles[0u]);
-    const auto wrongArena = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, wrongVertices, wrongTriangles);
+    const auto wrongArena = NWB::Impl::CommitCsgDeformCuts(scratchArena, commitArena, inputVertices, inputTriangles, cuts, options, nullptr, wrongVertices, wrongTriangles);
     ASSERT_FALSE(wrongArena);
     EXPECT_EQ(wrongArena.error().reason, NWB::Impl::CsgDeformViabilityReason::InvalidOutputArena);
     EXPECT_EQ(wrongArena.error().stats.inputVertexCount, 0u);

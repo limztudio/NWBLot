@@ -335,8 +335,6 @@ struct CrashContext{
 [[nodiscard]] static DWORD MachineTypeFromContext([[maybe_unused]] const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return IMAGE_FILE_MACHINE_AMD64;
-#elif defined(_M_IX86) || defined(__i386__)
-    return IMAGE_FILE_MACHINE_I386;
 #elif defined(_M_ARM64) || defined(__aarch64__)
     return IMAGE_FILE_MACHINE_ARM64;
 #else
@@ -350,10 +348,6 @@ static void InitializeStackFrameFromContext(const CONTEXT& context, STACKFRAME64
     outFrame.AddrPC.Offset = context.Rip;
     outFrame.AddrFrame.Offset = context.Rbp;
     outFrame.AddrStack.Offset = context.Rsp;
-#elif defined(_M_IX86) || defined(__i386__)
-    outFrame.AddrPC.Offset = context.Eip;
-    outFrame.AddrFrame.Offset = context.Ebp;
-    outFrame.AddrStack.Offset = context.Esp;
 #elif defined(_M_ARM64) || defined(__aarch64__)
     outFrame.AddrPC.Offset = context.Pc;
     outFrame.AddrFrame.Offset = context.Fp;

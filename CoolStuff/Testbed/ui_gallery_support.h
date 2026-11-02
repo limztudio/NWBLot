@@ -10,7 +10,9 @@
 
 #include <impl/ecs_ui/paint_context.h>
 
+#include <core/alloc/scratch.h>
 #include <global/scope_exit.h>
+#include <global/text_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +35,11 @@ decltype(auto) WithGalleryFontSize(NWB::Impl::Ui::Builder& ui, const f32 fontSiz
 template<typename CallbackF>
 decltype(auto) WithGalleryFontSize(NWB::Impl::Ui::Builder& ui, CallbackF&& callback){
     return WithGalleryFontSize(ui, s_GalleryFontSize, Forward<CallbackF>(callback));
+}
+
+[[nodiscard]] inline b8 DeclareSelectedKeyLabel(NWB::Impl::Ui::Builder& ui, NWB::Core::Alloc::ScratchArena& scratchArena, const u64 selectedKey){
+    const auto text = StringFormat(scratchArena, s_SelectedTextFormat, selectedKey);
+    return ui.label(s_SelectedKey, { text.data(), text.size() });
 }
 
 

@@ -8,12 +8,16 @@ import sys
 import time
 
 from numeric_edit_native import NumericEditNativeInput
-from numeric_edit_probe import center, draft_fields, float_bits, integer_bits, observe_numeric_edit, snapshot_from_logs, text_hash
+from numeric_edit_probe import draft_fields, float_bits, integer_bits, observe_numeric_edit, snapshot_from_logs
 from edit_probe import caret_pixel_column
 from caret_capture import wait_for_caret_phase
+from probe_common import center, text_hash
 from window_smoke import parse_args
+from window_capture_image import read_bmp_24_rows
+from window_capture_logs import wait_for_log_message
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_expected_log_text
 from fixture_environment import build_fixture_environment
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
 from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS

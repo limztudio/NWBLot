@@ -25,7 +25,7 @@ TEST_F(UiPopupInputTests, NestedAcceptanceCancelsTheParentSessionOnlyAfterGeomet
     ASSERT_EQ(m_context.input().popupCount(), 2u);
     EXPECT_EQ(m_context.input().focus(), m_childWidget.id);
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commit(parentSession, "late parent"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(parentSession, "late parent"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(nestedFrame());
     EXPECT_TRUE(m_childResult.focused);
     EXPECT_TRUE(m_textInput.activeSession().valid());
@@ -78,7 +78,7 @@ TEST_F(UiPopupInputTests, AncestorReopeningFencesQueuedChildNativeAndClipboardIn
     const ClipboardRequestToken paste = m_clipboard.startedToken;
     ASSERT_TRUE(paste.valid());
     ASSERT_TRUE(m_clipboard.complete(paste, "late paste"));
-    ASSERT_EQ(m_textInput.commit(childSession, "late native"), TextInputAdmission::Accepted);
+    ASSERT_EQ(m_textInput.emitCommit(childSession, "late native"), TextInputAdmission::Accepted);
     m_popupState.close();
     m_popupState.open();
     ASSERT_TRUE(prepareNested());
@@ -86,7 +86,7 @@ TEST_F(UiPopupInputTests, AncestorReopeningFencesQueuedChildNativeAndClipboardIn
     EXPECT_FALSE(m_childModel.canUndo());
     EXPECT_FALSE(m_childState.isOpen());
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_EQ(m_textInput.commit(childSession, "later"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(childSession, "later"), TextInputAdmission::InvalidSession);
     EXPECT_FALSE(m_clipboard.complete(paste, "later"));
     ASSERT_TRUE(commit());
     ASSERT_EQ(m_context.input().popupCount(), 1u);
@@ -105,7 +105,7 @@ TEST_F(UiPopupInputTests, NestedFocusLossCancelsTheWholeFamilyWithoutRestoringAn
     EXPECT_TRUE(dispatch({ .position = {} , .type = Ui::InputEventType::FocusLost}).commandConsumed);
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_FALSE(m_context.input().focus().valid());
-    EXPECT_EQ(m_textInput.commit(childSession, "late"), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(m_textInput.emitCommit(childSession, "late"), TextInputAdmission::InvalidSession);
     ASSERT_TRUE(nestedFrame());
     EXPECT_FALSE(m_popupState.isOpen());
     EXPECT_FALSE(m_context.input().hasPopup());

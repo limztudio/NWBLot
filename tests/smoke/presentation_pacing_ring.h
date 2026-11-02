@@ -30,7 +30,6 @@ namespace Tests::Smoke{
 // Track frame intervals and count idle stalls of 50ms or more once per gap.
 struct PresentationPacingSample{
     f64 wallMsPerPresentation = 0.0;
-    u64 newPresentations = 0u;
 };
 
 struct PresentationPacingSummary{

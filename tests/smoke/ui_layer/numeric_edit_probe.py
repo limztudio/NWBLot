@@ -6,6 +6,7 @@ import re
 import struct
 
 from edit_probe import caret_pixel_column
+from probe_common import text_hash
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
@@ -40,17 +41,7 @@ FIELDS = ("integer_bits", "float_bits", "i_bytes", "i_hash", "i_anchor", "i_care
 RECTANGLES = tuple(f"{field}_{part}" for field in ("integer", "float", "clipboard") for part in ("bounds", "content", "caret", "selection"))
 MARKER_PARTS = tuple(6 if index < 2 else 3 if index in (3, 10, 17) else 2 for index in range(len(FIELDS))) + (2,)
 MARKER_TOLERANCE = 5
-FNV32_OFFSET_BASIS = 2166136261
-FNV32_PRIME = 16777619
-UINT32_MASK = 0xFFFFFFFF
 UINT64_MASK = 0xFFFFFFFFFFFFFFFF
-
-
-def text_hash(text):
-    value = FNV32_OFFSET_BASIS
-    for byte in text.encode(LIT_UTF_8):
-        value = ((value ^ byte) * FNV32_PRIME) & UINT32_MASK
-    return value
 
 
 def integer_bits(value):
@@ -90,11 +81,6 @@ def snapshot_from_logs(text):
     if any(value > 0xFFFFFFFFFFFFFFFF for value in values):
         raise SmokeFailure("numeric fixture state exceeds the unsigned 64-bit log schema")
     return {LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(FIELDS, values)), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles}
-
-
-def center(rectangle):
-    x, y, width, height = rectangle
-    return x + width / 2.0, y + height / 2.0
 
 
 def ink_coverage(observed, background, foreground):

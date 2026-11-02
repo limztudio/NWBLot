@@ -49,7 +49,6 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
-using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame;
 using NWB::Tests::Smoke::RendererBaselineFixedDelta;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;

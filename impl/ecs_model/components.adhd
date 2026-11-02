@@ -46,8 +46,6 @@ class ModelStaticMeshAttachmentComponent{
         return this.parentEntity.valid() && this.parentJointIndex != s_SkeletonInvalidJointIndex;
     }
 
-    public Name parentObject = s_NameNone;
-    public Name parentJoint = s_NameNone;
     public EntityID parentEntity = s_InvalidEntityId;
     public u32 parentJointIndex = s_SkeletonInvalidJointIndex;
     public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);

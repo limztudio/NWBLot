@@ -18,7 +18,7 @@
 
 // Software-shadow G-buffer inputs and material context are selected from global heap tables by the shared push block.
 #define NWB_SW_SHADOW_DEFERRED_RESOURCES nwbHeapDeferredBindlessResources(g_NwbSwShadowPush.deferredResourcesHeapSlot)
-#define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbSwShadowPush.materialContextSlotsHeapSlot)
+#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbSwShadowPush.materialContextSlotsHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_SW_SHADOW_DEFERRED_RESOURCES.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_SW_SHADOW_DEFERRED_RESOURCES.avboitSlots.w
 #include "../scene/buffer.slangi"

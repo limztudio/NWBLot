@@ -110,7 +110,7 @@ static Expected<CookString> ParseVariantField(const Path& nwbFilePath, const Cor
             }
             return true;
         },
-        [&](const VariantSignatureSegmentError::Enum, const AStringView){
+        [&](const ShaderBinaryPayload::VariantSignatureSegmentError::Enum, const AStringView){
             logInvalidVariant();
         }
     );
@@ -283,14 +283,6 @@ static b8 HasMatchingVirtualAssetExtension(const ::Path<ScratchArena>& virtualPa
     return AStringView(extension) == requiredExtension;
 }
 
-template<typename StringT>
-static void NormalizeVirtualAssetSeparators(StringT& inOutPath)noexcept{
-    for(char& ch : inOutPath){
-        if(ch == '\\')
-            ch = '/';
-    }
-}
-
 static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, const Core::Metascript::Value& asset, CookArena& arena, ScratchArena& scratchArena){
     const auto* interfaceValue = asset.findField(s_MaterialMetaInterfaceField);
     if(!interfaceValue){
@@ -323,7 +315,7 @@ static Expected<CookString> ParseMaterialInterface(const Path& nwbFilePath, cons
 
     interfacePathPath.replaceExtension();
     ScratchString strippedInterface = PathToString(scratchArena, interfacePathPath);
-    NormalizeVirtualAssetSeparators(strippedInterface);
+    Replace(strippedInterface.begin(), strippedInterface.end(), '\\', '/');
 
     // Store path text; the Name hash is produced on demand.
     const auto interfaceName = Name::FromText(AStringView(strippedInterface));
@@ -367,7 +359,7 @@ static Expected<CookString> ParseMaterialVirtualAssetField(const Path& nwbFilePa
     }
 
     CookString normalized(virtualPath, arena);
-    NormalizeVirtualAssetSeparators(normalized);
+    Replace(normalized.begin(), normalized.end(), '\\', '/');
     return normalized;
 }
 

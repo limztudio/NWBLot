@@ -14,7 +14,8 @@ import renderer_ab_benchmark as ab
 import reflection_benchmark as reflection
 import smoke_cpu_gpu_timing as timing
 from smoke_volume_identity import file_identity
-from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text)
+from window_capture_smoke import (SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, build_launch_environment, launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process)
+from window_capture_validation import validate_expected_log_text
 
 LIT_MINIMUM_WARMUP_SECONDS = 5.0
 LIT_MILLISECONDS_PER_SECOND = 1000

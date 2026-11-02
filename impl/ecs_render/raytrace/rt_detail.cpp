@@ -44,7 +44,7 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
 }
 
 [[nodiscard]] b8 IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass)noexcept{
-    return handle.valid() && handle.descriptorClass() == descriptorClass;
+    return RendererDescriptorRegisterDetail::IsDescriptorClass(handle, descriptorClass);
 }
 
 [[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable){
@@ -67,21 +67,15 @@ Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> Reso
 }
 
 [[nodiscard]] b8 ReplaceHeapBuffer(const Core::GpuDescriptorClass::Enum descriptorClass, const b8 writable, Core::GpuDescriptorHeap& heap, Core::Buffer& buffer, Core::GpuDescriptorHandle& inOutHandle){
-    const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
-    if(!acquired)
-        return false;
-    Core::GpuDescriptorRetirementGuard retireUnpublished(heap, *acquired);
-    if(inOutHandle.valid())
-        heap.free(inOutHandle);
-    inOutHandle = *acquired;
-    retireUnpublished.release();
-    return true;
+    const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : (writable ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer) : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer))
+    ;
+    return RendererDescriptorRegisterDetail::ReplaceDescriptor(heap, descriptorClass, item, inOutHandle);
 }
 
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
-    if(handle.valid())
-        heap.free(handle);
-    handle = Core::GpuDescriptorHandle::Invalid();
+    RendererDescriptorRegisterDetail::RetireDescriptor(heap, handle);
 }
 
 Core::ComputeState MakeComputePassState(const Core::ComputePipelineHandle& pipeline)noexcept{

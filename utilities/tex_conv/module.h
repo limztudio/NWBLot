@@ -52,8 +52,6 @@ struct PreparedTexture{
 struct OutputPaths{
     Path metadata;
     Path data;
-    Path metadataTemporary;
-    Path dataTemporary;
 
 
 public:

@@ -57,10 +57,6 @@ static constexpr TStringView s_RtTriangleAttributeLabel = NWB_TEXT("rt triangle 
 }
 
 [[nodiscard]] b8 ValidateRuntimeMeshUploadPayload(const MeshSkinningRuntimeInstance& instance){
-    if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class"), ConvertString(RuntimeMeshSourceText(instance)));
-        return false;
-    }
     if(!instance.hasCompleteSplitMeshPayload()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload"), ConvertString(RuntimeMeshSourceText(instance)));
         return false;

@@ -16,7 +16,7 @@ from reflection_smoke import (
     BUDGET_CAPTURES, DEFAULT_RAY_BUDGET, FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION, STATISTICS_FIELDS, SmokeFailure, analyze_markers, analyze_panels, capture_environment, compare_marker_motion, compare_hybrid_statistics, compare_opaque_glass,
     compare_panel_motion, parse_statistics, write_report, region_pixels, validate_statistics
 )  # noqa: E402
-from window_capture_smoke import write_bmp_24  # noqa: E402
+from window_capture_image import write_bmp_24  # noqa: E402
 
 LIT_CAPTURES = "captures"
 LIT_OPTICAL_CSG_CAP = "optical_csg_cap"

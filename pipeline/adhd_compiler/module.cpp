@@ -42,11 +42,9 @@ int RunPipelineTool(const int argc, char** argv){
         AdhdCompiler::AdhdCompileOptions compileOptions(arena);
         compileOptions.inputs = Move(options.inputs);
         compileOptions.includeDirectories = Move(options.includeDirectories);
-        compileOptions.macroDefinitions = Move(options.macroDefinitions);
         compileOptions.outputDirectory = Move(options.outputPath);
         compileOptions.customNamespace = Move(options.customNamespace);
         compileOptions.depfilePath = Move(options.depfilePath);
-        compileOptions.validateOnly = options.validateOnly;
         return AdhdCompiler::CompileAdhd(compileOptions) ? s_PipelineExitSuccess : s_PipelineExitFailure;
     }, arena, scratchArena);
 }

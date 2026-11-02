@@ -7,9 +7,12 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
+from refraction_density_benchmark import Cell  # noqa: E402
+from refraction_density_capture_smoke import projected_bounds  # noqa: E402
 from refraction_query_diagnostics_smoke import (  # noqa: E402
-    COUNTER_FIELDS, Cell, SmokeFailure, parse_completed_statistics, projected_bounds, validate_statistics,
+    COUNTER_FIELDS, parse_completed_statistics, validate_statistics,
 )
+from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
 class RefractionQueryDiagnosticsTests(unittest.TestCase):

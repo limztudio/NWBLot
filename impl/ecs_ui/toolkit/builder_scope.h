@@ -112,28 +112,16 @@ private:
         const EditModel* model = nullptr;
         TextAreaState* state = nullptr;
         EditNavigationSnapshot navigation;
+        TextAreaModelStamp modelStamp;
         u64 stateRevision = 0u;
-        u64 modelGeneration = 0u;
-        u64 modelRevision = 0u;
-        u64 externalRevision = 0u;
-        u64 selectionGeneration = 0u;
-        u64 compositionGeneration = 0u;
-        usize anchor = 0u;
-        usize caret = 0u;
         u32 item = s_LayoutNoParent;
         b8 focused = false;
     };
 
     struct NumericEditFrame{
         EditBoxState* state = nullptr;
+        TextAreaModelStamp draftStamp;
         u64 revision = 0u;
-        u64 draftGeneration = 0u;
-        u64 draftRevision = 0u;
-        u64 draftExternalRevision = 0u;
-        u64 draftCompositionGeneration = 0u;
-        u64 draftSelectionGeneration = 0u;
-        usize anchor = 0u;
-        usize caret = 0u;
         u32 item = s_LayoutNoParent;
         b8 focused = false;
     };
@@ -197,15 +185,9 @@ private:
         ControlToken token;
         ControlToken listToken;
         Rect visibleField;
+        TextAreaModelStamp queryStamp;
         u64 rowCount = 0u;
         u64 resultCount = 0u;
-        u64 queryGeneration = 0u;
-        u64 queryRevision = 0u;
-        u64 queryCompositionGeneration = 0u;
-        u64 querySelectionGeneration = 0u;
-        u64 queryExternalRevision = 0u;
-        usize queryAnchor = 0u;
-        usize queryCaret = 0u;
         u32 editor = s_LayoutNoParent;
         u32 list = s_LayoutNoParent;
         f32 arrowExtent = 0.0f;

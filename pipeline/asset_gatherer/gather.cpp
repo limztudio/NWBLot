@@ -154,11 +154,6 @@ b8 GatherAssets(const AssetGatherOptions& options, Core::Alloc::ScratchArena& sc
     return true;
 }
 
-b8 GatherAssets(const AssetGatherOptions& options){
-    Core::Alloc::ScratchArena scratchArena(s_AssetsGatherScratchArena);
-    return GatherAssets(options, scratchArena);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

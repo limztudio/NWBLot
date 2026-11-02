@@ -79,16 +79,13 @@ template<typename T>
 
 template<typename T>
 [[nodiscard]] constexpr Expected<T> TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
-#if __has_builtin(__builtin_mul_overflow)
     if constexpr(IsIntegral_V<T> && !IsSame_V<T, b8>){
         T value;
         if(__builtin_mul_overflow(lhs, rhs, &value))
             return MakeUnexpected(Failure{});
         return value;
     }
-    else
-#endif
-    {
+    else{
         if(MultiplyOverflows<T>(lhs, rhs))
             return MakeUnexpected(Failure{});
 

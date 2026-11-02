@@ -9,7 +9,8 @@ import subprocess
 import sys
 
 from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection, write_gallery
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
+from window_capture_image import read_bmp_24_rows
+from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_DUPLICATE_SINGLE_COOL = "duplicate_single_cool"
 LIT_DUPLICATE_SINGLE_WARM = "duplicate_single_warm"

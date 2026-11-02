@@ -76,14 +76,6 @@ const usize s_RefractionPushConstantsByteSize = 44u;
 const usize s_RefractionDenseArgumentOffset = 16u;
 const usize s_RefractionTileArgumentBytes = 32u;
 const usize s_RefractionFixedUseCapacity = 8u;
-const usize s_RefractionResourceSetUseCapacity = 3u;
-
-usize ResolveRefractionVariantIndex(in b8 enabled){
-    if(enabled)
-        return 1u;
-    return 0u;
-}
-
 const Name s_RefractionClassifyTilesDebugName = "ECSRender_RefractionClassifyTiles";
 const Name s_RefractionFinalizeTilesDebugName = "ECSRender_RefractionFinalizeTiles";
 const Name s_RefractionHwDenseDebugName = "ECSRender_RefractionHwDense";

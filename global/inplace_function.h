@@ -30,12 +30,6 @@ private:
     };
 
 
-public:
-    using RawFunction = Ret(*)(Args...);
-    using TrampolineFirstFunction = Ret(*)(void*, Args...);
-    using TrampolineLastFunction = Ret(*)(Args..., void*);
-
-
 private:
     using InvokeFn = Ret(*)(Storage&, Args...);
     using DestroyFn = void(*)(Storage&)noexcept;
@@ -120,30 +114,6 @@ public:
         m_destroy = nullptr;
         m_move = nullptr;
         m_copy = nullptr;
-        m_raw = nullptr;
-    }
-
-    [[nodiscard]] inline RawFunction rawFn()const noexcept{
-        NWB_ASSERT_MSG(m_raw != nullptr, NWB_TEXT("InplaceFunction does not hold a stateless function pointer"));
-        return m_raw;
-    }
-
-    [[nodiscard]] inline void* userData()const noexcept{
-        return const_cast<void*>(static_cast<const void*>(this));
-    }
-
-    [[nodiscard]] inline TrampolineFirstFunction cTrampolineFirst()const noexcept{
-        return [](void* data, Args... args) -> Ret{
-            const InplaceFunction& self = *static_cast<const InplaceFunction*>(data);
-            return self(Forward<Args>(args)...);
-        };
-    }
-
-    [[nodiscard]] inline TrampolineLastFunction cTrampolineLast()const noexcept{
-        return [](Args... args, void* data) -> Ret{
-            const InplaceFunction& self = *static_cast<const InplaceFunction*>(data);
-            return self(Forward<Args>(args)...);
-        };
     }
 
 
@@ -156,11 +126,6 @@ private:
         static_assert(alignof(FuncType) <= alignof(Storage), "InplaceFunction capture alignment exceeds inline storage");
         static_assert(IsNothrowMoveConstructible_V<FuncType>, "InplaceFunction targets must be nothrow move constructible");
         static_assert(IsNothrowDestructible_V<FuncType>, "InplaceFunction targets must be nothrow destructible");
-
-        if constexpr(IsConvertible_V<FuncType, RawFunction>)
-            m_raw = static_cast<RawFunction>(func);
-        else
-            m_raw = nullptr;
 
         new(static_cast<void*>(m_storage.data)) FuncType(Forward<Func>(func));
 
@@ -198,7 +163,6 @@ private:
         m_destroy = rhs.m_destroy;
         m_move = rhs.m_move;
         m_copy = rhs.m_copy;
-        m_raw = rhs.m_raw;
     }
 
     inline void moveFrom(InplaceFunction&& rhs)noexcept{
@@ -210,13 +174,11 @@ private:
         m_destroy = rhs.m_destroy;
         m_move = rhs.m_move;
         m_copy = rhs.m_copy;
-        m_raw = rhs.m_raw;
 
         rhs.m_invoke = nullptr;
         rhs.m_destroy = nullptr;
         rhs.m_move = nullptr;
         rhs.m_copy = nullptr;
-        rhs.m_raw = nullptr;
     }
 
 
@@ -226,7 +188,6 @@ private:
     DestroyFn m_destroy = nullptr;
     MoveFn m_move = nullptr;
     CopyFn m_copy = nullptr;
-    RawFunction m_raw = nullptr;
 };
 
 
@@ -237,8 +198,6 @@ template<typename Ret, typename... Args>
 class InplaceFunction<0u, Ret(Args...)>{
 public:
     using RawFunction = Ret(*)(Args...);
-    using TrampolineFirstFunction = Ret(*)(void*, Args...);
-    using TrampolineLastFunction = Ret(*)(Args..., void*);
 
 
 public:
@@ -284,26 +243,6 @@ public:
 
 public:
     constexpr void reset()noexcept{ m_function = nullptr; }
-
-    [[nodiscard]] constexpr RawFunction rawFn()const noexcept{ return m_function; }
-
-    [[nodiscard]] inline void* userData()const noexcept{
-        return const_cast<void*>(static_cast<const void*>(this));
-    }
-
-    [[nodiscard]] inline TrampolineFirstFunction cTrampolineFirst()const noexcept{
-        return [](void* data, Args... args) -> Ret{
-            const InplaceFunction& self = *static_cast<const InplaceFunction*>(data);
-            return self(Forward<Args>(args)...);
-        };
-    }
-
-    [[nodiscard]] inline TrampolineLastFunction cTrampolineLast()const noexcept{
-        return [](Args... args, void* data) -> Ret{
-            const InplaceFunction& self = *static_cast<const InplaceFunction*>(data);
-            return self(Forward<Args>(args)...);
-        };
-    }
 
 
 private:

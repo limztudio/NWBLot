@@ -6,7 +6,6 @@
 
 #include <global/containers.h>
 #include <global/exception.h>
-#include <global/text_utils.h>
 
 #include <tests/common/test_context.h>
 

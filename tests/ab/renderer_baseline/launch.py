@@ -10,39 +10,30 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "tests" / "ab"))
 
+import launch as AB_LAUNCH  # noqa: E402
 import launcher as ROOT_LAUNCHER  # noqa: E402
 from profiles import get_profile, profile_names  # noqa: E402
 
-LIT_ON = "ON"
-LIT_COZTER = ".cozter"
-LIT_OUT = "out"
-LIT_AB_RESULTS = "ab-results"
 LIT_RENDERER_BASELINE = "renderer-baseline"
 LIT_PROFILE = "--profile"
 LIT_EXECUTABLE = "--executable"
-LIT_RUNTIME_DIR = "--runtime-dir"
-LIT_OUTPUT_DIR = "--output-dir"
-LIT_GPU_VALIDATION = "--gpu-validation"
-LIT_NO_LOGSERVER = "--no-logserver"
-LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
-LIT_STORE_TRUE = "store_true"
-LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_RUNTIME_DIR = AB_LAUNCH.LIT_RUNTIME_DIR
+LIT_OUTPUT_DIR = AB_LAUNCH.LIT_OUTPUT_DIR
 LIT_MAIN = "__main__"
 
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "renderer_baseline" / "run.py"
-REQUIRED_DEFINES = { "NWB_BUILD_LOADER": LIT_ON, "NWB_BUILD_LOGSERVER": LIT_ON, "NWB_BUILD_PIPELINE": LIT_ON, "NWB_BUILD_TESTS": LIT_ON, }
+REQUIRED_DEFINES = AB_LAUNCH.REQUIRED_AB_DEFINES
 
 
 @dataclass(frozen=True)
@@ -53,8 +44,7 @@ class BaselinePaths:
 
 
 def default_output_directory(root: Path, profile_name: str) -> Path:
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_RENDERER_BASELINE / profile_name / stamp
+    return AB_LAUNCH.default_ab_output_directory(root, f"{LIT_RENDERER_BASELINE}/{profile_name}")
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> BaselinePaths:
@@ -72,14 +62,7 @@ def build_target(args: argparse.Namespace, settings, environment) -> None:
 
 def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[object]:
     command: List[object] = [sys.executable, REPO / RUNNER_SCRIPT, LIT_PROFILE, args.profile, LIT_EXECUTABLE, paths.executable, LIT_RUNTIME_DIR, paths.runtime_directory, LIT_OUTPUT_DIR, paths.output_directory,]
-    if args.gpu_validation:
-        command.append(LIT_GPU_VALIDATION)
-    if args.no_logserver:
-        command.append(LIT_NO_LOGSERVER)
-    elif args.logserver_executable is not None:
-        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
-    command += list(args.runner_args)
-    return command
+    return AB_LAUNCH.append_ab_runner_args(command, args, REPO)
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -89,19 +72,17 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the selected smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the selected cooked smoke runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for the immutable capture and manifest.")
-    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
-    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
-    validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument(LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for this capture.")
-    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg.")
-    parser.set_defaults(gpu_validation=True)
+    AB_LAUNCH.add_ab_runner_options(
+        parser,
+        default_gpu_validation=True,
+        gpu_validation_help="Enable GPU validation for this capture.",
+        no_gpu_validation_help="Do not pass --gpudbg.",
+    )
     return parser
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
-    args = make_parser().parse_args(launcher_args)
-    args.runner_args = runner_args
+    args = AB_LAUNCH.parse_ab_launcher_args(make_parser, argv)
     if args.profile is None:
         raise SystemExit("renderer-baseline requires a profile; choose one of: " + ", ".join(profile_names()))
     return args
@@ -114,12 +95,12 @@ def run(args: argparse.Namespace) -> int:
     settings = ROOT_LAUNCHER.refresh_launch_settings(settings, args.domain)
     build_target(args, settings, environment)
     paths = resolve_paths(args, settings)
-    command = runner_command(args, paths)
-    print(f"Renderer baseline artifacts: {paths.output_directory}", flush=True)
-    print("+ " + ROOT_LAUNCHER.format_command(command), flush=True)
-    if args.dry_run:
-        return 0
-    return subprocess.run([str(part) for part in command], cwd=REPO).returncode
+    return AB_LAUNCH.run_ab_runner(
+        runner_command(args, paths),
+        args.dry_run,
+        REPO,
+        f"Renderer baseline artifacts: {paths.output_directory}",
+    )
 
 
 def main(argv: Sequence[str]) -> int:

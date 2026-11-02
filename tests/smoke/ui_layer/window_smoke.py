@@ -8,9 +8,13 @@ import sys
 import time
 
 from interaction_smoke import NativeInput
-from window_probe import ACTION, center, observe_window, snapshot_from_logs
+from probe_common import center
+from window_probe import ACTION, observe_window, snapshot_from_logs
+from window_capture_image import read_bmp_24_rows
+from window_capture_logs import wait_for_log_message
 from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, wait_for_log_message,)
+    require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,)
+from window_capture_validation import validate_expected_log_text
 from smoke_arguments import parse_ui_smoke_args
 from fixture_environment import build_fixture_environment
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS

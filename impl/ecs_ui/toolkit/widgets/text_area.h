@@ -25,8 +25,40 @@ class TextAreaScrollState final{
 
 
 private:
-    [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration, u64 stateRevision, const EditModel& model, b8 enabled, b8 readOnly, const ScrollViewportPlacement& placement, Point step)noexcept;
-    void retire()noexcept;
+    [[nodiscard]] ControlToken prepare(
+        const WidgetState& widget, const PopupToken& popup,
+        const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const b8 enabled, const b8 readOnly,
+        const ScrollViewportPlacement& placement,
+        const Point step
+    )noexcept{
+        const TextAreaScrollSnapshot next(
+            widget.id,
+            popup,
+            widget.declarationGeneration,
+            stateRevision,
+            model.stamp(),
+            enabled,
+            readOnly
+        );
+        if(
+            !m_prepared || next != m_snapshot
+            || !SameScrollViewportPlacementGeometry(placement, m_placement)
+            || step.x != m_step.x || step.y != m_step.y
+        )
+            advanceRevision();
+        m_snapshot = next;
+        m_placement = placement;
+        m_step = step;
+        m_prepared = true;
+        return { stateGeneration, next.model.instanceGeneration, m_revision };
+    }
+    void retire()noexcept{
+        advanceRevision();
+        m_prepared = false;
+        m_snapshot = {};
+        m_placement = {};
+        m_step = {};
+    }
 
 
 private:
@@ -74,8 +106,25 @@ public:
 
     [[nodiscard]] b8 focused()const noexcept{ return m_visual.focused; }
     // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
-    [[nodiscard]] b8 scrollTo(Point scroll)noexcept;
-    void reset()noexcept;
+    [[nodiscard]] b8 scrollTo(const Point scroll)noexcept{
+        if(!IsValidUiExtent(scroll))
+            return false;
+        advanceRevision();
+        m_scrollInput.retire();
+        m_visual.scroll = scroll.x;
+        m_scrollY = scroll.y;
+        m_revealCaret = false;
+        return true;
+    }
+    void reset()noexcept{
+        advanceRevision();
+        m_scrollInput.retire();
+        m_visual = {};
+        m_navigation.reset();
+        m_compositionGeneration = 0u;
+        m_scrollY = 0.0f;
+        m_revealCaret = true;
+    }
 
 
 private:

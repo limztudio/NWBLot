@@ -368,6 +368,98 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
     return candidate;
 }
 
+void ReconcileRadioGroupSelectionAndCursor(
+    in RadioGroupSnapshot snapshot,
+    in RadioGroupChoices candidate,
+    mut u64 outSelected,
+    mut u64 outCursor
+){
+    const b8 replacement = snapshot.sourceGeneration != 0u && snapshot.sourceGeneration != candidate.sourceGeneration;
+    u64 selected = snapshot.selectedKey;
+    u64 cursor = snapshot.cursorKey;
+    if(replacement){
+        selected = 0u;
+        cursor = 0u;
+    }
+    u32 selectedIndex = 0u;
+    if(!TryFindRadioGroupChoice(candidate, selected, selectedIndex))
+        selected = 0u;
+    u32 cursorIndex = 0u;
+    if(!TryFindRadioGroupChoice(candidate, cursor, cursorIndex))
+        cursor = FindEnabledRadioGroupChoice(candidate, 0u, false);
+    else if(!candidate.rows[cursorIndex].enabled){
+        u32 nextStart = cursorIndex + 1u;
+        if(nextStart == candidate.count)
+            nextStart = 0u;
+        cursor = FindEnabledRadioGroupChoice(candidate, nextStart, false);
+    }
+    outSelected = selected;
+    outCursor = cursor;
+}
+
+b8 TryApplyRadioGroupControlAction(
+    in RadioGroupChoices choices,
+    in RadioGroupOptions options,
+    in ControlAction action,
+    in ControlToken stateToken,
+    in u64 currentSelected,
+    in u64 currentCursor,
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut RadioGroupResult inOutResult
+){
+    outSelected = currentSelected;
+    outCursor = currentCursor;
+    if(
+        !IsValidRadioGroupOptions(options) || !IsValidRadioGroupChoices(choices)
+        || !stateToken.valid() || stateToken != action.control
+        || choices.sourceGeneration != stateToken.contentGeneration || choices.sourceRevision != stateToken.contentRevision
+    )
+        return false;
+    u64 candidate = 0u;
+    b8 activate = false;
+    switch(action.kind){
+    case ControlActionKind::Up:
+    case ControlActionKind::Down:
+    case ControlActionKind::Left:
+    case ControlActionKind::Right:
+    case ControlActionKind::Home:
+    case ControlActionKind::End:
+        candidate = ResolveRadioGroupNavigationTarget(choices, currentCursor, action.kind);
+        break;
+    case ControlActionKind::Submit:
+    case ControlActionKind::Activate:{
+        candidate = currentCursor;
+        if(action.kind == ControlActionKind::Activate)
+            candidate = action.value;
+        u32 index = 0u;
+        if(!TryFindRadioGroupChoice(choices, candidate, index) || !choices.rows[index].enabled){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        activate = candidate != 0u;
+        break;
+    }
+    case ControlActionKind::Wheel:
+    case ControlActionKind::PageUp:
+    case ControlActionKind::PageDown:
+        break;
+    default:
+        return false;
+    }
+    RadioGroupResult candidateResult = inOutResult;
+    candidateResult.valid = true;
+    if(candidate != 0u){
+        candidateResult.selectionChanged = candidateResult.selectionChanged || currentSelected != candidate;
+        candidateResult.activated = candidateResult.activated || activate;
+        outSelected = candidate;
+        outCursor = candidate;
+    }
+    inOutResult = candidateResult;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -4,7 +4,6 @@
 
 #include "model.h"
 #include "grapheme.h"
-#include "multiline_text.h"
 
 #include <global/atomic_identity.h>
 #include <global/termination.h>
@@ -116,9 +115,7 @@ b8 EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterByt
         return false;
     const usize anchor = m_anchor - beforeBytes;
     const usize caret = m_caret - beforeBytes;
-    const auto anchorBoundary = LowerBound(boundaries->begin(), boundaries->end(), anchor);
-    const auto caretBoundary = LowerBound(boundaries->begin(), boundaries->end(), caret);
-    if(anchorBoundary == boundaries->end() || *anchorBoundary != anchor || caretBoundary == boundaries->end() || *caretBoundary != caret)
+    if(!IsEditBoundary(*boundaries, anchor) || !IsEditBoundary(*boundaries, caret))
         return false;
 
     recordHistory(text(), m_anchor, m_caret, after, anchor, caret);

@@ -401,6 +401,195 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
     return candidate;
 }
 
+Expected<f64> NormalizeSliderValue(in f64 minimum, in f64 maximum, in f64 value){
+    f64 normalized = 0.0;
+    if(!TryNormalizeSliderValue(minimum, maximum, value, normalized))
+        return makeUnexpected(Failure());
+    return normalized;
+}
+
+Expected<f64> InterpolateSliderValue(in f64 minimum, in f64 maximum, in f64 normalized){
+    f64 value = 0.0;
+    if(!TryInterpolateSliderValue(minimum, maximum, normalized, value))
+        return makeUnexpected(Failure());
+    return value;
+}
+
+b8 SameSliderOptionsValues(in f64 stateMin, in f64 stateMax, in f64 stateStep, in b8 stateEnabled, in SliderOptions options){
+    return bit_cast<u64>(stateMin) == bit_cast<u64>(options.minimum)
+        && bit_cast<u64>(stateMax) == bit_cast<u64>(options.maximum)
+        && bit_cast<u64>(stateStep) == bit_cast<u64>(options.keyStep)
+        && stateEnabled == options.enabled;
+}
+
+b8 TryEvaluateSliderAdmission(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in SliderPlacement stateAdmission,
+    in SliderOptions options,
+    in SliderPlacement placement,
+    mut b8 outChanged
+){
+    outChanged = false;
+    if(!IsValidSliderOptions(options) || !IsValidSliderPlacement(placement))
+        return false;
+    outChanged = !admitted
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !SameSliderPlacementGeometry(stateAdmission, placement);
+    return true;
+}
+
+b8 TryApplySliderControlAction(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in ControlToken stateToken,
+    in f64 currentValue,
+    in SliderOptions options,
+    in ControlAction action,
+    mut f64 outValue,
+    mut b8 outAdvanceRevision,
+    mut SliderResult inOutResult
+){
+    outValue = currentValue;
+    outAdvanceRevision = false;
+    if(
+        !IsValidSliderOptions(options) || !admitted || !action.id.valid() || action.control != stateToken
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options) || action.kind > ControlActionKind::Right
+    )
+        return false;
+    SliderResult accepted = inOutResult;
+    accepted.valid = true;
+    if(!options.enabled || options.minimum == options.maximum){
+        accepted.dragging = false;
+        inOutResult = accepted;
+        return true;
+    }
+    if(
+        action.kind != ControlActionKind::Left && action.kind != ControlActionKind::Down
+        && action.kind != ControlActionKind::Right && action.kind != ControlActionKind::Up
+        && action.kind != ControlActionKind::PageDown && action.kind != ControlActionKind::PageUp
+        && action.kind != ControlActionKind::Home && action.kind != ControlActionKind::End
+    ){
+        inOutResult = accepted;
+        return true;
+    }
+    f64 value = currentValue;
+    if(!TryStepSliderValue(currentValue, options, action.kind, value))
+        return false;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
+    outValue = value;
+    outAdvanceRevision = true;
+    inOutResult = accepted;
+    return true;
+}
+
+b8 TrySeekSliderPointerGesture(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in ControlToken stateToken,
+    in SliderPlacement stateAdmission,
+    in f64 currentValue,
+    in SliderOptions options,
+    in PointerGesture gesture,
+    mut f64 outValue,
+    mut InputActionId outPress,
+    mut b8 outAdvanceRevision,
+    mut SliderResult inOutResult
+){
+    outValue = currentValue;
+    outPress = InputActionId();
+    outAdvanceRevision = false;
+    if(
+        !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !EqualUiRect(gesture.referenceRectangle, stateAdmission.centerTravel)
+    )
+        return false;
+    SliderResult accepted = inOutResult;
+    accepted.valid = true;
+    if(!options.enabled || options.minimum == options.maximum || gesture.referenceRectangle.width <= 0.0f){
+        accepted.dragging = false;
+        inOutResult = accepted;
+        return true;
+    }
+    f64 value = 0.0;
+    if(!TryComputeSliderSeekValue(options, gesture, value))
+        return false;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
+    accepted.dragging = gesture.state == PointerGestureState::Active;
+    outValue = value;
+    if(accepted.dragging)
+        outPress = gesture.id;
+    outAdvanceRevision = true;
+    inOutResult = accepted;
+    return true;
+}
+
+b8 TryDragSliderPointerGesture(
+    in b8 admitted,
+    in f64 stateMin,
+    in f64 stateMax,
+    in f64 stateStep,
+    in b8 stateEnabled,
+    in ControlToken stateToken,
+    in SliderPlacement stateAdmission,
+    in f64 currentValue,
+    in InputActionId currentPress,
+    in b8 currentPressMoved,
+    in SliderOptions options,
+    in PointerGesture gesture,
+    mut f64 outValue,
+    mut InputActionId outPress,
+    mut b8 outPressMoved,
+    mut b8 outAdvanceRevision,
+    mut SliderResult inOutResult
+){
+    outValue = currentValue;
+    outPress = currentPress;
+    outPressMoved = currentPressMoved;
+    outAdvanceRevision = false;
+    const f64 baseline = bit_cast<f64>(gesture.value);
+    if(
+        !IsValidSliderOptions(options) || !admitted || !IsValidSliderGesture(gesture) || gesture.control != stateToken
+        || !SameSliderOptionsValues(stateMin, stateMax, stateStep, stateEnabled, options)
+        || !EqualUiRect(gesture.referenceRectangle, stateAdmission.travelBounds)
+        || gesture.targetRectangle.width != stateAdmission.thumbExtent.x
+        || gesture.targetRectangle.height != stateAdmission.thumbExtent.y || !isFinite(baseline)
+    )
+        return false;
+    SliderResult accepted = inOutResult;
+    accepted.valid = true;
+    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+    if(!options.enabled || options.minimum == options.maximum || travel <= 0.0){
+        accepted.dragging = false;
+        inOutResult = accepted;
+        return true;
+    }
+    b8 moved = currentPress == gesture.id && currentPressMoved;
+    f64 value = currentValue;
+    if(!TryComputeSliderDragValue(currentValue, baseline, options, gesture, moved, value, moved))
+        return false;
+    accepted.valueChanged = accepted.valueChanged || bit_cast<u64>(currentValue) != bit_cast<u64>(value);
+    accepted.dragging = gesture.state == PointerGestureState::Active;
+    outValue = value;
+    outPress = InputActionId();
+    if(accepted.dragging)
+        outPress = gesture.id;
+    outPressMoved = accepted.dragging && moved;
+    outAdvanceRevision = true;
+    inOutResult = accepted;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

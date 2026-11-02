@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_ui/toolkit/global.h>
+#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +29,9 @@ namespace GraphemeSegmentation{
 
 // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
 [[nodiscard]] Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, b8 singleLine = false);
-[[nodiscard]] b8 Validate(AStringView text, b8 singleLine = false)noexcept;
+[[nodiscard]] inline b8 Validate(const AStringView text, const b8 singleLine = false)noexcept{
+    return ValidateGraphemeText(text, singleLine);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

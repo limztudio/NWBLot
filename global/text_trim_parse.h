@@ -287,6 +287,29 @@ struct DecodedUtf8CodePoint{
     return *decoded;
 }
 
+[[nodiscard]] inline constexpr b8 TryDecodeUtf8CodePoint(const AStringView bytes, u32& outCodePoint, usize& outByteCount)noexcept{
+    outCodePoint = 0u;
+    outByteCount = 0u;
+    if(bytes.empty() || bytes.data() == nullptr)
+        return false;
+    i32 byteCount = 0;
+    if(!BasicStringDetail::TryDecodeUtf8CodePoint(outCodePoint, byteCount, bytes) || byteCount <= 0){
+        outCodePoint = 0u;
+        return false;
+    }
+    outByteCount = static_cast<usize>(byteCount);
+    return true;
+}
+
+[[nodiscard]] inline constexpr b8 TryDecodeUtf8Scalar(const AStringView bytes, u32& outCodePoint, usize& outByteCount)noexcept{
+    if(!TryDecodeUtf8CodePoint(bytes, outCodePoint, outByteCount) || IsUnicodeSurrogate(outCodePoint)){
+        outCodePoint = 0u;
+        outByteCount = 0u;
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline constexpr Expected<usize> EncodeUtf8CodePoint(const u32 codePoint, const Span<char, s_Utf8MaxSequenceBytes> outBytes)noexcept{
     if(!IsUnicodeScalarValue(codePoint))
         return MakeUnexpected(Failure{});

@@ -43,16 +43,81 @@ public:
     [[nodiscard]] b8 snapshot(const EditModel& model);
 
     // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
-    [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
+    [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {}){
+        if(m_revision == 0u || request.direction != TextDirection::LeftToRight)
+            return TextLayoutStatus::InvalidParameters;
+        request.text = displayText();
+        const TextLayoutStatus::Enum validation = ValidateTextRequest(request, m_textMode == EditTextMode::Multiline);
+        if(validation != TextLayoutStatus::Success)
+            return validation;
+        auto candidate = text.layout(request);
+        if(!candidate)
+            return candidate.error();
+        return adoptLayout(Move(*candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
+    }
 
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
-    [[nodiscard]] b8 adoptLayout(TextLayout&& layout);
+    [[nodiscard]] b8 adoptLayout(TextLayout&& layout){
+        if(m_revision == 0u)
+            return false;
+        EditCaretGeometry candidate(*m_arena);
+        if(!candidate.adoptLayout(Move(layout), displayText(), m_mapping, m_committedBytes, m_textMode))
+            return false;
+        if(!candidate.caretRect(m_caret) || !candidate.caretRect(m_selection.begin) || !candidate.caretRect(m_selection.end))
+            return false;
+        const Point logicalSize = candidate.layout().measure();
+        m_geometry = Move(candidate);
+        m_visualBounds = { 0.0f, 0.0f, logicalSize.x, logicalSize.y };
+        m_ready = true;
+        return true;
+    }
     // Shape at display scale before arranging; measurement keeps line, caret, hit-test, composition coords.
-    [[nodiscard]] b8 measure(TextService& text, const DisplayMetrics& display);
-    [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, b8 revealCaret = true)const noexcept;
+    [[nodiscard]] b8 measure(TextService& text, const DisplayMetrics& display){
+        if(!m_ready)
+            return false;
+        const auto measured = text.measure(layout(), display);
+        if(!measured)
+            return false;
+        m_visualBounds = *measured;
+        return true;
+    }
+    [[nodiscard]] Expected<EditBoxPlacement> arrange(const Rect& bounds, const Insets& padding, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
+        if(!m_ready)
+            return MakeUnexpected(Failure{});
+        Rect viewport{};
+        if(!TryComputeEditBoxViewport(bounds, padding, clip, previousScroll, caretWidth, viewport))
+            return MakeUnexpected(Failure{});
+        return arrangeViewport(bounds, viewport, clip, previousScroll, caretWidth, revealCaret);
+    }
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
-    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, Point previousScroll, f32 caretWidth = 1.0f, b8 revealCaret = true)const noexcept;
-    [[nodiscard]] Expected<usize> hitTest(Point point, const EditBoxPlacement& placement)const noexcept;
+    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip, const Point previousScroll, const f32 caretWidth = 1.0f, const b8 revealCaret = true)const noexcept{
+        if(!m_ready || !ValidateEditBoxViewportArrangeInputs(bounds, viewport, clip, previousScroll, caretWidth))
+            return MakeUnexpected(Failure{});
+        const auto caret = m_geometry.caretRect(m_caret);
+        if(!caret)
+            return MakeUnexpected(Failure{});
+        EditBoxPlacement placement{};
+        if(!TryComputeEditBoxViewportPlacement(bounds, viewport, clip, previousScroll, caretWidth, revealCaret, m_textMode, m_visualBounds, layout().measure(), *caret, placement))
+            return MakeUnexpected(Failure{});
+        auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);
+        if(!selection)
+            return MakeUnexpected(Failure{});
+        Rect preeditUnderline{};
+        if(m_composing){
+            const auto underline = m_geometry.rangeOnLine(m_preedit, 0u, caretWidth);
+            if(!underline)
+                return MakeUnexpected(underline.error());
+            preeditUnderline = *underline;
+        }
+        if(!ValidateEditBoxArrangedSegments(placement, caretWidth, *selection, preeditUnderline, m_composing))
+            return MakeUnexpected(Failure{});
+        return placement;
+    }
+    [[nodiscard]] Expected<usize> hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
+        if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
+            return MakeUnexpected(Failure{});
+        return m_geometry.hitTest({ point.x - placement.textOrigin.x, point.y - placement.textOrigin.y });
+    }
 
     [[nodiscard]] b8 paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
 

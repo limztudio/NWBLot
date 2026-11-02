@@ -4,7 +4,7 @@
 
 #include "text_edit_session.h"
 
-#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
+#include <impl/ecs_ui/toolkit/edit/single_line_text.h>
 
 #include <core/os/text_input_text.h>
 

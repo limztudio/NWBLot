@@ -3,6 +3,7 @@
 
 
 #include "popup_style.adhd"
+#include <impl/ecs_ui/toolkit/input/popup.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,6 +55,58 @@ b8 IsValidTooltipOptions(in TooltipOptions options){
 
 void ApplySkinPaletteToTooltipStyle(in UiSkinPalette palette, mut TooltipStyle style){
     style.text = ResolveUiSkinColor(palette, UiSkinColorRole::TextTooltip);
+}
+
+b8 TryEvaluateTooltipStateUpdate(
+    in WidgetId anchor,
+    in u64 declarationGeneration,
+    in PopupToken popup,
+    in u64 focusLossGeneration,
+    in u64 hoverActivityGeneration,
+    in b8 hovered,
+    in f32 deltaSeconds,
+    in TooltipOptions options,
+    mut WidgetId inOutAnchor,
+    mut u64 inOutDeclarationGeneration,
+    mut PopupToken inOutPopup,
+    mut u64 inOutFocusLossGeneration,
+    mut u64 inOutHoverActivityGeneration,
+    mut TooltipOptions inOutOptions,
+    mut PopupPlacement inOutPlacement,
+    mut b8 inOutHovered,
+    mut b8 inOutVisible,
+    mut f64 inOutElapsed,
+    mut b8 outChanged
+){
+    outChanged = false;
+    if(!anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !popup.empty()) || !isFinite(deltaSeconds) || deltaSeconds < 0.0f || !IsValidTooltipOptions(options))
+        return false;
+    const b8 sameBinding = inOutAnchor == anchor
+        && inOutDeclarationGeneration == declarationGeneration
+        && inOutPopup == popup
+        && inOutFocusLossGeneration == focusLossGeneration
+        && inOutHoverActivityGeneration == hoverActivityGeneration;
+    const b8 sameOptions = inOutOptions == options;
+    const b8 activeHover = options.enabled && hovered;
+    f64 elapsed = 0.0;
+    if(activeHover && inOutHovered && sameBinding && sameOptions)
+        elapsed = min(inOutElapsed + cast<f64>(deltaSeconds), cast<f64>(options.delaySeconds));
+    const b8 visible = activeHover && elapsed >= cast<f64>(options.delaySeconds);
+    if(!sameBinding || !sameOptions || inOutHovered != activeHover || inOutElapsed != elapsed || inOutVisible != visible){
+        outChanged = true;
+        inOutAnchor = anchor;
+        inOutDeclarationGeneration = declarationGeneration;
+        inOutPopup = popup;
+        inOutFocusLossGeneration = focusLossGeneration;
+        inOutHoverActivityGeneration = hoverActivityGeneration;
+        inOutOptions = options;
+        inOutElapsed = elapsed;
+        inOutHovered = activeHover;
+        inOutVisible = visible;
+        if(!visible || !sameBinding || !sameOptions)
+            inOutPlacement = PopupPlacement();
+    }
+    return true;
 }
 
 

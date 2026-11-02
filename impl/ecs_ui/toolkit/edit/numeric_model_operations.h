@@ -96,7 +96,15 @@ template<typename Canonicalize>
     return result;
 }
 
-[[nodiscard]] Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft);
+[[nodiscard]] inline Expected<b8, ErrorCode> CanonicalizeDraft(const Expected<AStringView, ErrorCode>& formatted, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
+    if(!formatted)
+        return MakeUnexpected(formatted.error());
+    const b8 changed = *formatted != inOutDraft.text();
+    if(!inOutDraft.setText(*formatted))
+        return MakeUnexpected(MakeErrorCode(ErrorCondition::invalid_argument));
+    outAcceptedDraft.assign(formatted->data(), formatted->size());
+    return changed;
+}
 
 template<typename Value, typename Formatter>
 [[nodiscard]] inline Expected<b8, ErrorCode> FormatCanonicalDraft(const Value value, Formatter formatter, EditModel& inOutDraft, AString<Core::Alloc::GlobalArena>& outAcceptedDraft){
@@ -104,14 +112,12 @@ template<typename Value, typename Formatter>
     return CanonicalizeDraft(formatter(value, buffer), inOutDraft, outAcceptedDraft);
 }
 
-template<typename Value, typename Bounds>
-[[nodiscard]] inline NumericParseStatus::Enum DraftStatus(const Expected<Value, NumericParseStatus::Enum>& parsed, const Bounds& bounds)noexcept{
-    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
-        return NumericParseStatus::OutOfRange;
-    return parsed ? NumericParseStatus::Complete : parsed.error();
+[[nodiscard]] inline b8 SetDraftText(const AStringView text, EditModel& inOutDraft, u64& inOutRevision){
+    if(!inOutDraft.setText(text))
+        return false;
+    AdvanceRevision(inOutRevision);
+    return true;
 }
-
-[[nodiscard]] b8 SetDraftText(AStringView text, EditModel& inOutDraft, u64& inOutRevision);
 
 template<typename Canonicalize>
 [[nodiscard]] inline NumericEditResult RestoreModelDraft(Canonicalize canonicalize, const b8 cancelled, u64& inOutRevision)noexcept(noexcept(RestoreDraft(Move(canonicalize), cancelled))){
@@ -173,13 +179,6 @@ protected:
     void initializeDefault(const TValue initialValue){
         if(!static_cast<TDerived*>(this)->canonicalize(initialValue))
             TerminateInvariant();
-    }
-
-    template<typename TValidateBounds, typename TParseDraft>
-    [[nodiscard]] NumericParseStatus::Enum evaluateDraftStatus(const TBounds& bounds, TValidateBounds validateBounds, TParseDraft parseDraft)const noexcept{
-        if(!validateBounds(bounds))
-            return NumericParseStatus::Invalid;
-        return NumericEditDetail::DraftStatus(parseDraft(m_draft.text()), bounds);
     }
 
     [[nodiscard]] b8 assignAuthoritativeValue(const TValue value){

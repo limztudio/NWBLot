@@ -88,6 +88,84 @@ b8 HasValidPopupScopeGeometry(in PopupScope scope){
     return isFinite(boundsRight) && isFinite(boundsBottom) && isFinite(viewportRight) && isFinite(viewportBottom) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && boundsRight <= viewportRight && boundsBottom <= viewportBottom;
 }
 
+b8 CanDismissPopupScope(in PopupScope scope, in b8 closing, in PopupDismissReason reason){
+    if(closing || reason <= PopupDismissReason::None || reason > PopupDismissReason::FocusLost)
+        return false;
+    if(reason == PopupDismissReason::Cancel && !scope.dismissCancel)
+        return false;
+    if(reason == PopupDismissReason::OutsideClick && !scope.dismissOutside)
+        return false;
+    if(reason == PopupDismissReason::FocusTraversal && !scope.dismissFocusTraversal)
+        return false;
+    return true;
+}
+
+b8 IsPopupTokenDescendant(in Span<PopupRecord> popups, in PopupToken token, in PopupToken ancestor){
+    PopupToken current = token;
+    for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
+        if(current == ancestor)
+            return true;
+        b8 found = false;
+        for(usize index = 0u; index < popups.size(); ++index){
+            if(popups[index].scope.token == current){
+                current = popups[index].scope.parent;
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            return false;
+    }
+    return false;
+}
+
+b8 ValidateStagedPopupScopes(in Span<PopupScope> scopes, in Span<PopupRecord> existingPopups){
+    const usize count = scopes.size();
+    if(count > s_InputMaxPopups)
+        return false;
+    for(usize index = 0u; index < count; ++index){
+        const PopupScope scope = scopes[index];
+        if(
+            !scope.token.valid() || !HasValidPopupScopeGeometry(scope)
+            || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
+            || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
+        )
+            return false;
+        for(usize previous = 0u; previous < index; ++previous){
+            if(scopes[previous].token.widget == scope.token.widget)
+                return false;
+        }
+        if(!scope.parent.empty()){
+            b8 parent = false;
+            for(usize previous = 0u; previous < index; ++previous)
+                parent = parent || (scopes[previous].token == scope.parent);
+            if(!scope.parent.valid() || !parent)
+                return false;
+        }
+        // A child cannot reuse its open lifetime beneath a different ancestor lifetime.
+        for(usize previous = 0u; previous < existingPopups.size(); ++previous){
+            if(existingPopups[previous].scope.token == scope.token && existingPopups[previous].scope.parent != scope.parent)
+                return false;
+        }
+    }
+    return true;
+}
+
+void BindPopupParentState(
+    in PopupToken parent,
+    in u64 openGeneration,
+    mut b8 inOutOpen,
+    mut b8 inOutParentBound,
+    mut PopupToken inOutParent,
+    mut u64 inOutParentOpenGeneration
+){
+    if(inOutParentBound && inOutParent != parent && inOutParentOpenGeneration == openGeneration)
+        inOutOpen = false;
+    inOutParent = parent;
+    inOutParentBound = true;
+    inOutParentOpenGeneration = openGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

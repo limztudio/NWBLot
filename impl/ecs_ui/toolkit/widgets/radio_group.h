@@ -8,11 +8,32 @@
 #include "list.h"
 #include <impl/ecs_ui/toolkit/widgets/radio_group_style.adhd.h>
 
+#include <global/atomic_identity.h>
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_radio_group{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +46,10 @@ class RadioGroupState final : NoCopy{
 
 
 public:
-    RadioGroupState()noexcept;
+    RadioGroupState()noexcept
+        : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity))
+        , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity))
+    {}
     RadioGroupState(RadioGroupState&&) = delete;
 
 
@@ -49,8 +73,21 @@ public:
     [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept{ return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision }; }
 
     [[nodiscard]] b8 matches(const RadioGroupSnapshot& value)const noexcept{ return snapshot() == value; }
-    void select(u64 key)noexcept;
-    void reset()noexcept;
+    void select(const u64 key)noexcept{
+        advanceRevision();
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity);
+        m_selected = key;
+        m_cursor = key;
+    }
+    void reset()noexcept{
+        advanceRevision();
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group::s_NextIdentity);
+        m_selected = 0u;
+        m_cursor = 0u;
+        m_sourceGeneration = 0u;
+        m_sourceRevision = 0u;
+        m_placement = {};
+    }
 
 
 private:
@@ -81,11 +118,105 @@ public:
 };
 
 class RadioGroupBehavior final{
+private:
+    [[nodiscard]] static b8 StateCurrent(const RadioGroupState& state, const RadioGroupSnapshot& snapshot, const b8& reentryObserved, const IRadioGroupReconcileGuard* const guard){
+        if(reentryObserved || !state.matches(snapshot) || (guard && !guard->current()))
+            return false;
+        return !reentryObserved && state.matches(snapshot);
+    }
+
+    [[nodiscard]] static b8 SourceMatches(const IListDataSource& source, const RadioGroupState& state, const RadioGroupSnapshot& snapshot, const b8& reentryObserved, const RadioGroupChoices& choices, const IRadioGroupReconcileGuard* const guard){
+        if(!StateCurrent(state, snapshot, reentryObserved, guard))
+            return false;
+        const u64 generation = source.instanceGeneration();
+        if(!StateCurrent(state, snapshot, reentryObserved, guard) || generation != choices.sourceGeneration)
+            return false;
+        const u64 revision = source.revision();
+        if(!StateCurrent(state, snapshot, reentryObserved, guard) || revision != choices.sourceRevision)
+            return false;
+        const u64 count = source.rowCount();
+        return StateCurrent(state, snapshot, reentryObserved, guard) && count == choices.count;
+    }
+
+
 public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
-    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(const IListDataSource& source, const IRadioGroupReconcileGuard* guard, RadioGroupState& state, RadioGroupResult& result);
+    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(const IListDataSource& source, const IRadioGroupReconcileGuard* const guard, RadioGroupState& state, RadioGroupResult& result){
+        if(state.m_reconciling){
+            state.m_reentryObserved = true;
+            return MakeUnexpected(Failure{});
+        }
+        const RadioGroupSnapshot snapshot = state.snapshot();
+        state.m_reconciling = true;
+        state.m_reentryObserved = false;
+        ScopeExit finish([&state]()noexcept{ state.m_reconciling = false; state.m_reentryObserved = false; });
+
+        RadioGroupChoices candidate;
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
+            return MakeUnexpected(Failure{});
+        candidate.sourceGeneration = source.instanceGeneration();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceGeneration == 0u)
+            return MakeUnexpected(Failure{});
+        candidate.sourceRevision = source.revision();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceRevision == 0u)
+            return MakeUnexpected(Failure{});
+        const u64 count = source.rowCount();
+        if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || count > s_RadioGroupMaxChoices)
+            return MakeUnexpected(Failure{});
+        candidate.count = static_cast<u32>(count);
+        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+            return MakeUnexpected(Failure{});
+        for(u32 index = 0u; index < candidate.count; ++index){
+            if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
+                return MakeUnexpected(Failure{});
+            const u64 key = source.key(index);
+            if(key == 0u || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+                return MakeUnexpected(Failure{});
+            for(u32 previous = 0u; previous < index; ++previous){
+                if(candidate.rows[previous].key == key)
+                    return MakeUnexpected(Failure{});
+            }
+            const auto resolved = source.indexOf(key);
+            if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !resolved || *resolved != index)
+                return MakeUnexpected(Failure{});
+            const b8 enabled = source.enabled(index);
+            if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+                return MakeUnexpected(Failure{});
+            candidate.rows[index] = { key, enabled };
+        }
+        u64 selected = 0u;
+        u64 cursor = 0u;
+        ReconcileRadioGroupSelectionAndCursor(snapshot, candidate, selected, cursor);
+        // A second observation catches one-shot metadata mutation from the preceding final count callback.
+        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
+            return MakeUnexpected(Failure{});
+        RadioGroupResult candidateResult = result;
+        candidateResult.valid = true;
+        candidateResult.selectionChanged |= snapshot.selectedKey != selected;
+        state.advanceRevision();
+        state.m_selected = selected;
+        state.m_cursor = cursor;
+        state.m_sourceGeneration = candidate.sourceGeneration;
+        state.m_sourceRevision = candidate.sourceRevision;
+        result = candidateResult;
+        return candidate;
+    }
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
-    [[nodiscard]] static b8 Apply(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result)noexcept;
+    [[nodiscard]] static b8 Apply(const RadioGroupChoices& choices, const RadioGroupOptions& options, const ControlAction& action, RadioGroupState& state, RadioGroupResult& result)noexcept{
+        if(state.m_reconciling){
+            state.m_reentryObserved = true;
+            return false;
+        }
+        const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
+        u64 selected = state.m_selected;
+        u64 cursor = state.m_cursor;
+        if(!TryApplyRadioGroupControlAction(choices, options, action, token, state.m_selected, state.m_cursor, selected, cursor, result))
+            return false;
+        state.advanceRevision();
+        state.m_selected = selected;
+        state.m_cursor = cursor;
+        return true;
+    }
 };
 
 

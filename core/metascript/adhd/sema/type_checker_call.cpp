@@ -131,11 +131,37 @@ b8 TypeChecker::checkCallableArguments(
                 PropagateFuncCaptureBytes(expectedParamTypeRef, arg, scope, m_symbols);
             }
         }
+        else if(!recvTypeRef && !calledMemberName.empty()){
+            if(calledMemberName == "tryDecodeUtf8CodePoint" || calledMemberName == "tryDecodeUtf8Scalar"){
+                if(i == 0u)
+                    expectedParamType = "StringView";
+                else if(i == 1u || i == 2u)
+                    paramIsMut = true;
+            }
+            else if(i == 0u && (calledMemberName == "trimView" || calledMemberName == "trimLeftView" || calledMemberName == "parseI64" || calledMemberName == "parseU64" || calledMemberName == "parseF32" || calledMemberName == "parseF64")){
+                expectedParamType = "StringView";
+            }
+        }
         arg->isMutArg = paramIsMut || expectedParamType == "Span" || expectedParamType == "StringView";
         if(expectedParamType == "Path")
             markStringToPathAdaptation(ownerClass, &method, scope, *arg);
         if(!checkExpr(ownerClass, scope, paramIsMut, method, *arg, errors))
             ok = false;
+        if(!recvTypeRef && (calledMemberName == "tryDecodeUtf8CodePoint" || calledMemberName == "tryDecodeUtf8Scalar")){
+            const MStringView actualArgType = inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(i == 0u && !actualArgType.empty() && actualArgType != "StringView" && actualArgType != "String" && actualArgType != "CompactString"){
+                reportError(errors, arg->span, "first argument to UTF-8 decode built-in must be StringView, String, or CompactString");
+                ok = false;
+            }
+            else if(i == 1u && actualArgType != "u32"){
+                reportError(errors, arg->span, "second argument to UTF-8 decode built-in must be a mutable 'u32' variable");
+                ok = false;
+            }
+            else if(i == 2u && actualArgType != "usize"){
+                reportError(errors, arg->span, "third argument to UTF-8 decode built-in must be a mutable 'usize' variable");
+                ok = false;
+            }
+        }
         if(!expectedParamType.empty() && m_symbols.findInterface(expectedParamType)){
             if(!verifyConcreteClassImplementsInterface(
                 ownerClass,
@@ -305,9 +331,12 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 ok = false;
             }
             if(!targetCallable && !localCallable){
-                if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text); fnInfo && fnInfo->arity > 0u && callArgCount != fnInfo->arity){
-                    reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
-                    ok = false;
+                if(const BuiltinFunctionInfo* fnInfo = FindBuiltinFunction(expr.lhs->text)){
+                    calledMemberName = expr.lhs->text;
+                    if(fnInfo->arity > 0u && callArgCount != fnInfo->arity){
+                        reportError(errors, expr.span, "wrong number of arguments to built-in math/SIMD function");
+                        ok = false;
+                    }
                 }
                 if(!IsValidBuiltinVectorOrMatrixCtorArity(baseCallee, callArgCount)){
                     reportError(errors, expr.span, "wrong number of arguments to built-in vector/matrix constructor");

@@ -534,6 +534,37 @@ TEST(AdhdCompiler, RejectsSurrogateEscapesMalformedAttributesDependentBoundsAndP
     CompileResult nativeParamRes(arena.arena);
     ASSERT_TRUE(Compiler::Compile(s_NativeBlockParamNoShadowForwardDecl, "impl/ecs_ui/skin_check.adhd", arena.arena, nativeParamRes));
     EXPECT_EQ(MStringView(nativeParamRes.generatedHeader.data(), nativeParamRes.generatedHeader.size()).find("class UiSkin;"), MStringView::npos);
+
+    static constexpr MStringView s_Utf8DecodeBuiltinsValid =
+        "b8 validateUtf8(in StringView text, mut u32 outLastScalar) {\r\n"
+        "    outLastScalar = 0u;\r\n"
+        "    usize offset = 0u;\r\n"
+        "    while(offset < text.size()) {\r\n"
+        "        u32 codePoint = 0u;\r\n"
+        "        usize byteCount = 0u;\r\n"
+        "        if(!tryDecodeUtf8Scalar(text.substr(offset), codePoint, byteCount)) {\r\n"
+        "            return false;\r\n"
+        "        }\r\n"
+        "        if(!tryDecodeUtf8CodePoint(text.substr(offset), outLastScalar, byteCount)) {\r\n"
+        "            return false;\r\n"
+        "        }\r\n"
+        "        offset += byteCount;\r\n"
+        "    }\r\n"
+        "    return true;\r\n"
+        "}\r\n";
+    CompileResult utf8DecodeRes(arena.arena);
+    ASSERT_TRUE(Compiler::Compile(s_Utf8DecodeBuiltinsValid, "impl/utf8_decode.adhd", arena.arena, utf8DecodeRes));
+    EXPECT_NE(MStringView(utf8DecodeRes.generatedSource.data(), utf8DecodeRes.generatedSource.size()).find("::TryDecodeUtf8Scalar("), MStringView::npos);
+    EXPECT_NE(MStringView(utf8DecodeRes.generatedSource.data(), utf8DecodeRes.generatedSource.size()).find("::TryDecodeUtf8CodePoint("), MStringView::npos);
+
+    static constexpr MStringView s_BadUtf8DecodeConstOut =
+        "b8 badUtf8(in StringView text) {\r\n"
+        "    const u32 codePoint = 0u;\r\n"
+        "    usize byteCount = 0u;\r\n"
+        "    return tryDecodeUtf8Scalar(text, codePoint, byteCount);\r\n"
+        "}\r\n";
+    CompileResult badUtf8ConstRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_BadUtf8DecodeConstOut, "impl/bad_utf8_const.adhd", arena.arena, badUtf8ConstRes));
 }
 
 

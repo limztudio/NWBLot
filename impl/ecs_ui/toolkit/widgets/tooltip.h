@@ -24,8 +24,17 @@ class TooltipState final : NoCopy{
     friend class TooltipBehavior;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
-    TooltipState()noexcept;
+    TooltipState()noexcept
+        : m_instanceGeneration(NextIdentity())
+    {}
     TooltipState(TooltipState&&) = delete;
 
 
@@ -34,7 +43,21 @@ public:
 
 
 public:
-    void reset()noexcept;
+    void reset()noexcept{
+        advanceRevision();
+        m_owner = {};
+        m_ownerDeclaration = 0u;
+        m_anchor = {};
+        m_declarationGeneration = 0u;
+        m_popup = {};
+        m_focusLossGeneration = 0u;
+        m_hoverActivityGeneration = 0u;
+        m_options = {};
+        m_placement = {};
+        m_elapsed = 0.0;
+        m_hovered = false;
+        m_visible = false;
+    }
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
@@ -68,7 +91,38 @@ private:
 class TooltipBehavior final{
 public:
     // A new hover starts at zero; only contiguous accepted hover updates accrue time. Invalid inputs preserve the state.
-    [[nodiscard]] static b8 Update(TooltipState& state, WidgetId anchor, u64 declarationGeneration, const PopupToken& popup, u64 focusLossGeneration, u64 hoverActivityGeneration, b8 hovered, f32 deltaSeconds, const TooltipOptions& options)noexcept;
+    [[nodiscard]] static b8 Update(
+        TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
+        const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
+        const b8 hovered, const f32 deltaSeconds, const TooltipOptions& options
+    )noexcept{
+        b8 changed = false;
+        if(!TryEvaluateTooltipStateUpdate(
+            anchor,
+            declarationGeneration,
+            popup,
+            focusLossGeneration,
+            hoverActivityGeneration,
+            hovered,
+            deltaSeconds,
+            options,
+            state.m_anchor,
+            state.m_declarationGeneration,
+            state.m_popup,
+            state.m_focusLossGeneration,
+            state.m_hoverActivityGeneration,
+            state.m_options,
+            state.m_placement,
+            state.m_hovered,
+            state.m_visible,
+            state.m_elapsed,
+            changed
+        ))
+            return false;
+        if(changed)
+            state.advanceRevision();
+        return true;
+    }
 };
 
 

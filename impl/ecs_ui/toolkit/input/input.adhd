@@ -499,6 +499,40 @@ b8 FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> look
     return true;
 }
 
+b8 ValidateStagedHitTargetControlTargets(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
+    for(usize i = 0u; i < targets.size(); ++i){
+        const HitTarget target = targets[i];
+        if(!HasValidHitTargetControlProperties(target))
+            return false;
+        if(!target.owner.valid())
+            continue;
+        usize hostIndex = 0u;
+        if(!FindTargetIndexInTable(targets, lookup, target.owner, target.ownerDeclarationGeneration, hostIndex))
+            return false;
+        const HitTarget host = targets[hostIndex];
+        if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
+            return false;
+    }
+    return true;
+}
+
+b8 ValidateStagedHitTargetCommandOwners(in Span<HitTarget> targets, in Span<TargetLookup> lookup){
+    for(usize i = 0u; i < targets.size(); ++i){
+        const HitTarget source = targets[i];
+        if(!HasValidHitTargetCommandOwnerProperties(source))
+            return false;
+        if(!source.commandOwner.valid())
+            continue;
+        usize hostIndex = 0u;
+        if(!FindTargetIndexInTable(targets, lookup, source.commandOwner, source.commandOwnerDeclarationGeneration, hostIndex))
+            return false;
+        const HitTarget host = targets[hostIndex];
+        if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != source.commandControl || host.popup != source.popup || host.layer != source.layer)
+            return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

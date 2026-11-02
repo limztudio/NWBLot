@@ -52,29 +52,11 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
 }
 
 b8 InputRouter::validControlTargets()const noexcept{
-    for(const auto& target : m_stagedTargets){
-        if(!HasValidHitTargetControlProperties(target))
-            return false;
-        if(!target.owner.valid())
-            continue;
-        const HitTarget* host = FindTargetInTable(m_stagedTargets, m_stagedLookup, target.owner, target.ownerDeclarationGeneration);
-        if(!host || !host->enabled || !host->focusable || host->owner.valid() || host->control != target.control || host->popup != target.popup || host->layer != target.layer)
-            return false;
-    }
-    return true;
+    return ValidateStagedHitTargetControlTargets(m_stagedTargets, m_stagedLookup);
 }
 
 b8 InputRouter::validCommandOwners()const noexcept{
-    for(const HitTarget& source : m_stagedTargets){
-        if(!HasValidHitTargetCommandOwnerProperties(source))
-            return false;
-        if(!source.commandOwner.valid())
-            continue;
-        const HitTarget* host = FindTargetInTable(m_stagedTargets, m_stagedLookup, source.commandOwner, source.commandOwnerDeclarationGeneration);
-        if(!host || !host->enabled || !host->focusable || !host->navigable || host->owner.valid() || host->control != source.commandControl || host->popup != source.popup || host->layer != source.layer)
-            return false;
-    }
-    return true;
+    return ValidateStagedHitTargetCommandOwners(m_stagedTargets, m_stagedLookup);
 }
 
 const HitTarget* InputRouter::commandHost(const HitTarget& source)const noexcept{

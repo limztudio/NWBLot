@@ -7,6 +7,8 @@
 
 #include "numeric_model_operations.h"
 
+#include <global/numeric_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,18 +25,36 @@ class FloatEditModel final : public NumericEditModelBase<f64, FloatBounds, Float
 
 
 public:
-    explicit FloatEditModel(Core::Alloc::GlobalArena& arena);
+    explicit FloatEditModel(Core::Alloc::GlobalArena& arena)
+        : NumericEditModelBase(arena)
+    {
+        initializeDefault(0.0);
+    }
 
 
 public:
-    [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const noexcept;
+    [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const noexcept{
+        return EvaluateFloatDraftStatus(m_draft.text(), bounds);
+    }
     // Nonfinite values fail atomically. Successful external replacements always fence pending input.
-    [[nodiscard]] b8 setValue(f64 value);
+    [[nodiscard]] b8 setValue(const f64 value){
+        return IsFinite(value) && assignAuthoritativeValue(value);
+    }
 
 
 private:
-    [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, b8 canonical);
-    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(f64 value);
+    [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, const b8 canonical){
+        return commitDraftWith(
+            bounds,
+            canonical,
+            ValidateFloatBounds,
+            ParseFloatDraft,
+            DifferentFloatEditValues
+        );
+    }
+    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const f64 value){
+        return canonicalizeWith(value, [](const f64 candidate, const Span<char> buffer)noexcept{ return FormatF64(candidate, buffer); });
+    }
 };
 
 

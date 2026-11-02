@@ -23,7 +23,7 @@ namespace __hidden_ui_edit_box_paint{
 
 
 [[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style, const EditBoxPaintFlags& flags)noexcept{
-    const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused : flags.hovered ? style.hover : style.normal;
+    const Name preferred = ResolvePreferredEditBoxBackgroundName(style, flags);
     const UiSkinRegion* region = skin.findRegion(preferred);
     if(!region)
         region = skin.findRegion(style.normal);
@@ -43,13 +43,7 @@ namespace __hidden_ui_edit_box_paint{
 
 
 b8 EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin, const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
-    if(
-        !m_ready || !IsValidPaintColor(style.background)
-        || !IsValidPaintColor(style.text) || !IsValidPaintColor(style.disabledText)
-        || !IsValidPaintColor(style.selection)
-        || !IsValidPaintColor(style.inactiveSelection)
-        || !IsValidPaintColor(style.caret) || !IsValidPaintColor(style.preedit)
-    )
+    if(!m_ready || !IsValidEditBoxPaintStyle(style))
         return false;
     paint.pushClip(placement.frameClip);
     b8 painted = true;

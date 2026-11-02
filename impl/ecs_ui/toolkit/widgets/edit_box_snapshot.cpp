@@ -4,8 +4,6 @@
 
 #include "edit_box.h"
 
-#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,44 +54,6 @@ b8 EditBoxView::snapshot(const EditModel& model){
     m_revision = model.revision();
     m_textMode = model.textMode();
     m_ready = false;
-    return true;
-}
-
-TextLayoutStatus::Enum EditBoxView::shape(TextService& text, ShapeRequest request){
-    if(m_revision == 0u || request.direction != TextDirection::LeftToRight)
-        return TextLayoutStatus::InvalidParameters;
-    request.text = displayText();
-    const TextLayoutStatus::Enum validation = ValidateTextRequest(request, m_textMode == EditTextMode::Multiline);
-    if(validation != TextLayoutStatus::Success)
-        return validation;
-    auto candidate = text.layout(request);
-    if(!candidate)
-        return candidate.error();
-    return adoptLayout(Move(*candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
-}
-
-b8 EditBoxView::adoptLayout(TextLayout&& layout){
-    if(m_revision == 0u)
-        return false;
-    EditCaretGeometry candidate(*m_arena);
-    if(!candidate.adoptLayout(Move(layout), displayText(), m_mapping, m_committedBytes, m_textMode))
-        return false;
-    if(!candidate.caretRect(m_caret) || !candidate.caretRect(m_selection.begin) || !candidate.caretRect(m_selection.end))
-        return false;
-    const Point logicalSize = candidate.layout().measure();
-    m_geometry = Move(candidate);
-    m_visualBounds = { 0.0f, 0.0f, logicalSize.x, logicalSize.y };
-    m_ready = true;
-    return true;
-}
-
-b8 EditBoxView::measure(TextService& text, const DisplayMetrics& display){
-    if(!m_ready)
-        return false;
-    const auto measured = text.measure(layout(), display);
-    if(!measured)
-        return false;
-    m_visualBounds = *measured;
     return true;
 }
 

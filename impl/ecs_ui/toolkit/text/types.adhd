@@ -137,37 +137,27 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         if(!IsTextAsciiAlphaNumericOrHyphen(cast<u32>(cast<u8>(request.language[i]))))
             return TextLayoutStatus::InvalidParameters;
     }
-    TextLayoutStatus utf8Status = TextLayoutStatus::Success;
     const StringView text = request.text;
-    native(in text, in allowLineBreaks, mut utf8Status){
-        usize offset = 0u;
-        while(offset < text.size()){
-            const auto decoded = DecodeUtf8Scalar(text.substr(offset));
-            if(!decoded || decoded->codePoint == 0u){
-                utf8Status = TextLayoutStatus::InvalidUtf8;
-                break;
-            }
-            const u32 scalar = decoded->codePoint;
-            offset += static_cast<usize>(decoded->byteCount);
-            if(scalar == '\r'){
-                if(!allowLineBreaks || offset == text.size() || text[offset] != '\n'){
-                    utf8Status = TextLayoutStatus::UnsupportedControl;
-                    break;
-                }
-            }
-            else if(scalar == '\n'){
-                if(!allowLineBreaks){
-                    utf8Status = TextLayoutStatus::UnsupportedControl;
-                    break;
-                }
-            }
-            else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
-                utf8Status = TextLayoutStatus::UnsupportedControl;
-                break;
-            }
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!tryDecodeUtf8Scalar(text.substr(offset), scalar, byteCount) || scalar == 0u)
+            return TextLayoutStatus::InvalidUtf8;
+        offset += byteCount;
+        if(scalar == '\r'){
+            if(!allowLineBreaks || offset == text.size() || text[offset] != '\n')
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar == '\n'){
+            if(!allowLineBreaks)
+                return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
+            return TextLayoutStatus::UnsupportedControl;
         }
     }
-    return utf8Status;
+    return TextLayoutStatus::Success;
 }
 
 native{

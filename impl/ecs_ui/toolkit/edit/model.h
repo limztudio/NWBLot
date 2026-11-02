@@ -86,9 +86,21 @@ public:
     [[nodiscard]] b8 selectAll()noexcept{ return setSelection(0u, m_text.size()); }
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
-    [[nodiscard]] b8 move(EditMove::Enum movement, b8 extend = false)noexcept;
+    [[nodiscard]] b8 move(const EditMove::Enum movement, const b8 extend = false)noexcept{
+        usize target = m_caret;
+        if(!TryResolveEditMoveTarget(text(), m_boundaries, m_textMode, m_anchor, m_caret, movement, extend, target))
+            return false;
+        cancelComposition();
+        if(!extend)
+            m_anchor = target;
+        m_caret = target;
+        advanceSelectionGeneration();
+        return true;
+    }
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
-    [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
+    [[nodiscard]] Expected<EditWordRange> wordRangeAt(const usize position)const noexcept{
+        return ResolveEditWordRangeAt(text(), m_boundaries, position);
+    }
     [[nodiscard]] b8 replaceSelection(const AStringView value){ return replaceRange(selectionStart(), selectionEnd(), value); }
     [[nodiscard]] b8 backspace(){
         return replaceRange(hasSelection() ? selectionStart() : previousBoundary(m_caret), hasSelection() ? selectionEnd() : m_caret, {});
@@ -116,10 +128,10 @@ public:
 
 
 private:
-    [[nodiscard]] b8 isBoundary(usize position)const noexcept;
-    [[nodiscard]] usize previousBoundary(usize position)const noexcept;
-    [[nodiscard]] usize nextBoundary(usize position)const noexcept;
-    [[nodiscard]] usize wordBoundary(usize position, b8 forward)const noexcept;
+    [[nodiscard]] b8 isBoundary(const usize position)const noexcept{ return IsEditBoundary(m_boundaries, position); }
+    [[nodiscard]] usize previousBoundary(const usize position)const noexcept{ return PreviousEditBoundary(m_boundaries, position); }
+    [[nodiscard]] usize nextBoundary(const usize position)const noexcept{ return NextEditBoundary(m_boundaries, m_text.size(), position); }
+    [[nodiscard]] usize wordBoundary(const usize position, const b8 forward)const noexcept{ return ResolveEditWordBoundary(text(), m_boundaries, position, forward); }
     [[nodiscard]] b8 replaceRange(usize begin, usize end, AStringView replacement);
     [[nodiscard]] b8 validateText(AStringView value)const noexcept;
     [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView value)const;

@@ -10,6 +10,8 @@
 #include <impl/ecs_ui/toolkit/input/popup.adhd.h>
 #include <impl/ecs_ui/toolkit/widgets/popup_style.adhd.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,8 +27,17 @@ class PopupState final : NoCopy{
     friend class Builder;
 
 
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
-    PopupState()noexcept;
+    PopupState()noexcept
+        : m_instanceGeneration(NextIdentity())
+    {}
     PopupState(PopupState&&) = delete;
 
 
@@ -35,7 +46,12 @@ public:
 
 
 public:
-    void open()noexcept;
+    void open()noexcept{
+        if(m_open)
+            return;
+        AdvanceRevision(m_openGeneration);
+        m_open = true;
+    }
     void close()noexcept{ m_open = false; }
 
     [[nodiscard]] b8 isOpen()const noexcept{ return m_open; }
@@ -48,7 +64,16 @@ public:
 
 
 private:
-    void bindParent(const PopupToken& parent)noexcept;
+    void bindParent(const PopupToken& parent)noexcept{
+        BindPopupParentState(
+            parent,
+            m_openGeneration,
+            m_open,
+            m_parentBound,
+            m_parent,
+            m_parentOpenGeneration
+        );
+    }
 
 
 private:

@@ -7,6 +7,8 @@
 
 #include "commands.h"
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,8 +21,17 @@ NWB_IMPL_UI_BEGIN
 
 // Caller-owned preferred-column intent is lent synchronously; identical accepted intentions still retire old snapshots.
 class EditNavigationState final : NoCopy{
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
-    EditNavigationState()noexcept;
+    EditNavigationState()noexcept
+        : m_instanceGeneration(NextIdentity())
+    {}
     EditNavigationState(EditNavigationState&&) = delete;
 
 
@@ -42,8 +53,16 @@ public:
     [[nodiscard]] b8 matches(const EditNavigationSnapshot& snapshot)const noexcept{
         return snapshot == this->snapshot();
     }
-    [[nodiscard]] b8 setPreferredX(f32 preferredX)noexcept;
-    void reset()noexcept;
+    [[nodiscard]] b8 setPreferredX(const f32 preferredX)noexcept{
+        if(!TryResolveEditNavigationPreferredX(preferredX, m_preferredX, m_valid))
+            return false;
+        advanceGeneration();
+        return true;
+    }
+    void reset()noexcept{
+        advanceGeneration();
+        ClearEditNavigationPreferredX(m_preferredX, m_valid);
+    }
 
 
 private:

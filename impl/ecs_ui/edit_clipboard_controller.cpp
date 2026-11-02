@@ -5,7 +5,6 @@
 #include "edit_clipboard_controller.h"
 
 #include <impl/ecs_ui/toolkit/edit/single_line_text.h>
-#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
 
 #include <global/termination.h>
 

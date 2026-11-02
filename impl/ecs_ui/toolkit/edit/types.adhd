@@ -18,6 +18,7 @@ const usize s_EditDefaultMaxHistoryBytes = 131072u;
 const usize s_EditMaxBytes = 1048576u;
 const usize s_EditMaxHistoryRecords = 256u;
 const usize s_EditMaxHistoryBytes = 16777216u;
+const usize s_EditUtf8MaxSequenceBytes = 4u;
 const StringView s_EditNewlineText = "\n";
 
 const u32 s_EditUnicodeTab = 0x09u;
@@ -588,6 +589,295 @@ b8 TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scal
     if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
         ++outStep.sourceBytes;
     return true;
+}
+
+b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
+    if(text.size() > cast<usize>(i32.max))
+        return false;
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!tryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+            return false;
+        if(singleLine && !IsSingleLineScalar(scalar))
+            return false;
+        offset += byteCount;
+    }
+    return true;
+}
+
+// Canonical multiline text contains LF and ordinary UTF8 scalars; all other ASCII/C1 controls and line separators fail.
+b8 ValidateMultilineText(in StringView text){
+    if(text.size() > cast<usize>(i32.max))
+        return false;
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 scalar = 0u;
+        usize byteCount = 0u;
+        if(!tryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount) || !IsCanonicalMultilineScalar(scalar))
+            return false;
+        offset += byteCount;
+    }
+    return true;
+}
+
+Expected<SingleLineTextStep> ReadSingleLineTextStep(in StringView source, in usize offset){
+    u32 scalar = 0u;
+    usize byteCount = 0u;
+    if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+        return makeUnexpected(Failure());
+    SingleLineTextStep step;
+    if(!TryBuildSingleLineTextStep(source, offset, scalar, byteCount, step))
+        return makeUnexpected(Failure());
+    return step;
+}
+
+Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize offset){
+    u32 scalar = 0u;
+    usize byteCount = 0u;
+    if(!tryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
+        return makeUnexpected(Failure());
+    MultilineTextStep step;
+    if(!TryBuildMultilineTextStep(source, offset, scalar, byteCount, step))
+        return makeUnexpected(Failure());
+    return step;
+}
+
+usize LowerBoundEditBoundaryIndex(in Span<usize> boundaries, in usize position){
+    usize first = 0u;
+    usize count = boundaries.size();
+    while(count > 0u){
+        const usize step = count / 2u;
+        const usize mid = first + step;
+        if(boundaries[mid] < position){
+            first = mid + 1u;
+            count -= step + 1u;
+        }
+        else{
+            count = step;
+        }
+    }
+    return first;
+}
+
+b8 IsEditBoundary(in Span<usize> boundaries, in usize position){
+    const usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    return index < boundaries.size() && boundaries[index] == position;
+}
+
+usize PreviousEditBoundary(in Span<usize> boundaries, in usize position){
+    const usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    if(index == 0u)
+        return 0u;
+    return boundaries[index - 1u];
+}
+
+usize NextEditBoundary(in Span<usize> boundaries, in usize textSize, in usize position){
+    usize index = LowerBoundEditBoundaryIndex(boundaries, position);
+    if(index < boundaries.size() && boundaries[index] == position)
+        ++index;
+    if(index >= boundaries.size())
+        return textSize;
+    return boundaries[index];
+}
+
+EditNavigationRunClass ClassifyEditNavigationOffset(in StringView text, in usize offset){
+    u32 codePoint = 0u;
+    usize byteCount = 0u;
+    if(!tryDecodeUtf8CodePoint(text.substr(offset, s_EditUtf8MaxSequenceBytes), codePoint, byteCount))
+        return EditNavigationRunClass::Text;
+    return ClassifyEditNavigationScalar(codePoint);
+}
+
+EditNavigationRunClass ClassifyEditWordRangeOffset(in StringView text, in usize offset){
+    if(text[offset] == '\n')
+        return EditNavigationRunClass::LineBreak;
+    return ClassifyEditNavigationOffset(text, offset);
+}
+
+usize ResolveEditWordBoundary(in StringView text, in Span<usize> boundaries, in usize position, in b8 forward){
+    if((forward && position == text.size()) || (!forward && position == 0u) || boundaries.empty())
+        return position;
+    usize cursor = LowerBoundEditBoundaryIndex(boundaries, position);
+    const usize lastBoundaryIndex = boundaries.size() - 1u;
+    if(forward){
+        const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, position);
+        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == category)
+            ++cursor;
+        while(cursor < lastBoundaryIndex && ClassifyEditNavigationOffset(text, boundaries[cursor]) == EditNavigationRunClass::Whitespace)
+            ++cursor;
+        return boundaries[cursor];
+    }
+    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == EditNavigationRunClass::Whitespace)
+        --cursor;
+    if(cursor == 0u)
+        return 0u;
+    const EditNavigationRunClass category = ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]);
+    while(cursor != 0u && ClassifyEditNavigationOffset(text, boundaries[cursor - 1u]) == category)
+        --cursor;
+    return boundaries[cursor];
+}
+
+Expected<EditWordRange> ResolveEditWordRangeAt(in StringView text, in Span<usize> boundaries, in usize position){
+    const usize requested = LowerBoundEditBoundaryIndex(boundaries, position);
+    if(requested >= boundaries.size() || boundaries[requested] != position)
+        return makeUnexpected(Failure());
+    if(text.empty())
+        return EditWordRange();
+    usize origin = requested;
+    if(position == text.size())
+        origin = requested - 1u;
+    const EditNavigationRunClass run = ClassifyEditWordRangeOffset(text, boundaries[origin]);
+    usize first = origin;
+    usize last = origin + 1u;
+    const usize lastBoundaryIndex = boundaries.size() - 1u;
+    while(first != 0u && ClassifyEditWordRangeOffset(text, boundaries[first - 1u]) == run)
+        --first;
+    while(last < lastBoundaryIndex && ClassifyEditWordRangeOffset(text, boundaries[last]) == run)
+        ++last;
+    EditWordRange range;
+    range.begin = boundaries[first];
+    range.end = boundaries[last];
+    return range;
+}
+
+b8 TryResolveEditMoveTarget(
+    in StringView text,
+    in Span<usize> boundaries,
+    in EditTextMode textMode,
+    in usize anchor,
+    in usize caret,
+    in EditMove movement,
+    in b8 extend,
+    mut usize outTarget
+){
+    outTarget = caret;
+    if(cast<u8>(movement) > cast<u8>(EditMove::DocumentEnd))
+        return false;
+    usize target = caret;
+    if(!extend && anchor != caret && (movement == EditMove::Left || movement == EditMove::Right)){
+        if(movement == EditMove::Left)
+            target = min(anchor, caret);
+        else
+            target = max(anchor, caret);
+    }
+    else{
+        switch(movement){
+        case EditMove::Left:
+            target = PreviousEditBoundary(boundaries, target);
+            break;
+        case EditMove::Right:
+            target = NextEditBoundary(boundaries, text.size(), target);
+            break;
+        case EditMove::Home:
+            if(textMode == EditTextMode::SingleLine){
+                target = 0u;
+            }
+            else{
+                while(target != 0u && text[target - 1u] != '\n')
+                    --target;
+            }
+            break;
+        case EditMove::End:
+            if(textMode == EditTextMode::SingleLine){
+                target = text.size();
+            }
+            else{
+                while(target < text.size() && text[target] != '\n')
+                    ++target;
+            }
+            break;
+        case EditMove::WordLeft:
+            target = ResolveEditWordBoundary(text, boundaries, target, false);
+            break;
+        case EditMove::WordRight:
+            target = ResolveEditWordBoundary(text, boundaries, target, true);
+            break;
+        case EditMove::DocumentHome:
+            target = 0u;
+            break;
+        case EditMove::DocumentEnd:
+            target = text.size();
+            break;
+        }
+    }
+    outTarget = target;
+    return true;
+}
+
+b8 TryResolveEditNavigationPreferredX(in f32 preferredX, mut f32 outPreferredX, mut b8 outValid){
+    if(!isFinite(preferredX))
+        return false;
+    outPreferredX = preferredX;
+    outValid = true;
+    return true;
+}
+
+void ClearEditNavigationPreferredX(mut f32 outPreferredX, mut b8 outValid){
+    outPreferredX = 0.0f;
+    outValid = false;
+}
+
+b8 MatchesEditModelSurrounding(
+    in TextAreaModelStamp currentStamp,
+    in StringView currentText,
+    in TextAreaModelStamp expectedStamp,
+    in StringView expectedText
+){
+    return currentStamp.revision == expectedStamp.revision
+        && currentStamp.externalRevision == expectedStamp.externalRevision
+        && currentStamp.selectionGeneration == expectedStamp.selectionGeneration
+        && currentText == expectedText
+        && currentStamp.anchor == expectedStamp.anchor
+        && currentStamp.caret == expectedStamp.caret;
+}
+
+b8 MatchesEditModelSnapshot(
+    in TextAreaModelStamp currentStamp,
+    in StringView currentText,
+    in EditCompositionView currentComposition,
+    in TextAreaModelStamp expectedStamp,
+    in StringView expectedText,
+    in EditCompositionView expectedComposition,
+    in StringView expectedPreedit
+){
+    return currentStamp == expectedStamp
+        && currentText == expectedText
+        && currentComposition.active == expectedComposition.active
+        && currentComposition.text == expectedPreedit
+        && currentComposition.anchor == expectedComposition.anchor
+        && currentComposition.caret == expectedComposition.caret
+        && currentComposition.replacementStart == expectedComposition.replacementStart
+        && currentComposition.replacementEnd == expectedComposition.replacementEnd;
+}
+
+NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
+    if(!ValidateIntegerBounds(bounds))
+        return NumericParseStatus::Invalid;
+    const Expected<i64, NumericParseStatus> parsed = ParseIntegerDraft(text);
+    if(!parsed.has_value())
+        return parsed.error();
+    const i64 value = parsed.value();
+    if(value < bounds.minimum || value > bounds.maximum)
+        return NumericParseStatus::OutOfRange;
+    return NumericParseStatus::Complete;
+}
+
+NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds bounds){
+    if(!ValidateFloatBounds(bounds))
+        return NumericParseStatus::Invalid;
+    const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(text);
+    if(!parsed.has_value())
+        return parsed.error();
+    const f64 value = parsed.value();
+    if(value < bounds.minimum || value > bounds.maximum)
+        return NumericParseStatus::OutOfRange;
+    return NumericParseStatus::Complete;
+}
+
+b8 DifferentFloatEditValues(in f64 lhs, in f64 rhs){
+    return bit_cast<u64>(lhs) != bit_cast<u64>(rhs);
 }
 
 

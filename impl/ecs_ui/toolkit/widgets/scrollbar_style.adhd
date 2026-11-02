@@ -85,6 +85,21 @@ b8 SameScrollbarPlacementGeometry(in ScrollbarPlacement first, in ScrollbarPlace
         && first.visible == second.visible;
 }
 
+b8 SameScrollViewportPlacementGeometry(in ScrollViewportPlacement first, in ScrollViewportPlacement second){
+    return EqualUiRect(first.viewport, second.viewport)
+        && EqualUiRect(first.contentClip, second.contentClip)
+        && EqualUiRect(first.corner, second.corner)
+        && SameScrollbarPlacementGeometry(first.horizontal, second.horizontal)
+        && SameScrollbarPlacementGeometry(first.vertical, second.vertical);
+}
+
+b8 TrySetScrollOffset(in f64 offset, mut f64 outOffset){
+    if(!isFinite(offset) || offset < 0.0)
+        return false;
+    outOffset = offset;
+    return true;
+}
+
 void ApplySkinPaletteToScrollbarStyle(in UiSkinPalette palette, mut ScrollbarStyle style){
     style.trackColor = ResolveUiSkinColor(palette, UiSkinColorRole::ScrollbarTrack);
     style.thumbColor = ResolveUiSkinColor(palette, UiSkinColorRole::ScrollbarThumb);

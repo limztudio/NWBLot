@@ -8,13 +8,33 @@
 #include <impl/ecs_ui/toolkit/widgets/slider_style.adhd.h>
 #include <impl/ecs_ui/toolkit/input/input.adhd.h>
 
+#include <global/atomic_identity.h>
 #include <global/bit.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_slider{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +47,10 @@ class SliderState final : NoCopy{
 
 
 public:
-    SliderState()noexcept;
+    SliderState()noexcept
+        : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity))
+        , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity))
+    {}
     SliderState(SliderState&&) = delete;
 
 
@@ -57,8 +80,32 @@ public:
     }
 
     [[nodiscard]] b8 matches(const SliderSnapshot& value)const noexcept{ return snapshot() == value; }
-    [[nodiscard]] b8 setValue(f64 value)noexcept;
-    void reset()noexcept;
+    [[nodiscard]] b8 setValue(const f64 value)noexcept{
+        if(!IsFinite(value))
+            return false;
+        advanceRevision();
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity);
+        m_value = value;
+        m_press = {};
+        m_pressMoved = false;
+        return true;
+    }
+    void reset()noexcept{
+        advanceRevision();
+        advanceAdmission();
+        m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider::s_NextIdentity);
+        m_value = 0.0;
+        m_minimum = 0.0;
+        m_maximum = 1.0;
+        m_keyStep = 0.0;
+        m_admission = {};
+        m_press = {};
+        m_result = {};
+        m_placement = {};
+        m_enabled = true;
+        m_admitted = false;
+        m_pressMoved = false;
+    }
 
 
 private:
@@ -85,23 +132,72 @@ private:
 };
 
 class SliderBehavior final{
-private:
-    [[nodiscard]] static b8 SameSliderOptions(const SliderState& state, const SliderOptions& options)noexcept{
-        return BitCast<u64>(state.m_minimum) == BitCast<u64>(options.minimum)
-            && BitCast<u64>(state.m_maximum) == BitCast<u64>(options.maximum)
-            && BitCast<u64>(state.m_keyStep) == BitCast<u64>(options.keyStep)
-            && state.m_enabled == options.enabled;
-    }
-
-
 public:
-    [[nodiscard]] static Expected<f64> Normalize(f64 minimum, f64 maximum, f64 value)noexcept;
-    [[nodiscard]] static Expected<f64> Interpolate(f64 minimum, f64 maximum, f64 normalized)noexcept;
+    [[nodiscard]] static Expected<f64> Normalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
+        return NormalizeSliderValue(minimum, maximum, value);
+    }
+    [[nodiscard]] static Expected<f64> Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
+        return InterpolateSliderValue(minimum, maximum, normalized);
+    }
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
-    [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
-    [[nodiscard]] static b8 Apply(const SliderOptions& options, const ControlAction& action, SliderState& state, SliderResult& result)noexcept;
-    [[nodiscard]] static b8 Seek(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept;
-    [[nodiscard]] static b8 Drag(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept;
+    [[nodiscard]] static b8 Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
+        b8 changed = false;
+        if(!TryEvaluateSliderAdmission(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.m_admission, options, placement, changed))
+            return false;
+        if(!changed)
+            return true;
+        state.advanceRevision();
+        state.advanceAdmission();
+        state.m_minimum = options.minimum;
+        state.m_maximum = options.maximum;
+        state.m_keyStep = options.keyStep;
+        state.m_enabled = options.enabled;
+        state.m_admission = placement;
+        state.m_admitted = true;
+        state.m_press = {};
+        state.m_pressMoved = false;
+        return true;
+    }
+    [[nodiscard]] static b8 Apply(const SliderOptions& options, const ControlAction& action, SliderState& state, SliderResult& result)noexcept{
+        f64 value = state.m_value;
+        b8 advanceRevision = false;
+        if(!TryApplySliderControlAction(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_value, options, action, value, advanceRevision, result))
+            return false;
+        if(advanceRevision){
+            state.advanceRevision();
+            state.m_value = value;
+        }
+        return true;
+    }
+    [[nodiscard]] static b8 Seek(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept{
+        f64 value = state.m_value;
+        InputActionId press{};
+        b8 advanceRevision = false;
+        if(!TrySeekSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, options, gesture, value, press, advanceRevision, result))
+            return false;
+        if(advanceRevision){
+            state.advanceRevision();
+            state.m_value = value;
+            state.m_press = press;
+            state.m_pressMoved = false;
+        }
+        return true;
+    }
+    [[nodiscard]] static b8 Drag(const SliderOptions& options, const PointerGesture& gesture, SliderState& state, SliderResult& result)noexcept{
+        f64 value = state.m_value;
+        InputActionId press = state.m_press;
+        b8 pressMoved = state.m_pressMoved;
+        b8 advanceRevision = false;
+        if(!TryDragSliderPointerGesture(state.m_admitted, state.m_minimum, state.m_maximum, state.m_keyStep, state.m_enabled, state.controlToken(), state.m_admission, state.m_value, state.m_press, state.m_pressMoved, options, gesture, value, press, pressMoved, advanceRevision, result))
+            return false;
+        if(advanceRevision){
+            state.advanceRevision();
+            state.m_value = value;
+            state.m_press = press;
+            state.m_pressMoved = pressMoved;
+        }
+        return true;
+    }
 };
 
 

@@ -26,12 +26,10 @@ Expected<PopupDismissReason::Enum> InputRouter::consumePopupDismissal(const Popu
 }
 
 b8 InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
-    if(m_popups.empty() || reason <= PopupDismissReason::None || reason > PopupDismissReason::FocusLost)
+    if(m_popups.empty() || m_popupDismissals.size() == s_InputMaxPopups)
         return false;
-    auto& top = m_popups.back();
-    if(top.closing || (reason == PopupDismissReason::Cancel && !top.scope.dismissCancel) || (reason == PopupDismissReason::OutsideClick && !top.scope.dismissOutside) || (reason == PopupDismissReason::FocusTraversal && !top.scope.dismissFocusTraversal))
-        return false;
-    if(m_popupDismissals.size() == s_InputMaxPopups)
+    const auto& top = m_popups.back();
+    if(!CanDismissPopupScope(top.scope, top.closing, reason))
         return false;
     m_popupDismissals.push_back({ top.scope.token, reason });
     closePopup(top.scope.token);
@@ -70,53 +68,14 @@ b8 InputRouter::allowedByPopup(const HitTarget& target)const noexcept{
 }
 
 b8 InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const noexcept{
-    PopupToken current = token;
-    for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
-        if(current == ancestor)
-            return true;
-        b8 found = false;
-        for(const auto& record : m_popups){
-            if(record.scope.token == current){
-                current = record.scope.parent;
-                found = true;
-                break;
-            }
-        }
-        if(!found)
-            return false;
-    }
-    return false;
+    return IsPopupTokenDescendant(m_popups, token, ancestor);
 }
 
 b8 InputRouter::stagePopups(const Span<const PopupScope> scopes){
-    const usize count = scopes.size();
-    if(count > s_InputMaxPopups)
-        return false;
     m_stagedPopups.clear();
-    for(usize index = 0u; index < count; ++index){
-        const PopupScope& scope = scopes[index];
-        if(
-            !scope.token.valid() || !HasValidPopupScopeGeometry(scope)
-            || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
-            || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
-        )
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(scopes[previous].token.widget == scope.token.widget)
-                return false;
-        }
-        if(!scope.parent.empty()){
-            b8 parent = false;
-            for(usize previous = 0u; previous < index; ++previous)
-                parent |= scopes[previous].token == scope.parent;
-            if(!scope.parent.valid() || !parent)
-                return false;
-        }
-        // A child cannot reuse its open lifetime beneath a different ancestor lifetime.
-        for(const auto& previous : m_popups){
-            if(previous.scope.token == scope.token && previous.scope.parent != scope.parent)
-                return false;
-        }
+    if(!ValidateStagedPopupScopes(scopes, m_popups))
+        return false;
+    for(const PopupScope& scope : scopes){
         PopupRecord record;
         record.scope = scope;
         m_stagedPopups.push_back(record);

@@ -7,6 +7,8 @@
 
 #include "numeric_model_operations.h"
 
+#include <global/numeric_text.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,18 +25,36 @@ class IntegerEditModel final : public NumericEditModelBase<i64, IntegerBounds, I
 
 
 public:
-    explicit IntegerEditModel(Core::Alloc::GlobalArena& arena);
+    explicit IntegerEditModel(Core::Alloc::GlobalArena& arena)
+        : NumericEditModelBase(arena)
+    {
+        initializeDefault(0);
+    }
 
 
 public:
-    [[nodiscard]] NumericParseStatus::Enum status(const IntegerBounds& bounds = {})const noexcept;
+    [[nodiscard]] NumericParseStatus::Enum status(const IntegerBounds& bounds = {})const noexcept{
+        return EvaluateIntegerDraftStatus(m_draft.text(), bounds);
+    }
     // External replacements fence pending native/clipboard intentions even when the supplied value is unchanged.
-    [[nodiscard]] b8 setValue(i64 value);
+    [[nodiscard]] b8 setValue(const i64 value){
+        return assignAuthoritativeValue(value);
+    }
 
 
 private:
-    [[nodiscard]] NumericEditResult commit(const IntegerBounds& bounds, b8 canonical);
-    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(i64 value);
+    [[nodiscard]] NumericEditResult commit(const IntegerBounds& bounds, const b8 canonical){
+        return commitDraftWith(
+            bounds,
+            canonical,
+            ValidateIntegerBounds,
+            ParseIntegerDraft,
+            [](const i64 candidate, const i64 value)noexcept{ return candidate != value; }
+        );
+    }
+    [[nodiscard]] Expected<b8, ErrorCode> canonicalize(const i64 value){
+        return canonicalizeWith(value, [](const i64 candidate, const Span<char> buffer)noexcept{ return FormatI64(candidate, buffer); });
+    }
 };
 
 

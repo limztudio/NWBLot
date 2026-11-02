@@ -32,8 +32,23 @@ public:
 
 
 public:
-    [[nodiscard]] b8 open(const Rect& anchor)noexcept;
-    void close()noexcept;
+    [[nodiscard]] b8 open(const Rect& anchor)noexcept{
+        if(!IsValidUiRect(anchor))
+            return false;
+        m_popup.close();
+        m_popup.open();
+        m_list.select(0u);
+        if(!m_list.scrollTo(0.0))
+            TerminateInvariant();
+        m_anchor = anchor;
+        advanceRevision();
+        return true;
+    }
+    void close()noexcept{
+        m_popup.close();
+        m_list.select(0u);
+        advanceRevision();
+    }
     [[nodiscard]] b8 isOpen()const noexcept{ return m_popup.isOpen(); }
 
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_popup.instanceGeneration(); }

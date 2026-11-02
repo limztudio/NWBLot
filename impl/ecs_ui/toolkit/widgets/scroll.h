@@ -8,6 +8,8 @@
 #include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/ecs_ui/toolkit/widgets/scrollbar_style.adhd.h>
 
+#include <global/atomic_identity.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,8 +22,17 @@ NWB_IMPL_UI_BEGIN
 
 // Hosts own scroll state; its offset and identity contain no retained application or OS references.
 class ScrollState final : NoCopy{
+private:
+    [[nodiscard]] static u64 NextIdentity()noexcept{
+        static Atomic<u64> s_NextIdentity{ 1u };
+        return NextNonWrappingIdentity(s_NextIdentity);
+    }
+
+
 public:
-    ScrollState()noexcept;
+    ScrollState()noexcept
+        : m_instanceGeneration(NextIdentity())
+    {}
     ScrollState(ScrollState&&) = delete;
 
 
@@ -33,7 +44,7 @@ public:
     [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
 
     [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
-    [[nodiscard]] b8 setOffset(f64 offset)noexcept;
+    [[nodiscard]] b8 setOffset(const f64 offset)noexcept{ return TrySetScrollOffset(offset, m_offset); }
     [[nodiscard]] b8 ensureVisible(const f64 start, const f64 end, const f64 viewportHeight)noexcept{ return TryEnsureScrollVisible(m_offset, start, end, viewportHeight, m_offset); }
     [[nodiscard]] b8 scrollBy(const f64 delta, const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryScrollByOffset(m_offset, delta, contentHeight, viewportHeight, m_offset); }
     [[nodiscard]] b8 clamp(const f64 contentHeight, const f64 viewportHeight)noexcept{ return TryClampScrollOffset(m_offset, contentHeight, viewportHeight, m_offset); }

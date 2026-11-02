@@ -4,8 +4,6 @@
 
 #include "grapheme.h"
 
-#include <impl/ecs_ui/toolkit/edit/types.adhd.h>
-
 #include <global/unicode/grapheme.h>
 
 
@@ -45,21 +43,6 @@ Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, const AStrin
     }
     candidate.push_back(text.size());
     return candidate;
-}
-
-b8 Validate(const AStringView text, const b8 singleLine)noexcept{
-    if(text.size() > Limit<i32>::s_Max || (!text.empty() && text.data() == nullptr))
-        return false;
-    usize offset = 0u;
-    while(offset < text.size()){
-        const auto decoded = DecodeUtf8Scalar(text.substr(offset, s_Utf8MaxSequenceBytes));
-        if(!decoded)
-            return false;
-        if(singleLine && !IsSingleLineScalar(decoded->codePoint))
-            return false;
-        offset += static_cast<usize>(decoded->byteCount);
-    }
-    return true;
 }
 
 

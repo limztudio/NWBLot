@@ -4,7 +4,6 @@
 
 #include "edit_fixture.h"
 
-#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
 #include <impl/ecs_ui/toolkit/edit/single_line_text.h>
 
 

@@ -27,11 +27,32 @@ public:
 
 
 public:
-    [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept;
-    [[nodiscard]] b8 matches(const EditModel& model)const noexcept;
-    void captureSurrounding(const EditModel& model);
-    void capture(const EditModel& model);
-    void clear()noexcept;
+    [[nodiscard]] b8 matchesSurrounding(const EditModel& model)const noexcept{
+        return MatchesEditModelSurrounding(model.stamp(), model.text(), m_expectedStamp, AStringView(m_expectedText));
+    }
+    [[nodiscard]] b8 matches(const EditModel& model)const noexcept{
+        return MatchesEditModelSnapshot(model.stamp(), model.text(), model.composition(), m_expectedStamp, AStringView(m_expectedText), m_expectedComposition, AStringView(m_expectedPreedit));
+    }
+    void captureSurrounding(const EditModel& model){
+        m_expectedText.assign(model.text().data(), model.text().size());
+        m_expectedStamp = model.stamp();
+        m_expectedRevision = m_expectedStamp.revision;
+        m_expectedExternalRevision = m_expectedStamp.externalRevision;
+    }
+    void capture(const EditModel& model){
+        captureSurrounding(model);
+        m_expectedComposition = model.composition();
+        m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
+        m_expectedComposition.text = {};
+    }
+    void clear()noexcept{
+        m_expectedText.clear();
+        m_expectedPreedit.clear();
+        m_expectedComposition = {};
+        m_expectedStamp = {};
+        m_expectedRevision = 0u;
+        m_expectedExternalRevision = 0u;
+    }
 
 
 public:

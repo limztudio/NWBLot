@@ -128,7 +128,6 @@ usize ContextStateClaimHash(in ContextStateClaim claim){
     return hashCombineValue(seed, cast<u8>(claim.kind));
 }
 
-[inline]
 b8 ContainsWidgetRoot(in Span<WidgetRoot> roots, in WidgetRoot root){
     for(usize index = 0u; index < roots.size(); ++index){
         if(roots[index] == root)

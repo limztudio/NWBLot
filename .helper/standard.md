@@ -26,7 +26,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.
 - Use UTF-8 encoding for source files.
-- Use Windows-style newlines (`CRLF`) for all C++ source files and authored asset text files (`.nwb`, `.slang`, `.slangi`, `.bind`, `.bxdf`, `.surface`).
+- Use Windows-style newlines (`CRLF`) for all C++ source files, `.adhd` files, and authored asset text files (`.nwb`, `.slang`, `.slangi`, `.bind`, `.bxdf`, `.surface`). Follow `.helper/adhd.md` for `.adhd` file shape, syntax, compiler-managed inlining/layout rules, and authoring conventions.
 - Do not commit LF-only or mixed line endings in those files.
 
 ## 2. Namespace style

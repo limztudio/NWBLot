@@ -203,13 +203,12 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; expected 'reflect', 'inline', or 'noinline'");
+            if(attr.name == "inline" || attr.name == "noinline")
+                m_cursor.error(attr.line, attr.column, "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler");
+            else
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on callable; only '[reflect]' is permitted");
             return false;
         }
-    }
-    if(decl.isForceInline && decl.isNoInline){
-        m_cursor.error(decl.span.line, decl.span.column, "callable cannot specify both 'inline' and 'noinline' attributes");
-        return false;
     }
     return true;
 }

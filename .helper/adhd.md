@@ -1,0 +1,188 @@
+# `.adhd` Shape and Authoring Guide
+
+Authoritative guide for structuring and writing `.adhd` files in NWBLot. Every `.adhd` file is compiled by `adhd_compiler` (`core/metascript/adhd/`) into generated `.adhd.h` and `.adhd.cpp` C++ sources.
+
+---
+
+## 1. File Shape and Formatting
+
+- **Filename**: Lowercase `snake_case.adhd`.
+- **Encoding & Newlines**: UTF-8 encoding with Windows-style `CRLF` (`\r\n`) line endings on every line.
+- **Banner & Section Separators**:
+  - Start every file with:
+    ```cpp
+    // limztudio@gmail.com
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ```
+  - Use the exact 128-slash separator (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) between major file sections.
+  - Keep exactly two blank lines before and after every file-scope 128-slash separator (except immediately after `// limztudio@gmail.com`, which has no blank line before the banner separator).
+  - End every file with the closing 128-slash separator followed by exactly two newline terminators (`\r\n\r\n`, one blank line at EOF).
+- **Indentation, Braces & Line Width**:
+  - 4-space indentation (no tabs), K&R braces (`class Foo{`, `if(cond){`, `else{`), and a 260-character soft line width.
+  - No space between closing `)` and trailing method qualifiers (`const`, `override`):
+    - Correct: `public u32 count()const{`, `public b8 evaluate()const override{`, `public void apply()override;`
+    - Wrong: `public u32 count() const{`, `public b8 evaluate() const override{`
+- **Canonical Top-to-Bottom Section Order**:
+  1. `.adhd` `#include` directives (`#include <...>` or `#include "..."` for other `.adhd` files)
+  2. Top-level `native{ ... }` block (C++ `#include`s and forward declarations needed by the generated `.adhd.h`)
+  3. File-scope `const` compile-time constants (`const u32 s_MaxItems = 64u;`) and `type` aliases (`type ItemId = u64;`)
+  4. `enum<SizeType>` and `flag<SizeType>` declarations
+  5. `interface` declarations
+  6. `class` declarations
+  7. Top-level free functions and out-of-line `ClassName::methodName` definitions
+
+```cpp
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/id.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DefaultPadding = 4.0f;
+
+type ElementIndex = u32;
+
+[reflect]
+enum<u8> AlignmentMode{
+    Leading = 0,
+    Center = 1,
+    Trailing = 2,
+    kCount
+}
+
+flag<u32> ElementStateFlags{
+    None = 0u,
+    Hovered,
+    Pressed,
+    Disabled,
+}
+
+class ElementBox{
+    public f32 width = 0.0f;
+    public f32 height = 0.0f;
+    public AlignmentMode mode = AlignmentMode::Leading;
+
+    public ElementBox() = default;
+
+    public ElementBox(in f32 w, in f32 h, in AlignmentMode m){
+        this.width = w;
+        this.height = h;
+        this.mode = m;
+    }
+
+    public f32 area()const{
+        return this.width * this.height;
+    }
+}
+
+f32 ComputePaddedWidth(in ElementBox box){
+    return box.width + s_DefaultPadding * 2.0f;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+```
+
+---
+
+## 2. Compiler-Owned Decisions & Prohibited Constructs
+
+1. **No `[inline]` / `[noinline]` Attributes and No `inline` / `noinline` Keywords**:
+   - Inlining is decided **exclusively and automatically by the `adhd` compiler itself** (`ShouldAutoInlineCallable`), never by the user.
+   - Writing `[inline]`, `[noinline]`, `inline`, or `noinline` anywhere in `.adhd` is a compile-time error.
+2. **No `namespace` Keyword**:
+   - `.adhd` files never declare `namespace`. The C++ namespace is configured on the CMake target via `nwb_target_adhd_sources(<target> NAMESPACE "NWB::...")`.
+3. **No `struct` or `union` Keywords**:
+   - All record types use `class` (or `[serialize] class` for 1-byte packed binary layout).
+4. **No `static` or `virtual` Keywords**:
+   - Use top-level `const` for compile-time constants and top-level free functions for stateless helpers.
+   - Declare abstract contracts in an `interface` (implicitly pure virtual) and mark implementing `class` methods with `override`.
+5. **No `template` Keyword**:
+   - Write generic parameters inline on the declaration: `class Pair<T, U>{ ... }`, `void swapValues<T>(mut T a, mut T b){ ... }`, `class StaticBatch<T, const usize Capacity>{ ... }`.
+6. **No Raw Pointers (`*`), Address-Of (`&`), Arrow (`->`), `new`/`delete`, or `null`/`nullptr`**:
+   - All variables and `in`/`mut` parameters are non-null by construction and accessed with `.` syntax.
+   - Use `Optional<T>`, `Expected<T, E>`, or `AssetRef<T>` when absence or failure is possible.
+7. **No C++-Style `const` Type Qualifiers or Native C Scalar Names**:
+   - Read-only parameters use `in T` (never `const T` or `const T&`).
+   - `const` is permitted only on file-level compile-time constants (`const u32 s_Limit = 16u;`), non-type template parameters (`<const usize N>`), and read-only method suffixes (`)const`).
+   - Use NWBLot scalar types (`b8`, `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `isize`, `usize`, `f32`, `f64`, `void`); `bool`, `int`, `float`, `double`, `char`, `short`, `long`, `unsigned`, and `signed` are prohibited.
+8. **No `Move`, Exceptions (`try`/`catch`/`throw`), `goto`, Ternary (`? :`), C-Style Casts, C-Style Arrays (`T[N]`), or Bitfields**:
+   - Last-use `Move(...)` is emitted automatically by the compiler.
+   - Use `if`/`else` instead of `? :`.
+   - Use `cast<T>(x)` for value conversions and `bit_cast<T>(x)` for bitwise reinterpretation.
+   - Use `Array<T, N>`, `FixedVector<T, N>`, or `Vector<T>` instead of `T[N]`.
+   - Use `flag<SizeType>` instead of C bitfields.
+
+---
+
+## 3. Classes, Layout Reordering, and `[serialize]`
+
+- **Explicit Access Specifiers on Every Member**:
+  - Every field, constructor, destructor, operator, and method inside a `class` must begin with `public`, `private`, or `protected` (C++-style `public:` section labels are prohibited).
+- **Single-Source Member Initialization**:
+  - Every `class` field must either declare an inline default value (`public f32 speed = 1.0f;`) or be initialized inside the class's constructor body (`this.speed = s;`)—never both.
+  - C++ constructor initializer lists (`: speed(s)`) are prohibited; assign `this.field = ...;` inside the constructor `{ ... }` body.
+- **Automatic Member Reordering vs. `[serialize]`**:
+  - **Default `class` (No `[serialize]`)**: The `adhd` compiler automatically reorders fields by descending alignment and size (`32B -> 16B -> 8B -> 4B -> 2B -> 1B`) to eliminate padding holes. Because the emitted C++ member order may differ from authored order, do not use C++ positional aggregate initialization (`Foo{ a, b }`) on non-`[serialize]` classes; use constructors or named member assignment.
+  - **`[serialize] class`**: Emits a 1-byte packed layout (`#pragma pack(push, 1)` when no SIMD fields are present) and generates binary serialization, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction. Use `[serialize]` for binary payloads, GPU constant/push-constant mirrors, or structs requiring exact authored field order.
+
+---
+
+## 4. Enums, Flags, Interfaces, and Types
+
+- **`enum<SizeType> Name` & `flag<SizeType> Name`**:
+  - Must specify an explicit integer size type (`u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`).
+  - Use `kCount` (never `Count`) for enum/flag count sentries.
+  - Plain `enum<SizeType> Name` emits `enum class Name : SizeType`.
+  - `[reflect] enum<SizeType> Name` and `flag<SizeType> Name` emit `namespace Name{ enum Enum : SizeType{ ... }; };` (and automatic bitwise operators `|`, `&`, `^`, `~`, `|=`, `&=`, `^=` for `flag`).
+- **`interface`**:
+  - Contains method declarations only (no fields, no access specifiers, no method bodies).
+  - Used via `in IContract` / `mut IContract` parameters, rebindable local references, or template bounds (`<T : IContract>`).
+- **Built-In SIMD, Containers, and Strings**:
+  - **SIMD**: `f32x4`, `i32x4`, `u32x4`, `f32x3_i32`, `f32x3_u32`, `f32x3x4`, `f32x4x4`, `f64x2`, `f64x3`, `f64x4`, `i64x4`, `u64x4`, `f64x3_i64`, `f64x3_u64`, `f64x3x3`, `f64x3x4`, `f64x4x4`. Supports `.x`/`.y`/`.z`/`.w`, `.r`/`.g`/`.b`/`.a`, multi-lane swizzles (`.xyz`, `.zwxy`), and built-in math/SIMD functions (`abs`, `min`, `max`, `clamp`, `lerp`, `sqrt`, `rsqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `round`, `dot`, `cross`, `length`, `lengthSq`, `normalize`, `mul`, `transpose`, `inverse`, `isFinite`, `isNaN`, `hashValue`, `hashCombineValue`).
+  - **Containers**: `Array<T, N>`, `FixedVector<T, N>`, `Vector<T>`, `ParallelVector<T>`, `ForwardList<T>`, `List<T>`, `Deque<T>`, `Set<T>`, `HashSet<T>`, `ParallelHashSet<T>`, `Map<K, V>`, `HashMap<K, V>`, `ParallelHashMap<K, V>`, `Queue<T>`, `ParallelQueue<T>`, `ParallelBlockQueue<T, BlockSize>`. Owning containers are automatically bound to `s_ClassArena` (class fields) or a function-local `ScratchArena` (local variables).
+  - **Spans**: `Span<T>` in `.adhd` is always read-only (`Span<const T>` in C++). Use `mut Vector<T>` or `mut FixedVector<T, N>` for mutable buffer outputs.
+  - **Strings**: UTF-8 exclusively (`String`, `StringView`, `CompactString`, `Name`, `Path`). Write plain `"..."` literals (never `NWB_TEXT("...")`).
+
+---
+
+## 5. Functions, Methods, and Control Flow
+
+- **Mandatory `in` / `mut` Parameters**:
+  - Every parameter must specify `in` (read-only borrow, lowered via `CallTraits<T>::param_type`) or `mut` (mutable reference `T&`).
+  - Default parameter values are prohibited; write explicit overloads instead.
+- **Mandatory `this.` Qualification**:
+  - Inside any class method, accessing a member field (`this.position`) or calling a member method (`this.reset()`) must be prefixed with `this.`.
+- **Mandatory Local Initialization & Loop Syntax**:
+  - Every local variable must be initialized at declaration (`u32 count = 0u;`, `auto total = 0.0f;`).
+  - Range-based `for` loops require `in` or `mut`: `for(in auto item : list)` or `for(mut Node item : nodes)`.
+  - Every `switch` `case` and `default` branch must end with `break;` or `return;`.
+- **Lambdas & Callables**:
+  - Non-null callable type: `Func<Ret(in A, mut B)>` (wrap in `Optional<Func<...>>` if nullable).
+  - Lambda syntax: `lambda[in threshold, mut count](in f32 value) -> b8{ ... }` (all captures and parameters must specify `in` or `mut`).
+- **Parallelism & Diagnostics**:
+  - `parallel_for(...)` and `parallel taskName : dependencyName{ ... }` lower to `Core::CpuTaskScheduler`.
+  - Built-in diagnostics: `assert(cond, "msg", ...)`, `info("msg", ...)`, `warning("msg", ...)`, `error("msg", ...)`, optionally prefixed with `[essential]`.
+
+---
+
+## 6. Attributes (`[...]`) and `native` Interop
+
+- **Single-Bracket Attribute Rule**:
+  - Combine multiple attributes in a single comma-separated bracket (`[asset("foo"), serialize]`); stacked `[...][...]` blocks on the same declaration are prohibited.
+- **Permitted Attributes by Declaration Kind**:
+  - `class`: `[serialize]`, `[reflect]`, `[asset("type_name")]`, `[subsystem("type_name")]`, `[component_asset("type_name")]`
+  - `interface`: `[reflect]`, `[asset("type_name")]`
+  - `enum` / `flag`: `[reflect]`
+  - `field`: `[transient]`, `[reflect]`, `[subsystem("type_name")]`
+  - `method` (`class` / `interface`): `[reflect]` (never `[inline]` or `[noinline]`)
+  - `parallel` / `parallel_for`: `[core(Any|Heavy|Light|MainThread)]`, `[priority(Normal|Critical|Background)]`
+  - `assert` / `info` / `warning` / `error`: `[essential]`
+- **C++ Interop (`native` Blocks)**:
+  - **Top-level `native{ ... }`**: Emits raw C++ `#include` directives and forward declarations into the generated `.adhd.h` header.
+  - **Statement-level `native(in x, mut y = this.member){ ... }`**: Binds `.adhd` variables/fields into a scoped C++ block (`in` as `const` reference/value, `mut` as mutable reference) while preserving `.adhd` mutability and concurrency analysis.

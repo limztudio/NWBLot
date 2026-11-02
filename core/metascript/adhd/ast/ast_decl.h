@@ -111,8 +111,6 @@ struct MethodDecl{
     b8 isDestructor = false;
     b8 isOperator = false;
     b8 isInline = false;
-    b8 isForceInline = false;
-    b8 isNoInline = false;
     b8 isOutOfLine = false;
     b8 isReflect = false;
     b8 usesScratchArena = false;

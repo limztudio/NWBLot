@@ -75,14 +75,14 @@ NWB_ADHD_EXPORT_ACCESS_SPECIFIER("private",   AccessSpecifier::Private)
 NWB_ADHD_EXPORT_ACCESS_SPECIFIER("protected", AccessSpecifier::Protected)
 
 NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE("reflect",  isReflect)
-NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE("inline",   isForceInline)
-NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE("noinline", isNoInline)
 
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("namespace", "explicit 'namespace' declarations are prohibited in adhd; namespaces are derived from file paths")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("struct",    "'struct' is prohibited in adhd; use 'class' (or '[serialize] class' for 1-byte packed binary layout)")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("union",     "'union' is prohibited in adhd")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("static",    "'static' is prohibited in adhd")
 NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("template",  "C++ 'template' keyword is prohibited in adhd; write '<T>' directly on declarations")
+NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("inline",    "'inline' is prohibited in adhd; inlining is decided automatically by the adhd compiler")
+NWB_ADHD_EXPORT_PROHIBITED_TOP_LEVEL_KEYWORD("noinline",  "'noinline' is prohibited in adhd; inlining is decided automatically by the adhd compiler")
 
 NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD("null",             "'null' and 'nullptr' are prohibited in adhd; use Optional<T>")
 NWB_ADHD_EXPORT_PROHIBITED_EXPR_KEYWORD("nullptr",          "'null' and 'nullptr' are prohibited in adhd; use Optional<T>")

@@ -238,6 +238,9 @@
     - Like Rust, `adhd` has **no `Move(x)` or rvalue reference (`T&&`) syntax**.
     - Function parameters strictly use `in` (read-only borrow) or `mut` (mutable borrow).
     - Whenever a local variable is transferred by value at its last use, the `adhd` compiler automatically emits `Move(...)` in the generated C++.
+  - **Automatic Compiler-Managed Inlining (No `[inline]` / `[noinline]` or `inline` / `noinline` Keywords)**:
+    - There are **no `[inline]` or `[noinline]` attributes** and **no `inline` or `noinline` keywords** in `adhd`.
+    - Whether a function or method is emitted inline in `.adhd.h` or out-of-line in `.adhd.cpp` is decided **exclusively and automatically by the `adhd` compiler itself**, never by the user. Specifying `[inline]`, `[noinline]`, `inline`, or `noinline` in `.adhd` source is a compile-time error.
 - **Split Method Declarations & Implementations (C++ Style)**:
   - Methods can be declared inside a `class` without a body:
     ```cpp
@@ -418,7 +421,7 @@ All owning containers are automatically bound to the enclosing class's static ar
         [transient]
         private u32 runtimeHandle;
 
-        [inline]
+        [reflect]
         public void validate(in b8 strict);
     }
     ```
@@ -431,13 +434,13 @@ All owning containers are automatically bound to the enclosing class's static ar
   1. **Serialization & Layout Attributes**:
      - **Default (No `[serialize]`)**: Follows natural/SIMD alignment (`16`-byte / `32`-byte for SIMD types, natural alignment for scalars) with automatic compiler member reordering to minimize padding.
      - **`[serialize]`**: Always packs in `1` byte (`1`-byte packed binary representation / serialization layout with zero padding holes), and connects the reflected fields to binary serialization / `.nwb` cooking.
-  2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / function):
-     - `[reflect]` / `[asset("type_name")]`: Exposes the `class` or `interface` to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
+  2. **Reflection & `.nwb` Asset Connection Attributes** (`class` / `interface` / variable / method):
+     - `[reflect]` / `[asset("type_name")]`: Exposes the `class`, `interface`, or method to the reflection registry and connects it directly to `.nwb` authoring, dependency scanning, and cooking.
      - `[transient]`: Marks a member variable as runtime-only (excluded from `[serialize]` and `.nwb` authoring).
-  3. **Function, Scheduling & Diagnostic Attributes**:
-     - `[inline]` / `[noinline]`
+  3. **Scheduling & Diagnostic Attributes**:
      - `[core(...)]` / `[priority(...)]` (for `parallel` and `parallel_for`)
      - `[essential]` (for `assert`, `info`, `warning`, and `error`)
+     - **No `[inline]` / `[noinline]` Attributes**: Function and method inlining is decided automatically by the `adhd` compiler itself, never by user attributes.
 
 ---
 

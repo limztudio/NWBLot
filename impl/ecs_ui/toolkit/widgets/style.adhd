@@ -103,12 +103,10 @@ b8 TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density, mut P
     return true;
 }
 
-[inline]
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){
     return Point(bounds.x + xInset, bounds.y + max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction);
 }
 
-[inline]
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in Rect textBounds){
     const Point origin = ResolveCenteredTextOrigin(bounds, xInset, textBounds.height);
     return Point(origin.x - textBounds.x, origin.y - textBounds.y);

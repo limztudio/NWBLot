@@ -210,6 +210,10 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         m_cursor.error("'virtual' is prohibited in adhd; declare contracts in an 'interface' and mark implementations with 'override'");
         return false;
     }
+    if(m_cursor.checkIdentifier("inline") || m_cursor.checkIdentifier("noinline")){
+        m_cursor.error("'inline' and 'noinline' are prohibited in adhd; inlining is decided automatically by the adhd compiler");
+        return false;
+    }
     if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
         m_cursor.error("nested type declarations inside a class are prohibited in adhd");
         return false;

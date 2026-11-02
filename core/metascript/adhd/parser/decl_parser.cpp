@@ -336,6 +336,10 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
             m_cursor.error("'static' methods and members are prohibited inside 'interface' in adhd");
             return nullptr;
         }
+        if(m_cursor.checkIdentifier("inline") || m_cursor.checkIdentifier("noinline")){
+            m_cursor.error("'inline' and 'noinline' are prohibited in adhd; inlining is decided automatically by the adhd compiler");
+            return nullptr;
+        }
         if(m_cursor.check(TokenType::Identifier) && IsNestedTypeKeyword(m_cursor.current().text, true)){
             m_cursor.error("nested type declarations inside 'interface' are prohibited in adhd; declare types at file scope");
             return nullptr;
@@ -352,10 +356,6 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         method->span = methodSpan;
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
-        if(method->isForceInline || method->isNoInline){
-            m_cursor.error(methodSpan.line, methodSpan.column, "'inline' and 'noinline' attributes are not permitted on abstract interface method declarations");
-            return nullptr;
-        }
 
         if(m_cursor.matchIdentifier("operator")){
             MStringView opName;

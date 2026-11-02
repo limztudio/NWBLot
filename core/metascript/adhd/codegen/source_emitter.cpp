@@ -129,14 +129,8 @@ void SourceEmitter::emitOutOfClassCallable(MString& out, const ClassDecl* ownerC
     if(ownerClass && !ownerClass->templateParams.empty())
         m_typeEmitter.emitTemplateHeaderCpp(out, ownerClass->templateParams);
     m_typeEmitter.emitTemplateHeaderCpp(out, callable.templateParams);
-    if(emitBody){
-        if(callable.isForceInline)
-            out.append("NWB_INLINE ");
-        else if(callable.isNoInline)
-            out.append("NWB_NOINLINE ");
-        if(emitInlineKeyword && !callable.isForceInline)
-            out.append("inline ");
-    }
+    if(emitBody && emitInlineKeyword)
+        out.append("inline ");
 
     m_typeEmitter.emitMethodSignature(out, ownerClass, callable, false);
     if(emitBody){

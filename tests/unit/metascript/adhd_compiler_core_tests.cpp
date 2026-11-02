@@ -329,11 +329,27 @@ TEST(AdhdCompiler, RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttributeConfl
     CompileResult nonFuncFieldRes(arena.arena);
     EXPECT_FALSE(Compiler::Compile(s_CallNonFuncField, "impl/bad_call_field.adhd", arena.arena, nonFuncFieldRes));
 
-    static constexpr MStringView s_ConflictingInlineAttrs =
-        "[inline, noinline]\r\n"
-        "void badAttrs() {}\r\n";
-    CompileResult badAttrRes(arena.arena);
-    EXPECT_FALSE(Compiler::Compile(s_ConflictingInlineAttrs, "impl/bad_inline_attrs.adhd", arena.arena, badAttrRes));
+    static constexpr MStringView s_ProhibitedInlineAttr =
+        "[inline]\r\n"
+        "void badInlineAttr() {}\r\n";
+    CompileResult badInlineRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ProhibitedInlineAttr, "impl/bad_inline_attr.adhd", arena.arena, badInlineRes));
+
+    static constexpr MStringView s_ProhibitedNoInlineAttr =
+        "[noinline]\r\n"
+        "void badNoInlineAttr() {}\r\n";
+    CompileResult badNoInlineRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ProhibitedNoInlineAttr, "impl/bad_noinline_attr.adhd", arena.arena, badNoInlineRes));
+
+    static constexpr MStringView s_ProhibitedInlineKeyword =
+        "inline void badInlineKeyword() {}\r\n";
+    CompileResult badInlineKwRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ProhibitedInlineKeyword, "impl/bad_inline_kw.adhd", arena.arena, badInlineKwRes));
+
+    static constexpr MStringView s_ProhibitedNoInlineKeyword =
+        "noinline void badNoInlineKeyword() {}\r\n";
+    CompileResult badNoInlineKwRes(arena.arena);
+    EXPECT_FALSE(Compiler::Compile(s_ProhibitedNoInlineKeyword, "impl/bad_noinline_kw.adhd", arena.arena, badNoInlineKwRes));
 }
 
 TEST(AdhdCompiler, RejectsMalformedHexMacroParamsCastsDanglingRefsAndEarlyReturnCtors){

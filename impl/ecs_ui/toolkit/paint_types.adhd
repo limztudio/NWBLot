@@ -120,7 +120,6 @@ class PaintOverlayFrame{
     public u32 layer = 0u;
 }
 
-[inline]
 Color ResolveUiSkinColor(in UiSkinPalette palette, in UiSkinColorRole role){
     const UiSkinColor value = palette.colors[cast<usize>(role)];
     Color out;
@@ -131,12 +130,10 @@ Color ResolveUiSkinColor(in UiSkinPalette palette, in UiSkinColorRole role){
     return out;
 }
 
-[inline]
 b8 SameTextureImageKey(in ImageSource first, in ImageSource second){
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
 
-[inline]
 b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
     if(command.material == PaintMaterial::Glyph)
         return cast<usize>(command.glyphPageIndex) < pageCount && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
@@ -147,21 +144,18 @@ b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
     return false;
 }
 
-[inline]
 b8 ValidDrawCommandImageBinding(in DrawCommand command, in usize imageCount){
     if(command.material == PaintMaterial::Image)
         return cast<usize>(command.textureImageIndex) < imageCount && command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
     return command.textureImageIndex == 0xffffffffu;
 }
 
-[inline]
 b8 ValidDrawCommandSdfBinding(in DrawCommand command, in usize pageCount, in u32 pageChannelCount){
     if(command.material == PaintMaterial::SdfGlyph)
         return cast<usize>(command.sdfPageIndex) < pageCount && command.sdfChannel < pageChannelCount;
     return true;
 }
 
-[inline]
 b8 ValidSnapshotImageCounts(in usize glyphPageCount, in usize sdfPageCount, in usize textureImageCount){
     return
         glyphPageCount <= s_PaintMaxImages

@@ -108,10 +108,8 @@ namespace __hidden_adhd_type_checker{
 }
 
 [[nodiscard]] b8 ShouldAutoInlineCallable(const MethodDecl& fn)noexcept{
-    if(!fn.hasBody || fn.isNoInline)
+    if(!fn.hasBody)
         return false;
-    if(fn.isForceInline)
-        return true;
     if(fn.usesScratchArena || fn.usesTaskScope || fn.isOutOfLine)
         return false;
     if(!fn.templateParams.empty())
@@ -474,12 +472,6 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
             continue;
         }
 
-        if((matched->isForceInline && ool->isNoInline) || (matched->isNoInline && ool->isForceInline)){
-            reportError(errors, ool->span, "conflicting 'inline' and 'noinline' attributes between method declaration and definition");
-            ok = false;
-            continue;
-        }
-
         if(!matched->isConstructor && !matched->isDestructor){
             if(!AreTypeRefsEquivalent(matched->returnType, ool->returnType, m_symbols)){
                 reportError(errors, ool->span, "out-of-line method return type does not match class declaration");
@@ -514,10 +506,6 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
         matched->hasBody = true;
         matched->isOutOfLine = true;
         matched->body = ool->body;
-        if(ool->isForceInline)
-            matched->isForceInline = true;
-        if(ool->isNoInline)
-            matched->isNoInline = true;
         if(ool->isReflect){
             matched->isReflect = true;
             cls->isReflect = true;
@@ -569,23 +557,10 @@ b8 TypeChecker::linkOutOfLineMethods(TranslationUnit& unit, MVector<ParseError>&
                 ok = false;
                 continue;
             }
-            if((prev->isForceInline && fn->isNoInline) || (prev->isNoInline && fn->isForceInline)){
-                reportError(errors, fn->span, "conflicting 'inline' and 'noinline' attributes between function declaration and definition");
-                ok = false;
-                continue;
-            }
             if(prev->hasBody && fn->hasBody){
                 reportError(errors, fn->span, "duplicate free function definition with identical signature");
                 ok = false;
                 continue;
-            }
-            if(prev->isForceInline || fn->isForceInline){
-                prev->isForceInline = true;
-                fn->isForceInline = true;
-            }
-            if(prev->isNoInline || fn->isNoInline){
-                prev->isNoInline = true;
-                fn->isNoInline = true;
             }
             if(!prev->hasBody && fn->hasBody){
                 if(!prev->isImported){
